@@ -26,7 +26,8 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
     familyMembers,
     completedWeeks,
     currentWeek,
-    familyName
+    familyName,
+    familyId  // Add this line to get familyId from context
   } = useFamily();
   
   const { loadFamilyData } = useAuth();
