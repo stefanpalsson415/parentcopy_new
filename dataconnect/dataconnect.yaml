@@ -1,0 +1,12 @@
+specVersion: "v1beta"
+serviceId: "parentload"
+location: "europe-north1"
+schema:
+  source: "./schema"
+  datasource:
+    postgresql:
+      database: "fdcdb"
+      cloudSql:
+        instanceId: "parentload-fdc"
+      # schemaValidation: "COMPATIBLE"
+connectorDirs: ["./connector"]
