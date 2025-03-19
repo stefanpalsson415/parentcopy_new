@@ -78,24 +78,24 @@ const AllieChat = () => {
           <div className="flex-1 overflow-y-auto p-3 bg-gray-50">
           {messages.length === 0 ? (
   <div className="text-center text-gray-500 my-4">
-    <p className="mb-2 font-medium">Hi, I'm Allie!</p>
-    <p className="text-sm mb-2">I can help your family achieve better balance. Ask me about:</p>
-    <div className="text-left text-sm space-y-1 mx-auto max-w-[200px]">
+    <p className="mb-2 font-medium font-roboto">Hi, I'm Allie!</p>
+    <p className="text-sm mb-2 font-roboto">I can help your family achieve better balance. Ask me about:</p>
+    <div className="text-left text-sm space-y-1 mx-auto max-w-[220px]">
       <div className="flex items-start">
         <span className="inline-block w-4 h-4 rounded-full bg-black text-white text-xs flex-shrink-0 flex items-center justify-center mr-2 mt-0.5">?</span>
-        <span>Survey results and insights</span>
+        <span className="font-roboto">Survey results and insights</span>
       </div>
       <div className="flex items-start">
         <span className="inline-block w-4 h-4 rounded-full bg-black text-white text-xs flex-shrink-0 flex items-center justify-center mr-2 mt-0.5">?</span>
-        <span>Tips for family balance</span>
+        <span className="font-roboto">Why each task was selected for you</span>
       </div>
       <div className="flex items-start">
         <span className="inline-block w-4 h-4 rounded-full bg-black text-white text-xs flex-shrink-0 flex items-center justify-center mr-2 mt-0.5">?</span>
-        <span>How to use Allie features</span>
+        <span className="font-roboto">How tasks improve family balance</span>
       </div>
       <div className="flex items-start">
         <span className="inline-block w-4 h-4 rounded-full bg-black text-white text-xs flex-shrink-0 flex items-center justify-center mr-2 mt-0.5">?</span>
-        <span>Parenting advice based on research</span>
+        <span className="font-roboto">Tips for getting tasks done easily</span>
       </div>
     </div>
   </div>

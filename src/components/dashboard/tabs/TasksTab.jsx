@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Calendar, AlertCircle, CheckCircle, ChevronDown, ChevronUp, Sparkles, Brain, Info, Edit, CheckCircle2, Target, Heart, LogOut, HelpCircle } from 'lucide-react';
+import { Users, Calendar, AlertCircle, CheckCircle, ChevronDown, ChevronUp, Sparkles, Brain, Info, Edit, CheckCircle2, Target, Heart, LogOut, HelpCircle, Camera, Image } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { useSurvey } from '../../../contexts/SurveyContext';
 import DatabaseService from '../../../services/DatabaseService';
 import CoupleCheckInScreen from '../../assessment/CoupleCheckInScreen';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../../../services/firebase';
 
 // AI-powered task generation based on survey data
 const analyzeTaskImbalances = (surveyResponses, fullQuestionSet) => {
@@ -63,30 +65,8 @@ const generateDefaultTasks = (weekNumber) => {
       completed: false,
       completedDate: null,
       insight: "Balancing household tasks leads to better family harmony and less stress.",
-      comments: [],
-      subTasks: [
-        { 
-          id: `${taskPrefix}1-1`, 
-          title: "Track household tasks", 
-          description: "Monitor who does which household tasks this week",
-          completed: false,
-          completedDate: null
-        },
-        { 
-          id: `${taskPrefix}1-2`, 
-          title: "Share responsibilities", 
-          description: "Take initiative on tasks you don't normally do",
-          completed: false,
-          completedDate: null
-        },
-        { 
-          id: `${taskPrefix}1-3`, 
-          title: "Discuss as a family", 
-          description: "Talk about how to better distribute tasks",
-          completed: false,
-          completedDate: null
-        }
-      ]
+      details: "Choose one household task that you normally don't handle and take full responsibility for it this week. Notice how it feels to own this task and discuss the experience with your partner.",
+      comments: []
     },
     {
       id: `${taskPrefix}2`,
@@ -98,30 +78,8 @@ const generateDefaultTasks = (weekNumber) => {
       completed: false,
       completedDate: null,
       insight: "Shared parenting leads to healthier child development and less parent burnout.",
-      comments: [],
-      subTasks: [
-        { 
-          id: `${taskPrefix}2-1`, 
-          title: "Track parenting duties", 
-          description: "Monitor who handles which parenting tasks",
-          completed: false,
-          completedDate: null
-        },
-        { 
-          id: `${taskPrefix}2-2`, 
-          title: "Share responsibilities", 
-          description: "Each take lead on different parenting activities",
-          completed: false,
-          completedDate: null
-        },
-        { 
-          id: `${taskPrefix}2-3`, 
-          title: "Check in with each other", 
-          description: "Discuss how the new balance is working",
-          completed: false,
-          completedDate: null
-        }
-      ]
+      details: "Identify one parenting responsibility that your partner usually handles and take charge of it this week. This could be bedtime routines, homework help, or coordinating activities.",
+      comments: []
     }
   ];
 };
@@ -142,52 +100,20 @@ const getTaskTitleForCategory = (category) => {
   }
 };
 
-// Helper function to generate relevant subtasks
-const generateSubtasksForCategory = (category, taskPrefix, taskId) => {
-  const subtasks = [];
-  
+// Helper function to generate task details based on category
+const getTaskDetailsForCategory = (category) => {
   switch(category) {
     case "Visible Household Tasks":
-      subtasks.push(
-        { id: `${taskPrefix}${taskId}-1`, title: "Track household tasks", description: "Monitor who does which visible household tasks this week" },
-        { id: `${taskPrefix}${taskId}-2`, title: "Take initiative", description: "Proactively handle tasks you don't normally do" },
-        { id: `${taskPrefix}${taskId}-3`, title: "Create sharing system", description: "Develop a system for better task sharing" }
-      );
-      break;
+      return "Choose one visible household task that your partner usually handles (like cooking, cleaning, or repairs) and take full responsibility for it this week. Observe how it feels to own this task completely and discuss the experience afterward.";
     case "Invisible Household Tasks":
-      subtasks.push(
-        { id: `${taskPrefix}${taskId}-1`, title: "Identify mental load", description: "Notice the planning and coordination work that's often invisible" },
-        { id: `${taskPrefix}${taskId}-2`, title: "Share planning duties", description: "Take on some planning tasks your partner usually handles" },
-        { id: `${taskPrefix}${taskId}-3`, title: "Establish coordination system", description: "Create a shared system for household management" }
-      );
-      break;
+      return "Identify and take over one 'invisible' planning or organizing task that typically falls to your partner. This might be meal planning, schedule coordination, or tracking household supplies. Document what you learn about the mental load involved.";
     case "Visible Parental Tasks":
-      subtasks.push(
-        { id: `${taskPrefix}${taskId}-1`, title: "Review childcare duties", description: "List all the visible childcare tasks in your family" },
-        { id: `${taskPrefix}${taskId}-2`, title: "Balance direct care", description: "Take on more direct childcare tasks if needed" },
-        { id: `${taskPrefix}${taskId}-3`, title: "Create a fair schedule", description: "Develop a balanced schedule for childcare tasks" }
-      );
-      break;
+      return "Take initiative on one direct childcare task that your partner typically handles (like school drop-offs, homework help, or bedtime routines). Fully manage this responsibility for the week and reflect on what you learned.";
     case "Invisible Parental Tasks":
-      subtasks.push(
-        { id: `${taskPrefix}${taskId}-1`, title: "Notice emotional labor", description: "Be aware of who's handling children's emotional needs" },
-        { id: `${taskPrefix}${taskId}-2`, title: "Practice emotional support", description: "Take more initiative in supporting children emotionally" },
-        { id: `${taskPrefix}${taskId}-3`, title: "Coordinate developmental needs", description: "Share responsibility for planning children's activities" }
-      );
-      break;
+      return "Notice and take on one aspect of emotional or planning work related to the children. This could be planning activities, anticipating needs, or providing emotional support. Share what you discover about this often unseen work.";
     default:
-      subtasks.push(
-        { id: `${taskPrefix}${taskId}-1`, title: "Analyze current situation", description: "Review your family's current balance in this area" },
-        { id: `${taskPrefix}${taskId}-2`, title: "Make changes", description: "Take specific actions to improve balance" },
-        { id: `${taskPrefix}${taskId}-3`, title: "Discuss effectiveness", description: "Talk with your partner about what worked" }
-      );
+      return "Choose one task that your partner usually handles and complete it fully, from start to finish. Pay attention to all the steps involved, including planning and cleanup.";
   }
-  
-  return subtasks.map(subtask => ({
-    ...subtask,
-    completed: false,
-    completedDate: null
-  }));
 };
 
 // ENHANCED: Helper function to generate new tasks for the next week with effectiveness data
@@ -233,7 +159,7 @@ const generateTaskRecommendations = (weekNumber = 1, previousResponses = {}, que
     tasks.push({
       id: `${weekNumber}-1`,
       title: `Cycle ${weekNumber}: ${getTaskTitleForCategory(papaFocusAreas[0].category)}`,
-      description: `Address the ${papaFocusAreas[0].imbalance.toFixed(0)}% imbalance in ${papaFocusAreas[0].category}`,
+      description: `Take initiative on one ${papaFocusAreas[0].category.toLowerCase()} task this week. Notice what's typically handled by your partner and step in proactively.`,
       assignedTo: "Papa",
       assignedToName: "Papa",
       taskType: "survey-based",
@@ -241,9 +167,9 @@ const generateTaskRecommendations = (weekNumber = 1, previousResponses = {}, que
       category: papaFocusAreas[0].category,
       completed: false,
       completedDate: null,
-      insight: `Our survey analysis shows Mama is handling ${papaFocusAreas[0].mamaPercent.toFixed(0)}% of tasks in this area.`,
-      comments: [],
-      subTasks: generateSubtasksForCategory(papaFocusAreas[0].category, taskPrefix, "1")
+      insight: `Our survey analysis shows Mama is handling ${papaFocusAreas[0].mamaPercent.toFixed(0)}% of tasks in this area. Taking initiative on one task can help create better balance and reduce your partner's mental load.`,
+      details: getTaskDetailsForCategory(papaFocusAreas[0].category),
+      comments: []
     });
   }
   
@@ -260,12 +186,8 @@ const generateTaskRecommendations = (weekNumber = 1, previousResponses = {}, que
     completed: false,
     completedDate: null,
     insight: "Our AI has identified patterns in your family's responses that indicate a hidden imbalance in mental load.",
-    comments: [],
-    subTasks: [
-      { id: `${weekNumber}-ai-1-1`, title: "Identify invisible work", description: "Notice tasks that often go unrecognized", completed: false, completedDate: null },
-      { id: `${weekNumber}-ai-1-2`, title: "Take initiative", description: "Proactively handle a task usually done by your partner", completed: false, completedDate: null },
-      { id: `${weekNumber}-ai-1-3`, title: "Create a system", description: "Develop a way to maintain better balance", completed: false, completedDate: null }
-    ]
+    details: "Identify one 'invisible' task that often goes unrecognized (like planning, organizing, or tracking family needs) and take full responsibility for it this week. Document what you learn about this mental labor.",
+    comments: []
   });
   
   // 3. Relationship-focused task for Papa
@@ -279,12 +201,8 @@ const generateTaskRecommendations = (weekNumber = 1, previousResponses = {}, que
     completed: false,
     completedDate: null,
     insight: "Research shows that relationship satisfaction improves by up to 42% when workload is balanced.",
-    comments: [],
-    subTasks: [
-      { id: `${weekNumber}-rel-1-1`, title: "Express appreciation", description: "Acknowledge your partner's contributions", completed: false, completedDate: null },
-      { id: `${weekNumber}-rel-1-2`, title: "Active listening", description: "Have a conversation where you truly listen to your partner's experience", completed: false, completedDate: null },
-      { id: `${weekNumber}-rel-1-3`, title: "Plan together", description: "Set aside time to plan your week together", completed: false, completedDate: null }
-    ]
+    details: "Schedule a 15-minute conversation with your partner focused solely on appreciating each other's contributions. Share specific things you've noticed and value about how your partner cares for the family.",
+    comments: []
   });
   
   // 4. Survey-based task for Mama (from highest priority area)
@@ -293,7 +211,7 @@ const generateTaskRecommendations = (weekNumber = 1, previousResponses = {}, que
     tasks.push({
       id: `${weekNumber}-2`,
       title: `Cycle ${weekNumber}: ${getTaskTitleForCategory(mamaFocusAreas[0].category)}`,
-      description: `Address the ${mamaFocusAreas[0].imbalance.toFixed(0)}% imbalance in ${mamaFocusAreas[0].category}`,
+      description: `Take initiative on one ${mamaFocusAreas[0].category.toLowerCase()} task this week that your partner typically handles.`,
       assignedTo: "Mama",
       assignedToName: "Mama",
       taskType: "survey-based",
@@ -301,9 +219,9 @@ const generateTaskRecommendations = (weekNumber = 1, previousResponses = {}, que
       category: mamaFocusAreas[0].category,
       completed: false,
       completedDate: null,
-      insight: `Our survey analysis shows Papa is handling ${mamaFocusAreas[0].papaPercent.toFixed(0)}% of tasks in this area.`,
-      comments: [],
-      subTasks: generateSubtasksForCategory(mamaFocusAreas[0].category, taskPrefix, "2")
+      insight: `Our survey analysis shows Papa is handling ${mamaFocusAreas[0].papaPercent.toFixed(0)}% of tasks in this area. Taking initiative on one task can help create better balance.`,
+      details: getTaskDetailsForCategory(mamaFocusAreas[0].category),
+      comments: []
     });
   }
   
@@ -320,12 +238,8 @@ const generateTaskRecommendations = (weekNumber = 1, previousResponses = {}, que
     completed: false,
     completedDate: null,
     insight: "Our AI has identified patterns in your family's responses that indicate a hidden imbalance in mental load.",
-    comments: [],
-    subTasks: [
-      { id: `${weekNumber}-ai-2-1`, title: "Identify invisible work", description: "Notice tasks that often go unrecognized", completed: false, completedDate: null },
-      { id: `${weekNumber}-ai-2-2`, title: "Take initiative", description: "Proactively handle a task usually done by your partner", completed: false, completedDate: null },
-      { id: `${weekNumber}-ai-2-3`, title: "Create a system", description: "Develop a way to maintain better balance", completed: false, completedDate: null }
-    ]
+    details: "Notice a task that often goes unrecognized that your partner typically handles, and take it on completely this week. Pay attention to all the mental planning involved.",
+    comments: []
   });
   
   // 6. Relationship-focused task for Mama
@@ -339,12 +253,8 @@ const generateTaskRecommendations = (weekNumber = 1, previousResponses = {}, que
     completed: false,
     completedDate: null,
     insight: "Research shows that relationship satisfaction improves by up to 42% when workload is balanced.",
-    comments: [],
-    subTasks: [
-      { id: `${weekNumber}-rel-2-1`, title: "Express appreciation", description: "Acknowledge your partner's contributions", completed: false, completedDate: null },
-      { id: `${weekNumber}-rel-2-2`, title: "Active listening", description: "Have a conversation where you truly listen to your partner's experience", completed: false, completedDate: null },
-      { id: `${weekNumber}-rel-2-3`, title: "Plan together", description: "Set aside time to plan your week together", completed: false, completedDate: null }
-    ]
+    details: "Schedule a brief 'appreciation exchange' with your partner where you each share specific things you value about how the other person contributes to family life.",
+    comments: []
   });
   
   return tasks;
@@ -359,7 +269,6 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     familyId,
     addTaskComment,
     updateTaskCompletion,
-    updateSubtaskCompletion,
     surveySchedule,
     updateSurveySchedule,
     taskRecommendations: initialTaskRecommendations,
@@ -517,6 +426,8 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   const [taskReactions, setTaskReactions] = useState({});
   const [selectedTaskForEmoji, setSelectedTaskForEmoji] = useState(null);
   const [kidTaskComments, setKidTaskComments] = useState({});
+  const [kidTaskPictures, setKidTaskPictures] = useState({});
+  const [uploadingPicture, setUploadingPicture] = useState(false);
   
   // Load tasks for the current week
   useEffect(() => {
@@ -637,10 +548,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   const countCompletedTasks = () => {
     let count = 0;
     taskRecommendations.forEach(task => {
-      if (task.subTasks && task.subTasks.every(subtask => subtask.completed)) {
-        count++;
-      } else if (task.completed) {
-        // For AI tasks without subtasks
+      if (task.completed) {
         count++;
       }
     });
@@ -658,14 +566,6 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   // Whether family meeting can be started
   const canStartFamilyMeeting = weeklyCheckInCompleted && enoughTasksCompleted;
   
-  // Check if all subtasks are completed
-  const areAllSubtasksComplete = (task) => {
-    if (!task.subTasks || task.subTasks.length === 0) {
-      return task.completed;
-    }
-    return task.subTasks.every(subtask => subtask.completed);
-  };
-  
   // Check if user can complete a task
   const canCompleteTask = (task) => {
     // Only a parent can complete tasks assigned to their role type (Mama or Papa)
@@ -673,6 +573,69 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
            selectedUser.role === 'parent' && 
            (selectedUser.name === task.assignedToName || 
             selectedUser.roleType === task.assignedTo);
+  };
+
+  // Handle task completion
+  const handleTaskCompletion = async (taskId, isCompleted) => {
+    if (!selectedUser) {
+      console.error("No user selected");
+      alert("Please select a user profile first");
+      return;
+    }
+    
+    const task = taskRecommendations.find(t => t.id.toString() === taskId.toString());
+    if (!task) {
+      console.error("Task not found:", taskId);
+      return;
+    }
+    
+    // Check permissions
+    if (!canCompleteTask(task)) {
+      if (selectedUser.role !== 'parent') {
+        alert("Only parents can mark tasks as complete. Children can add comments instead.");
+      } else {
+        alert(`Only ${task.assignedTo} can mark this task as complete.`);
+      }
+      return;
+    }
+    
+    try {
+      // Create completion timestamp
+      const completedDate = isCompleted ? new Date().toISOString() : null;
+      
+      // Immediately update local state for responsive UI
+      const updatedTasks = taskRecommendations.map(t => {
+        if (t.id.toString() === taskId.toString()) {
+          return {
+            ...t,
+            completed: isCompleted,
+            completedDate: completedDate
+          };
+        }
+        return t;
+      });
+      
+      // Update state immediately
+      setTaskRecommendations(updatedTasks);
+      
+      // Save to Firebase
+      await updateTaskCompletion(taskId, isCompleted);
+      console.log("Task completed successfully:", taskId);
+      
+      // Force reload of tasks to ensure data consistency
+      setTimeout(async () => {
+        if (familyId) {
+          const freshTasks = await DatabaseService.getTasksForWeek(familyId, currentWeek);
+          if (freshTasks && freshTasks.length > 0) {
+            setTaskRecommendations(freshTasks);
+          }
+        }
+      }, 1000);
+      
+    } catch (error) {
+      console.error("Error completing task:", error);
+      alert("There was an error saving your task. Please try again.");
+    }
   };
   
   // Handle kid task completion with observations
@@ -726,14 +689,64 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
       alert("There was an error saving your task. Please try again.");
     }
   };
+
+  // Handle kid task picture upload
+  const handleKidTaskPictureUpload = async (taskId, file) => {
+    if (!selectedUser || selectedUser.role !== 'child' || !file) return;
+    
+    setUploadingPicture(true);
+    
+    try {
+      // Create a reference to Firebase Storage
+      const storageRef = ref(storage, `kidTasks/${familyId}/${taskId}/${Date.now()}_${file.name}`);
+      
+      // Upload the file
+      const snapshot = await uploadBytes(storageRef, file);
+      
+      // Get the download URL
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      // Update local state
+      setKidTaskPictures(prev => ({
+        ...prev,
+        [taskId]: downloadURL
+      }));
+      
+      // Save to Firebase - update the kid task data to include the picture URL
+      const updatedData = {
+        ...(kidTasksCompleted[taskId] || {}),
+        pictureUrl: downloadURL
+      };
+      
+      await DatabaseService.saveFamilyData({
+        kidTasks: {
+          ...kidTasksCompleted,
+          [taskId]: updatedData
+        }
+      }, familyId);
+      
+      console.log(`Picture for kid task ${taskId} uploaded successfully`);
+      
+      // Update the local state of completed tasks to include the picture
+      setKidTasksCompleted(prev => ({
+        ...prev,
+        [taskId]: {
+          ...prev[taskId],
+          pictureUrl: downloadURL
+        }
+      }));
+      
+    } catch (error) {
+      console.error("Error uploading picture:", error);
+      alert("There was an error uploading your picture. Please try again.");
+    } finally {
+      setUploadingPicture(false);
+    }
+  };
   
   // Handle adding a comment to a task or subtask
-  const handleAddComment = (taskId, subtaskId = null) => {
-    if (subtaskId) {
-      setCommentTask(`${taskId}-${subtaskId}`);
-    } else {
-      setCommentTask(taskId);
-    }
+  const handleAddComment = (taskId) => {
+    setCommentTask(taskId);
     setCommentText('');
   };
   
@@ -749,36 +762,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
       const result = await addTaskComment(commentTask, commentText);
       
       // Update local state
-      if (commentTask.toString().includes('-')) {
-        // It's a subtask comment
-        const [taskId, subtaskId] = commentTask.split('-');
-        
-        const updatedTasks = taskRecommendations.map(task => {
-          if (task.id.toString() === taskId) {
-            return {
-              ...task,
-              subTasks: task.subTasks.map(subtask => {
-                if (subtask.id === `${taskId}-${subtaskId}`) {
-                  return {
-                    ...subtask,
-                    comments: [...(subtask.comments || []), {
-                      id: result.id || Date.now(),
-                      userId: selectedUser.id,
-                      userName: selectedUser.name,
-                      text: commentText,
-                      timestamp: new Date().toLocaleString()
-                    }]
-                  };
-                }
-                return subtask;
-              })
-            };
-          }
-          return task;
-        });
-        
-        setTaskRecommendations(updatedTasks);
-      } else if (commentTask.toString().startsWith('kid-task')) {
+      if (commentTask.toString().startsWith('kid-task')) {
         // It's a kid task comment
         setKidTaskComments(prev => ({
           ...prev,
@@ -885,100 +869,6 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
       alert(`Only ${task.assignedTo} can mark this task as complete.`);
     }
   };
-  
-  // Simplified task completion handler
-  const handleCompleteSubtask = async (taskId, subtaskId, isCompleted) => {
-    if (!selectedUser) {
-      console.error("No user selected");
-      alert("Please select a user profile first");
-      return;
-    }
-    
-    const task = taskRecommendations.find(t => t.id.toString() === taskId.toString());
-    if (!task) {
-      console.error("Task not found:", taskId);
-      return;
-    }
-    
-    // Log useful information
-    console.log(`Handling subtask completion: taskId=${taskId}, subtaskId=${subtaskId}, isCompleted=${isCompleted}, user=${selectedUser?.name}, role=${selectedUser?.role}`);
-    
-    // Check permissions
-    if (!canCompleteTask(task)) {
-      if (selectedUser.role !== 'parent') {
-        alert("Only parents can mark tasks as complete. Children can add comments instead.");
-      } else {
-        alert(`Only ${task.assignedTo} can mark this task as complete.`);
-      }
-      return;
-    }
-    
-    try {
-      // Create completion timestamp
-      const completedDate = isCompleted ? new Date().toISOString() : null;
-      
-      // Immediately update local state for responsive UI
-      const updatedTasks = JSON.parse(JSON.stringify(taskRecommendations));
-      const taskIndex = updatedTasks.findIndex(t => t.id.toString() === taskId.toString());
-      
-      if (taskIndex !== -1) {
-        const task = updatedTasks[taskIndex];
-        const subtaskIndex = task.subTasks.findIndex(st => st.id === subtaskId);
-        
-        if (subtaskIndex !== -1) {
-          // Update the subtask
-          task.subTasks[subtaskIndex].completed = isCompleted;
-          task.subTasks[subtaskIndex].completedDate = completedDate;
-          
-          // Check if all subtasks are completed
-          const allSubtasksComplete = task.subTasks.every(st => st.completed);
-          
-          // Update main task's completion based on subtasks
-          task.completed = allSubtasksComplete;
-          task.completedDate = allSubtasksComplete ? new Date().toISOString() : null;
-        }
-      }
-      
-      // Update state immediately
-      setTaskRecommendations(updatedTasks);
-      
-      // Then update in Firebase (using context method which handles persistence)
-      console.log(`Saving subtask ${subtaskId} of task ${taskId} for Week ${currentWeek} using context method`);
-      await updateSubtaskCompletion(taskId, subtaskId, isCompleted);
-      console.log("Task updated successfully via context method");
-      
-      // Force a reload of the task data to ensure state is in sync
-      setTimeout(async () => {
-        if (familyId) {
-          try {
-            console.log("Reloading tasks to ensure data consistency");
-            const freshTasks = await DatabaseService.getTasksForWeek(familyId, currentWeek);
-            if (freshTasks && freshTasks.length > 0) {
-              setTaskRecommendations(freshTasks);
-            }
-          } catch (reloadError) {
-            console.error("Error reloading tasks after update:", reloadError);
-          }
-        }
-      }, 1000); // Wait 1 second before reloading to avoid race conditions
-      
-    } catch (error) {
-      console.error("Error updating subtask:", error);
-      alert("There was an error saving your task. Please try again.");
-      
-      // On error, reload tasks to ensure consistency
-      try {
-        if (familyId) {
-          const freshTasks = await DatabaseService.getTasksForWeek(familyId, currentWeek);
-          if (freshTasks && freshTasks.length > 0) {
-            setTaskRecommendations(freshTasks);
-          }
-        }
-      } catch (reloadError) {
-        console.error("Error reloading tasks after error:", reloadError);
-      }
-    }
-  };
 
   // Format date for display
   const formatDate = (date) => {
@@ -1056,7 +946,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
         <p className="text-sm text-gray-600 mb-1 font-roboto">
           Complete at your own pace - could be days or weeks
         </p>
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-gray-600 mb-4 font-roboto">
           Suggested tasks to help balance your family's workload
         </p>
         
@@ -1105,23 +995,23 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
           <div className="bg-blue-50 p-4 rounded">
             <div className="flex items-center mb-3">
               <Calendar className="text-blue-600 mr-2" size={18} />
-              <p className="text-sm">
+              <p className="text-sm font-roboto">
                 <span className="font-medium">Due by:</span> {formatDate(checkInDueDate)}
               </p>
             </div>
             
             {/* Date editor added from Surveys tab */}
             <div className="flex items-center mt-2 mb-3">
-              <span className="text-sm mr-2">Change date:</span>
+              <span className="text-sm mr-2 font-roboto">Change date:</span>
               <input
                 type="date"
                 value={checkInDueDateInput}
                 onChange={(e) => setCheckInDueDateInput(e.target.value)}
-                className="border rounded px-2 py-1 text-sm"
+                className="border rounded px-2 py-1 text-sm font-roboto"
               />
               <button
                 onClick={handleUpdateCheckInDate}
-                className="ml-2 px-2 py-1 bg-blue-100 text-blue-600 rounded text-sm hover:bg-blue-200"
+                className="ml-2 px-2 py-1 bg-blue-100 text-blue-600 rounded text-sm hover:bg-blue-200 font-roboto"
               >
                 Update
               </button>
@@ -1130,17 +1020,17 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
             {!canStartCheckIn && (
               <div className="flex items-center mb-3 text-amber-700 bg-amber-50 p-2 rounded">
                 <AlertCircle size={16} className="mr-2" />
-                <p className="text-sm">
+                <p className="text-sm font-roboto">
                   Weekly check-in will be available in {daysUntilCheckIn} {daysUntilCheckIn === 1 ? 'day' : 'days'}
                 </p>
               </div>
             )}
             
-            <p className="text-sm mb-3">
+            <p className="text-sm mb-3 font-roboto">
               All family members need to complete the weekly check-in to update your progress
             </p>
             <div className="flex justify-between items-center">
-              <span className="text-sm font-medium">Completed:</span>
+              <span className="text-sm font-medium font-roboto">Completed:</span>
               <div className="flex gap-1">
                 {familyMembers.map(member => (
                   <div 
@@ -1225,7 +1115,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                     <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
                       task.completed ? 'bg-green-100 text-green-600' : 'bg-purple-100 text-purple-600'
                     }`}>
-                      {task.completed ? <CheckCircle size={16} /> : <Sparkles size={16} />}
+                      {task.completed ? <CheckCircle size={16} /> : <Target size={16} />}
                     </div>
                     
                     <div className="flex-1">
@@ -1272,6 +1162,16 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                           </div>
                         </div>
                       </div>
+
+                      {/* Task details */}
+                      {task.details && (
+                        <div className="bg-white p-4 rounded-lg mt-3 border border-purple-100">
+                          <div className="flex items-start">
+                            <CheckCircle2 size={18} className="text-purple-600 mr-3 flex-shrink-0 mt-0.5" />
+                            <p className="text-sm text-gray-700 font-roboto">{task.details}</p>
+                          </div>
+                        </div>
+                      )}
                       
                       {/* Comments */}
                       {renderComments(task.comments)}
@@ -1322,16 +1222,16 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
               {taskRecommendations
                 .filter(task => task.assignedTo === "Papa")
                 .map(task => (
-                  <div key={task.id} className={`rounded-lg border ${areAllSubtasksComplete(task) ? 'bg-green-50' : 'bg-white'}`}>
+                  <div key={task.id} className={`rounded-lg border ${task.completed ? 'bg-green-50' : 'bg-white'}`}>
                     {/* Main task header */}
                     <div 
                       className="p-4 flex items-start cursor-pointer"
                       onClick={() => toggleTaskExpansion(task.id)}
                     >
                       <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                        areAllSubtasksComplete(task) ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
+                        task.completed ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
                       }`}>
-                        {areAllSubtasksComplete(task) ? <CheckCircle size={16} /> : task.id}
+                        {task.completed ? <CheckCircle size={16} /> : <Target size={16} />}
                       </div>
                         
                       <div className="flex-1">
@@ -1443,7 +1343,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                         
                         {/* Action buttons for main task */}
                         {!commentTask && (
-                          <div className="mt-4 flex justify-end">
+                          <div className="mt-4 flex justify-between">
                             <button
                               className="px-3 py-1 text-sm rounded border font-roboto"
                               onClick={(e) => {
@@ -1453,79 +1353,45 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                             >
                               Comment
                             </button>
+                            
+                            {canCompleteTask(task) && (
+                              <button
+                                className={`px-3 py-1 text-sm rounded font-roboto ${
+                                  task.completed 
+                                    ? 'bg-gray-200 text-gray-800' 
+                                    : 'bg-green-500 text-white'
+                                }`}
+                                onClick={() => handleTaskCompletion(task.id, !task.completed)}
+                              >
+                                {task.completed ? 'Completed' : 'Mark as Done'}
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
                     </div>
                     
-                    {/* Subtasks */}
+                    {/* Additional Task Details */}
                     {expandedTasks[task.id] && (
                       <div className="border-t">
                         <div className="p-4">
-                          <h5 className="font-medium text-sm mb-3 font-roboto">Action Steps:</h5>
-                          <div className="space-y-4 pl-4">
-                            {task.subTasks.map(subtask => (
-                              <div key={subtask.id} className={`border rounded-md p-3 ${subtask.completed ? 'bg-green-50' : 'bg-white'}`}>
-                                <div className="flex items-start">
-                                  <div className="flex-shrink-0 mr-3">
-                                    {canCompleteTask(task) ? (
-                                      <button
-                                        className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                                          subtask.completed 
-                                            ? 'bg-green-100 text-green-600 border border-green-300' 
-                                            : 'bg-white border border-gray-300'
-                                        }`}
-                                        onClick={() => handleCompleteSubtask(task.id, subtask.id, !subtask.completed)}
-                                      >
-                                        {subtask.completed && <CheckCircle size={16} />}
-                                      </button>
-                                    ) : (
-                                      <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                                        subtask.completed 
-                                          ? 'bg-green-100 text-green-600' 
-                                          : 'bg-gray-100'
-                                      }`}>
-                                        {subtask.completed && <CheckCircle size={16} />}
-                                      </div>
-                                    )}
-                                  </div>
-                                  
-                                  <div className="flex-1">
-                                    <h6 className="font-medium text-sm font-roboto">{subtask.title}</h6>
-                                    <p className="text-sm text-gray-600 mt-1 font-roboto">{subtask.description}</p>
-                                    
-                                    {/* Show completion date if subtask is completed */}
-                                    {subtask.completed && subtask.completedDate && (
-                                      <p className="text-xs text-green-600 mt-2 font-roboto">
-                                        Completed on {formatDate(subtask.completedDate)}
-                                      </p>
-                                    )}
-                                    
-                                    {/* Subtask comments */}
-                                    {renderComments(subtask.comments)}
-                                    
-                                    {/* Subtask comment form */}
-                                    {renderCommentForm(subtask.id)}
-                                    
-                                    {/* Action buttons for subtask */}
-                                    {!commentTask && (
-                                      <div className="mt-3 flex justify-end">
-                                        <button
-                                          className="px-2 py-1 text-xs rounded border font-roboto"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleAddComment(task.id, subtask.id.split('-')[1]);
-                                          }}
-                                        >
-                                          Comment
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
+                          <h5 className="font-medium text-sm mb-3 font-roboto">How to Complete This Task:</h5>
+                          <div className="bg-gray-50 p-4 rounded-lg mb-4 text-sm font-roboto">
+                            <p>{task.details || "Choose one task that your partner usually handles and complete it fully, from start to finish."}</p>
                           </div>
+                          
+                          {/* Completion UI */}
+                          {canCompleteTask(task) && !task.completed && (
+                            <div className="mt-4 flex justify-center">
+                              <button
+                                onClick={() => handleTaskCompletion(task.id, true)}
+                                className="px-4 py-2 bg-green-500 text-white rounded-lg flex items-center font-roboto"
+                              >
+                                <CheckCircle size={16} className="mr-2" />
+                                Mark Task Complete
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1541,16 +1407,16 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
               {taskRecommendations
                 .filter(task => task.assignedTo === "Mama")
                 .map(task => (
-                  <div key={task.id} className={`rounded-lg border ${areAllSubtasksComplete(task) ? 'bg-green-50' : 'bg-white'}`}>
+                  <div key={task.id} className={`rounded-lg border ${task.completed ? 'bg-green-50' : 'bg-white'}`}>
                     {/* Main task header */}
                     <div 
                       className="p-4 flex items-start cursor-pointer"
                       onClick={() => toggleTaskExpansion(task.id)}
                     >
                       <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                        areAllSubtasksComplete(task) ? 'bg-green-100 text-green-600' : 'bg-purple-100 text-purple-600'
+                        task.completed ? 'bg-green-100 text-green-600' : 'bg-purple-100 text-purple-600'
                       }`}>
-                        {areAllSubtasksComplete(task) ? <CheckCircle size={16} /> : task.id}
+                        {task.completed ? <CheckCircle size={16} /> : <Target size={16} />}
                       </div>
                         
                       <div className="flex-1">
@@ -1662,7 +1528,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                         
                         {/* Action buttons for main task */}
                         {!commentTask && (
-                          <div className="mt-4 flex justify-end">
+                          <div className="mt-4 flex justify-between">
                             <button
                               className="px-3 py-1 text-sm rounded border font-roboto"
                               onClick={(e) => {
@@ -1672,79 +1538,45 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                             >
                               Comment
                             </button>
+                            
+                            {canCompleteTask(task) && (
+                              <button
+                                className={`px-3 py-1 text-sm rounded font-roboto ${
+                                  task.completed 
+                                    ? 'bg-gray-200 text-gray-800' 
+                                    : 'bg-green-500 text-white'
+                                }`}
+                                onClick={() => handleTaskCompletion(task.id, !task.completed)}
+                              >
+                                {task.completed ? 'Completed' : 'Mark as Done'}
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
                     </div>
                     
-                    {/* Subtasks */}
+                    {/* Additional Task Details */}
                     {expandedTasks[task.id] && (
                       <div className="border-t">
                         <div className="p-4">
-                          <h5 className="font-medium text-sm mb-3 font-roboto">Action Steps:</h5>
-                          <div className="space-y-4 pl-4">
-                            {task.subTasks.map(subtask => (
-                              <div key={subtask.id} className={`border rounded-md p-3 ${subtask.completed ? 'bg-green-50' : 'bg-white'}`}>
-                                <div className="flex items-start">
-                                  <div className="flex-shrink-0 mr-3">
-                                    {canCompleteTask(task) ? (
-                                      <button
-                                        className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                                          subtask.completed 
-                                            ? 'bg-green-100 text-green-600 border border-green-300' 
-                                            : 'bg-white border border-gray-300'
-                                        }`}
-                                        onClick={() => handleCompleteSubtask(task.id, subtask.id, !subtask.completed)}
-                                      >
-                                        {subtask.completed && <CheckCircle size={16} />}
-                                      </button>
-                                    ) : (
-                                      <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                                        subtask.completed 
-                                          ? 'bg-green-100 text-green-600' 
-                                          : 'bg-gray-100'
-                                      }`}>
-                                        {subtask.completed && <CheckCircle size={16} />}
-                                      </div>
-                                    )}
-                                  </div>
-                                  
-                                  <div className="flex-1">
-                                    <h6 className="font-medium text-sm font-roboto">{subtask.title}</h6>
-                                    <p className="text-sm text-gray-600 mt-1 font-roboto">{subtask.description}</p>
-                                    
-                                    {/* Show completion date if subtask is completed */}
-                                    {subtask.completed && subtask.completedDate && (
-                                      <p className="text-xs text-green-600 mt-2 font-roboto">
-                                        Completed on {formatDate(subtask.completedDate)}
-                                      </p>
-                                    )}
-                                    
-                                    {/* Subtask comments */}
-                                    {renderComments(subtask.comments)}
-                                    
-                                    {/* Subtask comment form */}
-                                    {renderCommentForm(subtask.id)}
-                                    
-                                    {/* Action buttons for subtask */}
-                                    {!commentTask && (
-                                      <div className="mt-3 flex justify-end">
-                                        <button
-                                          className="px-2 py-1 text-xs rounded border font-roboto"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleAddComment(task.id, subtask.id.split('-')[1]);
-                                          }}
-                                        >
-                                          Comment
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
+                          <h5 className="font-medium text-sm mb-3 font-roboto">How to Complete This Task:</h5>
+                          <div className="bg-gray-50 p-4 rounded-lg mb-4 text-sm font-roboto">
+                            <p>{task.details || "Choose one task that your partner usually handles and complete it fully, from start to finish."}</p>
                           </div>
+                          
+                          {/* Completion UI */}
+                          {canCompleteTask(task) && !task.completed && (
+                            <div className="mt-4 flex justify-center">
+                              <button
+                                onClick={() => handleTaskCompletion(task.id, true)}
+                                className="px-4 py-2 bg-green-500 text-white rounded-lg flex items-center font-roboto"
+                              >
+                                <CheckCircle size={16} className="mr-2" />
+                                Mark Task Complete
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1841,6 +1673,40 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                                     {kidTasksCompleted[`kid-task-1-${index}`].observations && (
                                       <div className="mt-2 p-2 bg-amber-50 rounded text-sm">
                                         <p className="italic text-amber-800 font-roboto">"{kidTasksCompleted[`kid-task-1-${index}`].observations}"</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                
+                                {/* Picture upload for completed kid tasks */}
+                                {kidTasksCompleted[`kid-task-1-${index}`]?.completed && (
+                                  <div className="mt-3">
+                                    {kidTasksCompleted[`kid-task-1-${index}`]?.pictureUrl ? (
+                                      <div className="mt-2">
+                                        <p className="text-xs text-green-600 mb-1 font-roboto">Picture uploaded:</p>
+                                        <img 
+                                          src={kidTasksCompleted[`kid-task-1-${index}`].pictureUrl} 
+                                          alt="Task completion" 
+                                          className="max-h-32 rounded border border-green-200"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-xs text-blue-600 font-roboto">Add a picture of what you did!</span>
+                                        <label className="px-2 py-1 bg-blue-100 text-blue-600 rounded text-xs cursor-pointer hover:bg-blue-200 font-roboto flex items-center">
+                                          <Camera size={12} className="mr-1" />
+                                          Upload Picture
+                                          <input 
+                                            type="file" 
+                                            accept="image/*" 
+                                            className="hidden" 
+                                            onChange={(e) => {
+                                              if (e.target.files && e.target.files[0]) {
+                                                handleKidTaskPictureUpload(`kid-task-1-${index}`, e.target.files[0]);
+                                              }
+                                            }}
+                                          />
+                                        </label>
                                       </div>
                                     )}
                                   </div>
@@ -1966,19 +1832,53 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                             </div>
                             
                             <div className="flex-1">
-                              <h6 className="font-medium text-sm">Watch Who Cooks</h6>
-                              <p className="text-sm text-gray-600 mt-1">
+                              <h6 className="font-medium text-sm font-roboto">Watch Who Cooks</h6>
+                              <p className="text-sm text-gray-600 mt-1 font-roboto">
                                 Keep track of who makes meals this week
                               </p>
                               
                               {kidTasksCompleted['kid-task-2-1']?.completed && (
                                 <div>
-                                  <p className="text-xs text-green-600 mt-2">
+                                  <p className="text-xs text-green-600 mt-2 font-roboto">
                                     Completed by {kidTasksCompleted['kid-task-2-1'].completedByName || 'a child'} on {formatDate(kidTasksCompleted['kid-task-2-1'].completedDate)}
                                   </p>
                                   {kidTasksCompleted['kid-task-2-1'].observations && (
                                     <div className="mt-2 p-2 bg-green-50 rounded text-sm">
-                                      <p className="italic text-green-800">"{kidTasksCompleted['kid-task-2-1'].observations}"</p>
+                                      <p className="italic text-green-800 font-roboto">"{kidTasksCompleted['kid-task-2-1'].observations}"</p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              
+                              {/* Picture upload for completed kid tasks */}
+                              {kidTasksCompleted['kid-task-2-1']?.completed && (
+                                <div className="mt-3">
+                                  {kidTasksCompleted['kid-task-2-1']?.pictureUrl ? (
+                                    <div className="mt-2">
+                                      <p className="text-xs text-green-600 mb-1 font-roboto">Picture uploaded:</p>
+                                      <img 
+                                        src={kidTasksCompleted['kid-task-2-1'].pictureUrl} 
+                                        alt="Task completion" 
+                                        className="max-h-32 rounded border border-green-200"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-xs text-blue-600 font-roboto">Add a picture of what you observed!</span>
+                                      <label className="px-2 py-1 bg-blue-100 text-blue-600 rounded text-xs cursor-pointer hover:bg-blue-200 font-roboto flex items-center">
+                                        <Camera size={12} className="mr-1" />
+                                        Upload Picture
+                                        <input 
+                                          type="file" 
+                                          accept="image/*" 
+                                          className="hidden" 
+                                          onChange={(e) => {
+                                            if (e.target.files && e.target.files[0]) {
+                                              handleKidTaskPictureUpload('kid-task-2-1', e.target.files[0]);
+                                            }
+                                          }}
+                                        />
+                                      </label>
                                     </div>
                                   )}
                                 </div>
@@ -1994,7 +1894,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                               {!commentTask && (
                                 <div className="mt-2 flex justify-end">
                                   <button
-                                    className="px-2 py-1 text-xs rounded border"
+                                    className="px-2 py-1 text-xs rounded border font-roboto"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleAddComment('kid-task-2-1');
@@ -2011,7 +1911,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                                   {taskReactions['kid-task-2-1']?.map((reaction, i) => (
                                     <div key={i} className="bg-green-50 px-2 py-1 rounded-full text-xs flex items-center">
                                       <span className="mr-1">{reaction.emoji}</span>
-                                      <span className="text-green-700">{reaction.from}</span>
+                                      <span className="text-green-700 font-roboto">{reaction.from}</span>
                                     </div>
                                   ))}
                                 </div>
@@ -2021,7 +1921,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                               {kidTasksCompleted['kid-task-2-1']?.completed && (
                                 <button
                                   onClick={() => openEmojiPicker('kid-task-2-1')}
-                                  className="mt-2 text-xs flex items-center text-blue-600 hover:text-blue-800"
+                                  className="mt-2 text-xs flex items-center text-blue-600 hover:text-blue-800 font-roboto"
                                 >
                                   <span className="mr-1">🎉</span> Add a cheer!
                                 </button>
@@ -2052,7 +1952,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                                 disabled={selectedUser?.role !== 'child'}
                               >
                                 {kidTasksCompleted['kid-task-2-2']?.completed && <span>✓</span>}
-                              </button>
+                                </button>
                             </div>
                             
                             <div className="flex-1">
