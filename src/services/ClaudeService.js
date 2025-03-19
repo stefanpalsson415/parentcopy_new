@@ -64,41 +64,108 @@ class ClaudeService {
     }
   }
 
-  formatSystemPrompt(familyContext) {
-    // Create a context-rich system prompt
-    return `You are Allie, an AI assistant specialized in family workload balance. 
-    Your purpose is to help families distribute responsibilities more equitably and improve their dynamics.
+  // Find and update the formatSystemPrompt method (around line 67-96)
+formatSystemPrompt(familyContext) {
+  // Get knowledge base if available
+  const kb = familyContext.knowledgeBase || {};
+  
+  // Create knowledge base section
+  let knowledgeBaseContent = '';
+  if (kb.whitepapers) {
+    knowledgeBaseContent = `
+    === ALLIE KNOWLEDGE BASE ===
     
-    Family Information:
-    Family Name: ${familyContext.familyName || 'Unknown'}
-    Number of Adults: ${familyContext.adults || 2}
-    Number of Children: ${familyContext.children?.length || 0}
-    Current Week: ${familyContext.currentWeek || 1}
+    TASK CATEGORIES:
+    - Visible Household: ${kb.whitepapers.taskCategories?.visibleHousehold || ''}
+    - Invisible Household: ${kb.whitepapers.taskCategories?.invisibleHousehold || ''}
+    - Visible Parental: ${kb.whitepapers.taskCategories?.visibleParental || ''}
+    - Invisible Parental: ${kb.whitepapers.taskCategories?.invisibleParental || ''}
     
-    ${familyContext.surveyData ? `
-    Survey Data:
-    Total Questions: ${familyContext.surveyData.totalQuestions || 0}
-    Mama Percentage: ${familyContext.surveyData.mamaPercentage?.toFixed(1) || 50}%
-    Papa Percentage: ${(100 - (familyContext.surveyData.mamaPercentage || 50)).toFixed(1)}%
-    ` : ''}
+    RESEARCH FINDINGS:
+    - Mental Load: ${kb.whitepapers.research?.mentalLoad || ''}
+    - Relationship Impact: ${kb.whitepapers.research?.relationshipImpact || ''}
+    - Child Development: ${kb.whitepapers.research?.childDevelopment || ''}
     
-    You can help with:
-    1. Explaining how to use the Allie app
-    2. Providing insights about family survey results
-    3. Offering research-backed parenting advice
-    4. Suggesting ways to improve family balance
-    5. Answering questions about the app's mission and methodology
+    METHODOLOGY:
+    - Task Weighting: ${kb.whitepapers.methodology?.taskWeighting || ''}
+    - Improvement Framework: ${kb.whitepapers.methodology?.improvementFramework || ''}
     
-    Always be supportive, practical, and focused on improving family dynamics through better balance.
-    Remember that all data is confidential to this family.
+    PARENTING STRATEGIES:
+    1. Positive Reinforcement: ${kb.whitepapers.parentingStrategies?.positiveReinforcement?.summary || ''}
+       Research shows: ${kb.whitepapers.parentingStrategies?.positiveReinforcement?.research || ''}
     
-    In your responses:
-    - Be concise but friendly
-    - Provide practical, actionable advice whenever possible
-    - Focus on equity and balance rather than "traditional" gender roles
-    - Remember that "balance" doesn't always mean a perfect 50/50 split
-    - Encourage communication between family members`;
+    2. Responsibility Development: ${kb.whitepapers.parentingStrategies?.responsibilityDevelopment?.summary || ''}
+       Research shows: ${kb.whitepapers.parentingStrategies?.responsibilityDevelopment?.research || ''}
+    
+    3. Emotional Support: ${kb.whitepapers.parentingStrategies?.emotionalSupport?.summary || ''}
+       Research shows: ${kb.whitepapers.parentingStrategies?.emotionalSupport?.research || ''}
+    
+    4. Integrated Approach: ${kb.whitepapers.parentingStrategies?.integratedApproach?.summary || ''}
+       Research shows: ${kb.whitepapers.parentingStrategies?.integratedApproach?.research || ''}
+    `;
   }
+
+  // Create FAQ section if available
+  let faqContent = '';
+  if (kb.faqs) {
+    faqContent = '\n=== FREQUENTLY ASKED QUESTIONS ===\n';
+    Object.entries(kb.faqs).forEach(([question, answer]) => {
+      faqContent += `Q: ${question}\nA: ${answer}\n\n`;
+    });
+  }
+  
+  // Add marketing statements if available
+  let marketingContent = '';
+  if (kb.marketing) {
+    marketingContent = '\n=== KEY BENEFITS ===\n';
+    if (kb.marketing.valueProps) {
+      kb.marketing.valueProps.forEach(prop => {
+        marketingContent += `- ${prop}\n`;
+      });
+    }
+  }
+  
+  // Create a context-rich system prompt
+  return `You are Allie, an AI assistant specialized in family workload balance. 
+  Your purpose is to help families distribute responsibilities more equitably and improve their dynamics.
+  
+  Family Information:
+  Family Name: ${familyContext.familyName || 'Unknown'}
+  Number of Adults: ${familyContext.adults || 2}
+  Number of Children: ${familyContext.children?.length || 0}
+  Current Week: ${familyContext.currentWeek || 1}
+  
+  ${familyContext.surveyData ? `
+  Survey Data:
+  Total Questions: ${familyContext.surveyData.totalQuestions || 0}
+  Mama Percentage: ${familyContext.surveyData.mamaPercentage?.toFixed(1) || 50}%
+  Papa Percentage: ${(100 - (familyContext.surveyData.mamaPercentage || 50)).toFixed(1)}%
+  ` : ''}
+  
+  ${knowledgeBaseContent}
+  
+  ${marketingContent}
+  
+  ${faqContent}
+  
+  You can help with:
+  1. Explaining how to use the Allie app
+  2. Providing insights about family survey results
+  3. Offering research-backed parenting advice
+  4. Suggesting ways to improve family balance
+  5. Answering questions about the app's mission and methodology
+  
+  Always be supportive, practical, and focused on improving family dynamics through better balance.
+  Remember that all data is confidential to this family.
+  
+  In your responses:
+  - Be concise but friendly
+  - Provide practical, actionable advice whenever possible
+  - Focus on equity and balance rather than "traditional" gender roles
+  - Remember that "balance" doesn't always mean a perfect 50/50 split
+  - Encourage communication between family members
+  - When mentioning research or scientific findings, refer to the studies in the knowledge base`;
+}
 }
 
 export default new ClaudeService();

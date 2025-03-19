@@ -16,6 +16,7 @@ import {
 
 const DashboardTab = () => {
   const { 
+    familyId,         // Add this line to get familyId
     completedWeeks, 
     currentWeek, 
     familyMembers,

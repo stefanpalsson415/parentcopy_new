@@ -2,6 +2,8 @@
 import { collection, query, where, orderBy, getDocs, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import ClaudeService from './ClaudeService';
+// Add this import at the top of the file
+import { knowledgeBase } from '../data/AllieKnowledgeBase';
 
 class ChatService {
   // Load messages for a family
@@ -45,38 +47,42 @@ class ChatService {
     }
   }
   
-  // Get AI response from Claude
-  async getAIResponse(text, familyId, previousMessages) {
-    try {
-      // Get family data from Firestore for context
-      const familyData = await this.getFamilyContext(familyId);
-      
-      // Format messages for Claude API
-      const formattedMessages = previousMessages
-        .slice(-10) // Last 10 messages for context
-        .map(msg => ({
-          role: msg.sender === 'allie' ? 'assistant' : 'user',
-          content: msg.text
-        }));
-      
-      // Add the current message
-      formattedMessages.push({
-        role: 'user',
-        content: text
-      });
-      
-      // Call the Claude API through our service
-      const response = await ClaudeService.generateResponse(
-        formattedMessages, 
-        familyData
-      );
-      
-      return response;
-    } catch (error) {
-      console.error("Error getting AI response:", error);
-      return "I'm sorry, I'm having trouble processing your request right now. Please try again in a moment.";
-    }
+
+// Find and update the getAIResponse method (typically around line 50-80)
+async getAIResponse(text, familyId, previousMessages) {
+  try {
+    // Get family data from Firestore for context
+    const familyData = await this.getFamilyContext(familyId);
+    
+    // Add knowledge base to context
+    familyData.knowledgeBase = knowledgeBase;
+    
+    // Format messages for Claude API
+    const formattedMessages = previousMessages
+      .slice(-10) // Last 10 messages for context
+      .map(msg => ({
+        role: msg.sender === 'allie' ? 'assistant' : 'user',
+        content: msg.text
+      }));
+    
+    // Add the current message
+    formattedMessages.push({
+      role: 'user',
+      content: text
+    });
+    
+    // Call the Claude API through our service
+    const response = await ClaudeService.generateResponse(
+      formattedMessages, 
+      familyData
+    );
+    
+    return response;
+  } catch (error) {
+    console.error("Error getting AI response:", error);
+    return "I'm sorry, I'm having trouble processing your request right now. Please try again in a moment.";
   }
+}
   
   // Get family context data for the AI
   async getFamilyContext(familyId) {
