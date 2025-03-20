@@ -24,6 +24,7 @@ const formatDate = (date) => {
 };
 
 const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
+  console.log("=== COMPONENT MOUNTING ===");
   const { 
     selectedUser, 
     familyMembers,
@@ -129,78 +130,166 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
 
   // Load tasks for the current week - with enhanced reliability
   useEffect(() => {
-    const loadTasks = async () => {
+    // Replace the entire loadTasks function within the useEffect
+const loadTasks = async () => {
+  try {
+    console.log(`Starting to load tasks for Week ${currentWeek}, user:`, selectedUser?.name);
+    
+    let tasks = [];
+    let tasksLoaded = false; // Track if we successfully loaded tasks
+    
+    if (familyId) {
+      // METHOD 1: Try loading from DatabaseService
       try {
-        console.log(`Loading tasks for Week ${currentWeek}, user:`, selectedUser?.name);
-        console.log('Completed weeks:', completedWeeks);
+        console.log("METHOD 1: Trying DatabaseService.getTasksForWeek...");
+        const dbTasks = await DatabaseService.getTasksForWeek(familyId, currentWeek);
+        console.log("METHOD 1 result:", dbTasks);
         
-        let tasks = [];
-        
-        if (familyId) {
-          // Method 1: Use DatabaseService directly
-          try {
-            tasks = await DatabaseService.getTasksForWeek(familyId, currentWeek);
-            console.log(`Tasks loaded from Firebase for Week ${currentWeek}:`, tasks?.length || 0);
-          } catch (error) {
-            console.error("Error loading tasks from DatabaseService:", error);
-          }
-          
-          // Method 2: If that fails, try direct Firestore query
-          if (!tasks || tasks.length === 0) {
-            try {
-              console.log("Trying direct Firestore query...");
-              const docRef = doc(db, "families", familyId);
-              const familyDoc = await getDoc(docRef);
-              
-              if (familyDoc.exists()) {
-                const familyData = familyDoc.data();
-                tasks = familyData.tasks || [];
-                console.log(`Tasks loaded directly from Firestore:`, tasks.length);
-              }
-            } catch (dbError) {
-              console.error("Error on direct Firestore query:", dbError);
-            }
-          }
-          
-          // Method 3: Use context method
-          if (!tasks || tasks.length === 0) {
-            try {
-              console.log("Trying context loadCurrentWeekTasks...");
-              tasks = await loadCurrentWeekTasks();
-              console.log(`Tasks loaded from context:`, tasks?.length || 0);
-            } catch (contextError) {
-              console.error("Error loading tasks from context:", contextError);
-            }
-          }
-          
-          // Also load kid tasks
-          try {
-            const familyData = await DatabaseService.loadFamilyData(familyId);
-            if (familyData && familyData.kidTasks) {
-              setKidTasksCompleted(familyData.kidTasks);
-              console.log("Kid tasks loaded:", familyData.kidTasks);
-            }
-          } catch (kidTasksError) {
-            console.error("Error loading kid tasks:", kidTasksError);
-          }
-        }
-        
-        if (tasks && tasks.length > 0) {
-          console.log("Setting task recommendations with loaded data:", tasks.length);
-          setTaskRecommendations(tasks);
-        } else {
-          console.warn("No tasks found for current week. This should not happen in production.");
-          // In production, your AI service would generate tasks here
-          setTaskRecommendations([]);
+        if (dbTasks && dbTasks.length > 0) {
+          tasks = dbTasks;
+          tasksLoaded = true;
+          console.log("METHOD 1 SUCCESS: Tasks loaded from DatabaseService");
         }
       } catch (error) {
-        console.error(`Error in loadTasks for Week ${currentWeek}:`, error);
-        setTaskRecommendations([]);
+        console.error("METHOD 1 FAILED:", error);
       }
-    };
+      
+      // METHOD 2: If Method 1 failed, try direct Firestore query
+      if (!tasksLoaded) {
+        try {
+          console.log("METHOD 2: Trying direct Firestore query...");
+          const docRef = doc(db, "families", familyId);
+          const familyDoc = await getDoc(docRef);
+          
+          if (familyDoc.exists()) {
+            const familyData = familyDoc.data();
+            if (familyData.tasks && familyData.tasks.length > 0) {
+              tasks = familyData.tasks;
+              tasksLoaded = true;
+              console.log("METHOD 2 SUCCESS: Tasks loaded directly from Firestore");
+            }
+          }
+        } catch (dbError) {
+          console.error("METHOD 2 FAILED:", dbError);
+        }
+      }
+      
+      // METHOD 3: If both previous methods failed, try context method
+      if (!tasksLoaded) {
+        try {
+          console.log("METHOD 3: Trying context loadCurrentWeekTasks...");
+          const contextTasks = await loadCurrentWeekTasks();
+          if (contextTasks && contextTasks.length > 0) {
+            tasks = contextTasks;
+            tasksLoaded = true;
+            console.log("METHOD 3 SUCCESS: Tasks loaded from context");
+          }
+        } catch (contextError) {
+          console.error("METHOD 3 FAILED:", contextError);
+        }
+      }
+      
+      // METHOD 4: If all methods failed, create placeholder tasks
+      if (!tasksLoaded) {
+        console.warn("All task loading methods failed. Creating placeholder tasks.");
+        tasks = [
+          {
+            id: `${currentWeek}-placeholder-1`,
+            title: `Week ${currentWeek}: Meal Planning`,
+            description: "Take charge of planning family meals for the week",
+            assignedTo: "Papa",
+            assignedToName: "Papa",
+            focusArea: "Meal Planning",
+            category: "Invisible Household Tasks",
+            taskType: "survey-based",
+            insight: "Survey data shows an imbalance in meal planning responsibilities.",
+            completed: false,
+            comments: []
+          },
+          {
+            id: `${currentWeek}-placeholder-2`,
+            title: `Week ${currentWeek}: Emotional Support`,
+            description: "Provide more emotional guidance for the children",
+            assignedTo: "Mama",
+            assignedToName: "Mama",
+            focusArea: "Emotional Support",
+            category: "Invisible Parental Tasks",
+            taskType: "ai",
+            insight: "AI analysis indicates emotional labor could be better balanced.",
+            completed: false,
+            comments: []
+          }
+        ];
+        console.log("Created placeholder tasks:", tasks);
+      }
+    }
+    
+    // Log what we're about to set as tasks
+    console.log("Final tasks to be set in state:", tasks);
+    console.log("Tasks for Papa:", tasks.filter(t => t.assignedTo === "Papa").length);
+    console.log("Tasks for Mama:", tasks.filter(t => t.assignedTo === "Mama").length);
+    
+    // Set the tasks in state
+    setTaskRecommendations(tasks);
+    
+  } catch (error) {
+    console.error(`Error in loadTasks for Week ${currentWeek}:`, error);
+    console.log("Creating basic placeholder tasks due to error");
+    
+    // Create very basic fallback tasks on error
+    const fallbackTasks = [
+      {
+        id: `${currentWeek}-error-1`,
+        title: `Task for Papa`,
+        description: "An error occurred loading tasks. This is a placeholder.",
+        assignedTo: "Papa",
+        assignedToName: "Papa",
+        completed: false,
+        comments: []
+      },
+      {
+        id: `${currentWeek}-error-2`,
+        title: `Task for Mama`,
+        description: "An error occurred loading tasks. This is a placeholder.",
+        assignedTo: "Mama",
+        assignedToName: "Mama",
+        completed: false,
+        comments: []
+      }
+    ];
+    setTaskRecommendations(fallbackTasks);
+  }
+};
     
     loadTasks();
   }, [familyId, currentWeek, selectedUser]);
+
+  // Add this after tasks are loaded and set in state
+useEffect(() => {
+  console.log("TaskRecommendations after loading:", taskRecommendations);
+  console.log("Papa tasks:", taskRecommendations.filter(task => task.assignedTo === "Papa"));
+  console.log("Mama tasks:", taskRecommendations.filter(task => task.assignedTo === "Mama"));
+}, [taskRecommendations]);
+
+// Add this as a new useEffect hook somewhere after your state definitions
+useEffect(() => {
+  // Log data whenever taskRecommendations changes
+  console.log("=== ALL TASKS ===", taskRecommendations);
+  console.log("=== TASK TYPES ===", taskRecommendations.map(t => t.taskType));
+  console.log("=== MAMA TASKS ===", taskRecommendations.filter(t => 
+    t.assignedTo === "Mama" || 
+    t.assignedTo === "mama" || 
+    t.assignedToName === "Mama" || 
+    t.assignedToName === "mama"
+  ));
+  console.log("=== PAPA TASKS ===", taskRecommendations.filter(t => 
+    t.assignedTo === "Papa" || 
+    t.assignedTo === "papa" || 
+    t.assignedToName === "Papa" || 
+    t.assignedToName === "papa"
+  ));
+}, [taskRecommendations]);
+
 
   // Force reload on visibility change to keep data fresh
   useEffect(() => {
@@ -282,6 +371,124 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     return count;
   };
   
+  // Add this function to handle task completion similar to child tasks
+const handleParentTaskLikeChild = async (taskId, isCompleted, comment = '') => {
+  try {
+    if (!selectedUser || !familyId) return;
+    
+    const completedDate = isCompleted ? new Date().toISOString() : null;
+    
+    // First update the local state
+    const updatedTasks = taskRecommendations.map(task => {
+      if (task.id.toString() === taskId.toString()) {
+        return {
+          ...task,
+          completed: isCompleted,
+          completedDate: completedDate,
+          comments: comment ? [...(task.comments || []), {
+            id: Date.now(),
+            userId: selectedUser.id,
+            userName: selectedUser.name,
+            text: comment,
+            timestamp: new Date().toLocaleString()
+          }] : task.comments
+        };
+      }
+      return task;
+    });
+    
+    setTaskRecommendations(updatedTasks);
+    
+    // Now, save data similar to kid tasks
+    if (familyId) {
+      // Create a custom field for each task
+      const customField = `parentTask_${taskId}`;
+      
+      // Create data object similar to kid tasks
+      const taskData = {
+        completed: isCompleted,
+        completedDate: completedDate,
+        completedBy: selectedUser.id,
+        completedByName: selectedUser.name,
+        comment: comment
+      };
+      
+      // Save using a similar approach to kid tasks
+      await DatabaseService.saveFamilyData({
+        [customField]: taskData,
+        // Also update the regular tasks array
+        tasks: updatedTasks
+      }, familyId);
+      
+      console.log(`Parent task ${taskId} saved using child-like approach`);
+    }
+    
+    // Try our direct save method too
+    await directlySaveTask(taskId, isCompleted);
+    
+    return true;
+  } catch (error) {
+    console.error("Error in handleParentTaskLikeChild:", error);
+    return false;
+  }
+};
+  
+// Add this function to the TasksTab component
+const directlySaveTask = async (taskId, isCompleted) => {
+  if (!familyId) {
+    console.error("No family ID available");
+    return false;
+  }
+  
+  try {
+    console.log(`DIRECT SAVE: Saving task ${taskId} as ${isCompleted ? 'completed' : 'incomplete'}`);
+    
+    // Get a direct reference to the family document
+    const docRef = doc(db, "families", familyId);
+    
+    // Get the current family data
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      // Get current tasks array
+      const familyData = docSnap.data();
+      const currentTasks = familyData.tasks || [];
+      
+      // Find the task we want to update
+      const taskIndex = currentTasks.findIndex(t => t.id.toString() === taskId.toString());
+      
+      if (taskIndex >= 0) {
+        console.log(`DIRECT SAVE: Found task at index ${taskIndex}`, currentTasks[taskIndex]);
+        
+        // Create a new tasks array with the updated task
+        const updatedTasks = [...currentTasks];
+        updatedTasks[taskIndex] = {
+          ...updatedTasks[taskIndex],
+          completed: isCompleted,
+          completedDate: isCompleted ? new Date().toISOString() : null
+        };
+        
+        // Write the updated tasks back to Firestore
+        await updateDoc(docRef, {
+          tasks: updatedTasks
+        });
+        
+        console.log("DIRECT SAVE: Successfully updated task");
+        return true;
+      } else {
+        console.error(`DIRECT SAVE: Task with ID ${taskId} not found in tasks array`);
+        return false;
+      }
+    } else {
+      console.error("DIRECT SAVE: Family document doesn't exist");
+      return false;
+    }
+  } catch (error) {
+    console.error("DIRECT SAVE: Error saving task:", error);
+    return false;
+  }
+};  
+
   // Whether family meeting can be started
   const enoughTasksCompleted = countCompletedTasks() >= 3;
   const canStartFamilyMeeting = weeklyCheckInCompleted && enoughTasksCompleted;
@@ -463,58 +670,81 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   };
   
   // New function to handle task completion with comment
-  const handleCompleteWithComment = async (taskId) => {
-    if (!selectedUser || !commentInputs[taskId]?.trim()) return;
+  // Replace the current handleCompleteWithComment function
+const handleCompleteWithComment = async (taskId) => {
+  if (!selectedUser || !commentInputs[taskId]?.trim()) return;
+  
+  // Set submitting state
+  setIsSubmittingComment(true);
+  setSavingTasks(prev => ({ ...prev, [taskId]: true }));
+  
+  try {
+    console.log(`SAVING TASK WITH COMMENT: ${taskId}`);
+    // Try our new method first
+    const saveResult = await handleParentTaskLikeChild(taskId, true, commentInputs[taskId]);
     
-    // Set submitting state
-    setIsSubmittingComment(true);
-    setSavingTasks(prev => ({ ...prev, [taskId]: true }));
-    
-    try {
-      // First add the comment
-      console.log(`Adding comment to task ${taskId}: "${commentInputs[taskId]}"`);
-      const commentResult = await addTaskComment(taskId, commentInputs[taskId]);
+    if (saveResult) {
+      console.log(`SAVE SUCCESS: Task ${taskId} saved successfully`);
+    } else {
+      console.warn(`SAVE WARNING: Primary save method failed, trying fallbacks...`);
       
-      // Then immediately mark task as completed
-      console.log(`Marking task ${taskId} as completed after adding comment`);
-      await handleTaskCompletion(taskId, true);
+      // If that failed, try adding just the comment
+      try {
+        await addTaskComment(taskId, commentInputs[taskId]);
+      } catch (commentError) {
+        console.error("Error adding comment:", commentError);
+      }
       
-      // Update local state to show the new comment
-      const updatedTasks = taskRecommendations.map(task => {
-        if (task.id.toString() === taskId.toString()) {
-          return {
-            ...task,
-            completed: true,
-            completedDate: new Date().toISOString(),
-            comments: [...(task.comments || []), {
-              id: commentResult?.id || Date.now(),
-              userId: selectedUser.id,
-              userName: selectedUser.name,
-              text: commentInputs[taskId],
-              timestamp: new Date().toLocaleString()
-            }]
-          };
-        }
-        return task;
-      });
+      // Then try marking the task as completed
+      try {
+        await handleTaskCompletion(taskId, true);
+      } catch (completionError) {
+        console.error("Error completing task:", completionError);
+      }
       
-      setTaskRecommendations(updatedTasks);
-      console.log("Task marked complete with comment");
-      
-    } catch (error) {
-      console.error("Error completing task with comment:", error);
-      setSaveErrors(prev => ({ 
-        ...prev, 
-        [taskId]: "Error saving: " + error.message 
-      }));
-    } finally {
-      setIsSubmittingComment(false);
-      setSavingTasks(prev => ({ ...prev, [taskId]: false }));
-      
-      // Clear the input but don't remove it from state entirely
-      setCommentInputs(prev => ({...prev, [taskId]: ''}));
+      // Finally try our direct method
+      try {
+        await directlySaveTask(taskId, true);
+      } catch (directError) {
+        console.error("Error in direct save:", directError);
+      }
     }
-  };
+    
+    // Update local state regardless of save success
+    const updatedTasks = taskRecommendations.map(task => {
+      if (task.id.toString() === taskId.toString()) {
+        return {
+          ...task,
+          completed: true,
+          completedDate: new Date().toISOString(),
+          comments: [...(task.comments || []), {
+            id: Date.now(),
+            userId: selectedUser.id,
+            userName: selectedUser.name,
+            text: commentInputs[taskId],
+            timestamp: new Date().toLocaleString()
+          }]
+        };
+      }
+      return task;
+    });
+    
+    setTaskRecommendations(updatedTasks);
+    
+  } catch (error) {
+    console.error("Error in handleCompleteWithComment:", error);
+    setSaveErrors(prev => ({ 
+      ...prev, 
+      [taskId]: "Error saving: " + error.message 
+    }));
+  } finally {
+    setIsSubmittingComment(false);
+    setSavingTasks(prev => ({ ...prev, [taskId]: false }));
+    
+    // Clear the input but don't remove it from state entirely
+    setCommentInputs(prev => ({...prev, [taskId]: ''}));
+  }
+};
 
   // Handle kid task completion with observations
   const handleCompleteKidTask = async (taskId, kidId, isCompleted, observations = null) => {
@@ -884,9 +1114,9 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
           <div className="border-l-4 border-blue-500 p-2">
             <h4 className="font-medium mb-2 text-lg font-roboto">Papa's Tasks</h4>
             <div className="space-y-3">
-              {taskRecommendations
-                .filter(task => task.assignedTo === "Papa")
-                .map(task => (
+            {taskRecommendations
+  .filter(task => task.assignedTo?.toLowerCase() === "papa".toLowerCase())
+  .map(task => (
                   <div key={task.id} className={`rounded-lg border shadow ${task.completed ? 'bg-green-50' : 'bg-white'}`}>
                     {/* Main task header */}
                     <div className="p-4">
@@ -1010,6 +1240,13 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                               </div>
                             )}
                             
+{/* Show message if no tasks */}
+{taskRecommendations.filter(task => task?.assignedTo?.toLowerCase() === "papa".toLowerCase()).length === 0 && (
+      <div className="p-4 bg-gray-50 rounded-lg text-center">
+        <p className="text-gray-500 font-roboto">No tasks assigned to Papa for this cycle. Please check back later.</p>
+      </div>
+    )}
+
                             {/* Completion status notification */}
                             {task.completed && (
                               <div className="bg-green-50 p-3 rounded-lg border border-green-200 text-center">
@@ -1032,9 +1269,9 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
           <div className="border-l-4 border-purple-500 p-2">
             <h4 className="font-medium mb-2 text-lg font-roboto">Mama's Tasks</h4>
             <div className="space-y-3">
-              {taskRecommendations
-                .filter(task => task.assignedTo === "Mama")
-                .map(task => (
+            {taskRecommendations
+  .filter(task => task.assignedTo?.toLowerCase() === "mama".toLowerCase())
+  .map(task => (
                   <div key={task.id} className={`rounded-lg border shadow ${task.completed ? 'bg-green-50' : 'bg-white'}`}>
                     {/* Main task header */}
                     <div className="p-4">

@@ -1047,20 +1047,26 @@ export function FamilyProvider({ children }) {
     }));
     
     // Create the task with AI-driven insight
-    return {
-      id: taskId,
-      title: `${weekNumber > 1 ? `Week ${weekNumber}: ` : ""}${areaData.focusArea}`,
-      description: areaData.description,
-      assignedTo: assignedTo,
-      assignedToName: assignedTo,
-      focusArea: areaData.focusArea, 
-      category: areaData.category,
-      completed: false,
-      completedDate: null,
-      comments: [],
-      aiInsight: areaData.insight,
-      subTasks: formattedSubTasks
-    };
+    // Get the actual parent name from family members
+const getParentName = (role) => {
+  const parent = familyMembers.find(m => m.role === 'parent' && m.roleType === role);
+  return parent ? parent.name : role; // Fall back to role if name not found
+};
+
+return {
+  id: taskId,
+  title: `${weekNumber > 1 ? `Week ${weekNumber}: ` : ""}${areaData.focusArea}`,
+  description: areaData.description,
+  assignedTo: assignedTo,
+  assignedToName: getParentName(assignedTo),
+  focusArea: areaData.focusArea, 
+  category: areaData.category,
+  completed: false,
+  completedDate: null,
+  comments: [],
+  aiInsight: areaData.insight,
+  subTasks: formattedSubTasks
+};
   };
 
   // Generate special AI insight task
@@ -1518,9 +1524,10 @@ export function FamilyProvider({ children }) {
     meetingActionItems.forEach((item, index) => {
       // Determine who should be assigned the task
       // Simple heuristic: assign to Papa if contains "Papa", Mama if contains "Mama", alternate otherwise
-      const assignTo = item.includes("Papa") ? "Papa" : 
-                        item.includes("Mama") ? "Mama" : 
-                        index % 2 === 0 ? "Papa" : "Mama";
+      const itemLower = item.toLowerCase();
+const assignTo = itemLower.includes("papa") ? "Papa" : 
+                itemLower.includes("mama") ? "Mama" : 
+                index % 2 === 0 ? "Papa" : "Mama";
       
       tasks.push({
         id: `${weekNumber}-meeting-${index + 1}`,
