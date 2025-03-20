@@ -1780,8 +1780,12 @@ export function FamilyProvider({ children }) {
     try {
       if (!familyId) throw new Error("No family ID available");
       
+      console.log(`Loading tasks for Week ${currentWeek} from Firebase...`);
       const tasks = await DatabaseService.getTasksForWeek(familyId, currentWeek);
+      console.log(`Received ${tasks?.length || 0} tasks from Firebase:`, tasks);
+      
       if (tasks && tasks.length > 0) {
+        console.log("Updating task recommendations with fresh data");
         setTaskRecommendations(tasks);
       }
       return tasks;

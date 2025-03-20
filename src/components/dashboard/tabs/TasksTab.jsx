@@ -6,6 +6,8 @@ import DatabaseService from '../../../services/DatabaseService';
 import CoupleCheckInScreen from '../../assessment/CoupleCheckInScreen';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../../services/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../../../services/firebase';
 
 // AI-powered task generation based on survey data
 const analyzeTaskImbalances = (surveyResponses, fullQuestionSet) => {
@@ -331,6 +333,23 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     checkInDueDate ? checkInDueDate.toISOString().split('T')[0] : ''
   );
 
+// Add this effect around line 200
+useEffect(() => {
+  // Load tasks when component becomes visible again
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible' && familyId) {
+      console.log("Document visible again, reloading tasks...");
+      loadCurrentWeekTasks();
+    }
+  };
+  
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  
+  return () => {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+  };
+}, [familyId, loadCurrentWeekTasks]);
+
   // Update input when due date changes
   useEffect(() => {
     if (checkInDueDate) {
@@ -583,6 +602,12 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
       return;
     }
     
+    if (!familyId) {
+      console.error("No family ID available");
+      alert("Family data not loaded correctly. Please refresh the page.");
+      return;
+    }
+    
     const task = taskRecommendations.find(t => t.id.toString() === taskId.toString());
     if (!task) {
       console.error("Task not found:", taskId);
@@ -602,8 +627,9 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     try {
       // Create completion timestamp
       const completedDate = isCompleted ? new Date().toISOString() : null;
+      console.log(`Marking task ${taskId} as ${isCompleted ? 'completed' : 'incomplete'} for Week ${currentWeek}`);
       
-      // Immediately update local state for responsive UI
+      // Update local state immediately for UI responsiveness
       const updatedTasks = taskRecommendations.map(t => {
         if (t.id.toString() === taskId.toString()) {
           return {
@@ -615,26 +641,60 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
         return t;
       });
       
-      // Update state immediately
       setTaskRecommendations(updatedTasks);
       
-      // Save to Firebase
-      await updateTaskCompletion(taskId, isCompleted);
-      console.log("Task completed successfully:", taskId);
+      // DIRECT DATABASE UPDATE - This is more reliable than context methods sometimes
+      console.log("Directly updating task completion in Firebase...");
       
-      // Force reload of tasks to ensure data consistency
-      setTimeout(async () => {
-        if (familyId) {
-          const freshTasks = await DatabaseService.getTasksForWeek(familyId, currentWeek);
-          if (freshTasks && freshTasks.length > 0) {
-            setTaskRecommendations(freshTasks);
+      // First get current tasks from the database
+      const docRef = doc(db, "families", familyId);
+      const familyDoc = await getDoc(docRef);
+      
+      if (familyDoc.exists()) {
+        const familyData = familyDoc.data();
+        const currentTasks = familyData.tasks || [];
+        
+        // Update the specific task
+        const updatedDBTasks = currentTasks.map(t => {
+          if (t.id.toString() === taskId.toString()) {
+            console.log(`Updating task ${t.id} in database, setting completed=${isCompleted}`);
+            return {
+              ...t,
+              completed: isCompleted,
+              completedDate: completedDate
+            };
           }
+          return t;
+        });
+        
+        // Save back to database
+        await updateDoc(docRef, {
+          tasks: updatedDBTasks,
+          updatedAt: new Date().toISOString()
+        });
+        
+        console.log("Task completion successfully saved to database");
+      } else {
+        console.error("Family document not found!");
+      }
+      
+      // Also try the context method as a backup
+      await updateTaskCompletion(taskId, isCompleted);
+      
+      // Force reload after a delay to ensure fresh data
+      setTimeout(async () => {
+        try {
+          console.log("Reloading fresh task data...");
+          await loadCurrentWeekTasks();
+          console.log("Task data reloaded successfully");
+        } catch (reloadError) {
+          console.error("Error reloading tasks:", reloadError);
         }
       }, 1000);
       
     } catch (error) {
       console.error("Error completing task:", error);
-      alert("There was an error saving your task. Please try again.");
+      alert("There was an error saving your task completion. Please try again.");
     }
   };
   
