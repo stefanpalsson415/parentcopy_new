@@ -16,6 +16,8 @@ import AllieChat from '../chat/AllieChat';
 // At the top of the file, add these imports
 import AllieAIEngineService from '../../services/AllieAIEngineService';
 import { Brain, Lightbulb } from 'lucide-react';
+import StrategicActionsTracker from './StrategicActionsTracker';
+
 
 const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const navigate = useNavigate();
@@ -286,8 +288,13 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
         return <HowThisWorksScreen />;
       case 'personalized':
         return <PersonalizedApproachScreen />;
-      case 'relationship':
-        return <CoupleRelationshipChart />;
+        case 'relationship':
+          return (
+            <div className="space-y-6">
+              <CoupleRelationshipChart />
+              <StrategicActionsTracker />
+            </div>
+          );
       case 'dashboard':
         return <DashboardTab />;
       case 'tasks':

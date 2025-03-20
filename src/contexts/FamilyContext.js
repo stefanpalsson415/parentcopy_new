@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import DatabaseService from '../services/DatabaseService';
 import { calculateBalanceScores } from '../utils/TaskWeightCalculator';
 import { useSurvey } from './SurveyContext';
+import { collection, doc, setDoc, getDoc, updateDoc, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
 
 // Create the family context
 const FamilyContext = createContext();
@@ -54,7 +55,8 @@ export function FamilyProvider({ children }) {
   const [impactInsights, setImpactInsights] = useState([]);
   const [kidTasksData, setKidTasksData] = useState({});
   const [coupleCheckInData, setCoupleCheckInData] = useState({});
-  const [weightedScores, setWeightedScores] = useState(null); // Added this line to fix the error
+  const [weightedScores, setWeightedScores] = useState(null);
+  const [relationshipStrategies, setRelationshipStrategies] = useState([]);
   
   // Set family priorities for weighting system
   const [familyPriorities, setFamilyPriorities] = useState({
@@ -323,6 +325,65 @@ useEffect(() => {
   // Get relationship satisfaction trend data
   const getRelationshipTrendData = () => {
     const trendData = [];
+
+  // Get relationship strategies
+  const getRelationshipStrategies = async () => {
+    try {
+      if (!familyId) throw new Error("No family ID available");
+      
+      // Try to get strategies from Firebase
+      const docRef = doc(db, "relationshipStrategies", familyId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return docSnap.data().strategies || [];
+      }
+      
+      return null; // No strategies found
+    } catch (error) {
+      console.error("Error getting relationship strategies:", error);
+      return null;
+    }
+  };
+  
+  // Update a relationship strategy
+  const updateRelationshipStrategy = async (strategyId, updateData) => {
+    try {
+      if (!familyId) throw new Error("No family ID available");
+      
+      // Get current strategies
+      const docRef = doc(db, "relationshipStrategies", familyId);
+      const docSnap = await getDoc(docRef);
+      
+      let currentStrategies = [];
+      
+      if (docSnap.exists()) {
+        currentStrategies = docSnap.data().strategies || [];
+      }
+      
+      // Update the specific strategy
+      const updatedStrategies = currentStrategies.map(strategy => 
+        strategy.id === strategyId ? { ...strategy, ...updateData } : strategy
+      );
+      
+      // If strategy doesn't exist in the array, this has no effect
+      // In a real implementation, you might want to add it
+      
+      // Save back to Firebase
+      await setDoc(docRef, {
+        strategies: updatedStrategies,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      // Update local state
+      setRelationshipStrategies(updatedStrategies);
+      
+      return true;
+    } catch (error) {
+      console.error("Error updating relationship strategy:", error);
+      throw error;
+    }
+  };
     
     // Add initial data point if available
     if (coupleCheckInData[1]) {
@@ -1978,6 +2039,9 @@ const assignTo = itemLower.includes("papa") ? "Papa" :
     saveCoupleCheckInData,
     getCoupleCheckInData,
     getRelationshipTrendData,
+    relationshipStrategies,
+    getRelationshipStrategies,
+    updateRelationshipStrategy,
     setWeightedScores, // Added setWeightedScores to the context value
     setSurveyData // Add the bridge function to the context value
   };
