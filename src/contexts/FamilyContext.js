@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import DatabaseService from '../services/DatabaseService';
 import { calculateBalanceScores } from '../utils/TaskWeightCalculator';
 import { useSurvey } from './SurveyContext';
+import { db } from '../services/firebase';
 import { collection, doc, setDoc, getDoc, updateDoc, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
 
 // Create the family context

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Heart, Clock, Users, CheckCircle, Calendar, MessageCircle, Smile, Award, Lightbulb, Map } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
+import { ChevronUp, ChevronDown } from "lucide-react";
+
 
 const StrategicActionsTracker = () => {
   const { 
@@ -86,8 +88,7 @@ const StrategicActionsTracker = () => {
     {
       id: 'gratitude-affirmation',
       name: 'Practice Gratitude & Affirmation',
-      description: 'Routinely express appreciation for your partner's efforts—big or small.',
-      icon: <Smile size={20} className="text-yellow-600" />,
+      description: "Routinely express appreciation for your partner's efforts—big or small.",      icon: <Smile size={20} className="text-yellow-600" />,
       frequency: 'daily',
       implementation: 0,
       lastActivity: null,
@@ -107,7 +108,7 @@ const StrategicActionsTracker = () => {
       lastActivity: null,
       tips: [
         'Use a physical calendar in the kitchen or a digital app',
-        'Include kids' events, work deadlines, and personal appointments',
+"Include kids' events, work deadlines, and personal appointments",
         'Review the calendar together weekly'
       ]
     },
@@ -135,7 +136,7 @@ const StrategicActionsTracker = () => {
       lastActivity: null,
       tips: [
         'Schedule time blocks where one parent manages responsibilities',
-        'Identify each partner's preferred self-care activities',
+        "Identify each partner's preferred self-care activities",
         'Hold these times sacred, avoiding interruptions'
       ]
     },
@@ -177,7 +178,7 @@ const StrategicActionsTracker = () => {
       lastActivity: null,
       tips: [
         'Schedule quarterly meetings to discuss finances and aspirations',
-        'Ensure both partners' voices are heard and valued',
+        "Ensure both partners' voices are heard and valued",
         'Document decisions and revisit them periodically'
       ]
     }
