@@ -62,8 +62,9 @@ const UserSettingsScreen = ({ onClose }) => {
           throw new Error("Family ID is required to upload family picture");
         }
         
-        if (file.size > 2 * 1024 * 1024) { // 2MB limit for family icons
-          throw new Error("Family icon size exceeds 2MB limit");
+        if (file.size > 10 * 1024 * 1024) { // 10MB limit
+          alert("File is too large. Please select a file under 10MB.");
+          return;
         }
         
         // Use the dedicated method for uploading family pictures

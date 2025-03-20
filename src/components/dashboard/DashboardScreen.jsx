@@ -27,7 +27,9 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
     completedWeeks,
     currentWeek,
     familyName,
-    familyId  // Add this line to get familyId from context
+    familyId,  // Add this line to get familyId from context
+    familyPicture  // Added this line to get familyPicture from context
+
   } = useFamily();
   
   const { loadFamilyData } = useAuth();
@@ -324,80 +326,93 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <div className="bg-black text-white p-4">
-        <div className="container mx-auto flex justify-between items-center">
-          <div className="flex flex-col">
-            <h1 className="text-xl font-bold font-roboto">Allie</h1>
-            <p className="text-sm font-roboto">Balance family responsibilities together</p>
-            <p className="text-xs text-gray-300 font-roboto">The {familyName ? familyName.split(' ')[0] : ''} Family</p>
-          </div>
-          <div className="flex items-center">
-            <div 
-              className="w-8 h-8 rounded-full overflow-hidden mr-2 cursor-pointer border-2 border-white"
-              onClick={toggleSettings}
-            >
-              <img 
-                src={selectedUser.profilePicture}
-                alt={selectedUser.name}
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <span className="mr-3 font-roboto">{selectedUser.name}</span>
-            <button 
-              onClick={handleLogout}
-              className="flex items-center text-sm bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded font-roboto"
-            >
-              <LogOut size={14} className="mr-1" />
-              Switch User
-            </button>
-          </div>
+  <div className="container mx-auto flex justify-between items-center">
+    <div className="flex items-center">
+      {/* Family photo */}
+      <div className="mr-4 hidden md:block">
+        <div className="w-12 h-12 rounded-lg overflow-hidden border-2 border-white shadow-lg">
+          <img 
+            src={familyPicture || '/api/placeholder/150/150'}
+            alt={`${familyName || 'Family'} Photo`}
+            className="w-full h-full object-cover"
+          />
         </div>
       </div>
+      <div className="flex flex-col">
+        <h1 className="text-xl font-bold font-roboto">Allie</h1>
+        <p className="text-sm font-roboto">Balance family responsibilities together</p>
+        <p className="text-xs text-gray-300 font-roboto">The {familyName ? familyName.split(' ')[0] : ''} Family</p>
+      </div>
+    </div>
+    <div className="flex items-center">
+      <div 
+        className="w-8 h-8 rounded-full overflow-hidden mr-2 cursor-pointer border-2 border-white"
+        onClick={toggleSettings}
+      >
+        <img 
+          src={selectedUser.profilePicture}
+          alt={selectedUser.name}
+          className="w-full h-full object-cover"
+        />
+      </div>
+      <span className="mr-3 font-roboto">{selectedUser.name}</span>
+      <button 
+        onClick={handleLogout}
+        className="flex items-center text-sm bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded font-roboto"
+      >
+        <LogOut size={14} className="mr-1" />
+        Switch User
+      </button>
+    </div>
+  </div>
+</div>
       
       {/* Main content */}
       <div className="flex-1 container mx-auto px-4 py-6">
         {/* Tabs */}
-        <div className="flex border-b mb-6 overflow-x-auto">
-          <button 
-            className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'dashboard' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            Family Dashboard
-          </button>
-          <button 
-            className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'tasks' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
-            onClick={() => setActiveTab('tasks')}
-          >
-            Your To-do List
-          </button>
-          <button 
-            className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'initial-survey' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
-            onClick={() => setActiveTab('initial-survey')}
-          >
-            Initial Survey
-          </button>
-          
-          {/* Add completed weeks as tabs */}
-          {weekTabs.map(tab => (
-            <button 
-              key={tab.id}
-              className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === tab.id ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.name.replace('Week', 'Cycle')}
-              <span className="text-xs block text-gray-500 font-roboto">Flexible timeframe</span>
-            </button>
-          ))}
-
-          {/* Relationship Tab */}
-          {selectedUser && selectedUser.role === 'parent' && (
-            <button 
-              className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'relationship' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
-              onClick={() => setActiveTab('relationship')}
-            >
-              Relationship
-            </button>
-          )}
-        </div>
+        <div className="flex border-b overflow-x-auto sticky top-0 bg-gray-50 z-10 px-4" style={{ marginBottom: "1.5rem" }}>
+  <button 
+    className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'tasks' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+    onClick={() => setActiveTab('tasks')}
+  >
+    {selectedUser ? `${selectedUser.name}'s Tasks` : 'My Tasks'}
+  </button>
+  <button 
+    className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'dashboard' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+    onClick={() => setActiveTab('dashboard')}
+  >
+    Family Dashboard
+  </button>
+  
+  {/* Relationship Tab */}
+  {selectedUser && selectedUser.role === 'parent' && (
+    <button 
+      className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'relationship' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+      onClick={() => setActiveTab('relationship')}
+    >
+      Relationship
+    </button>
+  )}
+  
+  <button 
+    className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'initial-survey' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+    onClick={() => setActiveTab('initial-survey')}
+  >
+    Initial Survey
+  </button>
+  
+  {/* Add completed weeks as tabs */}
+  {weekTabs.map(tab => (
+    <button 
+      key={tab.id}
+      className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === tab.id ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+      onClick={() => setActiveTab(tab.id)}
+    >
+      {tab.name.replace('Week', 'Cycle')}
+      <span className="text-xs block text-gray-500 font-roboto">Flexible timeframe</span>
+    </button>
+  ))}
+</div>
           
         {/* Tab content */}
         {renderTabContent()}
