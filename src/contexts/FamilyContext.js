@@ -324,102 +324,70 @@ useEffect(() => {
   };
 
   // Get relationship satisfaction trend data
-  const getRelationshipTrendData = () => {
-    const trendData = [];
+  // Get relationship satisfaction trend data
+const getRelationshipTrendData = () => {
+  const trendData = [];
+    
+  // Add code for trend data here...
+    
+  return trendData;
+};
 
-  // Get relationship strategies
-  const getRelationshipStrategies = async () => {
-    try {
-      if (!familyId) throw new Error("No family ID available");
-      
-      // Try to get strategies from Firebase
-      const docRef = doc(db, "relationshipStrategies", familyId);
-      const docSnap = await getDoc(docRef);
-      
-      if (docSnap.exists()) {
-        return docSnap.data().strategies || [];
-      }
-      
-      return null; // No strategies found
-    } catch (error) {
-      console.error("Error getting relationship strategies:", error);
-      return null;
-    }
-  };
-  
-  // Update a relationship strategy
-  const updateRelationshipStrategy = async (strategyId, updateData) => {
-    try {
-      if (!familyId) throw new Error("No family ID available");
-      
-      // Get current strategies
-      const docRef = doc(db, "relationshipStrategies", familyId);
-      const docSnap = await getDoc(docRef);
-      
-      let currentStrategies = [];
-      
-      if (docSnap.exists()) {
-        currentStrategies = docSnap.data().strategies || [];
-      }
-      
-      // Update the specific strategy
-      const updatedStrategies = currentStrategies.map(strategy => 
-        strategy.id === strategyId ? { ...strategy, ...updateData } : strategy
-      );
-      
-      // If strategy doesn't exist in the array, this has no effect
-      // In a real implementation, you might want to add it
-      
-      // Save back to Firebase
-      await setDoc(docRef, {
-        strategies: updatedStrategies,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-      
-      // Update local state
-      setRelationshipStrategies(updatedStrategies);
-      
-      return true;
-    } catch (error) {
-      console.error("Error updating relationship strategy:", error);
-      throw error;
-    }
-  };
+// Get relationship strategies (MOVED OUTSIDE getRelationshipTrendData)
+const getRelationshipStrategies = async () => {
+  try {
+    if (!familyId) throw new Error("No family ID available");
     
-    // Add initial data point if available
-    if (coupleCheckInData[1]) {
-      trendData.push({
-        week: 'Week 1',
-        satisfaction: coupleCheckInData[1].responses.satisfaction,
-        communication: coupleCheckInData[1].responses.communication,
-        workloadBalance: 50, // From initial survey
-      });
+    // Try to get strategies from Firebase
+    const docRef = doc(db, "relationshipStrategies", familyId);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      return docSnap.data().strategies || [];
     }
     
-    // Add data for each week
-    Object.keys(coupleCheckInData)
-      .map(Number)
-      .sort((a, b) => a - b)
-      .forEach(week => {
-        if (week === 1) return; // Skip week 1 as it's already added
-        
-        const data = coupleCheckInData[week];
-        if (!data) return;
-        
-        // Get workload balance for this week
-        const weekBalance = getWeekHistoryData(week)?.balance || { mama: 50, papa: 50 };
-        const balanceScore = 100 - Math.abs(weekBalance.mama - 50) * 2; // Convert to 0-100 scale where 100 is perfect balance
-        
-        trendData.push({
-          week: `Week ${week}`,
-          satisfaction: data.responses.satisfaction,
-          communication: data.responses.communication,
-          workloadBalance: balanceScore
-        });
-      });
+    return null; // No strategies found
+  } catch (error) {
+    console.error("Error getting relationship strategies:", error);
+    return null;
+  }
+};
+
+// Update a relationship strategy (MOVED OUTSIDE getRelationshipTrendData)
+const updateRelationshipStrategy = async (strategyId, updateData) => {
+  try {
+    if (!familyId) throw new Error("No family ID available");
     
-    return trendData;
-  };
+    // Get current strategies
+    const docRef = doc(db, "relationshipStrategies", familyId);
+    const docSnap = await getDoc(docRef);
+    
+    let currentStrategies = [];
+    
+    if (docSnap.exists()) {
+      currentStrategies = docSnap.data().strategies || [];
+    }
+    
+    // Update the specific strategy
+    const updatedStrategies = currentStrategies.map(strategy => 
+      strategy.id === strategyId ? { ...strategy, ...updateData } : strategy
+    );
+    
+    // Save back to Firebase
+    await setDoc(docRef, {
+      strategies: updatedStrategies,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    
+    // Update local state
+    setRelationshipStrategies(updatedStrategies);
+    
+    return true;
+  } catch (error) {
+    console.error("Error updating relationship strategy:", error);
+    throw error;
+  }
+};
 
   // Update survey schedule
   const updateSurveySchedule = async (weekNumber, dueDate) => {

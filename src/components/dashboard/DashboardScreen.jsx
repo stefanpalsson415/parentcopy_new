@@ -17,6 +17,9 @@ import AllieChat from '../chat/AllieChat';
 import AllieAIEngineService from '../../services/AllieAIEngineService';
 import { Brain, Lightbulb } from 'lucide-react';
 import StrategicActionsTracker from './StrategicActionsTracker';
+import RelationshipMeetingScreen from '../meeting/RelationshipMeetingScreen';
+
+
 
 
 const DashboardScreen = ({ onOpenFamilyMeeting }) => {
@@ -42,6 +45,8 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const [loadingFamily, setLoadingFamily] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [insights, setInsights] = useState([]);
+  const [showRelationshipMeeting, setShowRelationshipMeeting] = useState(false);
+
 
   // Consolidated family loading from all possible sources
   useEffect(() => {
@@ -155,6 +160,15 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
     navigate('/login');
   };
   
+  const handleOpenRelationshipMeeting = () => {
+    setShowRelationshipMeeting(true);
+  };
+  
+  const handleCloseRelationshipMeeting = () => {
+    setShowRelationshipMeeting(false);
+  };
+
+
   // Start weekly check-in
   const handleStartWeeklyCheckIn = () => {
     navigate('/weekly-check-in');
@@ -401,6 +415,16 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
     </button>
   )}
   
+  <div className="mt-6">
+  <button 
+    className="px-4 py-2 bg-pink-100 text-pink-800 rounded-md flex items-center hover:bg-pink-200 font-roboto"
+    onClick={handleOpenRelationshipMeeting}
+  >
+    <Heart size={16} className="mr-2" />
+    Start Relationship Meeting
+  </button>
+</div>
+
   <button 
     className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'initial-survey' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
     onClick={() => setActiveTab('initial-survey')}
@@ -434,6 +458,11 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
       {showFamilyMeeting && (
         <FamilyMeetingScreen onClose={handleCloseFamilyMeeting} />
       )}
+      
+      {/* Relationship Meeting Modal */}
+{showRelationshipMeeting && (
+  <RelationshipMeetingScreen onClose={handleCloseRelationshipMeeting} />
+)}
       
       {/* Allie Chat Widget */}
       <AllieChat />
