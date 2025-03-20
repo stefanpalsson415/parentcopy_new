@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Users, Calendar, AlertCircle, CheckCircle, ChevronDown, ChevronUp, Sparkles, Brain, Info, Edit, CheckCircle2, Target, Heart, LogOut, HelpCircle, Camera, Image } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Users, Calendar, AlertCircle, CheckCircle, ChevronDown, ChevronUp, Sparkles, Brain, 
+         Info, CheckCircle2, Target, Heart, Camera, HelpCircle } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { useSurvey } from '../../../contexts/SurveyContext';
 import DatabaseService from '../../../services/DatabaseService';
@@ -9,257 +10,17 @@ import { storage } from '../../../services/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../services/firebase';
 
-// AI-powered task generation based on survey data
-const analyzeTaskImbalances = (surveyResponses, fullQuestionSet) => {
-  const categories = {
-    "Visible Household Tasks": { mama: 0, papa: 0, total: 0, imbalance: 0, mamaPercent: 0, papaPercent: 0 },
-    "Invisible Household Tasks": { mama: 0, papa: 0, total: 0, imbalance: 0, mamaPercent: 0, papaPercent: 0 },
-    "Visible Parental Tasks": { mama: 0, papa: 0, total: 0, imbalance: 0, mamaPercent: 0, papaPercent: 0 },
-    "Invisible Parental Tasks": { mama: 0, papa: 0, total: 0, imbalance: 0, mamaPercent: 0, papaPercent: 0 }
-  };
+// Helper function to format dates consistently
+const formatDate = (date) => {
+  if (!date) return "Not scheduled yet";
   
-  // Count responses by category and parent
-  Object.entries(surveyResponses).forEach(([key, value]) => {
-    if (!key.includes('q')) return; // Skip non-question keys
-    
-    // Extract question ID
-    const questionId = key.includes('-') ? key.split('-').pop() : key;
-    const question = fullQuestionSet.find(q => q.id === questionId);
-    
-    if (!question) return;
-    
-    const category = question.category;
-    if (categories[category]) {
-      categories[category].total++;
-      if (value === 'Mama') categories[category].mama++;
-      else if (value === 'Papa') categories[category].papa++;
-    }
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  
+  return dateObj.toLocaleDateString('en-US', { 
+    weekday: 'short',
+    month: 'short', 
+    day: 'numeric'
   });
-  
-  // Calculate imbalance scores and percentages for each category
-  Object.keys(categories).forEach(category => {
-    const data = categories[category];
-    if (data.total === 0) return;
-    
-    const mamaPercent = (data.mama / data.total) * 100;
-    const papaPercent = (data.papa / data.total) * 100;
-    
-    // Imbalance score - higher means more unequal
-    data.imbalance = Math.abs(mamaPercent - papaPercent);
-    data.mamaPercent = mamaPercent;
-    data.papaPercent = papaPercent;
-  });
-  
-  return categories;
-};
-
-// Generate default tasks when data is unavailable
-const generateDefaultTasks = (weekNumber) => {
-  const taskPrefix = weekNumber ? `${weekNumber}-` : "";
-  return [
-    {
-      id: `${taskPrefix}1`,
-      title: `${weekNumber ? `Cycle ${weekNumber}: ` : ""}Family Task Balance`,
-      description: "Work together to improve balance of household responsibilities",
-      assignedTo: "Papa",
-      assignedToName: "Papa",
-      taskType: "default",
-      completed: false,
-      completedDate: null,
-      insight: "Balancing household tasks leads to better family harmony and less stress.",
-      details: "Choose one household task that you normally don't handle and take full responsibility for it this week. Notice how it feels to own this task and discuss the experience with your partner.",
-      comments: []
-    },
-    {
-      id: `${taskPrefix}2`,
-      title: `${weekNumber ? `Cycle ${weekNumber}: ` : ""}Parenting Balance`,
-      description: "Balance parenting responsibilities more evenly",
-      assignedTo: "Mama",
-      assignedToName: "Mama",
-      taskType: "default",
-      completed: false,
-      completedDate: null,
-      insight: "Shared parenting leads to healthier child development and less parent burnout.",
-      details: "Identify one parenting responsibility that your partner usually handles and take charge of it this week. This could be bedtime routines, homework help, or coordinating activities.",
-      comments: []
-    }
-  ];
-};
-
-// Helper function to generate task titles based on category
-const getTaskTitleForCategory = (category) => {
-  switch(category) {
-    case "Visible Household Tasks":
-      return "Household Balance Challenge";
-    case "Invisible Household Tasks":
-      return "Mental Load Balancer";
-    case "Visible Parental Tasks":
-      return "Parenting Task Rebalance";
-    case "Invisible Parental Tasks":
-      return "Emotional Labor Distribution";
-    default:
-      return "Family Balance Task";
-  }
-};
-
-// Helper function to generate task details based on category
-const getTaskDetailsForCategory = (category) => {
-  switch(category) {
-    case "Visible Household Tasks":
-      return "Choose one visible household task that your partner usually handles (like cooking, cleaning, or repairs) and take full responsibility for it this week. Observe how it feels to own this task completely and discuss the experience afterward.";
-    case "Invisible Household Tasks":
-      return "Identify and take over one 'invisible' planning or organizing task that typically falls to your partner. This might be meal planning, schedule coordination, or tracking household supplies. Document what you learn about the mental load involved.";
-    case "Visible Parental Tasks":
-      return "Take initiative on one direct childcare task that your partner typically handles (like school drop-offs, homework help, or bedtime routines). Fully manage this responsibility for the week and reflect on what you learned.";
-    case "Invisible Parental Tasks":
-      return "Notice and take on one aspect of emotional or planning work related to the children. This could be planning activities, anticipating needs, or providing emotional support. Share what you discover about this often unseen work.";
-    default:
-      return "Choose one task that your partner usually handles and complete it fully, from start to finish. Pay attention to all the steps involved, including planning and cleanup.";
-  }
-};
-
-// ENHANCED: Helper function to generate new tasks for the next week with effectiveness data
-const generateTaskRecommendations = (weekNumber = 1, previousResponses = {}, questionSet = []) => {
-  console.log(`Generating AI-driven tasks for Week ${weekNumber} based on family data and effectiveness`);
-  const taskPrefix = weekNumber ? `${weekNumber}-` : "";
-  
-  // Add this safeguard for empty inputs
-  if (!previousResponses || Object.keys(previousResponses).length === 0 || !questionSet || questionSet.length === 0) {
-    console.log("Warning: Missing survey data or question set for task generation. Using fallback data.");
-    // Return default tasks if no data available
-    return generateDefaultTasks(weekNumber);
-  }
-
-  // This would normally use actual survey data, but we'll simulate AI analysis
-  const imbalanceAnalysis = analyzeTaskImbalances(previousResponses, questionSet);
-  
-  // Add fallback values if analysis returns empty results
-  if (!imbalanceAnalysis || Object.keys(imbalanceAnalysis).length === 0) {
-    console.log("Warning: Analysis returned no results. Using fallback tasks.");
-    return generateDefaultTasks(weekNumber);
-  }
-  
-  // Sort categories by imbalance to prioritize most unbalanced areas
-  const prioritizedCategories = Object.entries(imbalanceAnalysis)
-    .sort((a, b) => b[1].imbalance - a[1].imbalance)
-    .map(entry => ({
-      category: entry[0],
-      mamaPercent: entry[1].mamaPercent,
-      papaPercent: entry[1].papaPercent,
-      imbalance: entry[1].imbalance,
-      assignTo: entry[1].mamaPercent > entry[1].papaPercent ? "Papa" : "Mama"
-    }));
-  
-  console.log("Category imbalances detected:", prioritizedCategories);
-  
-  // Generate tasks based on the family's specific needs
-  const tasks = [];
-  
-  // 1. Survey-based task for Papa (from highest priority area)
-  const papaFocusAreas = prioritizedCategories.filter(area => area.assignTo === "Papa");
-  if (papaFocusAreas.length > 0) {
-    tasks.push({
-      id: `${weekNumber}-1`,
-      title: `Cycle ${weekNumber}: ${getTaskTitleForCategory(papaFocusAreas[0].category)}`,
-      description: `Take initiative on one ${papaFocusAreas[0].category.toLowerCase()} task this week. Notice what's typically handled by your partner and step in proactively.`,
-      assignedTo: "Papa",
-      assignedToName: "Papa",
-      taskType: "survey-based",
-      focusArea: papaFocusAreas[0].category,
-      category: papaFocusAreas[0].category,
-      completed: false,
-      completedDate: null,
-      insight: `Our survey analysis shows Mama is handling ${papaFocusAreas[0].mamaPercent.toFixed(0)}% of tasks in this area. Taking initiative on one task can help create better balance and reduce your partner's mental load.`,
-      details: getTaskDetailsForCategory(papaFocusAreas[0].category),
-      comments: []
-    });
-  }
-  
-  // 2. AI-based task for Papa
-  tasks.push({
-    id: `${weekNumber}-ai-1`,
-    title: `Cycle ${weekNumber}: AI Insight Challenge`,
-    description: "Address a hidden workload imbalance identified by our AI analysis",
-    assignedTo: "Papa",
-    assignedToName: "Papa",
-    taskType: "ai",
-    isAIGenerated: true,
-    hiddenWorkloadType: papaFocusAreas.length > 0 ? papaFocusAreas[0].category : "Family Balance",
-    completed: false,
-    completedDate: null,
-    insight: "Our AI has identified patterns in your family's responses that indicate a hidden imbalance in mental load.",
-    details: "Identify one 'invisible' task that often goes unrecognized (like planning, organizing, or tracking family needs) and take full responsibility for it this week. Document what you learn about this mental labor.",
-    comments: []
-  });
-  
-  // 3. Relationship-focused task for Papa
-  tasks.push({
-    id: `${weekNumber}-rel-1`,
-    title: `Cycle ${weekNumber}: Relationship Strengthening`,
-    description: "Take steps to strengthen your relationship while improving balance",
-    assignedTo: "Papa",
-    assignedToName: "Papa",
-    taskType: "relationship",
-    completed: false,
-    completedDate: null,
-    insight: "Research shows that relationship satisfaction improves by up to 42% when workload is balanced.",
-    details: "Schedule a 15-minute conversation with your partner focused solely on appreciating each other's contributions. Share specific things you've noticed and value about how your partner cares for the family.",
-    comments: []
-  });
-  
-  // 4. Survey-based task for Mama (from highest priority area)
-  const mamaFocusAreas = prioritizedCategories.filter(area => area.assignTo === "Mama");
-  if (mamaFocusAreas.length > 0) {
-    tasks.push({
-      id: `${weekNumber}-2`,
-      title: `Cycle ${weekNumber}: ${getTaskTitleForCategory(mamaFocusAreas[0].category)}`,
-      description: `Take initiative on one ${mamaFocusAreas[0].category.toLowerCase()} task this week that your partner typically handles.`,
-      assignedTo: "Mama",
-      assignedToName: "Mama",
-      taskType: "survey-based",
-      focusArea: mamaFocusAreas[0].category,
-      category: mamaFocusAreas[0].category,
-      completed: false,
-      completedDate: null,
-      insight: `Our survey analysis shows Papa is handling ${mamaFocusAreas[0].papaPercent.toFixed(0)}% of tasks in this area. Taking initiative on one task can help create better balance.`,
-      details: getTaskDetailsForCategory(mamaFocusAreas[0].category),
-      comments: []
-    });
-  }
-  
-  // 5. AI-based task for Mama
-  tasks.push({
-    id: `${weekNumber}-ai-2`,
-    title: `Cycle ${weekNumber}: AI Insight Challenge`,
-    description: "Address a hidden workload imbalance identified by our AI analysis",
-    assignedTo: "Mama",
-    assignedToName: "Mama",
-    taskType: "ai",
-    isAIGenerated: true,
-    hiddenWorkloadType: mamaFocusAreas.length > 0 ? mamaFocusAreas[0].category : "Family Balance",
-    completed: false,
-    completedDate: null,
-    insight: "Our AI has identified patterns in your family's responses that indicate a hidden imbalance in mental load.",
-    details: "Notice a task that often goes unrecognized that your partner typically handles, and take it on completely this week. Pay attention to all the mental planning involved.",
-    comments: []
-  });
-  
-  // 6. Relationship-focused task for Mama
-  tasks.push({
-    id: `${weekNumber}-rel-2`,
-    title: `Cycle ${weekNumber}: Relationship Strengthening`,
-    description: "Take steps to strengthen your relationship while improving balance",
-    assignedTo: "Mama",
-    assignedToName: "Mama",
-    taskType: "relationship",
-    completed: false,
-    completedDate: null,
-    insight: "Research shows that relationship satisfaction improves by up to 42% when workload is balanced.",
-    details: "Schedule a brief 'appreciation exchange' with your partner where you each share specific things you value about how the other person contributes to family life.",
-    comments: []
-  });
-  
-  return tasks;
 };
 
 const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
@@ -281,21 +42,35 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
 
   const { fullQuestionSet } = useSurvey();
   
-  // State to track when everyone completed initial survey
-  const [allInitialComplete, setAllInitialComplete] = useState(false);
-  const [daysUntilCheckIn, setDaysUntilCheckIn] = useState(6);
-  const [canStartCheckIn, setCanStartCheckIn] = useState(false);
+  // Main states
+  const [taskRecommendations, setTaskRecommendations] = useState([]);
+  const [kidTasksCompleted, setKidTasksCompleted] = useState({});
+  const [commentInputs, setCommentInputs] = useState({});
+  const [kidTaskComments, setKidTaskComments] = useState({});
+  const [kidTaskPictures, setKidTaskPictures] = useState({});
+  const [taskReactions, setTaskReactions] = useState({});
+  const [selectedTaskForEmoji, setSelectedTaskForEmoji] = useState(null);
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [uploadingPicture, setUploadingPicture] = useState(false);
   const [showCoupleCheckIn, setShowCoupleCheckIn] = useState(false);
-  const [canStartCoupleCheckIn, setCanStartCoupleCheckIn] = useState(false);
-  const [showFamilyMeeting, setShowFamilyMeeting] = useState(false);
+  const [savingTasks, setSavingTasks] = useState({});
+  const [saveErrors, setSaveErrors] = useState({});
 
+  // Check-in related states
+  const [canStartCheckIn, setCanStartCheckIn] = useState(false);
+  const [canStartCoupleCheckIn, setCanStartCoupleCheckIn] = useState(false);
+  const [daysUntilCheckIn, setDaysUntilCheckIn] = useState(6);
+  
+  // Date management
+  const [checkInDueDate, setCheckInDueDate] = useState(null);
+  const [checkInDueDateInput, setCheckInDueDateInput] = useState('');
+  
   // Calculate due date based on survey schedule if available
   const calculateDueDate = () => {
     if (surveySchedule && surveySchedule[currentWeek]) {
       return new Date(surveySchedule[currentWeek]);
     } else {
       // Default to 7 days from the start of the week
-      // For a new week, this should be ~7 days from when the week started
       let date = new Date();
       
       // If we have completed the previous week, use that as reference
@@ -317,80 +92,140 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     const today = new Date();
     const dueDate = checkInDueDate;
     
+    if (!dueDate) return 7;
+    
     // Calculate difference in days
     const diffTime = dueDate.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
     return Math.max(0, diffDays);
   };
-  
-  // State for dates
-  const [checkInDueDate, setCheckInDueDate] = useState(calculateDueDate());
-  const [currentDate] = useState(new Date());
-  
-  // State for date input
-  const [checkInDueDateInput, setCheckInDueDateInput] = useState(
-    checkInDueDate ? checkInDueDate.toISOString().split('T')[0] : ''
-  );
 
-// Add this effect around line 200
-useEffect(() => {
-  // Load tasks when component becomes visible again
-  const handleVisibilityChange = () => {
-    if (document.visibilityState === 'visible' && familyId) {
-      console.log("Document visible again, reloading tasks...");
-      loadCurrentWeekTasks();
-    }
-  };
-  
-  document.addEventListener('visibilitychange', handleVisibilityChange);
-  
-  return () => {
-    document.removeEventListener('visibilitychange', handleVisibilityChange);
-  };
-}, [familyId, loadCurrentWeekTasks]);
-
-  // Update input when due date changes
+  // Initialize and update date-related states
   useEffect(() => {
-    if (checkInDueDate) {
-      setCheckInDueDateInput(checkInDueDate.toISOString().split('T')[0]);
-    }
-  }, [checkInDueDate]);
+    const due = calculateDueDate();
+    setCheckInDueDate(due);
+    setCheckInDueDateInput(due.toISOString().split('T')[0]);
+    setDaysUntilCheckIn(calculateDaysUntilCheckIn());
+  }, [surveySchedule, currentWeek]);
 
-  // Effect to update check-in status when survey schedule or current week changes
+  // Effect to update check-in availability
   useEffect(() => {
-    // Update check-in due date
-    setCheckInDueDate(calculateDueDate());
-    
     // Update days until check-in
     setDaysUntilCheckIn(calculateDaysUntilCheckIn());
     
-    // Determine if check-in can be started
-    // Allow check-in if it's due within 2 days
+    // Determine if check-in can be started (available if it's due within 2 days)
     const canStart = calculateDaysUntilCheckIn() <= 2;
     setCanStartCheckIn(canStart);
     
-    // NEW: Determine if couple check-in can be started
+    // Determine if couple check-in can be started
     // Only allow after weekly check-in is completed by at least one parent
     const parentCompleted = familyMembers
       .filter(m => m.role === 'parent')
       .some(m => m.weeklyCompleted && m.weeklyCompleted[currentWeek-1]?.completed);
     
     setCanStartCoupleCheckIn(parentCompleted);
-    
-  }, [surveySchedule, currentWeek, familyMembers]); // Add familyMembers to dependencies
+  }, [checkInDueDate, familyMembers, currentWeek]);
 
-  // Effect to recalculate check-in availability immediately after date changes
+  // Load tasks for the current week - with enhanced reliability
   useEffect(() => {
-    // Update days until check-in
-    setDaysUntilCheckIn(calculateDaysUntilCheckIn());
+    const loadTasks = async () => {
+      try {
+        console.log(`Loading tasks for Week ${currentWeek}, user:`, selectedUser?.name);
+        console.log('Completed weeks:', completedWeeks);
+        
+        let tasks = [];
+        
+        if (familyId) {
+          // Method 1: Use DatabaseService directly
+          try {
+            tasks = await DatabaseService.getTasksForWeek(familyId, currentWeek);
+            console.log(`Tasks loaded from Firebase for Week ${currentWeek}:`, tasks?.length || 0);
+          } catch (error) {
+            console.error("Error loading tasks from DatabaseService:", error);
+          }
+          
+          // Method 2: If that fails, try direct Firestore query
+          if (!tasks || tasks.length === 0) {
+            try {
+              console.log("Trying direct Firestore query...");
+              const docRef = doc(db, "families", familyId);
+              const familyDoc = await getDoc(docRef);
+              
+              if (familyDoc.exists()) {
+                const familyData = familyDoc.data();
+                tasks = familyData.tasks || [];
+                console.log(`Tasks loaded directly from Firestore:`, tasks.length);
+              }
+            } catch (dbError) {
+              console.error("Error on direct Firestore query:", dbError);
+            }
+          }
+          
+          // Method 3: Use context method
+          if (!tasks || tasks.length === 0) {
+            try {
+              console.log("Trying context loadCurrentWeekTasks...");
+              tasks = await loadCurrentWeekTasks();
+              console.log(`Tasks loaded from context:`, tasks?.length || 0);
+            } catch (contextError) {
+              console.error("Error loading tasks from context:", contextError);
+            }
+          }
+          
+          // Also load kid tasks
+          try {
+            const familyData = await DatabaseService.loadFamilyData(familyId);
+            if (familyData && familyData.kidTasks) {
+              setKidTasksCompleted(familyData.kidTasks);
+              console.log("Kid tasks loaded:", familyData.kidTasks);
+            }
+          } catch (kidTasksError) {
+            console.error("Error loading kid tasks:", kidTasksError);
+          }
+        }
+        
+        if (tasks && tasks.length > 0) {
+          console.log("Setting task recommendations with loaded data:", tasks.length);
+          setTaskRecommendations(tasks);
+        } else {
+          console.warn("No tasks found for current week. This should not happen in production.");
+          // In production, your AI service would generate tasks here
+          setTaskRecommendations([]);
+        }
+      } catch (error) {
+        console.error(`Error in loadTasks for Week ${currentWeek}:`, error);
+        setTaskRecommendations([]);
+      }
+    };
     
-    // Determine if check-in can be started
-    const canStart = calculateDaysUntilCheckIn() <= 2;
-    setCanStartCheckIn(canStart);
-  }, [checkInDueDateInput]); // Re-run when date input changes
+    loadTasks();
+  }, [familyId, currentWeek, selectedUser]);
 
-  // Function to handle date update
+  // Force reload on visibility change to keep data fresh
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && familyId) {
+        console.log("Document visible again, reloading tasks...");
+        loadCurrentWeekTasks().then(freshTasks => {
+          if (freshTasks && freshTasks.length > 0) {
+            console.log("Fresh tasks loaded on visibility change:", freshTasks.length);
+            setTaskRecommendations(freshTasks);
+          }
+        }).catch(error => {
+          console.error("Error reloading tasks on visibility change:", error);
+        });
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [familyId, loadCurrentWeekTasks]);
+
+  // Handle date update for check-in
   const handleUpdateCheckInDate = async () => {
     try {
       const newDate = new Date(checkInDueDateInput);
@@ -409,7 +244,7 @@ useEffect(() => {
       setDaysUntilCheckIn(Math.max(0, newDaysUntil));
       setCanStartCheckIn(newDaysUntil <= 2);
       
-      // Alert in app rather than browser
+      // Show success message
       const alertDiv = document.createElement('div');
       alertDiv.className = 'fixed top-4 right-4 bg-green-100 border border-green-500 text-green-700 px-4 py-3 rounded z-50';
       alertDiv.innerHTML = 'Check-in date updated successfully!';
@@ -424,149 +259,13 @@ useEffect(() => {
       alert("Failed to update check-in date. Please try again.");
     }
   };
-  
-  // State for task recommendations
-  const [taskRecommendations, setTaskRecommendations] = useState([]);
-  
-  // State for AI recommendations
-  const [aiRecommendations, setAiRecommendations] = useState([]);
-  const [isLoadingAiRecommendations, setIsLoadingAiRecommendations] = useState(false);
-  
-  // Task recommendations for the current week
-  const [expandedTasks, setExpandedTasks] = useState({});
-  
-  // State for comment form
-  const [commentTask, setCommentTask] = useState(null);
-  const [commentText, setCommentText] = useState('');
-  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
-  // Add this state for storing comment inputs
-const [commentInputs, setCommentInputs] = useState({});
-  
-  // Kids tasks state
-  const [kidTasksCompleted, setKidTasksCompleted] = useState({});
-  const [taskReactions, setTaskReactions] = useState({});
-  const [selectedTaskForEmoji, setSelectedTaskForEmoji] = useState(null);
-  const [kidTaskComments, setKidTaskComments] = useState({});
-  const [kidTaskPictures, setKidTaskPictures] = useState({});
-  const [uploadingPicture, setUploadingPicture] = useState(false);
-  
-  // Load tasks for the current week
-  useEffect(() => {
-    const loadTasks = async () => {
-      try {
-        console.log(`Loading tasks for Week ${currentWeek}, user:`, selectedUser?.name);
-        console.log('Completed weeks:', completedWeeks);
-        
-        // Regular task loading logic for all weeks
-        let tasks = [];
-        
-        if (familyId) {
-          try {
-            tasks = await DatabaseService.getTasksForWeek(familyId, currentWeek);
-            console.log(`Tasks loaded from Firebase for Week ${currentWeek}:`, tasks?.length || 0);
-            
-            // Also load kid tasks from Firebase
-            const familyData = await DatabaseService.loadFamilyData(familyId);
-            if (familyData && familyData.kidTasks) {
-              setKidTasksCompleted(familyData.kidTasks);
-              console.log("Kid tasks loaded:", familyData.kidTasks);
-            }
-          } catch (error) {
-            console.error("Error loading tasks:", error);
-          }
-        }
-        
-        if (tasks && tasks.length > 0) {
-          setTaskRecommendations(tasks);
-        } else {
-          // Fallback to generating tasks
-          console.log("Using AI-generated tasks");
-          setTaskRecommendations(generateTaskRecommendations(currentWeek, surveyResponses, fullQuestionSet));
-        }
-        
-      } catch (error) {
-        console.error(`Error in loadTasks for Week ${currentWeek}:`, error);
-        setTaskRecommendations(generateTaskRecommendations(currentWeek, surveyResponses, fullQuestionSet));
-      }
-    };
-    
-    loadTasks();
-    
-  }, [familyId, currentWeek, completedWeeks]);
-
-  // Effect to force reload tasks when component becomes visible again
-  useEffect(() => {
-    // Function to reload tasks from Firebase
-    const reloadTasks = async () => {
-      console.log(`Reloading tasks for Week ${currentWeek} from visibility change`);
-      try {
-        if (familyId) {
-          const freshTasks = await DatabaseService.getTasksForWeek(familyId, currentWeek);
-          console.log(`Fresh tasks loaded for Week ${currentWeek}:`, freshTasks?.length || 0);
-          if (freshTasks && freshTasks.length > 0) {
-            setTaskRecommendations(freshTasks);
-          }
-          
-          // Also reload kid tasks
-          const familyData = await DatabaseService.loadFamilyData(familyId);
-          if (familyData && familyData.kidTasks) {
-            setKidTasksCompleted(familyData.kidTasks);
-          }
-        }
-      } catch (error) {
-        console.error(`Error reloading tasks for Week ${currentWeek}:`, error);
-      }
-    };
-
-    // Set up visibility change listener
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        reloadTasks();
-      }
-    };
-
-    // Add event listener
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    // Also reload when the component mounts
-    reloadTasks();
-
-    // Clean up
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [familyId, currentWeek, surveyResponses, fullQuestionSet]); // <-- Updated dependencies
-
-  // Load AI task recommendations
-  const loadAiRecommendations = async () => {
-    if (!familyId) return;
-    
-    setIsLoadingAiRecommendations(true);
-    try {
-      const recommendations = await DatabaseService.generateAITaskRecommendations(familyId);
-      setAiRecommendations(recommendations);
-    } catch (error) {
-      console.error("Error loading AI recommendations:", error);
-    } finally {
-      setIsLoadingAiRecommendations(false);
-    }
-  };
-  
   // Check if weekly check-in is completed for this week
   const weeklyCheckInCompleted = familyMembers.every(member => 
     member.weeklyCompleted && member.weeklyCompleted[currentWeek-1]?.completed
   );
   
-  // Toggle task expansion
-  const toggleTaskExpansion = (taskId) => {
-    setExpandedTasks(prev => ({
-      ...prev,
-      [taskId]: !prev[taskId]
-    }));
-  };
-  
-  // Check if enough tasks are completed for family meeting
+  // Count completed tasks for family meeting eligibility
   const countCompletedTasks = () => {
     let count = 0;
     taskRecommendations.forEach(task => {
@@ -583,9 +282,8 @@ const [commentInputs, setCommentInputs] = useState({});
     return count;
   };
   
-  const enoughTasksCompleted = countCompletedTasks() >= 3;
-  
   // Whether family meeting can be started
+  const enoughTasksCompleted = countCompletedTasks() >= 3;
   const canStartFamilyMeeting = weeklyCheckInCompleted && enoughTasksCompleted;
   
   // Check if user can complete a task
@@ -597,173 +295,226 @@ const [commentInputs, setCommentInputs] = useState({});
             selectedUser.roleType === task.assignedTo);
   };
 
-  // Handle task completion
   // Handle task completion - ENHANCED FOR BETTER PERSISTENCE
-const handleTaskCompletion = async (taskId, isCompleted) => {
-  if (!selectedUser) {
-    console.error("No user selected");
-    alert("Please select a user profile first");
-    return;
-  }
-  
-  if (!familyId) {
-    console.error("No family ID available");
-    alert("Family data not loaded correctly. Please refresh the page.");
-    return;
-  }
-  
-  const task = taskRecommendations.find(t => t.id.toString() === taskId.toString());
-  if (!task) {
-    console.error("Task not found:", taskId);
-    return;
-  }
-  
-  // Check permissions
-  if (!canCompleteTask(task)) {
-    if (selectedUser.role !== 'parent') {
-      alert("Only parents can mark tasks as complete. Children can add comments instead.");
-    } else {
-      alert(`Only ${task.assignedTo} can mark this task as complete.`);
-    }
-    return;
-  }
-  
-  try {
-    // Create completion timestamp
-    const completedDate = isCompleted ? new Date().toISOString() : null;
-    console.log(`Marking task ${taskId} as ${isCompleted ? 'completed' : 'incomplete'} for Week ${currentWeek}`);
-    
-    // Update local state immediately for UI responsiveness
-    const updatedTasks = taskRecommendations.map(t => {
-      if (t.id.toString() === taskId.toString()) {
-        return {
-          ...t,
-          completed: isCompleted,
-          completedDate: completedDate
-        };
-      }
-      return t;
-    });
-    
-    setTaskRecommendations(updatedTasks);
-    
-    // MULTI-LAYERED UPDATE APPROACH FOR MAXIMUM RELIABILITY
-    
-    // 1. Update via the context method
-    try {
-      await updateTaskCompletion(taskId, isCompleted);
-      console.log("Method 1: Context update successful");
-    } catch (error) {
-      console.error("Method 1 failed:", error);
+  const handleTaskCompletion = async (taskId, isCompleted) => {
+    if (!selectedUser) {
+      console.error("No user selected");
+      alert("Please select a user profile first");
+      return;
     }
     
-    // 2. Direct Firestore update
-    try {
-      console.log("Method 2: Directly updating task completion in Firebase...");
-      const docRef = doc(db, "families", familyId);
-      const familyDoc = await getDoc(docRef);
-      
-      if (familyDoc.exists()) {
-        const familyData = familyDoc.data();
-        const currentTasks = familyData.tasks || [];
-        
-        // Update the specific task
-        const updatedDBTasks = currentTasks.map(t => {
-          if (t.id.toString() === taskId.toString()) {
-            console.log(`Updating task ${t.id} in database, setting completed=${isCompleted}`);
-            return {
-              ...t,
-              completed: isCompleted,
-              completedDate: completedDate
-            };
-          }
-          return t;
-        });
-        
-        // Save back to database
-        await updateDoc(docRef, {
-          tasks: updatedDBTasks,
-          updatedAt: new Date().toISOString()
-        });
-        
-        console.log("Method 2: Direct Firestore update successful");
-      }
-    } catch (error) {
-      console.error("Method 2 failed:", error);
+    if (!familyId) {
+      console.error("No family ID available");
+      alert("Family data not loaded correctly. Please refresh the page.");
+      return;
     }
     
-    // 3. Using DatabaseService
-    try {
-      await DatabaseService.updateTaskCompletion(familyId, taskId, isCompleted, completedDate);
-      console.log("Method 3: DatabaseService update successful");
-    } catch (error) {
-      console.error("Method 3 failed:", error);
+    const task = taskRecommendations.find(t => t.id.toString() === taskId.toString());
+    if (!task) {
+      console.error("Task not found:", taskId);
+      return;
     }
     
-    // Success - the task should now be saved through at least one method
-    console.log("Task completion saved successfully through multiple methods");
-    
-    // Reload tasks after a short delay to verify the data was saved
-    setTimeout(async () => {
-      try {
-        console.log("Verifying task data was saved...");
-        await loadCurrentWeekTasks();
-      } catch (error) {
-        console.error("Error reloading tasks:", error);
+    // Check permissions
+    if (!canCompleteTask(task)) {
+      if (selectedUser.role !== 'parent') {
+        alert("Only parents can mark tasks as complete.");
+      } else {
+        alert(`Only ${task.assignedTo} can mark this task as complete.`);
       }
-    }, 1000);
-    
-  } catch (error) {
-    console.error("Error completing task:", error);
-    alert("There was an error saving your task completion. Please try again.");
-  }
-};
-  
-// New function to handle task completion with comment
-const handleCompleteWithComment = async (taskId) => {
-  if (!selectedUser || !commentInputs[taskId]?.trim()) return;
-  
-  setIsSubmittingComment(true);
-  
-  try {
-    // First add the comment
-    const commentResult = await addTaskComment(taskId, commentInputs[taskId]);
-    
-    // Then immediately mark task as completed
-    await handleTaskCompletion(taskId, true);
-    
-    // Clear the comment input
-    setCommentInputs({...commentInputs, [taskId]: ''});
-    
-    // Update local state to show the new comment
-    const updatedTasks = taskRecommendations.map(task => {
-      if (task.id.toString() === taskId.toString()) {
-        return {
-          ...task,
-          completed: true,
-          completedDate: new Date().toISOString(),
-          comments: [...(task.comments || []), {
-            id: commentResult?.id || Date.now(),
-            userId: selectedUser.id,
-            userName: selectedUser.name,
-            text: commentInputs[taskId],
-            timestamp: new Date().toLocaleString()
-          }]
-        };
-      }
-      return task;
-    });
-    
-    setTaskRecommendations(updatedTasks);
-    
-  } catch (error) {
-    console.error("Error completing task with comment:", error);
-    alert("There was an error completing this task. Please try again.");
-  } finally {
-    setIsSubmittingComment(false);
-  }
-};
+      return;
+    }
 
+    // Set saving state for this task
+    setSavingTasks(prev => ({ ...prev, [taskId]: true }));
+    setSaveErrors(prev => ({ ...prev, [taskId]: null }));
+    
+    try {
+      // Create completion timestamp
+      const completedDate = isCompleted ? new Date().toISOString() : null;
+      console.log(`Marking task ${taskId} as ${isCompleted ? 'completed' : 'incomplete'} for Week ${currentWeek}`);
+      
+      // Update local state immediately for UI responsiveness
+      const updatedTasks = taskRecommendations.map(t => {
+        if (t.id.toString() === taskId.toString()) {
+          return {
+            ...t,
+            completed: isCompleted,
+            completedDate: completedDate
+          };
+        }
+        return t;
+      });
+      
+      setTaskRecommendations(updatedTasks);
+      
+      // MULTI-LAYERED UPDATE APPROACH FOR MAXIMUM RELIABILITY
+      
+      // Track success of each method
+      let methodSuccess = {
+        method1: false,
+        method2: false,
+        method3: false
+      };
+      
+      // 1. Update via the context method
+      try {
+        await updateTaskCompletion(taskId, isCompleted);
+        methodSuccess.method1 = true;
+        console.log("Method 1: Context update successful");
+      } catch (error) {
+        console.error("Method 1 failed:", error);
+      }
+      
+      // 2. Direct Firestore update
+      try {
+        console.log("Method 2: Directly updating task completion in Firebase...");
+        const docRef = doc(db, "families", familyId);
+        const familyDoc = await getDoc(docRef);
+        
+        if (familyDoc.exists()) {
+          const familyData = familyDoc.data();
+          const currentTasks = familyData.tasks || [];
+          
+          // Update the specific task
+          const updatedDBTasks = currentTasks.map(t => {
+            if (t.id.toString() === taskId.toString()) {
+              console.log(`Updating task ${t.id} in database, setting completed=${isCompleted}`);
+              return {
+                ...t,
+                completed: isCompleted,
+                completedDate: completedDate
+              };
+            }
+            return t;
+          });
+          
+          // Save back to database
+          await updateDoc(docRef, {
+            tasks: updatedDBTasks,
+            updatedAt: new Date().toISOString()
+          });
+          
+          methodSuccess.method2 = true;
+          console.log("Method 2: Direct Firestore update successful");
+        }
+      } catch (error) {
+        console.error("Method 2 failed:", error);
+      }
+      
+      // 3. Using DatabaseService
+      try {
+        await DatabaseService.updateTaskCompletion(familyId, taskId, isCompleted, completedDate);
+        methodSuccess.method3 = true;
+        console.log("Method 3: DatabaseService update successful");
+      } catch (error) {
+        console.error("Method 3 failed:", error);
+      }
+      
+      // Check if any method succeeded
+      const anyMethodSucceeded = methodSuccess.method1 || methodSuccess.method2 || methodSuccess.method3;
+      
+      if (!anyMethodSucceeded) {
+        console.error("All task save methods failed!");
+        setSaveErrors(prev => ({ 
+          ...prev, 
+          [taskId]: "Failed to save completion status. Please try again." 
+        }));
+      } else {
+        console.log("Task completion saved successfully through at least one method");
+      }
+      
+      // Reload tasks after a short delay to verify the data was saved
+      setTimeout(async () => {
+        try {
+          console.log("Verifying task data was saved...");
+          const freshTasks = await loadCurrentWeekTasks();
+          if (freshTasks && freshTasks.length > 0) {
+            // Check if our task is properly updated in the fresh data
+            const freshTask = freshTasks.find(t => t.id.toString() === taskId.toString());
+            if (freshTask && freshTask.completed === isCompleted) {
+              console.log("Task completion verified in fresh data");
+            } else {
+              console.warn("Task completion not verified in fresh data, forcing update");
+              // Try one more direct update
+              const docRef = doc(db, "families", familyId);
+              await updateDoc(docRef, {
+                [`tasks.${freshTasks.findIndex(t => t.id.toString() === taskId.toString())}.completed`]: isCompleted,
+                [`tasks.${freshTasks.findIndex(t => t.id.toString() === taskId.toString())}.completedDate`]: completedDate,
+                updatedAt: new Date().toISOString()
+              });
+            }
+          }
+        } catch (error) {
+          console.error("Error verifying task data:", error);
+        }
+      }, 1000);
+      
+    } catch (error) {
+      console.error("Error completing task:", error);
+      setSaveErrors(prev => ({ 
+        ...prev, 
+        [taskId]: "Error saving task: " + error.message 
+      }));
+    } finally {
+      // Clear saving state
+      setSavingTasks(prev => ({ ...prev, [taskId]: false }));
+    }
+  };
+  
+  // New function to handle task completion with comment
+  const handleCompleteWithComment = async (taskId) => {
+    if (!selectedUser || !commentInputs[taskId]?.trim()) return;
+    
+    // Set submitting state
+    setIsSubmittingComment(true);
+    setSavingTasks(prev => ({ ...prev, [taskId]: true }));
+    
+    try {
+      // First add the comment
+      console.log(`Adding comment to task ${taskId}: "${commentInputs[taskId]}"`);
+      const commentResult = await addTaskComment(taskId, commentInputs[taskId]);
+      
+      // Then immediately mark task as completed
+      console.log(`Marking task ${taskId} as completed after adding comment`);
+      await handleTaskCompletion(taskId, true);
+      
+      // Update local state to show the new comment
+      const updatedTasks = taskRecommendations.map(task => {
+        if (task.id.toString() === taskId.toString()) {
+          return {
+            ...task,
+            completed: true,
+            completedDate: new Date().toISOString(),
+            comments: [...(task.comments || []), {
+              id: commentResult?.id || Date.now(),
+              userId: selectedUser.id,
+              userName: selectedUser.name,
+              text: commentInputs[taskId],
+              timestamp: new Date().toLocaleString()
+            }]
+          };
+        }
+        return task;
+      });
+      
+      setTaskRecommendations(updatedTasks);
+      console.log("Task marked complete with comment");
+      
+    } catch (error) {
+      console.error("Error completing task with comment:", error);
+      setSaveErrors(prev => ({ 
+        ...prev, 
+        [taskId]: "Error saving: " + error.message 
+      }));
+    } finally {
+      setIsSubmittingComment(false);
+      setSavingTasks(prev => ({ ...prev, [taskId]: false }));
+      
+      // Clear the input but don't remove it from state entirely
+      setCommentInputs(prev => ({...prev, [taskId]: ''}));
+    }
+  };
 
   // Handle kid task completion with observations
   const handleCompleteKidTask = async (taskId, kidId, isCompleted, observations = null) => {
@@ -871,69 +622,7 @@ const handleCompleteWithComment = async (taskId) => {
     }
   };
   
-  // Handle adding a comment to a task or subtask
-  const handleAddComment = (taskId) => {
-    setCommentTask(taskId);
-    setCommentText('');
-  };
-  
-  // Handle submitting a comment
-  const handleSubmitComment = async () => {
-    if (commentText.trim() === '' || isSubmittingComment) return;
-    
-    setIsSubmittingComment(true);
-    
-    try {
-      // Save comment to database
-      // In a real app this would use the correct ID structure to save to the database
-      const result = await addTaskComment(commentTask, commentText);
-      
-      // Update local state
-      if (commentTask.toString().startsWith('kid-task')) {
-        // It's a kid task comment
-        setKidTaskComments(prev => ({
-          ...prev,
-          [commentTask]: [...(prev[commentTask] || []), {
-            id: result.id || Date.now(),
-            userId: selectedUser.id,
-            userName: selectedUser.name,
-            text: commentText,
-            timestamp: new Date().toLocaleString()
-          }]
-        }));
-      } else {
-        // It's a main task comment
-        const updatedTasks = taskRecommendations.map(task => {
-          if (task.id.toString() === commentTask.toString()) {
-            return {
-              ...task,
-              comments: [...(task.comments || []), {
-                id: result.id || Date.now(),
-                userId: selectedUser.id,
-                userName: selectedUser.name,
-                text: commentText,
-                timestamp: new Date().toLocaleString()
-              }]
-            };
-          }
-          return task;
-        });
-        
-        setTaskRecommendations(updatedTasks);
-      }
-      
-      // Reset form
-      setCommentTask(null);
-      setCommentText('');
-    } catch (error) {
-      console.error("Error adding comment:", error);
-      alert("There was an error adding your comment. Please try again.");
-    } finally {
-      setIsSubmittingComment(false);
-    }
-  };
-  
-  // Open emoji picker
+  // Open emoji picker for reactions
   const openEmojiPicker = (taskId) => {
     setSelectedTaskForEmoji(taskId);
   };
@@ -959,57 +648,7 @@ const handleCompleteWithComment = async (taskId) => {
     // In a real implementation, you would save this to the database
     console.log(`Added reaction ${emoji} to task ${taskId} from ${selectedUser.name}`);
   };
-  
-  // Handle completion of AI task
-  const handleCompleteAiTask = async (taskId, isCompleted) => {
-    const task = aiRecommendations.find(t => t.id === taskId);
-    
-    // Check permissions - only assigned parent can complete tasks
-    if (canCompleteTask(task)) {
-      try {
-        // Prepare updated task with completion status and timestamp
-        const completedDate = isCompleted ? new Date().toISOString() : null;
-        
-        // Update task in database
-        await DatabaseService.updateTaskCompletion(familyId, taskId, isCompleted, completedDate);
-        
-        // Update local state
-        const updatedTasks = aiRecommendations.map(task => {
-          if (task.id === taskId) {
-            return {
-              ...task,
-              completed: isCompleted,
-              completedDate: completedDate
-            };
-          }
-          return task;
-        });
-        
-        setAiRecommendations(updatedTasks);
-      } catch (error) {
-        console.error("Error updating AI task:", error);
-        alert("There was an error updating the task. Please try again.");
-      }
-    } else if (selectedUser.role !== 'parent') {
-      alert("Only parents can mark tasks as complete. Children can add comments instead.");
-    } else {
-      alert(`Only ${task.assignedTo} can mark this task as complete.`);
-    }
-  };
 
-  // Format date for display
-  const formatDate = (date) => {
-    if (!date) return "Not scheduled yet";
-    
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
-    
-    return dateObj.toLocaleDateString('en-US', { 
-      weekday: 'short',
-      month: 'short', 
-      day: 'numeric'
-    });
-  };
-  
   // Render comments section
   const renderComments = (comments) => {
     if (!comments || comments.length === 0) return null;
@@ -1029,42 +668,32 @@ const handleCompleteWithComment = async (taskId) => {
       </div>
     );
   };
-  
-  // Render comment form
-  const renderCommentForm = (id) => {
-    if (commentTask !== id) return null;
+
+  // Calculate task completion by parent
+  const calculateParentTaskCompletion = () => {
+    // Initialize counters
+    const completion = {
+      Mama: { assigned: 0, completed: 0 },
+      Papa: { assigned: 0, completed: 0 }
+    };
     
-    return (
-      <div className="mt-3 pt-3 border-t">
-        <h5 className="text-sm font-medium mb-2 font-roboto">Add a Comment:</h5>
-        <textarea
-          className="w-full border rounded p-2 text-sm font-roboto"
-          rows="2"
-          placeholder="Write your comment here..."
-          value={commentText}
-          onChange={(e) => setCommentText(e.target.value)}
-          disabled={isSubmittingComment}
-        ></textarea>
-        <div className="flex justify-end mt-2 space-x-2">
-          <button
-            className="px-3 py-1 text-sm border rounded font-roboto"
-            onClick={() => setCommentTask(null)}
-            disabled={isSubmittingComment}
-          >
-            Cancel
-          </button>
-          <button
-            className="px-3 py-1 text-sm bg-blue-500 text-white rounded font-roboto"
-            onClick={handleSubmitComment}
-            disabled={isSubmittingComment || !commentText.trim()}
-          >
-            {isSubmittingComment ? 'Submitting...' : 'Submit'}
-          </button>
-        </div>
-      </div>
-    );
+    // Count assigned and completed tasks for each parent
+    taskRecommendations.forEach(task => {
+      if (task.assignedTo === 'Mama') {
+        completion.Mama.assigned++;
+        if (task.completed) completion.Mama.completed++;
+      } else if (task.assignedTo === 'Papa') {
+        completion.Papa.assigned++;
+        if (task.completed) completion.Papa.completed++;
+      }
+    });
+    
+    return completion;
   };
   
+  // Task completion by parent
+  const parentTaskCompletion = calculateParentTaskCompletion();
+
   return (
     <div className="space-y-4">
       {/* Weekly Task System Overview */}
@@ -1127,7 +756,7 @@ const handleCompleteWithComment = async (taskId) => {
               </p>
             </div>
             
-            {/* Date editor added from Surveys tab */}
+            {/* Date editor */}
             <div className="flex items-center mt-2 mb-3">
               <span className="text-sm mr-2 font-roboto">Change date:</span>
               <input
@@ -1156,191 +785,100 @@ const handleCompleteWithComment = async (taskId) => {
             <p className="text-sm mb-3 font-roboto">
               All family members need to complete the weekly check-in to update your progress
             </p>
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium font-roboto">Completed:</span>
-              <div className="flex gap-1">
+            
+            {/* Family member completion tracking */}
+            <div className="bg-white p-3 rounded border mb-3">
+              <h4 className="text-sm font-medium mb-2 font-roboto">Check-in Completion:</h4>
+              <div className="flex flex-wrap gap-1 mb-3">
                 {familyMembers.map(member => (
                   <div 
                     key={member.id} 
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs ${
-                      member.weeklyCompleted && member.weeklyCompleted[currentWeek-1]?.completed ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'
+                    className={`px-2 py-1 rounded-full text-xs flex items-center ${
+                      member.weeklyCompleted && member.weeklyCompleted[currentWeek-1]?.completed 
+                        ? 'bg-green-100 text-green-700' 
+                        : 'bg-gray-100 text-gray-500'
                     }`}
                     title={`${member.name}: ${member.weeklyCompleted && member.weeklyCompleted[currentWeek-1]?.completed ? 'Completed' : 'Not completed'}`}
                   >
-                    {member.weeklyCompleted && member.weeklyCompleted[currentWeek-1]?.completed ? '✓' : member.name.charAt(0)}
+                    <div className="w-4 h-4 rounded-full flex items-center justify-center mr-1 bg-white">
+                      {member.weeklyCompleted && member.weeklyCompleted[currentWeek-1]?.completed ? '✓' : '!'}
+                    </div>
+                    <span className="font-roboto">{member.name}</span>
                   </div>
                 ))}
               </div>
+              
+              {/* NEW: Task completion tracking by parent */}
+              <h4 className="text-sm font-medium mb-2 font-roboto">Task Completion:</h4>
+              <div className="space-y-2">
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="font-roboto">Mama: {parentTaskCompletion.Mama.completed}/{parentTaskCompletion.Mama.assigned} tasks</span>
+                    <span className="font-roboto">{parentTaskCompletion.Mama.assigned > 0 
+                      ? Math.round((parentTaskCompletion.Mama.completed / parentTaskCompletion.Mama.assigned) * 100) 
+                      : 0}%</span>
+                  </div>
+                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-purple-500" 
+                      style={{ 
+                        width: `${parentTaskCompletion.Mama.assigned > 0 
+                          ? (parentTaskCompletion.Mama.completed / parentTaskCompletion.Mama.assigned) * 100 
+                          : 0}%` 
+                      }}
+                    ></div>
+                  </div>
+                </div>
+                
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="font-roboto">Papa: {parentTaskCompletion.Papa.completed}/{parentTaskCompletion.Papa.assigned} tasks</span>
+                    <span className="font-roboto">{parentTaskCompletion.Papa.assigned > 0 
+                      ? Math.round((parentTaskCompletion.Papa.completed / parentTaskCompletion.Papa.assigned) * 100) 
+                      : 0}%</span>
+                  </div>
+                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-500" 
+                      style={{ 
+                        width: `${parentTaskCompletion.Papa.assigned > 0 
+                          ? (parentTaskCompletion.Papa.completed / parentTaskCompletion.Papa.assigned) * 100 
+                          : 0}%` 
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
             
-          <div className="mt-4 text-center">
-            <button 
-              className={`px-4 py-2 rounded font-roboto ${
-                selectedUser.weeklyCompleted && selectedUser.weeklyCompleted[currentWeek-1]?.completed
-                  ? 'bg-green-500 text-white cursor-not-allowed'
+            <div className="text-center">
+              <button 
+                className={`px-4 py-2 rounded font-roboto ${
+                  selectedUser.weeklyCompleted && selectedUser.weeklyCompleted[currentWeek-1]?.completed
+                    ? 'bg-green-500 text-white cursor-not-allowed'
+                    : canStartCheckIn 
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+                onClick={() => {
+                  if (selectedUser.weeklyCompleted && selectedUser.weeklyCompleted[currentWeek-1]?.completed) {
+                    alert("You've already completed this week's check-in!");
+                  } else if (canStartCheckIn) {
+                    onStartWeeklyCheckIn();
+                  }
+                }}
+                disabled={!canStartCheckIn || (selectedUser.weeklyCompleted && selectedUser.weeklyCompleted[currentWeek-1]?.completed)}
+              >
+                {selectedUser.weeklyCompleted && selectedUser.weeklyCompleted[currentWeek-1]?.completed 
+                  ? 'You Completed This Check-in' 
                   : canStartCheckIn 
-                    ? 'bg-blue-500 text-white hover:bg-blue-600' 
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-              onClick={() => {
-                if (selectedUser.weeklyCompleted && selectedUser.weeklyCompleted[currentWeek-1]?.completed) {
-                  alert("You've already completed this week's check-in!");
-                } else if (canStartCheckIn) {
-                  onStartWeeklyCheckIn();
-                }
-              }}
-              disabled={!canStartCheckIn || (selectedUser.weeklyCompleted && selectedUser.weeklyCompleted[currentWeek-1]?.completed)}
-            >
-              {selectedUser.weeklyCompleted && selectedUser.weeklyCompleted[currentWeek-1]?.completed 
-                ? 'You Completed This Check-in' 
-                : canStartCheckIn 
-                  ? 'Start Weekly Check-in' 
-                  : 'Check-in Not Yet Available'}
-            </button>
+                    ? 'Start Weekly Check-in' 
+                    : 'Check-in Not Yet Available'}
+              </button>
+            </div>
           </div>
         </div>
         
-        {/* AI Task Intelligence Section */}
-        {aiRecommendations && aiRecommendations.length > 0 && (
-          <div className="border-2 border-purple-300 rounded-lg p-4 mb-6 bg-gradient-to-r from-purple-100 to-blue-100 shadow-md">
-            <div className="flex items-start mb-4">
-              <div className="flex-shrink-0 mr-3">
-                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
-                  <Brain size={20} className="text-purple-600" />
-                </div>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold flex items-center font-roboto">
-                  AI Task Intelligence
-                  <Sparkles size={16} className="ml-2 text-amber-500" />
-                </h3>
-                <p className="text-sm text-gray-600 font-roboto">
-                  Our AI has detected hidden workload imbalances your family might not have noticed
-                </p>
-              </div>
-            </div>
-            
-            <div className="space-y-4 pl-4">
-              {aiRecommendations.map(task => (
-                <div 
-                  key={task.id} 
-                  className="border-2 border-purple-400 rounded-lg overflow-hidden shadow-lg relative"
-                  style={{
-                    background: task.completed ? '#f0fdf4' : 'linear-gradient(to right, #f5f3ff, #eef2ff)'
-                  }}
-                >
-                  {/* Add a special badge for AI tasks */}
-                  <div className="absolute top-0 right-0">
-                    <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-3 py-1 rounded-bl-lg text-sm font-bold flex items-center">
-                      <Brain size={14} className="mr-1" />
-                      AI Powered
-                    </div>
-                  </div>
-                  
-                  <div className="p-4 flex items-start">
-                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                      task.completed ? 'bg-green-100 text-green-600' : 'bg-purple-100 text-purple-600'
-                    }`}>
-                      {task.completed ? <CheckCircle size={16} /> : <Target size={16} />}
-                    </div>
-                    
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-medium text-lg font-roboto">{task.title}</h4>
-                          <div className="flex items-center text-xs text-purple-600 mt-1 mb-2">
-                            <Brain size={12} className="mr-1" />
-                            <span className="font-roboto">AI-detected {task.hiddenWorkloadType} imbalance</span>
-                          </div>
-                          <p className="text-gray-600 mt-1 font-roboto">
-                            {task.description}
-                          </p>
-                          
-                          {/* Show completion date if task is completed */}
-                          {task.completed && task.completedDate && (
-                            <p className="text-sm text-green-600 mt-2 font-roboto">
-                              Completed on {formatDate(task.completedDate)}
-                            </p>
-                          )}
-                        </div>
-                        
-                        {/* Assigned to label */}
-                        <div className="ml-4 flex-shrink-0">
-                          <span className={`px-2 py-1 text-xs rounded-full font-roboto ${
-                            task.assignedTo === 'Mama' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'
-                          }`}>
-                            For {task.assignedTo}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      {/* AI Insight Box - Enhanced version */}
-                      <div className="bg-purple-100 p-4 rounded-lg mt-3 border border-purple-200">
-                        <div className="flex items-start">
-                          <Info size={20} className="text-purple-600 mr-3 flex-shrink-0 mt-0.5" />
-                          <div>
-                            <h5 className="font-bold text-purple-900 text-sm mb-1 font-roboto">Why This Task Matters:</h5>
-                            <p className="text-sm text-purple-800 font-roboto">{task.insight}</p>
-                            <p className="text-xs text-purple-700 mt-2 font-roboto">
-                              Our AI analyzed your family's survey data and identified this task as important for improving balance.
-                              This was selected because your responses showed a significant imbalance in {task.hiddenWorkloadType.toLowerCase()}.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Task details */}
-                      {task.details && (
-                        <div className="bg-white p-4 rounded-lg mt-3 border border-purple-100">
-                          <div className="flex items-start">
-                            <CheckCircle2 size={18} className="text-purple-600 mr-3 flex-shrink-0 mt-0.5" />
-                            <p className="text-sm text-gray-700 font-roboto">{task.details}</p>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Comments */}
-                      {renderComments(task.comments)}
-                      
-                      {/* Comment form */}
-                      {renderCommentForm(task.id)}
-                      
-                      {/* Action buttons */}
-                      {!commentTask && (
-                        <div className="mt-4 flex justify-end space-x-2">
-                          <button
-                            className="px-3 py-1 text-sm rounded border font-roboto"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAddComment(task.id);
-                            }}
-                          >
-                            Comment
-                          </button>
-                          
-                          {canCompleteTask(task) && (
-                            <button
-                              className={`px-3 py-1 text-sm rounded font-roboto ${
-                                task.completed 
-                                  ? 'bg-gray-200 text-gray-800' 
-                                  : 'bg-green-500 text-white'
-                              }`}
-                              onClick={() => handleCompleteAiTask(task.id, !task.completed)}
-                            >
-                              {task.completed ? 'Completed' : 'Mark as Done'}
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-          
         <div className="space-y-4">
           {/* Papa's Tasks */}
           <div className="border-l-4 border-blue-500 p-2">
@@ -1349,367 +887,290 @@ const handleCompleteWithComment = async (taskId) => {
               {taskRecommendations
                 .filter(task => task.assignedTo === "Papa")
                 .map(task => (
-                  <div key={task.id} className={`rounded-lg border ${task.completed ? 'bg-green-50' : 'bg-white'}`}>
+                  <div key={task.id} className={`rounded-lg border shadow ${task.completed ? 'bg-green-50' : 'bg-white'}`}>
                     {/* Main task header */}
-                    <div 
-                      className="p-4 flex items-start cursor-pointer"
-                      onClick={() => toggleTaskExpansion(task.id)}
-                    >
-                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                        task.completed ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
-                      }`}>
-                        {task.completed ? <CheckCircle size={16} /> : <Target size={16} />}
-                      </div>
-                        
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center">
-                          <h4 className="font-medium text-lg font-roboto">{task.title}</h4>
+                    <div className="p-4">
+                      <div className="flex items-start">
+                        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                          task.completed ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
+                        }`}>
+                          {task.completed ? <CheckCircle size={16} /> : <Target size={16} />}
+                        </div>
                           
-                          {/* Task type label */}
-                          <div className="flex items-center gap-2">
-                            {task.taskType === 'ai' && (
-                              <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-xs rounded-full flex items-center">
-                                <Brain size={10} className="mr-1" />
-                                AI Insight
-                              </span>
-                            )}
-                            {task.taskType === 'survey-based' && (
-                              <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full flex items-center">
-                                <CheckCircle2 size={10} className="mr-1" />
-                                Survey Data
-                              </span>
-                            )}
-                            {task.taskType === 'relationship' && (
-                              <span className="px-2 py-0.5 bg-pink-100 text-pink-800 text-xs rounded-full flex items-center">
-                                <Heart size={10} className="mr-1" />
-                                Relationship
-                              </span>
-                            )}
-                            {task.taskType === 'meeting' && (
-                              <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-xs rounded-full flex items-center">
-                                <Users size={10} className="mr-1" />
-                                Family Meeting
-                              </span>
-                            )}
-                            {task.taskType === 'goal' && (
-                              <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full flex items-center">
-                                <Target size={10} className="mr-1" />
-                                Family Goal
-                              </span>
-                            )}
-                            <div>
-                              {expandedTasks[task.id] ? (
-                                <ChevronUp size={20} className="text-gray-500" />
-                              ) : (
-                                <ChevronDown size={20} className="text-gray-500" />
+                        <div className="flex-1">
+                          <div className="flex justify-between items-start">
+                            <h4 className="font-medium text-lg font-roboto">{task.title}</h4>
+                            
+                            {/* Task type label */}
+                            <div className="flex items-center gap-2">
+                              {task.taskType === 'ai' && (
+                                <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-xs rounded-full flex items-center">
+                                  <Brain size={10} className="mr-1" />
+                                  AI Insight
+                                </span>
+                              )}
+                              {task.taskType === 'survey-based' && (
+                                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full flex items-center">
+                                  <CheckCircle2 size={10} className="mr-1" />
+                                  Survey Data
+                                </span>
+                              )}
+                              {task.taskType === 'relationship' && (
+                                <span className="px-2 py-0.5 bg-pink-100 text-pink-800 text-xs rounded-full flex items-center">
+                                  <Heart size={10} className="mr-1" />
+                                  Relationship
+                                </span>
                               )}
                             </div>
                           </div>
-                        </div>
-                          
-                        <div className="mt-2">
-                          <p className="text-gray-600 font-roboto">
-                            {task.description}
-                          </p>
-                          
-                          {/* Show completion date if task is completed */}
-                          {task.completed && task.completedDate && (
-                            <p className="text-sm text-green-600 mt-2 font-roboto">
-                              Completed on {formatDate(task.completedDate)}
-                            </p>
-                          )}
-                        </div>
-                        
-                        {/* AI Insight Box for AI tasks */}
-                        {task.taskType === 'ai' && task.insight && (
-                          <div className="bg-purple-100 p-4 rounded-lg mt-3 border border-purple-200">
-                            <div className="flex items-start">
-                              <Info size={20} className="text-purple-600 mr-3 flex-shrink-0 mt-0.5" />
-                              <div>
-                                <h5 className="font-bold text-purple-900 text-sm mb-1 font-roboto">Why This Task Matters:</h5>
-                                <p className="text-sm text-purple-800 font-roboto">{task.insight}</p>
-                                <p className="text-xs text-purple-700 mt-2 font-roboto">
-                                  Our AI analyzed your family's survey data and identified this task as important for improving balance.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Insight Box for survey-based tasks */}
-                        {task.taskType === 'survey-based' && task.insight && (
-                          <div className="bg-blue-100 p-4 rounded-lg mt-3 border border-blue-200">
-                            <div className="flex items-start">
-                              <Info size={20} className="text-blue-600 mr-3 flex-shrink-0 mt-0.5" />
-                              <div>
-                                <h5 className="font-bold text-blue-900 text-sm mb-1 font-roboto">Survey Insight:</h5>
-                                <p className="text-sm text-blue-800 font-roboto">{task.insight}</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Insight Box for relationship tasks */}
-                        {task.taskType === 'relationship' && task.insight && (
-                          <div className="bg-pink-100 p-4 rounded-lg mt-3 border border-pink-200">
-                            <div className="flex items-start">
-                              <Heart size={20} className="text-pink-600 mr-3 flex-shrink-0 mt-0.5" />
-                              <div>
-                                <h5 className="font-bold text-pink-900 text-sm mb-1 font-roboto">Relationship Impact:</h5>
-                                <p className="text-sm text-pink-800 font-roboto">{task.insight}</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Main task comments */}
-                        {renderComments(task.comments)}
-                        
-                        {/* Main task comment form */}
-                        {renderCommentForm(task.id.toString())}
-                        
-                        {/* Action buttons for main task */}
-                        {!commentTask && (
-                          <div className="mt-4 flex justify-between">
-                            <button
-                              className="px-3 py-1 text-sm rounded border font-roboto"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleAddComment(task.id.toString());
-                              }}
-                            >
-                              Comment
-                            </button>
                             
-                            {canCompleteTask(task) && (
-                              <button
-                                className={`px-3 py-1 text-sm rounded font-roboto ${
-                                  task.completed 
-                                    ? 'bg-gray-200 text-gray-800' 
-                                    : 'bg-green-500 text-white'
-                                }`}
-                                onClick={() => handleTaskCompletion(task.id, !task.completed)}
-                              >
-                                {task.completed ? 'Completed' : 'Mark as Done'}
-                              </button>
+                          <div className="mt-2">
+                            <p className="text-gray-600 font-roboto">
+                              {task.description}
+                            </p>
+                            
+                            {/* Show completion date if task is completed */}
+                            {task.completed && task.completedDate && (
+                              <p className="text-sm text-green-600 mt-2 font-roboto">
+                                Completed on {formatDate(task.completedDate)}
+                              </p>
                             )}
                           </div>
-                        )}
+                          
+                          {/* SECTION 1: Survey Insights / AI Insights */}
+                          {(task.insight || (task.taskType === 'ai' && task.insight)) && (
+                            <div className="bg-blue-50 p-4 rounded-lg mt-4 border border-blue-200">
+                              <div className="flex items-start">
+                                <Info size={20} className="text-blue-600 mr-3 flex-shrink-0 mt-0.5" />
+                                <div>
+                                  <h5 className="font-bold text-blue-900 text-sm mb-1 font-roboto">
+                                    {task.taskType === 'ai' ? 'AI Insight:' : 'Survey Insight:'}
+                                  </h5>
+                                  <p className="text-sm text-blue-800 font-roboto">{task.insight}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* SECTION 2: How to Complete This Task */}
+                          <div className="mt-4">
+                            <h5 className="font-medium text-sm mb-2 font-roboto">How to Complete This Task:</h5>
+                            <div className="bg-gray-50 p-4 rounded-lg mb-4 text-sm font-roboto">
+                              <p>{task.details || "Choose one task that your partner usually handles and complete it fully, from start to finish."}</p>
+                            </div>
+                          </div>
+                          
+                          {/* SECTION 3: Comments Section with Always-Visible Input */}
+                          <div className="mt-4 pt-4 border-t">
+                            <h5 className="text-sm font-medium mb-2 font-roboto">
+                              {task.completed ? 'Your Completion Notes:' : 'Describe How You Completed This Task:'}
+                            </h5>
+                            
+                            {/* Existing comments */}
+                            {renderComments(task.comments)}
+                            
+                            {/* Always-visible comment input */}
+                            {!task.completed && canCompleteTask(task) && (
+                              <div>
+                                <textarea
+                                  className="w-full border rounded p-2 text-sm font-roboto mb-2"
+                                  rows="3"
+                                  placeholder="Describe what you did and what you learned from this task..."
+                                  value={commentInputs[task.id] || ''}
+                                  onChange={(e) => setCommentInputs({...commentInputs, [task.id]: e.target.value})}
+                                  disabled={isSubmittingComment || savingTasks[task.id]}
+                                ></textarea>
+                                
+                                {/* Error message if saving failed */}
+                                {saveErrors[task.id] && (
+                                  <div className="text-xs text-red-600 mb-2 font-roboto">
+                                    {saveErrors[task.id]}
+                                  </div>
+                                )}
+                                
+                                <div className="flex justify-end">
+                                  <button
+                                    onClick={() => handleCompleteWithComment(task.id)}
+                                    disabled={!commentInputs[task.id]?.trim() || isSubmittingComment || savingTasks[task.id]}
+                                    className="px-4 py-2 bg-green-500 text-white rounded flex items-center font-roboto disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                  >
+                                    {savingTasks[task.id] ? (
+                                      <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                                        Saving...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CheckCircle size={16} className="mr-2" />
+                                        Mark Complete
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Completion status notification */}
+                            {task.completed && (
+                              <div className="bg-green-50 p-3 rounded-lg border border-green-200 text-center">
+                                <CheckCircle className="inline-block text-green-600 mr-2" size={16} />
+                                <span className="text-green-800 font-medium font-roboto">
+                                  Task completed on {formatDate(task.completedDate)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    
-                    {/* Additional Task Details */}
-                    {/* Main task details section - MOVED HERE FROM EXPANDED AREA */}
-<div className="mt-4">
-  <h5 className="font-medium text-sm mb-3 font-roboto">How to Complete This Task:</h5>
-  <div className="bg-gray-50 p-4 rounded-lg mb-4 text-sm font-roboto">
-    <p>{task.details || "Choose one task that your partner usually handles and complete it fully, from start to finish."}</p>
-  </div>
-</div>
-
-{/* AI Insight Box for AI tasks */}
-{task.taskType === 'ai' && task.insight && (
-  <div className="bg-purple-100 p-4 rounded-lg mt-3 border border-purple-200">
-    <div className="flex items-start">
-      <Info size={20} className="text-purple-600 mr-3 flex-shrink-0 mt-0.5" />
-      <div>
-        <h5 className="font-bold text-purple-900 text-sm mb-1 font-roboto">Why This Task Matters:</h5>
-        <p className="text-sm text-purple-800 font-roboto">{task.insight}</p>
-        <p className="text-xs text-purple-700 mt-2 font-roboto">
-          Our AI analyzed your family's survey data and identified this task as important for improving balance.
-        </p>
-      </div>
-    </div>
-  </div>
-)}
                   </div>
                 ))}
             </div>
           </div>
           
-          {/* Mama's Tasks */}
+          {/* Mama's Tasks - Now with IDENTICAL DESIGN to Papa's Tasks */}
           <div className="border-l-4 border-purple-500 p-2">
             <h4 className="font-medium mb-2 text-lg font-roboto">Mama's Tasks</h4>
             <div className="space-y-3">
               {taskRecommendations
                 .filter(task => task.assignedTo === "Mama")
                 .map(task => (
-                  <div key={task.id} className={`rounded-lg border ${task.completed ? 'bg-green-50' : 'bg-white'}`}>
+                  <div key={task.id} className={`rounded-lg border shadow ${task.completed ? 'bg-green-50' : 'bg-white'}`}>
                     {/* Main task header */}
-                    <div 
-                      className="p-4 flex items-start cursor-pointer"
-                      onClick={() => toggleTaskExpansion(task.id)}
-                    >
-                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                        task.completed ? 'bg-green-100 text-green-600' : 'bg-purple-100 text-purple-600'
-                      }`}>
-                        {task.completed ? <CheckCircle size={16} /> : <Target size={16} />}
-                      </div>
-                        
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center">
-                          <h4 className="font-medium text-lg font-roboto">{task.title}</h4>
+                    <div className="p-4">
+                      <div className="flex items-start">
+                        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                          task.completed ? 'bg-green-100 text-green-600' : 'bg-purple-100 text-purple-600'
+                        }`}>
+                          {task.completed ? <CheckCircle size={16} /> : <Target size={16} />}
+                        </div>
                           
-                          {/* Task type label */}
-                          <div className="flex items-center gap-2">
-                            {task.taskType === 'ai' && (
-                              <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-xs rounded-full flex items-center">
-                                <Brain size={10} className="mr-1" />
-                                AI Insight
-                              </span>
-                            )}
-                            {task.taskType === 'survey-based' && (
-                              <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full flex items-center">
-                                <CheckCircle2 size={10} className="mr-1" />
-                                Survey Data
-                              </span>
-                            )}
-                            {task.taskType === 'relationship' && (
-                              <span className="px-2 py-0.5 bg-pink-100 text-pink-800 text-xs rounded-full flex items-center">
-                                <Heart size={10} className="mr-1" />
-                                Relationship
-                              </span>
-                            )}
-                            {task.taskType === 'meeting' && (
-                              <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-xs rounded-full flex items-center">
-                                <Users size={10} className="mr-1" />
-                                Family Meeting
-                              </span>
-                            )}
-                            {task.taskType === 'goal' && (
-                              <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full flex items-center">
-                                <Target size={10} className="mr-1" />
-                                Family Goal
-                              </span>
-                            )}
-                            <div>
-                              {expandedTasks[task.id] ? (
-                                <ChevronUp size={20} className="text-gray-500" />
-                              ) : (
-                                <ChevronDown size={20} className="text-gray-500" />
+                        <div className="flex-1">
+                          <div className="flex justify-between items-start">
+                            <h4 className="font-medium text-lg font-roboto">{task.title}</h4>
+                            
+                            {/* Task type label */}
+                            <div className="flex items-center gap-2">
+                              {task.taskType === 'ai' && (
+                                <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-xs rounded-full flex items-center">
+                                  <Brain size={10} className="mr-1" />
+                                  AI Insight
+                                </span>
+                              )}
+                              {task.taskType === 'survey-based' && (
+                                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full flex items-center">
+                                  <CheckCircle2 size={10} className="mr-1" />
+                                  Survey Data
+                                </span>
+                              )}
+                              {task.taskType === 'relationship' && (
+                                <span className="px-2 py-0.5 bg-pink-100 text-pink-800 text-xs rounded-full flex items-center">
+                                  <Heart size={10} className="mr-1" />
+                                  Relationship
+                                </span>
                               )}
                             </div>
                           </div>
-                        </div>
-                          
-                        <div className="mt-2">
-                          <p className="text-gray-600 font-roboto">
-                            {task.description}
-                          </p>
-                          
-                          {/* Show completion date if task is completed */}
-                          {task.completed && task.completedDate && (
-                            <p className="text-sm text-green-600 mt-2 font-roboto">
-                              Completed on {formatDate(task.completedDate)}
+                            
+                          <div className="mt-2">
+                            <p className="text-gray-600 font-roboto">
+                              {task.description}
                             </p>
+                            
+                            {/* Show completion date if task is completed */}
+                            {task.completed && task.completedDate && (
+                              <p className="text-sm text-green-600 mt-2 font-roboto">
+                                Completed on {formatDate(task.completedDate)}
+                              </p>
+                            )}
+                          </div>
+                          
+                          {/* SECTION 1: Survey Insights / AI Insights */}
+                          {(task.insight || (task.taskType === 'ai' && task.insight)) && (
+                            <div className="bg-blue-50 p-4 rounded-lg mt-4 border border-blue-200">
+                              <div className="flex items-start">
+                                <Info size={20} className="text-blue-600 mr-3 flex-shrink-0 mt-0.5" />
+                                <div>
+                                  <h5 className="font-bold text-blue-900 text-sm mb-1 font-roboto">
+                                    {task.taskType === 'ai' ? 'AI Insight:' : 'Survey Insight:'}
+                                  </h5>
+                                  <p className="text-sm text-blue-800 font-roboto">{task.insight}</p>
+                                </div>
+                              </div>
+                            </div>
                           )}
+                          
+                          {/* SECTION 2: How to Complete This Task */}
+                          <div className="mt-4">
+                            <h5 className="font-medium text-sm mb-2 font-roboto">How to Complete This Task:</h5>
+                            <div className="bg-gray-50 p-4 rounded-lg mb-4 text-sm font-roboto">
+                              <p>{task.details || "Choose one task that your partner usually handles and complete it fully, from start to finish."}</p>
+                            </div>
+                          </div>
+                          
+                          {/* SECTION 3: Comments Section with Always-Visible Input */}
+                          <div className="mt-4 pt-4 border-t">
+                            <h5 className="text-sm font-medium mb-2 font-roboto">
+                              {task.completed ? 'Your Completion Notes:' : 'Describe How You Completed This Task:'}
+                            </h5>
+                            
+                            {/* Existing comments */}
+                            {renderComments(task.comments)}
+                            
+                            {/* Always-visible comment input */}
+                            {!task.completed && canCompleteTask(task) && (
+                              <div>
+                                <textarea
+                                  className="w-full border rounded p-2 text-sm font-roboto mb-2"
+                                  rows="3"
+                                  placeholder="Describe what you did and what you learned from this task..."
+                                  value={commentInputs[task.id] || ''}
+                                  onChange={(e) => setCommentInputs({...commentInputs, [task.id]: e.target.value})}
+                                  disabled={isSubmittingComment || savingTasks[task.id]}
+                                ></textarea>
+                                
+                                {/* Error message if saving failed */}
+                                {saveErrors[task.id] && (
+                                  <div className="text-xs text-red-600 mb-2 font-roboto">
+                                    {saveErrors[task.id]}
+                                  </div>
+                                )}
+                                
+                                <div className="flex justify-end">
+                                  <button
+                                    onClick={() => handleCompleteWithComment(task.id)}
+                                    disabled={!commentInputs[task.id]?.trim() || isSubmittingComment || savingTasks[task.id]}
+                                    className="px-4 py-2 bg-green-500 text-white rounded flex items-center font-roboto disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                  >
+                                    {savingTasks[task.id] ? (
+                                      <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                                        Saving...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CheckCircle size={16} className="mr-2" />
+                                        Mark Complete
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Completion status notification */}
+                            {task.completed && (
+                              <div className="bg-green-50 p-3 rounded-lg border border-green-200 text-center">
+                                <CheckCircle className="inline-block text-green-600 mr-2" size={16} />
+                                <span className="text-green-800 font-medium font-roboto">
+                                  Task completed on {formatDate(task.completedDate)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        
-                        {/* AI Insight Box for AI tasks */}
-                        {task.taskType === 'ai' && task.insight && (
-                          <div className="bg-purple-100 p-4 rounded-lg mt-3 border border-purple-200">
-                            <div className="flex items-start">
-                              <Info size={20} className="text-purple-600 mr-3 flex-shrink-0 mt-0.5" />
-                              <div>
-                                <h5 className="font-bold text-purple-900 text-sm mb-1 font-roboto">Why This Task Matters:</h5>
-                                <p className="text-sm text-purple-800 font-roboto">{task.insight}</p>
-                                <p className="text-xs text-purple-700 mt-2 font-roboto">
-                                  Our AI analyzed your family's survey data and identified this task as important for improving balance.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Insight Box for survey-based tasks */}
-                        {task.taskType === 'survey-based' && task.insight && (
-                          <div className="bg-blue-100 p-4 rounded-lg mt-3 border border-blue-200">
-                            <div className="flex items-start">
-                              <Info size={20} className="text-blue-600 mr-3 flex-shrink-0 mt-0.5" />
-                              <div>
-                                <h5 className="font-bold text-blue-900 text-sm mb-1 font-roboto">Survey Insight:</h5>
-                                <p className="text-sm text-blue-800 font-roboto">{task.insight}</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Insight Box for relationship tasks */}
-                        {task.taskType === 'relationship' && task.insight && (
-                          <div className="bg-pink-100 p-4 rounded-lg mt-3 border border-pink-200">
-                            <div className="flex items-start">
-                              <Heart size={20} className="text-pink-600 mr-3 flex-shrink-0 mt-0.5" />
-                              <div>
-                                <h5 className="font-bold text-pink-900 text-sm mb-1 font-roboto">Relationship Impact:</h5>
-                                <p className="text-sm text-pink-800 font-roboto">{task.insight}</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Comments */}
-{renderComments(task.comments)}
-
-{/* Always show comment form */}
-<div className="mt-3 pt-3 border-t">
-  <h5 className="text-sm font-medium mb-2 font-roboto">Comment to Complete:</h5>
-  <textarea
-    className="w-full border rounded p-2 text-sm font-roboto"
-    rows="2"
-    placeholder="Write your comment here..."
-    value={commentInputs[task.id] || ''}
-    onChange={(e) => setCommentInputs({...commentInputs, [task.id]: e.target.value})}
-    disabled={task.completed || isSubmittingComment}
-  ></textarea>
-  
-  {/* Completion button - only show if not completed */}
-  {canCompleteTask(task) && !task.completed && (
-    <div className="mt-4 flex justify-center">
-      <button
-        onClick={() => handleCompleteWithComment(task.id)}
-        disabled={!commentInputs[task.id]?.trim() || isSubmittingComment}
-        className="px-4 py-2 bg-green-500 text-white rounded-lg flex items-center font-roboto disabled:bg-gray-300 disabled:cursor-not-allowed"
-      >
-        <CheckCircle size={16} className="mr-2" />
-        Mark Task Complete
-      </button>
-    </div>
-  )}
-  
-  {/* Show this if already completed */}
-  {task.completed && (
-    <div className="mt-4 text-center text-green-600 font-medium font-roboto">
-      ✓ Task completed on {formatDate(task.completedDate)}
-    </div>
-  )}
-</div>
                       </div>
                     </div>
-                    
-                    {/* Additional Task Details */}
-                    {expandedTasks[task.id] && (
-                      <div className="border-t">
-                        <div className="p-4">
-                          <h5 className="font-medium text-sm mb-3 font-roboto">How to Complete This Task:</h5>
-                          <div className="bg-gray-50 p-4 rounded-lg mb-4 text-sm font-roboto">
-                            <p>{task.details || "Choose one task that your partner usually handles and complete it fully, from start to finish."}</p>
-                          </div>
-                          
-                          {/* Completion UI */}
-                          {canCompleteTask(task) && !task.completed && (
-                            <div className="mt-4 flex justify-center">
-                              <button
-                                onClick={() => handleTaskCompletion(task.id, true)}
-                                className="px-4 py-2 bg-green-500 text-white rounded-lg flex items-center font-roboto"
-                              >
-                                <CheckCircle size={16} className="mr-2" />
-                                Mark Task Complete
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 ))}
             </div>
@@ -1725,104 +1186,230 @@ const handleCompleteWithComment = async (taskId) => {
             </div>
             <div className="space-y-3">
               {/* First Kid Task - Helper Task */}
-              <div className="rounded-lg border bg-white">
-                <div 
-                  className="p-4 flex items-start cursor-pointer"
-                  onClick={() => toggleTaskExpansion('kid-task-1')}
-                >
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mr-3 bg-amber-100 text-amber-600">
-                    🏆
-                  </div>
-                    
-                  <div className="flex-1">
-                    <div className="flex justify-between items-center">
-                      <h4 className="font-medium text-lg font-roboto">Family Helper Challenge</h4>
-                      <div>
-                        {expandedTasks['kid-task-1'] ? (
-                          <ChevronUp size={20} className="text-gray-500" />
-                        ) : (
-                          <ChevronDown size={20} className="text-gray-500" />
-                        )}
-                      </div>
+              <div className="rounded-lg border bg-white shadow">
+                <div className="p-4">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mr-3 bg-amber-100 text-amber-600">
+                      🏆
                     </div>
                       
-                    <div className="mt-2">
-                      <p className="text-gray-600 font-roboto">
-                        Help your parents with special tasks this week and become a Family Hero!
-                      </p>
+                    <div className="flex-1">
+                      <div className="flex justify-between items-center">
+                        <h4 className="font-medium text-lg font-roboto">Family Helper Challenge</h4>
+                      </div>
+                        
+                      <div className="mt-2">
+                        <p className="text-gray-600 font-roboto">
+                          Help your parents with special tasks this week and become a Family Hero!
+                        </p>
+                      </div>
+                    
+                      {/* Kid Task Details */}
+                      <div className="mt-4">
+                        <h5 className="font-medium text-sm mb-3 font-roboto">Your Mission:</h5>
+                        <div className="space-y-4">
+                          {/* Kid Subtasks */}
+                          {familyMembers.filter(member => member.role === 'child').map((child, index) => (
+                            <div key={`kid-subtask-${index}`} className="border rounded-md p-3 bg-gray-50">
+                              <div className="flex items-start">
+                                <div className="flex-shrink-0 mr-3">
+                                  <button
+                                    className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                                      selectedUser && selectedUser.role === 'child'
+                                        ? 'bg-white border border-amber-300 hover:bg-amber-50 cursor-pointer' 
+                                        : 'bg-gray-100 border border-gray-300 cursor-not-allowed'
+                                    }`}
+                                    onClick={() => {
+                                      if (!kidTasksCompleted[`kid-task-1-${index}`]?.completed) {
+                                        const observations = prompt("What did you do to help? Share your accomplishment!");
+                                        if (observations) {
+                                          handleCompleteKidTask(`kid-task-1-${index}`, selectedUser.id, true, observations);
+                                        }
+                                      } else {
+                                        handleCompleteKidTask(`kid-task-1-${index}`, selectedUser.id, false);
+                                      }
+                                    }}
+                                    disabled={selectedUser?.role !== 'child'}
+                                  >
+                                    {kidTasksCompleted[`kid-task-1-${index}`]?.completed && <span>✓</span>}
+                                  </button>
+                                </div>
+                                
+                                <div className="flex-1">
+                                  <h6 className="font-medium text-sm font-roboto">{child.name}'s Special Task</h6>
+                                  <p className="text-sm text-gray-600 mt-1 font-roboto">
+                                    {index % 2 === 0 ? 
+                                      "Help set the table for dinner this week" : 
+                                      "Help organize a family game night"}
+                                  </p>
+                                  
+                                  {kidTasksCompleted[`kid-task-1-${index}`]?.completed && (
+                                    <div>
+                                      <p className="text-xs text-green-600 mt-2 font-roboto">
+                                        Completed by {kidTasksCompleted[`kid-task-1-${index}`].completedByName || 'a child'} on {formatDate(kidTasksCompleted[`kid-task-1-${index}`].completedDate)}
+                                      </p>
+                                      {kidTasksCompleted[`kid-task-1-${index}`].observations && (
+                                        <div className="mt-2 p-2 bg-amber-50 rounded text-sm">
+                                          <p className="italic text-amber-800 font-roboto">"{kidTasksCompleted[`kid-task-1-${index}`].observations}"</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  
+                                  {/* Picture upload for completed kid tasks */}
+                                  {kidTasksCompleted[`kid-task-1-${index}`]?.completed && (
+                                    <div className="mt-3">
+                                      {kidTasksCompleted[`kid-task-1-${index}`]?.pictureUrl ? (
+                                        <div className="mt-2">
+                                          <p className="text-xs text-green-600 mb-1 font-roboto">Picture uploaded:</p>
+                                          <img 
+                                            src={kidTasksCompleted[`kid-task-1-${index}`].pictureUrl} 
+                                            alt="Task completion" 
+                                            className="max-h-32 rounded border border-green-200"
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-xs text-blue-600 font-roboto">Add a picture of what you did!</span>
+                                          <label className="px-2 py-1 bg-blue-100 text-blue-600 rounded text-xs cursor-pointer hover:bg-blue-200 font-roboto flex items-center">
+                                            <Camera size={12} className="mr-1" />
+                                            Upload Picture
+                                            <input 
+                                              type="file" 
+                                              accept="image/*" 
+                                              className="hidden" 
+                                              onChange={(e) => {
+                                                if (e.target.files && e.target.files[0]) {
+                                                  handleKidTaskPictureUpload(`kid-task-1-${index}`, e.target.files[0]);
+                                                }
+                                              }}
+                                            />
+                                          </label>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  
+                                  {/* Reactions/Cheers */}
+                                  {kidTasksCompleted[`kid-task-1-${index}`]?.completed && (
+                                    <div className="flex mt-2 flex-wrap gap-1">
+                                      {taskReactions[`kid-task-1-${index}`]?.map((reaction, i) => (
+                                        <div key={i} className="bg-amber-50 px-2 py-1 rounded-full text-xs flex items-center">
+                                          <span className="mr-1">{reaction.emoji}</span>
+                                          <span className="text-amber-700 font-roboto">{reaction.from}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  
+                                  {/* Add Reaction Button */}
+                                  {kidTasksCompleted[`kid-task-1-${index}`]?.completed && (
+                                    <button
+                                      onClick={() => openEmojiPicker(`kid-task-1-${index}`)}
+                                      className="mt-2 text-xs flex items-center text-blue-600 hover:text-blue-800 font-roboto"
+                                    >
+                                      <span className="mr-1">🎉</span> Add a cheer!
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+
+                          {/* If no children, show message */}
+                          {familyMembers.filter(member => member.role === 'child').length === 0 && (
+                            <p className="text-sm text-gray-500 italic font-roboto">No children added to your family yet</p>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-                
-                {/* Subtasks */}
-                {expandedTasks['kid-task-1'] && (
-                  <div className="border-t">
-                    <div className="p-4">
-                      <h5 className="font-medium text-sm mb-3 font-roboto">Your Mission:</h5>
-                      <div className="space-y-4 pl-4">
-                        {/* Kid Subtasks */}
-                        {familyMembers.filter(member => member.role === 'child').map((child, index) => (
-                          <div key={`kid-subtask-${index}`} className="border rounded-md p-3 bg-white">
+              </div>
+              
+              {/* Second Kid Task - Fun Survey Challenge */}
+              <div className="rounded-lg border bg-white shadow">
+                <div className="p-4">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mr-3 bg-green-100 text-green-600">
+                      🔍
+                    </div>
+                      
+                    <div className="flex-1">
+                      <div className="flex justify-between items-center">
+                        <h4 className="font-medium text-lg font-roboto">Family Detective Challenge</h4>
+                      </div>
+                        
+                      <div className="mt-2">
+                        <p className="text-gray-600 font-roboto">
+                          Become a family detective! Observe who does what in your family this week!
+                        </p>
+                      </div>
+                    
+                      {/* Detective Task Details */}
+                      <div className="mt-4">
+                        <h5 className="font-medium text-sm mb-3 font-roboto">Your Mission:</h5>
+                        <div className="space-y-4">
+                          {/* Detective Subtasks */}
+                          <div className="border rounded-md p-3 bg-gray-50">
                             <div className="flex items-start">
                               <div className="flex-shrink-0 mr-3">
                                 <button
                                   className={`w-6 h-6 rounded-full flex items-center justify-center ${
                                     selectedUser && selectedUser.role === 'child'
-                                      ? 'bg-white border border-amber-300 hover:bg-amber-50 cursor-pointer' 
+                                      ? 'bg-white border border-green-300 hover:bg-green-50 cursor-pointer' 
                                       : 'bg-gray-100 border border-gray-300 cursor-not-allowed'
                                   }`}
                                   onClick={() => {
-                                    if (!kidTasksCompleted[`kid-task-1-${index}`]?.completed) {
-                                      const observations = prompt("What did you do to help? Share your accomplishment!");
+                                    if (!kidTasksCompleted['kid-task-2-1']?.completed) {
+                                      const observations = prompt("What did you observe about who cooks in your family?");
                                       if (observations) {
-                                        handleCompleteKidTask(`kid-task-1-${index}`, selectedUser.id, true, observations);
+                                        handleCompleteKidTask('kid-task-2-1', selectedUser.id, true, observations);
                                       }
                                     } else {
-                                      handleCompleteKidTask(`kid-task-1-${index}`, selectedUser.id, false);
+                                      handleCompleteKidTask('kid-task-2-1', selectedUser.id, false);
                                     }
                                   }}
                                   disabled={selectedUser?.role !== 'child'}
                                 >
-                                  {kidTasksCompleted[`kid-task-1-${index}`]?.completed && <span>✓</span>}
+                                  {kidTasksCompleted['kid-task-2-1']?.completed && <span>✓</span>}
                                 </button>
                               </div>
                               
                               <div className="flex-1">
-                                <h6 className="font-medium text-sm font-roboto">{child.name}'s Special Task</h6>
+                                <h6 className="font-medium text-sm font-roboto">Watch Who Cooks</h6>
                                 <p className="text-sm text-gray-600 mt-1 font-roboto">
-                                  {index % 2 === 0 ? 
-                                    "Help set the table for dinner this week" : 
-                                    "Help organize a family game night"}
+                                  Keep track of who makes meals this week
                                 </p>
                                 
-                                {kidTasksCompleted[`kid-task-1-${index}`]?.completed && (
+                                {kidTasksCompleted['kid-task-2-1']?.completed && (
                                   <div>
                                     <p className="text-xs text-green-600 mt-2 font-roboto">
-                                      Completed by {kidTasksCompleted[`kid-task-1-${index}`].completedByName || 'a child'} on {formatDate(kidTasksCompleted[`kid-task-1-${index}`].completedDate)}
+                                      Completed by {kidTasksCompleted['kid-task-2-1'].completedByName || 'a child'} on {formatDate(kidTasksCompleted['kid-task-2-1'].completedDate)}
                                     </p>
-                                    {kidTasksCompleted[`kid-task-1-${index}`].observations && (
-                                      <div className="mt-2 p-2 bg-amber-50 rounded text-sm">
-                                        <p className="italic text-amber-800 font-roboto">"{kidTasksCompleted[`kid-task-1-${index}`].observations}"</p>
+                                    {kidTasksCompleted['kid-task-2-1'].observations && (
+                                      <div className="mt-2 p-2 bg-green-50 rounded text-sm">
+                                        <p className="italic text-green-800 font-roboto">"{kidTasksCompleted['kid-task-2-1'].observations}"</p>
                                       </div>
                                     )}
                                   </div>
                                 )}
                                 
                                 {/* Picture upload for completed kid tasks */}
-                                {kidTasksCompleted[`kid-task-1-${index}`]?.completed && (
+                                {kidTasksCompleted['kid-task-2-1']?.completed && (
                                   <div className="mt-3">
-                                    {kidTasksCompleted[`kid-task-1-${index}`]?.pictureUrl ? (
+                                    {kidTasksCompleted['kid-task-2-1']?.pictureUrl ? (
                                       <div className="mt-2">
                                         <p className="text-xs text-green-600 mb-1 font-roboto">Picture uploaded:</p>
                                         <img 
-                                          src={kidTasksCompleted[`kid-task-1-${index}`].pictureUrl} 
+                                          src={kidTasksCompleted['kid-task-2-1'].pictureUrl} 
                                           alt="Task completion" 
                                           className="max-h-32 rounded border border-green-200"
                                         />
                                       </div>
                                     ) : (
                                       <div className="flex justify-between items-center">
-                                        <span className="text-xs text-blue-600 font-roboto">Add a picture of what you did!</span>
+                                        <span className="text-xs text-blue-600 font-roboto">Add a picture of what you observed!</span>
                                         <label className="px-2 py-1 bg-blue-100 text-blue-600 rounded text-xs cursor-pointer hover:bg-blue-200 font-roboto flex items-center">
                                           <Camera size={12} className="mr-1" />
                                           Upload Picture
@@ -1832,7 +1419,7 @@ const handleCompleteWithComment = async (taskId) => {
                                             className="hidden" 
                                             onChange={(e) => {
                                               if (e.target.files && e.target.files[0]) {
-                                                handleKidTaskPictureUpload(`kid-task-1-${index}`, e.target.files[0]);
+                                                handleKidTaskPictureUpload('kid-task-2-1', e.target.files[0]);
                                               }
                                             }}
                                           />
@@ -1842,43 +1429,22 @@ const handleCompleteWithComment = async (taskId) => {
                                   </div>
                                 )}
                                 
-                                {/* Reactions/Cheers */}
-                                {kidTasksCompleted[`kid-task-1-${index}`]?.completed && (
+                                {/* Reactions */}
+                                {kidTasksCompleted['kid-task-2-1']?.completed && (
                                   <div className="flex mt-2 flex-wrap gap-1">
-                                    {taskReactions[`kid-task-1-${index}`]?.map((reaction, i) => (
-                                      <div key={i} className="bg-amber-50 px-2 py-1 rounded-full text-xs flex items-center">
+                                    {taskReactions['kid-task-2-1']?.map((reaction, i) => (
+                                      <div key={i} className="bg-green-50 px-2 py-1 rounded-full text-xs flex items-center">
                                         <span className="mr-1">{reaction.emoji}</span>
-                                        <span className="text-amber-700 font-roboto">{reaction.from}</span>
+                                        <span className="text-green-700 font-roboto">{reaction.from}</span>
                                       </div>
                                     ))}
                                   </div>
                                 )}
                                 
-                                {/* Comments */}
-                                {renderComments(kidTaskComments[`kid-task-1-${index}`])}
-                                
-                                {/* Comment form */}
-                                {commentTask === `kid-task-1-${index}` && renderCommentForm(`kid-task-1-${index}`)}
-                                
-                                {/* Add comment button */}
-                                {!commentTask && (
-                                  <div className="mt-2 flex justify-end">
-                                    <button
-                                      className="px-2 py-1 text-xs rounded border font-roboto"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleAddComment(`kid-task-1-${index}`);
-                                      }}
-                                    >
-                                      Comment
-                                    </button>
-                                  </div>
-                                )}
-                                
                                 {/* Add Reaction Button */}
-                                {kidTasksCompleted[`kid-task-1-${index}`]?.completed && (
+                                {kidTasksCompleted['kid-task-2-1']?.completed && (
                                   <button
-                                    onClick={() => openEmojiPicker(`kid-task-1-${index}`)}
+                                    onClick={() => openEmojiPicker('kid-task-2-1')}
                                     className="mt-2 text-xs flex items-center text-blue-600 hover:text-blue-800 font-roboto"
                                   >
                                     <span className="mr-1">🎉</span> Add a cheer!
@@ -1887,351 +1453,159 @@ const handleCompleteWithComment = async (taskId) => {
                               </div>
                             </div>
                           </div>
-                        ))}
 
-                        {/* If no children, show message */}
-                        {familyMembers.filter(member => member.role === 'child').length === 0 && (
-                          <p className="text-sm text-gray-500 italic font-roboto">No children added to your family yet</p>
-                        )}
+                          <div className="border rounded-md p-3 bg-gray-50">
+                            <div className="flex items-start">
+                              <div className="flex-shrink-0 mr-3">
+                                <button
+                                  className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                                    selectedUser && selectedUser.role === 'child'
+                                      ? 'bg-white border border-green-300 hover:bg-green-50 cursor-pointer' 
+                                      : 'bg-gray-100 border border-gray-300 cursor-not-allowed'
+                                  }`}
+                                  onClick={() => {
+                                    if (!kidTasksCompleted['kid-task-2-2']?.completed) {
+                                      const observations = prompt("What did you notice about who cleans in your family?");
+                                      if (observations) {
+                                        handleCompleteKidTask('kid-task-2-2', selectedUser.id, true, observations);
+                                      }
+                                    } else {
+                                      handleCompleteKidTask('kid-task-2-2', selectedUser.id, false);
+                                    }
+                                  }}
+                                  disabled={selectedUser?.role !== 'child'}
+                                >
+                                  {kidTasksCompleted['kid-task-2-2']?.completed && <span>✓</span>}
+                                </button>
+                              </div>
+                              
+                              <div className="flex-1">
+                                <h6 className="font-medium text-sm font-roboto">Count Who Cleans</h6>
+                                <p className="text-sm text-gray-600 mt-1 font-roboto">
+                                  Notice who does cleaning tasks this week
+                                </p>
+                                
+                                {kidTasksCompleted['kid-task-2-2']?.completed && (
+                                  <div>
+                                    <p className="text-xs text-green-600 mt-2 font-roboto">
+                                      Completed by {kidTasksCompleted['kid-task-2-2'].completedByName || 'a child'} on {formatDate(kidTasksCompleted['kid-task-2-2'].completedDate)}
+                                    </p>
+                                    {kidTasksCompleted['kid-task-2-2'].observations && (
+                                      <div className="mt-2 p-2 bg-green-50 rounded text-sm">
+                                        <p className="italic text-green-800 font-roboto">"{kidTasksCompleted['kid-task-2-2'].observations}"</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                
+                                {/* Reactions */}
+                                {kidTasksCompleted['kid-task-2-2']?.completed && (
+                                  <div className="flex mt-2 flex-wrap gap-1">
+                                    {taskReactions['kid-task-2-2']?.map((reaction, i) => (
+                                      <div key={i} className="bg-green-50 px-2 py-1 rounded-full text-xs flex items-center">
+                                        <span className="mr-1">{reaction.emoji}</span>
+                                        <span className="text-green-700 font-roboto">{reaction.from}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                
+                                {/* Add Reaction Button */}
+                                {kidTasksCompleted['kid-task-2-2']?.completed && (
+                                  <button
+                                    onClick={() => openEmojiPicker('kid-task-2-2')}
+                                    className="mt-2 text-xs flex items-center text-blue-600 hover:text-blue-800 font-roboto"
+                                  >
+                                    <span className="mr-1">🎉</span> Add a cheer!
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              {/* Second Kid Task - Fun Survey Challenge */}
-              <div className="rounded-lg border bg-white">
-                <div 
-                  className="p-4 flex items-start cursor-pointer"
-                  onClick={() => toggleTaskExpansion('kid-task-2')}
-                >
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mr-3 bg-green-100 text-green-600">
-                    🔍
-                  </div>
-                    
-                  <div className="flex-1">
-                    <div className="flex justify-between items-center">
-                      <h4 className="font-medium text-lg font-roboto">Family Detective Challenge</h4>
-                      <div>
-                        {expandedTasks['kid-task-2'] ? (
-                          <ChevronUp size={20} className="text-gray-500" />
-                        ) : (
-                          <ChevronDown size={20} className="text-gray-500" />
-                        )}
-                      </div>
-                    </div>
-                      
-                    <div className="mt-2">
-                      <p className="text-gray-600 font-roboto">
-                        Become a family detective! Observe who does what in your family this week!
-                      </p>
                     </div>
                   </div>
                 </div>
-                
-                {/* Subtasks */}
-                {expandedTasks['kid-task-2'] && (
-                  <div className="border-t">
-                    <div className="p-4">
-                      <h5 className="font-medium text-sm mb-3 font-roboto">Your Mission:</h5>
-                      <div className="space-y-4 pl-4">
-                        {/* Detective Subtasks */}
-                        <div className="border rounded-md p-3 bg-white">
-                          <div className="flex items-start">
-                            <div className="flex-shrink-0 mr-3">
-                              <button
-                                className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                                  selectedUser && selectedUser.role === 'child'
-                                    ? 'bg-white border border-green-300 hover:bg-green-50 cursor-pointer' 
-                                    : 'bg-gray-100 border border-gray-300 cursor-not-allowed'
-                                }`}
-                                onClick={() => {
-                                  if (!kidTasksCompleted['kid-task-2-1']?.completed) {
-                                    const observations = prompt("What did you observe about who cooks in your family?");
-                                    if (observations) {
-                                      handleCompleteKidTask('kid-task-2-1', selectedUser.id, true, observations);
-                                    }
-                                  } else {
-                                    handleCompleteKidTask('kid-task-2-1', selectedUser.id, false);
-                                  }
-                                }}
-                                disabled={selectedUser?.role !== 'child'}
-                              >
-                                {kidTasksCompleted['kid-task-2-1']?.completed && <span>✓</span>}
-                              </button>
-                            </div>
-                            
-                            <div className="flex-1">
-                              <h6 className="font-medium text-sm font-roboto">Watch Who Cooks</h6>
-                              <p className="text-sm text-gray-600 mt-1 font-roboto">
-                                Keep track of who makes meals this week
-                              </p>
-                              
-                              {kidTasksCompleted['kid-task-2-1']?.completed && (
-                                <div>
-                                  <p className="text-xs text-green-600 mt-2 font-roboto">
-                                    Completed by {kidTasksCompleted['kid-task-2-1'].completedByName || 'a child'} on {formatDate(kidTasksCompleted['kid-task-2-1'].completedDate)}
-                                  </p>
-                                  {kidTasksCompleted['kid-task-2-1'].observations && (
-                                    <div className="mt-2 p-2 bg-green-50 rounded text-sm">
-                                      <p className="italic text-green-800 font-roboto">"{kidTasksCompleted['kid-task-2-1'].observations}"</p>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              
-                              {/* Picture upload for completed kid tasks */}
-                              {kidTasksCompleted['kid-task-2-1']?.completed && (
-                                <div className="mt-3">
-                                  {kidTasksCompleted['kid-task-2-1']?.pictureUrl ? (
-                                    <div className="mt-2">
-                                      <p className="text-xs text-green-600 mb-1 font-roboto">Picture uploaded:</p>
-                                      <img 
-                                        src={kidTasksCompleted['kid-task-2-1'].pictureUrl} 
-                                        alt="Task completion" 
-                                        className="max-h-32 rounded border border-green-200"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <div className="flex justify-between items-center">
-                                      <span className="text-xs text-blue-600 font-roboto">Add a picture of what you observed!</span>
-                                      <label className="px-2 py-1 bg-blue-100 text-blue-600 rounded text-xs cursor-pointer hover:bg-blue-200 font-roboto flex items-center">
-                                        <Camera size={12} className="mr-1" />
-                                        Upload Picture
-                                        <input 
-                                          type="file" 
-                                          accept="image/*" 
-                                          className="hidden" 
-                                          onChange={(e) => {
-                                            if (e.target.files && e.target.files[0]) {
-                                              handleKidTaskPictureUpload('kid-task-2-1', e.target.files[0]);
-                                            }
-                                          }}
-                                        />
-                                      </label>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              
-                              {/* Comments */}
-                              {renderComments(kidTaskComments['kid-task-2-1'])}
-                              
-                              {/* Comment form */}
-                              {commentTask === 'kid-task-2-1' && renderCommentForm('kid-task-2-1')}
-                              
-                              {/* Add comment button */}
-                              {!commentTask && (
-                                <div className="mt-2 flex justify-end">
-                                  <button
-                                    className="px-2 py-1 text-xs rounded border font-roboto"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleAddComment('kid-task-2-1');
-                                    }}
-                                  >
-                                    Comment
-                                  </button>
-                                </div>
-                              )}
-                              
-                              {/* Reactions */}
-                              {kidTasksCompleted['kid-task-2-1']?.completed && (
-                                <div className="flex mt-2 flex-wrap gap-1">
-                                  {taskReactions['kid-task-2-1']?.map((reaction, i) => (
-                                    <div key={i} className="bg-green-50 px-2 py-1 rounded-full text-xs flex items-center">
-                                      <span className="mr-1">{reaction.emoji}</span>
-                                      <span className="text-green-700 font-roboto">{reaction.from}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              
-                              {/* Add Reaction Button */}
-                              {kidTasksCompleted['kid-task-2-1']?.completed && (
-                                <button
-                                  onClick={() => openEmojiPicker('kid-task-2-1')}
-                                  className="mt-2 text-xs flex items-center text-blue-600 hover:text-blue-800 font-roboto"
-                                >
-                                  <span className="mr-1">🎉</span> Add a cheer!
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="border rounded-md p-3 bg-white">
-                          <div className="flex items-start">
-                            <div className="flex-shrink-0 mr-3">
-                              <button
-                                className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                                  selectedUser && selectedUser.role === 'child'
-                                    ? 'bg-white border border-green-300 hover:bg-green-50 cursor-pointer' 
-                                    : 'bg-gray-100 border border-gray-300 cursor-not-allowed'
-                                }`}
-                                onClick={() => {
-                                  if (!kidTasksCompleted['kid-task-2-2']?.completed) {
-                                    const observations = prompt("What did you notice about who cleans in your family?");
-                                    if (observations) {
-                                      handleCompleteKidTask('kid-task-2-2', selectedUser.id, true, observations);
-                                    }
-                                  } else {
-                                    handleCompleteKidTask('kid-task-2-2', selectedUser.id, false);
-                                  }
-                                }}
-                                disabled={selectedUser?.role !== 'child'}
-                              >
-                                {kidTasksCompleted['kid-task-2-2']?.completed && <span>✓</span>}
-                                </button>
-                            </div>
-                            
-                            <div className="flex-1">
-                              <h6 className="font-medium text-sm">Count Who Cleans</h6>
-                              <p className="text-sm text-gray-600 mt-1">
-                                Notice who does cleaning tasks this week
-                              </p>
-                              
-                              {kidTasksCompleted['kid-task-2-2']?.completed && (
-                                <div>
-                                  <p className="text-xs text-green-600 mt-2">
-                                    Completed by {kidTasksCompleted['kid-task-2-2'].completedByName || 'a child'} on {formatDate(kidTasksCompleted['kid-task-2-2'].completedDate)}
-                                  </p>
-                                  {kidTasksCompleted['kid-task-2-2'].observations && (
-                                    <div className="mt-2 p-2 bg-green-50 rounded text-sm">
-                                      <p className="italic text-green-800">"{kidTasksCompleted['kid-task-2-2'].observations}"</p>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              
-                              {/* Comments */}
-                              {renderComments(kidTaskComments['kid-task-2-2'])}
-                              
-                              {/* Comment form */}
-                              {commentTask === 'kid-task-2-2' && renderCommentForm('kid-task-2-2')}
-                              
-                              {/* Add comment button */}
-                              {!commentTask && (
-                                <div className="mt-2 flex justify-end">
-                                  <button
-                                    className="px-2 py-1 text-xs rounded border"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleAddComment('kid-task-2-2');
-                                    }}
-                                  >
-                                    Comment
-                                  </button>
-                                </div>
-                              )}
-                              
-                              {/* Reactions */}
-                              {kidTasksCompleted['kid-task-2-2']?.completed && (
-                                <div className="flex mt-2 flex-wrap gap-1">
-                                  {taskReactions['kid-task-2-2']?.map((reaction, i) => (
-                                    <div key={i} className="bg-green-50 px-2 py-1 rounded-full text-xs flex items-center">
-                                      <span className="mr-1">{reaction.emoji}</span>
-                                      <span className="text-green-700">{reaction.from}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              
-                              {/* Add Reaction Button */}
-                              {kidTasksCompleted['kid-task-2-2']?.completed && (
-                                <button
-                                  onClick={() => openEmojiPicker('kid-task-2-2')}
-                                  className="mt-2 text-xs flex items-center text-blue-600 hover:text-blue-800"
-                                >
-                                  <span className="mr-1">🎉</span> Add a cheer!
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
         </div>
 
         {/* Couple Check-In Card */}
-{selectedUser && selectedUser.role === 'parent' && (
-  <div className="bg-white rounded-lg shadow p-6 mt-8">
-    <div className="flex items-start">
-      <div className="flex-shrink-0 mr-4">
-        <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center">
-          <Heart size={20} className="text-pink-600" />
-        </div>
-      </div>
-      
-      <div className="flex-1">
-        <h3 className="text-lg font-semibold">Weekly Couple Check-In</h3>
-        <p className="text-sm text-gray-600 mt-1">
-          A quick 5-minute check-in to track how workload balance is affecting your relationship
-        </p>
-        
-        <div className="mt-3">
-          {!canStartCoupleCheckIn ? (
-            <div className="text-sm bg-amber-50 text-amber-800 p-3 rounded mb-3">
-              <div className="flex items-center mb-1">
-                <AlertCircle size={16} className="mr-2" />
-                <span className="font-medium">Couple check-in not yet available</span>
+        {selectedUser && selectedUser.role === 'parent' && (
+          <div className="bg-white rounded-lg shadow p-6 mt-8">
+            <div className="flex items-start">
+              <div className="flex-shrink-0 mr-4">
+                <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center">
+                  <Heart size={20} className="text-pink-600" />
+                </div>
               </div>
-              <p>
-                Complete the weekly check-in first to unlock the couple check-in.
-              </p>
-            </div>
-          ) : (
-            <div className="text-sm bg-pink-50 text-pink-800 p-3 rounded mb-3">
-              <div className="flex items-center mb-1">
-                <Heart size={16} className="mr-2" />
-                <span className="font-medium">Your relationship matters too!</span>
+              
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold font-roboto">Weekly Couple Check-In</h3>
+                <p className="text-sm text-gray-600 mt-1 font-roboto">
+                  A quick 5-minute check-in to track how workload balance is affecting your relationship
+                </p>
+                
+                <div className="mt-3">
+                  {!canStartCoupleCheckIn ? (
+                    <div className="text-sm bg-amber-50 text-amber-800 p-3 rounded mb-3">
+                      <div className="flex items-center mb-1">
+                        <AlertCircle size={16} className="mr-2" />
+                        <span className="font-medium font-roboto">Couple check-in not yet available</span>
+                      </div>
+                      <p className="font-roboto">
+                        Complete the weekly check-in first to unlock the couple check-in.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-sm bg-pink-50 text-pink-800 p-3 rounded mb-3">
+                      <div className="flex items-center mb-1">
+                        <Heart size={16} className="mr-2" />
+                        <span className="font-medium font-roboto">Your relationship matters too!</span>
+                      </div>
+                      <p className="font-roboto">
+                        Take 5 minutes to check in on how workload sharing is affecting your relationship.
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div className="text-sm text-gray-600 flex items-center">
+                    <span className="font-roboto">Recommended: 5 minutes</span>
+                  </div>
+                </div>
+                
+                <div className="mt-4">
+                  <button
+                    onClick={() => setShowCoupleCheckIn(true)}
+                    disabled={!canStartCoupleCheckIn}
+                    className={`px-4 py-2 rounded-md flex items-center font-roboto ${
+                      canStartCoupleCheckIn 
+                        ? 'bg-pink-100 text-pink-800 hover:bg-pink-200' 
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    Start Couple Check-In
+                  </button>
+                </div>
               </div>
-              <p>
-                Take 5 minutes to check in on how workload sharing is affecting your relationship.
-              </p>
             </div>
-          )}
-          
-          <div className="text-sm text-gray-600 flex items-center">
-            <span>Recommended: 5 minutes</span>
           </div>
-        </div>
-        
-        <div className="mt-4">
-          <button
-            onClick={() => setShowCoupleCheckIn(true)}
-            disabled={!canStartCoupleCheckIn}
-            className={`px-4 py-2 rounded-md flex items-center ${
-              canStartCoupleCheckIn 
-                ? 'bg-pink-100 text-pink-800 hover:bg-pink-200' 
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            Start Couple Check-In
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+        )}
 
-{/* Couple Check-In Modal */}
-{showCoupleCheckIn && (
-  <CoupleCheckInScreen onClose={(success) => {
-    setShowCoupleCheckIn(false);
-    // If successful completion, show a message or update UI
-    if (success) {
-      // Maybe show a success notification or update state
-    }
-  }} />
-)}
+        {/* Couple Check-In Modal */}
+        {showCoupleCheckIn && (
+          <CoupleCheckInScreen onClose={(success) => {
+            setShowCoupleCheckIn(false);
+            // If successful completion, show a message or update UI
+            if (success) {
+              // Maybe show a success notification or update state
+            }
+          }} />
+        )}
 
-        {/* Family Meeting Card - at the bottom */}
+        {/* Family Meeting Card */}
         <div className="bg-white rounded-lg shadow p-6 mt-8">
           <div className="flex items-start">
             <div className="flex-shrink-0 mr-4">
@@ -2241,8 +1615,8 @@ const handleCompleteWithComment = async (taskId) => {
             </div>
             
             <div className="flex-1">
-              <h3 className="text-lg font-semibold">Family Meeting</h3>
-              <p className="text-sm text-gray-600 mt-1">
+              <h3 className="text-lg font-semibold font-roboto">Family Meeting</h3>
+              <p className="text-sm text-gray-600 mt-1 font-roboto">
                 Hold a 30-minute family meeting to discuss progress and set goals
               </p>
               
@@ -2251,16 +1625,16 @@ const handleCompleteWithComment = async (taskId) => {
                   <div className="text-sm bg-amber-50 text-amber-800 p-3 rounded mb-3">
                     <div className="flex items-center mb-1">
                       <AlertCircle size={16} className="mr-2" />
-                      <span className="font-medium">Family meeting not yet available</span>
+                      <span className="font-medium font-roboto">Family meeting not yet available</span>
                     </div>
-                    <p>
+                    <p className="font-roboto">
                       Complete the weekly check-in and at least 3 tasks to unlock the family meeting agenda.
                     </p>
                   </div>
                 )}
                 
                 <div className="text-sm text-gray-600 flex items-center">
-                  <span>Recommended: 30 minutes</span>
+                  <span className="font-roboto">Recommended: 30 minutes</span>
                 </div>
               </div>
               
@@ -2268,7 +1642,7 @@ const handleCompleteWithComment = async (taskId) => {
                 <button
                   onClick={onOpenFamilyMeeting}
                   disabled={!canStartFamilyMeeting}
-                  className={`px-4 py-2 rounded-md flex items-center ${
+                  className={`px-4 py-2 rounded-md flex items-center font-roboto ${
                     canStartFamilyMeeting 
                       ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' 
                       : 'bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -2286,7 +1660,7 @@ const handleCompleteWithComment = async (taskId) => {
       {selectedTaskForEmoji && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 max-w-sm w-full">
-            <h3 className="text-lg font-medium mb-4">Add a cheer!</h3>
+            <h3 className="text-lg font-medium mb-4 font-roboto">Add a cheer!</h3>
             
             <div className="grid grid-cols-5 gap-3 mb-4">
               {['👍', '❤️', '🎉', '👏', '⭐', '🌟', '🏆', '💯', '🙌', '🤩'].map(emoji => (
@@ -2302,7 +1676,7 @@ const handleCompleteWithComment = async (taskId) => {
             
             <div className="flex justify-end">
               <button
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 font-roboto"
                 onClick={() => setSelectedTaskForEmoji(null)}
               >
                 Cancel
@@ -2311,6 +1685,23 @@ const handleCompleteWithComment = async (taskId) => {
           </div>
         </div>
       )}
+
+      {/* Helpful Tips Box */}
+      <div className="bg-white rounded-lg shadow p-4 mt-4 border-l-4 border-black">
+        <div className="flex items-start">
+          <div className="flex-shrink-0 mr-3">
+            <HelpCircle size={20} className="text-black" />
+          </div>
+          <div>
+            <h4 className="font-medium font-roboto">Did you know?</h4>
+            <p className="text-sm text-gray-600 mt-1 font-roboto">
+              All task completions and comments you add are analyzed by our AI to make future recommendations 
+              more personalized. The more details you share about task completion, the better Allie can help 
+              balance your family responsibilities!
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
