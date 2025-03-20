@@ -85,40 +85,88 @@ async getAIResponse(text, familyId, previousMessages) {
 }
   
   // Get family context data for the AI
-  async getFamilyContext(familyId) {
-    try {
-      // Get family data from Firestore
-      const docRef = doc(db, "families", familyId);
-      const docSnap = await getDoc(docRef);
+  // Update the getFamilyContext method
+async getFamilyContext(familyId) {
+  try {
+    // Get family data from Firestore
+    const docRef = doc(db, "families", familyId);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      const data = docSnap.data();
       
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        
-        // Extract survey data if available
-        let surveyData = {};
-        if (data.surveyResponses) {
-          surveyData = {
-            totalQuestions: Object.keys(data.surveyResponses).length,
-            mamaPercentage: this.calculateMamaPercentage(data.surveyResponses),
-            categories: this.getCategoryBreakdown(data.surveyResponses)
-          };
-        }
-        
-        return {
-          familyName: data.familyName,
-          adults: data.familyMembers.filter(m => m.role === 'parent').length,
-          children: data.familyMembers.filter(m => m.role === 'child'),
-          currentWeek: data.currentWeek,
-          surveyData
+      // Extract survey data if available
+      let surveyData = {};
+      if (data.surveyResponses) {
+        surveyData = {
+          totalQuestions: Object.keys(data.surveyResponses).length,
+          mamaPercentage: this.calculateMamaPercentage(data.surveyResponses),
+          categories: this.getCategoryBreakdown(data.surveyResponses)
         };
       }
       
-      return {};
-    } catch (error) {
-      console.error("Error getting family context:", error);
-      return {};
+      // NEW: Get relationship strategies data
+      let relationshipData = {};
+      try {
+        const stratDocRef = doc(db, "relationshipStrategies", familyId);
+        const stratDocSnap = await getDoc(stratDocRef);
+        
+        if (stratDocSnap.exists()) {
+          const strategies = stratDocSnap.data().strategies || [];
+          
+          relationshipData = {
+            implementedStrategies: strategies.filter(s => s.implementation > 50).map(s => s.name),
+            topStrategy: strategies.sort((a, b) => b.implementation - a.implementation)[0]?.name,
+            avgImplementation: strategies.length > 0 
+              ? strategies.reduce((sum, s) => sum + s.implementation, 0) / strategies.length 
+              : 0
+          };
+        }
+      } catch (e) {
+        console.error("Error getting relationship strategies:", e);
+      }
+      
+      // NEW: Get couple check-in data
+      let coupleData = {};
+      try {
+        const checkInQuery = query(
+          collection(db, "coupleCheckIns"),
+          where("familyId", "==", familyId),
+          orderBy("completedAt", "desc"),
+          limit(1)
+        );
+        
+        const checkInSnapshot = await getDocs(checkInQuery);
+        if (!checkInSnapshot.empty) {
+          const latestCheckIn = checkInSnapshot.docs[0].data();
+          
+          coupleData = {
+            lastCheckIn: latestCheckIn.completedAt?.toDate?.().toISOString() || null,
+            satisfaction: latestCheckIn.data?.satisfaction || null,
+            communication: latestCheckIn.data?.communication || null
+          };
+        }
+      } catch (e) {
+        console.error("Error getting couple check-in data:", e);
+      }
+      
+      return {
+        familyName: data.familyName,
+        adults: data.familyMembers.filter(m => m.role === 'parent').length,
+        children: data.familyMembers.filter(m => m.role === 'child'),
+        currentWeek: data.currentWeek,
+        surveyData,
+        relationshipData, // NEW
+        coupleData // NEW
+      };
     }
+    
+    return {};
+  } catch (error) {
+    console.error("Error getting family context:", error);
+    return {};
   }
+}
   
   // Helper method to calculate mama percentage from survey responses
   calculateMamaPercentage(responses) {

@@ -18,6 +18,7 @@ import AllieAIEngineService from '../../services/AllieAIEngineService';
 import { Brain, Lightbulb } from 'lucide-react';
 import StrategicActionsTracker from './StrategicActionsTracker';
 import RelationshipMeetingScreen from '../meeting/RelationshipMeetingScreen';
+import RelationshipProgressChart from './RelationshipProgressChart';
 
 
 
@@ -306,6 +307,8 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
           return (
             <div className="space-y-6">
               <CoupleRelationshipChart />
+              <RelationshipProgressChart /> {/* Add this line */}
+
               <StrategicActionsTracker />
             </div>
           );
@@ -458,7 +461,7 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
       {showFamilyMeeting && (
         <FamilyMeetingScreen onClose={handleCloseFamilyMeeting} />
       )}
-      
+
       {/* Relationship Meeting Modal */}
 {showRelationshipMeeting && (
   <RelationshipMeetingScreen onClose={handleCloseRelationshipMeeting} />
