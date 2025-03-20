@@ -1,288 +1,352 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, MessageCircle, Sparkles, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Heart, Clock, ChevronDown, ChevronUp, MessageCircle, Calendar, CheckCircle, Star, Smile, Sparkles } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
+import AllieAIEngineService from '../../services/AllieAIEngineService';
+
+// Confetti effect for celebration
+const Celebration = () => {
+  useEffect(() => {
+    // Create heart confetti effect
+    const createConfetti = () => {
+      const colors = ['#FF6B6B', '#FFE66D', '#FF9A8B', '#FF6F91'];
+      
+      for (let i = 0; i < 50; i++) {
+        const confetti = document.createElement('div');
+        confetti.className = 'confetti heart';
+        confetti.style.left = Math.random() * 100 + 'vw';
+        confetti.style.color = colors[Math.floor(Math.random() * colors.length)];
+        confetti.style.transform = `rotate(${Math.random() * 360}deg)`;
+        confetti.style.opacity = Math.random() + 0.5;
+        confetti.innerHTML = '❤️';
+        document.getElementById('confetti-container').appendChild(confetti);
+        
+        // Remove after animation completes
+        setTimeout(() => {
+          confetti.remove();
+        }, 3000);
+      }
+    };
+    
+    // Create confetti at regular intervals
+    const interval = setInterval(createConfetti, 300);
+    
+    // Play celebration sound (optional)
+    try {
+      const audio = new Audio('/sounds/celebration.mp3');
+      audio.volume = 0.3;
+      audio.play().catch(e => console.log("Audio play failed:", e));
+    } catch (error) {
+      console.log("Audio not available:", error);
+    }
+    
+    // Cleanup
+    return () => {
+      clearInterval(interval);
+      const container = document.getElementById('confetti-container');
+      if (container) {
+        while (container.firstChild) {
+          container.removeChild(container.firstChild);
+        }
+      }
+    };
+  }, []);
+  
+  return (
+    <div 
+      id="confetti-container" 
+      className="fixed inset-0 pointer-events-none z-50"
+      style={{ perspective: '700px' }}
+    >
+      <style jsx="true">{`
+        .confetti {
+          position: absolute;
+          font-size: 24px;
+          top: -20px;
+          animation: confetti-fall 3s linear forwards;
+        }
+        
+        @keyframes confetti-fall {
+          0% {
+            top: -20px;
+            transform: translateZ(0) rotate(0deg);
+          }
+          100% {
+            top: 100vh;
+            transform: translateZ(400px) rotate(720deg);
+          }
+        }
+      `}</style>
+    </div>
+  );
+};
 
 const RelationshipMeetingScreen = ({ onClose }) => {
   const { 
-    currentWeek,
+    currentWeek, 
+    familyId,
+    familyMembers,
     getCoupleCheckInData,
-    saveFamilyMeetingNotes
+    saveCoupleCheckInData,
+    getRelationshipStrategies,
+    updateRelationshipStrategy
   } = useFamily();
   
+  // State variables
   const [loading, setLoading] = useState(true);
-  const [agenda, setAgenda] = useState([]);
-  const [notes, setNotes] = useState({
-    gratitudes: '',
-    challengeDiscussion: '',
-    agreements: '',
-    nextSteps: ''
-  });
+  const [meetingStep, setMeetingStep] = useState('intro'); // intro, discussion, reflection, action, completion
   const [expandedSection, setExpandedSection] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [meetingNotes, setMeetingNotes] = useState({
+    strengths: '',
+    challenges: '',
+    actionItems: '',
+    goals: '',
+    strategies: []
+  });
+  const [strategies, setStrategies] = useState([]);
+  const [selectedStrategies, setSelectedStrategies] = useState([]);
+  const [coupleData, setCoupleData] = useState(null);
+  const [discussionTopics, setDiscussionTopics] = useState([]);
+  const [topicResponses, setTopicResponses] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
   
-  // Generate a relationship meeting agenda based on check-in data
+  // Toggle section expansion
+  const toggleSection = (sectionId) => {
+    setExpandedSection(expandedSection === sectionId ? null : sectionId);
+  };
+  
+  // Load meeting data
   useEffect(() => {
-    const generateAgenda = async () => {
+    const loadMeetingData = async () => {
       setLoading(true);
       
       try {
-        // Get couple check-in data
+        // Get couple check-in data for context
         const checkInData = await getCoupleCheckInData(currentWeek);
+        setCoupleData(checkInData);
         
-        if (!checkInData) {
-          // Generate default agenda if no check-in data
-          setAgenda(getDefaultAgenda());
-        } else {
-          // Generate tailored agenda based on check-in responses
-          setAgenda(generateTailoredAgenda(checkInData));
-        }
+        // Get relationship strategies
+        const strategiesData = await getRelationshipStrategies();
+        setStrategies(strategiesData || []);
+        
+        // Generate AI-powered discussion topics based on couple data
+        const topicsData = generateDiscussionTopics(checkInData, strategiesData);
+        setDiscussionTopics(topicsData);
+        
+        // Initialize empty responses for each topic
+        const initialResponses = {};
+        topicsData.forEach(topic => {
+          initialResponses[topic.id] = '';
+        });
+        setTopicResponses(initialResponses);
       } catch (error) {
-        console.error("Error generating relationship meeting agenda:", error);
-        setAgenda(getDefaultAgenda());
+        console.error("Error loading relationship meeting data:", error);
       } finally {
         setLoading(false);
       }
     };
     
-    generateAgenda();
-  }, [currentWeek, getCoupleCheckInData]);
+    loadMeetingData();
+  }, [currentWeek, familyId, getCoupleCheckInData, getRelationshipStrategies]);
   
-  // Default agenda when no check-in data is available
-  const getDefaultAgenda = () => [
-    {
-      id: 'appreciation',
-      title: 'Express Appreciation',
-      description: 'Begin by sharing what you appreciate about each other this week.',
-      questions: [
-        'What did your partner do this week that you felt grateful for?',
-        'How did your partner's actions help you feel supported?',
-        'What specific quality in your partner did you notice or appreciate recently?'
-      ],
-      tips: 'Be specific with your appreciation. Mention both actions and qualities you value.'
-    },
-    {
-      id: 'challenges',
-      title: 'Discuss Current Challenges',
-      description: 'Talk about current difficulties affecting your relationship.',
-      questions: [
-        'What aspects of your workload balance feel most challenging right now?',
-        'Are there communication obstacles you'd like to address?',
-        'How has your time together been impacted by your responsibilities?'
-      ],
-      tips: 'Focus on "I" statements rather than blame. Describe how situations make you feel.'
-    },
-    {
-      id: 'strategies',
-      title: 'Review Your Strategic Actions',
-      description: 'Discuss which relationship strategies you'd like to focus on or improve.',
-      questions: [
-        'Which of our 10 strategic actions do you feel we should prioritize?',
-        'How can we better implement our daily check-ins?',
-        'What would help us be more successful with dividing responsibilities?'
-      ],
-      tips: 'Choose 1-2 strategies to focus on rather than trying to improve everything at once.'
-    },
-    {
-      id: 'agreements',
-      title: 'Make Agreements',
-      description: 'Create clear agreements about what each of you will do.',
-      questions: [
-        'What specific actions will each of you take this week?',
-        'How will you support each other in maintaining these agreements?',
-        'When will you check in on your progress?'
-      ],
-      tips: 'Make agreements SMART: Specific, Measurable, Achievable, Relevant, and Time-bound.'
+  // Generate discussion topics based on couple data and strategies
+  const generateDiscussionTopics = (coupleData, strategies) => {
+    // Identify areas for discussion based on couple data
+    const topics = [];
+    
+    // If we have couple check-in data, use it for personalized topics
+    if (coupleData) {
+      // Add topic based on satisfaction score
+      if (coupleData.satisfaction) {
+        const satisfactionTopic = {
+          id: 'satisfaction',
+          title: 'Relationship Satisfaction',
+          description: `Based on your check-in, your current satisfaction level is ${coupleData.satisfaction}/5.`,
+          questions: [
+            'What moments brought you joy in your relationship this week?',
+            'What would help increase your satisfaction level?',
+            'What small gestures have meant the most to you?'
+          ]
+        };
+        topics.push(satisfactionTopic);
+      }
+      
+      // Add topic based on communication score
+      if (coupleData.communication) {
+        const communicationTopic = {
+          id: 'communication',
+          title: 'Communication Quality',
+          description: `Your communication quality was rated ${coupleData.communication}/5 in your latest check-in.`,
+          questions: [
+            'When did you feel most heard this week?',
+            'What communication challenges have you experienced?',
+            'How can you improve the way you express needs and concerns?'
+          ]
+        };
+        topics.push(communicationTopic);
+      }
+      
+      // Add topic based on workload balance perception
+      if (coupleData.balancePerception) {
+        const balanceTopic = {
+          id: 'balance',
+          title: 'Workload Balance Impact',
+          description: `You indicated that workload balance is affecting your relationship ${coupleData.balancePerception === 'positive' ? 'positively' : 'negatively'}.`,
+          questions: [
+            'How has the distribution of responsibilities affected your connection?',
+            'What tasks cause the most tension when unbalanced?',
+            'What balance improvements had the most positive effect?'
+          ]
+        };
+        topics.push(balanceTopic);
+      }
     }
-  ];
-  
-  // Generate a tailored agenda based on check-in responses
-  const generateTailoredAgenda = (checkInData) => {
-    const responses = checkInData.responses;
-    const agenda = [];
     
-    // Always start with appreciation section
-    agenda.push({
-      id: 'appreciation',
-      title: 'Express Appreciation',
-      description: 'Begin by sharing what you appreciate about each other this week.',
-      questions: [
-        'What did your partner do this week that you felt grateful for?',
-        'How did your partner's actions help you feel supported?',
-        'What specific quality in your partner did you notice or appreciate recently?'
-      ],
-      tips: 'Be specific with your appreciation. Mention both actions and qualities you value.'
-    });
+    // Add topics based on relationship strategies
+    if (strategies && strategies.length > 0) {
+      // Find least implemented strategies
+      const lowImplementationStrategies = strategies
+        .filter(s => s.implementation < 50)
+        .sort((a, b) => a.implementation - b.implementation)
+        .slice(0, 2);
+      
+      if (lowImplementationStrategies.length > 0) {
+        const strategiesTopic = {
+          id: 'strategies',
+          title: 'Relationship Strategy Implementation',
+          description: `You have opportunities to strengthen your relationship through key strategies.`,
+          questions: lowImplementationStrategies.map(s => 
+            `How can you incorporate "${s.name}" into your routine (currently at ${s.implementation}% implementation)?`
+          ),
+          highlightedStrategies: lowImplementationStrategies.map(s => s.id)
+        };
+        topics.push(strategiesTopic);
+      }
+    }
     
-    // Add section based on satisfaction score
-    if (responses.satisfaction < 4) {
-      agenda.push({
-        id: 'satisfaction',
-        title: 'Relationship Satisfaction',
-        description: 'Your check-in indicated some room for improvement in overall satisfaction.',
+    // If we don't have enough personalized topics, add general ones
+    if (topics.length < 3) {
+      topics.push({
+        id: 'general-connection',
+        title: 'Emotional Connection',
+        description: 'Discussing your emotional connection can strengthen your bond.',
         questions: [
-          'What factors are most affecting your relationship satisfaction right now?',
-          'What would help you feel more satisfied in your relationship?',
-          'What is one thing each of you could do to increase satisfaction?'
-        ],
-        tips: 'Focus on what you can create together rather than what's missing.'
+          'What makes you feel most connected to your partner?',
+          'When do you feel most supported in your relationship?',
+          'What activities would you like to do together more often?'
+        ]
+      });
+      
+      topics.push({
+        id: 'appreciation',
+        title: 'Appreciation & Recognition',
+        description: 'Expressing gratitude strengthens relationships.',
+        questions: [
+          'What specific actions has your partner done that you appreciate?',
+          'How do you prefer to receive recognition and appreciation?',
+          'What efforts do you feel may be going unnoticed?'
+        ]
       });
     }
     
-    // Add section based on communication score
-    if (responses.communication < 4) {
-      agenda.push({
-        id: 'communication',
-        title: 'Communication Patterns',
-        description: 'Your check-in indicated some challenges in communication.',
-        questions: [
-          'What communication patterns aren't working well for you?',
-          'When do you feel most heard and understood by your partner?',
-          'What would help improve how you communicate about sensitive topics?'
-        ],
-        tips: 'Practice reflective listening: repeat back what you heard before responding.'
-      });
-    }
-    
-    // Add section for strategies that need attention
-    const lowImplementationStrategies = [];
-    Object.entries(responses.strategies).forEach(([key, data]) => {
-      if (data.implementation < 50) {
-        // Convert camelCase to readable text
-        const strategy = key
-          .replace(/([A-Z])/g, ' $1')
-          .replace(/^./, str => str.toUpperCase());
-        
-        lowImplementationStrategies.push({
-          key,
-          name: strategy,
-          implementation: data.implementation,
-          effectiveness: data.effectiveness
-        });
+    return topics;
+  };
+  
+  // Handle topic response changes
+  const handleTopicResponseChange = (topicId, value) => {
+    setTopicResponses(prev => ({
+      ...prev,
+      [topicId]: value
+    }));
+  };
+  
+  // Handle strategy selection
+  const toggleStrategySelection = (strategyId) => {
+    setSelectedStrategies(prev => {
+      if (prev.includes(strategyId)) {
+        return prev.filter(id => id !== strategyId);
+      } else {
+        return [...prev, strategyId];
       }
     });
-    
-    if (lowImplementationStrategies.length > 0) {
-      // Sort by implementation level (lowest first)
-      lowImplementationStrategies.sort((a, b) => a.implementation - b.implementation);
-      
-      // Create questions for the top 3 strategies that need attention
-      const topStrategies = lowImplementationStrategies.slice(0, 3);
-      const strategyQuestions = topStrategies.map(strategy => 
-        `How can you improve your implementation of ${strategy.name}?`
-      );
-      
-      // Add additional generic questions
-      strategyQuestions.push(
-        'What obstacles are preventing better implementation of these strategies?',
-        'Which strategy would have the biggest positive impact if improved?'
-      );
-      
-      agenda.push({
-        id: 'strategies',
-        title: 'Strategy Implementation',
-        description: `Your check-in identified ${topStrategies.length} strategies that need attention.`,
-        questions: strategyQuestions,
-        tips: 'Choose 1-2 strategies to focus on rather than trying to improve everything at once.'
-      });
-    }
-    
-    // Add section based on workload balance impact
-    if (responses.workloadBalance < 4) {
-      agenda.push({
-        id: 'workloadBalance',
-        title: 'Workload Balance Impact',
-        description: 'Your check-in indicated that workload balance is affecting your relationship.',
-        questions: [
-          'How is the current distribution of tasks affecting your relationship?',
-          'What specific responsibilities create the most strain?',
-          'What adjustments would make the biggest positive difference?'
-        ],
-        tips: 'Focus first on the mental load aspects, not just visible tasks.'
-      });
-    }
-    
-    // Always end with agreements section
-    agenda.push({
-      id: 'agreements',
-      title: 'Make Agreements',
-      description: 'Create clear agreements about what each of you will do.',
-      questions: [
-        'What specific actions will each of you take this week?',
-        'How will you support each other in maintaining these agreements?',
-        'When will you check in on your progress?'
-      ],
-      tips: 'Make agreements SMART: Specific, Measurable, Achievable, Relevant, and Time-bound.'
-    });
-    
-    return agenda;
   };
   
-  // Toggle section expansion
-  const toggleSection = (sectionId) => {
-    if (expandedSection === sectionId) {
-      setExpandedSection(null);
-    } else {
-      setExpandedSection(sectionId);
-    }
+  // Handle input changes for meeting notes
+  const handleNoteChange = (field, value) => {
+    setMeetingNotes(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
   
-  // Handle notes change
-  const handleNotesChange = (key, value) => {
-    setNotes({
-      ...notes,
-      [key]: value
-    });
-  };
-  
-  // Complete meeting and save notes
-  const handleComplete = async () => {
-    setSaving(true);
+  // Handle meeting completion
+  const handleCompleteMeeting = async () => {
+    setIsSubmitting(true);
     
     try {
-      // Save meeting notes to database
-      await saveFamilyMeetingNotes(currentWeek, {
-        ...notes,
-        type: 'relationship',
-        completedAt: new Date().toISOString()
+      // Prepare meeting data
+      const meetingData = {
+        completedAt: new Date().toISOString(),
+        notes: meetingNotes,
+        topicResponses,
+        selectedStrategies
+      };
+      
+      // Save meeting data
+      await saveCoupleCheckInData(currentWeek, {
+        ...coupleData, // Preserve existing check-in data
+        meeting: meetingData // Add meeting data
       });
       
-      setSaved(true);
-      setTimeout(() => {
-        onClose(true); // Close with success
-      }, 2000);
+      // Update strategy implementation levels
+      for (const strategyId of selectedStrategies) {
+        const strategy = strategies.find(s => s.id === strategyId);
+        if (strategy) {
+          // Increase implementation by 10% (up to 100%)
+          const newImplementation = Math.min(100, (strategy.implementation || 0) + 10);
+          await updateRelationshipStrategy(strategyId, {
+            implementation: newImplementation,
+            lastActivity: new Date().toISOString()
+          });
+        }
+      }
+      
+      // Show celebration
+      setShowCelebration(true);
+      
+      // Move to completion step
+      setMeetingStep('completion');
     } catch (error) {
-      console.error("Error saving meeting notes:", error);
-      alert("There was an error saving your notes. Please try again.");
-      setSaving(false);
+      console.error("Error completing relationship meeting:", error);
+      alert("There was an error saving your meeting data. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
   
+  // Calculate parent names
+  const getParentNames = () => {
+    const parents = familyMembers.filter(m => m.role === 'parent');
+    if (parents.length >= 2) {
+      return [parents[0].name, parents[1].name];
+    }
+    return ['Partner 1', 'Partner 2'];
+  };
+  
+  const [parent1, parent2] = getParentNames();
+  
+  // If still loading, show a loading indicator
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-lg p-6 flex items-center space-x-3">
-          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          <span className="font-roboto">Generating your relationship meeting agenda...</span>
-        </div>
-      </div>
-    );
-  }
-  
-  if (saved) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-lg max-w-md w-full p-6 text-center">
-          <div className="w-16 h-16 mx-auto bg-green-100 rounded-full flex items-center justify-center mb-4">
-            <Check size={32} className="text-green-600" />
+        <div className="bg-white rounded-lg max-w-xl w-full">
+          <div className="p-6 text-center">
+            <div className="w-16 h-16 border-4 border-t-transparent border-black rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-lg font-roboto">Preparing your relationship meeting...</p>
+            <p className="text-sm text-gray-500 font-roboto mt-2">
+              We're generating personalized discussion topics
+            </p>
           </div>
-          <h3 className="text-xl font-bold mb-2 font-roboto">Meeting Complete!</h3>
-          <p className="text-gray-600 font-roboto">
-            Your relationship meeting notes have been saved. Keep building on your progress together!
-          </p>
         </div>
       </div>
     );
@@ -293,16 +357,18 @@ const RelationshipMeetingScreen = ({ onClose }) => {
       <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
-          <div className="flex items-center">
-            <Heart size={24} className="text-red-500 mr-2" />
-            <div>
-              <h2 className="text-xl font-bold font-roboto">Weekly Relationship Meeting</h2>
-              <p className="text-sm text-gray-600 font-roboto">Week {currentWeek}</p>
+          <div>
+            <h2 className="text-xl font-bold font-roboto">Week {currentWeek} Relationship Meeting</h2>
+            <div className="flex items-center text-gray-600 text-sm font-roboto">
+              <Clock size={16} className="mr-1" />
+              <span>15-20 minutes</span>
             </div>
           </div>
+          
+          {/* Close button */}
           <button
-            onClick={() => onClose()}
-            className="text-gray-500 hover:text-gray-700"
+            onClick={onClose}
+            className="p-2 rounded-full hover:bg-gray-200"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -310,173 +376,443 @@ const RelationshipMeetingScreen = ({ onClose }) => {
           </button>
         </div>
         
-        <div className="p-6">
-          {/* Introduction */}
-          <div className="mb-6">
-            <div className="bg-pink-50 border border-pink-200 rounded-lg p-4 mb-4">
+        {/* Meeting content - Introduction step */}
+        {meetingStep === 'intro' && (
+          <div className="p-6 space-y-6">
+            <div className="bg-gradient-to-r from-pink-50 to-blue-50 p-6 rounded-lg border border-pink-100">
               <div className="flex items-start">
-                <MessageCircle size={24} className="text-pink-600 mr-3 flex-shrink-0" />
+                <Heart size={24} className="text-pink-500 mr-4 flex-shrink-0 mt-1" />
                 <div>
-                  <h3 className="font-medium font-roboto">Welcome to Your Relationship Meeting</h3>
-                  <p className="text-sm mt-1 font-roboto">
-                    This 15-20 minute conversation will help you strengthen your partnership and ensure you're 
-                    supporting each other effectively. Research shows regular relationship check-ins lead to 
-                    higher satisfaction and better workload balance.
+                  <h3 className="text-lg font-medium mb-2 font-roboto">Welcome to Your Relationship Meeting</h3>
+                  <p className="text-sm mb-4 font-roboto">
+                    This 15-20 minute conversation will help you strengthen your relationship while improving family workload balance.
+                    Research shows that couples who have regular structured conversations experience:
                   </p>
+                  <ul className="space-y-2 text-sm font-roboto">
+                    <li className="flex items-center">
+                      <CheckCircle size={16} className="text-green-500 mr-2" />
+                      Stronger emotional connection
+                    </li>
+                    <li className="flex items-center">
+                      <CheckCircle size={16} className="text-green-500 mr-2" />
+                      Better conflict resolution skills
+                    </li>
+                    <li className="flex items-center">
+                      <CheckCircle size={16} className="text-green-500 mr-2" />
+                      Improved parenting coordination
+                    </li>
+                    <li className="flex items-center">
+                      <CheckCircle size={16} className="text-green-500 mr-2" />
+                      Higher overall relationship satisfaction
+                    </li>
+                  </ul>
                 </div>
               </div>
             </div>
             
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h3 className="font-medium mb-2 font-roboto">How to Use This Guide</h3>
-              <ol className="list-decimal list-inside text-sm space-y-2 font-roboto">
-                <li>Take turns answering questions in each section</li>
-                <li>Listen fully to your partner before responding</li>
-                <li>Focus on understanding, not just solving problems</li>
-                <li>Use the notes section to document key insights and agreements</li>
-                <li>End with clear agreements about what you'll each do differently</li>
+            <div className="border rounded-lg p-4">
+              <h3 className="font-medium mb-3 font-roboto">How This Meeting Works</h3>
+              <ol className="space-y-3 text-sm font-roboto">
+                <li className="flex items-start">
+                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-2 flex-shrink-0">1</div>
+                  <div>
+                    <span className="font-medium">Guided Discussion (10 min)</span>
+                    <p className="text-gray-600">
+                      We've created personalized discussion topics based on your check-in data.
+                      Take turns sharing your thoughts on each topic.
+                    </p>
+                  </div>
+                </li>
+                <li className="flex items-start">
+                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-2 flex-shrink-0">2</div>
+                  <div>
+                    <span className="font-medium">Reflection & Planning (5 min)</span>
+                    <p className="text-gray-600">
+                      Identify key relationship strengths and challenges.
+                      Select specific strategies to implement this week.
+                    </p>
+                  </div>
+                </li>
+                <li className="flex items-start">
+                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-2 flex-shrink-0">3</div>
+                  <div>
+                    <span className="font-medium">Commitment (3 min)</span>
+                    <p className="text-gray-600">
+                      Document specific actions you'll take to strengthen your relationship
+                      and balance family workload.
+                    </p>
+                  </div>
+                </li>
               </ol>
             </div>
+            
+            <div className="bg-gray-50 p-4 rounded-lg border font-roboto">
+              <h3 className="font-medium mb-2">Tips for a Productive Conversation</h3>
+              <ul className="space-y-2 text-sm">
+                <li className="flex items-start">
+                  <MessageCircle size={16} className="text-gray-600 mr-2 mt-0.5" />
+                  Listen actively without interrupting when your partner is speaking
+                </li>
+                <li className="flex items-start">
+                  <MessageCircle size={16} className="text-gray-600 mr-2 mt-0.5" />
+                  Use "I" statements to express your feelings ("I feel..." rather than "You always...")
+                </li>
+                <li className="flex items-start">
+                  <MessageCircle size={16} className="text-gray-600 mr-2 mt-0.5" />
+                  Focus on solutions rather than dwelling on problems
+                </li>
+                <li className="flex items-start">
+                  <MessageCircle size={16} className "text-gray-600 mr-2 mt-0.5" />
+                  Express appreciation for your partner's perspective
+                </li>
+              </ul>
+            </div>
+            
+            <div className="flex justify-end">
+              <button 
+                onClick={() => setMeetingStep('discussion')}
+                className="px-4 py-2 bg-black text-white rounded font-roboto hover:bg-gray-800"
+              >
+                Start Discussion
+              </button>
+            </div>
           </div>
-          
-          {/* Agenda Sections */}
-          <div className="space-y-4 mb-6">
-            {agenda.map((section, index) => (
-              <div key={section.id} className="border rounded-lg overflow-hidden">
+        )}
+        
+        {/* Meeting content - Discussion step */}
+        {meetingStep === 'discussion' && (
+          <div className="p-6 space-y-6">
+            <div className="bg-blue-50 p-4 rounded-lg mb-4 font-roboto">
+              <h3 className="font-medium mb-2">Guided Discussion</h3>
+              <p className="text-sm">
+                Spend about 10 minutes discussing these topics together. Take turns sharing your perspectives and 
+                listening to your partner. Capture key insights in the text areas below.
+              </p>
+            </div>
+            
+            {/* Discussion topics */}
+            {discussionTopics.map(topic => (
+              <div key={topic.id} className="border rounded-lg overflow-hidden">
                 <div 
                   className={`p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50 ${
-                    expandedSection === section.id ? 'border-b' : ''
+                    expandedSection === topic.id ? 'border-b' : ''
                   }`}
-                  onClick={() => toggleSection(section.id)}
+                  onClick={() => toggleSection(topic.id)}
                 >
-                  <div className="flex items-center">
-                    <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center mr-3">
-                      {index + 1}
-                    </div>
-                    <h3 className="font-medium font-roboto">{section.title}</h3>
-                  </div>
-                  {expandedSection === section.id ? (
+                  <h3 className="font-medium font-roboto">{topic.title}</h3>
+                  {expandedSection === topic.id ? (
                     <ChevronUp size={20} className="text-gray-500" />
                   ) : (
                     <ChevronDown size={20} className="text-gray-500" />
                   )}
                 </div>
                 
-                {expandedSection === section.id && (
+                {expandedSection === topic.id && (
                   <div className="p-4 bg-gray-50">
-                    <p className="mb-4 font-roboto">{section.description}</p>
+                    <p className="text-sm mb-3 font-roboto">{topic.description}</p>
                     
                     <div className="mb-4">
-                      <h4 className="font-medium mb-2 font-roboto">Discussion Questions</h4>
-                      <ul className="list-disc list-inside space-y-2 font-roboto">
-                        {section.questions.map((question, qIndex) => (
-                          <li key={qIndex} className="text-sm">{question}</li>
+                      <h4 className="text-sm font-medium mb-2 font-roboto">Discussion Questions:</h4>
+                      <ul className="space-y-2 list-disc pl-5">
+                        {topic.questions.map((question, index) => (
+                          <li key={index} className="text-sm font-roboto">{question}</li>
                         ))}
                       </ul>
                     </div>
                     
-                    {section.tips && (
-                      <div className="bg-blue-50 p-3 rounded-lg mb-4 text-sm font-roboto">
-                        <div className="flex items-start">
-                          <Sparkles size={16} className="text-blue-600 mr-2 mt-0.5" />
-                          <p><span className="font-medium">Tip:</span> {section.tips}</p>
+                    <div>
+                      <h4 className="text-sm font-medium mb-2 font-roboto">Capture Your Insights:</h4>
+                      <textarea
+                        className="w-full border rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-roboto"
+                        rows="4"
+                        placeholder="Write your thoughts on this topic here..."
+                        value={topicResponses[topic.id] || ''}
+                        onChange={(e) => handleTopicResponseChange(topic.id, e.target.value)}
+                      ></textarea>
+                    </div>
+                    
+                    {/* Strategy highlight if applicable */}
+                    {topic.highlightedStrategies && topic.highlightedStrategies.length > 0 && (
+                      <div className="mt-4 bg-white p-3 rounded-lg border">
+                        <h4 className="text-sm font-medium mb-2 font-roboto">Related Strategies:</h4>
+                        <div className="space-y-2">
+                          {topic.highlightedStrategies.map(strategyId => {
+                            const strategy = strategies.find(s => s.id === strategyId);
+                            return strategy ? (
+                              <div key={strategyId} className="flex items-center">
+                                <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-2">
+                                  <Heart size={12} />
+                                </div>
+                                <div className="text-sm font-roboto">
+                                  <span className="font-medium">{strategy.name}</span>
+                                  <span className="text-gray-500"> ({strategy.implementation || 0}% implemented)</span>
+                                </div>
+                              </div>
+                            ) : null;
+                          })}
                         </div>
                       </div>
                     )}
-                    
-                    {/* Notes for this section */}
-                    <div>
-                      <label className="block text-sm font-medium mb-2 font-roboto">
-                        Notes from your discussion:
-                      </label>
-                      <textarea
-                        className="w-full p-3 border rounded-md"
-                        rows="4"
-                        placeholder="Record your key insights, decisions, and agreements..."
-                        value={notes[section.id] || ''}
-                        onChange={(e) => handleNotesChange(section.id, e.target.value)}
-                      />
-                    </div>
                   </div>
                 )}
               </div>
             ))}
-          </div>
-          
-          {/* Notes Sections */}
-          <div className="mb-6">
-            <h3 className="font-medium mb-4 font-roboto">Meeting Summary</h3>
             
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2 font-roboto">
-                  Gratitudes shared:
-                </label>
-                <textarea
-                  className="w-full p-3 border rounded-md font-roboto"
-                  rows="3"
-                  placeholder="What appreciations did you share with each other?"
-                  value={notes.gratitudes}
-                  onChange={(e) => handleNotesChange('gratitudes', e.target.value)}
-                />
-              </div>
+            <div className="flex justify-between">
+              <button 
+                onClick={() => setMeetingStep('intro')}
+                className="px-4 py-2 border border-black text-black rounded font-roboto hover:bg-gray-50"
+              >
+                Back
+              </button>
+              <button 
+                onClick={() => setMeetingStep('reflection')}
+                className="px-4 py-2 bg-black text-white rounded font-roboto hover:bg-gray-800"
+              >
+                Continue to Reflection
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {/* Meeting content - Reflection step */}
+        {meetingStep === 'reflection' && (
+          <div className="p-6 space-y-6">
+            <div className="bg-green-50 p-4 rounded-lg mb-4 font-roboto">
+              <h3 className="font-medium mb-2">Reflection & Planning</h3>
+              <p className="text-sm">
+                Reflect on your discussion and identify key relationship strengths and challenges.
+                This will help you focus your efforts in the coming week.
+              </p>
+            </div>
+            
+            {/* Relationship strengths */}
+            <div className="border rounded-lg p-4">
+              <h3 className="font-medium mb-2 font-roboto">Relationship Strengths</h3>
+              <p className="text-sm mb-3 font-roboto">What's working well in your relationship?</p>
+              <textarea
+                className="w-full border rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-roboto"
+                rows="3"
+                placeholder="What are your relationship's greatest strengths?"
+                value={meetingNotes.strengths}
+                onChange={(e) => handleNoteChange('strengths', e.target.value)}
+              ></textarea>
+            </div>
+            
+            {/* Relationship challenges */}
+            <div className="border rounded-lg p-4">
+              <h3 className="font-medium mb-2 font-roboto">Relationship Challenges</h3>
+              <p className="text-sm mb-3 font-roboto">What could be improved in your relationship?</p>
+              <textarea
+                className="w-full border rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-roboto"
+                rows="3"
+                placeholder="What challenges are you currently facing?"
+                value={meetingNotes.challenges}
+                onChange={(e) => handleNoteChange('challenges', e.target.value)}
+              ></textarea>
+            </div>
+            
+            {/* Strategy selection */}
+            <div className="border rounded-lg p-4">
+              <h3 className="font-medium mb-3 font-roboto">Select Strategies to Focus On</h3>
+              <p className="text-sm mb-3 font-roboto">Choose 1-3 strategies to implement this week:</p>
               
-              <div>
-                <label className="block text-sm font-medium mb-2 font-roboto">
-                  Key insights from challenge discussion:
-                </label>
-                <textarea
-                  className="w-full p-3 border rounded-md font-roboto"
-                  rows="3"
-                  placeholder="What did you learn about your challenges?"
-                  value={notes.challengeDiscussion}
-                  onChange={(e) => handleNotesChange('challengeDiscussion', e.target.value)}
-                />
+              <div className="space-y-2">
+                {strategies.map(strategy => (
+                  <div 
+                    key={strategy.id} 
+                    className={`p-3 border rounded-lg cursor-pointer ${
+                      selectedStrategies.includes(strategy.id) ? 'bg-pink-50 border-pink-300' : 'bg-white hover:bg-gray-50'
+                    }`}
+                    onClick={() => toggleStrategySelection(strategy.id)}
+                  >
+                    <div className="flex items-center">
+                      <div className={`w-6 h-6 rounded-full border flex items-center justify-center mr-3 ${
+                        selectedStrategies.includes(strategy.id) 
+                          ? 'bg-pink-500 border-pink-500 text-white' 
+                          : 'border-gray-300'
+                      }`}>
+                        {selectedStrategies.includes(strategy.id) && (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                      
+                      <div>
+                        <h4 className="font-medium text-sm font-roboto">{strategy.name}</h4>
+                        <div className="flex items-center mt-1">
+                          <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden mr-2">
+                            <div 
+                              className="h-full bg-pink-500" 
+                              style={{ width: `${strategy.implementation || 0}%` }} 
+                            />
+                          </div>
+                          <span className="text-xs text-gray-500 font-roboto">{strategy.implementation || 0}% implemented</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2 font-roboto">
-                  Our agreements:
-                </label>
-                <textarea
-                  className="w-full p-3 border rounded-md font-roboto"
-                  rows="3"
-                  placeholder="What specific agreements did you make?"
-                  value={notes.agreements}
-                  onChange={(e) => handleNotesChange('agreements', e.target.value)}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2 font-roboto">
-                  Next steps:
-                </label>
-                <textarea
-                  className="w-full p-3 border rounded-md font-roboto"
-                  rows="3"
-                  placeholder="What will you each do differently this week?"
-                  value={notes.nextSteps}
-                  onChange={(e) => handleNotesChange('nextSteps', e.target.value)}
+            </div>
+            
+            <div className="flex justify-between">
+              <button 
+                onClick={() => setMeetingStep('discussion')}
+                className="px-4 py-2 border border-black text-black rounded font-roboto hover:bg-gray-50"
+              >
+                Back
+              </button>
+              <button 
+                onClick={() => setMeetingStep('action')}
+                className="px-4 py-2 bg-black text-white rounded font-roboto hover:bg-gray-800"
+              >
+                Continue to Action Plan
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {/* Meeting content - Action step */}
+        {meetingStep === 'action' && (
+          <div className="p-6 space-y-6">
+            <div className="bg-purple-50 p-4 rounded-lg mb-4 font-roboto">
+              <h3 className="font-medium mb-2">Commitment & Action Plan</h3>
+              <p className="text-sm">
+                Document specific actions you'll take to strengthen your relationship
+                and balance family workload in the coming week.
+              </p>
+            </div>
+            
+            {/* Specific action items */}
+            <div className="border rounded-lg p-4">
+              <h3 className="font-medium mb-2 font-roboto">Action Items</h3>
+              <p className="text-sm mb-3 font-roboto">What specific actions will you both take this week?</p>
+              <textarea
+                className="w-full border rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-roboto"
+                rows="4"
+                placeholder="List specific, achievable actions you'll take this week..."
+                value={meetingNotes.actionItems}
+                onChange={(e) => handleNoteChange('actionItems', e.target.value)}
+              ></textarea>
+            </div>
+            
+            {/* Relationship goals */}
+            <div className="border rounded-lg p-4">
+              <h3 className="font-medium mb-2 font-roboto">Relationship Goals</h3>
+              <p className="text-sm mb-3 font-roboto">What relationship goals would you like to focus on?</p>
+              <textarea
+                className="w-full border rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-roboto"
+                rows="3"
+                placeholder="What goals will strengthen your relationship?"
+                value={meetingNotes.goals}
+                onChange={(e) => handleNoteChange('goals', e.target.value)}
+              ></textarea>
+            </div>
+            
+            {/* Schedule next meeting */}
+            <div className="border rounded-lg p-4">
+              <h3 className="font-medium mb-2 font-roboto">Schedule Next Meeting</h3>
+              <p className="text-sm mb-3 font-roboto">When will you have your next relationship conversation?</p>
+              <div className="flex items-center">
+                <Calendar size={20} className="text-gray-500 mr-2" />
+                <input
+                  type="date"
+                  className="border rounded-md p-2 font-roboto"
+                  defaultValue={(() => {
+                    const date = new Date();
+                    date.setDate(date.getDate() + 7); // Default to one week from now
+                    return date.toISOString().split('T')[0];
+                  })()}
                 />
               </div>
             </div>
+            
+            <div className="flex justify-between">
+              <button 
+                onClick={() => setMeetingStep('reflection')}
+                className="px-4 py-2 border border-black text-black rounded font-roboto hover:bg-gray-50"
+              >
+                Back
+              </button>
+              <button 
+                onClick={handleCompleteMeeting}
+                disabled={isSubmitting}
+                className="px-4 py-2 bg-black text-white rounded font-roboto hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2"></div>
+                    Saving...
+                  </>
+                ) : (
+                  'Complete Meeting'
+                )}
+              </button>
+            </div>
           </div>
-          
-          {/* Complete Button */}
-          <div className="flex justify-end">
-            <button
-              onClick={handleComplete}
-              disabled={saving}
-              className={`px-4 py-2 rounded font-roboto ${
-                saving 
-                  ? 'bg-gray-400 text-white cursor-not-allowed' 
-                  : 'bg-blue-500 text-white hover:bg-blue-600'
-              }`}
-            >
-              {saving ? 'Saving...' : 'Complete Meeting'}
-            </button>
+        )}
+        
+        {/* Meeting content - Completion step */}
+        {meetingStep === 'completion' && (
+          <div className="p-6 space-y-6 text-center">
+            <div className="mx-auto w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4">
+              <Heart size={32} className="text-pink-500" />
+            </div>
+            
+            <h3 className="text-xl font-bold mb-2 font-roboto">Relationship Meeting Complete!</h3>
+            <p className="text-gray-600 mb-6 font-roboto">
+              You've taken an important step toward strengthening your relationship and improving family balance.
+            </p>
+            
+            <div className="bg-pink-50 p-4 rounded-lg border border-pink-100 text-left mb-6">
+              <h3 className="font-medium mb-2 font-roboto">Your Relationship Action Plan</h3>
+              
+              <div className="mb-4">
+                <h4 className="text-sm font-medium font-roboto">Selected Strategies:</h4>
+                <ul className="mt-2 space-y-1">
+                  {selectedStrategies.map(strategyId => {
+                    const strategy = strategies.find(s => s.id === strategyId);
+                    return strategy ? (
+                      <li key={strategyId} className="flex items-center text-sm font-roboto">
+                        <CheckCircle size={16} className="text-pink-500 mr-2" />
+                        {strategy.name}
+                      </li>
+                    ) : null;
+                  })}
+                </ul>
+              </div>
+              
+              {meetingNotes.actionItems && (
+                <div className="mb-4">
+                  <h4 className="text-sm font-medium font-roboto">Action Items:</h4>
+                  <p className="text-sm mt-1 font-roboto">{meetingNotes.actionItems}</p>
+                </div>
+              )}
+              
+              {meetingNotes.goals && (
+                <div>
+                  <h4 className="text-sm font-medium font-roboto">Relationship Goals:</h4>
+                  <p className="text-sm mt-1 font-roboto">{meetingNotes.goals}</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex justify-center">
+              <button
+                onClick={onClose}
+                className="px-6 py-3 bg-black text-white rounded-md font-roboto hover:bg-gray-800 flex items-center"
+              >
+                <Star size={16} className="mr-2" />
+                Return to Dashboard
+              </button>
+            </div>
           </div>
-        </div>
+        )}
+        
+        {/* Celebration animation */}
+        {showCelebration && <Celebration />}
       </div>
     </div>
   );
