@@ -439,6 +439,9 @@ useEffect(() => {
   const [commentTask, setCommentTask] = useState(null);
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+
+  // Add this state for storing comment inputs
+const [commentInputs, setCommentInputs] = useState({});
   
   // Kids tasks state
   const [kidTasksCompleted, setKidTasksCompleted] = useState({});
@@ -595,58 +598,68 @@ useEffect(() => {
   };
 
   // Handle task completion
-  const handleTaskCompletion = async (taskId, isCompleted) => {
-    if (!selectedUser) {
-      console.error("No user selected");
-      alert("Please select a user profile first");
-      return;
+  // Handle task completion - ENHANCED FOR BETTER PERSISTENCE
+const handleTaskCompletion = async (taskId, isCompleted) => {
+  if (!selectedUser) {
+    console.error("No user selected");
+    alert("Please select a user profile first");
+    return;
+  }
+  
+  if (!familyId) {
+    console.error("No family ID available");
+    alert("Family data not loaded correctly. Please refresh the page.");
+    return;
+  }
+  
+  const task = taskRecommendations.find(t => t.id.toString() === taskId.toString());
+  if (!task) {
+    console.error("Task not found:", taskId);
+    return;
+  }
+  
+  // Check permissions
+  if (!canCompleteTask(task)) {
+    if (selectedUser.role !== 'parent') {
+      alert("Only parents can mark tasks as complete. Children can add comments instead.");
+    } else {
+      alert(`Only ${task.assignedTo} can mark this task as complete.`);
     }
+    return;
+  }
+  
+  try {
+    // Create completion timestamp
+    const completedDate = isCompleted ? new Date().toISOString() : null;
+    console.log(`Marking task ${taskId} as ${isCompleted ? 'completed' : 'incomplete'} for Week ${currentWeek}`);
     
-    if (!familyId) {
-      console.error("No family ID available");
-      alert("Family data not loaded correctly. Please refresh the page.");
-      return;
-    }
-    
-    const task = taskRecommendations.find(t => t.id.toString() === taskId.toString());
-    if (!task) {
-      console.error("Task not found:", taskId);
-      return;
-    }
-    
-    // Check permissions
-    if (!canCompleteTask(task)) {
-      if (selectedUser.role !== 'parent') {
-        alert("Only parents can mark tasks as complete. Children can add comments instead.");
-      } else {
-        alert(`Only ${task.assignedTo} can mark this task as complete.`);
+    // Update local state immediately for UI responsiveness
+    const updatedTasks = taskRecommendations.map(t => {
+      if (t.id.toString() === taskId.toString()) {
+        return {
+          ...t,
+          completed: isCompleted,
+          completedDate: completedDate
+        };
       }
-      return;
+      return t;
+    });
+    
+    setTaskRecommendations(updatedTasks);
+    
+    // MULTI-LAYERED UPDATE APPROACH FOR MAXIMUM RELIABILITY
+    
+    // 1. Update via the context method
+    try {
+      await updateTaskCompletion(taskId, isCompleted);
+      console.log("Method 1: Context update successful");
+    } catch (error) {
+      console.error("Method 1 failed:", error);
     }
     
+    // 2. Direct Firestore update
     try {
-      // Create completion timestamp
-      const completedDate = isCompleted ? new Date().toISOString() : null;
-      console.log(`Marking task ${taskId} as ${isCompleted ? 'completed' : 'incomplete'} for Week ${currentWeek}`);
-      
-      // Update local state immediately for UI responsiveness
-      const updatedTasks = taskRecommendations.map(t => {
-        if (t.id.toString() === taskId.toString()) {
-          return {
-            ...t,
-            completed: isCompleted,
-            completedDate: completedDate
-          };
-        }
-        return t;
-      });
-      
-      setTaskRecommendations(updatedTasks);
-      
-      // DIRECT DATABASE UPDATE - This is more reliable than context methods sometimes
-      console.log("Directly updating task completion in Firebase...");
-      
-      // First get current tasks from the database
+      console.log("Method 2: Directly updating task completion in Firebase...");
       const docRef = doc(db, "families", familyId);
       const familyDoc = await getDoc(docRef);
       
@@ -673,31 +686,85 @@ useEffect(() => {
           updatedAt: new Date().toISOString()
         });
         
-        console.log("Task completion successfully saved to database");
-      } else {
-        console.error("Family document not found!");
+        console.log("Method 2: Direct Firestore update successful");
       }
-      
-      // Also try the context method as a backup
-      await updateTaskCompletion(taskId, isCompleted);
-      
-      // Force reload after a delay to ensure fresh data
-      setTimeout(async () => {
-        try {
-          console.log("Reloading fresh task data...");
-          await loadCurrentWeekTasks();
-          console.log("Task data reloaded successfully");
-        } catch (reloadError) {
-          console.error("Error reloading tasks:", reloadError);
-        }
-      }, 1000);
-      
     } catch (error) {
-      console.error("Error completing task:", error);
-      alert("There was an error saving your task completion. Please try again.");
+      console.error("Method 2 failed:", error);
     }
-  };
+    
+    // 3. Using DatabaseService
+    try {
+      await DatabaseService.updateTaskCompletion(familyId, taskId, isCompleted, completedDate);
+      console.log("Method 3: DatabaseService update successful");
+    } catch (error) {
+      console.error("Method 3 failed:", error);
+    }
+    
+    // Success - the task should now be saved through at least one method
+    console.log("Task completion saved successfully through multiple methods");
+    
+    // Reload tasks after a short delay to verify the data was saved
+    setTimeout(async () => {
+      try {
+        console.log("Verifying task data was saved...");
+        await loadCurrentWeekTasks();
+      } catch (error) {
+        console.error("Error reloading tasks:", error);
+      }
+    }, 1000);
+    
+  } catch (error) {
+    console.error("Error completing task:", error);
+    alert("There was an error saving your task completion. Please try again.");
+  }
+};
   
+// New function to handle task completion with comment
+const handleCompleteWithComment = async (taskId) => {
+  if (!selectedUser || !commentInputs[taskId]?.trim()) return;
+  
+  setIsSubmittingComment(true);
+  
+  try {
+    // First add the comment
+    const commentResult = await addTaskComment(taskId, commentInputs[taskId]);
+    
+    // Then immediately mark task as completed
+    await handleTaskCompletion(taskId, true);
+    
+    // Clear the comment input
+    setCommentInputs({...commentInputs, [taskId]: ''});
+    
+    // Update local state to show the new comment
+    const updatedTasks = taskRecommendations.map(task => {
+      if (task.id.toString() === taskId.toString()) {
+        return {
+          ...task,
+          completed: true,
+          completedDate: new Date().toISOString(),
+          comments: [...(task.comments || []), {
+            id: commentResult?.id || Date.now(),
+            userId: selectedUser.id,
+            userName: selectedUser.name,
+            text: commentInputs[taskId],
+            timestamp: new Date().toLocaleString()
+          }]
+        };
+      }
+      return task;
+    });
+    
+    setTaskRecommendations(updatedTasks);
+    
+  } catch (error) {
+    console.error("Error completing task with comment:", error);
+    alert("There was an error completing this task. Please try again.");
+  } finally {
+    setIsSubmittingComment(false);
+  }
+};
+
+
   // Handle kid task completion with observations
   const handleCompleteKidTask = async (taskId, kidId, isCompleted, observations = null) => {
     try {
@@ -1432,29 +1499,29 @@ useEffect(() => {
                     </div>
                     
                     {/* Additional Task Details */}
-                    {expandedTasks[task.id] && (
-                      <div className="border-t">
-                        <div className="p-4">
-                          <h5 className="font-medium text-sm mb-3 font-roboto">How to Complete This Task:</h5>
-                          <div className="bg-gray-50 p-4 rounded-lg mb-4 text-sm font-roboto">
-                            <p>{task.details || "Choose one task that your partner usually handles and complete it fully, from start to finish."}</p>
-                          </div>
-                          
-                          {/* Completion UI */}
-                          {canCompleteTask(task) && !task.completed && (
-                            <div className="mt-4 flex justify-center">
-                              <button
-                                onClick={() => handleTaskCompletion(task.id, true)}
-                                className="px-4 py-2 bg-green-500 text-white rounded-lg flex items-center font-roboto"
-                              >
-                                <CheckCircle size={16} className="mr-2" />
-                                Mark Task Complete
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
+                    {/* Main task details section - MOVED HERE FROM EXPANDED AREA */}
+<div className="mt-4">
+  <h5 className="font-medium text-sm mb-3 font-roboto">How to Complete This Task:</h5>
+  <div className="bg-gray-50 p-4 rounded-lg mb-4 text-sm font-roboto">
+    <p>{task.details || "Choose one task that your partner usually handles and complete it fully, from start to finish."}</p>
+  </div>
+</div>
+
+{/* AI Insight Box for AI tasks */}
+{task.taskType === 'ai' && task.insight && (
+  <div className="bg-purple-100 p-4 rounded-lg mt-3 border border-purple-200">
+    <div className="flex items-start">
+      <Info size={20} className="text-purple-600 mr-3 flex-shrink-0 mt-0.5" />
+      <div>
+        <h5 className="font-bold text-purple-900 text-sm mb-1 font-roboto">Why This Task Matters:</h5>
+        <p className="text-sm text-purple-800 font-roboto">{task.insight}</p>
+        <p className="text-xs text-purple-700 mt-2 font-roboto">
+          Our AI analyzed your family's survey data and identified this task as important for improving balance.
+        </p>
+      </div>
+    </div>
+  </div>
+)}
                   </div>
                 ))}
             </div>
@@ -1580,39 +1647,42 @@ useEffect(() => {
                           </div>
                         )}
                         
-                        {/* Main task comments */}
-                        {renderComments(task.comments)}
-                        
-                        {/* Main task comment form */}
-                        {renderCommentForm(task.id.toString())}
-                        
-                        {/* Action buttons for main task */}
-                        {!commentTask && (
-                          <div className="mt-4 flex justify-between">
-                            <button
-                              className="px-3 py-1 text-sm rounded border font-roboto"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleAddComment(task.id.toString());
-                              }}
-                            >
-                              Comment
-                            </button>
-                            
-                            {canCompleteTask(task) && (
-                              <button
-                                className={`px-3 py-1 text-sm rounded font-roboto ${
-                                  task.completed 
-                                    ? 'bg-gray-200 text-gray-800' 
-                                    : 'bg-green-500 text-white'
-                                }`}
-                                onClick={() => handleTaskCompletion(task.id, !task.completed)}
-                              >
-                                {task.completed ? 'Completed' : 'Mark as Done'}
-                              </button>
-                            )}
-                          </div>
-                        )}
+                        {/* Comments */}
+{renderComments(task.comments)}
+
+{/* Always show comment form */}
+<div className="mt-3 pt-3 border-t">
+  <h5 className="text-sm font-medium mb-2 font-roboto">Comment to Complete:</h5>
+  <textarea
+    className="w-full border rounded p-2 text-sm font-roboto"
+    rows="2"
+    placeholder="Write your comment here..."
+    value={commentInputs[task.id] || ''}
+    onChange={(e) => setCommentInputs({...commentInputs, [task.id]: e.target.value})}
+    disabled={task.completed || isSubmittingComment}
+  ></textarea>
+  
+  {/* Completion button - only show if not completed */}
+  {canCompleteTask(task) && !task.completed && (
+    <div className="mt-4 flex justify-center">
+      <button
+        onClick={() => handleCompleteWithComment(task.id)}
+        disabled={!commentInputs[task.id]?.trim() || isSubmittingComment}
+        className="px-4 py-2 bg-green-500 text-white rounded-lg flex items-center font-roboto disabled:bg-gray-300 disabled:cursor-not-allowed"
+      >
+        <CheckCircle size={16} className="mr-2" />
+        Mark Task Complete
+      </button>
+    </div>
+  )}
+  
+  {/* Show this if already completed */}
+  {task.completed && (
+    <div className="mt-4 text-center text-green-600 font-medium font-roboto">
+      ✓ Task completed on {formatDate(task.completedDate)}
+    </div>
+  )}
+</div>
                       </div>
                     </div>
                     
