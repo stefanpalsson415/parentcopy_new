@@ -56,6 +56,10 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   const [showCoupleCheckIn, setShowCoupleCheckIn] = useState(false);
   const [savingTasks, setSavingTasks] = useState({});
   const [saveErrors, setSaveErrors] = useState({});
+  const [showKidTaskDialog, setShowKidTaskDialog] = useState(false);
+  const [currentKidTask, setCurrentKidTask] = useState(null);
+  const [kidTaskObservation, setKidTaskObservation] = useState("");
+  
 
   // Check-in related states
   const [canStartCheckIn, setCanStartCheckIn] = useState(false);
@@ -131,6 +135,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   // Load tasks for the current week - with enhanced reliability
   useEffect(() => {
     // Replace the entire loadTasks function within the useEffect
+// Replace the entire loadTasks function within the useEffect
 const loadTasks = async () => {
   try {
     console.log(`Starting to load tasks for Week ${currentWeek}, user:`, selectedUser?.name);
@@ -259,8 +264,7 @@ const loadTasks = async () => {
     ];
     setTaskRecommendations(fallbackTasks);
   }
-};
-    
+};    
     loadTasks();
   }, [familyId, currentWeek, selectedUser]);
 
@@ -531,7 +535,7 @@ const directlySaveTask = async (taskId, isCompleted) => {
       }
       return;
     }
-
+  
     // Set saving state for this task
     setSavingTasks(prev => ({ ...prev, [taskId]: true }));
     setSaveErrors(prev => ({ ...prev, [taskId]: null }));
@@ -1237,6 +1241,12 @@ const handleCompleteWithComment = async (taskId) => {
                                     )}
                                   </button>
                                 </div>
+                                {/* Error message if saving failed */}
+{saveErrors[task.id] && (
+  <div className="text-xs text-red-600 mb-2 font-roboto">
+    {saveErrors[task.id]}
+  </div>
+)}
                               </div>
                             )}
                             
@@ -1458,10 +1468,12 @@ const handleCompleteWithComment = async (taskId) => {
                                     }`}
                                     onClick={() => {
                                       if (!kidTasksCompleted[`kid-task-1-${index}`]?.completed) {
-                                        const observations = prompt("What did you do to help? Share your accomplishment!");
-                                        if (observations) {
-                                          handleCompleteKidTask(`kid-task-1-${index}`, selectedUser.id, true, observations);
-                                        }
+                                        setCurrentKidTask({
+                                          id: `kid-task-1-${index}`,
+                                          title: `${child.name}'s Special Task`,
+                                          question: "What did you do to help? Share your accomplishment!"
+                                        });
+                                        setShowKidTaskDialog(true);
                                       } else {
                                         handleCompleteKidTask(`kid-task-1-${index}`, selectedUser.id, false);
                                       }
@@ -1939,6 +1951,48 @@ const handleCompleteWithComment = async (taskId) => {
           </div>
         </div>
       </div>
+      {/* Kid Task Dialog */}
+{showKidTaskDialog && currentKidTask && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div className="bg-white rounded-lg p-6 max-w-md w-full">
+      <h3 className="text-lg font-medium mb-4 font-roboto">{currentKidTask.title}</h3>
+      <p className="mb-4 font-roboto">{currentKidTask.question}</p>
+      
+      <textarea
+        rows="4"
+        placeholder="Type your answer here..."
+        className="w-full p-3 border rounded mb-4 font-roboto"
+        value={kidTaskObservation}
+        onChange={(e) => setKidTaskObservation(e.target.value)}
+      ></textarea>
+      
+      <div className="flex justify-end space-x-3">
+        <button
+          onClick={() => {
+            setShowKidTaskDialog(false);
+            setKidTaskObservation("");
+          }}
+          className="px-4 py-2 border rounded font-roboto"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={() => {
+            if (kidTaskObservation.trim()) {
+              handleCompleteKidTask(currentKidTask.id, selectedUser.id, true, kidTaskObservation);
+              setShowKidTaskDialog(false);
+              setKidTaskObservation("");
+            }
+          }}
+          disabled={!kidTaskObservation.trim()}
+          className="px-4 py-2 bg-green-500 text-white rounded font-roboto disabled:bg-gray-300 disabled:cursor-not-allowed"
+        >
+          Complete Task
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 };
