@@ -495,7 +495,7 @@ const directlySaveTask = async (taskId, isCompleted) => {
 
   // Whether family meeting can be started
   const enoughTasksCompleted = countCompletedTasks() >= 3;
-  const canStartFamilyMeeting = weeklyCheckInCompleted && enoughTasksCompleted;
+const canStartFamilyMeeting = weeklyCheckInCompleted && enoughTasksCompleted && atLeastOneKidTaskCompleted();
   
   // Check if user can complete a task
   const canCompleteTask = (task) => {
@@ -750,27 +750,32 @@ const handleCompleteWithComment = async (taskId) => {
   }
 };
 
-  // Handle kid task completion with observations
-  const handleCompleteKidTask = async (taskId, kidId, isCompleted, observations = null) => {
-    try {
-      // Allow any child to complete any task
-      if (selectedUser && selectedUser.role === 'child') {
-        const completedDate = isCompleted ? new Date().toISOString() : null;
+const handleCompleteKidTask = async (taskId, kidId, isCompleted, observations = null) => {
+  try {
+    console.log(`Attempting to save kid task ${taskId} as ${isCompleted ? 'completed' : 'incomplete'}`);
+    
+    // Allow any child to complete any task
+    if (selectedUser && selectedUser.role === 'child') {
+      const completedDate = isCompleted ? new Date().toISOString() : null;
+      
+      // Update local state immediately for responsiveness
+      setKidTasksCompleted(prev => ({
+        ...prev,
+        [taskId]: {
+          completed: isCompleted,
+          completedDate: completedDate,
+          completedBy: selectedUser.id,
+          completedByName: selectedUser.name,
+          observations: observations
+        }
+      }));
+      
+      // Save to database - try multiple methods for reliability
+      if (familyId) {
+        let saveSuccess = false;
         
-        // Update local state
-        setKidTasksCompleted(prev => ({
-          ...prev,
-          [taskId]: {
-            completed: isCompleted,
-            completedDate: completedDate,
-            completedBy: selectedUser.id,
-            completedByName: selectedUser.name,
-            observations: observations
-          }
-        }));
-        
-        // Save to database
-        if (familyId) {
+        // Method 1: Using DatabaseService with existing approach
+        try {
           // Get existing kid tasks
           const familyData = await DatabaseService.loadFamilyData(familyId);
           const existingKidTasks = (familyData && familyData.kidTasks) || {};
@@ -791,16 +796,85 @@ const handleCompleteWithComment = async (taskId) => {
             kidTasks: updatedKidTasks
           }, familyId);
           
-          console.log(`Kid task ${taskId} saved to database: ${isCompleted} by ${selectedUser.name}`);
+          console.log(`Method 1: Kid task ${taskId} saved to database: ${isCompleted} by ${selectedUser.name}`);
+          saveSuccess = true;
+        } catch (error) {
+          console.error("Method 1 failed for kid task:", error);
         }
-      } else if (selectedUser.role !== 'child') {
-        alert("Only children can complete kid tasks.");
+        
+        // Method 2: Direct Firestore update if method 1 failed
+        if (!saveSuccess) {
+          try {
+            const docRef = doc(db, "families", familyId);
+            const familyDoc = await getDoc(docRef);
+            
+            if (familyDoc.exists()) {
+              const familyData = familyDoc.data();
+              const existingKidTasks = familyData.kidTasks || {};
+              
+              await updateDoc(docRef, {
+                kidTasks: {
+                  ...existingKidTasks,
+                  [taskId]: {
+                    completed: isCompleted,
+                    completedDate: completedDate,
+                    completedBy: selectedUser.id,
+                    completedByName: selectedUser.name,
+                    observations: observations
+                  }
+                },
+                updatedAt: new Date().toISOString()
+              });
+              
+              console.log(`Method 2: Kid task ${taskId} saved directly to Firestore`);
+              saveSuccess = true;
+            }
+          } catch (error) {
+            console.error("Method 2 failed for kid task:", error);
+          }
+        }
+        
+        // Method 3: Alternative field path approach
+        if (!saveSuccess) {
+          try {
+            const docRef = doc(db, "families", familyId);
+            
+            await updateDoc(docRef, {
+              [`kidTasks.${taskId}`]: {
+                completed: isCompleted,
+                completedDate: completedDate,
+                completedBy: selectedUser.id,
+                completedByName: selectedUser.name,
+                observations: observations
+              },
+              updatedAt: new Date().toISOString()
+            });
+            
+            console.log(`Method 3: Kid task ${taskId} saved using field path`);
+            saveSuccess = true;
+          } catch (error) {
+            console.error("Method 3 failed for kid task:", error);
+          }
+        }
+        
+        // After all attempts
+        if (saveSuccess) {
+          console.log(`Kid task ${taskId} successfully saved to database`);
+        } else {
+          console.error(`Failed to save kid task ${taskId} after multiple attempts`);
+          
+          // Still keep the local state updated for better UX
+          console.log("Local state for kid tasks was updated, but database save failed");
+        }
       }
-    } catch (error) {
-      console.error("Error saving kid task:", error);
-      alert("There was an error saving your task. Please try again.");
+    } else if (selectedUser.role !== 'child') {
+      alert("Only children can complete kid tasks.");
     }
-  };
+  } catch (error) {
+    console.error("Error in handleCompleteKidTask:", error);
+    alert("There was an error saving your task. Please try again.");
+  }
+};
 
   // Handle kid task picture upload
   const handleKidTaskPictureUpload = async (taskId, file) => {
@@ -1870,17 +1944,20 @@ const handleCompleteWithComment = async (taskId) => {
               </p>
               
               <div className="mt-3">
-                {!canStartFamilyMeeting && (
-                  <div className="text-sm bg-amber-50 text-amber-800 p-3 rounded mb-3">
-                    <div className="flex items-center mb-1">
-                      <AlertCircle size={16} className="mr-2" />
-                      <span className="font-medium font-roboto">Family meeting not yet available</span>
-                    </div>
-                    <p className="font-roboto">
-                      Complete the weekly check-in and at least 3 tasks to unlock the family meeting agenda.
-                    </p>
-                  </div>
-                )}
+              {!canStartFamilyMeeting && (
+  <div className="text-sm bg-amber-50 text-amber-800 p-3 rounded mb-3">
+    <div className="flex items-center mb-1">
+      <AlertCircle size={16} className="mr-2" />
+      <span className="font-medium font-roboto">Family meeting not yet available</span>
+    </div>
+    <p className="font-roboto">
+      Complete the weekly check-in and at least 3 tasks to unlock the family meeting agenda.
+      {familyMembers.some(member => member.role === 'child') && 
+       !atLeastOneKidTaskCompleted() && 
+        " Also, at least one kid task needs to be completed."}
+    </p>
+  </div>
+)}
                 
                 <div className="text-sm text-gray-600 flex items-center">
                   <span className="font-roboto">Recommended: 30 minutes</span>
