@@ -24,48 +24,57 @@ import OnboardingFlow from './components/onboarding/OnboardingFlow';
 import { ChatProvider } from './contexts/ChatContext';
 import RelationshipFeaturesPage from './components/marketing/RelationshipFeaturesPage';
 import AIAssistantPage from './components/marketing/AIAssistantPage';
+import FloatingCalendarWidget from './components/calendar/FloatingCalendarWidget'; // Add this import
 
 // App Routes Component - Used after context providers are set up
 function AppRoutes() {
   const { selectedUser } = useFamily();
+  const { currentUser } = useAuth(); // Add this line
+
+  // Determine if calendar widget should be shown
+  const showCalendarWidget = !!currentUser && !!selectedUser && window.location.pathname === '/dashboard';
 
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/login" element={<FamilySelectionScreen />} />
-      <Route path="/onboarding" element={<OnboardingFlow />} />
-      <Route path="/signup" element={<UserSignupScreen />} />
+    <>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<FamilySelectionScreen />} />
+        <Route path="/onboarding" element={<OnboardingFlow />} />
+        <Route path="/signup" element={<UserSignupScreen />} />
 
-      <Route path="/how-it-works" element={<HowThisWorksScreen />} />
-      <Route path="/relationship-features" element={<RelationshipFeaturesPage />} />
-<Route path="/ai-assistant" element={<AIAssistantPage />} />
-      <Route path="/about-us" element={<AboutUsPage />} />
-      <Route path="/product-overview" element={<ProductOverviewPage />} />
-      <Route path="/blog" element={<BlogHomePage />} />
-      <Route path="/blog/:slug" element={<BlogArticlePage />} />
-      <Route path="/survey" element={
-        selectedUser?.role === 'child' 
-          ? <KidFriendlySurvey surveyType="initial" /> 
-          : <SurveyScreen />
-      } />
-      <Route path="/mini-survey" element={<MiniSurvey />} />
-      <Route path="/mini-results" element={<MiniResultsScreen />} />
-      <Route path="/payment" element={<PaymentScreen />} />
-      <Route path="/dashboard" element={<DashboardScreen />} />
+        <Route path="/how-it-works" element={<HowThisWorksScreen />} />
+        <Route path="/relationship-features" element={<RelationshipFeaturesPage />} />
+        <Route path="/ai-assistant" element={<AIAssistantPage />} />
+        <Route path="/about-us" element={<AboutUsPage />} />
+        <Route path="/product-overview" element={<ProductOverviewPage />} />
+        <Route path="/blog" element={<BlogHomePage />} />
+        <Route path="/blog/:slug" element={<BlogArticlePage />} />
+        <Route path="/survey" element={
+          selectedUser?.role === 'child' 
+            ? <KidFriendlySurvey surveyType="initial" /> 
+            : <SurveyScreen />
+        } />
+        <Route path="/mini-survey" element={<MiniSurvey />} />
+        <Route path="/mini-results" element={<MiniResultsScreen />} />
+        <Route path="/payment" element={<PaymentScreen />} />
+        <Route path="/dashboard" element={<DashboardScreen />} />
+        
+        {/* Route for weekly check-in - directs kids to kid-friendly version */}
+        <Route path="/weekly-check-in" element={
+          selectedUser?.role === 'child' 
+            ? <KidFriendlySurvey surveyType="weekly" /> 
+            : <WeeklyCheckInScreen />
+        } />
+        
+        <Route path="/loading" element={<LoadingScreen />} />
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
       
-      {/* Route for weekly check-in - directs kids to kid-friendly version */}
-      <Route path="/weekly-check-in" element={
-        selectedUser?.role === 'child' 
-          ? <KidFriendlySurvey surveyType="weekly" /> 
-          : <WeeklyCheckInScreen />
-      } />
-      
-      <Route path="/loading" element={<LoadingScreen />} />
-      <Route path="*" element={<Navigate to="/" />} />
-    </Routes>
+      {/* Show calendar widget only on dashboard when user is logged in */}
+      {showCalendarWidget && <FloatingCalendarWidget />}
+    </>
   );
 }
-
 // Enhanced error boundary with better user feedback and recovery options
 class ErrorBoundary extends React.Component {
   constructor(props) {

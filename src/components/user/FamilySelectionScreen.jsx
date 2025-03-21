@@ -69,30 +69,6 @@ useEffect(() => {
   }, [currentUser]);
   
 // Effect to update empty state visibility based on whether we have family members
-useEffect(() => {
-  if (currentUser && familyMembers.length === 0 && availableFamilies.length === 0) {
-    // Only show empty state if there are truly no families
-    setShowEmptyState(true);
-  } else {
-    setShowEmptyState(false);
-  }
-  
-  // Auto-redirect to onboarding if logged in with no families
-  // but only if we're not in the process of logging in
-  if (currentUser && availableFamilies.length === 0 && !isLoggingIn) {
-    console.log("No families found, redirecting to onboarding");
-    navigate('/onboarding');
-  }
-}, [currentUser, familyMembers, availableFamilies, navigate, isLoggingIn]);
-  
-  // Debug logging
-  useEffect(() => {
-    console.log("Current user:", currentUser);
-    console.log("Available families:", availableFamilies);
-    console.log("Family members:", familyMembers);
-  }, [currentUser, availableFamilies, familyMembers]);
-  
-// Effect to update empty state visibility based on whether we have family members
 // Effect to update empty state visibility based on whether we have family members
 useEffect(() => {
   console.log("Current user:", currentUser);
@@ -106,28 +82,51 @@ useEffect(() => {
     setShowEmptyState(false);
   }
   
-  // Only redirect to onboarding if:
-  // 1. User is logged in
-  // 2. We've confirmed they have no families (after attempting to load them)
-  // 3. We're not in the process of logging in
-  // 4. We're not in a direct access flow from marketing pages
+  // Don't redirect in these cases:
+  // 1. No current user
+  // 2. We're in the process of logging in
+  // 3. We're in a direct access flow
+  // 4. We have families or family members already loaded
+  // 5. We haven't waited long enough for families to load
   const shouldRedirectToOnboarding = 
     currentUser && 
+    !isLoggingIn &&
+    !location.state?.directAccess &&
     availableFamilies.length === 0 && 
-    !isLoggingIn && 
-    !location.state?.directAccess;
+    familyMembers.length === 0;
   
-  if (shouldRedirectToOnboarding) {
-    console.log("No families found and not direct access, redirecting to onboarding");
-    navigate('/onboarding');
+  // Use a reference to track if we've already tried loading
+  if (shouldRedirectToOnboarding && currentUser) {
+    // Try to load families one more time before redirecting
+    console.log("No families found, attempting to load again before redirect");
+    
+    // Try loading families once more
+    loadAllFamilies(currentUser.uid)
+      .then(families => {
+        // Only redirect if we still have no families after loading
+        if (!families || families.length === 0) {
+          console.log("Confirmed no families, redirecting to onboarding");
+          navigate('/onboarding');
+        } else {
+          console.log("Found families after retry, not redirecting");
+        }
+      })
+      .catch(err => {
+        console.error("Error loading families:", err);
+        // Only redirect on load failure if we have no other data
+        if (availableFamilies.length === 0 && familyMembers.length === 0) {
+          navigate('/onboarding');
+        }
+      });
   }
+}, [currentUser, familyMembers, availableFamilies, navigate, isLoggingIn, location]);  
+  // Debug logging
+  useEffect(() => {
+    console.log("Current user:", currentUser);
+    console.log("Available families:", availableFamilies);
+    console.log("Family members:", familyMembers);
+  }, [currentUser, availableFamilies, familyMembers]);
   
-  // If this is direct access and we have family members, go straight to dashboard
-  if (location.state?.directAccess && familyMembers.length > 0 && selectedUser) {
-    console.log("Direct access with loaded family data, going to dashboard");
-    navigate('/dashboard');
-  }
-}, [currentUser, familyMembers, availableFamilies, navigate, isLoggingIn, location, selectedUser]);
 
 
   // Get default profile image based on role
