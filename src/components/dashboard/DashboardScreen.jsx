@@ -41,7 +41,7 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   
   const { loadFamilyData } = useAuth();
   
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('tasks');
   const [showSettings, setShowSettings] = useState(false);
   const [showFamilyMeeting, setShowFamilyMeeting] = useState(false);
   const [loadingFamily, setLoadingFamily] = useState(false);
@@ -306,6 +306,15 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
       case 'relationship':
         return (
           <div className="space-y-6">
+          <div className="flex justify-end mb-4">
+            <button 
+              className="px-4 py-2 bg-pink-100 text-pink-800 rounded-md flex items-center hover:bg-pink-200 font-roboto"
+              onClick={handleOpenRelationshipMeeting}
+            >
+              <Heart size={16} className="mr-2" />
+              Start Relationship Meeting
+            </button>
+          </div>
             <AIRelationshipInsights />
             <CoupleRelationshipChart />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -356,8 +365,8 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
-      <div className="bg-black text-white p-4">
-        <div className="container mx-auto flex justify-between items-center">
+      <div className="fixed top-0 left-0 right-0 z-20 bg-black text-white p-4 shadow-md">
+  <div className="container mx-auto flex justify-between items-center">
           <div className="flex items-center">
             {/* Family photo */}
             <div className="mr-4 hidden md:block">
@@ -399,9 +408,8 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
       </div>
       
       {/* Main content */}
-      <div className="flex-1 container mx-auto px-4 py-6">
-        {/* Tabs */}
-        <div className="flex border-b overflow-x-auto sticky top-0 bg-gray-50 z-10 px-4" style={{ marginBottom: "1.5rem" }}>
+      <div className="fixed top-16 left-0 right-0 z-10 bg-gray-50 border-b shadow-sm">
+  <div className="container mx-auto flex overflow-x-auto px-4 py-2">
           <button 
             className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'tasks' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
             onClick={() => setActiveTab('tasks')}
@@ -425,15 +433,7 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
             </button>
           )}
           
-          <div className="mt-6">
-            <button 
-              className="px-4 py-2 bg-pink-100 text-pink-800 rounded-md flex items-center hover:bg-pink-200 font-roboto"
-              onClick={handleOpenRelationshipMeeting}
-            >
-              <Heart size={16} className="mr-2" />
-              Start Relationship Meeting
-            </button>
-          </div>
+          
 
           <button 
             className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'initial-survey' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
@@ -455,6 +455,9 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
           ))}
         </div>
           
+        <div className="flex-1 container mx-auto px-4 pt-32 pb-6">
+
+
         {/* Tab content */}
         {renderTabContent()}
       </div>

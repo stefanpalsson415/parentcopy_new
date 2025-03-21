@@ -23,34 +23,69 @@ class ClaudeService {
       const systemPrompt = this.formatSystemPrompt(familyContext || {});
       
       if (this.useServerProxy) {
-        // Call the secure Cloud Function - add better logging
+        // Call the secure Cloud Function
         console.log("Using Firebase Function to call Claude API");
         
-        const result = await this.claudeProxy({
-          system: systemPrompt,
-          messages: messages
-        });
+        // Add a timeout to the API call
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Request timed out")), 30000)
+        );
         
-        // Better error checking on the result
+        const result = await Promise.race([
+          this.claudeProxy({
+            system: systemPrompt,
+            messages: messages
+          }),
+          timeoutPromise
+        ]);
+        
+        // Check for valid response
         if (!result || !result.data || !result.data.content || !result.data.content[0]) {
           console.error("Invalid response format from Claude proxy:", result);
           throw new Error("Invalid response format from Claude proxy");
         }
         
-        // Extract the response based on the shape of the function result
         return result.data.content[0].text;
       } else {
-        // FALLBACK: Direct API call - use mock responses instead
-        console.warn("Using fallback response mode - Claude API proxy unavailable");
+        // Use embedded responses for testing
+        console.log("Using embedded responses for chat - API proxy unavailable");
         
-        // Return a helpful mock response instead of trying a direct API call
-        return this.getMockResponse(messages[messages.length - 1]?.content || "");
+        // Check if it's a greeting or basic question
+        const userMessage = messages[messages.length - 1]?.content || "";
+        return this.getContextualResponse(userMessage, familyContext);
       }
     } catch (error) {
       console.error("Error calling Claude API:", error);
-      // Provide a more helpful response if possible
-      return "I'm currently experiencing technical difficulties. Please try again in a few moments, or ask me something simple about family balance that I can help with directly.";
+      return this.getContextualResponse(messages[messages.length - 1]?.content || "", familyContext);
     }
+  }
+  
+  // Add this new method for better fallback responses
+  getContextualResponse(userMessage, context) {
+    const userMessageLower = userMessage.toLowerCase();
+    
+    // Greeting patterns
+    if (userMessageLower.match(/^(hi|hello|hey|greetings)/)) {
+      return `Hello! I'm Allie, your family balance assistant. How can I help you today?`;
+    }
+    
+    // Questions about the app or features
+    if (userMessageLower.includes("how do you work") || userMessageLower.includes("what can you do")) {
+      return "I can help you understand your family balance data, explain tasks, provide insights on workload distribution, and offer suggestions for improving balance. What would you like to know about?";
+    }
+    
+    // Questions about tasks
+    if (userMessageLower.includes("task") || userMessageLower.includes("to do")) {
+      return "Your tasks are designed to balance family workload. Each one is carefully selected based on your survey data to address specific imbalances. Check the Tasks tab to see what's currently assigned to you.";
+    }
+    
+    // Questions about balance
+    if (userMessageLower.includes("balance") || userMessageLower.includes("workload")) {
+      return "Family balance is about equitably sharing both visible work (like cleaning) and invisible work (like planning). Your dashboard shows your current balance across these categories, and your tasks help improve areas where there's imbalance.";
+    }
+    
+    // Default response that feels more personalized
+    return "I'd like to help with that! Currently, I'm using my basic knowledge to respond. For more personalized assistance, please check the Tasks or Dashboard tabs where I've already analyzed your family's specific data.";
   }
   
   // Add this new method to provide useful responses even when API is down

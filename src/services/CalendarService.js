@@ -105,15 +105,53 @@ class CalendarService {
   // Initialize Google Calendar API
   async initializeGoogleCalendar() {
     return new Promise((resolve, reject) => {
-      // Load Google API script if not already loaded
+      // For testing/development, create a mock implementation
+      const mockMode = true; // Set to false in production with real API keys
+      
+      if (mockMode) {
+        console.log("Using mock Google Calendar implementation");
+        this.googleApiLoaded = true;
+        
+        // Create mock functions for testing
+        if (!window.gapi) {
+          window.gapi = {
+            auth2: {
+              getAuthInstance: () => ({
+                isSignedIn: { get: () => false },
+                signIn: async () => true,
+                signOut: async () => true
+              })
+            },
+            client: {
+              calendar: {
+                events: {
+                  insert: async () => ({ result: { id: 'mock-event-id', htmlLink: '#' } })
+                },
+                calendarList: {
+                  list: async () => ({ result: { items: [
+                    { id: 'primary', summary: 'Primary Calendar' },
+                    { id: 'work', summary: 'Work Calendar' },
+                    { id: 'family', summary: 'Family Calendar' }
+                  ]}})
+                }
+              }
+            }
+          };
+        }
+        
+        resolve(true);
+        return;
+      }
+      
+      // Real implementation
       if (!window.gapi) {
         const script = document.createElement('script');
         script.src = 'https://apis.google.com/js/api.js';
         script.onload = () => {
           window.gapi.load('client:auth2', () => {
             window.gapi.client.init({
-              apiKey: process.env.REACT_APP_GOOGLE_API_KEY,
-              clientId: process.env.REACT_APP_GOOGLE_CLIENT_ID,
+              apiKey: process.env.REACT_APP_GOOGLE_API_KEY || 'YOUR_API_KEY', // Provide default for testing
+              clientId: process.env.REACT_APP_GOOGLE_CLIENT_ID || 'YOUR_CLIENT_ID', // Provide default for testing
               scope: 'https://www.googleapis.com/auth/calendar',
               discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
             }).then(() => {
@@ -131,11 +169,11 @@ class CalendarService {
         };
         document.body.appendChild(script);
       } else {
-        // API already loaded, just initialize client
+        // API already loaded, initialize client
         window.gapi.load('client:auth2', () => {
           window.gapi.client.init({
-            apiKey: process.env.REACT_APP_GOOGLE_API_KEY,
-            clientId: process.env.REACT_APP_GOOGLE_CLIENT_ID,
+            apiKey: process.env.REACT_APP_GOOGLE_API_KEY || 'YOUR_API_KEY',
+            clientId: process.env.REACT_APP_GOOGLE_CLIENT_ID || 'YOUR_CLIENT_ID',
             scope: 'https://www.googleapis.com/auth/calendar',
             discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
           }).then(() => {
