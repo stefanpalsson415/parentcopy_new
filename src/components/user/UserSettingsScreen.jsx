@@ -3,6 +3,7 @@ import { X, Upload, Camera, User, Users, Home } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import DatabaseService from '../../services/DatabaseService';
+import { Calendar, Download, X, ChevronDown, ChevronUp, Users, Home, Settings, Google, Apple } from 'lucide-react';
 
 const UserSettingsScreen = ({ onClose }) => {
   const { 
@@ -20,8 +21,9 @@ const UserSettingsScreen = ({ onClose }) => {
   const [newFamilyName, setNewFamilyName] = useState(familyName || '');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadType, setUploadType] = useState(null); // 'profile' or 'family'
-  const [settingsTab, setSettingsTab] = useState('profile'); // 'profile', 'family', or 'app'
   const [uploadError, setUploadError] = useState(null);
+  const [settingsTab, setSettingsTab] = useState('profile'); // 'profile', 'family', 'app', or 'calendar'
+
   
   // Handle family name update
   const handleFamilyNameUpdate = async () => {
@@ -95,6 +97,444 @@ const UserSettingsScreen = ({ onClose }) => {
     });
   };
   
+  const CalendarSettingsTab = ({ userId }) => {
+    const [isLoading, setIsLoading] = useState(true);
+    const [calendarSettings, setCalendarSettings] = useState(null);
+    const [googleCalendars, setGoogleCalendars] = useState([]);
+    const [isGoogleSignedIn, setIsGoogleSignedIn] = useState(false);
+    const [selectedGoogleCalendar, setSelectedGoogleCalendar] = useState('primary');
+    const [activeCalendarType, setActiveCalendarType] = useState(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveMessage, setSaveMessage] = useState({ type: '', message: '' });
+    
+    // Load calendar settings on component mount
+    useEffect(() => {
+      const loadSettings = async () => {
+        if (!userId) {
+          setIsLoading(false);
+          return;
+        }
+        
+        try {
+          // Load user's calendar settings
+          const settings = await CalendarService.loadUserCalendarSettings(userId);
+          setCalendarSettings(settings);
+          setActiveCalendarType(settings?.defaultCalendarType || null);
+          
+          if (settings?.googleCalendar?.calendarId) {
+            setSelectedGoogleCalendar(settings.googleCalendar.calendarId);
+          }
+          
+          // Check if signed in to Google
+          try {
+            await CalendarService.initializeGoogleCalendar();
+            const signedIn = CalendarService.isSignedInToGoogle();
+            setIsGoogleSignedIn(signedIn);
+            
+            // If signed in, load available calendars
+            if (signedIn) {
+              const calendars = await CalendarService.listUserCalendars();
+              setGoogleCalendars(calendars);
+            }
+          } catch (googleError) {
+            console.error("Error checking Google sign-in status:", googleError);
+          }
+        } catch (error) {
+          console.error("Error loading calendar settings:", error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      
+      loadSettings();
+    }, [userId]);
+    
+    // Handle Google sign in
+    const handleGoogleSignIn = async () => {
+      try {
+        await CalendarService.signInToGoogle();
+        setIsGoogleSignedIn(true);
+        
+        // Load available calendars
+        const calendars = await CalendarService.listUserCalendars();
+        setGoogleCalendars(calendars);
+      } catch (error) {
+        console.error("Error signing in to Google:", error);
+        alert("Failed to sign in to Google Calendar. Please try again.");
+      }
+    };
+    
+    // Handle Google sign out
+    const handleGoogleSignOut = async () => {
+      try {
+        await CalendarService.signOutFromGoogle();
+        setIsGoogleSignedIn(false);
+        setGoogleCalendars([]);
+      } catch (error) {
+        console.error("Error signing out from Google:", error);
+      }
+    };
+    
+    // Handle Google calendar selection
+    const handleGoogleCalendarChange = (e) => {
+      setSelectedGoogleCalendar(e.target.value);
+    };
+    
+    // Handle calendar type selection
+    const handleCalendarTypeChange = (type) => {
+      setActiveCalendarType(type);
+    };
+    
+    // Save calendar settings
+    const saveCalendarSettings = async () => {
+      if (!userId) return;
+      
+      setIsSaving(true);
+      setSaveMessage({ type: '', message: '' });
+      
+      try {
+        // Prepare updated settings
+        const updatedSettings = {
+          ...calendarSettings,
+          defaultCalendarType: activeCalendarType,
+          googleCalendar: {
+            ...calendarSettings?.googleCalendar,
+            enabled: activeCalendarType === 'google',
+            calendarId: selectedGoogleCalendar
+          },
+          appleCalendar: {
+            ...calendarSettings?.appleCalendar,
+            enabled: activeCalendarType === 'apple'
+          }
+        };
+        
+        // Save to Firebase
+        await CalendarService.saveUserCalendarSettings(userId, updatedSettings);
+        setCalendarSettings(updatedSettings);
+        
+        setSaveMessage({
+          type: 'success',
+          message: 'Calendar settings saved successfully'
+        });
+      } catch (error) {
+        console.error("Error saving calendar settings:", error);
+        setSaveMessage({
+          type: 'error',
+          message: 'Failed to save calendar settings'
+        });
+      } finally {
+        setIsSaving(false);
+        
+        // Clear message after delay
+        setTimeout(() => {
+          setSaveMessage({ type: '', message: '' });
+        }, 3000);
+      }
+    };
+    
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <div className="w-8 h-8 border-4 border-t-transparent border-blue-600 rounded-full animate-spin"></div>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="space-y-6">
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <h4 className="font-medium text-blue-800 flex items-center">
+            <Calendar className="mr-2" size={18} />
+            Calendar Integration
+          </h4>
+          <p className="text-sm mt-2 text-blue-700">
+            Connect your calendar to Allie to add family meetings, tasks, and reminders directly to your existing calendar system.
+          </p>
+        </div>
+        
+        {/* Default Calendar Selection */}
+        <div className="bg-white p-4 rounded-lg border">
+          <h4 className="font-medium mb-3">Default Calendar</h4>
+          <p className="text-sm text-gray-600 mb-4">
+            Select which calendar system you want to use by default when adding events from Allie.
+          </p>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div
+              className={`p-4 border rounded-lg cursor-pointer ${
+                activeCalendarType === 'google' ? 'border-blue-500 bg-blue-50' : 'hover:border-gray-400'
+              }`}
+              onClick={() => handleCalendarTypeChange('google')}
+            >
+              <div className="flex items-center mb-2">
+                <div className={`w-4 h-4 rounded-full border ${
+                  activeCalendarType === 'google' ? 'bg-blue-500 border-blue-500' : 'border-gray-400'
+                } flex items-center justify-center mr-2`}>
+                  {activeCalendarType === 'google' && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                </div>
+                <span className="font-medium">Google Calendar</span>
+              </div>
+              <div className="flex items-center justify-center h-10 mb-2">
+                <Google size={24} className="text-gray-700" />
+              </div>
+              <p className="text-xs text-gray-500">
+                Sync with your Google Calendar account
+              </p>
+            </div>
+            
+            <div
+              className={`p-4 border rounded-lg cursor-pointer ${
+                activeCalendarType === 'apple' ? 'border-blue-500 bg-blue-50' : 'hover:border-gray-400'
+              } ${!CalendarService.appleCalendarAvailable ? 'opacity-50 cursor-not-allowed' : ''}`}
+              onClick={() => CalendarService.appleCalendarAvailable && handleCalendarTypeChange('apple')}
+            >
+              <div className="flex items-center mb-2">
+                <div className={`w-4 h-4 rounded-full border ${
+                  activeCalendarType === 'apple' ? 'bg-blue-500 border-blue-500' : 'border-gray-400'
+                } flex items-center justify-center mr-2`}>
+                  {activeCalendarType === 'apple' && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                </div>
+                <span className="font-medium">Apple Calendar</span>
+              </div>
+              <div className="flex items-center justify-center h-10 mb-2">
+                <Apple size={24} className="text-gray-700" />
+              </div>
+              <p className="text-xs text-gray-500">
+                {CalendarService.appleCalendarAvailable 
+                  ? "Sync with your Apple Calendar" 
+                  : "Not available in this browser"}
+              </p>
+            </div>
+            
+            <div
+              className={`p-4 border rounded-lg cursor-pointer ${
+                activeCalendarType === 'ics' ? 'border-blue-500 bg-blue-50' : 'hover:border-gray-400'
+              }`}
+              onClick={() => handleCalendarTypeChange('ics')}
+            >
+              <div className="flex items-center mb-2">
+                <div className={`w-4 h-4 rounded-full border ${
+                  activeCalendarType === 'ics' ? 'bg-blue-500 border-blue-500' : 'border-gray-400'
+                } flex items-center justify-center mr-2`}>
+                  {activeCalendarType === 'ics' && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                </div>
+                <span className="font-medium">ICS Download</span>
+              </div>
+              <div className="flex items-center justify-center h-10 mb-2">
+                <Download size={24} className="text-gray-700" />
+              </div>
+              <p className="text-xs text-gray-500">
+                Download ICS files to import into any calendar system
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        {/* Google Calendar Settings */}
+        {activeCalendarType === 'google' && (
+          <div className="bg-white p-4 rounded-lg border">
+            <h4 className="font-medium mb-3">Google Calendar Settings</h4>
+            
+            {!isGoogleSignedIn ? (
+              <div className="text-center p-6">
+                <p className="text-sm text-gray-600 mb-4">
+                  Sign in to your Google account to connect your calendar.
+                </p>
+                <button
+                  onClick={handleGoogleSignIn}
+                  className="px-4 py-2 bg-white border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center mx-auto"
+                >
+                  <Google size={16} className="mr-2" />
+                  Sign in with Google
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-sm text-green-600 flex items-center">
+                    <Check size={16} className="mr-1" />
+                    Connected to Google Calendar
+                  </p>
+                  <button
+                    onClick={handleGoogleSignOut}
+                    className="text-xs text-gray-600 hover:text-gray-800"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+                
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Select Calendar
+                  </label>
+                  <select
+                    value={selectedGoogleCalendar}
+                    onChange={handleGoogleCalendarChange}
+                    className="w-full p-2 border rounded"
+                  >
+                    <option value="primary">Primary Calendar</option>
+                    {googleCalendars.map(calendar => (
+                      <option key={calendar.id} value={calendar.id}>
+                        {calendar.summary}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Allie will add events to this calendar.
+                  </p>
+                </div>
+                
+                <div className="flex items-center text-sm text-gray-600 mb-2">
+                  <button
+                    onClick={() => window.open('https://calendar.google.com/', '_blank')}
+                    className="text-blue-600 hover:underline flex items-center"
+                  >
+                    <Settings size={14} className="mr-1" />
+                    Manage Google Calendar Settings
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Apple Calendar Settings */}
+        {activeCalendarType === 'apple' && (
+          <div className="bg-white p-4 rounded-lg border">
+            <h4 className="font-medium mb-3">Apple Calendar Settings</h4>
+            
+            {!CalendarService.appleCalendarAvailable ? (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-sm text-amber-700">
+                  Apple Calendar integration is only available on macOS devices using Safari or Chrome browsers.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm text-gray-600 mb-4">
+                  When you add events to your Apple Calendar, you'll be prompted to allow access to your calendar.
+                </p>
+                
+                <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
+                  <p>
+                    Note: Allie will download .ics files that you can open with Apple Calendar. Simply click "Add to Calendar" 
+                    when prompted.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* ICS Download Settings */}
+        {activeCalendarType === 'ics' && (
+          <div className="bg-white p-4 rounded-lg border">
+            <h4 className="font-medium mb-3">ICS Download Settings</h4>
+            
+            <p className="text-sm text-gray-600 mb-4">
+              Allie will generate .ics files for you to download. These files can be imported into any calendar 
+              application including Google Calendar, Apple Calendar, Outlook, and more.
+            </p>
+            
+            <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
+              <p>
+                After downloading, open the .ics file with your preferred calendar application to add the event.
+              </p>
+            </div>
+          </div>
+        )}
+        
+        {/* Notification Settings */}
+        <div className="bg-white p-4 rounded-lg border">
+          <h4 className="font-medium mb-3">Calendar Notifications</h4>
+          
+          <div className="space-y-3">
+            <label className="flex items-center">
+              <input 
+                type="checkbox" 
+                className="w-4 h-4 mr-2"
+                checked={calendarSettings?.notifications?.taskReminders}
+                onChange={(e) => setCalendarSettings(prev => ({
+                  ...prev,
+                  notifications: {
+                    ...prev.notifications,
+                    taskReminders: e.target.checked
+                  }
+                }))}
+              />
+              <span className="text-sm">Include reminders for tasks</span>
+            </label>
+            
+            <label className="flex items-center">
+              <input 
+                type="checkbox" 
+                className="w-4 h-4 mr-2"
+                checked={calendarSettings?.notifications?.meetingReminders}
+                onChange={(e) => setCalendarSettings(prev => ({
+                  ...prev,
+                  notifications: {
+                    ...prev.notifications,
+                    meetingReminders: e.target.checked
+                  }
+                }))}
+              />
+              <span className="text-sm">Include reminders for family meetings</span>
+            </label>
+            
+            <div>
+              <label className="block text-sm mb-1">Reminder time</label>
+              <select
+                className="p-2 border rounded w-full"
+                value={calendarSettings?.notifications?.reminderTime || 30}
+                onChange={(e) => setCalendarSettings(prev => ({
+                  ...prev,
+                  notifications: {
+                    ...prev.notifications,
+                    reminderTime: parseInt(e.target.value)
+                  }
+                }))}
+              >
+                <option value="10">10 minutes before</option>
+                <option value="30">30 minutes before</option>
+                <option value="60">1 hour before</option>
+                <option value="120">2 hours before</option>
+                <option value="1440">1 day before</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        {/* Save Button */}
+        <div className="flex justify-end">
+          <button
+            onClick={saveCalendarSettings}
+            disabled={isSaving}
+            className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
+          >
+            {isSaving ? (
+              <span className="flex items-center">
+                <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2"></div>
+                Saving...
+              </span>
+            ) : (
+              'Save Calendar Settings'
+            )}
+          </button>
+        </div>
+        
+        {/* Save Message */}
+        {saveMessage.message && (
+          <div className={`p-3 rounded text-sm ${
+            saveMessage.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+          }`}>
+            {saveMessage.message}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+
   // Update favicon
   const updateFavicon = (imageUrl) => {
     let link = document.querySelector("link[rel*='icon']") || document.createElement('link');
@@ -143,6 +583,17 @@ const UserSettingsScreen = ({ onClose }) => {
                 <span>Family</span>
               </div>
             </button>
+            <button
+  className={`px-4 py-3 font-medium ${
+    settingsTab === 'calendar' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'
+  }`}
+  onClick={() => setSettingsTab('calendar')}
+>
+  <div className="flex items-center">
+    <Calendar size={16} className="mr-2" />
+    <span>Calendar</span>
+  </div>
+</button>
             <button
               className={`px-4 py-3 font-medium ${
                 settingsTab === 'app' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'
@@ -320,6 +771,15 @@ const UserSettingsScreen = ({ onClose }) => {
           </div>
         )}
         
+{/* Calendar Settings */}
+{settingsTab === 'calendar' && (
+  <div className="p-6">
+    <h3 className="text-lg font-semibold mb-4">Calendar Integration</h3>
+    
+    <CalendarSettingsTab userId={currentUser?.uid} />
+  </div>
+)}
+
         {/* App Settings */}
         {settingsTab === 'app' && (
           <div className="p-6">

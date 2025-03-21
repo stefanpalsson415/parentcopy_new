@@ -68,6 +68,17 @@ export const knowledgeBase = {
     
     // Common questions and answers
     faqs: {
+"How do I add a task to my calendar?": 
+  "You can add any Allie task to your calendar by clicking the 'Add to Calendar' button on the task card. You can also ask me to add specific tasks or meetings to your calendar by saying 'Add [task name] to my calendar' or 'Schedule the family meeting in my calendar'.",
+
+"Can I sync with Google Calendar?": 
+  "Yes! Allie supports integration with Google Calendar, Apple Calendar, and other calendar systems through ICS file downloads. Go to Settings > Calendar to set up your preferred calendar integration.",
+
+"How do I set up calendar integration?": 
+  "To set up calendar integration, go to Settings and select the Calendar tab. You can choose your default calendar system (Google, Apple, or ICS download) and configure specific settings for each type.",
+
+
+
       "How does Allie measure workload balance?": 
         "Allie uses a comprehensive 80-question initial survey that categorizes tasks across four domains, with a sophisticated weighting system that accounts for time investment, frequency, emotional labor, and mental load.",
       

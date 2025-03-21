@@ -23,6 +23,8 @@ import DailyCheckInTool from './DailyCheckInTool';
 import GratitudeTracker from './GratitudeTracker';
 import DateNightPlanner from './DateNightPlanner';
 import AIRelationshipInsights from './AIRelationshipInsights';
+import CalendarDashboardWidget from './CalendarDashboardWidget';
+
 
 
 
@@ -399,6 +401,10 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
         Switch User
       </button>
     </div>
+    <div className="col-span-1">
+  <CalendarDashboardWidget />
+  {/* Other sidebar widgets */}
+</div>
   </div>
 </div>
       
