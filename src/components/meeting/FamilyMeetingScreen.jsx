@@ -84,7 +84,8 @@ const FamilyMeetingScreen = ({ onClose }) => {
     saveFamilyMeetingNotes, 
     familyMembers, 
     surveyResponses,
-    completeWeek
+    completeWeek,
+    familyId
   } = useFamily();
   
   const { fullQuestionSet } = useSurvey();
