@@ -298,6 +298,77 @@ const MiniResultsScreen = () => {
           </div>
         </div>
         
+        {/* Personalized Insights Based on Family Data */}
+{pendingFamilyData && (
+  <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-6">
+    <div className="p-6">
+      <div className="flex items-start">
+        <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 mr-4">
+          <Users className="text-purple-600" size={24} />
+        </div>
+        <div className="flex-1">
+          <h2 className="text-xl font-bold text-gray-800 mb-3">Personalized for the {pendingFamilyData.familyName} Family</h2>
+          <p className="text-gray-600 mb-6">
+            Based on your family structure and survey responses, we've identified specific areas where Allie can help your family:
+          </p>
+          
+          <div className="space-y-4">
+            {pendingFamilyData.children && pendingFamilyData.children.length > 0 && (
+              <div className="bg-amber-50 p-4 rounded-lg">
+                <h3 className="font-medium">
+                  {pendingFamilyData.children.length > 1 ? 
+                    `Support for Multiple Children (${pendingFamilyData.children.map(c => c.name).join(', ')})` : 
+                    `Support for ${pendingFamilyData.children[0].name}`}
+                </h3>
+                <p className="text-sm mt-1">
+                  Allie helps parents with multiple children balance attention and responsibilities more effectively, reducing parental stress by up to 40%.
+                </p>
+              </div>
+            )}
+            
+            {pendingFamilyData.priorities?.highestPriority && (
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="font-medium">
+                  {pendingFamilyData.priorities.highestPriority} Priority
+                </h3>
+                <p className="text-sm mt-1">
+                  Your family identified {pendingFamilyData.priorities.highestPriority.toLowerCase()} as a key concern. Our full assessment will provide detailed insights and targeted solutions in this area.
+                </p>
+              </div>
+            )}
+            
+            {pendingFamilyData.mainChallenge && (
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="font-medium">
+                  {pendingFamilyData.mainChallenge === 'awareness' ? 'Awareness Gap Solutions' : 
+                   pendingFamilyData.mainChallenge === 'implementation' ? 'Implementation Strategy' :
+                   pendingFamilyData.mainChallenge === 'sustainability' ? 'Sustainability Framework' :
+                   'Communication Enhancement'}
+                </h3>
+                <p className="text-sm mt-1">
+                  Allie's full program includes specialized tools to address your specific {pendingFamilyData.mainChallenge} challenge.
+                </p>
+              </div>
+            )}
+            
+            {pendingFamilyData.communication?.style && (
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <h3 className="font-medium">
+                  Communication Style Support
+                </h3>
+                <p className="text-sm mt-1">
+                  Based on your {pendingFamilyData.communication.style} communication style, Allie will tailor recommendations to improve family discussions and reduce conflict.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
+
         {/* Call to Action */}
         <div className="bg-gradient-to-r from-purple-500 to-indigo-600 rounded-lg shadow-sm overflow-hidden text-white">
           <div className="p-6">

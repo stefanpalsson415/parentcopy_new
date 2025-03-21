@@ -380,7 +380,170 @@ const OnboardingFlow = () => {
           </div>
         );
 
-      case 7:
+        case 7:
+          return (
+            <div>
+              <h2 className="text-3xl font-light mb-6">Relationship Insights</h2>
+              <p className="text-gray-600 mb-6">
+                Understanding your partnership helps us provide more personalized support for your unique relationship dynamics.
+              </p>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-gray-700 mb-2">How would you describe your communication style with your partner?</label>
+                  <select 
+                    className="w-full p-2 border rounded"
+                    value={familyData.relationship?.communicationStyle || ''}
+                    onChange={(e) => {
+                      const updatedRelationship = { ...familyData.relationship, communicationStyle: e.target.value };
+                      updateFamily('relationship', updatedRelationship);
+                    }}
+                  >
+                    <option value="">Select an option</option>
+                    <option value="direct">Direct - We're straightforward with each other</option>
+                    <option value="collaborative">Collaborative - We work through things together</option>
+                    <option value="supportive">Supportive - We focus on empathy and understanding</option>
+                    <option value="conflict-avoidant">Conflict-Avoidant - We tend to avoid difficult topics</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-gray-700 mb-2">How do you typically resolve disagreements?</label>
+                  <select 
+                    className="w-full p-2 border rounded"
+                    value={familyData.relationship?.conflictResolution || ''}
+                    onChange={(e) => {
+                      const updatedRelationship = { ...familyData.relationship, conflictResolution: e.target.value };
+                      updateFamily('relationship', updatedRelationship);
+                    }}
+                  >
+                    <option value="">Select an option</option>
+                    <option value="immediate">We address issues immediately</option>
+                    <option value="scheduled">We set aside time for difficult conversations</option>
+                    <option value="cool-down">We wait until emotions cool down</option>
+                    <option value="third-party">We sometimes need a mediator or counselor</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-gray-700 mb-2">What area of your relationship would you like to strengthen most?</label>
+                  <select 
+                    className="w-full p-2 border rounded"
+                    value={familyData.relationship?.strengthenArea || ''}
+                    onChange={(e) => {
+                      const updatedRelationship = { ...familyData.relationship, strengthenArea: e.target.value };
+                      updateFamily('relationship', updatedRelationship);
+                    }}
+                  >
+                    <option value="">Select an option</option>
+                    <option value="communication">Communication</option>
+                    <option value="quality-time">Quality Time Together</option>
+                    <option value="shared-responsibilities">Shared Responsibilities</option>
+                    <option value="emotional-support">Emotional Support</option>
+                    <option value="parenting-alignment">Parenting Alignment</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                <div className="flex items-start">
+                  <Brain size={20} className="text-purple-600 mt-1 mr-2 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-medium text-purple-800">Why We Ask This</h4>
+                    <p className="text-sm text-purple-700 mt-1">
+                      Research shows that relationship dynamics directly impact family balance. Allie uses this information to provide personalized relationship strengthening strategies alongside workload balancing.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+
+          case 8:
+  return (
+    <div>
+      <h2 className="text-3xl font-light mb-6">Customize Your AI Assistant</h2>
+      <p className="text-gray-600 mb-6">
+        Allie is your AI-powered family assistant. Tell us how you'd like Allie to communicate with you.
+      </p>
+      
+      <div className="space-y-4">
+        <div>
+          <label className="block text-gray-700 mb-2">Preferred communication style:</label>
+          <select 
+            className="w-full p-2 border rounded"
+            value={familyData.aiPreferences?.style || ''}
+            onChange={(e) => {
+              const updatedPreferences = { ...familyData.aiPreferences, style: e.target.value };
+              updateFamily('aiPreferences', updatedPreferences);
+            }}
+          >
+            <option value="">Select a style</option>
+            <option value="friendly">Friendly and Conversational</option>
+            <option value="direct">Direct and To-the-Point</option>
+            <option value="supportive">Supportive and Encouraging</option>
+            <option value="analytical">Analytical and Detailed</option>
+          </select>
+        </div>
+        
+        <div>
+          <label className="block text-gray-700 mb-2">Response length preference:</label>
+          <select 
+            className="w-full p-2 border rounded"
+            value={familyData.aiPreferences?.length || ''}
+            onChange={(e) => {
+              const updatedPreferences = { ...familyData.aiPreferences, length: e.target.value };
+              updateFamily('aiPreferences', updatedPreferences);
+            }}
+          >
+            <option value="">Select a length</option>
+            <option value="concise">Concise - Just the essentials</option>
+            <option value="balanced">Balanced - Some explanation</option>
+            <option value="detailed">Detailed - Full explanations</option>
+          </select>
+        </div>
+        
+        <div>
+          <label className="block text-gray-700 mb-2">Topics of particular interest:</label>
+          <div className="grid grid-cols-2 gap-2">
+            {['Balance insights', 'Parenting tips', 'Relationship advice', 'Time management', 'Self-care reminders'].map(topic => (
+              <label key={topic} className="flex items-center p-2 border rounded hover:bg-gray-50">
+                <input 
+                  type="checkbox" 
+                  className="mr-2"
+                  checked={familyData.aiPreferences?.topics?.includes(topic) || false}
+                  onChange={() => {
+                    const topics = familyData.aiPreferences?.topics || [];
+                    const updatedTopics = topics.includes(topic) 
+                      ? topics.filter(t => t !== topic) 
+                      : [...topics, topic];
+                    
+                    const updatedPreferences = { 
+                      ...familyData.aiPreferences, 
+                      topics: updatedTopics 
+                    };
+                    
+                    updateFamily('aiPreferences', updatedPreferences);
+                  }}
+                />
+                <span>{topic}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+      
+      <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+        <div className="flex items-start">
+          <MessageSquare size={20} className="text-blue-600 mr-2 flex-shrink-0 mt-1" />
+          <p className="text-sm text-blue-800">
+            Allie will be available to chat anytime through the app, helping you with task management, relationship insights, and family balance guidance based on your preferences.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+      
+        case 7:
         // Your Children - moved from position 8 to 7
         return (
           <div>
@@ -806,65 +969,89 @@ const OnboardingFlow = () => {
           </div>
         );
         
-      case 13:
-        return (
-          <div>
-            <h2 className="text-3xl font-light mb-6">The Allie Approach</h2>
-            <p className="text-gray-600 mb-6">
-              We use a structured, weekly process to help your family achieve lasting balance.
-            </p>
-            
-            <div className="space-y-4">
-              <div className="bg-white p-4 rounded-lg border-l-4 border-blue-500 shadow-sm">
-                <div className="flex">
-                  <div className="bg-blue-100 rounded-full w-8 h-8 flex items-center justify-center text-blue-600 font-medium mr-3 flex-shrink-0">1</div>
-                  <div>
-                    <h3 className="font-medium">Measure Current State</h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      A comprehensive 80-question assessment for all family members establishes your baseline
-                    </p>
+        case 13:
+          return (
+            <div>
+              <h2 className="text-3xl font-light mb-6">The Allie Approach</h2>
+              <p className="text-gray-600 mb-6">
+                We use a structured, weekly cycle system to help your family achieve lasting balance.
+              </p>
+              
+              <div className="space-y-4">
+                <div className="bg-white p-4 rounded-lg border-l-4 border-blue-500 shadow-sm">
+                  <div className="flex">
+                    <div className="bg-blue-100 rounded-full w-8 h-8 flex items-center justify-center text-blue-600 font-medium mr-3 flex-shrink-0">1</div>
+                    <div>
+                      <h3 className="font-medium">Initial 80-Question Survey</h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Comprehensive assessment of visible and invisible tasks across all family members
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-              
-              <div className="bg-white p-4 rounded-lg border-l-4 border-green-500 shadow-sm">
-                <div className="flex">
-                  <div className="bg-green-100 rounded-full w-8 h-8 flex items-center justify-center text-green-600 font-medium mr-3 flex-shrink-0">2</div>
-                  <div>
-                    <h3 className="font-medium">Weekly Task Adjustment</h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      AI-powered recommendations for specific tasks to redistribute each week
-                    </p>
+                
+                <div className="bg-white p-4 rounded-lg border-l-4 border-green-500 shadow-sm">
+                  <div className="flex">
+                    <div className="bg-green-100 rounded-full w-8 h-8 flex items-center justify-center text-green-600 font-medium mr-3 flex-shrink-0">2</div>
+                    <div>
+                      <h3 className="font-medium">Weekly Task Focus</h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        AI generates personalized tasks based on your family's specific imbalances
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-              
-              <div className="bg-white p-4 rounded-lg border-l-4 border-purple-500 shadow-sm">
-                <div className="flex">
-                  <div className="bg-purple-100 rounded-full w-8 h-8 flex items-center justify-center text-purple-600 font-medium mr-3 flex-shrink-0">3</div>
-                  <div>
-                    <h3 className="font-medium">Brief Weekly Check-ins</h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      20-question surveys track progress and adjust recommendations in real-time
-                    </p>
+                
+                <div className="bg-white p-4 rounded-lg border-l-4 border-purple-500 shadow-sm">
+                  <div className="flex">
+                    <div className="bg-purple-100 rounded-full w-8 h-8 flex items-center justify-center text-purple-600 font-medium mr-3 flex-shrink-0">3</div>
+                    <div>
+                      <h3 className="font-medium">Couple Relationship Check-in</h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Brief assessment of relationship satisfaction and communication quality
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-              
-              <div className="bg-white p-4 rounded-lg border-l-4 border-amber-500 shadow-sm">
-                <div className="flex">
-                  <div className="bg-amber-100 rounded-full w-8 h-8 flex items-center justify-center text-amber-600 font-medium mr-3 flex-shrink-0">4</div>
-                  <div>
-                    <h3 className="font-medium">Guided Family Meetings</h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      30-minute structured discussions to assess progress and set new goals
-                    </p>
+                
+                <div className="bg-white p-4 rounded-lg border-l-4 border-amber-500 shadow-sm">
+                  <div className="flex">
+                    <div className="bg-amber-100 rounded-full w-8 h-8 flex items-center justify-center text-amber-600 font-medium mr-3 flex-shrink-0">4</div>
+                    <div>
+                      <h3 className="font-medium">20-Question Weekly Survey</h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Track progress with shorter follow-up surveys focused on key balance areas
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white p-4 rounded-lg border-l-4 border-pink-500 shadow-sm">
+                  <div className="flex">
+                    <div className="bg-pink-100 rounded-full w-8 h-8 flex items-center justify-center text-pink-600 font-medium mr-3 flex-shrink-0">5</div>
+                    <div>
+                      <h3 className="font-medium">Guided Family Meeting</h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        AI-generated 30-minute agenda to discuss progress, challenges, and set next week's goals
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white p-4 rounded-lg border-l-4 border-indigo-500 shadow-sm">
+                  <div className="flex">
+                    <div className="bg-indigo-100 rounded-full w-8 h-8 flex items-center justify-center text-indigo-600 font-medium mr-3 flex-shrink-0">6</div>
+                    <div>
+                      <h3 className="font-medium">Cycle Completion & Data Archive</h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Weekly data is preserved for historical reference and progress tracking
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        );
+          );
         
       case 14:
         return (

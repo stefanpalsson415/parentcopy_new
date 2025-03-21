@@ -585,12 +585,13 @@ async getFamilyMeetingNotes(familyId, weekNumber) {
   // Create a new family
   async createFamily(familyData) {
     try {
-      const { familyName, parentData, childrenData } = familyData;
+      const { familyName, parents, children } = familyData;
       
-      // Create user accounts for parents
-      const parentUsers = [];
-      for (const parent of parentData) {
-        if (parent.email && parent.password) {
+// Create user accounts for parents
+const parentUsers = [];
+const parentData = Array.isArray(parents) ? parents : [];
+for (const parent of parentData) {
+  if (parent.email && parent.password) {
           try {
             const user = await this.createUser(parent.email, parent.password);
             parentUsers.push({
@@ -638,7 +639,8 @@ console.log("Family data being prepared:", {
             profilePicture: '/api/placeholder/150/150' // Default placeholder
           };
         }),
-        ...childrenData.map(child => {
+        ...(Array.isArray(children) ? children : []).map(child => {
+
           const childId = `${child.name.toLowerCase()}-${familyId}`;
           console.log(`Creating family member for child ${child.name} with ID ${childId}`);
           return {

@@ -13,6 +13,8 @@ const PaymentScreen = () => {
     const location = useLocation();
     const [pendingFamilyData, setPendingFamilyData] = useState(null);
     const { createFamily } = useAuth();
+    const [selectedPlan, setSelectedPlan] = useState(null);
+
     
     // Effect to load pending family data
     useEffect(() => {
@@ -99,58 +101,175 @@ const PaymentScreen = () => {
   
     return (
       <div className="min-h-screen bg-white flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white p-8 rounded-lg shadow">
-          <h2 className="text-3xl font-light mb-6">Subscribe to Allie</h2>
+        <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow">
+          <h2 className="text-3xl font-light mb-6">Choose Your Allie Plan</h2>
           
           <div className="mb-6">
-            <p className="text-lg mb-2">$1/month</p>
-            <p className="text-gray-600 mb-4">Get full access to all Allie features</p>
-            <ul className="space-y-2">
-              <li className="flex items-center">
-                <span className="mr-2 text-green-500">✓</span>
-                Weekly check-ins for all family members
-              </li>
-              <li className="flex items-center">
-                <span className="mr-2 text-green-500">✓</span>
-                AI-powered balance insights
-              </li>
-              <li className="flex items-center">
-                <span className="mr-2 text-green-500">✓</span>
-                Family meeting tools and resources
-              </li>
-            </ul>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="border rounded-lg p-6 hover:shadow-md transition-all">
+                <div className="text-center mb-4">
+                  <h3 className="text-xl font-bold">Monthly Plan</h3>
+                  <div className="text-3xl font-bold mt-2">$20<span className="text-lg font-normal text-gray-500">/month</span></div>
+                  <p className="text-sm text-gray-500 mt-1">Billed monthly</p>
+                </div>
+                
+                <ul className="space-y-3 mb-6">
+                  <li className="flex items-start">
+                    <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <span className="text-sm">Full access to all features</span>
+                  </li>
+                  <li className="flex items-start">
+                    <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <span className="text-sm">Unlimited family members</span>
+                  </li>
+                  <li className="flex items-start">
+                    <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <span className="text-sm">Weekly AI recommendations</span>
+                  </li>
+                  <li className="flex items-start">
+                    <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <span className="text-sm">Email progress reports</span>
+                  </li>
+                  <li className="flex items-start">
+                    <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <span className="text-sm">Cancel anytime</span>
+                  </li>
+                </ul>
+                
+                <button 
+                  onClick={() => {
+                    setSelectedPlan('monthly');
+                    setCouponApplied(false);
+                  }}
+                  className={`w-full py-2 ${selectedPlan === 'monthly' ? 'bg-black text-white' : 'bg-gray-200 text-gray-800'} rounded-md hover:bg-gray-800 hover:text-white`}
+                >
+                  Select Monthly Plan
+                </button>
+              </div>
+              
+              <div className="border rounded-lg p-6 hover:shadow-md transition-all relative">
+                <div className="absolute top-0 right-0 bg-green-500 text-white py-1 px-3 text-xs transform translate-y-0 rounded-b-md">
+                  BEST VALUE
+                </div>
+                
+                <div className="text-center mb-4">
+                  <h3 className="text-xl font-bold">Annual Plan</h3>
+                  <div className="text-3xl font-bold mt-2">$180<span className="text-lg font-normal text-gray-500">/year</span></div>
+                  <p className="text-sm text-gray-500 mt-1">$15/month, billed annually</p>
+                </div>
+                
+                <ul className="space-y-3 mb-6">
+                  <li className="flex items-start">
+                    <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <span className="text-sm">Everything in monthly plan</span>
+                  </li>
+                  <li className="flex items-start">
+                    <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <span className="text-sm">Save 25% ($60/year)</span>
+                  </li>
+                  <li className="flex items-start">
+                    <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <span className="text-sm">Premium support</span>
+                  </li>
+                  <li className="flex items-start">
+                    <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <span className="text-sm">Advanced progress analytics</span>
+                  </li>
+                  <li className="flex items-start">
+                    <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <span className="text-sm">30-day money back guarantee</span>
+                  </li>
+                </ul>
+                
+                <button 
+                  onClick={() => {
+                    setSelectedPlan('annual');
+                    setCouponApplied(false);
+                  }}
+                  className={`w-full py-2 ${selectedPlan === 'annual' ? 'bg-black text-white' : 'bg-gray-200 text-gray-800'} rounded-md hover:bg-gray-800 hover:text-white`}
+                >
+                  Select Annual Plan
+                </button>
+              </div>
+            </div>
+            
+            <div className="mt-6 bg-gray-100 p-6 rounded-lg">
+              <h3 className="font-medium text-lg mb-3">What You're Paying For</h3>
+              <div className="grid md:grid-cols-3 gap-4">
+                <div className="flex items-start">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-2 flex-shrink-0">
+                    <Brain className="text-blue-600" size={16} />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-sm">Advanced AI Engine</h4>
+                    <p className="text-xs text-gray-600">Powered by Claude, one of the world's most sophisticated AI models</p>
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-2 flex-shrink-0">
+                    <Shield className="text-green-600" size={16} />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-sm">Privacy & Security</h4>
+                    <p className="text-xs text-gray-600">Enterprise-grade encryption and data protection</p>
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-2 flex-shrink-0">
+                    <Database className="text-purple-600" size={16} />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-sm">Secure Data Storage</h4>
+                    <p className="text-xs text-gray-600">Your family's data securely stored and backed up</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+    
+            <div className="mt-6 text-center">
+              <button
+                onClick={() => navigate('/mini-survey', pendingFamilyData ? {
+                  state: {
+                    fromPayment: true,
+                    familyData: pendingFamilyData
+                  }
+                } : undefined)}
+                className="text-blue-600 hover:underline"
+              >
+                Not convinced? Try our mini-assessment first
+              </button>
+            </div>
           </div>
           
           {couponApplied ? (
-  <div className="bg-green-100 p-4 rounded mb-4">
-    <p className="text-green-800">Coupon applied successfully! Enjoy Allie at no cost.</p>
-    <button
-      onClick={() => {
-        if (pendingFamilyData) {
-          // Store a flag indicating payment is complete
-          localStorage.setItem('paymentCompleted', 'true');
-          
-          // Navigate to signup for final confirmation
-          navigate('/signup', { 
-            state: { 
-              fromPayment: true,
-              familyData: pendingFamilyData 
-            } 
-          });
-        } else {
-          console.error("No pending family data available");
-          setError("Missing family information. Please try again.");
-        }
-      }}
-      className="mt-4 w-full py-3 bg-blue-600 text-white rounded-md"
-    >
-      Continue to Confirmation
-    </button>
-  </div>
-) : (
-  // form code here
-
-            <form onSubmit={handleSubmit}>
+            <div className="bg-green-100 p-4 rounded mb-4">
+              <p className="text-green-800">Coupon applied successfully! Enjoy Allie at no cost.</p>
+              <button
+                onClick={() => {
+                  if (pendingFamilyData) {
+                    // Store a flag indicating payment is complete
+                    localStorage.setItem('paymentCompleted', 'true');
+                    
+                    // Navigate to signup for final confirmation
+                    navigate('/signup', { 
+                      state: { 
+                        fromPayment: true,
+                        familyData: pendingFamilyData 
+                      } 
+                    });
+                  } else {
+                    console.error("No pending family data available");
+                    setError("Missing family information. Please try again.");
+                  }
+                }}
+                className="mt-4 w-full py-3 bg-blue-600 text-white rounded-md"
+              >
+                Continue to Confirmation
+              </button>
+            </div>
+          ) : selectedPlan && (
+            <form onSubmit={handleSubmit} className="border-t pt-6">
+              <h3 className="text-xl font-medium mb-4">Payment Details</h3>
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-2">Card Information</label>
                 <div className="border rounded p-3">
@@ -165,7 +284,7 @@ const PaymentScreen = () => {
                   </div>
                 </div>
               </div>
-                  
+                    
               <div className="mb-6">
                 <label className="block text-sm font-medium mb-2">Have a coupon?</label>
                 <div className="flex">
@@ -186,13 +305,13 @@ const PaymentScreen = () => {
                 </div>
                 {error && <p className="text-red-600 text-sm mt-1">{error}</p>}
               </div>
-                  
+                    
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 bg-blue-600 text-white rounded-md"
+                className="w-full py-3 bg-black text-white rounded-md"
               >
-                {loading ? 'Processing...' : 'Subscribe - $20/month'}
+                {loading ? 'Processing...' : `Complete Payment - ${selectedPlan === 'monthly' ? '$20/month' : '$180/year'}`}
               </button>
             </form>
           )}

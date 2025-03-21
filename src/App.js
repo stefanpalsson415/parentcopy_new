@@ -42,6 +42,8 @@ function AppRoutes() {
         <Route path="/login" element={<FamilySelectionScreen />} />
         <Route path="/onboarding" element={<OnboardingFlow />} />
         <Route path="/signup" element={<UserSignupScreen />} />
+        <Route path="/email-opt-in" element={<EmailOptIn />} />
+
 
         <Route path="/how-it-works" element={<HowThisWorksScreen />} />
         <Route path="/relationship-features" element={<RelationshipFeaturesPage />} />

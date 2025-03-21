@@ -97,8 +97,8 @@ const MiniSurvey = () => {
   
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-  <div className="max-w-2xl mx-auto bg-white rounded-lg shadow p-6">
-    <h1 className="text-2xl font-bold mb-6 text-center font-roboto">Family Balance Mini-Assessment</h1>
+      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow p-6">
+        <h1 className="text-2xl font-bold mb-6 text-center font-roboto">Family Balance Mini-Assessment</h1>
         
         {/* Progress indicator */}
         <div className="mb-6">
@@ -107,51 +107,58 @@ const MiniSurvey = () => {
             <span>{Math.round(((currentQuestion + 1) / questions.length) * 100)}% complete</span>
           </div>
           <div className="h-2 bg-gray-200 rounded-full">
-  <div 
-    className="h-full bg-black rounded-full transition-all"
-    style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
-  ></div>
-</div>
+            <div 
+              className="h-full bg-black rounded-full transition-all"
+              style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
+            ></div>
+          </div>
         </div>
         
         {/* Question */}
-<div className="mb-8">
-  <h2 className="text-xl mb-2 font-roboto">{currentQ.text}</h2>
-  <p className="text-sm text-gray-500 font-roboto">{currentQ.category}</p>
-  
-  {/* Add a simplified AI explanation */}
-  <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded">
-    <div className="flex items-start">
-      <Brain size={16} className="text-purple-600 mr-2 mt-0.5 flex-shrink-0" />
-      <div>
-        <p className="text-purple-800 font-medium text-sm mb-1">Why This Question Matters:</p>
-        <p className="text-purple-800 font-roboto text-sm">
-          This question helps identify who handles key {currentQ.category.toLowerCase()} in your family. 
-          Balancing these responsibilities leads to healthier family dynamics and relationships.
-        </p>
-      </div>
-    </div>
-  </div>
-</div>
+        <div className="mb-8">
+          <h2 className="text-xl mb-2 font-roboto">{currentQ.text}</h2>
+          <p className="text-sm text-gray-500 font-roboto">{currentQ.category}</p>
+          
+          {/* Enhanced AI explanation */}
+          <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded">
+            <div className="flex items-start">
+              <Brain size={16} className="text-purple-600 mr-2 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-purple-800 font-medium text-sm mb-1">Why This Question Matters:</p>
+                <p className="text-purple-800 font-roboto text-sm">
+                  This question helps identify who handles key {currentQ.category.toLowerCase()} in your family. 
+                  {currentQ.category.includes("Invisible") ? 
+                    " Invisible work often goes unrecognized but creates significant mental load." : 
+                    " Visible tasks take time and energy that should be equitably shared."}
+                </p>
+                <div className="mt-2 text-xs text-purple-700 bg-purple-100 p-2 rounded">
+                  <span className="font-medium">Task Weight Factors:</span> {currentQ.category.includes("Household") ? "Time (4.2×) • " : "Time (3.8×) • "}
+                  {currentQ.category.includes("Invisible") ? "Invisibility (1.5×) • " : "Invisibility (1.0×) • "}
+                  {currentQ.category.includes("Parental") ? "Emotional Labor (1.4×)" : "Emotional Labor (1.1×)"}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         
         {/* Answer options */}
-<div className="grid grid-cols-2 gap-4 mb-8">
-  <button 
-    onClick={() => handleSelectParent('Mama')}
-    className="p-4 bg-purple-100 hover:bg-purple-200 rounded-lg text-center transition-all"
-  >
-    <span className="block font-bold text-lg text-purple-800 mb-1 font-roboto">Mama</span>
-    <span className="text-sm text-purple-600 font-roboto">Click to select</span>
-  </button>
-  
-  <button 
-    onClick={() => handleSelectParent('Papa')}
-    className="p-4 bg-blue-100 hover:bg-blue-200 rounded-lg text-center transition-all"
-  >
-    <span className="block font-bold text-lg text-blue-800 mb-1 font-roboto">Papa</span>
-    <span className="text-sm text-blue-600 font-roboto">Click to select</span>
-  </button>
-</div>
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <button 
+            onClick={() => handleSelectParent('Mama')}
+            className="p-4 bg-purple-100 hover:bg-purple-200 rounded-lg text-center transition-all"
+          >
+            <span className="block font-bold text-lg text-purple-800 mb-1 font-roboto">Mama</span>
+            <span className="text-sm text-purple-600 font-roboto">Click to select</span>
+          </button>
+          
+          <button 
+            onClick={() => handleSelectParent('Papa')}
+            className="p-4 bg-blue-100 hover:bg-blue-200 rounded-lg text-center transition-all"
+          >
+            <span className="block font-bold text-lg text-blue-800 mb-1 font-roboto">Papa</span>
+            <span className="text-sm text-blue-600 font-roboto">Click to select</span>
+          </button>
+        </div>
       </div>
     </div>
   );
