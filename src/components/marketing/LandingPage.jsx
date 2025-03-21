@@ -311,14 +311,16 @@ const LandingPage = () => {
     Blog
   </button>
             
-            {currentUser ? (
-              <button 
-                onClick={() => navigate('/login', { state: { directAccess: true, fromLanding: true } })}
-                className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
-              >
-                Jump Back In
-              </button>
-            ) : (
+  {currentUser ? (
+  <button 
+    onClick={() => navigate('/login', { state: { directAccess: true, jumpToDashboard: true } })}
+    className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
+  >
+    Jump Back In
+  </button>
+) : (
+  // Login and Sign Up buttons...
+
               <>
                 <button 
                   onClick={() => navigate('/login')}

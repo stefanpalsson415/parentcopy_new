@@ -30,13 +30,14 @@ const FamilySelectionScreen = () => {
  
   
 // Check for direct navigation state
+// Check for direct navigation state
 const location = useLocation();
 useEffect(() => {
-  if (location.state?.directAccess && location.state?.fromLanding) {
-    console.log("DIRECT ACCESS from landing page");
+  if (location.state?.directAccess) {
+    console.log("DIRECT ACCESS detected, loading families");
     
-    // Only load if needed
-    if (!selectedUser || !familyMembers || familyMembers.length === 0) {
+    // Only proceed if we have a current user
+    if (currentUser) {
       // Let's make sure we load the family data correctly
       loadAllFamilies(currentUser.uid)
         .then(families => {
@@ -46,11 +47,17 @@ useEffect(() => {
         })
         .then(() => {
           console.log("Family loaded successfully for direct access");
+          
+          // If jumpToDashboard is set and we have family members loaded, go straight to dashboard
+          if (location.state?.jumpToDashboard && familyMembers && familyMembers.length > 0) {
+            console.log("Jumping to dashboard as requested");
+            navigate('/dashboard');
+          }
         })
         .catch(error => console.error("Error loading family:", error));
     }
   }
-}, [location]);
+}, [location, currentUser, familyMembers]);
 
   // Effect to update login form visibility based on auth state
   useEffect(() => {
@@ -86,6 +93,7 @@ useEffect(() => {
   }, [currentUser, availableFamilies, familyMembers]);
   
 // Effect to update empty state visibility based on whether we have family members
+// Effect to update empty state visibility based on whether we have family members
 useEffect(() => {
   console.log("Current user:", currentUser);
   console.log("Family members:", familyMembers);
@@ -98,13 +106,28 @@ useEffect(() => {
     setShowEmptyState(false);
   }
   
-  // Auto-redirect to onboarding if logged in with no families
-  // but only if we're not in the process of logging in
-  if (currentUser && availableFamilies.length === 0 && !isLoggingIn) {
-    console.log("No families found, redirecting to onboarding");
+  // Only redirect to onboarding if:
+  // 1. User is logged in
+  // 2. We've confirmed they have no families (after attempting to load them)
+  // 3. We're not in the process of logging in
+  // 4. We're not in a direct access flow from marketing pages
+  const shouldRedirectToOnboarding = 
+    currentUser && 
+    availableFamilies.length === 0 && 
+    !isLoggingIn && 
+    !location.state?.directAccess;
+  
+  if (shouldRedirectToOnboarding) {
+    console.log("No families found and not direct access, redirecting to onboarding");
     navigate('/onboarding');
   }
-}, [currentUser, familyMembers, availableFamilies, navigate, isLoggingIn]);
+  
+  // If this is direct access and we have family members, go straight to dashboard
+  if (location.state?.directAccess && familyMembers.length > 0 && selectedUser) {
+    console.log("Direct access with loaded family data, going to dashboard");
+    navigate('/dashboard');
+  }
+}, [currentUser, familyMembers, availableFamilies, navigate, isLoggingIn, location, selectedUser]);
 
 
   // Get default profile image based on role
