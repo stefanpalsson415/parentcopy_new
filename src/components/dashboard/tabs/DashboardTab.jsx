@@ -159,35 +159,44 @@ useEffect(() => {
 }, [timeFilter, radarFilter, fullQuestionSet, surveyResponses, familyPriorities, familyId, currentWeek]);
   
   // Get filtered responses based on selected time period
-  const getFilteredResponses = () => {
-    if (!surveyResponses) return {};
+  // Get filtered responses based on selected time period
+const getFilteredResponses = () => {
+  if (!surveyResponses) return {};
+  
+  const filteredResponses = {};
+  
+  if (timeFilter === 'initial') {
+    // Only include responses from initial survey
+    Object.entries(surveyResponses).forEach(([key, value]) => {
+      if (!key.includes('week-') && !key.includes('weekly-') && key.includes('q')) {
+        filteredResponses[key] = value;
+      }
+    });
+  } else if (timeFilter.startsWith('week')) {
+    // Extract week number
+    const weekNum = parseInt(timeFilter.replace('week', ''));
     
-    const filteredResponses = {};
+    // Include responses for this specific week - with expanded formats
+    Object.entries(surveyResponses).forEach(([key, value]) => {
+      if (key.includes(`week-${weekNum}`) || 
+          key.includes(`weekly-${weekNum}`) || 
+          key.includes(`week${weekNum}-`) || 
+          (weekNum === 1 && (key.includes('weekly') || key.includes('week1')))) {
+        filteredResponses[key] = value;
+      }
+    });
     
-    if (timeFilter === 'initial') {
-      // Only include responses from initial survey
-      Object.entries(surveyResponses).forEach(([key, value]) => {
-        if (!key.includes('week-') && key.includes('q')) {
-          filteredResponses[key] = value;
-        }
-      });
-    } else if (timeFilter.startsWith('week')) {
-      // Extract week number
-      const weekNum = parseInt(timeFilter.replace('week', ''));
-      
-      // Include responses for this specific week
-      Object.entries(surveyResponses).forEach(([key, value]) => {
-        if (key.includes(`week-${weekNum}`) || key.includes(`weekly-${weekNum}`)) {
-          filteredResponses[key] = value;
-        }
-      });
-    } else {
-      // 'all' - include all responses
-      return surveyResponses;
+    // If we're still not finding any responses for week 1, add a debug log
+    if (weekNum === 1 && Object.keys(filteredResponses).length === 0) {
+      console.log("No Week 1 responses found with standard filtering. Available keys:", Object.keys(surveyResponses));
     }
-    
-    return filteredResponses;
-  };
+  } else {
+    // 'all' - include all responses
+    return surveyResponses;
+  }
+  
+  return filteredResponses;
+};
   
   // Generate weight-based insights
   const generateWeightBasedInsights = (scores) => {

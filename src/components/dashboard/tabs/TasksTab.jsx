@@ -319,6 +319,32 @@ useEffect(() => {
     };
   }, [familyId, loadCurrentWeekTasks]);
 
+  
+  // Load kid tasks data when component mounts
+useEffect(() => {
+  const loadKidTasksData = async () => {
+    try {
+      if (!familyId) return;
+      
+      console.log("Loading kid tasks data...");
+      const docRef = doc(db, "families", familyId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const familyData = docSnap.data();
+        if (familyData.kidTasks) {
+          console.log("Found kid tasks data:", familyData.kidTasks);
+          setKidTasksCompleted(familyData.kidTasks);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading kid tasks:", error);
+    }
+  };
+  
+  loadKidTasksData();
+}, [familyId]);
+  
   // Handle date update for check-in
   const handleUpdateCheckInDate = async () => {
     try {
@@ -353,6 +379,8 @@ useEffect(() => {
       alert("Failed to update check-in date. Please try again.");
     }
   };
+
+
 
   // Check if weekly check-in is completed for this week
   const weeklyCheckInCompleted = familyMembers.every(member => 
@@ -762,112 +790,43 @@ const handleCompleteKidTask = async (taskId, kidId, isCompleted, observations = 
       const completedDate = isCompleted ? new Date().toISOString() : null;
       
       // Update local state immediately for responsiveness
-      setKidTasksCompleted(prev => ({
-        ...prev,
+      const updatedKidTasks = {
+        ...kidTasksCompleted,
         [taskId]: {
           completed: isCompleted,
           completedDate: completedDate,
           completedBy: selectedUser.id,
           completedByName: selectedUser.name,
-          observations: observations
+          observations: observations,
+          profilePicture: selectedUser.profilePicture
         }
-      }));
+      };
       
-      // Save to database - try multiple methods for reliability
+      setKidTasksCompleted(updatedKidTasks);
+      
+      // Save to database using multiple methods for reliability
       if (familyId) {
-        let saveSuccess = false;
-        
-        // Method 1: Using DatabaseService with existing approach
         try {
-          // Get existing kid tasks
-          const familyData = await DatabaseService.loadFamilyData(familyId);
-          const existingKidTasks = (familyData && familyData.kidTasks) || {};
+          // Direct Firestore update
+          const docRef = doc(db, "families", familyId);
+          await updateDoc(docRef, {
+            kidTasks: updatedKidTasks,
+            updatedAt: new Date().toISOString()
+          });
           
-          // Create updated kid tasks object
-          const updatedKidTasks = {
-            ...existingKidTasks,
-            [taskId]: {
-              completed: isCompleted,
-              completedDate: completedDate,
-              completedBy: selectedUser.id,
-              completedByName: selectedUser.name,
-              observations: observations
-            }
-          };
-          
-          await DatabaseService.saveFamilyData({
-            kidTasks: updatedKidTasks
-          }, familyId);
-          
-          console.log(`Method 1: Kid task ${taskId} saved to database: ${isCompleted} by ${selectedUser.name}`);
-          saveSuccess = true;
+          console.log(`Kid task ${taskId} saved to database: ${isCompleted} by ${selectedUser.name}`);
         } catch (error) {
-          console.error("Method 1 failed for kid task:", error);
-        }
-        
-        // Method 2: Direct Firestore update if method 1 failed
-        if (!saveSuccess) {
-          try {
-            const docRef = doc(db, "families", familyId);
-            const familyDoc = await getDoc(docRef);
-            
-            if (familyDoc.exists()) {
-              const familyData = familyDoc.data();
-              const existingKidTasks = familyData.kidTasks || {};
-              
-              await updateDoc(docRef, {
-                kidTasks: {
-                  ...existingKidTasks,
-                  [taskId]: {
-                    completed: isCompleted,
-                    completedDate: completedDate,
-                    completedBy: selectedUser.id,
-                    completedByName: selectedUser.name,
-                    observations: observations
-                  }
-                },
-                updatedAt: new Date().toISOString()
-              });
-              
-              console.log(`Method 2: Kid task ${taskId} saved directly to Firestore`);
-              saveSuccess = true;
-            }
-          } catch (error) {
-            console.error("Method 2 failed for kid task:", error);
-          }
-        }
-        
-        // Method 3: Alternative field path approach
-        if (!saveSuccess) {
-          try {
-            const docRef = doc(db, "families", familyId);
-            
-            await updateDoc(docRef, {
-              [`kidTasks.${taskId}`]: {
-                completed: isCompleted,
-                completedDate: completedDate,
-                completedBy: selectedUser.id,
-                completedByName: selectedUser.name,
-                observations: observations
-              },
-              updatedAt: new Date().toISOString()
-            });
-            
-            console.log(`Method 3: Kid task ${taskId} saved using field path`);
-            saveSuccess = true;
-          } catch (error) {
-            console.error("Method 3 failed for kid task:", error);
-          }
-        }
-        
-        // After all attempts
-        if (saveSuccess) {
-          console.log(`Kid task ${taskId} successfully saved to database`);
-        } else {
-          console.error(`Failed to save kid task ${taskId} after multiple attempts`);
+          console.error("Error saving kid task:", error);
           
-          // Still keep the local state updated for better UX
-          console.log("Local state for kid tasks was updated, but database save failed");
+          // Try alternative method
+          try {
+            await DatabaseService.saveFamilyData({
+              kidTasks: updatedKidTasks
+            }, familyId);
+            console.log("Kid task saved via DatabaseService");
+          } catch (backupError) {
+            console.error("Backup method failed too:", backupError);
+          }
         }
       }
     } else if (selectedUser.role !== 'child') {
@@ -981,7 +940,13 @@ const handleCompleteKidTask = async (taskId, kidId, isCompleted, observations = 
   };
 
 // Helper function to check if at least one kid task is completed
+// Helper function to check if at least one kid task is completed
 const atLeastOneKidTaskCompleted = () => {
+  // If no children in the family, return true (not applicable)
+  const hasChildren = familyMembers.some(member => member.role === 'child');
+  if (!hasChildren) return true;
+  
+  // Otherwise check if any kid tasks are completed
   return Object.values(kidTasksCompleted).some(taskData => taskData?.completed);
 };
 
@@ -1123,6 +1088,42 @@ const atLeastOneKidTaskCompleted = () => {
                   </div>
                 ))}
               </div>
+
+              {/* Kid task completion tracking */}
+<div className="mt-3 mb-3">
+  <h4 className="text-sm font-medium mb-2 font-roboto">Kid Task Completion:</h4>
+  <div className="flex flex-wrap gap-2">
+    {familyMembers.filter(member => member.role === 'child').map((child, index) => {
+      const task1Completed = kidTasksCompleted[`kid-task-1-${index}`]?.completed || false;
+      const task2Completed = (index === 0) && (kidTasksCompleted['kid-task-2-1']?.completed || kidTasksCompleted['kid-task-2-2']?.completed);
+      const completedTasks = (task1Completed ? 1 : 0) + (task2Completed ? 1 : 0);
+      const totalTasks = 2;
+      
+      return (
+        <div 
+          key={`kid-completion-${child.id}`} 
+          className="px-3 py-2 rounded-lg border flex items-center space-x-2"
+        >
+          <div className="w-6 h-6 rounded-full overflow-hidden">
+            <img 
+              src={child.profilePicture || '/api/placeholder/24/24'} 
+              alt={child.name}
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <span className="font-roboto text-sm">{child.name}:</span>
+          <span className={`text-xs px-2 py-1 rounded-full ${
+            completedTasks === totalTasks 
+              ? 'bg-green-100 text-green-800' 
+              : 'bg-amber-100 text-amber-800'
+          }`}>
+            {completedTasks}/{totalTasks} tasks
+          </span>
+        </div>
+      );
+    })}
+  </div>
+</div>
               
               {/* NEW: Task completion tracking by parent */}
               <h4 className="text-sm font-medium mb-2 font-roboto">Task Completion:</h4>
@@ -1549,15 +1550,15 @@ const atLeastOneKidTaskCompleted = () => {
                                         : 'bg-gray-100 border border-gray-300 cursor-not-allowed'
                                     }`}
                                     onClick={() => {
-                                      if (!kidTasksCompleted[`kid-task-1-${index}`]?.completed) {
+                                      if (!kidTasksCompleted['kid-task-2-1']?.completed) {
                                         setCurrentKidTask({
-                                          id: `kid-task-1-${index}`,
-                                          title: `${child.name}'s Special Task`,
-                                          question: "What did you do to help? Share your accomplishment!"
+                                          id: 'kid-task-2-1',
+                                          title: "Watch Who Cooks",
+                                          question: "What did you observe about who cooks in your family?"
                                         });
                                         setShowKidTaskDialog(true);
                                       } else {
-                                        handleCompleteKidTask(`kid-task-1-${index}`, selectedUser.id, false);
+                                        handleCompleteKidTask('kid-task-2-1', selectedUser.id, false);
                                       }
                                     }}
                                     disabled={selectedUser?.role !== 'child'}
@@ -1567,8 +1568,16 @@ const atLeastOneKidTaskCompleted = () => {
                                 </div>
                                 
                                 <div className="flex-1">
-                                  <h6 className="font-medium text-sm font-roboto">{child.name}'s Special Task</h6>
-                                  <p className="text-sm text-gray-600 mt-1 font-roboto">
+                                <div className="flex items-center">
+  <div className="w-5 h-5 rounded-full overflow-hidden mr-1">
+    <img 
+      src={child.profilePicture || '/api/placeholder/20/20'} 
+      alt={child.name}
+      className="w-full h-full object-cover"
+    />
+  </div>
+  <h6 className="font-medium text-sm font-roboto">{child.name}'s Special Task</h6>
+</div>                                  <p className="text-sm text-gray-600 mt-1 font-roboto">
                                     {index % 2 === 0 ? 
                                       "Help set the table for dinner this week" : 
                                       "Help organize a family game night"}
@@ -1796,10 +1805,12 @@ const atLeastOneKidTaskCompleted = () => {
                                   }`}
                                   onClick={() => {
                                     if (!kidTasksCompleted['kid-task-2-2']?.completed) {
-                                      const observations = prompt("What did you notice about who cleans in your family?");
-                                      if (observations) {
-                                        handleCompleteKidTask('kid-task-2-2', selectedUser.id, true, observations);
-                                      }
+                                      setCurrentKidTask({
+                                        id: 'kid-task-2-2',
+                                        title: "Count Who Cleans",
+                                        question: "What did you notice about who cleans in your family?"
+                                      });
+                                      setShowKidTaskDialog(true);
                                     } else {
                                       handleCompleteKidTask('kid-task-2-2', selectedUser.id, false);
                                     }
