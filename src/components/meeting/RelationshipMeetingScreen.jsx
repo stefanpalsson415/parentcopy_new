@@ -462,8 +462,8 @@ const RelationshipMeetingScreen = ({ onClose }) => {
                   Focus on solutions rather than dwelling on problems
                 </li>
                 <li className="flex items-start">
-                  <MessageCircle size={16} className "text-gray-600 mr-2 mt-0.5" />
-                  Express appreciation for your partner's perspective
+                <MessageCircle size={16} className="text-gray-600 mr-2 mt-0.5" />
+                Express appreciation for your partner's perspective
                 </li>
               </ul>
             </div>

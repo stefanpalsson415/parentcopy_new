@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Clock, CheckCircle, Calendar, MessageCircle, Smile, Award, Lightbulb, Map, Users } from 'lucide-react';
+import { Heart, Clock, CheckCircle, Calendar, MessageCircle, Smile, Award, Lightbulb, Map, Users, Brain } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 
 const CoupleCheckInScreen = ({ onClose }) => {
@@ -8,7 +8,9 @@ const CoupleCheckInScreen = ({ onClose }) => {
     saveCoupleCheckInData, 
     familyMembers,
     surveyResponses,
-    getRelationshipStrategies
+    getRelationshipStrategies,
+    selectedUser,
+    getCoupleCheckInData
   } = useFamily();
   
   const [activeStep, setActiveStep] = useState(0);

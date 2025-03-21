@@ -29,7 +29,9 @@ const WeeklyCheckInScreen = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  
+  const weekNum = currentWeek;
+
+
   // Ref to track if keyboard listeners are initialized
   const keyboardInitialized = useRef(false);
   
@@ -149,20 +151,21 @@ const generateAIExplanation = (question) => {
   const currentQuestion = weeklyQuestions[currentQuestionIndex];
   
 // Add relationship questions to the weekly check-in
+// Add relationship questions to the weekly check-in
 const addRelationshipQuestions = (questions) => {
   // Only add these for parents
   if (selectedUser.role !== 'parent') return questions;
   
   const relationshipQuestions = [
     {
-      id: `rel-week-${weekNum}-q1`,
+      id: `rel-week-${currentWeek}-q1`,
       text: "How would you rate your satisfaction with your relationship this week?",
       category: "Relationship Health",
       type: "scale",
       options: ["Very Low", "Low", "Moderate", "High", "Very High"]
     },
     {
-      id: `rel-week-${weekNum}-q2`,
+      id: `rel-week-${currentWeek}-q2`,
       text: "How has the distribution of household tasks affected your relationship this week?",
       category: "Relationship Impact",
       type: "multipleChoice",
@@ -175,7 +178,7 @@ const addRelationshipQuestions = (questions) => {
       ]
     },
     {
-      id: `rel-week-${weekNum}-q3`,
+      id: `rel-week-${currentWeek}-q3`,
       text: "Which relationship strategy had the most positive impact this week?",
       category: "Relationship Strategies",
       type: "multipleChoice",

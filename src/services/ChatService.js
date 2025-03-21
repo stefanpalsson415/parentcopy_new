@@ -1,9 +1,10 @@
 // src/services/ChatService.js
-import { collection, query, where, orderBy, getDocs, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import ClaudeService from './ClaudeService';
 // Add this import at the top of the file
 import { knowledgeBase } from '../data/AllieKnowledgeBase';
+import { collection, query, where, orderBy, getDocs, addDoc, serverTimestamp, doc, getDoc, limit } from 'firebase/firestore';
+
 
 class ChatService {
   // Load messages for a family
@@ -51,8 +52,20 @@ class ChatService {
 // Find and update the getAIResponse method (typically around line 50-80)
 async getAIResponse(text, familyId, previousMessages) {
   try {
-    // Get family data from Firestore for context
-    const familyData = await this.getFamilyContext(familyId);
+    // Better error handling for missing familyId
+    if (!familyId) {
+      console.warn("getAIResponse called without familyId, using limited context");
+      // Continue with limited context rather than failing
+    }
+    
+    // Get family data from Firestore for context - with safer error handling
+    let familyData = {};
+    try {
+      familyData = await this.getFamilyContext(familyId);
+    } catch (contextError) {
+      console.warn("Could not get family context, using limited context:", contextError);
+      // Continue with empty context rather than failing completely
+    }
     
     // Add knowledge base to context
     familyData.knowledgeBase = knowledgeBase;
@@ -71,6 +84,12 @@ async getAIResponse(text, familyId, previousMessages) {
       content: text
     });
     
+    console.log("Sending to Claude API:", {
+      messageCount: formattedMessages.length,
+      lastMessage: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+      hasContext: Object.keys(familyData).length > 0
+    });
+    
     // Call the Claude API through our service
     const response = await ClaudeService.generateResponse(
       formattedMessages, 
@@ -80,10 +99,15 @@ async getAIResponse(text, familyId, previousMessages) {
     return response;
   } catch (error) {
     console.error("Error getting AI response:", error);
-    return "I'm sorry, I'm having trouble processing your request right now. Please try again in a moment.";
+    
+    // Provide more helpful fallback responses
+    if (text.toLowerCase().includes("help") || text.length < 20) {
+      return "I can help with questions about family balance, your tasks, or how to use Allie. What would you like to know?";
+    }
+    
+    return "I'm having trouble processing your question right now. While I'm reconnecting, you can explore the dashboard for insights or check your tasks in the Tasks tab.";
   }
-}
-  
+}  
   // Get family context data for the AI
   // Update the getFamilyContext method
 // Update the getFamilyContext method

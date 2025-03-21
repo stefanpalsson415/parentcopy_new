@@ -7,7 +7,6 @@ import { useSurvey } from './SurveyContext';
 import { db } from '../services/firebase';
 import { collection, doc, setDoc, getDoc, updateDoc, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
 import AllieAIEngineService from '../services/AllieAIEngineService';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 
 
@@ -304,7 +303,8 @@ useEffect(() => {
 
   // Save couple check-in data
   // Save couple check-in data with AI feedback
-async saveCoupleCheckInData(familyId, weekNumber, data) {
+// Save couple check-in data with AI feedback
+const saveCoupleCheckInData = async (familyId, weekNumber, data) => {
   try {
     if (!familyId) throw new Error("No family ID available");
     
@@ -342,7 +342,7 @@ async saveCoupleCheckInData(familyId, weekNumber, data) {
     console.error("Error saving couple check-in data:", error);
     throw error;
   }
-}
+};
 
   // Get couple check-in data for a specific week
   const getCoupleCheckInData = (weekNumber) => {
@@ -584,6 +584,33 @@ const updateRelationshipStrategy = async (strategyId, updateData) => {
             date: new Date().toISOString().split('T')[0]
           };
           
+// Send relationship data to AI engine for learning
+if (responses && Object.keys(responses).some(key => key.startsWith('rel-'))) {
+  try {
+    // Extract just the relationship responses
+    const relationshipResponses = {};
+    Object.entries(responses).forEach(([key, value]) => {
+      if (key.startsWith('rel-')) {
+        relationshipResponses[key] = value;
+      }
+    });
+    
+    // Don't await this to avoid blocking completion
+    AllieAIEngineService.processRelationshipFeedback(
+      familyId,
+      weekNum,
+      memberId,
+      relationshipResponses
+    ).catch(err => console.error("Error processing relationship feedback:", err));
+    
+    console.log("Sent relationship data to AI engine for learning");
+  } catch (error) {
+    console.error("Error handling relationship responses:", error);
+    // Don't block completion if this fails
+  }
+}
+
+
           return {
             ...member,
             weeklyCompleted
@@ -657,33 +684,7 @@ const updateRelationshipStrategy = async (strategyId, updateData) => {
     }
   };
 
-// After saving survey responses and before the return statement
 
-// Send relationship data to AI engine for learning
-if (responses && Object.keys(responses).some(key => key.startsWith('rel-'))) {
-  try {
-    // Extract just the relationship responses
-    const relationshipResponses = {};
-    Object.entries(responses).forEach(([key, value]) => {
-      if (key.startsWith('rel-')) {
-        relationshipResponses[key] = value;
-      }
-    });
-    
-    // Don't await this to avoid blocking completion
-    AllieAIEngineService.processRelationshipFeedback(
-      familyId,
-      weekNum,
-      memberId,
-      relationshipResponses
-    ).catch(err => console.error("Error processing relationship feedback:", err));
-    
-    console.log("Sent relationship data to AI engine for learning");
-  } catch (error) {
-    console.error("Error handling relationship responses:", error);
-    // Don't block completion if this fails
-  }
-}
 
   // Helper function to analyze survey responses and identify imbalances
   const analyzeImbalancesByCategory = (responses) => {

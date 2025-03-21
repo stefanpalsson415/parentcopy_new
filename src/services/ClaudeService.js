@@ -20,48 +20,58 @@ class ClaudeService {
   async generateResponse(messages, familyContext) {
     try {
       // Format system prompt with family context
-      const systemPrompt = this.formatSystemPrompt(familyContext);
+      const systemPrompt = this.formatSystemPrompt(familyContext || {});
       
       if (this.useServerProxy) {
-        // Call the secure Cloud Function
+        // Call the secure Cloud Function - add better logging
+        console.log("Using Firebase Function to call Claude API");
+        
         const result = await this.claudeProxy({
           system: systemPrompt,
           messages: messages
         });
         
+        // Better error checking on the result
+        if (!result || !result.data || !result.data.content || !result.data.content[0]) {
+          console.error("Invalid response format from Claude proxy:", result);
+          throw new Error("Invalid response format from Claude proxy");
+        }
+        
         // Extract the response based on the shape of the function result
         return result.data.content[0].text;
       } else {
-        // FALLBACK: Direct API call (FOR DEVELOPMENT ONLY)
-        // WARNING: This exposes your API key in client-side code
-        console.warn("Using direct API call - not recommended for production!");
+        // FALLBACK: Direct API call - use mock responses instead
+        console.warn("Using fallback response mode - Claude API proxy unavailable");
         
-        const response = await fetch(this.API_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': this.API_KEY,
-            'anthropic-version': '2023-06-01'
-          },
-          body: JSON.stringify({
-            model: "claude-3-7-sonnet-20240307",
-            max_tokens: 1000,
-            system: systemPrompt,
-            messages: messages
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`API Error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        return data.content[0].text;
+        // Return a helpful mock response instead of trying a direct API call
+        return this.getMockResponse(messages[messages.length - 1]?.content || "");
       }
     } catch (error) {
       console.error("Error calling Claude API:", error);
-      return "I'm having trouble connecting to my servers. Please try again later.";
+      // Provide a more helpful response if possible
+      return "I'm currently experiencing technical difficulties. Please try again in a few moments, or ask me something simple about family balance that I can help with directly.";
     }
+  }
+  
+  // Add this new method to provide useful responses even when API is down
+  getMockResponse(userMessage) {
+    // Check if the message contains common keywords and return appropriate responses
+    const userMessageLower = userMessage.toLowerCase();
+    
+    if (userMessageLower.includes("help") || userMessageLower.includes("what can you do")) {
+      return "I can help with questions about family workload balance, explain how the app works, and provide insights about your survey results. What would you like to know?";
+    }
+    
+    if (userMessageLower.includes("task") || userMessageLower.includes("balance")) {
+      return "Balancing family tasks is about creating fair distribution of both visible and invisible work. The Allie app helps track these responsibilities and suggests ways to improve balance over time.";
+    }
+    
+    if (userMessageLower.includes("relationship") || userMessageLower.includes("partner")) {
+      return "Research shows that balanced household responsibilities lead to stronger relationships. When both partners feel the workload is fair, relationship satisfaction typically improves.";
+    }
+    
+    // Default response for any other question
+    return "I'd normally connect to my AI system to answer this question in detail. While that connection is being restored, you can explore the dashboard for insights or check your tasks for this week.";
   }
 
   // Find and update the formatSystemPrompt method (around line 67-96)

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Clock, Users, CheckCircle, Calendar, MessageCircle, Smile, Award, Lightbulb, Map } from 'lucide-react';
+import { Heart, Clock, Users, CheckCircle, Calendar, MessageCircle, Smile, Award, Lightbulb, Map, Brain } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { ChevronUp, ChevronDown } from "lucide-react";
 

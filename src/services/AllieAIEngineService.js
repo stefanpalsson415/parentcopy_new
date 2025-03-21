@@ -1,7 +1,7 @@
 // src/services/AllieAIEngineService.js
 
 import ClaudeService from './ClaudeService';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 
 class AllieAIEngineService {
