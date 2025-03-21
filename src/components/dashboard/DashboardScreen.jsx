@@ -19,6 +19,9 @@ import { Brain, Lightbulb } from 'lucide-react';
 import StrategicActionsTracker from './StrategicActionsTracker';
 import RelationshipMeetingScreen from '../meeting/RelationshipMeetingScreen';
 import RelationshipProgressChart from './RelationshipProgressChart';
+import DailyCheckInTool from './DailyCheckInTool';
+import GratitudeTracker from './GratitudeTracker';
+import DateNightPlanner from './DateNightPlanner';
 
 
 
@@ -304,14 +307,20 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
       case 'personalized':
         return <PersonalizedApproachScreen />;
         case 'relationship':
-          return (
-            <div className="space-y-6">
-              <CoupleRelationshipChart />
-              <RelationshipProgressChart /> {/* Add this line */}
-
-              <StrategicActionsTracker />
-            </div>
-          );
+  return (
+    <div className="space-y-6">
+      <CoupleRelationshipChart />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <DailyCheckInTool />
+        <GratitudeTracker />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <DateNightPlanner />
+        <RelationshipProgressChart />
+      </div>
+      <StrategicActionsTracker />
+    </div>
+  );
       case 'dashboard':
         return <DashboardTab />;
       case 'tasks':
