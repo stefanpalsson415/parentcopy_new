@@ -139,35 +139,68 @@ const CoupleCheckInScreen = ({ onClose }) => {
     loadStrategies();
   }, [getRelationshipStrategies]);
   
-  // Define check-in steps
-  const steps = [
-    {
-      title: "Relationship Health",
-      description: "How would you rate your current relationship satisfaction?",
-      fields: [
-        {
-          id: "satisfaction",
-          label: "Overall Relationship Satisfaction",
-          type: "slider"
-        },
-        {
-          id: "communication",
-          label: "Communication Quality",
-          type: "slider"
-        },
-        {
-          id: "emotionalConnection",
-          label: "Emotional Connection",
-          type: "slider"
-        },
-        {
-          id: "workloadBalance",
-          label: "Workload Balance Impact on Relationship",
-          type: "slider",
-          description: "How is the current workload balance affecting your relationship?"
-        }
-      ]
-    },
+  // Define check-in steps with enhanced questions
+const steps = [
+  {
+    title: "Relationship Health",
+    description: "How would you rate your current relationship satisfaction?",
+    fields: [
+      {
+        id: "satisfaction",
+        label: "Overall Relationship Satisfaction",
+        type: "slider"
+      },
+      {
+        id: "communication",
+        label: "Communication Quality",
+        type: "slider"
+      },
+      {
+        id: "emotionalConnection",
+        label: "Emotional Connection",
+        type: "slider"
+      },
+      {
+        id: "workloadBalance",
+        label: "Workload Balance Impact on Relationship",
+        type: "slider",
+        description: "How is the current workload balance affecting your relationship?"
+      }
+    ]
+  },
+  // Add a new section for deeper relationship metrics
+  {
+    title: "Relationship Dynamics",
+    description: "These questions help us understand your unique relationship patterns",
+    fields: [
+      {
+        id: "conflictResolution",
+        label: "Conflict Resolution",
+        type: "slider",
+        description: "How effectively are you resolving disagreements this week?"
+      },
+      {
+        id: "qualityTime",
+        label: "Quality Time Together",
+        type: "slider",
+        description: "How satisfied are you with the amount of quality time you've had together?"
+      },
+      {
+        id: "stressManagement",
+        label: "Shared Stress Management",
+        type: "slider",
+        description: "How well have you supported each other through stressful moments?"
+      },
+      {
+        id: "parentingTeam", 
+        label: "Parenting Team Effectiveness",
+        type: "slider",
+        description: "How well are you working together as parents this week?"
+      }
+    ]
+  },
+  // Keep the original strategy check-in sections...
+  // ...
     {
       title: "Strategy Check-in: Connection",
       description: "Let's review how you're implementing these relationship-strengthening strategies",
@@ -582,14 +615,64 @@ const CoupleCheckInScreen = ({ onClose }) => {
   if (saved) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-lg max-w-md w-full p-6 text-center">
+        <div className="bg-white rounded-lg max-w-lg w-full p-6">
           <div className="w-16 h-16 mx-auto bg-green-100 rounded-full flex items-center justify-center mb-4">
             <Heart size={32} className="text-green-600" />
           </div>
-          <h3 className="text-xl font-bold mb-2 font-roboto">Check-in Complete!</h3>
-          <p className="text-gray-600 font-roboto">
-            Thank you for your responses. They help us provide better support for your relationship.
-          </p>
+          <h3 className="text-xl font-bold mb-2 font-roboto text-center">Check-in Complete!</h3>
+          
+          {/* AI Feedback - this will be available if the AI returned insights */}
+          {getCoupleCheckInData(currentWeek)?.aiInsights ? (
+            <div className="mt-4">
+              <div className="p-4 bg-purple-50 rounded-lg border border-purple-200 mb-4">
+                <h4 className="font-medium flex items-center font-roboto">
+                  <Brain size={16} className="text-purple-600 mr-2" />
+                  Allie's Relationship Insights
+                </h4>
+                <p className="text-sm mt-2 font-roboto">{getCoupleCheckInData(currentWeek).aiInsights.assessment}</p>
+              </div>
+              
+              <h5 className="font-medium mb-2 font-roboto">Your Relationship Strengths</h5>
+              <div className="space-y-2 mb-4">
+                {getCoupleCheckInData(currentWeek).aiInsights.strengths.map((strength, index) => (
+                  <div key={index} className="p-2 bg-green-50 rounded border border-green-100">
+                    <p className="text-sm font-medium font-roboto">{strength.title}</p>
+                    <p className="text-xs font-roboto">{strength.description}</p>
+                  </div>
+                ))}
+              </div>
+              
+              <h5 className="font-medium mb-2 font-roboto">Growth Opportunities</h5>
+              <div className="space-y-2 mb-4">
+                {getCoupleCheckInData(currentWeek).aiInsights.growthAreas.map((area, index) => (
+                  <div key={index} className="p-2 bg-blue-50 rounded border border-blue-100">
+                    <p className="text-sm font-medium font-roboto">{area.title}</p>
+                    <p className="text-xs font-roboto">{area.description}</p>
+                    <p className="text-xs font-medium mt-1 font-roboto">Try this: {area.suggestion}</p>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200 mt-4">
+                <h5 className="text-sm font-medium flex items-center font-roboto">
+                  <Lightbulb size={14} className="text-yellow-600 mr-2" />
+                  This Week's Recommendation
+                </h5>
+                <p className="text-sm mt-1 font-roboto">{getCoupleCheckInData(currentWeek).aiInsights.weeklyRecommendation}</p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-gray-600 font-roboto text-center">
+              Thank you for your responses. They help us provide better support for your relationship.
+            </p>
+          )}
+          
+          <button 
+            onClick={onClose}
+            className="w-full mt-6 py-2 bg-black text-white rounded font-roboto"
+          >
+            Close
+          </button>
         </div>
       </div>
     );

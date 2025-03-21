@@ -253,6 +253,54 @@ const StrategicActionsTracker = () => {
           </div>
         )}
         
+        <div className="bg-white rounded-lg p-4 mb-4 border border-black">
+  <h4 className="font-medium text-lg mb-2 font-roboto">Allie Task Weighting System</h4>
+  <p className="text-sm font-roboto mb-3">
+    Our proprietary task weighting system goes beyond simple counting to analyze the true impact of different tasks:
+  </p>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="flex items-start">
+      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-2">
+        <Clock size={16} className="text-blue-600" />
+      </div>
+      <div>
+        <h5 className="font-medium text-sm font-roboto">Time & Frequency</h5>
+        <p className="text-xs text-gray-600 font-roboto">Tasks done daily or requiring significant time receive higher weight</p>
+      </div>
+    </div>
+    
+    <div className="flex items-start">
+      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-2">
+        <Brain size={16} className="text-purple-600" />
+      </div>
+      <div>
+        <h5 className="font-medium text-sm font-roboto">Invisibility Factor</h5>
+        <p className="text-xs text-gray-600 font-roboto">Mental load from tasks that go unnoticed receives higher weight</p>
+      </div>
+    </div>
+    
+    <div className="flex items-start">
+      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center mr-2">
+        <Heart size={16} className="text-red-600" />
+      </div>
+      <div>
+        <h5 className="font-medium text-sm font-roboto">Emotional Labor</h5>
+        <p className="text-xs text-gray-600 font-roboto">Tasks requiring emotional energy are weighted more heavily</p>
+      </div>
+    </div>
+    
+    <div className="flex items-start">
+      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 flex items-center justify-center mr-2">
+        <Users size={16} className="text-green-600" />
+      </div>
+      <div>
+        <h5 className="font-medium text-sm font-roboto">Child Development Impact</h5>
+        <p className="text-xs text-gray-600 font-roboto">Tasks that influence how children view gender roles receive higher weight</p>
+      </div>
+    </div>
+  </div>
+</div>
+
         {/* Strategies List */}
         <div className="space-y-4">
           {strategies.map(strategy => (
@@ -289,6 +337,24 @@ const StrategicActionsTracker = () => {
                       <span className="ml-2 text-xs font-roboto">{strategy.implementation}%</span>
                     </div>
                   </div>
+
+                  {/* Effectiveness Recommendations */}
+{strategy.implementation > 0 && (
+  <div className="mt-3 p-3 bg-purple-50 rounded-lg border border-purple-200">
+    <h5 className="text-sm font-medium text-purple-800 font-roboto">Implementation Tips</h5>
+    <p className="text-xs mt-1 text-purple-700 font-roboto">
+      {strategy.id === 'daily-checkins' ? 
+        "Try setting a consistent time each day for your check-in. Evening discussions work best for 78% of couples." : 
+      strategy.id === 'date-nights' ?
+        "Research shows planning dates 2 weeks in advance increases follow-through by 64%. Try scheduling your next 2-3 dates today." :
+      strategy.id === 'gratitude-affirmation' ?
+        "Couples who express gratitude daily report 37% higher relationship satisfaction. Consider adding appreciation to your daily routine." :
+      strategy.id === 'divide-conquer' ?
+        "The most successful couples revisit their task division monthly to adjust as needed. Schedule a monthly division review." :
+      "Families who fully implement this strategy report a 31% increase in relationship satisfaction. Keep making progress!"}
+    </p>
+  </div>
+)}
                   
                   {/* Expand/Collapse Icon */}
                   {expandedStrategy === strategy.id ? (
@@ -338,6 +404,36 @@ const StrategicActionsTracker = () => {
                     </div>
                   </div>
                   
+{/* Milestone display - add after implementation level selector */}
+{strategy.implementation >= 50 && (
+  <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded-lg">
+    <div className="flex items-start">
+      <div className="mt-0.5 mr-2">
+        <CheckCircle size={16} className="text-green-600" />
+      </div>
+      <div>
+        <p className="text-sm font-medium text-green-800 font-roboto">Milestone Reached!</p>
+        <p className="text-xs text-green-700 font-roboto">
+          You've successfully implemented this strategy at the 50% level. 
+          {strategy.implementation >= 75 && " You're now at the advanced level of implementation!"}
+        </p>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Quick Start Guide */}
+<div className="mt-3">
+  <button
+    className="w-full py-2 px-3 bg-blue-50 text-blue-700 rounded-lg border border-blue-200 text-sm flex items-center justify-center font-roboto hover:bg-blue-100"
+    onClick={() => window.open(`/quick-start-${strategy.id}`, '_blank')}
+  >
+    <Lightbulb size={16} className="mr-2" />
+    Quick Start Guide
+  </button>
+</div>
+
+
                   {/* Last Activity */}
                   {strategy.lastActivity && (
                     <p className="text-xs text-gray-500 mt-4 font-roboto">

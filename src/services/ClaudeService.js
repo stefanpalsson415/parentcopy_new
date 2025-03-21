@@ -203,7 +203,7 @@ formatSystemPrompt(familyContext) {
     - Encourage communication between family members
     - When mentioning research or scientific findings, refer to the studies in the knowledge base
     - Suggest appropriate relationship strategies when workload issues arise`;
-  }
+}
 }
 
 export default new ClaudeService();

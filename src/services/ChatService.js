@@ -86,6 +86,7 @@ async getAIResponse(text, familyId, previousMessages) {
   
   // Get family context data for the AI
   // Update the getFamilyContext method
+// Update the getFamilyContext method
 async getFamilyContext(familyId) {
   try {
     // Get family data from Firestore

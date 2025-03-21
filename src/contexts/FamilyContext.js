@@ -6,6 +6,10 @@ import { calculateBalanceScores } from '../utils/TaskWeightCalculator';
 import { useSurvey } from './SurveyContext';
 import { db } from '../services/firebase';
 import { collection, doc, setDoc, getDoc, updateDoc, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
+import AllieAIEngineService from '../services/AllieAIEngineService';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+
+
 
 // Create the family context
 const FamilyContext = createContext();
@@ -299,24 +303,46 @@ useEffect(() => {
   };
 
   // Save couple check-in data
-  const saveCoupleCheckInData = async (weekNumber, data) => {
+  // Save couple check-in data with AI feedback
+async saveCoupleCheckInData(familyId, weekNumber, data) {
+  try {
+    if (!familyId) throw new Error("No family ID available");
+    
+    // Save the check-in data to Firestore
+    await DatabaseService.saveCoupleCheckInData(familyId, weekNumber, data);
+    
+    // Get AI insights based on the check-in data
     try {
-      if (!familyId) throw new Error("No family ID available");
+      const aiInsights = await AllieAIEngineService.generateCoupleCheckInFeedback(
+        familyId,
+        weekNumber,
+        data
+      );
       
-      await DatabaseService.saveCoupleCheckInData(familyId, weekNumber, data);
+      // Save the AI insights along with the check-in data
+      if (aiInsights) {
+        await DatabaseService.saveCoupleCheckInFeedback(familyId, weekNumber, aiInsights);
+      }
       
       // Update local state
       setCoupleCheckInData(prev => ({
         ...prev,
-        [weekNumber]: data
+        [weekNumber]: {
+          ...data,
+          aiInsights
+        }
       }));
-      
-      return true;
-    } catch (error) {
-      console.error("Error saving couple check-in data:", error);
-      throw error;
+    } catch (insightError) {
+      console.error("Error generating AI feedback:", insightError);
+      // Don't block completion if AI insights fail
     }
-  };
+    
+    return true;
+  } catch (error) {
+    console.error("Error saving couple check-in data:", error);
+    throw error;
+  }
+}
 
   // Get couple check-in data for a specific week
   const getCoupleCheckInData = (weekNumber) => {
@@ -630,6 +656,34 @@ const updateRelationshipStrategy = async (strategyId, updateData) => {
       throw error;
     }
   };
+
+// After saving survey responses and before the return statement
+
+// Send relationship data to AI engine for learning
+if (responses && Object.keys(responses).some(key => key.startsWith('rel-'))) {
+  try {
+    // Extract just the relationship responses
+    const relationshipResponses = {};
+    Object.entries(responses).forEach(([key, value]) => {
+      if (key.startsWith('rel-')) {
+        relationshipResponses[key] = value;
+      }
+    });
+    
+    // Don't await this to avoid blocking completion
+    AllieAIEngineService.processRelationshipFeedback(
+      familyId,
+      weekNum,
+      memberId,
+      relationshipResponses
+    ).catch(err => console.error("Error processing relationship feedback:", err));
+    
+    console.log("Sent relationship data to AI engine for learning");
+  } catch (error) {
+    console.error("Error handling relationship responses:", error);
+    // Don't block completion if this fails
+  }
+}
 
   // Helper function to analyze survey responses and identify imbalances
   const analyzeImbalancesByCategory = (responses) => {

@@ -160,6 +160,138 @@ class AllieAIEngineService {
     }
   }
   
+// Generate relationship insights based on all available data
+async generateRelationshipInsights(familyId, currentWeek, relationshipData, strategies, checkInData) {
+  try {
+    if (!familyId) throw new Error("No family ID available");
+    
+    // Prepare data for Claude
+    const systemPrompt = `You are Allie's relationship AI expert. Analyze the family's relationship data and generate 3-4 personalized insights.
+    
+    For each insight, include:
+    1. A short, specific title
+    2. A 1-2 sentence description with a specific data point or research finding
+    3. One actionable recommendation
+    4. A category (connection, workload, gratitude, or growth)
+    
+    Your response should be in valid JSON format with this structure:
+    {
+      "insights": [
+        {
+          "id": "string (unique identifier)",
+          "title": "string (concise title)",
+          "description": "string (insight with data point)",
+          "actionable": "string (specific action to take)",
+          "category": "string (connection, workload, gratitude, or growth)"
+        }
+      ]
+    }`;
+    
+    const userMessage = `Generate relationship insights based on this data:
+    
+    Relationship Trend Data:
+    ${JSON.stringify(relationshipData)}
+    
+    Strategy Implementation:
+    ${JSON.stringify(strategies)}
+    
+    Check-in Responses:
+    ${JSON.stringify(checkInData)}
+    
+    Current Week: ${currentWeek}`;
+    
+    // Call Claude API
+    const claudeResponse = await ClaudeService.generateResponse(
+      [{ role: 'user', content: userMessage }],
+      { system: systemPrompt }
+    );
+    
+    // Parse JSON response
+    const responseData = JSON.parse(claudeResponse);
+    
+    return responseData.insights;
+  } catch (error) {
+    console.error("Error generating relationship insights:", error);
+    return null;
+  }
+}
+
+// Process relationship feedback to improve AI recommendations
+async processRelationshipFeedback(familyId, weekNum, memberId, relationshipResponses) {
+  try {
+    if (!familyId) throw new Error("No family ID available");
+    
+    console.log(`Processing relationship feedback from week ${weekNum} for member ${memberId}`);
+    
+    // Save the responses to Firestore for future AI training
+    const docRef = doc(db, "relationshipFeedback", `${familyId}-${weekNum}-${memberId}`);
+    await setDoc(docRef, {
+      familyId,
+      weekNum,
+      memberId,
+      responses: relationshipResponses,
+      timestamp: serverTimestamp()
+    });
+    
+    // Optionally: Immediately update any AI models or recommendations
+    // This could trigger a re-evaluation of strategies or insights
+    
+    return true;
+  } catch (error) {
+    console.error("Error processing relationship feedback:", error);
+    return false;
+  }
+}
+
+// Generate feedback on couple check-in responses
+async generateCoupleCheckInFeedback(familyId, weekNumber, checkInData) {
+  try {
+    if (!familyId) throw new Error("No family ID available");
+    
+    // Prepare data for Claude
+    const systemPrompt = `You are Allie's relationship AI expert. Analyze the couple's check-in responses and provide personalized feedback.
+    
+    For your feedback, include:
+    1. An overall assessment of their relationship health
+    2. 2-3 specific strengths you've identified
+    3. 1-2 growth opportunities with actionable suggestions
+    4. A specific recommendation for the coming week
+    
+    Your response should be in valid JSON format with this structure:
+    {
+      "assessment": "string (1-2 sentences overall assessment)",
+      "strengths": [
+        { "title": "string", "description": "string" }
+      ],
+      "growthAreas": [
+        { "title": "string", "description": "string", "suggestion": "string" }
+      ],
+      "weeklyRecommendation": "string (specific action for the week)"
+    }`;
+    
+    const userMessage = `Generate couple check-in feedback based on these responses:
+    
+    Week Number: ${weekNumber}
+    
+    Check-in Data:
+    ${JSON.stringify(checkInData)}`;
+    
+    // Call Claude API
+    const claudeResponse = await ClaudeService.generateResponse(
+      [{ role: 'user', content: userMessage }],
+      { system: systemPrompt }
+    );
+    
+    // Parse JSON response
+    const responseData = JSON.parse(claudeResponse);
+    
+    return responseData;
+  } catch (error) {
+    console.error("Error generating couple check-in feedback:", error);
+    return null;
+  }
+}
+
   // Generate family meeting agenda
   async generateFamilyMeetingAgenda(familyId, weekNumber) {
     try {

@@ -148,6 +148,57 @@ const generateAIExplanation = (question) => {
   // Get current question
   const currentQuestion = weeklyQuestions[currentQuestionIndex];
   
+// Add relationship questions to the weekly check-in
+const addRelationshipQuestions = (questions) => {
+  // Only add these for parents
+  if (selectedUser.role !== 'parent') return questions;
+  
+  const relationshipQuestions = [
+    {
+      id: `rel-week-${weekNum}-q1`,
+      text: "How would you rate your satisfaction with your relationship this week?",
+      category: "Relationship Health",
+      type: "scale",
+      options: ["Very Low", "Low", "Moderate", "High", "Very High"]
+    },
+    {
+      id: `rel-week-${weekNum}-q2`,
+      text: "How has the distribution of household tasks affected your relationship this week?",
+      category: "Relationship Impact",
+      type: "multipleChoice",
+      options: [
+        "It has caused significant strain",
+        "It has caused some tension",
+        "It has had no impact",
+        "It has somewhat improved our relationship",
+        "It has significantly improved our relationship"
+      ]
+    },
+    {
+      id: `rel-week-${weekNum}-q3`,
+      text: "Which relationship strategy had the most positive impact this week?",
+      category: "Relationship Strategies",
+      type: "multipleChoice",
+      options: [
+        "Daily Check-ins",
+        "Gratitude & Affirmation",
+        "Date Night",
+        "Task Division",
+        "Problem-Solving",
+        "None of these strategies"
+      ]
+    }
+  ];
+  
+  // Add relationship questions to the end of the set
+  return [...questions, ...relationshipQuestions];
+};
+
+// Modify the return statement to include relationship questions
+return addRelationshipQuestions(filteredQuestions);
+
+
+
   // Handle parent selection
   const handleSelectParent = (parent) => {
     if (isProcessing) return; // Prevent multiple selections while processing
@@ -176,6 +227,10 @@ const generateAIExplanation = (question) => {
     }
   };
   
+
+
+
+
   // Handle survey completion
   const handleCompleteSurvey = async () => {
     if (isSubmitting) return;
