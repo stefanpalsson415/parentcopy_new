@@ -24,6 +24,7 @@ import OnboardingFlow from './components/onboarding/OnboardingFlow';
 import { ChatProvider } from './contexts/ChatContext';
 import RelationshipFeaturesPage from './components/marketing/RelationshipFeaturesPage';
 import AIAssistantPage from './components/marketing/AIAssistantPage';
+import { useAuth } from './contexts/AuthContext';
 import FloatingCalendarWidget from './components/calendar/FloatingCalendarWidget'; // Add this import
 
 // App Routes Component - Used after context providers are set up
