@@ -366,7 +366,7 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <div className="fixed top-0 left-0 right-0 z-20 bg-black text-white p-4 shadow-md">
-  <div className="container mx-auto flex justify-between items-center">
+        <div className="container mx-auto flex justify-between items-center">
           <div className="flex items-center">
             {/* Family photo */}
             <div className="mr-4 hidden md:block">
@@ -407,9 +407,9 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
         </div>
       </div>
       
-      {/* Main content */}
-      <div className="fixed top-16 left-0 right-0 z-10 bg-gray-50 border-b shadow-sm">
-  <div className="container mx-auto flex overflow-x-auto px-4 py-2">
+      {/* Navigation Tabs */}
+      <div className="fixed top-24 left-0 right-0 z-10 bg-gray-50 border-b shadow-sm">
+      <div className="container mx-auto flex overflow-x-auto px-4 py-2">
           <button 
             className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'tasks' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
             onClick={() => setActiveTab('tasks')}
@@ -433,8 +433,6 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
             </button>
           )}
           
-          
-
           <button 
             className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'initial-survey' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
             onClick={() => setActiveTab('initial-survey')}
@@ -454,11 +452,11 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
             </button>
           ))}
         </div>
-          
-        <div className="flex-1 container mx-auto px-4 pt-32 pb-6">
-
-
-        {/* Tab content */}
+      </div>
+      
+      {/* Main Content */}
+      <div className="container mx-auto px-4 pt-40 pb-6">
+      {/* Tab content */}
         {renderTabContent()}
       </div>
 
