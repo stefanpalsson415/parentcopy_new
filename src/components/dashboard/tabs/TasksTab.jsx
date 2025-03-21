@@ -60,6 +60,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   const [currentKidTask, setCurrentKidTask] = useState(null);
   const [kidTaskObservation, setKidTaskObservation] = useState("");
   
+  
 
   // Check-in related states
   const [canStartCheckIn, setCanStartCheckIn] = useState(false);
@@ -374,6 +375,8 @@ useEffect(() => {
     
     return count;
   };
+  
+
   
   // Add this function to handle task completion similar to child tasks
 const handleParentTaskLikeChild = async (taskId, isCompleted, comment = '') => {
@@ -976,6 +979,11 @@ const handleCompleteKidTask = async (taskId, kidId, isCompleted, observations = 
       </div>
     );
   };
+
+// Helper function to check if at least one kid task is completed
+const atLeastOneKidTaskCompleted = () => {
+  return Object.values(kidTasksCompleted).some(taskData => taskData?.completed);
+};
 
   // Calculate task completion by parent
   const calculateParentTaskCompletion = () => {
