@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Upload, Camera, User, Users, Home } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import DatabaseService from '../../services/DatabaseService';
-import { Calendar, Download, X, ChevronDown, ChevronUp, Users, Home, Settings, Google, Apple } from 'lucide-react';
+import CalendarService from '../../services/CalendarService';
+import { Calendar, Download, ChevronDown, ChevronUp, Settings, Globe, Check, Apple } from 'lucide-react';
 
 const UserSettingsScreen = ({ onClose }) => {
   const { 
@@ -275,7 +276,7 @@ const UserSettingsScreen = ({ onClose }) => {
                 <span className="font-medium">Google Calendar</span>
               </div>
               <div className="flex items-center justify-center h-10 mb-2">
-                <Google size={24} className="text-gray-700" />
+                <Globe size={24} className="text-gray-700" />
               </div>
               <p className="text-xs text-gray-500">
                 Sync with your Google Calendar account
@@ -344,7 +345,8 @@ const UserSettingsScreen = ({ onClose }) => {
                   onClick={handleGoogleSignIn}
                   className="px-4 py-2 bg-white border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center mx-auto"
                 >
-                  <Google size={16} className="mr-2" />
+                  <Globe size={16} className="mr-2" />
+
                   Sign in with Google
                 </button>
               </div>

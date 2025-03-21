@@ -280,24 +280,36 @@ const LandingPage = () => {
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <h1 className="text-3xl font-light">Allie</h1>
           <nav className="hidden md:flex space-x-8">
-            <button 
-              onClick={() => navigate('/how-it-works')}
-              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-            >
-              How It Works
-            </button>
-            <button
-              onClick={() => navigate('/about-us')}
-              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-            >
-              About Us
-            </button>
-            <button 
-              onClick={() => navigate('/blog')}
-              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-            >
-              Blog
-            </button>
+  <button 
+    onClick={() => navigate('/how-it-works')}
+    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+  >
+    How It Works
+  </button>
+  <button
+    onClick={() => navigate('/about-us')}
+    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+  >
+    About Us
+  </button>
+  <button 
+    onClick={() => navigate('/relationship-features')}
+    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+  >
+    Relationship Features
+  </button>
+  <button 
+    onClick={() => navigate('/ai-assistant')}
+    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+  >
+    AI Assistant
+  </button>
+  <button 
+    onClick={() => navigate('/blog')}
+    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+  >
+    Blog
+  </button>
             
             {currentUser ? (
               <button 
@@ -713,16 +725,22 @@ const LandingPage = () => {
             </div>
             
             <div>
-              <h3 className="text-gray-800 font-medium mb-4">Product</h3>
-              <ul className="space-y-2">
-                <li>
-                  <button onClick={() => navigate('/how-it-works')} className="text-gray-600 hover:text-gray-900 font-light">How It Works</button>
-                </li>
-                <li>
-                  <button onClick={() => navigate('/mini-survey')} className="text-gray-600 hover:text-gray-900 font-light">Mini Assessment</button>
-                </li>
-              </ul>
-            </div>
+  <h3 className="text-gray-800 font-medium mb-4">Product</h3>
+  <ul className="space-y-2">
+    <li>
+      <button onClick={() => navigate('/how-it-works')} className="text-gray-600 hover:text-gray-900 font-light">How It Works</button>
+    </li>
+    <li>
+      <button onClick={() => navigate('/relationship-features')} className="text-gray-600 hover:text-gray-900 font-light">Relationship Features</button>
+    </li>
+    <li>
+      <button onClick={() => navigate('/ai-assistant')} className="text-gray-600 hover:text-gray-900 font-light">AI Assistant</button>
+    </li>
+    <li>
+      <button onClick={() => navigate('/mini-survey')} className="text-gray-600 hover:text-gray-900 font-light">Mini Assessment</button>
+    </li>
+  </ul>
+</div>
             
             <div>
               <h3 className="text-gray-800 font-medium mb-4">Company</h3>

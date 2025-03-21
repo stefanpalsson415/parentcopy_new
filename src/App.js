@@ -22,6 +22,8 @@ import PaymentScreen from './components/payment/PaymentScreen';
 import LandingPage from './components/marketing/LandingPage';
 import OnboardingFlow from './components/onboarding/OnboardingFlow';
 import { ChatProvider } from './contexts/ChatContext';
+import RelationshipFeaturesPage from './components/marketing/RelationshipFeaturesPage';
+import AIAssistantPage from './components/marketing/AIAssistantPage';
 
 // App Routes Component - Used after context providers are set up
 function AppRoutes() {
@@ -35,6 +37,8 @@ function AppRoutes() {
       <Route path="/signup" element={<UserSignupScreen />} />
 
       <Route path="/how-it-works" element={<HowThisWorksScreen />} />
+      <Route path="/relationship-features" element={<RelationshipFeaturesPage />} />
+<Route path="/ai-assistant" element={<AIAssistantPage />} />
       <Route path="/about-us" element={<AboutUsPage />} />
       <Route path="/product-overview" element={<ProductOverviewPage />} />
       <Route path="/blog" element={<BlogHomePage />} />
