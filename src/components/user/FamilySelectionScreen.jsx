@@ -614,16 +614,10 @@ const getDefaultProfileImage = (member) => {
   <div className="flex items-center">
     <div className="flex-shrink-0 mr-4 relative">
       {!member.profilePicture ? (
-        <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-dashed border-pink-400 relative bg-gray-50 animate-pulse">
-          <img 
-            src={getDefaultProfileImage(member)} 
-            alt={`${member.name}'s profile`}
-            className="w-full h-full object-cover opacity-60"
-          />
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-1 text-white bg-gradient-to-br from-purple-500 to-pink-500 bg-opacity-80">
+        <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-dashed border-pink-400 relative bg-gray-50 flex items-center justify-center">
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-1 text-white bg-black bg-opacity-50">
             <Camera size={14} className="mb-1" />
-            <span className="text-xs font-bold">Add a photo!</span>
-            <span className="text-[7px]">Personalize Allie</span>
+            <span className="text-xs font-bold">Add photo</span>
           </div>
           <button
             className="absolute bottom-0 right-0 bg-black text-white p-1 rounded-full shadow-lg transform hover:scale-110 transition-transform"

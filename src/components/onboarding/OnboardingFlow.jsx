@@ -1624,90 +1624,138 @@ const selectPlan = (plan) => {
   
   return (
     <div className="min-h-screen bg-white flex flex-col font-['Roboto']">
-     {/* Family journey progress indicator */}
-<div className="mt-5 mb-10 w-full max-w-lg mx-auto">
-  {/* Family outline SVG with more detail - this will be the container */}
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 200" className="w-full">
-    {/* Background outline - full family with bodies */}
-    <g stroke="lightgray" strokeWidth="2" fill="none">
-      {/* Papa */}
-      <circle cx="150" cy="50" r="25" /> {/* Head */}
-      <path d="M150,75 L150,130" /> {/* Body */}
-      <path d="M150,90 L120,120" /> {/* Left arm */}
-      <path d="M150,90 L180,120" /> {/* Right arm */}
-      <path d="M150,130 L130,180" /> {/* Left leg */}
-      <path d="M150,130 L170,180" /> {/* Right leg */}
-      
-      {/* Mama */}
-      <circle cx="350" cy="50" r="25" /> {/* Head */}
-      <path d="M350,75 L350,130" /> {/* Body */}
-      <path d="M350,90 L320,120" /> {/* Left arm */}
-      <path d="M350,90 L380,120" /> {/* Right arm */}
-      <path d="M350,130 L330,180" /> {/* Left leg */}
-      <path d="M350,130 L370,180" /> {/* Right leg */}
-      
-      {/* Child 1 */}
-      <circle cx="220" cy="70" r="15" /> {/* Head */}
-      <path d="M220,85 L220,130" /> {/* Body */}
-      <path d="M220,100 L200,120" /> {/* Left arm */}
-      <path d="M220,100 L240,120" /> {/* Right arm */}
-      <path d="M220,130 L210,160" /> {/* Left leg */}
-      <path d="M220,130 L230,160" /> {/* Right leg */}
-      
-      {/* Child 2 */}
-      <circle cx="280" cy="70" r="15" /> {/* Head */}
-      <path d="M280,85 L280,130" /> {/* Body */}
-      <path d="M280,100 L260,120" /> {/* Left arm */}
-      <path d="M280,100 L300,120" /> {/* Right arm */}
-      <path d="M280,130 L270,160" /> {/* Left leg */}
-      <path d="M280,130 L290,160" /> {/* Right leg */}
-      
-      {/* Ground */}
-      <path d="M100,180 L400,180" />
-    </g>
-    
-    {/* Progress fill - gets revealed as steps progress */}
-    <g stroke="black" strokeWidth="2" fill="none" strokeDasharray="1500" strokeDashoffset={1500 - ((step / totalSteps) * 1500)}>
-      {/* Papa */}
-      <circle cx="150" cy="50" r="25" /> {/* Head */}
-      <path d="M150,75 L150,130" /> {/* Body */}
-      <path d="M150,90 L120,120" /> {/* Left arm */}
-      <path d="M150,90 L180,120" /> {/* Right arm */}
-      <path d="M150,130 L130,180" /> {/* Left leg */}
-      <path d="M150,130 L170,180" /> {/* Right leg */}
-      
-      {/* Mama */}
-      <circle cx="350" cy="50" r="25" /> {/* Head */}
-      <path d="M350,75 L350,130" /> {/* Body */}
-      <path d="M350,90 L320,120" /> {/* Left arm */}
-      <path d="M350,90 L380,120" /> {/* Right arm */}
-      <path d="M350,130 L330,180" /> {/* Left leg */}
-      <path d="M350,130 L370,180" /> {/* Right leg */}
-      
-      {/* Child 1 */}
-      <circle cx="220" cy="70" r="15" /> {/* Head */}
-      <path d="M220,85 L220,130" /> {/* Body */}
-      <path d="M220,100 L200,120" /> {/* Left arm */}
-      <path d="M220,100 L240,120" /> {/* Right arm */}
-      <path d="M220,130 L210,160" /> {/* Left leg */}
-      <path d="M220,130 L230,160" /> {/* Right leg */}
-      
-      {/* Child 2 */}
-      <circle cx="280" cy="70" r="15" /> {/* Head */}
-      <path d="M280,85 L280,130" /> {/* Body */}
-      <path d="M280,100 L260,120" /> {/* Left arm */}
-      <path d="M280,100 L300,120" /> {/* Right arm */}
-      <path d="M280,130 L270,160" /> {/* Left leg */}
-      <path d="M280,130 L290,160" /> {/* Right leg */}
-      
-      {/* Ground */}
-      <path d="M100,180 L400,180" />
-    </g>
-  </svg>
+    {/* Progress visualization based on hand-drawn style */}
+<div className="relative mb-8 flex">
+  <div className="flex-1">
+    {familyData.familyName && (
+      <div className="text-center mb-6">
+        <h1 className="text-3xl font-medium text-black">
+          The {familyData.familyName} Family
+        </h1>
+        <p className="text-gray-600 text-sm">Personalizing your family balance experience</p>
+      </div>
+    )}
+  </div>
   
-  {/* Step counter below the SVG */}
-  <div className="text-center text-sm text-gray-500 mt-2">
-    Step {step} of {totalSteps}
+  <div className="w-64 hidden md:block">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 240" className="w-full">
+      {/* Hand-drawn style family - animated based on progress */}
+      <g stroke="black" strokeWidth="2.5" fill="none">
+        {/* First person (completed early) */}
+        <path 
+          d="M40,60 C45,59 55,62 60,58 C62,56 61,46 62,44 C64,40 69,37 74,38 C78,39 80,45 80,49 C80,55 75,58 72,60" 
+          strokeDasharray="200" 
+          strokeDashoffset={step < 3 ? "200" : "0"}
+          className="transition-all duration-1000"
+        />
+        <path 
+          d="M72,60 C70,70 70,80 70,90 C70,100 68,110 70,118" 
+          strokeDasharray="100" 
+          strokeDashoffset={step < 4 ? "100" : "0"}
+          className="transition-all duration-1000"
+        />
+        <path 
+          d="M70,85 C80,90 90,94 98,98" 
+          strokeDasharray="50" 
+          strokeDashoffset={step < 6 ? "50" : "0"}
+          className="transition-all duration-1000"
+        />
+        <path 
+          d="M70,85 C65,90 60,110 55,115" 
+          strokeDasharray="50" 
+          strokeDashoffset={step < 7 ? "50" : "0"}
+          className="transition-all duration-1000"
+        />
+        <path 
+          d="M70,118 C80,130 85,150 90,160" 
+          strokeDasharray="70" 
+          strokeDashoffset={step < 9 ? "70" : "0"}
+          className="transition-all duration-1000"
+        />
+        <path 
+          d="M70,118 C60,130 55,150 50,160" 
+          strokeDasharray="70" 
+          strokeDashoffset={step < 10 ? "70" : "0"}
+          className="transition-all duration-1000"
+        />
+
+        {/* Second person (completes in the middle) */}
+        <path 
+          d="M120,75 C125,73 135,77 140,73 C142,71 141,61 142,59 C144,55 149,52 154,53 C158,54 160,60 160,64 C160,70 155,73 152,75" 
+          strokeDasharray="200" 
+          strokeDashoffset={step < 8 ? "200" : "0"}
+          className="transition-all duration-1000"
+        />
+        <path 
+          d="M152,75 C150,85 150,95 150,105 C150,115 148,125 150,133" 
+          strokeDasharray="100" 
+          strokeDashoffset={step < 9 ? "100" : "0"}
+          className="transition-all duration-1000"
+        />
+        <path 
+          d="M150,100 C160,105 170,109 178,113" 
+          strokeDasharray="50" 
+          strokeDashoffset={step < 11 ? "50" : "0"}
+          className="transition-all duration-1000"
+        />
+        <path 
+          d="M150,100 C145,105 140,125 135,130" 
+          strokeDasharray="50" 
+          strokeDashoffset={step < 12 ? "50" : "0"}
+          className="transition-all duration-1000"
+        />
+        <path 
+          d="M150,133 C160,145 165,165 170,175" 
+          strokeDasharray="70" 
+          strokeDashoffset={step < 13 ? "70" : "0"}
+          className="transition-all duration-1000"
+        />
+        <path 
+          d="M150,133 C140,145 135,165 130,175" 
+          strokeDasharray="70" 
+          strokeDashoffset={step < 14 ? "70" : "0"}
+          className="transition-all duration-1000"
+        />
+
+        {/* Children (complete last) */}
+        <path 
+          d="M220,120 C222,118 228,121 230,119 C231,118 230,113 231,112 C232,110 234,108 237,109 C239,109 240,112 240,114 C240,117 238,119 236,120" 
+          strokeDasharray="150" 
+          strokeDashoffset={step < 15 ? "150" : "0"}
+          className="transition-all duration-1000"
+        />
+        <path 
+          d="M236,120 C235,125 235,130 235,135 C235,140 234,145 235,149" 
+          strokeDasharray="80" 
+          strokeDashoffset={step < 16 ? "80" : "0"}
+          className="transition-all duration-1000"
+        />
+        <path 
+          d="M235,135 C240,138 245,140 248,142" 
+          strokeDasharray="40" 
+          strokeDashoffset={step < 17 ? "40" : "0"}
+          className="transition-all duration-1000"
+        />
+        <path 
+          d="M235,135 C232,138 230,148 228,150" 
+          strokeDasharray="40" 
+          strokeDashoffset={step < 18 ? "40" : "0"}
+          className="transition-all duration-1000"
+        />
+        <path 
+          d="M235,149 C240,155 242,165 245,170" 
+          strokeDasharray="50" 
+          strokeDashoffset={step < 19 ? "50" : "0"}
+          className="transition-all duration-1000"
+        />
+        <path 
+          d="M235,149 C230,155 228,165 225,170" 
+          strokeDasharray="50" 
+          strokeDashoffset={step < totalSteps ? "50" : "0"}
+          className="transition-all duration-1000"
+        />
+      </g>
+    </svg>
   </div>
 </div>
 
@@ -1721,16 +1769,6 @@ const selectPlan = (plan) => {
   </div>
 )}
       
-{/* Family name header - only shows after family name is entered */}
-{familyData.familyName && (
-  <div className="text-center mb-6">
-    <h1 className="text-3xl font-medium text-black">
-      The {familyData.familyName} Family
-    </h1>
-    <p className="text-gray-600 text-sm">Personalizing your family balance experience</p>
-  </div>
-)}
-
 
       <div className="flex-1 flex flex-col items-center justify-center p-6">
         <div className="w-full max-w-md">
