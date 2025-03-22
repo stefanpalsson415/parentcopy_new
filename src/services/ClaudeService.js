@@ -3,20 +3,11 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 
 class ClaudeService {
   constructor() {
-    // Force direct API mode
-    this.useServerProxy = false;
-    this.API_URL = 'https://api.anthropic.com/v1/messages';
-    this.API_KEY = process.env.REACT_APP_CLAUDE_API_KEY;
-    
-    // Better logging to help diagnose environment variable issues
-    console.log("Claude service initialized in direct API mode");
-    console.log("Environment variable set:", process.env.REACT_APP_CLAUDE_API_KEY ? "Yes" : "No");
-    
-    // Warn if API key is not set
-    if (!this.API_KEY) {
-      console.warn("⚠️ REACT_APP_CLAUDE_API_KEY environment variable is not set!");
-    }
+    // Switch to using Firebase Function proxy
+    this.useServerProxy = true;
+    console.log("Claude service initialized to use Firebase Function proxy");
   }
+  
 
   async generateResponse(messages, familyContext) {
     try {
@@ -71,16 +62,56 @@ class ClaudeService {
         console.log("Sending request to Claude API with API key:", this.API_KEY ? "Present" : "MISSING");
         
         // Make the API call
-        const response = await fetch(this.API_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'anthropic-api-key': this.API_KEY, // Updated header name
-            'anthropic-version': '2023-06-01',
-            'accept': 'application/json'
-          },
-          body: JSON.stringify(requestBody)
-        });
+        // Log headers for debugging (redacting actual key)
+console.log("Making API call with headers:", {
+  'Content-Type': 'application/json',
+  'x-api-key': this.API_KEY ? 'PRESENT (redacted)' : 'MISSING',
+  'anthropic-version': '2023-06-01'
+});
+
+
+
+async claudeProxy(data) {
+  // Import Firebase functions
+  const { getFunctions, httpsCallable } = require('firebase/functions');
+  
+  // Get Firebase Functions instance
+  const functions = getFunctions();
+  
+  // Create a callable function
+  const callClaudeAPI = httpsCallable(functions, 'callClaudeAPI');
+  
+  // Call the function
+  console.log("Calling Claude via Firebase function proxy");
+  
+  try {
+    const result = await callClaudeAPI({
+      system: data.system,
+      messages: data.messages
+    });
+    
+    console.log("Response received from Firebase function:", result?.data ? "✓" : "✗");
+    return result;
+  } catch (error) {
+    console.error("Firebase function error:", error);
+    throw error;
+  }
+}
+
+
+// Make the API call
+const response = await fetch(this.API_URL, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': this.API_KEY,
+    'anthropic-version': '2023-06-01'
+  },
+  body: JSON.stringify(requestBody)
+});
+
+// Log response status for debugging
+console.log("Claude API response status:", response.status);
         
         if (!response.ok) {
           const errorData = await response.text();

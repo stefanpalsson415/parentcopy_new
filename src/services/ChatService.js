@@ -158,8 +158,24 @@ class ChatService {
       if (docSnap.exists()) {
         const data = docSnap.data();
         
-        // Get complete survey responses (not just summaries)
-        const completeResponses = data.surveyResponses || {};
+        // NEW: Get survey responses from the surveyResponses collection
+        const surveyResponsesQuery = query(
+          collection(db, "surveyResponses"), 
+          where("familyId", "==", familyId)
+        );
+        const surveyResponsesSnapshot = await getDocs(surveyResponsesQuery);
+        
+        // Process and merge all responses
+        const completeResponses = {};
+        surveyResponsesSnapshot.forEach((doc) => {
+          const responseData = doc.data();
+          if (responseData.responses) {
+            // Merge all responses together
+            Object.assign(completeResponses, responseData.responses);
+          }
+        });
+        
+        console.log("Retrieved survey responses:", Object.keys(completeResponses).length);
         
         // Extract survey data if available
         let surveyData = {};
@@ -170,6 +186,16 @@ class ChatService {
             categories: this.getCategoryBreakdown(completeResponses),
             responses: completeResponses  // Include the actual responses
           };
+        } else {
+          // Check if responses are directly in the family document (fallback)
+          if (data.surveyResponses && Object.keys(data.surveyResponses).length > 0) {
+            surveyData = {
+              totalQuestions: Object.keys(data.surveyResponses).length,
+              mamaPercentage: this.calculateMamaPercentage(data.surveyResponses),
+              categories: this.getCategoryBreakdown(data.surveyResponses),
+              responses: data.surveyResponses
+            };
+          }
         }
         
         // Get the full task list
@@ -213,7 +239,7 @@ class ChatService {
         } catch (e) {
           console.error("Error getting relationship strategies:", e);
         }
-
+        
         // Get couple check-in data
         let coupleData = {};
         try {
@@ -256,7 +282,7 @@ class ChatService {
           relationshipData,
           coupleData
         };
-
+  
         // Log the context data for debugging
         console.log("Family context generated:", {
           dataKeys: Object.keys(contextData),
@@ -264,7 +290,7 @@ class ChatService {
           responseCount: contextData.surveyData?.responses ? Object.keys(contextData.surveyData.responses).length : 0,
           tasksCount: contextData.tasks?.length || 0
         });
-
+  
         return contextData;
       }
       
