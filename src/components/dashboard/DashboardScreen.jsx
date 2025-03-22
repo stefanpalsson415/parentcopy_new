@@ -13,8 +13,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import CoupleRelationshipChart from './CoupleRelationshipChart';
 import AllieChat from '../chat/AllieChat';
-// At the top of the file, add these imports
-import AllieAIEngineService from '../../services/AllieAIEngineService';
+
 import { Brain, Lightbulb } from 'lucide-react';
 import StrategicActionsTracker from './StrategicActionsTracker';
 import RelationshipMeetingScreen from '../meeting/RelationshipMeetingScreen';
@@ -48,6 +47,15 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const [loadError, setLoadError] = useState(null);
   const [insights, setInsights] = useState([]);
   const [showRelationshipMeeting, setShowRelationshipMeeting] = useState(false);
+
+  const [allieAIEngineService, setAllieAIEngineService] = useState(null);
+
+useEffect(() => {
+  // Dynamically import the service to avoid circular dependencies
+  import('../../services/AllieAIEngineService').then(module => {
+    setAllieAIEngineService(module.default);
+  });
+}, []);
 
   // Consolidated family loading from all possible sources
   useEffect(() => {
@@ -121,22 +129,31 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        // Keep all your existing loading code
-        
-        // Add this section at the end of the try block
-        if (familyId && currentWeek) {
-          try {
-            console.log("Loading AI insights...");
-            const aiInsights = await AllieAIEngineService.generateDashboardInsights(
-              familyId,
-              currentWeek
-            );
-            setInsights(aiInsights);
-            console.log("AI insights loaded:", aiInsights);
-          } catch (insightError) {
-            console.error("Error loading AI insights:", insightError);
-            // Failure to load insights shouldn't block the whole dashboard
+        // If we need to load family data, do it here
+        if (familyId) {
+          console.log(`Loading dashboard data for family: ${familyId}`);
+          
+          // Any other data loading you need to do...
+          
+          // Load AI insights if service is available
+          if (currentWeek && allieAIEngineService) {
+            try {
+              console.log("Loading AI insights...");
+              const aiInsights = await allieAIEngineService.generateDashboardInsights(
+                familyId,
+                currentWeek
+              );
+              setInsights(aiInsights);
+              console.log("AI insights loaded:", aiInsights);
+            } catch (insightError) {
+              console.error("Error loading AI insights:", insightError);
+              // Failure to load insights shouldn't block the whole dashboard
+            }
+          } else {
+            console.log("Skipping AI insights - service not loaded yet or missing data");
           }
+        } else {
+          console.warn("No family ID available, can't load dashboard data");
         }
       } catch (error) {
         console.error("Error loading dashboard data:", error);

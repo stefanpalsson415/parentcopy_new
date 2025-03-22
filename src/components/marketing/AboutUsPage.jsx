@@ -141,7 +141,7 @@ const AboutUsPage = () => {
               <div className="bg-white p-8 rounded-lg shadow-sm relative z-10">
                 <div className="w-24 h-24 rounded-full overflow-hidden mx-auto mb-6 border-2 border-gray-200">
                   <img 
-                    src="/api/placeholder/150/150" 
+                    src={stefanProfilePic} 
                     alt="Stefan Palsson" 
                     className="w-full h-full object-cover"
                   />
@@ -177,7 +177,7 @@ const AboutUsPage = () => {
               <div className="bg-white p-8 rounded-lg shadow-sm relative z-10">
                 <div className="w-24 h-24 rounded-full overflow-hidden mx-auto mb-6 border-2 border-gray-200">
                   <img 
-                    src="/api/placeholder/150/150" 
+                    src={kimberlyProfilePic}
                     alt="Kimberly Palsson" 
                     className="w-full h-full object-cover"
                   />

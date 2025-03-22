@@ -101,7 +101,11 @@ async getAIResponse(text, familyId, previousMessages) {
     console.error("Error getting AI response:", error);
     
     // Provide more helpful fallback responses
-    if (text.toLowerCase().includes("help") || text.length < 20) {
+    if (text.toLowerCase().includes("survey") || 
+        text.toLowerCase().includes("data") || 
+        text.toLowerCase().includes("results")) {
+      return "I'd like to analyze your survey data, but I'm having trouble accessing it right now. Please try refreshing the page or asking again in a few moments. In the meantime, you can view your survey results directly in the Dashboard tab.";
+    } else if (text.toLowerCase().includes("help") || text.length < 20) {
       return "I can help with questions about family balance, your tasks, or how to use Allie. What would you like to know?";
     }
     
@@ -120,14 +124,38 @@ async getFamilyContext(familyId) {
     if (docSnap.exists()) {
       const data = docSnap.data();
       
+      // Get complete survey responses (not just summaries)
+      const completeResponses = data.surveyResponses || {};
+      
       // Extract survey data if available
       let surveyData = {};
-      if (data.surveyResponses) {
+      if (completeResponses && Object.keys(completeResponses).length > 0) {
         surveyData = {
-          totalQuestions: Object.keys(data.surveyResponses).length,
-          mamaPercentage: this.calculateMamaPercentage(data.surveyResponses),
-          categories: this.getCategoryBreakdown(data.surveyResponses)
+          totalQuestions: Object.keys(completeResponses).length,
+          mamaPercentage: this.calculateMamaPercentage(completeResponses),
+          categories: this.getCategoryBreakdown(completeResponses),
+          responses: completeResponses  // Include the actual responses
         };
+      }
+      
+      // Get the full task list
+      const tasks = data.tasks || [];
+      
+      // Get week history data for insights
+      const weekHistory = data.weekHistory || {};
+      
+      // Get impactInsights if available
+      const impactInsights = data.impactInsights || [];
+      
+      // Get balance scores if available
+      let balanceScores = null;
+      try {
+        // Try to calculate current weighted balance scores
+        if (data.weightedScores) {
+          balanceScores = data.weightedScores;
+        }
+      } catch (e) {
+        console.warn("Error getting balance scores:", e);
       }
       
       // NEW: Get relationship strategies data
@@ -144,7 +172,8 @@ async getFamilyContext(familyId) {
             topStrategy: strategies.sort((a, b) => b.implementation - a.implementation)[0]?.name,
             avgImplementation: strategies.length > 0 
               ? strategies.reduce((sum, s) => sum + s.implementation, 0) / strategies.length 
-              : 0
+              : 0,
+            allStrategies: strategies  // Include all strategies
           };
         }
       } catch (e) {
@@ -158,17 +187,18 @@ async getFamilyContext(familyId) {
           collection(db, "coupleCheckIns"),
           where("familyId", "==", familyId),
           orderBy("completedAt", "desc"),
-          limit(1)
+          limit(5)  // Get the last 5 check-ins for trend analysis
         );
         
         const checkInSnapshot = await getDocs(checkInQuery);
         if (!checkInSnapshot.empty) {
-          const latestCheckIn = checkInSnapshot.docs[0].data();
+          const checkIns = checkInSnapshot.docs.map(doc => doc.data());
           
           coupleData = {
-            lastCheckIn: latestCheckIn.completedAt?.toDate?.().toISOString() || null,
-            satisfaction: latestCheckIn.data?.satisfaction || null,
-            communication: latestCheckIn.data?.communication || null
+            lastCheckIn: checkIns[0].completedAt?.toDate?.().toISOString() || null,
+            satisfaction: checkIns[0].data?.satisfaction || null,
+            communication: checkIns[0].data?.communication || null,
+            history: checkIns  // Include full history of check-ins
           };
         }
       } catch (e) {
@@ -176,13 +206,20 @@ async getFamilyContext(familyId) {
       }
       
       return {
+        familyId: familyId,
         familyName: data.familyName,
         adults: data.familyMembers.filter(m => m.role === 'parent').length,
         children: data.familyMembers.filter(m => m.role === 'child'),
+        familyMembers: data.familyMembers,  // Include all family members
         currentWeek: data.currentWeek,
+        completedWeeks: data.completedWeeks || [],
         surveyData,
-        relationshipData, // NEW
-        coupleData // NEW
+        tasks,  // Include all tasks
+        weekHistory,  // Include week history
+        impactInsights,  // Include impact insights
+        balanceScores,  // Include balance scores
+        relationshipData,
+        coupleData
       };
     }
     
@@ -191,8 +228,7 @@ async getFamilyContext(familyId) {
     console.error("Error getting family context:", error);
     return {};
   }
-}
-  
+}  
   // Helper method to calculate mama percentage from survey responses
   calculateMamaPercentage(responses) {
     let mamaCount = 0;
