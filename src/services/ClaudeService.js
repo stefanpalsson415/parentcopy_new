@@ -6,8 +6,7 @@ class ClaudeService {
     // Force direct API mode
     this.useServerProxy = false;
     this.API_URL = 'https://api.anthropic.com/v1/messages';
-    this.API_KEY = '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'; // Replace with your actual API key
-    
+    this.API_KEY = process.env.REACT_APP_CLAUDE_API_KEY;
     console.log("Claude service initialized in direct API mode");
   }
   
