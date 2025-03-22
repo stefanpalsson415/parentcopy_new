@@ -50,6 +50,7 @@ class ChatService {
   
 
 // Find and update the getAIResponse method (typically around line 50-80)
+// Find and update the getAIResponse method (typically around line 50-80)
 async getAIResponse(text, familyId, previousMessages) {
   try {
     // Log request for debugging
@@ -130,8 +131,10 @@ async getAIResponse(text, familyId, previousMessages) {
     
     return "I'm having trouble processing your question right now. While I'm reconnecting, you can explore the dashboard for insights or check your tasks in the Tasks tab.";
   }
-}  // Get family context data for the AI
-  // Update the getFamilyContext method
+}
+
+// Update the getFamilyContext method
+// Update the getFamilyContext method
 // Update the getFamilyContext method
 async getFamilyContext(familyId) {
   try {
@@ -246,8 +249,7 @@ async getFamilyContext(familyId) {
     console.error("Error getting family context:", error);
     return {};
   }
-}  
-  // Helper method to calculate mama percentage from survey responses
+}  // Helper method to calculate mama percentage from survey responses
   calculateMamaPercentage(responses) {
     let mamaCount = 0;
     let totalCount = 0;

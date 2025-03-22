@@ -68,6 +68,7 @@ export function ChatProvider({ children }) {
       await ChatService.saveMessage(allieMessage);
       
 // Send a message
+// Send a message
 const sendMessage = async (text, user) => {
   if (!user || !familyId) {
     console.error("Missing user or familyId in sendMessage:", { user, familyId });
@@ -121,7 +122,6 @@ const sendMessage = async (text, user) => {
     setLoading(false);
   }
 };
-
 
       // Update messages state with AI response
       setMessages(prev => [...prev, allieMessage]);

@@ -30,6 +30,7 @@ const WeeklyCheckInScreen = () => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const weekNum = currentWeek;
+  
 
 
   // Ref to track if keyboard listeners are initialized
@@ -198,7 +199,7 @@ const addRelationshipQuestions = (questions) => {
 };
 
 // Modify the return statement to include relationship questions
-return addRelationshipQuestions(filteredQuestions);
+//return addRelationshipQuestions(filteredQuestions);
 
 
 

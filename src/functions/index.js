@@ -1,14 +1,13 @@
-// functions/index.js
-const functions = require('firebase-functions');
-const cors = require('cors')({ origin: true });
-const fetch = require('node-fetch');
+const functions = require("firebase-functions");
+const cors = require("cors")({ origin: true });
+const fetch = require("node-fetch");
 
 exports.claudeProxy = functions.https.onCall(async (data, context) => {
   // Verify user is authenticated
   if (!context.auth) {
     throw new functions.https.HttpsError(
-      'unauthenticated',
-      'User must be authenticated to use this feature.'
+      "unauthenticated",
+      "User must be authenticated to use this feature."
     );
   }
 
@@ -17,15 +16,15 @@ exports.claudeProxy = functions.https.onCall(async (data, context) => {
     const apiKey = functions.config().claude.api_key;
     
     if (!apiKey) {
-      throw new Error('Claude API key not configured');
+      throw new Error("Claude API key not configured");
     }
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01"
       },
       body: JSON.stringify({
         model: "claude-3-7-sonnet-20240307",
@@ -45,6 +44,6 @@ exports.claudeProxy = functions.https.onCall(async (data, context) => {
     return result;
   } catch (error) {
     console.error("Error in claudeProxy:", error);
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new functions.https.HttpsError("internal", error.message);
   }
 });
