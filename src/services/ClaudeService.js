@@ -12,53 +12,92 @@ class ClaudeService {
   
 
   async generateResponse(messages, familyContext) {
-  try {
-    // Format system prompt with family context
-    const systemPrompt = this.formatSystemPrompt(familyContext || {});
-    
-    // Log for debugging
-    console.log("Claude API request:", { 
-      messagesCount: messages.length, 
-      systemPromptLength: systemPrompt.length
-    });
-    
-    // Direct API call to Claude
-    console.log("Making direct API call to Claude");
-    
-    const response = await fetch(this.API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: "claude-3-7-sonnet-20240307",
-        max_tokens: 1000,
-        system: systemPrompt,
-        messages: messages
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Claude API error: ${response.status}`, errorText);
-      throw new Error(`Claude API error: ${response.status}`);
+    try {
+      // Format system prompt with family context
+      const systemPrompt = this.formatSystemPrompt(familyContext || {});
+      
+      // Log for debugging
+      console.log("Claude API request:", { 
+        messagesCount: messages.length, 
+        systemPromptLength: systemPrompt.length,
+        useServerProxy: this.useServerProxy
+      });
+      
+      if (this.useServerProxy) {
+        // Call the secure Cloud Function
+        console.log("Using Firebase Function to call Claude API");
+        
+        // Add a timeout to the API call
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Request timed out")), 30000)
+        );
+        
+        const result = await Promise.race([
+          this.claudeProxy({
+            system: systemPrompt,
+            messages: messages
+          }),
+          timeoutPromise
+        ]);
+        
+        // Check for valid response
+        if (!result || !result.data || !result.data.content || !result.data.content[0]) {
+          console.error("Invalid response format from Claude proxy:", result);
+          throw new Error("Invalid response format from Claude proxy");
+        }
+        
+        return result.data.content[0].text;
+      } else {
+        // Direct API call to Claude
+        console.log("Making direct API call to Claude");
+        
+        // Prepare the request body
+        const requestBody = {
+          model: "claude-3-7-sonnet-20240219", // Use the appropriate model
+          max_tokens: 1000,
+          system: systemPrompt,
+          messages: messages
+        };
+        
+        // Make the API call
+        const response = await fetch(this.API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': this.API_KEY,
+            'anthropic-version': '2023-06-01'
+          },
+          body: JSON.stringify(requestBody)
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Claude API error: ${response.status}`, errorText);
+          throw new Error(`Claude API error: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        // Check for valid response format
+        if (!result || !result.content || !result.content[0]) {
+          console.error("Invalid response format from Claude API:", result);
+          throw new Error("Invalid response format from Claude API");
+        }
+        
+        return result.content[0].text;
+      }
+    } catch (error) {
+      console.error("Error calling Claude API:", error);
+      
+      // If the API call fails, we could still use the fallback methods
+      if (familyContext && Object.keys(familyContext).length > 3) {
+        console.log("API failed - falling back to local response generation");
+        return this.createPersonalizedResponse(messages[messages.length - 1]?.content || "", familyContext);
+      }
+      
+      return this.getContextualResponse(messages[messages.length - 1]?.content || "", familyContext);
     }
-
-    const result = await response.json();
-    console.log("Claude API response received");
-    return result.content[0].text;
-  } catch (error) {
-    console.error("Error calling Claude API directly:", error);
-    
-    // Fall back to pre-written responses if direct API call fails
-    if (familyContext && Object.keys(familyContext).length > 3) {
-      return this.createPersonalizedResponse(messages[messages.length - 1]?.content || "", familyContext);
-    }
-    return this.getContextualResponse(messages[messages.length - 1]?.content || "", familyContext);
   }
-}
   
   // Add this new method to create personalized responses
   createPersonalizedResponse(userMessage, context) {
