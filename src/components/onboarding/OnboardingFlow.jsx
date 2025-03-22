@@ -1418,90 +1418,62 @@ const selectPlan = (plan) => {
       // Success Stories slide removed (case 18 in original)
         
       case 19:
-        // Family Balance FAQ (originally case 14)
-        return (
-          <div>
-            <h2 className="text-3xl font-light mb-6">Family Balance FAQ</h2>
-            <p className="text-gray-600 mb-6">
-              Answers to common questions about the Allie approach.
-            </p>
-            
-            <div className="space-y-4">
-              <div className="border rounded-lg overflow-hidden">
-                <button 
-                  className="w-full flex justify-between items-center p-4 text-left"
-                  onClick={() => updateFamily('expandedFaq', familyData.expandedFaq === 1 ? null : 1)}
-                >
-                  <span className="font-medium">How long does it take to see results?</span>
-                  {familyData.expandedFaq === 1 ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                </button>
-                
-                {familyData.expandedFaq === 1 && (
-                  <div className="p-4 bg-gray-50 border-t">
-                    <p className="text-gray-700 text-sm">
-                      Most families report noticeable improvements within 3-4 weeks of consistent use. More significant changes in balance and family dynamics typically emerge after 2-3 months, as new habits become established.
-                    </p>
-                  </div>
-                )}
-              </div>
-              
-              <div className="border rounded-lg overflow-hidden">
-                <button 
-                  className="w-full flex justify-between items-center p-4 text-left"
-                  onClick={() => updateFamily('expandedFaq', familyData.expandedFaq === 2 ? null : 2)}
-                >
-                  <span className="font-medium">What if my partner isn't enthusiastic?</span>
-                  {familyData.expandedFaq === 2 ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                </button>
-                
-                {familyData.expandedFaq === 2 && (
-                  <div className="p-4 bg-gray-50 border-t">
-                    <p className="text-gray-700 text-sm">
-                      This is common! One approach is to focus on the data-driven aspect of Allie. Many skeptical partners become more engaged when they see objective measurements rather than feeling "accused." Start with simple, specific task changes rather than attempting a complete overhaul at once.
-                    </p>
-                  </div>
-                )}
-              </div>
-              
-              <div className="border rounded-lg overflow-hidden">
-                <button 
-                  className="w-full flex justify-between items-center p-4 text-left"
-                  onClick={() => updateFamily('expandedFaq', familyData.expandedFaq === 3 ? null : 3)}
-                >
-                  <span className="font-medium">How much time does it take each week?</span>
-                  {familyData.expandedFaq === 3 ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                </button>
-                
-                {familyData.expandedFaq === 3 && (
-                  <div className="p-4 bg-gray-50 border-t">
-                    <p className="text-gray-700 text-sm">
-                      Weekly check-ins take about 5 minutes per person. The guided family meeting is designed to be 30 minutes once a week. In total, the Allie process requires about 45 minutes per week, but saves families hours in reduced conflicts and more efficient task management.
-                    </p>
-                  </div>
-                )}
-              </div>
-              
-              <div className="border rounded-lg overflow-hidden">
-                <button 
-                  className="w-full flex justify-between items-center p-4 text-left"
-                  onClick={() => updateFamily('expandedFaq', familyData.expandedFaq === 4 ? null : 4)}
-                >
-                  <span className="font-medium">Is 50/50 always the goal?</span>
-                  {familyData.expandedFaq === 4 ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                </button>
-                
-                {familyData.expandedFaq === 4 && (
-                  <div className="p-4 bg-gray-50 border-t">
-                    <p className="text-gray-700 text-sm">
-                      Not necessarily! Allie isn't about forcing a rigid 50/50 split. It's about finding a balance that works for your unique family situation and feels fair to all involved. Some families might have a 60/40 split that feels perfectly balanced based on work schedules, preferences, and other factors.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        );
+  return (
+    <div className="text-center">
+      <h2 className="text-3xl font-light mb-6">You're Ready to Begin!</h2>
+      <p className="text-lg mb-8">
+        Choose how you'd like to proceed with Allie
+      </p>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-all">
+          <h3 className="font-bold text-xl mb-2">Join Allie Premium</h3>
+          <p className="text-gray-600 mb-4">Get full access to all features and start your family balance journey</p>
+          <button 
+            onClick={() => {
+              // Store family data in localStorage
+              localStorage.setItem('pendingFamilyData', JSON.stringify(familyData));
+              // Navigate to payment
+              navigate('/payment', { 
+                state: { 
+                  fromOnboarding: true,
+                  familyData: familyData 
+                } 
+              });
+            }}
+            className="px-6 py-3 bg-black text-white rounded-md w-full hover:bg-gray-800"
+          >
+            Subscribe Now
+          </button>
+        </div>
         
+        <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-all">
+          <h3 className="font-bold text-xl mb-2">Try Our Mini Assessment</h3>
+          <p className="text-gray-600 mb-4">Take a quick 20-question survey to see if your family has balance issues</p>
+          <button 
+            onClick={() => {
+              // Store family data in localStorage
+              localStorage.setItem('pendingFamilyData', JSON.stringify(familyData));
+              // Navigate to mini survey
+              navigate('/mini-survey', { 
+                state: { 
+                  fromOnboarding: true,
+                  familyData: familyData 
+                } 
+              });
+            }}
+            className="px-6 py-3 bg-purple-600 text-white rounded-md w-full hover:bg-purple-700"
+          >
+            Start Mini Survey
+          </button>
+        </div>
+      </div>
+      
+      <p className="text-sm text-gray-500 mt-6">
+        Your data is secure and will only be used to improve your family experience.
+      </p>
+    </div>
+  );
         case 20:
           return (
             <div className="text-center">
@@ -1625,187 +1597,23 @@ const selectPlan = (plan) => {
   return (
     <div className="min-h-screen bg-white flex flex-col font-['Roboto']">
     {/* Progress visualization based on hand-drawn style */}
-{/* Progress visualization - Family drawing that builds progressively */}
-<div className="relative mb-8">
-  <div className="max-w-4xl mx-auto px-4 flex flex-col md:flex-row items-center">
-    <div className="flex-1">
-      {familyData.familyName && (
-        <div className="mb-6">
-          <h1 className="text-3xl font-medium text-black">
-            The {familyData.familyName} Family
-          </h1>
-          <p className="text-gray-600 text-sm">Personalizing your family balance experience</p>
-        </div>
-      )}
-      
-      {/* Step indicator */}
-      <div className="hidden md:block">
-        <div className="flex items-center text-sm text-gray-500">
-          <span className="font-medium">Step {step}</span>
-          <div className="h-1 bg-gray-200 flex-1 mx-4">
-            <div 
-              className="h-full bg-black transition-all duration-500"
-              style={{ width: `${(step / totalSteps) * 100}%` }}
-            ></div>
-          </div>
-          <span>of {totalSteps}</span>
-        </div>
-      </div>
+{/* Header with family name */}
+<div className="text-center mb-8">
+  {familyData.familyName && (
+    <div>
+      <h1 className="text-3xl font-medium text-black">
+        The {familyData.familyName} Family
+      </h1>
+      <p className="text-gray-600 text-sm">Personalizing your family balance experience</p>
     </div>
-    
-    {/* Family illustration */}
-    <div className="w-72 h-64 md:h-auto hidden md:block">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" className="w-full">
-        <g stroke="black" strokeWidth="2.5" fill="none">
-          {/* Parent 1 - head and body */}
-          <path 
-            d="M120,80 C130,80 140,70 140,60 C140,45 125,45 120,50 C115,45 100,45 100,60 C100,70 110,80 120,80z" 
-            strokeDasharray="100" 
-            strokeDashoffset={step < 3 ? "100" : "0"}
-            className="transition-all duration-700"
-          />
-          <path 
-            d="M120,80 L120,150" 
-            strokeDasharray="70" 
-            strokeDashoffset={step < 4 ? "70" : "0"}
-            className="transition-all duration-700"
-          />
-          
-          {/* Parent 1 - arms */}
-          <path 
-            d="M120,100 L90,130" 
-            strokeDasharray="50" 
-            strokeDashoffset={step < 5 ? "50" : "0"}
-            className="transition-all duration-700"
-          />
-          <path 
-            d="M120,100 L150,130" 
-            strokeDasharray="50" 
-            strokeDashoffset={step < 6 ? "50" : "0"}
-            className="transition-all duration-700"
-          />
-          
-          {/* Parent 1 - legs */}
-          <path 
-            d="M120,150 L100,200" 
-            strokeDasharray="60" 
-            strokeDashoffset={step < 7 ? "60" : "0"}
-            className="transition-all duration-700"
-          />
-          <path 
-            d="M120,150 L140,200" 
-            strokeDasharray="60" 
-            strokeDashoffset={step < 8 ? "60" : "0"}
-            className="transition-all duration-700"
-          />
-          
-          {/* Parent 2 - head and body */}
-          <path 
-            d="M240,80 C250,80 260,70 260,60 C260,45 245,45 240,50 C235,45 220,45 220,60 C220,70 230,80 240,80z" 
-            strokeDasharray="100" 
-            strokeDashoffset={step < 9 ? "100" : "0"}
-            className="transition-all duration-700"
-          />
-          <path 
-            d="M240,80 L240,150" 
-            strokeDasharray="70" 
-            strokeDashoffset={step < 10 ? "70" : "0"}
-            className="transition-all duration-700"
-          />
-          
-          {/* Parent 2 - arms */}
-          <path 
-            d="M240,100 L210,130" 
-            strokeDasharray="50" 
-            strokeDashoffset={step < 11 ? "50" : "0"}
-            className="transition-all duration-700"
-          />
-          <path 
-            d="M240,100 L270,130" 
-            strokeDasharray="50" 
-            strokeDashoffset={step < 12 ? "50" : "0"}
-            className="transition-all duration-700"
-          />
-          
-          {/* Parent 2 - legs */}
-          <path 
-            d="M240,150 L220,200" 
-            strokeDasharray="60" 
-            strokeDashoffset={step < 13 ? "60" : "0"}
-            className="transition-all duration-700"
-          />
-          <path 
-            d="M240,150 L260,200" 
-            strokeDasharray="60" 
-            strokeDashoffset={step < 14 ? "60" : "0"}
-            className="transition-all duration-700"
-          />
-          
-          {/* Child 1 - head and body */}
-          <path 
-            d="M180,120 C185,120 190,115 190,110 C190,102 182,102 180,105 C178,102 170,102 170,110 C170,115 175,120 180,120z" 
-            strokeDasharray="50" 
-            strokeDashoffset={step < 15 ? "50" : "0"}
-            className="transition-all duration-700"
-          />
-          <path 
-            d="M180,120 L180,160" 
-            strokeDasharray="40" 
-            strokeDashoffset={step < 16 ? "40" : "0"}
-            className="transition-all duration-700"
-          />
-          
-          {/* Child 1 - arms */}
-          <path 
-            d="M180,130 L165,145" 
-            strokeDasharray="25" 
-            strokeDashoffset={step < 17 ? "25" : "0"}
-            className="transition-all duration-700"
-          />
-          <path 
-            d="M180,130 L195,145" 
-            strokeDasharray="25" 
-            strokeDashoffset={step < 18 ? "25" : "0"}
-            className="transition-all duration-700"
-          />
-          
-          {/* Child 1 - legs */}
-          <path 
-            d="M180,160 L170,190" 
-            strokeDasharray="40" 
-            strokeDashoffset={step < 19 ? "40" : "0"}
-            className="transition-all duration-700"
-          />
-          <path 
-            d="M180,160 L190,190" 
-            strokeDasharray="40" 
-            strokeDashoffset={step < totalSteps ? "40" : "0"}
-            className="transition-all duration-700"
-          />
-          
-          {/* Connections between family members - hands */}
-          <path 
-            d="M150,130 C160,140 170,145 180,145" 
-            strokeDasharray="40" 
-            strokeDashoffset={step < totalSteps - 1 ? "40" : "0"}
-            className="transition-all duration-700"
-          />
-          <path 
-            d="M210,130 C200,140 190,145 180,145" 
-            strokeDasharray="40" 
-            strokeDashoffset={step < totalSteps ? "40" : "0"}
-            className="transition-all duration-700"
-          />
-        </g>
-      </svg>
-    </div>
-  </div>
+  )}
 </div>
 
       
 
-<div className="flex-1 flex flex-col items-center justify-center px-4 py-6">
-  <div className="w-full max-w-md md:ml-12">
+<div className="flex-1 flex flex-col md:flex-row justify-center px-4 py-6">
+  {/* Main content */}
+  <div className="w-full max-w-md">
     {renderStep()}
     
     <div className="flex justify-between mt-8">
@@ -1827,6 +1635,153 @@ const selectPlan = (plan) => {
         </button>
       ) : null}
     </div>
+  </div>
+  
+  {/* Family illustration - only visible on md screens and up */}
+  <div className="hidden md:block md:ml-8 lg:ml-12 mt-8 md:mt-0 w-80">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" className="w-full">
+      <g stroke="black" strokeWidth="2.5" fill="none">
+        {/* Parent 1 - head and body */}
+        <path 
+          d="M120,80 C130,80 140,70 140,60 C140,45 125,45 120,50 C115,45 100,45 100,60 C100,70 110,80 120,80z" 
+          strokeDasharray="100" 
+          strokeDashoffset={step < 3 ? "100" : "0"}
+          className="transition-all duration-700"
+        />
+        <path 
+          d="M120,80 L120,150" 
+          strokeDasharray="70" 
+          strokeDashoffset={step < 4 ? "70" : "0"}
+          className="transition-all duration-700"
+        />
+        
+        {/* Parent 1 - arms */}
+        <path 
+          d="M120,100 L90,130" 
+          strokeDasharray="50" 
+          strokeDashoffset={step < 5 ? "50" : "0"}
+          className="transition-all duration-700"
+        />
+        <path 
+          d="M120,100 L150,130" 
+          strokeDasharray="50" 
+          strokeDashoffset={step < 6 ? "50" : "0"}
+          className="transition-all duration-700"
+        />
+        
+        {/* Parent 1 - legs */}
+        <path 
+          d="M120,150 L100,200" 
+          strokeDasharray="60" 
+          strokeDashoffset={step < 7 ? "60" : "0"}
+          className="transition-all duration-700"
+        />
+        <path 
+          d="M120,150 L140,200" 
+          strokeDasharray="60" 
+          strokeDashoffset={step < 8 ? "60" : "0"}
+          className="transition-all duration-700"
+        />
+        
+        {/* Parent 2 - head and body */}
+        <path 
+          d="M240,80 C250,80 260,70 260,60 C260,45 245,45 240,50 C235,45 220,45 220,60 C220,70 230,80 240,80z" 
+          strokeDasharray="100" 
+          strokeDashoffset={step < 9 ? "100" : "0"}
+          className="transition-all duration-700"
+        />
+        <path 
+          d="M240,80 L240,150" 
+          strokeDasharray="70" 
+          strokeDashoffset={step < 10 ? "70" : "0"}
+          className="transition-all duration-700"
+        />
+        
+        {/* Parent 2 - arms */}
+        <path 
+          d="M240,100 L210,130" 
+          strokeDasharray="50" 
+          strokeDashoffset={step < 11 ? "50" : "0"}
+          className="transition-all duration-700"
+        />
+        <path 
+          d="M240,100 L270,130" 
+          strokeDasharray="50" 
+          strokeDashoffset={step < 12 ? "50" : "0"}
+          className="transition-all duration-700"
+        />
+        
+        {/* Parent 2 - legs */}
+        <path 
+          d="M240,150 L220,200" 
+          strokeDasharray="60" 
+          strokeDashoffset={step < 13 ? "60" : "0"}
+          className="transition-all duration-700"
+        />
+        <path 
+          d="M240,150 L260,200" 
+          strokeDasharray="60" 
+          strokeDashoffset={step < 14 ? "60" : "0"}
+          className="transition-all duration-700"
+        />
+        
+        {/* Child 1 - head and body */}
+        <path 
+          d="M180,120 C185,120 190,115 190,110 C190,102 182,102 180,105 C178,102 170,102 170,110 C170,115 175,120 180,120z" 
+          strokeDasharray="50" 
+          strokeDashoffset={step < 15 ? "50" : "0"}
+          className="transition-all duration-700"
+        />
+        <path 
+          d="M180,120 L180,160" 
+          strokeDasharray="40" 
+          strokeDashoffset={step < 16 ? "40" : "0"}
+          className="transition-all duration-700"
+        />
+        
+        {/* Child 1 - arms */}
+        <path 
+          d="M180,130 L165,145" 
+          strokeDasharray="25" 
+          strokeDashoffset={step < 17 ? "25" : "0"}
+          className="transition-all duration-700"
+        />
+        <path 
+          d="M180,130 L195,145" 
+          strokeDasharray="25" 
+          strokeDashoffset={step < 18 ? "25" : "0"}
+          className="transition-all duration-700"
+        />
+        
+        {/* Child 1 - legs */}
+        <path 
+          d="M180,160 L170,190" 
+          strokeDasharray="40" 
+          strokeDashoffset={step < 19 ? "40" : "0"}
+          className="transition-all duration-700"
+        />
+        <path 
+          d="M180,160 L190,190" 
+          strokeDasharray="40" 
+          strokeDashoffset={step < totalSteps ? "40" : "0"}
+          className="transition-all duration-700"
+        />
+        
+        {/* Connections between family members - hands */}
+        <path 
+          d="M150,130 C160,140 170,145 180,145" 
+          strokeDasharray="40" 
+          strokeDashoffset={step < totalSteps - 1 ? "40" : "0"}
+          className="transition-all duration-700"
+        />
+        <path 
+          d="M210,130 C200,140 190,145 180,145" 
+          strokeDasharray="40" 
+          strokeDashoffset={step < totalSteps ? "40" : "0"}
+          className="transition-all duration-700"
+        />
+      </g>
+    </svg>
   </div>
 </div>
       
