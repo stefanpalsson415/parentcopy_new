@@ -198,6 +198,20 @@ useEffect(() => {
     document.getElementsByTagName('head')[0].appendChild(link);
   };
 
+  // Get default favicon based on role
+const getDefaultFavicon = () => {
+  // If family has a picture, use it
+  if (familyPicture) {
+    return familyPicture;
+  }
+  // Otherwise return default favicon
+  return '/favicon.svg';
+};
+
+// Add this call to useEffect where favicon is set (around line 82)
+// Update favicon with family picture or default
+updateFavicon(familyPicture || getDefaultFavicon());
+
   // Reset all family state
   const resetFamilyState = () => {
     setFamilyId(null);

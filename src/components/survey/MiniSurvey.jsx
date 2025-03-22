@@ -11,7 +11,92 @@ const MiniSurvey = () => {
   const [responses, setResponses] = useState({});
   const navigate = useNavigate();
   
-  
+  // AI explanations for each question
+const questionExplanations = {
+  "q1": {
+    text: "Cooking requires significant time each day and has a direct impact on family nutrition and wellbeing. This visible task's distribution often reflects deeper patterns in household responsibility allocation.",
+    factors: "Time (4.5×) • Frequency (1.5×) • Emotional Labor (1.2×)",
+  },
+  "q2": {
+    text: "Bathroom cleaning is a high-impact visible household task that affects everyone's comfort. Who handles this task often reveals patterns about cleanliness standards and expectations.",
+    factors: "Time (3.8×) • Frequency (1.2×) • Emotional Labor (1.0×)",
+  },
+  "q3": {
+    text: "Laundry combines both visible work (washing, folding) and invisible work (monitoring, planning). It's a recurring task that impacts everyone's daily needs.",
+    factors: "Time (3.5×) • Frequency (1.4×) • Emotional Labor (1.1×)",
+  },
+  "q4": {
+    text: "While quick to perform, trash removal is a frequent necessity that someone must consistently remember. Its regularity makes it an important indicator of workload distribution.",
+    factors: "Time (1.5×) • Frequency (1.4×) • Emotional Labor (1.0×)",
+  },
+  "q5": {
+    text: "Yard work and gardening are seasonal but time-intensive tasks that affect your home's appearance and functionality. They often follow traditional gender divisions.",
+    factors: "Time (4.0×) • Frequency (1.0×) • Emotional Labor (1.0×)",
+  },
+  "q6": {
+    text: "Meal planning creates significant mental load through decision-making, nutrition planning, and anticipating everyone's preferences and schedules.",
+    factors: "Time (3.0×) • Invisibility (1.5×) • Emotional Labor (1.3×)",
+  },
+  "q7": {
+    text: "Remembering special occasions involves not just dates but also planning gifts, organizing celebrations, and maintaining social connections. This invisible work is easily overlooked.",
+    factors: "Time (2.5×) • Invisibility (1.5×) • Emotional Labor (1.4×)",
+  },
+  "q8": {
+    text: "Scheduling home maintenance requires foresight, coordination, and follow-up. This invisible task maintains your home's value and functionality but is rarely acknowledged.",
+    factors: "Time (2.0×) • Invisibility (1.5×) • Emotional Labor (1.2×)",
+  },
+  "q9": {
+    text: "Shopping lists involve inventory monitoring, meal planning, and anticipating family needs. This invisible mental task requires ongoing attention to household supplies.",
+    factors: "Time (2.0×) • Invisibility (1.5×) • Emotional Labor (1.2×)",
+  },
+  "q10": {
+    text: "Researching products requires time, attention, and decision-making energy. This invisible labor ensures wise spending and appropriate purchases for family needs.",
+    factors: "Time (3.0×) • Invisibility (1.5×) • Emotional Labor (1.2×)",
+  },
+  "q11": {
+    text: "Driving children creates both a time commitment and logistical planning. This visible parental task directly impacts children's access to activities and education.",
+    factors: "Time (3.5×) • Frequency (1.5×) • Child Impact (1.3×)",
+  },
+  "q12": {
+    text: "Homework help combines educational support with emotional coaching. This parenting task directly impacts academic outcomes and parent-child relationships.",
+    factors: "Time (3.0×) • Frequency (1.4×) • Child Impact (1.5×)",
+  },
+  "q13": {
+    text: "Preparing school lunches combines nutrition planning with daily execution. This visible task requires both planning and preparation time.",
+    factors: "Time (2.5×) • Frequency (1.5×) • Child Impact (1.2×)",
+  },
+  "q14": {
+    text: "Coordinating extracurricular activities involves scheduling, transportation planning, and communication with instructors. This parental task significantly impacts children's development.",
+    factors: "Time (3.0×) • Invisibility (1.3×) • Child Impact (1.4×)",
+  },
+  "q15": {
+    text: "Attending parent-teacher conferences requires time commitment but also information management and follow-up. This parental task is crucial for academic support.",
+    factors: "Time (3.5×) • Frequency (1.0×) • Child Impact (1.5×)",
+  },
+  "q16": {
+    text: "Emotional support during challenges is high-impact invisible work that shapes children's resilience and emotional intelligence. This task requires significant emotional energy.",
+    factors: "Time (4.0×) • Invisibility (1.5×) • Emotional Labor (1.5×)",
+  },
+  "q17": {
+    text: "Anticipating developmental needs requires research, observation, and proactive planning. This invisible parental task directly impacts children's growth and wellbeing.",
+    factors: "Time (3.0×) • Invisibility (1.5×) • Child Impact (1.5×)",
+  },
+  "q18": {
+    text: "Mediating sibling conflicts requires emotional regulation, conflict resolution skills, and patience. This invisible work teaches children relationship skills.",
+    factors: "Time (3.0×) • Invisibility (1.4×) • Emotional Labor (1.5×)",
+  },
+  "q19": {
+    text: "Monitoring academic progress involves tracking assignments, communicating with teachers, and providing appropriate support. This invisible task impacts educational outcomes.",
+    factors: "Time (2.5×) • Invisibility (1.4×) • Child Impact (1.5×)",
+  },
+  "q20": {
+    text: "Moral and cultural education shapes children's values and identity. This high-impact invisible work requires intentional conversations and modeling.",
+    factors: "Time (3.5×) • Invisibility (1.5×) • Child Impact (1.5×)",
+  }
+};
+
+
+
   // Sample 20 questions covering the different categories
   const questions = [
     // Visible Household Tasks (5 questions)
@@ -121,24 +206,28 @@ const MiniSurvey = () => {
           
           {/* Enhanced AI explanation */}
           <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded">
-            <div className="flex items-start">
-              <Brain size={16} className="text-purple-600 mr-2 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-purple-800 font-medium text-sm mb-1">Why This Question Matters:</p>
-                <p className="text-purple-800 font-roboto text-sm">
-                  This question helps identify who handles key {currentQ.category.toLowerCase()} in your family. 
-                  {currentQ.category.includes("Invisible") ? 
-                    " Invisible work often goes unrecognized but creates significant mental load." : 
-                    " Visible tasks take time and energy that should be equitably shared."}
-                </p>
-                <div className="mt-2 text-xs text-purple-700 bg-purple-100 p-2 rounded">
-                  <span className="font-medium">Task Weight Factors:</span> {currentQ.category.includes("Household") ? "Time (4.2×) • " : "Time (3.8×) • "}
-                  {currentQ.category.includes("Invisible") ? "Invisibility (1.5×) • " : "Invisibility (1.0×) • "}
-                  {currentQ.category.includes("Parental") ? "Emotional Labor (1.4×)" : "Emotional Labor (1.1×)"}
-                </div>
-              </div>
-            </div>
-          </div>
+  <div className="flex items-start">
+    <Brain size={16} className="text-purple-600 mr-2 mt-0.5 flex-shrink-0" />
+    <div>
+      <p className="text-purple-800 font-medium text-sm mb-1">Why This Question Matters:</p>
+      <p className="text-purple-800 font-roboto text-sm">
+        {questionExplanations[currentQ.id]?.text || 
+          `This question helps identify who handles key ${currentQ.category.toLowerCase()} in your family. 
+          ${currentQ.category.includes("Invisible") ? 
+            "Invisible work often goes unrecognized but creates significant mental load." : 
+            "Visible tasks take time and energy that should be equitably shared."}`
+        }
+      </p>
+      <div className="mt-2 text-xs text-purple-700 bg-purple-100 p-2 rounded">
+        <span className="font-medium">Task Weight Factors:</span> {questionExplanations[currentQ.id]?.factors || 
+          `${currentQ.category.includes("Household") ? "Time (4.2×) • " : "Time (3.8×) • "}
+          ${currentQ.category.includes("Invisible") ? "Invisibility (1.5×) • " : "Invisibility (1.0×) • "}
+          ${currentQ.category.includes("Parental") ? "Emotional Labor (1.4×)" : "Emotional Labor (1.1×)"}`
+        }
+      </div>
+    </div>
+  </div>
+</div>
         </div>
         
         {/* Answer options */}

@@ -36,6 +36,9 @@ const OnboardingFlow = () => {
   });
   const navigate = useNavigate();
   
+  const [validationErrors, setValidationErrors] = useState({});
+
+
   const totalSteps = 20; // Keeping total steps the same, even with reordering
   
   // Handle data updates
@@ -92,10 +95,13 @@ const OnboardingFlow = () => {
     // Validation for each step
     switch(step) {
       case 3: // Family name
-        if (!familyData.familyName.trim()) {
-          alert('Please enter your family name');
-          return;
-        }
+      if (!familyData.familyName.trim()) {
+        setValidationErrors({
+          ...validationErrors,
+          familyName: 'Please enter your family name'
+        });
+        return;
+      }
         break;
       case 5: // Parent information
         for (const parent of familyData.parents) {
@@ -172,18 +178,18 @@ const OnboardingFlow = () => {
   };
   
   // Function to select a subscription plan
-  const selectPlan = (plan) => {
-    updateFamily('plan', plan);
-    
-    // Store data and navigate to payment
-    localStorage.setItem('pendingFamilyData', JSON.stringify(familyData));
-    navigate('/payment', { 
-      state: { 
-        fromOnboarding: true,
-        familyData: familyData 
-      } 
-    });
-  };
+const selectPlan = (plan) => {
+  updateFamily('plan', plan);
+  
+  // Store data and navigate to payment
+  localStorage.setItem('pendingFamilyData', JSON.stringify(familyData));
+  navigate('/payment', { 
+    state: { 
+      fromOnboarding: true,
+      familyData: familyData 
+    } 
+  });
+};
   
   // Render step content
   const renderStep = () => {
@@ -1668,14 +1674,48 @@ const OnboardingFlow = () => {
   
   return (
     <div className="min-h-screen bg-white flex flex-col font-['Roboto']">
-      {/* Progress indicator */}
-      <div className="h-1 bg-gray-200">
-        <div 
-          className="h-full bg-black transition-all duration-500"
-          style={{ width: `${(step / totalSteps) * 100}%` }}
-        ></div>
-      </div>
+      {/* Family outline progress indicator */}
+<div className="relative h-8 mx-auto w-full max-w-lg mb-4">
+  {/* Family outline SVG - this will be the container */}
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 120" className="w-full">
+    {/* Background outline - full family */}
+    <g stroke="lightgray" strokeWidth="2" fill="none">
+      <circle cx="256" cy="40" r="30" /> {/* Center/parent */}
+      <circle cx="200" cy="45" r="25" /> {/* Left parent */}
+      <circle cx="312" cy="45" r="25" /> {/* Right parent */}
+      <circle cx="170" cy="70" r="15" /> {/* Left child */}
+      <circle cx="340" cy="70" r="15" /> {/* Right child */}
+      <path d="M170,85 Q256,115 340,85" /> {/* Smile connect */}
+    </g>
+    
+    {/* Progress fill - gets revealed as steps progress */}
+    <g stroke="black" strokeWidth="2" fill="none" strokeDasharray="1000" strokeDashoffset={1000 - ((step / totalSteps) * 1000)}>
+      <circle cx="256" cy="40" r="30" /> {/* Center/parent */}
+      <circle cx="200" cy="45" r="25" /> {/* Left parent */}
+      <circle cx="312" cy="45" r="25" /> {/* Right parent */}
+      <circle cx="170" cy="70" r="15" /> {/* Left child */}
+      <circle cx="340" cy="70" r="15" /> {/* Right child */}
+      <path d="M170,85 Q256,115 340,85" /> {/* Smile connect */}
+    </g>
+  </svg>
+  
+  {/* Step counter text */}
+  <div className="absolute bottom-0 w-full text-center text-sm text-gray-500">
+    Step {step} of {totalSteps}
+  </div>
+</div>
       
+{/* Family name header - only shows after family name is entered */}
+{familyData.familyName && (
+  <div className="text-center mb-6">
+    <h1 className="text-3xl font-medium text-black">
+      The {familyData.familyName} Family
+    </h1>
+    <p className="text-gray-600 text-sm">Personalizing your family balance experience</p>
+  </div>
+)}
+
+
       <div className="flex-1 flex flex-col items-center justify-center p-6">
         <div className="w-full max-w-md">
           {renderStep()}
@@ -1702,10 +1742,7 @@ const OnboardingFlow = () => {
         </div>
       </div>
       
-      {/* Step counter */}
-      <div className="p-4 text-center text-sm text-gray-500">
-        Step {step} of {totalSteps}
-      </div>
+      
     </div>
   );
 };

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Check, Edit, Trash2, User, Mail, Key, UserPlus, 
-  Save, AlertCircle, Users 
+  Save, AlertCircle, Brain, Users 
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -436,6 +436,59 @@ const UserSignupScreen = () => {
             </div>
           </div>
           
+{/* Personalized Insights Section */}
+{familyData.priorities && familyData.communication && (
+  <div className="mb-8 bg-purple-50 p-6 rounded-lg">
+    <h4 className="font-medium mb-3 flex items-center">
+      <Brain className="text-purple-600 mr-2" size={20} />
+      Personalized Family Insights
+    </h4>
+    
+    <div className="space-y-4">
+      {familyData.priorities.highestPriority && (
+        <div className="bg-white p-3 rounded border border-purple-100">
+          <p className="text-sm">
+            <span className="font-medium">Priority Focus:</span> Your family identified 
+            <span className="text-purple-700 font-medium"> {familyData.priorities.highestPriority.toLowerCase()} </span> 
+            as your highest priority area. Allie's AI will customize tasks to address this area first.
+          </p>
+        </div>
+      )}
+      
+      {familyData.communication.style && (
+        <div className="bg-white p-3 rounded border border-purple-100">
+          <p className="text-sm">
+            <span className="font-medium">Communication Style:</span> Based on your
+            <span className="text-purple-700 font-medium"> {familyData.communication.style} </span>
+            communication style, we've tailored your family meeting guides for maximum effectiveness.
+          </p>
+        </div>
+      )}
+      
+      {familyData.mainChallenge && (
+        <div className="bg-white p-3 rounded border border-purple-100">
+          <p className="text-sm">
+            <span className="font-medium">Primary Challenge:</span> We'll focus on addressing your
+            <span className="text-purple-700 font-medium"> {familyData.mainChallenge} </span>
+            challenge with specialized tools and approaches.
+          </p>
+        </div>
+      )}
+      
+      {familyData.children && familyData.children.length > 0 && (
+        <div className="bg-white p-3 rounded border border-purple-100">
+          <p className="text-sm">
+            <span className="font-medium">Child-Specific Insights:</span> We've customized the experience for
+            <span className="text-purple-700 font-medium"> {familyData.children.map(c => c.name).join(', ')} </span>
+            with age-appropriate content and activities.
+          </p>
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
+
           {/* Benefits Section */}
           <div className="bg-black text-white p-5 rounded-lg mb-6">
             <h3 className="font-medium text-lg mb-3 flex items-center">

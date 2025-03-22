@@ -125,14 +125,16 @@ const MiniResultsScreen = () => {
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
       {/* Header */}
-      <div className="bg-blue-600 text-white p-6">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-2xl font-bold mb-2">Your Family Balance Assessment</h1>
-          <p className="opacity-90">
-            Based on your responses, here's how tasks are currently distributed in your family
-          </p>
-        </div>
-      </div>
+<div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6">
+  <div className="max-w-3xl mx-auto">
+    <h1 className="text-3xl font-bold mb-2">
+      {pendingFamilyData?.familyName ? `${pendingFamilyData.familyName} Family Balance Assessment` : "Your Family Balance Assessment"}
+    </h1>
+    <p className="opacity-90">
+      Based on your responses, here's how tasks are currently distributed in your family
+    </p>
+  </div>
+</div>
       
       {/* Main Content */}
       <div className="max-w-3xl mx-auto p-4">
@@ -370,30 +372,38 @@ const MiniResultsScreen = () => {
 
 
         {/* Call to Action */}
-        <div className="bg-gradient-to-r from-purple-500 to-indigo-600 rounded-lg shadow-sm overflow-hidden text-white">
-          <div className="p-6">
-            <h2 className="text-xl font-bold mb-3">Want a Complete Analysis?</h2>
-            <p className="opacity-90 mb-6">
-              Allie offers in-depth analysis, weekly check-ins, and guided family meetings to help you achieve better balance.
-            </p>
-            
-            <button 
-              onClick={() => {
-                // Pass along family data if it exists
-                navigate('/payment', pendingFamilyData ? {
-                  state: {
-                    fromMiniResults: true,
-                    familyData: pendingFamilyData
-                  }
-                } : undefined);
-              }}
-              className="px-6 py-3 bg-white text-indigo-600 rounded-md font-medium hover:bg-indigo-50"
-            >
-              Get Full Access
-            </button>
-          </div>
-        </div>
-      </div>
+<div className="bg-gradient-to-r from-purple-500 to-indigo-600 rounded-lg shadow-sm overflow-hidden text-white">
+  <div className="p-8">
+    <h2 className="text-2xl font-bold mb-3">Want a Complete Family Balance Solution?</h2>
+    <p className="opacity-90 mb-6">
+      Allie offers in-depth analysis, AI-driven task recommendations, weekly check-ins, and guided family meetings to help you achieve better balance.
+    </p>
+    
+    <div className="flex flex-col md:flex-row gap-4">
+      <button 
+        onClick={() => {
+          // Pass along family data if it exists
+          navigate('/payment', pendingFamilyData ? {
+            state: {
+              fromMiniResults: true,
+              familyData: pendingFamilyData
+            }
+          } : undefined);
+        }}
+        className="px-6 py-3 bg-white text-indigo-600 rounded-md font-medium hover:bg-indigo-50 flex-1 text-center"
+      >
+        Get Full Access
+      </button>
+      
+      <button 
+        onClick={() => navigate('/')}
+        className="px-6 py-3 bg-transparent text-white border border-white rounded-md font-medium hover:bg-white hover:bg-opacity-10 flex-1 text-center"
+      >
+        Learn More
+      </button>
+    </div>
+  </div>
+</div>
     </div>
   );
 };

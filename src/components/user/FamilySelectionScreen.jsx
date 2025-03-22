@@ -129,20 +129,20 @@ useEffect(() => {
   
 
 
-  // Get default profile image based on role
-  const getDefaultProfileImage = (member) => {
-    if (!member.profilePicture) {
-      if (member.role === 'parent') {
-        return member.roleType === 'Mama' 
-          ? 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48Y2lyY2xlIGN4PSIxMjgiIGN5PSIxMjgiIHI9IjEyOCIgZmlsbD0iI2U5YjFkYSIvPjxjaXJjbGUgY3g9IjEyOCIgY3k9IjkwIiByPSI0MCIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yMTUsMTcyLjVjMCwzNS05NSwzNS05NSwzNXMtOTUsMC05NS0zNWMwLTIzLjMsOTUtMTAsOTUtMTBTMjE1LDE0OS4yLDIxNSwxNzIuNVoiIGZpbGw9IiNmZmYiLz48L3N2Zz4=' 
-          : 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48Y2lyY2xlIGN4PSIxMjgiIGN5PSIxMjgiIHI9IjEyOCIgZmlsbD0iIzg0YzRlMiIvPjxjaXJjbGUgY3g9IjEyOCIgY3k9IjkwIiByPSI0MCIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yMTUsMTcyLjVjMCwzNS05NSwzNS05NSwzNXMtOTUsMC05NS0zNWMwLTIzLjMsOTUtMTAsOTUtMTBTMjE1LDE0OS4yLDIxNSwxNzIuNVoiIGZpbGw9IiNmZmYiLz48L3N2Zz4=';
-      } else {
-        // Child icon
-        return 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48Y2lyY2xlIGN4PSIxMjgiIGN5PSIxMjgiIHI9IjEyOCIgZmlsbD0iI2ZkZTY4YSIvPjxjaXJjbGUgY3g9IjEyOCIgY3k9IjkwIiByPSI0MCIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yMTUsMTcyLjVjMCwzNS05NSwzNS05NSwzNXMtOTUsMC05NS0zNWMwLTIzLjMsOTUtMTAsOTUtMTBTMjE1LDE0OS4yLDIxNSwxNzIuNVoiIGZpbGw9IiNmZmYiLz48L3N2Zz4=';
-      }
+ // Get default profile image based on role
+const getDefaultProfileImage = (member) => {
+  if (!member.profilePicture) {
+    if (member.role === 'parent') {
+      return member.roleType === 'Mama' 
+        ? 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48Y2lyY2xlIGN4PSIxMjgiIGN5PSIxMjgiIHI9IjEyOCIgZmlsbD0iI2U5YjFkYSIvPjxjaXJjbGUgY3g9IjEyOCIgY3k9IjkwIiByPSI0MCIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yMTUsMTcyLjVjMCwzNS05NSwzNS05NSwzNXMtOTUsMC05NS0zNWMwLTIzLjMsOTUtMTAsOTUtMTBTMjE1LDE0OS4yLDIxNSwxNzIuNVoiIGZpbGw9IiNmZmYiLz48L3N2Zz4=' 
+        : 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48Y2lyY2xlIGN4PSIxMjgiIGN5PSIxMjgiIHI9IjEyOCIgZmlsbD0iIzg0YzRlMiIvPjxjaXJjbGUgY3g9IjEyOCIgY3k9IjkwIiByPSI0MCIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yMTUsMTcyLjVjMCwzNS05NSwzNS05NSwzNXMtOTUsMC05NS0zNWMwLTIzLjMsOTUtMTAsOTUtMTBTMjE1LDE0OS4yLDIxNSwxNzIuNVoiIGZpbGw9IiNmZmYiLz48L3N2Zz4=';
+    } else {
+      // Child icon
+      return 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48Y2lyY2xlIGN4PSIxMjgiIGN5PSIxMjgiIHI9IjEyOCIgZmlsbD0iI2ZkZTY4YSIvPjxjaXJjbGUgY3g9IjEyOCIgY3k9IjkwIiByPSI0MCIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yMTUsMTcyLjVjMCwzNS05NSwzNS05NSwzNXMtOTUsMC05NS0zNWMwLTIzLjMsOTUtMTAsOTUtMTBTMjE1LDE0OS4yLDIxNSwxNzIuNVoiIGZpbGw9IiNmZmYiLz48L3N2Zz4=';
     }
-    return member.profilePicture;
-  };
+  }
+  return member.profilePicture;
+};
   
   // Handle selecting a user from the family
   const handleSelectUser = (member) => {
@@ -206,11 +206,23 @@ useEffect(() => {
   const handleImageFile = async (file) => {
     setIsUploading(true);
     try {
-      const storageRef = ref(storage, `profiles/${uploadForMember.id}/${Date.now()}_${file.name}`);
-      const snapshot = await uploadBytes(storageRef, file);
-      const imageUrl = await getDownloadURL(snapshot.ref);
-      await updateMemberProfile(uploadForMember.id, { profilePicture: imageUrl });
-      setShowProfileUpload(false);
+      if (uploadForMember.id === 'family') {
+        // Handle family picture upload
+        const storageRef = ref(storage, `families/${familyId}/${Date.now()}_${file.name}`);
+        const snapshot = await uploadBytes(storageRef, file);
+        const imageUrl = await getDownloadURL(snapshot.ref);
+        
+        // Update family picture in context
+        await DatabaseService.saveFamilyData({ familyPicture: imageUrl }, familyId);
+        setShowProfileUpload(false);
+      } else {
+        // Handle individual profile upload
+        const storageRef = ref(storage, `profiles/${uploadForMember.id}/${Date.now()}_${file.name}`);
+        const snapshot = await uploadBytes(storageRef, file);
+        const imageUrl = await getDownloadURL(snapshot.ref);
+        await updateMemberProfile(uploadForMember.id, { profilePicture: imageUrl });
+        setShowProfileUpload(false);
+      }
     } catch (error) {
       console.error("Error uploading image:", error);
       let errorMessage = "Failed to upload image. Please try again.";
@@ -418,6 +430,35 @@ useEffect(() => {
                       />
                     </div>
                   </div>
+
+                  {/* Family Name and Photo */}
+<div className="flex items-center">
+  {/* Family photo */}
+  <div className="mr-4 hidden md:block relative">
+    <div className="w-12 h-12 rounded-lg overflow-hidden border-2 border-white shadow-lg">
+      <img 
+        src={familyPicture || '/favicon.svg'}
+        alt={`${familyName || 'Family'} Photo`}
+        className="w-full h-full object-cover"
+      />
+    </div>
+    <button
+      className="absolute bottom-0 right-0 bg-black text-white p-1 rounded-full"
+      onClick={() => {
+        setUploadForMember({id: 'family', name: 'Family'});
+        setUploadType('family');
+        setShowProfileUpload(true);
+      }}
+    >
+      <Camera size={8} />
+    </button>
+  </div>
+  <div className="flex flex-col">
+    <h1 className="text-xl font-bold font-roboto">Allie</h1>
+    <p className="text-sm font-roboto">Balance family responsibilities together</p>
+    <p className="text-xs text-gray-300 font-roboto">The {familyName ? familyName.split(' ')[0] : ''} Family</p>
+  </div>
+</div>
                   
                   <button
                     type="submit"
@@ -540,48 +581,48 @@ useEffect(() => {
     {familyMembers.length > 0 ? (
       familyMembers.map((member) => (
         <div 
-          key={member.id}
-          className={`border rounded-lg p-4 cursor-pointer transition-all ${
-            selectedUser?.id === member.id 
-              ? 'border-black bg-gray-50' 
-              : 'border-gray-200 hover:border-gray-900'
-          }`}
-          onClick={() => handleSelectUser(member)}
-        >
-          <div className="flex items-center">
-          <div className="flex-shrink-0 mr-4 relative">
-  <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-200 relative">
-    <img 
-      src={getDefaultProfileImage(member)} 
-      alt={`${member.name}'s profile`}
-      className="w-full h-full object-cover"
-    />
-    {!member.profilePicture && (
-      <div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center p-1 text-white">
-        <span className="text-xs font-bold">Add a pic!</span>
-        <span className="text-[7px]">It's better!</span>
-      </div>
-    )}
-  </div>
-  <button
-    className="absolute bottom-0 right-0 bg-black text-white p-1 rounded-full"
-    onClick={(e) => handleSelectForUpload(member, e)}
-  >
-    <Camera size={12} />
-  </button>
-</div>
-            <div className="flex-1">
-              <h3 className="font-medium text-lg">{member.name}</h3>
-              <p className="text-sm text-gray-500 capitalize">{member.role}</p>
-              <div className="mt-1">
-                <span className={`text-xs flex items-center ${getNextAction(member).className}`}>
-                  {getNextAction(member).icon}
-                  {getNextAction(member).text}
-                </span>
-              </div>
-            </div>
+  key={member.id}
+  className={`border rounded-lg p-4 cursor-pointer transition-all ${
+    selectedUser?.id === member.id 
+      ? 'border-black bg-gray-50' 
+      : 'border-gray-200 hover:border-gray-900'
+  }`}
+  onClick={() => handleSelectUser(member)}
+>
+  <div className="flex items-center">
+    <div className="flex-shrink-0 mr-4 relative">
+      <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-200 relative">
+        <img 
+          src={getDefaultProfileImage(member)} 
+          alt={`${member.name}'s profile`}
+          className="w-full h-full object-cover"
+        />
+        {!member.profilePicture && (
+          <div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center p-1 text-white">
+            <span className="text-xs font-bold">Add a pic!</span>
+            <span className="text-[7px]">It's better!</span>
           </div>
-        </div>
+        )}
+      </div>
+      <button
+        className="absolute bottom-0 right-0 bg-black text-white p-1 rounded-full"
+        onClick={(e) => handleSelectForUpload(member, e)}
+      >
+        <Camera size={12} />
+      </button>
+    </div>
+    <div className="flex-1">
+      <h3 className="font-medium text-lg">{member.name}</h3>
+      <p className="text-sm text-gray-500 capitalize">{member.role}</p>
+      <div className="mt-1">
+        <span className={`text-xs flex items-center ${getNextAction(member).className}`}>
+          {getNextAction(member).icon}
+          {getNextAction(member).text}
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
       ))
     ) : (
       <div className="text-center p-6 text-gray-500">

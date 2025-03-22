@@ -229,19 +229,30 @@ const PaymentScreen = () => {
               </div>
             </div>
     
-            <div className="mt-6 text-center">
-              <button
-                onClick={() => navigate('/mini-survey', pendingFamilyData ? {
-                  state: {
-                    fromPayment: true,
-                    familyData: pendingFamilyData
-                  }
-                } : undefined)}
-                className="text-blue-600 hover:underline"
-              >
-                Not convinced? Try our mini-assessment first
-              </button>
-            </div>
+            <div className="mt-6 bg-gradient-to-r from-purple-100 to-blue-100 p-6 rounded-lg border border-purple-200">
+  <div className="flex flex-col md:flex-row items-center">
+    <div className="flex-1 mb-4 md:mb-0 md:mr-4">
+      <h4 className="text-lg font-bold text-purple-800">Not Ready to Commit?</h4>
+      <p className="text-sm text-purple-700">
+        Try our interactive mini-assessment to see a preview of Allie's AI engine in action! Experience how our technology analyzes your family's balance, with personalized insights—all before subscribing.
+      </p>
+    </div>
+    <button
+      onClick={() => navigate('/mini-survey', pendingFamilyData ? {
+        state: {
+          fromPayment: true,
+          familyData: pendingFamilyData
+        }
+      } : undefined)}
+      className="px-6 py-3 bg-purple-600 text-white rounded-md hover:bg-purple-700 whitespace-nowrap"
+    >
+      <span className="flex items-center">
+        <Brain size={18} className="mr-2" />
+        Try Our Mini-Assessment
+      </span>
+    </button>
+  </div>
+</div>
           </div>
           
           {couponApplied ? (
