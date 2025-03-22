@@ -1625,189 +1625,210 @@ const selectPlan = (plan) => {
   return (
     <div className="min-h-screen bg-white flex flex-col font-['Roboto']">
     {/* Progress visualization based on hand-drawn style */}
-<div className="relative mb-8 flex">
-  <div className="flex-1">
-    {familyData.familyName && (
-      <div className="text-center mb-6">
-        <h1 className="text-3xl font-medium text-black">
-          The {familyData.familyName} Family
-        </h1>
-        <p className="text-gray-600 text-sm">Personalizing your family balance experience</p>
-      </div>
-    )}
-  </div>
-  
-  <div className="w-64 hidden md:block">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 240" className="w-full">
-      {/* Hand-drawn style family - animated based on progress */}
-      <g stroke="black" strokeWidth="2.5" fill="none">
-        {/* First person (completed early) */}
-        <path 
-          d="M40,60 C45,59 55,62 60,58 C62,56 61,46 62,44 C64,40 69,37 74,38 C78,39 80,45 80,49 C80,55 75,58 72,60" 
-          strokeDasharray="200" 
-          strokeDashoffset={step < 3 ? "200" : "0"}
-          className="transition-all duration-1000"
-        />
-        <path 
-          d="M72,60 C70,70 70,80 70,90 C70,100 68,110 70,118" 
-          strokeDasharray="100" 
-          strokeDashoffset={step < 4 ? "100" : "0"}
-          className="transition-all duration-1000"
-        />
-        <path 
-          d="M70,85 C80,90 90,94 98,98" 
-          strokeDasharray="50" 
-          strokeDashoffset={step < 6 ? "50" : "0"}
-          className="transition-all duration-1000"
-        />
-        <path 
-          d="M70,85 C65,90 60,110 55,115" 
-          strokeDasharray="50" 
-          strokeDashoffset={step < 7 ? "50" : "0"}
-          className="transition-all duration-1000"
-        />
-        <path 
-          d="M70,118 C80,130 85,150 90,160" 
-          strokeDasharray="70" 
-          strokeDashoffset={step < 9 ? "70" : "0"}
-          className="transition-all duration-1000"
-        />
-        <path 
-          d="M70,118 C60,130 55,150 50,160" 
-          strokeDasharray="70" 
-          strokeDashoffset={step < 10 ? "70" : "0"}
-          className="transition-all duration-1000"
-        />
-
-        {/* Second person (completes in the middle) */}
-        <path 
-          d="M120,75 C125,73 135,77 140,73 C142,71 141,61 142,59 C144,55 149,52 154,53 C158,54 160,60 160,64 C160,70 155,73 152,75" 
-          strokeDasharray="200" 
-          strokeDashoffset={step < 8 ? "200" : "0"}
-          className="transition-all duration-1000"
-        />
-        <path 
-          d="M152,75 C150,85 150,95 150,105 C150,115 148,125 150,133" 
-          strokeDasharray="100" 
-          strokeDashoffset={step < 9 ? "100" : "0"}
-          className="transition-all duration-1000"
-        />
-        <path 
-          d="M150,100 C160,105 170,109 178,113" 
-          strokeDasharray="50" 
-          strokeDashoffset={step < 11 ? "50" : "0"}
-          className="transition-all duration-1000"
-        />
-        <path 
-          d="M150,100 C145,105 140,125 135,130" 
-          strokeDasharray="50" 
-          strokeDashoffset={step < 12 ? "50" : "0"}
-          className="transition-all duration-1000"
-        />
-        <path 
-          d="M150,133 C160,145 165,165 170,175" 
-          strokeDasharray="70" 
-          strokeDashoffset={step < 13 ? "70" : "0"}
-          className="transition-all duration-1000"
-        />
-        <path 
-          d="M150,133 C140,145 135,165 130,175" 
-          strokeDasharray="70" 
-          strokeDashoffset={step < 14 ? "70" : "0"}
-          className="transition-all duration-1000"
-        />
-
-        {/* Children (complete last) */}
-        <path 
-          d="M220,120 C222,118 228,121 230,119 C231,118 230,113 231,112 C232,110 234,108 237,109 C239,109 240,112 240,114 C240,117 238,119 236,120" 
-          strokeDasharray="150" 
-          strokeDashoffset={step < 15 ? "150" : "0"}
-          className="transition-all duration-1000"
-        />
-        <path 
-          d="M236,120 C235,125 235,130 235,135 C235,140 234,145 235,149" 
-          strokeDasharray="80" 
-          strokeDashoffset={step < 16 ? "80" : "0"}
-          className="transition-all duration-1000"
-        />
-        <path 
-          d="M235,135 C240,138 245,140 248,142" 
-          strokeDasharray="40" 
-          strokeDashoffset={step < 17 ? "40" : "0"}
-          className="transition-all duration-1000"
-        />
-        <path 
-          d="M235,135 C232,138 230,148 228,150" 
-          strokeDasharray="40" 
-          strokeDashoffset={step < 18 ? "40" : "0"}
-          className="transition-all duration-1000"
-        />
-        <path 
-          d="M235,149 C240,155 242,165 245,170" 
-          strokeDasharray="50" 
-          strokeDashoffset={step < 19 ? "50" : "0"}
-          className="transition-all duration-1000"
-        />
-        <path 
-          d="M235,149 C230,155 228,165 225,170" 
-          strokeDasharray="50" 
-          strokeDashoffset={step < totalSteps ? "50" : "0"}
-          className="transition-all duration-1000"
-        />
-      </g>
-    </svg>
-  </div>
-</div>
-
-{/* Family name header - only shows after family name is entered */}
-{familyData.familyName && (
-  <div className="text-center mb-6">
-    <h1 className="text-3xl font-medium text-black">
-      The {familyData.familyName} Family
-    </h1>
-    <p className="text-gray-600 text-sm">Personalizing your family balance experience</p>
-  </div>
-)}
+{/* Progress visualization - Family drawing that builds progressively */}
+<div className="relative mb-8">
+  <div className="max-w-4xl mx-auto px-4 flex flex-col md:flex-row items-center">
+    <div className="flex-1">
+      {familyData.familyName && (
+        <div className="mb-6">
+          <h1 className="text-3xl font-medium text-black">
+            The {familyData.familyName} Family
+          </h1>
+          <p className="text-gray-600 text-sm">Personalizing your family balance experience</p>
+        </div>
+      )}
       
-
-      <div className="flex-1 flex flex-col items-center justify-center p-6">
-        <div className="w-full max-w-md">
-          {renderStep()}
-          
-          <div className="flex justify-between mt-8">
-  <button
-    onClick={() => step > 1 && prevStep()}
-    className={`px-4 py-2 flex items-center ${step === 1 ? 'invisible' : 'text-gray-600 hover:text-gray-800'}`}
-  >
-    <ArrowLeft size={16} className="mr-1" />
-    Back
-  </button>
-  
-  {step < totalSteps ? (
-    <button
-      onClick={() => {
-        // If we're on the FAQ step (step 19), go directly to payment
-        if (step === 19) {
-          localStorage.setItem('pendingFamilyData', JSON.stringify(familyData));
-          navigate('/payment', { 
-            state: { 
-              fromOnboarding: true,
-              familyData: familyData 
-            } 
-          });
-        } else {
-          nextStep();
-        }
-      }}
-      className="px-4 py-2 bg-black text-white rounded flex items-center hover:bg-gray-800"
-    >
-      {step === 19 ? 'Proceed to Payment' : 'Continue'}
-      <ArrowRight size={16} className="ml-1" />
-    </button>
-  ) : null}
-</div>
+      {/* Step indicator */}
+      <div className="hidden md:block">
+        <div className="flex items-center text-sm text-gray-500">
+          <span className="font-medium">Step {step}</span>
+          <div className="h-1 bg-gray-200 flex-1 mx-4">
+            <div 
+              className="h-full bg-black transition-all duration-500"
+              style={{ width: `${(step / totalSteps) * 100}%` }}
+            ></div>
+          </div>
+          <span>of {totalSteps}</span>
         </div>
       </div>
+    </div>
+    
+    {/* Family illustration */}
+    <div className="w-72 h-64 md:h-auto hidden md:block">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" className="w-full">
+        <g stroke="black" strokeWidth="2.5" fill="none">
+          {/* Parent 1 - head and body */}
+          <path 
+            d="M120,80 C130,80 140,70 140,60 C140,45 125,45 120,50 C115,45 100,45 100,60 C100,70 110,80 120,80z" 
+            strokeDasharray="100" 
+            strokeDashoffset={step < 3 ? "100" : "0"}
+            className="transition-all duration-700"
+          />
+          <path 
+            d="M120,80 L120,150" 
+            strokeDasharray="70" 
+            strokeDashoffset={step < 4 ? "70" : "0"}
+            className="transition-all duration-700"
+          />
+          
+          {/* Parent 1 - arms */}
+          <path 
+            d="M120,100 L90,130" 
+            strokeDasharray="50" 
+            strokeDashoffset={step < 5 ? "50" : "0"}
+            className="transition-all duration-700"
+          />
+          <path 
+            d="M120,100 L150,130" 
+            strokeDasharray="50" 
+            strokeDashoffset={step < 6 ? "50" : "0"}
+            className="transition-all duration-700"
+          />
+          
+          {/* Parent 1 - legs */}
+          <path 
+            d="M120,150 L100,200" 
+            strokeDasharray="60" 
+            strokeDashoffset={step < 7 ? "60" : "0"}
+            className="transition-all duration-700"
+          />
+          <path 
+            d="M120,150 L140,200" 
+            strokeDasharray="60" 
+            strokeDashoffset={step < 8 ? "60" : "0"}
+            className="transition-all duration-700"
+          />
+          
+          {/* Parent 2 - head and body */}
+          <path 
+            d="M240,80 C250,80 260,70 260,60 C260,45 245,45 240,50 C235,45 220,45 220,60 C220,70 230,80 240,80z" 
+            strokeDasharray="100" 
+            strokeDashoffset={step < 9 ? "100" : "0"}
+            className="transition-all duration-700"
+          />
+          <path 
+            d="M240,80 L240,150" 
+            strokeDasharray="70" 
+            strokeDashoffset={step < 10 ? "70" : "0"}
+            className="transition-all duration-700"
+          />
+          
+          {/* Parent 2 - arms */}
+          <path 
+            d="M240,100 L210,130" 
+            strokeDasharray="50" 
+            strokeDashoffset={step < 11 ? "50" : "0"}
+            className="transition-all duration-700"
+          />
+          <path 
+            d="M240,100 L270,130" 
+            strokeDasharray="50" 
+            strokeDashoffset={step < 12 ? "50" : "0"}
+            className="transition-all duration-700"
+          />
+          
+          {/* Parent 2 - legs */}
+          <path 
+            d="M240,150 L220,200" 
+            strokeDasharray="60" 
+            strokeDashoffset={step < 13 ? "60" : "0"}
+            className="transition-all duration-700"
+          />
+          <path 
+            d="M240,150 L260,200" 
+            strokeDasharray="60" 
+            strokeDashoffset={step < 14 ? "60" : "0"}
+            className="transition-all duration-700"
+          />
+          
+          {/* Child 1 - head and body */}
+          <path 
+            d="M180,120 C185,120 190,115 190,110 C190,102 182,102 180,105 C178,102 170,102 170,110 C170,115 175,120 180,120z" 
+            strokeDasharray="50" 
+            strokeDashoffset={step < 15 ? "50" : "0"}
+            className="transition-all duration-700"
+          />
+          <path 
+            d="M180,120 L180,160" 
+            strokeDasharray="40" 
+            strokeDashoffset={step < 16 ? "40" : "0"}
+            className="transition-all duration-700"
+          />
+          
+          {/* Child 1 - arms */}
+          <path 
+            d="M180,130 L165,145" 
+            strokeDasharray="25" 
+            strokeDashoffset={step < 17 ? "25" : "0"}
+            className="transition-all duration-700"
+          />
+          <path 
+            d="M180,130 L195,145" 
+            strokeDasharray="25" 
+            strokeDashoffset={step < 18 ? "25" : "0"}
+            className="transition-all duration-700"
+          />
+          
+          {/* Child 1 - legs */}
+          <path 
+            d="M180,160 L170,190" 
+            strokeDasharray="40" 
+            strokeDashoffset={step < 19 ? "40" : "0"}
+            className="transition-all duration-700"
+          />
+          <path 
+            d="M180,160 L190,190" 
+            strokeDasharray="40" 
+            strokeDashoffset={step < totalSteps ? "40" : "0"}
+            className="transition-all duration-700"
+          />
+          
+          {/* Connections between family members - hands */}
+          <path 
+            d="M150,130 C160,140 170,145 180,145" 
+            strokeDasharray="40" 
+            strokeDashoffset={step < totalSteps - 1 ? "40" : "0"}
+            className="transition-all duration-700"
+          />
+          <path 
+            d="M210,130 C200,140 190,145 180,145" 
+            strokeDasharray="40" 
+            strokeDashoffset={step < totalSteps ? "40" : "0"}
+            className="transition-all duration-700"
+          />
+        </g>
+      </svg>
+    </div>
+  </div>
+</div>
+
+      
+
+<div className="flex-1 flex flex-col items-center justify-center px-4 py-6">
+  <div className="w-full max-w-md md:ml-12">
+    {renderStep()}
+    
+    <div className="flex justify-between mt-8">
+      <button
+        onClick={() => step > 1 && prevStep()}
+        className={`px-4 py-2 flex items-center ${step === 1 ? 'invisible' : 'text-gray-600 hover:text-gray-800'}`}
+      >
+        <ArrowLeft size={16} className="mr-1" />
+        Back
+      </button>
+      
+      {step < totalSteps ? (
+        <button
+          onClick={nextStep}
+          className="px-4 py-2 bg-black text-white rounded flex items-center hover:bg-gray-800"
+        >
+          {step === totalSteps - 1 ? 'Finish' : 'Continue'}
+          <ArrowRight size={16} className="ml-1" />
+        </button>
+      ) : null}
+    </div>
+  </div>
+</div>
       
       
     </div>
