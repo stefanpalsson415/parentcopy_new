@@ -144,7 +144,7 @@ const UserSignupScreen = () => {
     if (!validateForm()) {
       return;
     }
-
+  
     setIsSubmitting(true);
     
     try {
@@ -164,8 +164,8 @@ const UserSignupScreen = () => {
         console.log("Stored family ID in localStorage:", result.familyId);
       }
       
-      // Navigate directly to dashboard with the newly created family
-      console.log("Navigating to dashboard with new family");
+      // Navigate to family selection screen with the newly created family
+      console.log("Navigating to family selection with new family");
       localStorage.setItem('selectedFamilyId', result.familyId);
       // Set a flag to ensure we use this new family
       localStorage.setItem('directFamilyAccess', JSON.stringify({
@@ -173,7 +173,12 @@ const UserSignupScreen = () => {
         familyName: familyData.familyName,
         timestamp: new Date().getTime()
       }));
-      navigate('/dashboard');
+      navigate('/login', { 
+        state: { 
+          directAccess: true,
+          familyId: result.familyId
+        } 
+      });
     } catch (error) {
       console.error("Detailed error creating family:", error);
       alert("There was an error creating your family: " + (error.message || "Unknown error"));

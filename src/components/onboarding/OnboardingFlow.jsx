@@ -39,7 +39,7 @@ const OnboardingFlow = () => {
   const [validationErrors, setValidationErrors] = useState({});
 
 
-  const totalSteps = 20; // Keeping total steps the same, even with reordering
+  const totalSteps = 19; // Reduced by 1 since we're removing the payment step
   
   // Handle data updates
   const updateFamily = (key, value) => {
@@ -1502,113 +1502,63 @@ const selectPlan = (plan) => {
           </div>
         );
         
-      case 20:
-        // Modified Plan Options slide with functional buttons
-        return (
-          <div>
-            <h2 className="text-3xl font-light mb-6">Get Started with Allie</h2>
-            <p className="text-gray-600 mb-6">
-              Choose the best option for your family:
-            </p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white rounded-lg border shadow-sm p-6 hover:shadow-md transition-shadow">
-                <div className="text-center mb-4">
-                  <h3 className="text-xl font-bold">Monthly Plan</h3>
-                  <div className="text-3xl font-bold mt-2">$20<span className="text-lg font-normal text-gray-500">/month</span></div>
-                  <p className="text-sm text-gray-500 mt-1">Billed monthly</p>
+        case 20:
+          return (
+            <div className="text-center">
+              <h2 className="text-3xl font-light mb-6">You're Ready to Begin!</h2>
+              <p className="text-lg mb-8">
+                Choose how you'd like to proceed with Allie
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-all">
+                  <h3 className="font-bold text-xl mb-2">Join Allie Premium</h3>
+                  <p className="text-gray-600 mb-4">Get full access to all features and start your family balance journey</p>
+                  <button 
+                    onClick={() => {
+                      // Store family data in localStorage
+                      localStorage.setItem('pendingFamilyData', JSON.stringify(familyData));
+                      // Navigate to payment
+                      navigate('/payment', { 
+                        state: { 
+                          fromOnboarding: true,
+                          familyData: familyData 
+                        } 
+                      });
+                    }}
+                    className="px-6 py-3 bg-black text-white rounded-md w-full hover:bg-gray-800"
+                  >
+                    Subscribe Now
+                  </button>
                 </div>
                 
-                <ul className="space-y-3 mb-6">
-                  <li className="flex items-start">
-                    <CheckCircle size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-sm">Full access to all features</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-sm">Unlimited family members</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-sm">Weekly AI recommendations</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-sm">Email progress reports</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-sm">Cancel anytime</span>
-                  </li>
-                </ul>
-                
-                <button 
-                  className="w-full py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                  onClick={() => selectPlan('monthly')}
-                >
-                  Select Monthly Plan
-                </button>
+                <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-all">
+                  <h3 className="font-bold text-xl mb-2">Try Our Mini Assessment</h3>
+                  <p className="text-gray-600 mb-4">Take a quick 20-question survey to see if your family has balance issues</p>
+                  <button 
+                    onClick={() => {
+                      // Store family data in localStorage
+                      localStorage.setItem('pendingFamilyData', JSON.stringify(familyData));
+                      // Navigate to mini survey
+                      navigate('/mini-survey', { 
+                        state: { 
+                          fromOnboarding: true,
+                          familyData: familyData 
+                        } 
+                      });
+                    }}
+                    className="px-6 py-3 bg-purple-600 text-white rounded-md w-full hover:bg-purple-700"
+                  >
+                    Start Mini Survey
+                  </button>
+                </div>
               </div>
               
-              <div className="bg-white rounded-lg border shadow-sm p-6 hover:shadow-md transition-shadow relative">
-                <div className="absolute top-0 right-0 bg-green-500 text-white py-1 px-3 text-xs transform translate-y-0 -translate-x-6 rounded-b-md">
-                  BEST VALUE
-                </div>
-                
-                <div className="text-center mb-4">
-                  <h3 className="text-xl font-bold">Annual Plan</h3>
-                  <div className="text-3xl font-bold mt-2">$180<span className="text-lg font-normal text-gray-500">/year</span></div>
-                  <p className="text-sm text-gray-500 mt-1">$15/month, billed annually</p>
-                </div>
-                
-                <ul className="space-y-3 mb-6">
-                  <li className="flex items-start">
-                    <CheckCircle size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-sm">Everything in monthly plan</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-sm">Save 25% ($60/year)</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-sm">Premium support</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-sm">Advanced progress analytics</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-sm">30-day money back guarantee</span>
-                  </li>
-                </ul>
-                
-                <button 
-                  className="w-full py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                  onClick={() => selectPlan('annual')}
-                >
-                  Select Annual Plan
-                </button>
-              </div>
+              <p className="text-sm text-gray-500 mt-6">
+                Your data is secure and will only be used to improve your family experience.
+              </p>
             </div>
-            
-            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
-              <div className="flex items-start">
-                <div className="mt-1 mr-3 flex-shrink-0">
-                  <Award size={20} className="text-blue-600" />
-                </div>
-                <div>
-                  <h4 className="font-medium text-blue-800">The True Value of Balance</h4>
-                  <p className="text-sm text-blue-700 mt-1">
-                    The average family spends 19 hours per week arguing about household responsibilities. Allie users report saving 7+ hours per week while improving relationship satisfaction by 40%. What would your family do with that extra time and energy?
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-        
+          );
       case 21:
         return (
           <div className="text-center">
@@ -1674,36 +1624,102 @@ const selectPlan = (plan) => {
   
   return (
     <div className="min-h-screen bg-white flex flex-col font-['Roboto']">
-      {/* Family outline progress indicator */}
-<div className="relative h-8 mx-auto w-full max-w-lg mb-4">
-  {/* Family outline SVG - this will be the container */}
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 120" className="w-full">
-    {/* Background outline - full family */}
+     {/* Family journey progress indicator */}
+<div className="mt-5 mb-10 w-full max-w-lg mx-auto">
+  {/* Family outline SVG with more detail - this will be the container */}
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 200" className="w-full">
+    {/* Background outline - full family with bodies */}
     <g stroke="lightgray" strokeWidth="2" fill="none">
-      <circle cx="256" cy="40" r="30" /> {/* Center/parent */}
-      <circle cx="200" cy="45" r="25" /> {/* Left parent */}
-      <circle cx="312" cy="45" r="25" /> {/* Right parent */}
-      <circle cx="170" cy="70" r="15" /> {/* Left child */}
-      <circle cx="340" cy="70" r="15" /> {/* Right child */}
-      <path d="M170,85 Q256,115 340,85" /> {/* Smile connect */}
+      {/* Papa */}
+      <circle cx="150" cy="50" r="25" /> {/* Head */}
+      <path d="M150,75 L150,130" /> {/* Body */}
+      <path d="M150,90 L120,120" /> {/* Left arm */}
+      <path d="M150,90 L180,120" /> {/* Right arm */}
+      <path d="M150,130 L130,180" /> {/* Left leg */}
+      <path d="M150,130 L170,180" /> {/* Right leg */}
+      
+      {/* Mama */}
+      <circle cx="350" cy="50" r="25" /> {/* Head */}
+      <path d="M350,75 L350,130" /> {/* Body */}
+      <path d="M350,90 L320,120" /> {/* Left arm */}
+      <path d="M350,90 L380,120" /> {/* Right arm */}
+      <path d="M350,130 L330,180" /> {/* Left leg */}
+      <path d="M350,130 L370,180" /> {/* Right leg */}
+      
+      {/* Child 1 */}
+      <circle cx="220" cy="70" r="15" /> {/* Head */}
+      <path d="M220,85 L220,130" /> {/* Body */}
+      <path d="M220,100 L200,120" /> {/* Left arm */}
+      <path d="M220,100 L240,120" /> {/* Right arm */}
+      <path d="M220,130 L210,160" /> {/* Left leg */}
+      <path d="M220,130 L230,160" /> {/* Right leg */}
+      
+      {/* Child 2 */}
+      <circle cx="280" cy="70" r="15" /> {/* Head */}
+      <path d="M280,85 L280,130" /> {/* Body */}
+      <path d="M280,100 L260,120" /> {/* Left arm */}
+      <path d="M280,100 L300,120" /> {/* Right arm */}
+      <path d="M280,130 L270,160" /> {/* Left leg */}
+      <path d="M280,130 L290,160" /> {/* Right leg */}
+      
+      {/* Ground */}
+      <path d="M100,180 L400,180" />
     </g>
     
     {/* Progress fill - gets revealed as steps progress */}
-    <g stroke="black" strokeWidth="2" fill="none" strokeDasharray="1000" strokeDashoffset={1000 - ((step / totalSteps) * 1000)}>
-      <circle cx="256" cy="40" r="30" /> {/* Center/parent */}
-      <circle cx="200" cy="45" r="25" /> {/* Left parent */}
-      <circle cx="312" cy="45" r="25" /> {/* Right parent */}
-      <circle cx="170" cy="70" r="15" /> {/* Left child */}
-      <circle cx="340" cy="70" r="15" /> {/* Right child */}
-      <path d="M170,85 Q256,115 340,85" /> {/* Smile connect */}
+    <g stroke="black" strokeWidth="2" fill="none" strokeDasharray="1500" strokeDashoffset={1500 - ((step / totalSteps) * 1500)}>
+      {/* Papa */}
+      <circle cx="150" cy="50" r="25" /> {/* Head */}
+      <path d="M150,75 L150,130" /> {/* Body */}
+      <path d="M150,90 L120,120" /> {/* Left arm */}
+      <path d="M150,90 L180,120" /> {/* Right arm */}
+      <path d="M150,130 L130,180" /> {/* Left leg */}
+      <path d="M150,130 L170,180" /> {/* Right leg */}
+      
+      {/* Mama */}
+      <circle cx="350" cy="50" r="25" /> {/* Head */}
+      <path d="M350,75 L350,130" /> {/* Body */}
+      <path d="M350,90 L320,120" /> {/* Left arm */}
+      <path d="M350,90 L380,120" /> {/* Right arm */}
+      <path d="M350,130 L330,180" /> {/* Left leg */}
+      <path d="M350,130 L370,180" /> {/* Right leg */}
+      
+      {/* Child 1 */}
+      <circle cx="220" cy="70" r="15" /> {/* Head */}
+      <path d="M220,85 L220,130" /> {/* Body */}
+      <path d="M220,100 L200,120" /> {/* Left arm */}
+      <path d="M220,100 L240,120" /> {/* Right arm */}
+      <path d="M220,130 L210,160" /> {/* Left leg */}
+      <path d="M220,130 L230,160" /> {/* Right leg */}
+      
+      {/* Child 2 */}
+      <circle cx="280" cy="70" r="15" /> {/* Head */}
+      <path d="M280,85 L280,130" /> {/* Body */}
+      <path d="M280,100 L260,120" /> {/* Left arm */}
+      <path d="M280,100 L300,120" /> {/* Right arm */}
+      <path d="M280,130 L270,160" /> {/* Left leg */}
+      <path d="M280,130 L290,160" /> {/* Right leg */}
+      
+      {/* Ground */}
+      <path d="M100,180 L400,180" />
     </g>
   </svg>
   
-  {/* Step counter text */}
-  <div className="absolute bottom-0 w-full text-center text-sm text-gray-500">
+  {/* Step counter below the SVG */}
+  <div className="text-center text-sm text-gray-500 mt-2">
     Step {step} of {totalSteps}
   </div>
 </div>
+
+{/* Family name header - only shows after family name is entered */}
+{familyData.familyName && (
+  <div className="text-center mb-6">
+    <h1 className="text-3xl font-medium text-black">
+      The {familyData.familyName} Family
+    </h1>
+    <p className="text-gray-600 text-sm">Personalizing your family balance experience</p>
+  </div>
+)}
       
 {/* Family name header - only shows after family name is entered */}
 {familyData.familyName && (
@@ -1721,24 +1737,37 @@ const selectPlan = (plan) => {
           {renderStep()}
           
           <div className="flex justify-between mt-8">
-            <button
-              onClick={() => step > 1 && prevStep()}
-              className={`px-4 py-2 flex items-center ${step === 1 ? 'invisible' : 'text-gray-600 hover:text-gray-800'}`}
-            >
-              <ArrowLeft size={16} className="mr-1" />
-              Back
-            </button>
-            
-            {step < totalSteps ? (
-              <button
-                onClick={() => nextStep()}
-                className="px-4 py-2 bg-black text-white rounded flex items-center hover:bg-gray-800"
-              >
-                Continue
-                <ArrowRight size={16} className="ml-1" />
-              </button>
-            ) : null}
-          </div>
+  <button
+    onClick={() => step > 1 && prevStep()}
+    className={`px-4 py-2 flex items-center ${step === 1 ? 'invisible' : 'text-gray-600 hover:text-gray-800'}`}
+  >
+    <ArrowLeft size={16} className="mr-1" />
+    Back
+  </button>
+  
+  {step < totalSteps ? (
+    <button
+      onClick={() => {
+        // If we're on the FAQ step (step 19), go directly to payment
+        if (step === 19) {
+          localStorage.setItem('pendingFamilyData', JSON.stringify(familyData));
+          navigate('/payment', { 
+            state: { 
+              fromOnboarding: true,
+              familyData: familyData 
+            } 
+          });
+        } else {
+          nextStep();
+        }
+      }}
+      className="px-4 py-2 bg-black text-white rounded flex items-center hover:bg-gray-800"
+    >
+      {step === 19 ? 'Proceed to Payment' : 'Continue'}
+      <ArrowRight size={16} className="ml-1" />
+    </button>
+  ) : null}
+</div>
         </div>
       </div>
       

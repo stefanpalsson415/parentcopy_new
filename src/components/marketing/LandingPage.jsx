@@ -313,7 +313,7 @@ const LandingPage = () => {
             
   {currentUser ? (
   <button 
-    onClick={() => navigate('/login', { state: { directAccess: true, jumpToDashboard: true } })}
+    onClick={() => navigate('/login', { state: { directAccess: true } })}
     className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
   >
     Jump Back In

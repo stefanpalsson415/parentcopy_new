@@ -564,7 +564,20 @@ const getDefaultProfileImage = (member) => {
   // Normal profile selection view
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      <div className="flex-1 flex flex-col items-center justify-center p-6">
+  <div className="flex-1 flex flex-col items-center justify-center p-6">
+    {familyMembers.some(m => !m.profilePicture) && (
+      <div className="bg-gradient-to-r from-pink-100 to-purple-100 p-4 rounded-lg shadow-sm mb-6 max-w-md w-full">
+        <div className="flex items-start">
+          <Camera className="text-purple-600 mr-3 mt-1 flex-shrink-0" size={20} />
+          <div>
+            <h4 className="font-medium text-purple-800 font-roboto">Make Allie Personal!</h4>
+            <p className="text-sm text-purple-700 mt-1 font-roboto">
+              Adding family photos makes Allie feel more personalized and helps us create a better experience just for you.
+            </p>
+          </div>
+        </div>
+      </div>
+    )}
         <div className="w-full max-w-md">
           {/* Header with Logout */}
           <div className="flex justify-between items-center mb-8">
@@ -600,31 +613,53 @@ const getDefaultProfileImage = (member) => {
 >
   <div className="flex items-center">
     <div className="flex-shrink-0 mr-4 relative">
-      <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-200 relative">
-        <img 
-          src={getDefaultProfileImage(member)} 
-          alt={`${member.name}'s profile`}
-          className="w-full h-full object-cover"
-        />
-        {!member.profilePicture && (
-          <div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center p-1 text-white">
-            <span className="text-xs font-bold">Add a pic!</span>
-            <span className="text-[7px]">It's better!</span>
+      {!member.profilePicture ? (
+        <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-dashed border-pink-400 relative bg-gray-50 animate-pulse">
+          <img 
+            src={getDefaultProfileImage(member)} 
+            alt={`${member.name}'s profile`}
+            className="w-full h-full object-cover opacity-60"
+          />
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-1 text-white bg-gradient-to-br from-purple-500 to-pink-500 bg-opacity-80">
+            <Camera size={14} className="mb-1" />
+            <span className="text-xs font-bold">Add a photo!</span>
+            <span className="text-[7px]">Personalize Allie</span>
           </div>
-        )}
-      </div>
-      <button
-        className="absolute bottom-0 right-0 bg-black text-white p-1 rounded-full"
-        onClick={(e) => handleSelectForUpload(member, e)}
-      >
-        <Camera size={12} />
-      </button>
+          <button
+            className="absolute bottom-0 right-0 bg-black text-white p-1 rounded-full shadow-lg transform hover:scale-110 transition-transform"
+            onClick={(e) => handleSelectForUpload(member, e)}
+          >
+            <Camera size={12} />
+          </button>
+        </div>
+      ) : (
+        <div className="relative">
+          <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-200">
+            <img 
+              src={member.profilePicture} 
+              alt={`${member.name}'s profile`}
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <button
+            className="absolute bottom-0 right-0 bg-black text-white p-1 rounded-full shadow-lg"
+            onClick={(e) => handleSelectForUpload(member, e)}
+          >
+            <Camera size={12} />
+          </button>
+        </div>
+      )}
     </div>
     <div className="flex-1">
-      <h3 className="font-medium text-lg">{member.name}</h3>
-      <p className="text-sm text-gray-500 capitalize">{member.role}</p>
+      <h3 className="font-medium text-lg font-roboto">{member.name}</h3>
+      <p className="text-sm text-gray-500 capitalize font-roboto">{member.role}</p>
+      {!member.profilePicture && (
+        <div className="mt-1 bg-pink-50 text-pink-700 text-xs p-1 rounded font-roboto">
+          <span>⭐ Photos make Allie more personal!</span>
+        </div>
+      )}
       <div className="mt-1">
-        <span className={`text-xs flex items-center ${getNextAction(member).className}`}>
+        <span className={`text-xs flex items-center ${getNextAction(member).className} font-roboto`}>
           {getNextAction(member).icon}
           {getNextAction(member).text}
         </span>
