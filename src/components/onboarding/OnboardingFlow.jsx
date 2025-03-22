@@ -1639,7 +1639,7 @@ const selectPlan = (plan) => {
   </div>
   
   {/* Family illustration - only visible on md screens and up */}
-  <div className="hidden md:block md:ml-8 lg:ml-12 mt-8 md:mt-0 w-80 relative">
+ <div className="hidden md:block md:ml-8 lg:ml-12 mt-8 md:mt-0 w-80 relative"></div>
   {/* Decorative frame */}
   <div className="absolute inset-0 border-4 border-gray-200 rounded-lg -z-10 transform rotate-1"></div>
   <div className="absolute inset-0 border-2 border-gray-300 rounded-lg p-4 bg-white">
@@ -1792,11 +1792,8 @@ const selectPlan = (plan) => {
     <div className="absolute top-2 right-2 w-3 h-3 border-t-2 border-r-2 border-black"></div>
     <div className="absolute bottom-2 left-2 w-3 h-3 border-b-2 border-l-2 border-black"></div>
     <div className="absolute bottom-2 right-2 w-3 h-3 border-b-2 border-r-2 border-black"></div>
-
   </div>
 </div>
-      
-      
     </div>
   );
 };
