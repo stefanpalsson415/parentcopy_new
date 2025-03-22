@@ -5,6 +5,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useFamily } from '../../contexts/FamilyContext';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../services/firebase';
+import DatabaseService from '../../services/DatabaseService';
+
 
 const FamilySelectionScreen = () => {
   const { currentUser, availableFamilies, loadFamilyData, familyData, login, logout, loadAllFamilies } = useAuth();
@@ -12,7 +14,12 @@ const FamilySelectionScreen = () => {
     familyMembers, 
     selectedUser, 
     selectFamilyMember, 
-    updateMemberProfile 
+    updateMemberProfile,
+    completedWeeks,
+  currentWeek, 
+    familyId,
+  familyName,
+  familyPicture
   } = useFamily();
   
   const navigate = useNavigate();
@@ -29,6 +36,8 @@ const FamilySelectionScreen = () => {
   const [showEmptyState, setShowEmptyState] = useState(false);
  
   
+  const [uploadType, setUploadType] = useState(null);
+
 // Check for direct navigation state
 // Check for direct navigation state
 const location = useLocation();
