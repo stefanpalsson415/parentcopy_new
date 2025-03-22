@@ -201,6 +201,8 @@ async getFamilyContext(familyId) {
         console.error("Error getting relationship strategies:", e);
       }
       
+      
+
       // NEW: Get couple check-in data
       let coupleData = {};
       try {
@@ -226,22 +228,33 @@ async getFamilyContext(familyId) {
         console.error("Error getting couple check-in data:", e);
       }
       
-      return {
-        familyId: familyId,
-        familyName: data.familyName,
-        adults: data.familyMembers.filter(m => m.role === 'parent').length,
-        children: data.familyMembers.filter(m => m.role === 'child'),
-        familyMembers: data.familyMembers,  // Include all family members
-        currentWeek: data.currentWeek,
-        completedWeeks: data.completedWeeks || [],
-        surveyData,
-        tasks,  // Include all tasks
-        weekHistory,  // Include week history
-        impactInsights,  // Include impact insights
-        balanceScores,  // Include balance scores
-        relationshipData,
-        coupleData
-      };
+      // Create the return object
+const contextData = {
+  familyId: familyId,
+  familyName: data.familyName,
+  adults: data.familyMembers.filter(m => m.role === 'parent').length,
+  children: data.familyMembers.filter(m => m.role === 'child'),
+  familyMembers: data.familyMembers,  // Include all family members
+  currentWeek: data.currentWeek,
+  completedWeeks: data.completedWeeks || [],
+  surveyData,
+  tasks,  // Include all tasks
+  weekHistory,  // Include week history
+  impactInsights,  // Include impact insights
+  balanceScores,  // Include balance scores
+  relationshipData,
+  coupleData
+};
+
+// Log the context data for debugging
+console.log("Family context generated:", {
+  dataKeys: Object.keys(contextData),
+  hasResponses: !!contextData.surveyData?.responses,
+  responseCount: contextData.surveyData?.responses ? Object.keys(contextData.surveyData.responses).length : 0,
+  tasksCount: contextData.tasks?.length || 0
+});
+
+return contextData;
     }
     
     return {};

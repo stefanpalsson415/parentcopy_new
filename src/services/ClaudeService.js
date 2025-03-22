@@ -48,16 +48,19 @@ class ClaudeService {
         
         return result.data.content[0].text;
       } else {
-        // Direct API call to Claude
-        console.log("Making direct API call to Claude");
+        // IMPLEMENT DIRECT API CALL
+        console.log("Making direct API call to Claude API");
         
         // Prepare the request body
         const requestBody = {
-          model: "claude-3-7-sonnet-20240219", // Use the appropriate model
+          model: "claude-3-7-sonnet-20240219",
           max_tokens: 1000,
           system: systemPrompt,
           messages: messages
         };
+        
+        console.log("API URL:", this.API_URL);
+        console.log("Request body:", JSON.stringify(requestBody).substring(0, 200) + "...");
         
         // Make the API call
         const response = await fetch(this.API_URL, {
@@ -77,8 +80,9 @@ class ClaudeService {
         }
         
         const result = await response.json();
+        console.log("Claude API response received:", result);
         
-        // Check for valid response format
+        // Extract the text from the response
         if (!result || !result.content || !result.content[0]) {
           console.error("Invalid response format from Claude API:", result);
           throw new Error("Invalid response format from Claude API");
@@ -88,10 +92,17 @@ class ClaudeService {
       }
     } catch (error) {
       console.error("Error calling Claude API:", error);
+      console.error("Error details:", error.message, error.stack);
       
-      // If the API call fails, we could still use the fallback methods
+      // For debugging - log the family context keys
+      if (familyContext) {
+        console.log("Family context keys:", Object.keys(familyContext));
+        console.log("Context size:", JSON.stringify(familyContext).length);
+      }
+      
+      // Still fall back to local responses if all else fails
       if (familyContext && Object.keys(familyContext).length > 3) {
-        console.log("API failed - falling back to local response generation");
+        console.log("Falling back to local personalized response");
         return this.createPersonalizedResponse(messages[messages.length - 1]?.content || "", familyContext);
       }
       
