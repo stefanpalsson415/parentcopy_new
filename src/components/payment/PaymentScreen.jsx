@@ -140,14 +140,20 @@ const PaymentScreen = () => {
                 </ul>
                 
                 <button 
-                  onClick={() => {
-                    setSelectedPlan('monthly');
-                    setCouponApplied(false);
-                  }}
-                  className={`w-full py-2 ${selectedPlan === 'monthly' ? 'bg-black text-white' : 'bg-gray-200 text-gray-800'} rounded-md hover:bg-gray-800 hover:text-white`}
-                >
-                  Select Monthly Plan
-                </button>
+  onClick={() => {
+    setSelectedPlan('monthly');
+    // Scroll to payment form after a short delay
+    setTimeout(() => {
+      document.getElementById('payment-details-section')?.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+      });
+    }, 100);
+  }}
+  className={`w-full py-2 ${selectedPlan === 'monthly' ? 'bg-black text-white' : 'bg-gray-200 text-gray-800'} rounded-md hover:bg-gray-800 hover:text-white`}
+>
+  Select Monthly Plan
+</button>
               </div>
               
               <div className="border rounded-lg p-6 hover:shadow-md transition-all relative">
@@ -185,14 +191,20 @@ const PaymentScreen = () => {
                 </ul>
                 
                 <button 
-                  onClick={() => {
-                    setSelectedPlan('annual');
-                    setCouponApplied(false);
-                  }}
-                  className={`w-full py-2 ${selectedPlan === 'annual' ? 'bg-black text-white' : 'bg-gray-200 text-gray-800'} rounded-md hover:bg-gray-800 hover:text-white`}
-                >
-                  Select Annual Plan
-                </button>
+  onClick={() => {
+    setSelectedPlan('annual');
+    // Scroll to payment form after a short delay
+    setTimeout(() => {
+      document.getElementById('payment-details-section')?.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+      });
+    }, 100);
+  }}
+  className={`w-full py-2 ${selectedPlan === 'monthly' ? 'bg-black text-white' : 'bg-gray-200 text-gray-800'} rounded-md hover:bg-gray-800 hover:text-white`}
+>
+  Select Annual Plan
+</button>
               </div>
             </div>
             
@@ -282,7 +294,8 @@ const PaymentScreen = () => {
               </button>
             </div>
           ) : selectedPlan && (
-            <form onSubmit={handleSubmit} className="border-t pt-6">
+            <form onSubmit={handleSubmit} className="border-t pt-6" id="payment-details-section">
+
               <h3 className="text-xl font-medium mb-4">Payment Details</h3>
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-2">Card Information</label>

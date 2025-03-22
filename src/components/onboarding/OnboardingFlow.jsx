@@ -1598,13 +1598,14 @@ const selectPlan = (plan) => {
     <div className="min-h-screen bg-white flex flex-col font-['Roboto']">
     {/* Progress visualization based on hand-drawn style */}
 {/* Header with family name */}
-<div className="text-center mb-8">
+{/* Header with family name */}
+<div className="text-center py-6">
   {familyData.familyName && (
     <div>
-      <h1 className="text-3xl font-medium text-black">
+      <h1 className="text-4xl font-light text-black mb-2">
         The {familyData.familyName} Family
       </h1>
-      <p className="text-gray-600 text-sm">Personalizing your family balance experience</p>
+      <p className="text-gray-600">Personalizing your family balance experience</p>
     </div>
   )}
 </div>
@@ -1638,8 +1639,12 @@ const selectPlan = (plan) => {
   </div>
   
   {/* Family illustration - only visible on md screens and up */}
-  <div className="hidden md:block md:ml-8 lg:ml-12 mt-8 md:mt-0 w-80">
+  <div className="hidden md:block md:ml-8 lg:ml-12 mt-8 md:mt-0 w-80 relative">
+  {/* Decorative frame */}
+  <div className="absolute inset-0 border-4 border-gray-200 rounded-lg -z-10 transform rotate-1"></div>
+  <div className="absolute inset-0 border-2 border-gray-300 rounded-lg p-4 bg-white">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" className="w-full">
+      {/* Keep existing SVG content */}
       <g stroke="black" strokeWidth="2.5" fill="none">
         {/* Parent 1 - head and body */}
         <path 
@@ -1782,6 +1787,12 @@ const selectPlan = (plan) => {
         />
       </g>
     </svg>
+    {/* Corner decorations */}
+    <div className="absolute top-2 left-2 w-3 h-3 border-t-2 border-l-2 border-black"></div>
+    <div className="absolute top-2 right-2 w-3 h-3 border-t-2 border-r-2 border-black"></div>
+    <div className="absolute bottom-2 left-2 w-3 h-3 border-b-2 border-l-2 border-black"></div>
+    <div className="absolute bottom-2 right-2 w-3 h-3 border-b-2 border-r-2 border-black"></div>
+
   </div>
 </div>
       
