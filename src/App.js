@@ -27,6 +27,8 @@ import AIAssistantPage from './components/marketing/AIAssistantPage';
 import { useAuth } from './contexts/AuthContext';
 import FloatingCalendarWidget from './components/calendar/FloatingCalendarWidget';
 import EmailOptIn from './components/marketing/EmailOptIn';
+import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
+
  // Add this import
 
 // App Routes Component - Used after context providers are set up

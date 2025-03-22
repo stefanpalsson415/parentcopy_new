@@ -1,5 +1,6 @@
 // src/services/ClaudeService.js
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { functions } from '../services/firebase';
 
 class ClaudeService {
   constructor() {
@@ -8,7 +9,6 @@ class ClaudeService {
     console.log("Claude service initialized to use Firebase Function proxy");
   }
   
-
   async generateResponse(messages, familyContext) {
     try {
       // Format system prompt with family context
@@ -46,87 +46,14 @@ class ClaudeService {
         
         return result.data.content[0].text;
       } else {
-        // IMPLEMENT DIRECT API CALL
+        // Direct API call method (fallback)
         console.log("Making direct API call to Claude API");
         
-        // Prepare the request body
-        const requestBody = {
-          model: "claude-3-7-sonnet-20240219",
-          max_tokens: 1000,
-          system: systemPrompt,
-          messages: messages
-        };
-        
-        console.log("API URL:", this.API_URL);
-        console.log("Request body:", JSON.stringify(requestBody).substring(0, 200) + "...");
-        console.log("Sending request to Claude API with API key:", this.API_KEY ? "Present" : "MISSING");
-        
-        // Make the API call
-        // Log headers for debugging (redacting actual key)
-console.log("Making API call with headers:", {
-  'Content-Type': 'application/json',
-  'x-api-key': this.API_KEY ? 'PRESENT (redacted)' : 'MISSING',
-  'anthropic-version': '2023-06-01'
-});
-
-
-
-// Fix this function definition
-async claudeProxy(data) {
-  try {
-    // Get Firebase Functions instance
-    const functions = getFunctions();
-    
-    // Create a callable function
-    const callClaudeAPI = httpsCallable(functions, 'callClaudeAPI');
-    
-    // Call the function
-    console.log("Calling Claude via Firebase function proxy");
-    
-    const result = await callClaudeAPI({
-      system: data.system,
-      messages: data.messages
-    });
-    
-    console.log("Response received from Firebase function:", result?.data ? "✓" : "✗");
-    return result;
-  } catch (error) {
-    console.error("Firebase function error:", error);
-    throw error;
-  }
-}
-
-
-// Make the API call
-const response = await fetch(this.API_URL, {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'x-api-key': this.API_KEY,
-    'anthropic-version': '2023-06-01'
-  },
-  body: JSON.stringify(requestBody)
-});
-
-// Log response status for debugging
-console.log("Claude API response status:", response.status);
-        
-        if (!response.ok) {
-          const errorData = await response.text();
-          console.error(`Claude API Error (${response.status}):`, errorData);
-          throw new Error(`Claude API error: ${response.status} - ${errorData}`);
-        }
-        
-        const result = await response.json();
-        console.log("Claude API response received:", result);
-        
-        // Extract the text from the response
-        if (!result || !result.content || !result.content[0]) {
-          console.error("Invalid response format from Claude API:", result);
-          throw new Error("Invalid response format from Claude API");
-        }
-        
-        return result.content[0].text;
+        // Default response when direct API is not configured
+        return this.createPersonalizedResponse(
+          messages[messages.length - 1]?.content || "", 
+          familyContext
+        );
       }
     } catch (error) {
       console.error("Error calling Claude API:", error);
@@ -148,7 +75,34 @@ console.log("Claude API response status:", response.status);
     }
   }
   
-  // Keep your existing methods here
+  // Firebase function proxy method (fixed syntax)
+  async claudeProxy(data) {
+    try {
+      // Get Firebase Functions instance
+      const functions = getFunctions();
+
+      
+      
+      // Create a callable function
+      const callClaudeAPI = httpsCallable(functions, 'callClaudeAPI');
+      
+      // Call the function
+      console.log("Calling Claude via Firebase function proxy");
+      
+      const result = await callClaudeAPI({
+        system: data.system,
+        messages: data.messages
+      });
+      
+      console.log("Response received from Firebase function:", result?.data ? "✓" : "✗");
+      return result;
+    } catch (error) {
+      console.error("Firebase function error:", error);
+      throw error;
+    }
+  }
+  
+  // Create personalized response from context
   createPersonalizedResponse(userMessage, context) {
     const userMessageLower = userMessage.toLowerCase();
     
@@ -186,6 +140,7 @@ console.log("Claude API response status:", response.status);
     return `I have access to the ${familyName} family's data and can answer specific questions about your survey results, tasks, and balance metrics. What would you like to know?`;
   }
   
+  // Get contextual response for general questions
   getContextualResponse(userMessage, context) {
     const userMessageLower = userMessage.toLowerCase();
     
@@ -213,6 +168,7 @@ console.log("Claude API response status:", response.status);
     return "I'd like to help with that! Currently, I'm using my basic knowledge to respond. For more personalized assistance, please check the Tasks or Dashboard tabs where I've already analyzed your family's specific data.";
   }
   
+  // Get a mock response when API is unavailable
   getMockResponse(userMessage) {
     // Check if the message contains common keywords and return appropriate responses
     const userMessageLower = userMessage.toLowerCase();
@@ -233,6 +189,7 @@ console.log("Claude API response status:", response.status);
     return "I'd normally connect to my AI system to answer this question in detail. While that connection is being restored, you can explore the dashboard for insights or check your tasks for this week.";
   }
 
+  // Format system prompt with family context
   formatSystemPrompt(familyContext) {
     // Log the context data for debugging
     console.log("Formatting system prompt with context:", Object.keys(familyContext));
@@ -311,125 +268,124 @@ console.log("Claude API response status:", response.status);
       }
     }
     
-      // NEW: Create relationship strategies section
-      let relationshipContent = '';
-      if (familyContext.relationshipData) {
-        relationshipContent = `
-        === RELATIONSHIP STRATEGIES ===
-        
-        These 10 key relationship strategies strengthen the parental bond:
-        1. Brief Daily Check-ins: 5-10 minutes of connection each day
-        2. Divide and Conquer Tasks: Clear role assignment for responsibilities
-        3. Regular Date Nights: Dedicated couple time at least monthly
-        4. Practice Gratitude & Affirmation: Regular appreciation expressions
-        5. Create a Unified Family Calendar: Shared scheduling system
-        6. Collaborative Problem-Solving: Structured approach to challenges
-        7. Prioritize Self-Care: Ensuring "me time" for each parent
-        8. Consider Couples Workshops: Professional guidance when needed
-        9. Celebrate Milestones Together: Acknowledging achievements
-        10. Shared Future Planning: Joint vision for family direction
-        
-        Current Implementation Status:
-        - Average implementation: ${familyContext.relationshipData.avgImplementation?.toFixed(0) || 0}%
-        - Most implemented strategy: ${familyContext.relationshipData.topStrategy || 'None'}
-        - Number of well-implemented strategies: ${familyContext.relationshipData.implementedStrategies?.length || 0}
-        `;
-        
-        if (familyContext.coupleData && familyContext.coupleData.satisfaction) {
-          relationshipContent += `
-        Latest Couple Data:
-        - Satisfaction level: ${familyContext.coupleData.satisfaction}/5
-        - Communication quality: ${familyContext.coupleData.communication}/5
-        `;
-        }
+    // Create relationship strategies section
+    let relationshipContent = '';
+    if (familyContext.relationshipData) {
+      relationshipContent = `
+      === RELATIONSHIP STRATEGIES ===
+      
+      These 10 key relationship strategies strengthen the parental bond:
+      1. Brief Daily Check-ins: 5-10 minutes of connection each day
+      2. Divide and Conquer Tasks: Clear role assignment for responsibilities
+      3. Regular Date Nights: Dedicated couple time at least monthly
+      4. Practice Gratitude & Affirmation: Regular appreciation expressions
+      5. Create a Unified Family Calendar: Shared scheduling system
+      6. Collaborative Problem-Solving: Structured approach to challenges
+      7. Prioritize Self-Care: Ensuring "me time" for each parent
+      8. Consider Couples Workshops: Professional guidance when needed
+      9. Celebrate Milestones Together: Acknowledging achievements
+      10. Shared Future Planning: Joint vision for family direction
+      
+      Current Implementation Status:
+      - Average implementation: ${familyContext.relationshipData.avgImplementation?.toFixed(0) || 0}%
+      - Most implemented strategy: ${familyContext.relationshipData.topStrategy || 'None'}
+      - Number of well-implemented strategies: ${familyContext.relationshipData.implementedStrategies?.length || 0}
+      `;
+      
+      if (familyContext.coupleData && familyContext.coupleData.satisfaction) {
+        relationshipContent += `
+      Latest Couple Data:
+      - Satisfaction level: ${familyContext.coupleData.satisfaction}/5
+      - Communication quality: ${familyContext.coupleData.communication}/5
+      `;
       }
+    }
       
-      // Create a context-rich system prompt
-  return `You are Allie, an AI assistant specialized in family workload balance. 
-  Your purpose is to help families distribute responsibilities more equitably and improve their dynamics.
-  
-  Family Information:
-  Family Name: ${familyContext.familyName || 'Unknown'}
-  Number of Adults: ${familyContext.adults || 2}
-  Number of Children: ${familyContext.children?.length || 0}
-  Current Week: ${familyContext.currentWeek || 1}
-  Family ID: ${familyContext.familyId || 'Unknown'}
-  
-  ${familyContext.familyMembers ? `
-  Family Members:
-  ${familyContext.familyMembers.map(m => `- ${m.name}: ${m.role} (${m.roleType || 'Child'})`).join('\n')}
-  ` : ''}
-  
-  ${familyContext.surveyData ? `
-  Survey Data:
-  Total Questions: ${familyContext.surveyData.totalQuestions || 0}
-  Mama Percentage: ${familyContext.surveyData.mamaPercentage?.toFixed(1) || 50}%
-  Papa Percentage: ${(100 - (familyContext.surveyData.mamaPercentage || 50)).toFixed(1)}%
-  
-  Category Breakdown:
-  ${Object.entries(familyContext.surveyData.categories || {}).map(([category, data]) => 
-    `- ${category}: Mama ${data.mamaPercent?.toFixed(1) || 0}%, Papa ${data.papaPercent?.toFixed(1) || 0}%`
-  ).join('\n')}
-  ` : ''}
-  
-  ${familyContext.tasks && familyContext.tasks.length > 0 ? `
-  Current Tasks:
-  ${familyContext.tasks.map(task => 
-    `- "${task.title}" assigned to ${task.assignedTo} (${task.completed ? 'Completed' : 'Pending'}): ${task.description}`
-  ).join('\n')}
-  ` : ''}
-  
-  ${familyContext.impactInsights && familyContext.impactInsights.length > 0 ? `
-  Family Insights:
-  ${familyContext.impactInsights.map(insight => 
-    `- ${insight.type || 'Insight'} for ${insight.category || 'Family'}: ${insight.message}`
-  ).join('\n')}
-  ` : ''}
-  
-  ${familyContext.balanceScores ? `
-  Current Balance Scores:
-  - Overall Balance: Mama ${familyContext.balanceScores.overallBalance?.mama?.toFixed(1) || 50}%, Papa ${familyContext.balanceScores.overallBalance?.papa?.toFixed(1) || 50}%
-  ${Object.entries(familyContext.balanceScores.categoryBalance || {}).map(([category, scores]) => 
-    `- ${category}: Mama ${scores.mama?.toFixed(1) || 0}%, Papa ${scores.papa?.toFixed(1) || 0}%, Imbalance: ${scores.imbalance?.toFixed(1) || 0}%`
-  ).join('\n')}
-  ` : ''}
-  
-  ${knowledgeBaseContent}
-  
-  ${relationshipContent}
-  
-  ${marketingContent}
-  
-  ${faqContent}
-  
-  ${familyContext.surveyData && familyContext.surveyData.responses ? `
-  IMPORTANT: You have access to detailed survey responses for this family. When asked about specific tasks or categories, reference this data to provide personalized insights rather than general information.
-  ` : ''}
-  
-  You can help with:
-  1. Explaining how to use the Allie app
-  2. Providing insights about family survey results
-  3. Offering research-backed parenting advice
-  4. Suggesting ways to improve family balance
-  5. Answering questions about the app's mission and methodology
-  6. Giving relationship advice based on the 10 strategies
-  7. Connecting workload balance to relationship health
-  8. Adding tasks and meetings to calendars
-  9. Managing calendar integrations
-  10. Analyzing their specific survey data and tasks
-  
-  Always be supportive, practical, and focused on improving family dynamics through better balance.
-  Remember that all data is confidential to this family.
-  
-  In your responses:
-  - Be concise but friendly
-  - Provide practical, actionable advice whenever possible
-  - Focus on equity and balance rather than "traditional" gender roles
-  - Remember that "balance" doesn't always mean a perfect 50/50 split
-  - Encourage communication between family members
-  - When mentioning research or scientific findings, refer to the studies in the knowledge base
-  - Suggest appropriate relationship strategies when workload issues arise`;
-      
+    // Create a context-rich system prompt
+    return `You are Allie, an AI assistant specialized in family workload balance. 
+    Your purpose is to help families distribute responsibilities more equitably and improve their dynamics.
+    
+    Family Information:
+    Family Name: ${familyContext.familyName || 'Unknown'}
+    Number of Adults: ${familyContext.adults || 2}
+    Number of Children: ${familyContext.children?.length || 0}
+    Current Week: ${familyContext.currentWeek || 1}
+    Family ID: ${familyContext.familyId || 'Unknown'}
+    
+    ${familyContext.familyMembers ? `
+    Family Members:
+    ${familyContext.familyMembers.map(m => `- ${m.name}: ${m.role} (${m.roleType || 'Child'})`).join('\n')}
+    ` : ''}
+    
+    ${familyContext.surveyData ? `
+    Survey Data:
+    Total Questions: ${familyContext.surveyData.totalQuestions || 0}
+    Mama Percentage: ${familyContext.surveyData.mamaPercentage?.toFixed(1) || 50}%
+    Papa Percentage: ${(100 - (familyContext.surveyData.mamaPercentage || 50)).toFixed(1)}%
+    
+    Category Breakdown:
+    ${Object.entries(familyContext.surveyData.categories || {}).map(([category, data]) => 
+      `- ${category}: Mama ${data.mamaPercent?.toFixed(1) || 0}%, Papa ${data.papaPercent?.toFixed(1) || 0}%`
+    ).join('\n')}
+    ` : ''}
+    
+    ${familyContext.tasks && familyContext.tasks.length > 0 ? `
+    Current Tasks:
+    ${familyContext.tasks.map(task => 
+      `- "${task.title}" assigned to ${task.assignedTo} (${task.completed ? 'Completed' : 'Pending'}): ${task.description}`
+    ).join('\n')}
+    ` : ''}
+    
+    ${familyContext.impactInsights && familyContext.impactInsights.length > 0 ? `
+    Family Insights:
+    ${familyContext.impactInsights.map(insight => 
+      `- ${insight.type || 'Insight'} for ${insight.category || 'Family'}: ${insight.message}`
+    ).join('\n')}
+    ` : ''}
+    
+    ${familyContext.balanceScores ? `
+    Current Balance Scores:
+    - Overall Balance: Mama ${familyContext.balanceScores.overallBalance?.mama?.toFixed(1) || 50}%, Papa ${familyContext.balanceScores.overallBalance?.papa?.toFixed(1) || 50}%
+    ${Object.entries(familyContext.balanceScores.categoryBalance || {}).map(([category, scores]) => 
+      `- ${category}: Mama ${scores.mama?.toFixed(1) || 0}%, Papa ${scores.papa?.toFixed(1) || 0}%, Imbalance: ${scores.imbalance?.toFixed(1) || 0}%`
+    ).join('\n')}
+    ` : ''}
+    
+    ${knowledgeBaseContent}
+    
+    ${relationshipContent}
+    
+    ${marketingContent}
+    
+    ${faqContent}
+    
+    ${familyContext.surveyData && familyContext.surveyData.responses ? `
+    IMPORTANT: You have access to detailed survey responses for this family. When asked about specific tasks or categories, reference this data to provide personalized insights rather than general information.
+    ` : ''}
+    
+    You can help with:
+    1. Explaining how to use the Allie app
+    2. Providing insights about family survey results
+    3. Offering research-backed parenting advice
+    4. Suggesting ways to improve family balance
+    5. Answering questions about the app's mission and methodology
+    6. Giving relationship advice based on the 10 strategies
+    7. Connecting workload balance to relationship health
+    8. Adding tasks and meetings to calendars
+    9. Managing calendar integrations
+    10. Analyzing their specific survey data and tasks
+    
+    Always be supportive, practical, and focused on improving family dynamics through better balance.
+    Remember that all data is confidential to this family.
+    
+    In your responses:
+    - Be concise but friendly
+    - Provide practical, actionable advice whenever possible
+    - Focus on equity and balance rather than "traditional" gender roles
+    - Remember that "balance" doesn't always mean a perfect 50/50 split
+    - Encourage communication between family members
+    - When mentioning research or scientific findings, refer to the studies in the knowledge base
+    - Suggest appropriate relationship strategies when workload issues arise`;
   }
 }
 

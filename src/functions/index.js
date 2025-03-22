@@ -31,6 +31,36 @@ exports.callClaudeAPI = functions.https.onCall(async (data, context) => {
       }
     );
 
+
+    // In functions/index.js, add:
+exports.testClaudeAPI = functions.https.onRequest(async (req, res) => {
+  try {
+    console.log("Test Claude API endpoint hit");
+    
+    // Make a simple call to Claude
+    const response = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: "claude-3-7-sonnet-20240219",
+        max_tokens: 100,
+        system: "You are a helpful assistant.",
+        messages: [{ role: "user", content: "Hello!" }]
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': 'sk-ant-api03-wYazj0X00yKvWF_TCwYGGsT6pJrW5ytBEowQ7R-OiW8TX_vnPBeUFJlkxKJDEyJ9xM88Bi9bt9ChNpsIJOvYkg-aMXNIg-ZYDQQG',
+          'anthropic-version': '2023-06-01'
+        }
+      }
+    );
+    
+    res.json({ success: true, data: response.data });
+  } catch (error) {
+    console.error("Error in test endpoint:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
     console.log("Claude API response received");
     
     // Return the Claude API response
