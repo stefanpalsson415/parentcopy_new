@@ -22,6 +22,13 @@ class ClaudeService {
       // Format system prompt with family context
       const systemPrompt = this.formatSystemPrompt(familyContext || {});
       
+      // Log for debugging
+      console.log("Claude API request:", { 
+        messagesCount: messages.length, 
+        systemPromptLength: systemPrompt.length,
+        useServerProxy: this.useServerProxy
+      });
+      
       if (this.useServerProxy) {
         // Call the secure Cloud Function
         console.log("Using Firebase Function to call Claude API");
@@ -47,17 +54,60 @@ class ClaudeService {
         
         return result.data.content[0].text;
       } else {
-        // Use embedded responses for testing
-        console.log("Using embedded responses for chat - API proxy unavailable");
+        // For testing without the proxy
+        console.log("Using embedded responses - API proxy unavailable");
         
-        // Check if it's a greeting or basic question
-        const userMessage = messages[messages.length - 1]?.content || "";
-        return this.getContextualResponse(userMessage, familyContext);
+        // If we have family data, try to give a personalized response
+        if (familyContext && Object.keys(familyContext).length > 3) {
+          // Create a personalized response based on available data
+          return this.createPersonalizedResponse(messages[messages.length - 1]?.content || "", familyContext);
+        }
+        
+        // Otherwise fall back to contextual responses
+        return this.getContextualResponse(messages[messages.length - 1]?.content || "", familyContext);
       }
     } catch (error) {
       console.error("Error calling Claude API:", error);
-      return this.getContextualResponse(messages[messages.length - 1]?.content || "", familyContext);
+      throw error;  // Let the caller handle the error
     }
+  }
+  
+  // Add this new method to create personalized responses
+  createPersonalizedResponse(userMessage, context) {
+    const userMessageLower = userMessage.toLowerCase();
+    
+    // Get family name
+    const familyName = context.familyName || "your family";
+    
+    // Try to give responses based on actual data
+    if (userMessageLower.includes("survey") || userMessageLower.includes("result")) {
+      if (context.surveyData && context.surveyData.mamaPercentage) {
+        return `Based on your family's survey data, Mama is currently handling about ${context.surveyData.mamaPercentage.toFixed(1)}% of tasks overall, while Papa is handling ${(100 - context.surveyData.mamaPercentage).toFixed(1)}%. Would you like me to break this down by category?`;
+      }
+    }
+    
+    if (userMessageLower.includes("task") || userMessageLower.includes("what") && userMessageLower.includes("do")) {
+      if (context.tasks && context.tasks.length > 0) {
+        const pendingTasks = context.tasks.filter(t => !t.completed);
+        if (pendingTasks.length > 0) {
+          return `The ${familyName} family currently has ${pendingTasks.length} pending tasks. The next task due is "${pendingTasks[0].title}" assigned to ${pendingTasks[0].assignedTo}. Would you like more details about this task?`;
+        }
+      }
+    }
+    
+    if (userMessageLower.includes("balance") || userMessageLower.includes("imbalance")) {
+      if (context.balanceScores && context.balanceScores.categoryBalance) {
+        const mostImbalanced = Object.entries(context.balanceScores.categoryBalance)
+          .sort((a, b) => b[1].imbalance - a[1].imbalance)[0];
+        
+        if (mostImbalanced) {
+          return `The greatest imbalance in the ${familyName} family is in ${mostImbalanced[0]}, with a ${mostImbalanced[1].imbalance.toFixed(1)}% difference. ${mostImbalanced[1].mama > mostImbalanced[1].papa ? "Mama" : "Papa"} is currently handling most of these tasks.`;
+        }
+      }
+    }
+    
+    // If we can't give a specific response based on data, default to something generic but personalized
+    return `I have access to the ${familyName} family's data and can answer specific questions about your survey results, tasks, and balance metrics. What would you like to know?`;
   }
   
   // Add this new method for better fallback responses

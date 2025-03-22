@@ -52,19 +52,30 @@ class ChatService {
 // Find and update the getAIResponse method (typically around line 50-80)
 async getAIResponse(text, familyId, previousMessages) {
   try {
+    // Log request for debugging
+    console.log("Allie Chat request:", { text, familyId });
+    
     // Better error handling for missing familyId
     if (!familyId) {
-      console.warn("getAIResponse called without familyId, using limited context");
-      // Continue with limited context rather than failing
+      console.warn("getAIResponse called without familyId");
+      return "I need access to your family data to provide personalized responses. Please ensure you're logged in correctly.";
     }
     
-    // Get family data from Firestore for context - with safer error handling
+    // Get family data from Firestore for context
     let familyData = {};
     try {
+      console.log("Getting family context for:", familyId);
       familyData = await this.getFamilyContext(familyId);
+      console.log("Got family context:", Object.keys(familyData));
     } catch (contextError) {
-      console.warn("Could not get family context, using limited context:", contextError);
-      // Continue with empty context rather than failing completely
+      console.error("Error getting family context:", contextError);
+      return "I'm having trouble accessing your family data right now. Please try again in a moment.";
+    }
+    
+    // Check if we actually got meaningful family data
+    if (!familyData || Object.keys(familyData).length < 3) {
+      console.warn("Insufficient family data for personalized response");
+      return "I couldn't retrieve your complete family data. Please try refreshing the page or logging in again.";
     }
     
     // Add knowledge base to context
@@ -86,8 +97,8 @@ async getAIResponse(text, familyId, previousMessages) {
     
     console.log("Sending to Claude API:", {
       messageCount: formattedMessages.length,
-      lastMessage: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
-      hasContext: Object.keys(familyData).length > 0
+      contextSize: JSON.stringify(familyData).length,
+      familyDataKeys: Object.keys(familyData)
     });
     
     // Call the Claude API through our service
@@ -96,23 +107,30 @@ async getAIResponse(text, familyId, previousMessages) {
       familyData
     );
     
-    return response;
+    console.log("Received response from Claude:", response?.substring(0, 100) + "...");
+    
+    // If we got a response, return it
+    if (response && response.length > 0) {
+      return response;
+    }
+    
+    // If we got here, something went wrong but didn't throw an error
+    return "I should be able to answer this with your family's data, but I'm having trouble processing it right now. Could you try asking in a different way?";
   } catch (error) {
     console.error("Error getting AI response:", error);
     
-    // Provide more helpful fallback responses
-    if (text.toLowerCase().includes("survey") || 
-        text.toLowerCase().includes("data") || 
-        text.toLowerCase().includes("results")) {
-      return "I'd like to analyze your survey data, but I'm having trouble accessing it right now. Please try refreshing the page or asking again in a few moments. In the meantime, you can view your survey results directly in the Dashboard tab.";
-    } else if (text.toLowerCase().includes("help") || text.length < 20) {
-      return "I can help with questions about family balance, your tasks, or how to use Allie. What would you like to know?";
+    // Provide more specific error message for common issues
+    if (error.message?.includes("timeout")) {
+      return "I'm taking longer than expected to process your question. This might be due to high demand. Please try again in a moment.";
+    }
+    
+    if (text.toLowerCase().includes("survey") || text.toLowerCase().includes("data")) {
+      return "I'd like to analyze your survey data, but I'm having trouble accessing it right now. Please try refreshing the page or asking again in a few moments.";
     }
     
     return "I'm having trouble processing your question right now. While I'm reconnecting, you can explore the dashboard for insights or check your tasks in the Tasks tab.";
   }
-}  
-  // Get family context data for the AI
+}  // Get family context data for the AI
   // Update the getFamilyContext method
 // Update the getFamilyContext method
 async getFamilyContext(familyId) {

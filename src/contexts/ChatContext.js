@@ -67,6 +67,62 @@ export function ChatProvider({ children }) {
       // Save AI message to database
       await ChatService.saveMessage(allieMessage);
       
+// Send a message
+const sendMessage = async (text, user) => {
+  if (!user || !familyId) {
+    console.error("Missing user or familyId in sendMessage:", { user, familyId });
+    return;
+  }
+  
+  console.log("Sending message:", { text, user, familyId });
+  
+  const newMessage = {
+    familyId,
+    sender: user.id,
+    userName: user.name,
+    userImage: user.profilePicture,
+    text,
+    timestamp: new Date().toISOString()
+  };
+  
+  // Optimistically add message to UI
+  setMessages(prev => [...prev, newMessage]);
+  
+  try {
+    setLoading(true);
+    
+    // Save message to database
+    await ChatService.saveMessage(newMessage);
+    
+    console.log("Getting AI response for:", { text, familyId, messagesCount: messages.length });
+    
+    // Get AI response
+    const aiResponse = await ChatService.getAIResponse(text, familyId, messages);
+    
+    console.log("Received AI response:", { length: aiResponse?.length });
+    
+    // Add AI response to messages
+    const allieMessage = {
+      familyId,
+      sender: 'allie',
+      userName: 'Allie',
+      text: aiResponse,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Save AI message to database
+    await ChatService.saveMessage(allieMessage);
+    
+    // Update messages state with AI response
+    setMessages(prev => [...prev, allieMessage]);
+  } catch (error) {
+    console.error("Error sending message:", error);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
       // Update messages state with AI response
       setMessages(prev => [...prev, allieMessage]);
     } catch (error) {
