@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { Check, Brain, Shield, Database } from 'lucide-react';
+
+
 
 const PaymentScreen = () => {
     const [loading, setLoading] = useState(false);

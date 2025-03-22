@@ -6,8 +6,9 @@ import familyPhoto from '../../assets/family-photo.jpg';
 import { 
   ArrowRight, ArrowLeft, CheckCircle, Star, Award, Brain, 
   Heart, ChevronDown, ChevronUp, Book, BarChart, Scale, 
-  Clock, Sliders, AlertTriangle
+  Clock, Sliders, AlertTriangle, MessageSquare
 } from 'lucide-react';
+
 
 const OnboardingFlow = () => {
   const [step, setStep] = useState(1);
@@ -112,7 +113,7 @@ const OnboardingFlow = () => {
           }
         }
         break;
-      case 9: // Family priorities (for weighting system) - MOVED from 7 to 9
+      case 11: // Family priorities (for weighting system) - MOVED from 7 to 9
         if (!familyData.priorities?.highestPriority) {
           alert('Please select your highest priority concern');
           return;
@@ -142,19 +143,19 @@ const OnboardingFlow = () => {
           }
         }
         break;
-      case 12: // Current challenge
+      case 13: // Current challenge
         if (!familyData.mainChallenge) {
           alert('Please select your current family challenge');
           return;
         }
         break;
-      case 13: // App preferences
+      case 15: // App preferences
         if (!familyData.preferences.reminderFrequency || !familyData.preferences.meetingDay) {
           alert('Please complete your app preferences');
           return;
         }
         break;
-      case 15: // Family goals
+      case 16: // Family goals
         if (!familyData.goals || familyData.goals.length === 0) {
           alert('Please select at least one family goal');
           return;
@@ -380,7 +381,7 @@ const OnboardingFlow = () => {
           </div>
         );
 
-        case 7:
+        case 8:
           return (
             <div>
               <h2 className="text-3xl font-light mb-6">Relationship Insights</h2>
@@ -458,7 +459,7 @@ const OnboardingFlow = () => {
             </div>
           );
 
-          case 8:
+          case 9:
   return (
     <div>
       <h2 className="text-3xl font-light mb-6">Customize Your AI Assistant</h2>
@@ -603,7 +604,7 @@ const OnboardingFlow = () => {
           </div>
         );
         
-      case 8:
+      case 10:
         // The Four Categories - moved from position 9 to 8 (before priorities)
         return (
           <div>
@@ -644,7 +645,7 @@ const OnboardingFlow = () => {
           </div>
         );
         
-      case 9:
+      case 11:
         // Your Family's Priorities - moved from position 7 to 9 (after categories explanation)
         return (
           <div>
@@ -761,7 +762,7 @@ const OnboardingFlow = () => {
           </div>
         );
 
-      case 10:
+      case 12:
         // NEW SLIDE: Task Weighting System Introduction
         return (
           <div>
@@ -879,7 +880,7 @@ const OnboardingFlow = () => {
           </div>
         );
 
-      case 12:
+      case 13:
         // What's Your Current Challenge? - with added AI engine explanation
         return (
           <div>
@@ -969,7 +970,7 @@ const OnboardingFlow = () => {
           </div>
         );
         
-        case 13:
+        case 14:
           return (
             <div>
               <h2 className="text-3xl font-light mb-6">The Allie Approach</h2>
@@ -1053,7 +1054,7 @@ const OnboardingFlow = () => {
             </div>
           );
         
-      case 14:
+      case 15:
         return (
           <div>
             <h2 className="text-3xl font-light mb-6">App Preferences</h2>
@@ -1120,7 +1121,7 @@ const OnboardingFlow = () => {
           </div>
         );
         
-      case 15:
+      case 16:
         // Your Family's Goals - with added AI engine explanation
         return (
           <div>
@@ -1256,7 +1257,7 @@ const OnboardingFlow = () => {
           </div>
         );
         
-      case 16:
+      case 17:
         return (
           <div>
             <h2 className="text-3xl font-light mb-6">Your Weekly Journey</h2>
@@ -1312,7 +1313,7 @@ const OnboardingFlow = () => {
           </div>
         );
         
-      case 17:
+      case 18:
         return (
           <div>
             <h2 className="text-3xl font-light mb-6">Key Features of Allie</h2>
@@ -1410,7 +1411,7 @@ const OnboardingFlow = () => {
         
       // Success Stories slide removed (case 18 in original)
         
-      case 18:
+      case 19:
         // Family Balance FAQ (originally case 14)
         return (
           <div>
@@ -1495,7 +1496,7 @@ const OnboardingFlow = () => {
           </div>
         );
         
-      case 19:
+      case 20:
         // Modified Plan Options slide with functional buttons
         return (
           <div>
@@ -1602,7 +1603,7 @@ const OnboardingFlow = () => {
           </div>
         );
         
-      case 20:
+      case 21:
         return (
           <div className="text-center">
             <h2 className="text-3xl font-light mb-6">You're Ready to Begin!</h2>

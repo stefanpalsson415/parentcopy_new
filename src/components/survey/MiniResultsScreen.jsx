@@ -1,7 +1,7 @@
 // src/components/survey/MiniResultsScreen.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { BarChart3, Award, Clock, Heart } from 'lucide-react';
+import { BarChart3, Award, Clock, Heart, Users } from 'lucide-react';
 import { 
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, 
   Radar, Legend, ResponsiveContainer 

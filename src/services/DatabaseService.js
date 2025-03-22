@@ -619,7 +619,7 @@ console.log("Parent users created:", parentUsers);
 console.log("Family data being prepared:", {
   familyName,
   parentData: parentData.map(p => ({...p, password: '****'})),
-  childrenData
+  childrenData: Array.isArray(children) ? children : []
 });
       
       // Create family members array
