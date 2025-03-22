@@ -301,7 +301,7 @@ const MiniResultsScreen = () => {
         </div>
         
         {/* Personalized Insights Based on Family Data */}
-{pendingFamilyData && (
+        {pendingFamilyData && (
   <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-6">
     <div className="p-6">
       <div className="flex items-start">
