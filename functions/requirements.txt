@@ -1,4 +1,0 @@
-cat > requirements.txt << 'EOL'
-firebase-functions>=0.1.0
-requests>=2.31.0
-EOL

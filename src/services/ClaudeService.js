@@ -71,20 +71,18 @@ console.log("Making API call with headers:", {
 
 
 
+// Fix this function definition
 async claudeProxy(data) {
-  // Import Firebase functions
-  const { getFunctions, httpsCallable } = require('firebase/functions');
-  
-  // Get Firebase Functions instance
-  const functions = getFunctions();
-  
-  // Create a callable function
-  const callClaudeAPI = httpsCallable(functions, 'callClaudeAPI');
-  
-  // Call the function
-  console.log("Calling Claude via Firebase function proxy");
-  
   try {
+    // Get Firebase Functions instance
+    const functions = getFunctions();
+    
+    // Create a callable function
+    const callClaudeAPI = httpsCallable(functions, 'callClaudeAPI');
+    
+    // Call the function
+    console.log("Calling Claude via Firebase function proxy");
+    
     const result = await callClaudeAPI({
       system: data.system,
       messages: data.messages

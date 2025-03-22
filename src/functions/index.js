@@ -1,5 +1,9 @@
 const functions = require('firebase-functions');
+const admin = require('firebase-admin');
 const axios = require('axios');
+
+// Initialize Firebase Admin
+admin.initializeApp();
 
 // Cloud Function to proxy calls to Claude API
 exports.callClaudeAPI = functions.https.onCall(async (data, context) => {
