@@ -76,31 +76,36 @@ class ClaudeService {
   }
   
   // Firebase function proxy method (fixed syntax)
-  async claudeProxy(data) {
-    try {
-      // Get Firebase Functions instance
-      const functions = getFunctions();
-
-      
-      
-      // Create a callable function
-      const callClaudeAPI = httpsCallable(functions, 'callClaudeAPI');
-      
-      // Call the function
-      console.log("Calling Claude via Firebase function proxy");
-      
-      const result = await callClaudeAPI({
-        system: data.system,
-        messages: data.messages
-      });
-      
-      console.log("Response received from Firebase function:", result?.data ? "✓" : "✗");
-      return result;
-    } catch (error) {
-      console.error("Firebase function error:", error);
-      throw error;
-    }
+  // Firebase function proxy method (fixed syntax)
+// Firebase function proxy method (updated for v2 functions)
+async claudeProxy(data) {
+  try {
+    // Get Firebase Functions instance
+    const functions = getFunctions();
+    
+    // Create a callable function
+    const callClaudeAPI = httpsCallable(functions, 'callClaudeAPI');
+    
+    // Call the function - log more details for debugging
+    console.log("Calling Claude via Firebase function proxy with:", {
+      systemLength: data.system?.length || 0,
+      messagesCount: data.messages?.length || 0
+    });
+    
+    const result = await callClaudeAPI({
+      system: data.system,
+      messages: data.messages
+    });
+    
+    console.log("Response received from Firebase function:", !!result?.data);
+    return result;
+  } catch (error) {
+    console.error("Firebase function error:", error.message);
+    // Log full error details
+    console.error("Error details:", error);
+    throw error;
   }
+}
   
   // Create personalized response from context
   createPersonalizedResponse(userMessage, context) {
