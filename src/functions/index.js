@@ -5,6 +5,22 @@ const axios = require('axios');
 // Initialize Firebase Admin
 admin.initializeApp();
 
+
+// Add this to the top of your existing functions/index.js
+console.log("Firebase Functions initialized");
+
+// Make sure your callClaudeAPI function has proper logging:
+exports.callClaudeAPI = functions.https.onCall(async (data, context) => {
+  try {
+    console.log("callClaudeAPI function called!");
+    // Log the incoming data (but truncate it to avoid massive logs)
+    console.log("Data received:", JSON.stringify({
+      system: data.system ? data.system.substring(0, 100) + "..." : null,
+      messages: data.messages ? data.messages.length + " messages" : null
+    }));
+
+    // Your existing code...
+
 // Cloud Function to proxy calls to Claude API
 exports.callClaudeAPI = functions.https.onCall(async (data, context) => {
   try {
