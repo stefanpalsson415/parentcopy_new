@@ -325,15 +325,38 @@ useEffect(() => {
       case 'relationship':
         return (
           <div className="space-y-6">
-            <div className="flex justify-end mb-4">
-              <button 
-                className="px-4 py-2 bg-pink-100 text-pink-800 rounded-md flex items-center hover:bg-pink-200 font-roboto"
-                onClick={handleOpenRelationshipMeeting}
-              >
-                <Heart size={16} className="mr-2" />
-                Start Relationship Meeting
-              </button>
-            </div>
+            <div className="flex justify-between mb-4">
+  <button 
+    className="px-4 py-2 bg-blue-100 text-blue-800 rounded-md flex items-center hover:bg-blue-200 font-roboto"
+    onClick={() => {
+      // Show tour of relationship features
+      const features = [
+        { id: 'daily-checkin', name: 'Daily Check-ins', description: 'Set aside 5-10 minutes each day to connect with your partner' },
+        { id: 'gratitude', name: 'Gratitude Tracker', description: 'Express appreciation to strengthen your bond' },
+        { id: 'date-night', name: 'Date Night Planner', description: 'Schedule quality time together' },
+        { id: 'strategic-actions', name: 'Strategic Actions', description: 'Track your implementation of the 10 key relationship strategies' },
+        { id: 'relationship-meeting', name: 'Relationship Meeting', description: 'Have a structured 15-20 minute conversation about your relationship' }
+      ];
+      
+      // Show modal explaining the features
+      alert("Relationship Features Tour:\n\n" + 
+        features.map(f => `${f.name}: ${f.description}`).join("\n\n") +
+        "\n\nUse these tools together for a stronger relationship!"
+      );
+    }}
+  >
+    <Info size={16} className="mr-2" />
+    Relationship Features Tour
+  </button>
+  
+  <button 
+    className="px-4 py-2 bg-pink-100 text-pink-800 rounded-md flex items-center hover:bg-pink-200 font-roboto"
+    onClick={handleOpenRelationshipMeeting}
+  >
+    <Heart size={16} className="mr-2" />
+    Start Relationship Meeting
+  </button>
+</div>
             <AIRelationshipInsights />
             <CoupleRelationshipChart />
             <TaskDivisionVisualizer />

@@ -20,6 +20,11 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 const functions = getFunctions(app); // Add this line
+const googleProvider = new GoogleAuthProvider();
 
-// Export the Firebase services
-export { db, auth, storage, functions }; // Add functions to exports
+googleProvider.setCustomParameters({
+  prompt: 'select_account'
+});
+
+
+export { db, auth, storage, functions, googleProvider };

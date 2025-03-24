@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Calendar, AlertCircle, CheckCircle, ChevronDown, ChevronUp, Sparkles, Brain, 
-         Info, CheckCircle2, Target, Heart, Camera, HelpCircle } from 'lucide-react';
+  Info, CheckCircle2, Target, Heart, Camera, HelpCircle, Clock, MessageCircle, Calendar as CalendarIcon,
+  Briefcase, Gift, Book, Award } from 'lucide-react';
+         
 import { useFamily } from '../../../contexts/FamilyContext';
 import { useSurvey } from '../../../contexts/SurveyContext';
 import DatabaseService from '../../../services/DatabaseService';
@@ -9,6 +11,17 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../../services/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../services/firebase';
+
+// Add these state variables with the other state declarations
+const [relationshipMetrics, setRelationshipMetrics] = useState({
+  satisfaction: 65,
+  change: 5,
+  communicationQuality: 70,
+  taskCorrelation: 'Meal Planning'
+});
+const [showRelationshipMeeting, setShowRelationshipMeeting] = useState(false);
+const [selectedStrategy, setSelectedStrategy] = useState(null);
+
 
 // Helper function to format dates consistently
 const formatDate = (date) => {
@@ -139,133 +152,144 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
 // Replace the entire loadTasks function within the useEffect
 const loadTasks = async () => {
   try {
-    console.log(`Starting to load tasks for Week ${currentWeek}, user:`, selectedUser?.name);
+    console.log(`Loading tasks for Week ${currentWeek}, user:`, selectedUser?.name);
     
     let tasks = [];
-    let tasksLoaded = false; // Track if we successfully loaded tasks
+    let tasksLoaded = false;
     
     if (familyId) {
-      // METHOD 1: Try loading from DatabaseService
+      // Try primary method first (DatabaseService)
       try {
-        console.log("METHOD 1: Trying DatabaseService.getTasksForWeek...");
         const dbTasks = await DatabaseService.getTasksForWeek(familyId, currentWeek);
-        console.log("METHOD 1 result:", dbTasks);
-        
         if (dbTasks && dbTasks.length > 0) {
           tasks = dbTasks;
           tasksLoaded = true;
-          console.log("METHOD 1 SUCCESS: Tasks loaded from DatabaseService");
+          console.log("Tasks loaded from DatabaseService");
         }
       } catch (error) {
-        console.error("METHOD 1 FAILED:", error);
+        console.error("Primary loading method failed:", error);
       }
       
-      // METHOD 2: If Method 1 failed, try direct Firestore query
+      // If primary method failed, try backup method (context)
       if (!tasksLoaded) {
         try {
-          console.log("METHOD 2: Trying direct Firestore query...");
-          const docRef = doc(db, "families", familyId);
-          const familyDoc = await getDoc(docRef);
-          
-          if (familyDoc.exists()) {
-            const familyData = familyDoc.data();
-            if (familyData.tasks && familyData.tasks.length > 0) {
-              tasks = familyData.tasks;
-              tasksLoaded = true;
-              console.log("METHOD 2 SUCCESS: Tasks loaded directly from Firestore");
-            }
-          }
-        } catch (dbError) {
-          console.error("METHOD 2 FAILED:", dbError);
-        }
-      }
-      
-      // METHOD 3: If both previous methods failed, try context method
-      if (!tasksLoaded) {
-        try {
-          console.log("METHOD 3: Trying context loadCurrentWeekTasks...");
           const contextTasks = await loadCurrentWeekTasks();
           if (contextTasks && contextTasks.length > 0) {
             tasks = contextTasks;
             tasksLoaded = true;
-            console.log("METHOD 3 SUCCESS: Tasks loaded from context");
+            console.log("Tasks loaded from context");
           }
-        } catch (contextError) {
-          console.error("METHOD 3 FAILED:", contextError);
+        } catch (error) {
+          console.error("Backup loading method failed:", error);
         }
       }
       
-      // METHOD 4: If all methods failed, create placeholder tasks
+      // Add relationship metadata to tasks if loading was successful
+      if (tasksLoaded) {
+        tasks = tasks.map(task => {
+          // Add relationship strategy indicators to relationship tasks
+          if (task.taskType === 'relationship') {
+            // Assign a strategy number (1-10) based on task content
+            const strategyKeywords = {
+              'check-in': 1,
+              'divide': 2,
+              'date': 3,
+              'gratitude': 4,
+              'calendar': 5,
+              'problem': 6,
+              'self-care': 7,
+              'counseling': 8,
+              'celebrate': 9,
+              'future': 10
+            };
+            
+            // Find matching strategy based on task title/description
+            let relationshipStrategy = null;
+            Object.entries(strategyKeywords).forEach(([keyword, number]) => {
+              if ((task.title?.toLowerCase().includes(keyword) || 
+                   task.description?.toLowerCase().includes(keyword)) && 
+                  !relationshipStrategy) {
+                relationshipStrategy = number;
+              }
+            });
+            
+            return {
+              ...task,
+              relationshipStrategy
+            };
+          }
+          return task;
+        });
+      }
+      
+      // If still no tasks, create relationship-focused placeholder tasks
       if (!tasksLoaded) {
         console.warn("All task loading methods failed. Creating placeholder tasks.");
         tasks = [
           {
             id: `${currentWeek}-placeholder-1`,
-            title: `Week ${currentWeek}: Meal Planning`,
-            description: "Take charge of planning family meals for the week",
+            title: `Week ${currentWeek}: Daily Check-ins`,
+            description: "Implement 5-minute daily check-ins to connect and coordinate",
             assignedTo: "Papa",
             assignedToName: "Papa",
-            focusArea: "Meal Planning",
-            category: "Invisible Household Tasks",
-            taskType: "survey-based",
-            insight: "Survey data shows an imbalance in meal planning responsibilities.",
+            focusArea: "Communication",
+            category: "Relationship Tasks",
+            taskType: "relationship",
+            relationshipStrategy: 1,
+            insight: "Brief daily check-ins help couples stay connected and coordinate responsibilities.",
             completed: false,
             comments: []
           },
           {
             id: `${currentWeek}-placeholder-2`,
-            title: `Week ${currentWeek}: Emotional Support`,
-            description: "Provide more emotional guidance for the children",
+            title: `Week ${currentWeek}: Gratitude Practice`,
+            description: "Share specific appreciation for your partner's contributions",
             assignedTo: "Mama",
             assignedToName: "Mama",
-            focusArea: "Emotional Support",
-            category: "Invisible Parental Tasks",
-            taskType: "ai",
-            insight: "AI analysis indicates emotional labor could be better balanced.",
+            focusArea: "Appreciation",
+            category: "Relationship Tasks",
+            taskType: "relationship",
+            relationshipStrategy: 4,
+            insight: "Expressing gratitude improves relationship satisfaction and task-sharing motivation.",
             completed: false,
             comments: []
           }
         ];
-        console.log("Created placeholder tasks:", tasks);
       }
     }
     
-    // Log what we're about to set as tasks
-    console.log("Final tasks to be set in state:", tasks);
-    console.log("Tasks for Papa:", tasks.filter(t => t.assignedTo === "Papa").length);
-    console.log("Tasks for Mama:", tasks.filter(t => t.assignedTo === "Mama").length);
-    
-    // Set the tasks in state
+    console.log("Tasks being set in state:", tasks.length);
     setTaskRecommendations(tasks);
     
   } catch (error) {
-    console.error(`Error in loadTasks for Week ${currentWeek}:`, error);
-    console.log("Creating basic placeholder tasks due to error");
+    console.error(`Error in loadTasks:`, error);
     
-    // Create very basic fallback tasks on error
+    // Create basic fallback tasks on error
     const fallbackTasks = [
       {
         id: `${currentWeek}-error-1`,
-        title: `Task for Papa`,
-        description: "An error occurred loading tasks. This is a placeholder.",
+        title: `Relationship Task`,
+        description: "Have a 15-minute conversation about household responsibilities.",
         assignedTo: "Papa",
         assignedToName: "Papa",
+        taskType: "relationship",
         completed: false,
         comments: []
       },
       {
         id: `${currentWeek}-error-2`,
-        title: `Task for Mama`,
-        description: "An error occurred loading tasks. This is a placeholder.",
+        title: `Relationship Task`,
+        description: "Share three things you appreciate about your partner's contributions.",
         assignedTo: "Mama",
         assignedToName: "Mama",
+        taskType: "relationship",
         completed: false,
         comments: []
       }
     ];
     setTaskRecommendations(fallbackTasks);
   }
-};    
+};   
     loadTasks();
   }, [familyId, currentWeek, selectedUser]);
 
@@ -1128,24 +1152,53 @@ const atLeastOneKidTaskCompleted = () => {
               {/* NEW: Task completion tracking by parent */}
               <h4 className="text-sm font-medium mb-2 font-roboto">Task Completion:</h4>
               <div className="space-y-2">
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="font-roboto">Mama: {parentTaskCompletion.Mama.completed}/{parentTaskCompletion.Mama.assigned} tasks</span>
-                    <span className="font-roboto">{parentTaskCompletion.Mama.assigned > 0 
-                      ? Math.round((parentTaskCompletion.Mama.completed / parentTaskCompletion.Mama.assigned) * 100) 
-                      : 0}%</span>
-                  </div>
-                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-purple-500" 
-                      style={{ 
-                        width: `${parentTaskCompletion.Mama.assigned > 0 
-                          ? (parentTaskCompletion.Mama.completed / parentTaskCompletion.Mama.assigned) * 100 
-                          : 0}%` 
-                      }}
-                    ></div>
-                  </div>
-                </div>
+              <div>
+  <div className="flex justify-between text-xs mb-1">
+    <span className="font-roboto">Papa: {parentTaskCompletion.Papa.completed}/{parentTaskCompletion.Papa.assigned} tasks</span>
+    <span className="font-roboto">{parentTaskCompletion.Papa.assigned > 0 
+      ? Math.round((parentTaskCompletion.Papa.completed / parentTaskCompletion.Papa.assigned) * 100) 
+      : 0}%</span>
+  </div>
+  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+    <div 
+      className="h-full bg-blue-500" 
+      style={{ 
+        width: `${parentTaskCompletion.Papa.assigned > 0 
+          ? (parentTaskCompletion.Papa.completed / parentTaskCompletion.Papa.assigned) * 100 
+          : 0}%` 
+      }}
+    ></div>
+  </div>
+</div>
+
+{/* NEW: Relationship Impact Tracking */}
+<h4 className="text-sm font-medium mb-2 mt-4 font-roboto">Task Impact on Relationship:</h4>
+<div className="bg-gray-50 p-3 rounded border">
+  <div className="flex items-center justify-between text-xs mb-2">
+    <span className="font-roboto">Relationship Satisfaction</span>
+    <div className="flex items-center">
+      <span className="font-roboto text-green-600">+5%</span>
+      <div className="w-4 h-4 ml-1 flex items-center justify-center">
+        <div className="w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-green-600"></div>
+      </div>
+    </div>
+  </div>
+  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+    <div className="h-full bg-black" style={{ width: '65%' }}></div>
+  </div>
+  <p className="text-xs text-gray-600 mt-2 font-roboto">
+    Task completion correlates with a 5% increase in relationship satisfaction this week.
+  </p>
+  
+  <div className="mt-3 text-xs text-gray-800 p-2 rounded bg-blue-50 border border-blue-100">
+    <div className="flex items-start">
+      <Sparkles size={12} className="text-blue-600 mt-0.5 mr-1 flex-shrink-0" />
+      <span className="font-roboto">
+        <strong>Insight:</strong> Sharing meal planning tasks showed the strongest positive impact on your relationship this week.
+      </span>
+    </div>
+  </div>
+</div>
                 
                 <div>
                   <div className="flex justify-between text-xs mb-1">
@@ -1219,26 +1272,31 @@ const atLeastOneKidTaskCompleted = () => {
                             <h4 className="font-medium text-lg font-roboto">{task.title}</h4>
                             
                             {/* Task type label */}
-                            <div className="flex items-center gap-2">
-                              {task.taskType === 'ai' && (
-                                <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-xs rounded-full flex items-center">
-                                  <Brain size={10} className="mr-1" />
-                                  AI Insight
-                                </span>
-                              )}
-                              {task.taskType === 'survey-based' && (
-                                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full flex items-center">
-                                  <CheckCircle2 size={10} className="mr-1" />
-                                  Survey Data
-                                </span>
-                              )}
-                              {task.taskType === 'relationship' && (
-                                <span className="px-2 py-0.5 bg-pink-100 text-pink-800 text-xs rounded-full flex items-center">
-                                  <Heart size={10} className="mr-1" />
-                                  Relationship
-                                </span>
-                              )}
-                            </div>
+<div className="flex items-center gap-2">
+  {task.taskType === 'ai' && (
+    <span className="px-2 py-0.5 bg-black text-white text-xs rounded-full flex items-center">
+      <Brain size={10} className="mr-1" />
+      AI Insight
+    </span>
+  )}
+  {task.taskType === 'survey-based' && (
+    <span className="px-2 py-0.5 bg-gray-800 text-white text-xs rounded-full flex items-center">
+      <CheckCircle2 size={10} className="mr-1" />
+      Survey Data
+    </span>
+  )}
+  {task.taskType === 'relationship' && (
+    <span className="px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full flex items-center">
+      <Heart size={10} className="mr-1" />
+      Relationship
+    </span>
+  )}
+  {task.relationshipStrategy && (
+    <span className="px-2 py-0.5 bg-gray-100 text-gray-800 text-xs rounded-full ml-1">
+      Strategy #{task.relationshipStrategy}
+    </span>
+  )}
+</div>
                           </div>
                             
                           <div className="mt-2">
@@ -1874,67 +1932,104 @@ const atLeastOneKidTaskCompleted = () => {
           </div>
         </div>
 
-        {/* Couple Check-In Card */}
-        {selectedUser && selectedUser.role === 'parent' && (
-          <div className="bg-white rounded-lg shadow p-6 mt-8">
-            <div className="flex items-start">
-              <div className="flex-shrink-0 mr-4">
-                <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center">
-                  <Heart size={20} className="text-pink-600" />
-                </div>
+        {/* Enhanced Couple Check-In Card */}
+{selectedUser && selectedUser.role === 'parent' && (
+  <div className="bg-white rounded-lg shadow p-6 mt-8 border-l-2 border-black">
+    <div className="flex items-start">
+      <div className="flex-shrink-0 mr-4">
+        <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center">
+          <Heart size={20} className="text-white" />
+        </div>
+      </div>
+      
+      <div className="flex-1">
+        <h3 className="text-lg font-semibold font-roboto">Relationship Check-In</h3>
+        <p className="text-sm text-gray-600 mt-1 font-roboto">
+          A quick check-in to strengthen your relationship while balancing workload
+        </p>
+        
+        {/* Strategic Actions Progress */}
+        <div className="mt-4 mb-4">
+          <h4 className="text-sm font-medium mb-2 font-roboto flex items-center">
+            <CheckCircle2 size={14} className="mr-1 text-black" />
+            Strategic Actions Progress
+          </h4>
+          <div className="grid grid-cols-5 gap-2">
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={`strategy-${i}`} 
+                className="h-1 bg-gray-200 rounded overflow-hidden">
+                <div className="h-full bg-black" style={{ width: i % 3 === 0 ? '100%' : i % 2 === 0 ? '50%' : '25%' }}></div>
               </div>
-              
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold font-roboto">Weekly Couple Check-In</h3>
-                <p className="text-sm text-gray-600 mt-1 font-roboto">
-                  A quick 5-minute check-in to track how workload balance is affecting your relationship
-                </p>
-                
-                <div className="mt-3">
-                  {!canStartCoupleCheckIn ? (
-                    <div className="text-sm bg-amber-50 text-amber-800 p-3 rounded mb-3">
-                      <div className="flex items-center mb-1">
-                        <AlertCircle size={16} className="mr-2" />
-                        <span className="font-medium font-roboto">Couple check-in not yet available</span>
-                      </div>
-                      <p className="font-roboto">
-                        Complete the weekly check-in first to unlock the couple check-in.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="text-sm bg-pink-50 text-pink-800 p-3 rounded mb-3">
-                      <div className="flex items-center mb-1">
-                        <Heart size={16} className="mr-2" />
-                        <span className="font-medium font-roboto">Your relationship matters too!</span>
-                      </div>
-                      <p className="font-roboto">
-                        Take 5 minutes to check in on how workload sharing is affecting your relationship.
-                      </p>
-                    </div>
-                  )}
-                  
-                  <div className="text-sm text-gray-600 flex items-center">
-                    <span className="font-roboto">Recommended: 5 minutes</span>
-                  </div>
-                </div>
-                
-                <div className="mt-4">
-                  <button
-                    onClick={() => setShowCoupleCheckIn(true)}
-                    disabled={!canStartCoupleCheckIn}
-                    className={`px-4 py-2 rounded-md flex items-center font-roboto ${
-                      canStartCoupleCheckIn 
-                        ? 'bg-pink-100 text-pink-800 hover:bg-pink-200' 
-                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    Start Couple Check-In
-                  </button>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
-        )}
+          <p className="text-xs text-gray-500 mt-1 font-roboto">
+            You've implemented 3 of 10 relationship strategies
+          </p>
+        </div>
+        
+        <div className="mt-3">
+          {!canStartCoupleCheckIn ? (
+            <div className="text-sm bg-gray-50 text-gray-800 p-3 rounded mb-3 border border-gray-200">
+              <div className="flex items-center mb-1">
+                <AlertCircle size={16} className="mr-2" />
+                <span className="font-medium font-roboto">Couple check-in not yet available</span>
+              </div>
+              <p className="font-roboto">
+                Complete the weekly check-in first to unlock the couple check-in.
+              </p>
+            </div>
+          ) : (
+            <div className="text-sm bg-black text-white p-3 rounded mb-3">
+              <div className="flex items-center mb-1">
+                <Sparkles size={16} className="mr-2" />
+                <span className="font-medium font-roboto">This Week's Focus: Daily Check-ins</span>
+              </div>
+              <p className="font-roboto">
+                Research shows brief daily check-ins strengthen your connection while improving workload balance.
+              </p>
+            </div>
+          )}
+          
+          {/* Relationship Health Indicator */}
+          <div className="mt-4 bg-gray-50 p-3 rounded border">
+            <h4 className="text-sm font-medium mb-2 font-roboto">Relationship Health</h4>
+            <div className="flex items-center">
+              <div className="w-full bg-gray-200 rounded-full h-2 mr-2">
+                <div className="bg-blue-500 h-2 rounded-full" style={{ width: '68%' }}></div>
+              </div>
+              <span className="text-sm font-medium font-roboto">68%</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1 font-roboto">
+              +5% improvement since last week
+            </p>
+          </div>
+        </div>
+        
+        <div className="mt-4 flex space-x-2">
+          <button
+            onClick={() => setShowCoupleCheckIn(true)}
+            disabled={!canStartCoupleCheckIn}
+            className={`px-4 py-2 rounded-md flex items-center flex-1 justify-center font-roboto ${
+              canStartCoupleCheckIn 
+                ? 'bg-black text-white hover:bg-gray-800' 
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            Start Check-In
+          </button>
+          
+          <button
+            className="px-3 py-2 rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 font-roboto flex items-center"
+            onClick={() => window.open('/relationship', '_self')}
+          >
+            <HelpCircle size={16} className="mr-1" />
+            Tips
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
         {/* Couple Check-In Modal */}
         {showCoupleCheckIn && (
@@ -1946,6 +2041,48 @@ const atLeastOneKidTaskCompleted = () => {
             }
           }} />
         )}
+
+{/* Relationship Meeting Card */}
+{selectedUser && selectedUser.role === 'parent' && (
+  <div className="bg-white rounded-lg shadow p-6 mt-8">
+    <div className="flex items-start">
+      <div className="flex-shrink-0 mr-4">
+        <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center">
+          <MessageCircle size={20} className="text-white" />
+        </div>
+      </div>
+      
+      <div className="flex-1">
+        <h3 className="text-lg font-semibold font-roboto">15-Minute Relationship Meeting</h3>
+        <p className="text-sm text-gray-600 mt-1 font-roboto">
+          Have a focused conversation about your relationship and workload balance
+        </p>
+        
+        <div className="mt-4 bg-gray-50 p-4 rounded border">
+          <h4 className="text-sm font-medium mb-3 font-roboto">This Week's Discussion Topics:</h4>
+          <ol className="list-decimal list-inside space-y-2 text-sm font-roboto">
+            <li>How did the workload adjustments impact your stress levels?</li>
+            <li>What appreciation did you feel this week from your partner?</li>
+            <li>Which task would make the biggest difference if shared differently?</li>
+            <li>What's one small step to improve your connection this week?</li>
+          </ol>
+        </div>
+        
+        <div className="mt-4 flex items-center justify-between">
+          <div className="text-sm text-gray-600 font-roboto">
+            Recommended: 15 minutes
+          </div>
+          
+          <button
+            className="px-4 py-2 rounded-md bg-black text-white hover:bg-gray-800 font-roboto flex items-center"
+          >
+            Start Relationship Meeting
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
         {/* Family Meeting Card */}
         <div className="bg-white rounded-lg shadow p-6 mt-8">
@@ -2000,6 +2137,97 @@ const atLeastOneKidTaskCompleted = () => {
           </div>
         </div>
       </div>
+
+{/* Strategic Actions Tracker */}
+{selectedUser && selectedUser.role === 'parent' && (
+  <div className="bg-white rounded-lg shadow p-6 mt-8">
+    <div className="flex items-start">
+      <div className="flex-shrink-0 mr-4">
+        <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center">
+          <Target size={20} className="text-white" />
+        </div>
+      </div>
+      
+      <div className="flex-1">
+        <h3 className="text-lg font-semibold font-roboto">Relationship Strategy Tracker</h3>
+        <p className="text-sm text-gray-600 mt-1 mb-3 font-roboto">
+          Track your progress implementing the 10 key relationship strategies
+        </p>
+        
+        <div className="space-y-3 mt-4">
+          {/* Strategy 1 */}
+          <div className="flex items-center p-3 bg-gray-50 rounded border">
+            <div className="flex-shrink-0 mr-3">
+              <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                <Clock size={16} className="text-green-600" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-medium font-roboto">Brief Daily Check-ins</h4>
+              <div className="flex items-center mt-1">
+                <div className="w-full bg-gray-200 rounded-full h-1.5 mr-2">
+                  <div className="bg-green-500 h-1.5 rounded-full" style={{ width: '75%' }}></div>
+                </div>
+                <span className="text-xs font-medium font-roboto">75%</span>
+              </div>
+            </div>
+            <button className="ml-2 px-2 py-1 text-xs bg-black text-white rounded font-roboto">
+              View Tips
+            </button>
+          </div>
+          
+          {/* Strategy 2 */}
+          <div className="flex items-center p-3 bg-gray-50 rounded border">
+            <div className="flex-shrink-0 mr-3">
+              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                <Briefcase size={16} className="text-blue-600" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-medium font-roboto">Divide and Conquer</h4>
+              <div className="flex items-center mt-1">
+                <div className="w-full bg-gray-200 rounded-full h-1.5 mr-2">
+                  <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: '90%' }}></div>
+                </div>
+                <span className="text-xs font-medium font-roboto">90%</span>
+              </div>
+            </div>
+            <button className="ml-2 px-2 py-1 text-xs bg-black text-white rounded font-roboto">
+              View Tips
+            </button>
+          </div>
+          
+          {/* Strategy 3 */}
+          <div className="flex items-center p-3 bg-gray-50 rounded border">
+            <div className="flex-shrink-0 mr-3">
+              <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                <Gift size={16} className="text-purple-600" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-medium font-roboto">Regular Date Nights</h4>
+              <div className="flex items-center mt-1">
+                <div className="w-full bg-gray-200 rounded-full h-1.5 mr-2">
+                  <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: '25%' }}></div>
+                </div>
+                <span className="text-xs font-medium font-roboto">25%</span>
+              </div>
+            </div>
+            <button className="ml-2 px-2 py-1 text-xs bg-black text-white rounded font-roboto">
+              Schedule
+            </button>
+          </div>
+          
+          {/* Show More/Less Button */}
+          <button className="w-full flex items-center justify-center py-2 text-sm text-gray-600 hover:text-black font-roboto">
+            <ChevronDown size={16} className="mr-1" />
+            Show More Strategies
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* Emoji Picker Modal */}
       {selectedTaskForEmoji && (

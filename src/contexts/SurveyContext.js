@@ -18,7 +18,8 @@ export function SurveyProvider({ children }) {
       "Visible Household Tasks",
       "Invisible Household Tasks",
       "Visible Parental Tasks",
-      "Invisible Parental Tasks"
+      "Invisible Parental Tasks",
+      "Relationship Health" // Add this new category
     ];
       
     const questions = [];
@@ -130,7 +131,35 @@ export function SurveyProvider({ children }) {
         "Who notices subtle changes in children's emotional wellbeing and follows up?",
         "Who coordinates the 'emotional climate' of the family during stressful periods?",
         "Who keeps mental track of each child's emotional triggers and coping mechanisms?"
+      ],
+      "Relationship Health": [
+        "How would you rate your overall relationship satisfaction?",
+        "How has workload sharing affected your relationship?",
+        "How often do you currently have quality time together?",
+        "How would you rate your communication as a couple?",
+        "Which relationship area would you most like to improve?",
+        "How effectively do you and your partner resolve conflicts?",
+        "How valued do you feel by your partner?",
+        "How comfortable are you discussing difficult topics with your partner?",
+        "How fairly do you feel household responsibilities are distributed?",
+        "How connected do you feel to your partner emotionally?",
+        "How supported do you feel by your partner during stressful times?",
+        "How well does your partner listen when you express concerns?",
+        "How satisfied are you with the amount of appreciation expressed in your relationship?",
+        "How aligned are you and your partner on parenting approaches?",
+        "How well do you and your partner balance individual needs with relationship needs?",
+        "How often do you have constructive conversations about your relationship?",
+        "How well do you and your partner handle disagreements?",
+        "How satisfied are you with the physical affection in your relationship?",
+        "How much do you and your partner prioritize your relationship?",
+        "How much time do you spend on relationship maintenance?",
+        "How well do you and your partner support each other's personal goals?",
+        "How effectively do you and your partner communicate about finances?",
+        "How well do you and your partner divide childcare responsibilities?",
+        "How satisfied are you with the amount of fun and play in your relationship?",
+        "How much does balance affect your relationship satisfaction?"
       ]
+    };
     };
     
     // Add category balance questions - new in updated version
@@ -203,6 +232,55 @@ export function SurveyProvider({ children }) {
         childDevelopment: "high",
         relationshipImpact: "extreme" // New factor
       }
+      // Define weight attributes for each question category
+const categoryWeights = {
+  "Visible Household Tasks": {
+    baseWeight: 2,
+    frequency: "weekly",
+    invisibility: "highly",
+    emotionalLabor: "minimal",
+    researchImpact: "medium",
+    childDevelopment: "high",
+    relationshipImpact: "moderate"
+  },
+  "Invisible Household Tasks": {
+    baseWeight: 4,
+    frequency: "daily",
+    invisibility: "completely",
+    emotionalLabor: "high",
+    researchImpact: "high",
+    childDevelopment: "moderate",
+    relationshipImpact: "high"
+  },
+  "Visible Parental Tasks": {
+    baseWeight: 3,
+    frequency: "daily",
+    invisibility: "partially",
+    emotionalLabor: "moderate",
+    researchImpact: "high",
+    childDevelopment: "high",
+    relationshipImpact: "moderate"
+  },
+  "Invisible Parental Tasks": {
+    baseWeight: 5,
+    frequency: "daily",
+    invisibility: "completely",
+    emotionalLabor: "extreme",
+    researchImpact: "high",
+    childDevelopment: "high",
+    relationshipImpact: "extreme"
+  },
+  // Add this new section
+  "Relationship Health": {
+    baseWeight: 4,
+    frequency: "daily",
+    invisibility: "mostly",
+    emotionalLabor: "extreme",
+    researchImpact: "high",
+    childDevelopment: "high",
+    relationshipImpact: "extreme"
+  }
+};
     };
     
     // AI-generated weight variations within categories for specific questions

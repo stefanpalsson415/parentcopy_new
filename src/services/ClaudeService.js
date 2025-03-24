@@ -10,7 +10,11 @@ class ClaudeService {
     
     // Initialize the functions with the correct region
     this.functions = getFunctions();
-    connectFunctionsEmulator(this.functions, "localhost", 5001); // For local development
+// Only connect to the emulator in development
+if (process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost') {
+  console.log("Using Firebase functions emulator");
+  connectFunctionsEmulator(this.functions, "localhost", 5001);
+}
     
     console.log("Claude service initialized to use Firebase Function proxy");
   }
@@ -127,7 +131,7 @@ class ClaudeService {
       console.log("Testing Hello World function...");
       
       const helloWorld = httpsCallable(this.functions, 'helloWorld', {
-        timeout: 10000
+        timeout: 30000
       });
     
     // Call the function with a simple payload

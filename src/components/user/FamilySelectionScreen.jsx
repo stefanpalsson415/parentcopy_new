@@ -9,7 +9,15 @@ import DatabaseService from '../../services/DatabaseService';
 
 
 const FamilySelectionScreen = () => {
-  const { currentUser, availableFamilies, loadFamilyData, familyData, login, logout, loadAllFamilies } = useAuth();
+  const { currentUser, 
+    availableFamilies, 
+    loadFamilyData, 
+    familyData, 
+    login, 
+    logout, 
+    loadAllFamilies,
+    ensureFamiliesLoaded,
+    signInWithGoogle  } = useAuth();
   const { 
     familyMembers, 
     selectedUser, 
@@ -469,20 +477,62 @@ const getDefaultProfileImage = (member) => {
   </div>
 </div>
                   
-                  <button
-                    type="submit"
-                    disabled={isLoggingIn}
-                    className="w-full py-2 bg-black text-white rounded-md hover:bg-gray-800 flex items-center justify-center"
-                  >
-                    {isLoggingIn ? (
-                      <>
-                        <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Logging in...
-                      </>
-                    ) : (
-                      'Log In'
-                    )}
-                  </button>
+<button
+  type="submit"
+  disabled={isLoggingIn}
+  className="w-full py-2 bg-black text-white rounded-md hover:bg-gray-800 flex items-center justify-center"
+>
+  {isLoggingIn ? (
+    <>
+      <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+      Logging in...
+    </>
+  ) : (
+    'Log In'
+  )}
+</button>
+
+{/* Google Sign-In Button */}
+<div className="mt-4 relative">
+  <div className="absolute inset-0 flex items-center">
+    <div className="w-full border-t border-gray-300"></div>
+  </div>
+  <div className="relative flex justify-center text-sm">
+    <span className="px-2 bg-white text-gray-500">or</span>
+  </div>
+</div>
+
+<button
+  onClick={async () => {
+    setIsLoggingIn(true);
+    try {
+      // Call Google sign-in from AuthContext
+      const user = await signInWithGoogle();
+      console.log("Google sign-in successful:", user);
+      
+      // Load available families for this user
+      await loadAllFamilies(user.uid);
+      
+      // If families exist, load the first one
+      await ensureFamiliesLoaded(user.uid);
+      
+      // Hide login form
+      setShowLoginForm(false);
+    } catch (error) {
+      console.error("Google sign-in error:", error);
+      setLoginError('Google sign-in failed. Please try again.');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }}
+  disabled={isLoggingIn}
+  className="w-full mt-4 py-2 border border-gray-300 rounded-md text-black hover:bg-gray-50 flex items-center justify-center"
+>
+  <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#4285F4"/>
+  </svg>
+  Sign in with Google
+</button>
                 </div>
               </form>
             </div>

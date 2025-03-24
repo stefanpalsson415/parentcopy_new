@@ -121,27 +121,55 @@ content: text
 });
 
 // Add relationship-specific context if the message is about relationships
-if (text.toLowerCase().includes('relationship') || 
-  text.toLowerCase().includes('partner') || 
-  text.toLowerCase().includes('marriage') || 
-  text.toLowerCase().includes('date night') || 
-  text.toLowerCase().includes('strategies')) {
+const relationshipKeywords = [
+  'relationship', 'partner', 'marriage', 'date', 'night', 'couple', 'strategies',
+  'connect', 'connection', 'love', 'romance', 'argue', 'fight', 'conflict',
+  'communication', 'misunderstanding', 'quality time', 'together', 'affection',
+  'listen', 'understanding', 'support', 'intimate', 'check-in', 'appreciation'
+];
 
-console.log("Detected relationship question, adding specialized context");
+const isRelationshipQuestion = relationshipKeywords.some(keyword => 
+  text.toLowerCase().includes(keyword)
+);
 
-// Prepare extra relationship context to send to Claude
-const relationshipContext = {
-  detectedTopic: 'relationship',
-  specializedKnowledge: true,
-  strategies: familyData.relationshipData?.allStrategies || [],
-  coupleData: familyData.coupleData || {},
-  suggestionPriority: 'high'
-};
+if (isRelationshipQuestion) {
+  console.log("Detected relationship question, adding specialized context");
 
-// Add to the context
-familyData.specializedContext = relationshipContext;
-}
-      
+  // Get the 10 strategic actions data
+  const strategiesData = familyData.relationshipData?.allStrategies || [];
+  
+  // Identify least implemented strategies
+  const lowImplementedStrategies = [...strategiesData]
+    .sort((a, b) => (a.implementation || 0) - (b.implementation || 0))
+    .slice(0, 3);
+  
+  // Check if we have couple check-in data
+  const hasCoupleData = familyData.coupleData && 
+    (familyData.coupleData.satisfaction || familyData.coupleData.communication);
+  
+  // Prepare extra relationship context to send to Claude
+  const relationshipContext = {
+    detectedTopic: 'relationship',
+    specializedKnowledge: true,
+    strategies: strategiesData,
+    lowImplementedStrategies: lowImplementedStrategies.map(s => s.name || s.id),
+    coupleData: familyData.coupleData || {},
+    hasRecentCheckIn: !!familyData.coupleData?.lastCheckIn,
+    suggestionPriority: 'high',
+    relationshipFeatures: [
+      'DailyCheckInTool', 'DateNightPlanner', 'GratitudeTracker',
+      'StrategicActionsTracker', 'RelationshipMeeting'
+    ]
+  };
+
+  // Add to the context
+  familyData.specializedContext = relationshipContext;
+  
+  // Add relationship whitepaper content if available
+  if (familyData.knowledgeBase?.whitepapers?.parentingStrategies) {
+    familyData.whitepaperContent = familyData.knowledgeBase.whitepapers.parentingStrategies;
+  }
+}      
       console.log("Sending to Claude API:", {
         messageCount: formattedMessages.length,
         contextSize: JSON.stringify(familyData).length,

@@ -306,37 +306,46 @@ const StrategicActionsTracker = () => {
           {strategies.map(strategy => (
             <div key={strategy.id} className="border rounded-lg overflow-hidden">
               {/* Strategy Header */}
-              <div 
-                className={`p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50 ${
-                  expandedStrategy === strategy.id ? 'border-b' : ''
-                }`}
-                onClick={() => toggleStrategy(strategy.id)}
-              >
-                <div className="flex items-center">
-                  <div className="mr-3">
-                    {strategy.icon}
-                  </div>
-                  <div>
-                    <h4 className="font-medium font-roboto">{strategy.name}</h4>
-                    <p className="text-xs text-gray-500 font-roboto">
-                      {strategy.frequency.charAt(0).toUpperCase() + strategy.frequency.slice(1)} practice
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center">
-                  {/* Implementation Progress */}
-                  <div className="hidden sm:block mr-4">
-                    <div className="flex items-center">
-                      <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-blue-500" 
-                          style={{ width: `${strategy.implementation}%` }} 
-                        />
-                      </div>
-                      <span className="ml-2 text-xs font-roboto">{strategy.implementation}%</span>
-                    </div>
-                  </div>
+<div 
+  className={`p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50 ${
+    expandedStrategy === strategy.id ? 'border-b' : ''
+  }`}
+  onClick={() => toggleStrategy(strategy.id)}
+>
+  <div className="flex items-center">
+    <div className="mr-3">
+      {strategy.icon}
+    </div>
+    <div>
+      <h4 className="font-medium font-roboto">{strategy.name}</h4>
+      <p className="text-xs text-gray-500 font-roboto">
+        {strategy.frequency.charAt(0).toUpperCase() + strategy.frequency.slice(1)} practice
+      </p>
+      {/* Associated Tool Label */}
+      {strategy.id === 'daily-checkins' && 
+        <span className="text-xs bg-blue-100 text-blue-700 px-1 rounded font-roboto">Daily Check-in Tool</span>}
+      {strategy.id === 'date-nights' && 
+        <span className="text-xs bg-pink-100 text-pink-700 px-1 rounded font-roboto">Date Night Planner</span>}
+      {strategy.id === 'gratitude-affirmation' && 
+        <span className="text-xs bg-green-100 text-green-700 px-1 rounded font-roboto">Gratitude Tracker</span>}
+      {strategy.id === 'self-care' && 
+        <span className="text-xs bg-purple-100 text-purple-700 px-1 rounded font-roboto">Self-Care Planner</span>}
+    </div>
+  </div>
+  
+  <div className="flex items-center">
+    {/* Implementation Progress */}
+    <div className="hidden sm:block mr-4">
+      <div className="flex items-center">
+        <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-blue-500" 
+            style={{ width: `${strategy.implementation}%` }} 
+          />
+        </div>
+        <span className="ml-2 text-xs font-roboto">{strategy.implementation}%</span>
+      </div>
+    </div>
 
                   {/* Effectiveness Recommendations */}
 {strategy.implementation > 0 && (

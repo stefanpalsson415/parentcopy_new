@@ -200,11 +200,48 @@ const DailyCheckInTool = () => {
                 className="border rounded px-2 py-1 text-sm font-roboto"
               />
               <button 
-                onClick={saveReminderSettings}
-                className="ml-3 px-3 py-1 bg-black text-white text-sm rounded font-roboto"
-              >
-                Save
-              </button>
+  onClick={saveReminderSettings}
+  className="ml-3 px-3 py-1 bg-black text-white text-sm rounded font-roboto"
+>
+  Save
+</button>
+<button 
+  onClick={() => {
+    import('../services/CalendarService').then(module => {
+      const CalendarService = module.default;
+      
+      // Create daily recurring event
+      const today = new Date();
+      today.setHours(parseInt(reminderTime.split(':')[0]), parseInt(reminderTime.split(':')[1]), 0);
+      
+      const event = {
+        summary: 'Daily Couple Check-in',
+        description: 'Take 5-10 minutes to connect with your partner',
+        start: {
+          dateTime: today.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: new Date(today.getTime() + 15*60000).toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        recurrence: ['RRULE:FREQ=DAILY']
+      };
+      
+      CalendarService.addEvent(event).then(result => {
+        if (result.success) {
+          alert('Daily check-in reminders added to your calendar!');
+        }
+      }).catch(error => {
+        console.error('Error adding to calendar:', error);
+      });
+    });
+  }}
+  className="ml-2 px-3 py-1 border border-black text-sm rounded font-roboto flex items-center"
+>
+  <Calendar size={14} className="mr-1" />
+  Add to Calendar
+</button>
             </div>
           </div>
         )}

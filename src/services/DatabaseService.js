@@ -11,6 +11,9 @@ import {
 } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, auth, storage } from './firebase';
+import { 
+  signInWithPopup, linkWithPopup
+} from 'firebase/auth';
 
 class DatabaseService {
   constructor() {
@@ -58,6 +61,71 @@ class DatabaseService {
   getCurrentUser() {
     return this.auth.currentUser;
   }
+
+// Sign in with Google
+async signInWithGoogle() {
+  try {
+    const { googleProvider, auth } = require('./firebase');
+    const result = await signInWithPopup(auth, googleProvider);
+    return result.user;
+  } catch (error) {
+    console.error("Error signing in with Google:", error);
+    throw error;
+  }
+}
+
+// Link existing account with Google
+async linkAccountWithGoogle(user) {
+  try {
+    const { googleProvider } = require('./firebase');
+    const result = await linkWithPopup(user, googleProvider);
+    return result.user;
+  } catch (error) {
+    console.error("Error linking account with Google:", error);
+    throw error;
+  }
+}
+
+// Add Google auth info to family member
+async updateMemberWithGoogleAuth(familyId, memberId, userData) {
+  try {
+    // Get current family data
+    const docRef = doc(this.db, "families", familyId);
+    const familyDoc = await getDoc(docRef);
+    
+    if (!familyDoc.exists()) {
+      throw new Error("Family not found");
+    }
+    
+    // Update the correct family member with Google auth info
+    const updatedMembers = familyDoc.data().familyMembers.map(member => {
+      if (member.id === memberId) {
+        return {
+          ...member,
+          googleAuth: {
+            uid: userData.uid,
+            email: userData.email,
+            photoURL: userData.photoURL || member.profilePicture,
+            lastSignIn: new Date().toISOString()
+          }
+        };
+      }
+      return member;
+    });
+    
+    // Save updated members back to the database
+    await updateDoc(docRef, {
+      familyMembers: updatedMembers,
+      updatedAt: serverTimestamp()
+    });
+    
+    return true;
+  } catch (error) {
+    console.error("Error updating member with Google auth:", error);
+    throw error;
+  }
+}
+
 
   // ---- Storage Methods ----
 

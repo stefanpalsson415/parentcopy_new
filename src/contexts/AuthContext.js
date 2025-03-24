@@ -31,6 +31,23 @@ export function AuthProvider({ children }) {
     return DatabaseService.signIn(email, password);
   }
 
+// Sign in with Google
+async function signInWithGoogle() {
+  return DatabaseService.signInWithGoogle();
+}
+
+// Link existing account with Google
+async function linkAccountWithGoogle() {
+  if (!currentUser) throw new Error("No user is signed in");
+  return DatabaseService.linkAccountWithGoogle(currentUser);
+}
+
+// Update family member with Google info
+async function updateMemberWithGoogleAuth(familyId, memberId, userData) {
+  return DatabaseService.updateMemberWithGoogleAuth(familyId, memberId, userData);
+}
+
+
 // Added helper function to ensure families are loaded
 async function ensureFamiliesLoaded(userId) {
   try {
@@ -195,6 +212,9 @@ async function ensureFamiliesLoaded(userId) {
     signup,
     login,
     logout,
+    signInWithGoogle,   // Add this
+    linkAccountWithGoogle,  // Add this
+    updateMemberWithGoogleAuth,  // Add this
     createFamily,
     loadFamilyData,
     loadAllFamilies,

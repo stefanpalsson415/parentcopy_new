@@ -6,6 +6,10 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
+const [googleAuthPrompt, setGoogleAuthPrompt] = useState(false);
+const { createFamily, signInWithGoogle } = useAuth();
+
+
 const UserSignupScreen = () => {
   const { createFamily } = useAuth();
   const navigate = useNavigate();
@@ -29,6 +33,44 @@ const UserSignupScreen = () => {
   });
   const [validationErrors, setValidationErrors] = useState({});
  
+
+// Add right after the useEffect for location data (around line 55)
+useEffect(() => {
+  // Check if we should prompt for Google Auth
+  if (location?.state?.useGoogleAuth && pendingFamilyData?.parents?.length > 0) {
+    // Show a dialog asking which parent should connect with Google
+    const selectParentForGoogle = async (parentIndex) => {
+      try {
+        setIsSubmitting(true);
+        const user = await signInWithGoogle();
+        
+        // Update the parent's info
+        const updatedParents = [...pendingFamilyData.parents];
+        updatedParents[parentIndex] = {
+          ...updatedParents[parentIndex],
+          googleAuth: true,
+          email: user.email || updatedParents[parentIndex].email,
+          name: updatedParents[parentIndex].name || user.displayName
+        };
+        
+        setPendingFamilyData({...pendingFamilyData, parents: updatedParents});
+        
+        // Show success message
+        alert(`Successfully connected ${updatedParents[parentIndex].role} with Google!`);
+      } catch (error) {
+        console.error("Google sign-in error:", error);
+        alert("Google sign-in failed. Please try again or use email signup.");
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
+    
+    // Add a modal or option to select which parent
+    // For simplicity, we're just adding this to state for now
+    setGoogleAuthPrompt(true);
+  }
+}, [location, pendingFamilyData]);
+
   // Check if coming from payment with family data
   useEffect(() => {
     if (location?.state?.fromPayment && location?.state?.familyData) {
@@ -522,29 +564,84 @@ const UserSignupScreen = () => {
           
           {/* Final Call to Action */}
           <div className="flex flex-col space-y-4">
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="w-full py-3 bg-black text-white rounded-md hover:bg-gray-800 font-medium flex items-center justify-center"
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                  Creating Your Family...
-                </>
-              ) : (
-                <>Create Your Allie Family</>
-              )}
-            </button>
-            
-            <button
-              onClick={() => navigate('/')}
-              disabled={isSubmitting}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 flex items-center justify-center"
-            >
-              <ArrowLeft size={16} className="mr-1" />
-              Cancel
-            </button>
+          <button
+  onClick={handleSubmit}
+  disabled={isSubmitting}
+  className="w-full py-3 bg-black text-white rounded-md hover:bg-gray-800 font-medium flex items-center justify-center"
+>
+  {isSubmitting ? (
+    <>
+      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+      Creating Your Family...
+    </>
+  ) : (
+    <>Create Your Allie Family</>
+  )}
+</button>
+
+<div className="flex items-center my-4">
+  <div className="flex-1 border-t border-gray-300"></div>
+  <p className="mx-4 text-sm text-gray-500">or</p>
+  <div className="flex-1 border-t border-gray-300"></div>
+</div>
+
+<button
+  onClick={async () => {
+    setIsSubmitting(true);
+    try {
+      const user = await signInWithGoogle();
+      
+      // If we have family data, update the parent with Google info
+      if (familyData.parents && familyData.parents.length > 0) {
+        // Find the parent that matches the Google email
+        const parentIndex = familyData.parents.findIndex(
+          p => p.email.toLowerCase() === user.email.toLowerCase()
+        );
+        
+        if (parentIndex >= 0) {
+          // Update the parent's info
+          const updatedParents = [...familyData.parents];
+          updatedParents[parentIndex] = {
+            ...updatedParents[parentIndex],
+            googleAuth: true,
+            name: updatedParents[parentIndex].name || user.displayName
+          };
+          
+          setFamilyData({...familyData, parents: updatedParents});
+          
+          // If all required info is there, create the family
+          if (validateForm()) {
+            await handleSubmit();
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Google sign-in error:", error);
+      setError("Google sign-in failed. Please try again or use email.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }}
+  disabled={isSubmitting}
+  className="w-full py-3 border border-gray-300 rounded-md hover:bg-gray-50 flex items-center justify-center"
+>
+  <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#4285F4"/>
+    <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#34A853"/>
+    <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#FBBC05"/>
+    <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#EA4335"/>
+  </svg>
+  Continue with Google
+</button>
+
+<button
+  onClick={() => navigate('/')}
+  disabled={isSubmitting}
+  className="px-4 py-2 text-gray-600 hover:text-gray-800 flex items-center justify-center mt-4"
+>
+  <ArrowLeft size={16} className="mr-1" />
+  Cancel
+</button>
             
             {Object.keys(validationErrors).length > 0 && (
               <div className="p-3 bg-red-50 text-red-700 rounded flex items-start">

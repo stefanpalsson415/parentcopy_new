@@ -535,17 +535,58 @@ const DateNightPlanner = () => {
               >
                 Cancel
               </button>
-              <button
-                onClick={addDateNight}
-                disabled={!newDateNight.title || !newDateNight.date}
-                className={`px-4 py-2 rounded font-roboto ${
-                  newDateNight.title && newDateNight.date 
-                    ? 'bg-black text-white' 
-                    : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                {editIndex !== null ? 'Update' : 'Schedule'}
-              </button>
+              <div className="flex space-x-3">
+  <button
+    onClick={addDateNight}
+    disabled={!newDateNight.title || !newDateNight.date}
+    className={`px-4 py-2 rounded font-roboto ${
+      newDateNight.title && newDateNight.date 
+        ? 'bg-black text-white' 
+        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+    }`}
+  >
+    {editIndex !== null ? 'Update' : 'Schedule'}
+  </button>
+  {newDateNight.title && newDateNight.date && (
+    <button
+      onClick={() => {
+        const startTime = new Date(`${newDateNight.date}T${newDateNight.time}`);
+        const endTime = new Date(startTime);
+        endTime.setHours(endTime.getHours() + 2);
+        
+        // Create calendar event
+        import('../services/CalendarService').then(module => {
+          const CalendarService = module.default;
+          const event = {
+            summary: `Date Night: ${newDateNight.title}`,
+            description: newDateNight.description || 'Scheduled date night',
+            start: {
+              dateTime: startTime.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            end: {
+              dateTime: endTime.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            location: ''
+          };
+          
+          CalendarService.addEvent(event).then(result => {
+            if (result.success) {
+              alert('Date night added to calendar!');
+            }
+          }).catch(error => {
+            console.error('Error adding to calendar:', error);
+          });
+        });
+      }}
+      className="px-4 py-2 border rounded font-roboto flex items-center"
+    >
+      <Calendar size={16} className="mr-2" />
+      Add to Calendar
+    </button>
+  )}
+</div>
             </div>
           </div>
         </div>

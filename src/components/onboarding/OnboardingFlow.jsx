@@ -1425,7 +1425,7 @@ const selectPlan = (plan) => {
         Choose how you'd like to proceed with Allie
       </p>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-all">
           <h3 className="font-bold text-xl mb-2">Join Allie Premium</h3>
           <p className="text-gray-600 mb-4">Get full access to all features and start your family balance journey</p>
@@ -1465,6 +1465,31 @@ const selectPlan = (plan) => {
             className="px-6 py-3 bg-purple-600 text-white rounded-md w-full hover:bg-purple-700"
           >
             Start Mini Survey
+          </button>
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-all">
+          <h3 className="font-bold text-xl mb-2">Google Integration</h3>
+          <p className="text-gray-600 mb-4">Connect with Google for easy calendar integration and simplified login</p>
+          <button 
+            onClick={() => {
+              // Store family data in localStorage
+              localStorage.setItem('pendingFamilyData', JSON.stringify(familyData));
+              // Navigate to signup with Google flag
+              navigate('/signup', { 
+                state: { 
+                  fromOnboarding: true,
+                  useGoogleAuth: true,
+                  familyData: familyData 
+                } 
+              });
+            }}
+            className="px-6 py-3 border border-gray-300 rounded-md w-full hover:bg-gray-50 flex items-center justify-center"
+          >
+            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#4285F4"/>
+            </svg>
+            Continue with Google
           </button>
         </div>
       </div>

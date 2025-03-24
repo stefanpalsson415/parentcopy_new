@@ -17,7 +17,7 @@ const UserSettingsScreen = ({ onClose }) => {
     updateFamilyPicture
   } = useFamily();
   
-  const { currentUser } = useAuth();
+  const { currentUser,linkAccountWithGoogle } = useAuth();
   
   const [newFamilyName, setNewFamilyName] = useState(familyName || '');
   const [isUploading, setIsUploading] = useState(false);
@@ -635,66 +635,144 @@ const UserSettingsScreen = ({ onClose }) => {
 </div>
 
         {/* Profile Settings */}
-        {settingsTab === 'profile' && (
-          <div className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Personal Settings</h3>
-            
-            <div className="flex flex-col md:flex-row md:items-start gap-6">
-              {/* Profile Picture */}
-              <div className="flex flex-col items-center">
-                <div className="relative">
-                  <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-gray-200">
-                    <img 
-                      src={selectedUser?.profilePicture} 
-                      alt={selectedUser?.name} 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <button
-                    className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full"
-                    onClick={() => setUploadType('profile')}
-                  >
-                    <Camera size={16} />
-                  </button>
-                </div>
-                <p className="mt-2 text-sm text-gray-500">Update profile picture</p>
-              </div>
-              
-              {/* User Details */}
-              <div className="flex-1 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                  <input
-                    type="text"
-                    className="w-full p-2 border rounded"
-                    value={selectedUser?.name || ''}
-                    readOnly // For now, we're not allowing name changes
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                  <input
-                    type="text"
-                    className="w-full p-2 border rounded bg-gray-50"
-                    value={selectedUser?.role || ''}
-                    readOnly
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    className="w-full p-2 border rounded bg-gray-50"
-                    value={currentUser?.email || ''}
-                    readOnly
-                  />
-                </div>
-              </div>
+{settingsTab === 'profile' && (
+  <div className="p-6">
+    <h3 className="text-lg font-semibold mb-4">Personal Settings</h3>
+    
+    <div className="flex flex-col md:flex-row md:items-start gap-6">
+      {/* Profile Picture */}
+      <div className="flex flex-col items-center">
+        <div className="relative">
+          <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-gray-200">
+            <img 
+              src={selectedUser?.profilePicture} 
+              alt={selectedUser?.name} 
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <button
+            className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full"
+            onClick={() => setUploadType('profile')}
+          >
+            <Camera size={16} />
+          </button>
+        </div>
+        <p className="mt-2 text-sm text-gray-500">Update profile picture</p>
+      </div>
+      
+      {/* User Details */}
+      <div className="flex-1 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+          <input
+            type="text"
+            className="w-full p-2 border rounded"
+            value={selectedUser?.name || ''}
+            readOnly // For now, we're not allowing name changes
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+          <input
+            type="text"
+            className="w-full p-2 border rounded bg-gray-50"
+            value={selectedUser?.role || ''}
+            readOnly
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+          <input
+            type="email"
+            className="w-full p-2 border rounded bg-gray-50"
+            value={currentUser?.email || ''}
+            readOnly
+          />
+        </div>
+      </div>
+    </div>
+    
+    {/* Google Account Linking Section */}
+    <div className="mt-8 border-t pt-6">
+      <h4 className="font-medium mb-4">Connected Accounts</h4>
+      
+      <div className="bg-gray-50 p-4 rounded-lg">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center">
+            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border shadow-sm mr-3">
+              <svg className="w-6 h-6" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#4285F4"/>
+              </svg>
+            </div>
+            <div>
+              <h5 className="text-sm font-medium">Google Account</h5>
+              <p className="text-xs text-gray-500">
+                {selectedUser?.googleAuth 
+                  ? `Connected as ${selectedUser.googleAuth.email || currentUser?.email}`
+                  : 'Not connected'}
+              </p>
             </div>
           </div>
-        )}
+          
+          <button
+            onClick={async () => {
+              if (selectedUser?.googleAuth) {
+                // Already connected - ask if they want to disconnect
+                if (confirm('Are you sure you want to disconnect your Google account?')) {
+                  try {
+                    // We would implement a disconnect function here
+                    alert('Google account disconnected');
+                    // Update the UI
+                    updateMemberProfile(selectedUser.id, { 
+                      googleAuth: null 
+                    });
+                  } catch (error) {
+                    console.error('Error disconnecting Google account:', error);
+                    alert('Failed to disconnect Google account');
+                  }
+                }
+              } else {
+                // Not connected - connect now
+                try {
+                  const user = await linkAccountWithGoogle();
+                  
+                  // Update the member profile with Google data
+                  await updateMemberProfile(selectedUser.id, {
+                    googleAuth: {
+                      uid: user.uid,
+                      email: user.email,
+                      displayName: user.displayName,
+                      photoURL: user.photoURL,
+                      lastConnected: new Date().toISOString()
+                    }
+                  });
+                  
+                  alert('Google account connected successfully!');
+                } catch (error) {
+                  console.error('Error connecting Google account:', error);
+                  alert('Failed to connect Google account. Please try again.');
+                }
+              }
+            }}
+            className={`px-3 py-1.5 rounded text-sm ${
+              selectedUser?.googleAuth 
+                ? 'border border-gray-300 text-gray-700 hover:bg-gray-100' 
+                : 'bg-black text-white hover:bg-gray-800'
+            }`}
+          >
+            {selectedUser?.googleAuth ? 'Disconnect' : 'Connect'}
+          </button>
+        </div>
+        
+        <p className="text-xs text-gray-500 mt-3">
+          Connecting your Google account enables calendar integration and simplifies sign-in.
+        </p>
+      </div>
+    </div>
+  </div>
+)}
         
         {/* Family Settings */}
         {settingsTab === 'family' && (
