@@ -160,7 +160,6 @@ export function SurveyProvider({ children }) {
         "How much does balance affect your relationship satisfaction?"
       ]
     };
-    };
     
     // Add category balance questions - new in updated version
     const balanceQuestions = {
@@ -193,57 +192,55 @@ export function SurveyProvider({ children }) {
         "Who carries more of the emotional labor of parenting?"
       ]
     };
-    
    
-      // Define weight attributes for each question category
-const weightAttributes = {
-  "Visible Household Tasks": {
-    baseWeight: 2,
-    frequency: "weekly",
-    invisibility: "highly",
-    emotionalLabor: "minimal",
-    researchImpact: "medium",
-    childDevelopment: "high",
-    relationshipImpact: "moderate"
-  },
-  "Invisible Household Tasks": {
-    baseWeight: 4,
-    frequency: "daily",
-    invisibility: "completely",
-    emotionalLabor: "high",
-    researchImpact: "high",
-    childDevelopment: "moderate",
-    relationshipImpact: "high"
-  },
-  "Visible Parental Tasks": {
-    baseWeight: 3,
-    frequency: "daily",
-    invisibility: "partially",
-    emotionalLabor: "moderate",
-    researchImpact: "high",
-    childDevelopment: "high",
-    relationshipImpact: "moderate"
-  },
-  "Invisible Parental Tasks": {
-    baseWeight: 5,
-    frequency: "daily",
-    invisibility: "completely",
-    emotionalLabor: "extreme",
-    researchImpact: "high",
-    childDevelopment: "high",
-    relationshipImpact: "extreme"
-  },
-  // Add this new section
-  "Relationship Health": {
-    baseWeight: 4,
-    frequency: "daily",
-    invisibility: "mostly",
-    emotionalLabor: "extreme",
-    researchImpact: "high",
-    childDevelopment: "high",
-    relationshipImpact: "extreme"
-  }
-};
+    // Define weight attributes for each question category
+    const weightAttributes = {
+      "Visible Household Tasks": {
+        baseWeight: 2,
+        frequency: "weekly",
+        invisibility: "highly",
+        emotionalLabor: "minimal",
+        researchImpact: "medium",
+        childDevelopment: "high",
+        relationshipImpact: "moderate"
+      },
+      "Invisible Household Tasks": {
+        baseWeight: 4,
+        frequency: "daily",
+        invisibility: "completely",
+        emotionalLabor: "high",
+        researchImpact: "high",
+        childDevelopment: "moderate",
+        relationshipImpact: "high"
+      },
+      "Visible Parental Tasks": {
+        baseWeight: 3,
+        frequency: "daily",
+        invisibility: "partially",
+        emotionalLabor: "moderate",
+        researchImpact: "high",
+        childDevelopment: "high",
+        relationshipImpact: "moderate"
+      },
+      "Invisible Parental Tasks": {
+        baseWeight: 5,
+        frequency: "daily",
+        invisibility: "completely",
+        emotionalLabor: "extreme",
+        researchImpact: "high",
+        childDevelopment: "high",
+        relationshipImpact: "extreme"
+      },
+      // Add this new section
+      "Relationship Health": {
+        baseWeight: 4,
+        frequency: "daily",
+        invisibility: "mostly",
+        emotionalLabor: "extreme",
+        researchImpact: "high",
+        childDevelopment: "high",
+        relationshipImpact: "extreme"
+      }
     };
     
     // AI-generated weight variations within categories for specific questions
@@ -401,43 +398,45 @@ const weightAttributes = {
       });
       
       // Add the 5 balance questions for this category
-      balanceQuestions[category].forEach(text => {
-        // Balance questions have higher weights for relationship impact
-        const weightData = {
-          ...weightAttributes[category],
-          relationshipImpact: "extreme",
-          emotionalLabor: "high",
-          baseWeight: 4
-        };
-        
-        // Generate weight explanation
-        const weightExplanation = getWeightExplanation(text, weightData);
-        
-        // Calculate the total weight
-        const totalWeight = calculateTaskWeight({
-          ...weightData,
-          category
-        }, null);
-        
-        questions.push({
-          id: `q${questionId}`,
-          text: text,
-          category: category,
-          explanation: `This question helps us assess the meta-level balance of responsibility for ${category.toLowerCase()} tasks in your family.`,
-          weightExplanation: weightExplanation,
-          totalWeight: totalWeight.toFixed(2),
-          // Weight attributes
-          baseWeight: weightData.baseWeight,
-          frequency: weightData.frequency,
-          invisibility: weightData.invisibility,
-          emotionalLabor: weightData.emotionalLabor,
-          researchImpact: weightData.researchImpact,
-          childDevelopment: weightData.childDevelopment,
-          relationshipImpact: weightData.relationshipImpact,
-          isBalanceQuestion: true // Mark this as a balance-focused question
+      if (balanceQuestions[category]) {
+        balanceQuestions[category].forEach(text => {
+          // Balance questions have higher weights for relationship impact
+          const weightData = {
+            ...weightAttributes[category],
+            relationshipImpact: "extreme",
+            emotionalLabor: "high",
+            baseWeight: 4
+          };
+          
+          // Generate weight explanation
+          const weightExplanation = getWeightExplanation(text, weightData);
+          
+          // Calculate the total weight
+          const totalWeight = calculateTaskWeight({
+            ...weightData,
+            category
+          }, null);
+          
+          questions.push({
+            id: `q${questionId}`,
+            text: text,
+            category: category,
+            explanation: `This question helps us assess the meta-level balance of responsibility for ${category.toLowerCase()} tasks in your family.`,
+            weightExplanation: weightExplanation,
+            totalWeight: totalWeight.toFixed(2),
+            // Weight attributes
+            baseWeight: weightData.baseWeight,
+            frequency: weightData.frequency,
+            invisibility: weightData.invisibility,
+            emotionalLabor: weightData.emotionalLabor,
+            researchImpact: weightData.researchImpact,
+            childDevelopment: weightData.childDevelopment,
+            relationshipImpact: weightData.relationshipImpact,
+            isBalanceQuestion: true // Mark this as a balance-focused question
+          });
+          questionId++;
         });
-        questionId++;
-      });
+      }
     });
       
     return questions;
@@ -687,7 +686,13 @@ const weightAttributes = {
     getInvisibleWorkQuestions,
     getEmotionalLaborQuestions,
     getChildDevelopmentQuestions,
-    getBalanceQuestions
+    getBalanceQuestions,
+    // Share family priorities with other components
+    familyPriorities: {
+      highestPriority: "Invisible Parental Tasks",
+      secondaryPriority: "Visible Parental Tasks",
+      tertiaryPriority: "Invisible Household Tasks"
+    }
   };
 
   return (

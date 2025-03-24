@@ -12,15 +12,9 @@ import { storage } from '../../../services/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../services/firebase';
 
-// Add these state variables with the other state declarations
-const [relationshipMetrics, setRelationshipMetrics] = useState({
-  satisfaction: 65,
-  change: 5,
-  communicationQuality: 70,
-  taskCorrelation: 'Meal Planning'
-});
-const [showRelationshipMeeting, setShowRelationshipMeeting] = useState(false);
-const [selectedStrategy, setSelectedStrategy] = useState(null);
+
+
+
 
 
 // Helper function to format dates consistently
@@ -35,6 +29,9 @@ const formatDate = (date) => {
     day: 'numeric'
   });
 };
+
+
+
 
 const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   console.log("=== COMPONENT MOUNTING ===");
@@ -83,7 +80,19 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   // Date management
   const [checkInDueDate, setCheckInDueDate] = useState(null);
   const [checkInDueDateInput, setCheckInDueDateInput] = useState('');
+
+  // Add these state variables with the other state declarations
+const [relationshipMetrics, setRelationshipMetrics] = useState({
+  satisfaction: 65,
+  change: 5,
+  communicationQuality: 70,
+  taskCorrelation: 'Meal Planning'
+});
   
+const [showRelationshipMeeting, setShowRelationshipMeeting] = useState(false);
+const [selectedStrategy, setSelectedStrategy] = useState(null);
+
+
   // Calculate due date based on survey schedule if available
   const calculateDueDate = () => {
     if (surveySchedule && surveySchedule[currentWeek]) {
