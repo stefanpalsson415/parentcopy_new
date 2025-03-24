@@ -6,12 +6,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-const [googleAuthPrompt, setGoogleAuthPrompt] = useState(false);
-const { createFamily, signInWithGoogle } = useAuth();
-
 
 const UserSignupScreen = () => {
-  const { createFamily } = useAuth();
+  const { createFamily, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -32,7 +29,29 @@ const UserSignupScreen = () => {
     children: false
   });
   const [validationErrors, setValidationErrors] = useState({});
- 
+  const [googleAuthPrompt, setGoogleAuthPrompt] = useState(false);
+  const [pendingFamilyData, setPendingFamilyData] = useState(null);
+  const [error, setError] = useState(''); // Add this for error handling
+
+  // Check if coming from payment with family data
+  useEffect(() => {
+    if (location?.state?.fromPayment && location?.state?.familyData) {
+      const receivedData = location.state.familyData;
+      console.log("Received family data from payment:", location.state.familyData);
+      
+      // Set the received data
+      setFamilyData({
+        familyName: receivedData.familyName || '',
+        parents: receivedData.parents || [
+          { name: '', role: 'Mama', email: '', password: '' },
+          { name: '', role: 'Papa', email: '', password: '' }
+        ],
+        children: receivedData.children || [{ name: '', age: '' }]
+      });
+    }
+  }, [location]);
+
+  // Rest of the component stays the same...
 
 // Add right after the useEffect for location data (around line 55)
 useEffect(() => {
