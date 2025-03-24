@@ -1,4 +1,3 @@
-
 // src/services/ClaudeService.js
 class ClaudeService {
   constructor() {
@@ -8,10 +7,10 @@ class ClaudeService {
     console.log("Claude service initialized to use local proxy server");
   }
   
-  async generateResponse(messages, familyContext) {
+  async generateResponse(messages, context) {
     try {
       // Format system prompt with family context
-      const systemPrompt = this.formatSystemPrompt(familyContext || {});
+      const systemPrompt = this.formatSystemPrompt(context || {});
       
       // Log for debugging
       console.log("Claude API request via proxy:", { 
@@ -19,7 +18,7 @@ class ClaudeService {
         systemPromptLength: systemPrompt.length
       });
       
-      // Format the messages for Claude API
+      // Get the last user message
       const lastUserMessage = messages[messages.length - 1]?.content || "";
       
       // Prepare request payload for Claude API
@@ -72,7 +71,7 @@ class ClaudeService {
       // Fall back to personalized response on failure
       return this.createPersonalizedResponse(
         messages[messages.length - 1]?.content || "", 
-        familyContext
+        context
       );
     }
   }
@@ -120,87 +119,6 @@ class ClaudeService {
     }
   }
   
-  // Keep the rest of your methods (formatSystemPrompt, createPersonalizedResponse, etc.)
-  // ..
-  async generateResponse(messages, familyContext) {
-    try {
-      // Format system prompt with family context
-      const systemPrompt = this.formatSystemPrompt(familyContext || {});
-      
-      // Log for debugging
-      console.log("Claude API direct request:", { 
-        messagesCount: messages.length, 
-        systemPromptLength: systemPrompt.length
-      });
-      
-      if (!this.apiKey) {
-        throw new Error("Claude API key is not set. Please check your .env file.");
-      }
-      
-      // Format the messages for Claude API
-      const lastUserMessage = messages[messages.length - 1]?.content || "";
-      
-      // Prepare request payload for Claude API
-      const payload = {
-        model: this.model,
-        max_tokens: 4000,
-        messages: [
-          {
-            role: "user",
-            content: lastUserMessage
-          }
-        ],
-        system: systemPrompt
-      };
-      
-      // Add a timeout to the API call
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
-      
-      // Make the direct API call to Claude
-      const response = await fetch(this.apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': this.apiKey,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Claude API error response:", errorText);
-        throw new Error(`Claude API returned ${response.status}: ${errorText}`);
-      }
-      
-      const result = await response.json();
-      
-      // Check for valid response
-      if (!result || !result.content || !result.content[0]) {
-        console.error("Invalid response format from Claude API:", result);
-        throw new Error("Invalid response format from Claude API");
-      }
-      
-      return result.content[0].text;
-    } catch (error) {
-      console.error("Error in Claude API call:", error);
-      
-      // Fall back to personalized response on failure
-      return this.createPersonalizedResponse(
-        messages[messages.length - 1]?.content || "", 
-        familyContext
-      );
-    }
-  }  
-  // Firebase function proxy method (fixed syntax)
-  // Firebase function proxy method (fixed syntax)
-  
-  // Test Hello World function
-  
   // Create personalized response from context
   createPersonalizedResponse(userMessage, context) {
     const userMessageLower = userMessage.toLowerCase();
@@ -239,55 +157,6 @@ class ClaudeService {
     return `I have access to the ${familyName} family's data and can answer specific questions about your survey results, tasks, and balance metrics. What would you like to know?`;
   }
   
-  // Get contextual response for general questions
-  getContextualResponse(userMessage, context) {
-    const userMessageLower = userMessage.toLowerCase();
-    
-    // Greeting patterns
-    if (userMessageLower.match(/^(hi|hello|hey|greetings)/)) {
-      return `Hello! I'm Allie, your family balance assistant. How can I help you today?`;
-    }
-    
-    // Questions about the app or features
-    if (userMessageLower.includes("how do you work") || userMessageLower.includes("what can you do")) {
-      return "I can help you understand your family balance data, explain tasks, provide insights on workload distribution, and offer suggestions for improving balance. What would you like to know about?";
-    }
-    
-    // Questions about tasks
-    if (userMessageLower.includes("task") || userMessageLower.includes("to do")) {
-      return "Your tasks are designed to balance family workload. Each one is carefully selected based on your survey data to address specific imbalances. Check the Tasks tab to see what's currently assigned to you.";
-    }
-    
-    // Questions about balance
-    if (userMessageLower.includes("balance") || userMessageLower.includes("workload")) {
-      return "Family balance is about equitably sharing both visible work (like cleaning) and invisible work (like planning). Your dashboard shows your current balance across these categories, and your tasks help improve areas where there's imbalance.";
-    }
-    
-    // Default response that feels more personalized
-    return "I'd like to help with that! Currently, I'm using my basic knowledge to respond. For more personalized assistance, please check the Tasks or Dashboard tabs where I've already analyzed your family's specific data.";
-  }
-  
-  // Get a mock response when API is unavailable
-  getMockResponse(userMessage) {
-    // Check if the message contains common keywords and return appropriate responses
-    const userMessageLower = userMessage.toLowerCase();
-    
-    if (userMessageLower.includes("help") || userMessageLower.includes("what can you do")) {
-      return "I can help with questions about family workload balance, explain how the app works, and provide insights about your survey results. What would you like to know?";
-    }
-    
-    if (userMessageLower.includes("task") || userMessageLower.includes("balance")) {
-      return "Balancing family tasks is about creating fair distribution of both visible and invisible work. The Allie app helps track these responsibilities and suggests ways to improve balance over time.";
-    }
-    
-    if (userMessageLower.includes("relationship") || userMessageLower.includes("partner")) {
-      return "Research shows that balanced household responsibilities lead to stronger relationships. When both partners feel the workload is fair, relationship satisfaction typically improves.";
-    }
-    
-    // Default response for any other question
-    return "I'd normally connect to my AI system to answer this question in detail. While that connection is being restored, you can explore the dashboard for insights or check your tasks for this week.";
-  }
-
   // Format system prompt with family context
   formatSystemPrompt(familyContext) {
     // Log the context data for debugging
@@ -317,21 +186,20 @@ class ClaudeService {
       - Task Weighting: ${kb.whitepapers.methodology?.taskWeighting || ''}
       - Improvement Framework: ${kb.whitepapers.methodology?.improvementFramework || ''}
       
-  Calendar Integration Knowledge:
-  Allie supports calendar integration with:
-  1. Google Calendar - requires sign-in through settings
-  2. Apple Calendar - available on macOS devices 
-  3. ICS downloads - works with any calendar system
-  
-  Users can add tasks to their calendar by:
-  - Clicking the "Add to Calendar" button on any task
-  - Asking you to add a specific task to their calendar
-  - Setting up automatic calendar sync in Settings > Calendar
-  
-  When users ask about adding something to their calendar, explain the options
-  and direct them to Settings > Calendar if needed for setup.
-  
-  
+      Calendar Integration Knowledge:
+      Allie supports calendar integration with:
+      1. Google Calendar - requires sign-in through settings
+      2. Apple Calendar - available on macOS devices 
+      3. ICS downloads - works with any calendar system
+      
+      Users can add tasks to their calendar by:
+      - Clicking the "Add to Calendar" button on any task
+      - Asking you to add a specific task to their calendar
+      - Setting up automatic calendar sync in Settings > Calendar
+      
+      When users ask about adding something to their calendar, explain the options
+      and direct them to Settings > Calendar if needed for setup.
+      
       PARENTING STRATEGIES:
       1. Positive Reinforcement: ${kb.whitepapers.parentingStrategies?.positiveReinforcement?.summary || ''}
          Research shows: ${kb.whitepapers.parentingStrategies?.positiveReinforcement?.research || ''}
@@ -346,7 +214,7 @@ class ClaudeService {
          Research shows: ${kb.whitepapers.parentingStrategies?.integratedApproach?.research || ''}
       `;
     }
-  
+    
     // Create FAQ section if available
     let faqContent = '';
     if (kb.faqs) {
@@ -463,28 +331,16 @@ class ClaudeService {
     ` : ''}
     
     You can help with:
-1. Explaining how to use the Allie app
-2. Providing insights about family survey results
-3. Offering research-backed parenting advice
-4. Suggesting ways to improve family balance
-5. Answering questions about the app's mission and methodology
-6. Giving relationship advice based on the 10 strategies
-7. Connecting workload balance to relationship health
-8. Adding tasks and meetings to calendars
-9. Managing calendar integrations
-10. Analyzing their specific survey data and tasks
-11. Recommending self-care activities for each parent
-12. Providing guidance on implementing the 10 relationship strategies
-13. Suggesting date night ideas based on the family's schedule and preferences
-14. Creating balanced task division plans for couples
-15. Facilitating deeper relationship discussions through thoughtful prompts
-
-For relationship questions specifically:
-- Use the 10 strategic actions as your framework for advice
-- Emphasize the connection between workload balance and relationship health
-- Suggest specific tool features like Date Night Planner and Self-Care Planner
-- Recommend relevant check-ins or meetings when appropriate
-- Highlight the importance of both visible task sharing and emotional labor sharing
+    1. Explaining how to use the Allie app
+    2. Providing insights about family survey results
+    3. Offering research-backed parenting advice
+    4. Suggesting ways to improve family balance
+    5. Answering questions about the app's mission and methodology
+    6. Giving relationship advice based on the 10 strategies
+    7. Connecting workload balance to relationship health
+    8. Adding tasks and meetings to calendars
+    9. Managing calendar integrations
+    10. Analyzing their specific survey data and tasks
     
     Always be supportive, practical, and focused on improving family dynamics through better balance.
     Remember that all data is confidential to this family.

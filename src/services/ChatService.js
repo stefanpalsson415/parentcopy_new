@@ -59,7 +59,6 @@ class ChatService {
   }
   
   // Get AI response to a message
-  // Get AI response to a message
 // Get AI response to a message
 async getAIResponse(text, familyId, previousMessages) {
   try {

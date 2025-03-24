@@ -720,7 +720,8 @@ const UserSettingsScreen = ({ onClose }) => {
             onClick={async () => {
               if (selectedUser?.googleAuth) {
                 // Already connected - ask if they want to disconnect
-                if (confirm('Are you sure you want to disconnect your Google account?')) {
+                const confirmDisconnect = window.confirm('Are you sure you want to disconnect your Google account?');
+if (confirmDisconnect) {
                   try {
                     // We would implement a disconnect function here
                     alert('Google account disconnected');
