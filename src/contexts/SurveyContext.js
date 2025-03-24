@@ -195,7 +195,7 @@ export function SurveyProvider({ children }) {
     };
     
     // Define weight attributes for each question category
-    const categoryWeights = {
+    const weightAttributes = {
       "Visible Household Tasks": {
         baseWeight: 2,
         frequency: "weekly",
@@ -233,7 +233,7 @@ export function SurveyProvider({ children }) {
         relationshipImpact: "extreme" // New factor
       }
       // Define weight attributes for each question category
-const categoryWeights = {
+const weightAttributes = {
   "Visible Household Tasks": {
     baseWeight: 2,
     frequency: "weekly",
@@ -286,7 +286,7 @@ const categoryWeights = {
     // AI-generated weight variations within categories for specific questions
     const generateQuestionWeights = (text, category) => {
       // Base weights from category
-      const weights = { ...categoryWeights[category] };
+      const weights = { ...weightAttributes[category] };
       
       // Use text analysis to determine specific question attributes
       if (text.includes("meal") || text.includes("cook")) {
@@ -441,7 +441,7 @@ const categoryWeights = {
       balanceQuestions[category].forEach(text => {
         // Balance questions have higher weights for relationship impact
         const weightData = {
-          ...categoryWeights[category],
+          ...weightAttributes[category],
           relationshipImpact: "extreme",
           emotionalLabor: "high",
           baseWeight: 4

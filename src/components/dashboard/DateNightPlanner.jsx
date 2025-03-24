@@ -555,7 +555,7 @@ const DateNightPlanner = () => {
         endTime.setHours(endTime.getHours() + 2);
         
         // Create calendar event
-        import('../services/CalendarService').then(module => {
+        import('../../services/CalendarService').then(module => {
           const CalendarService = module.default;
           const event = {
             summary: `Date Night: ${newDateNight.title}`,

@@ -207,7 +207,7 @@ const DailyCheckInTool = () => {
 </button>
 <button 
   onClick={() => {
-    import('../services/CalendarService').then(module => {
+    import('../../services/CalendarService').then(module => {
       const CalendarService = module.default;
       
       // Create daily recurring event
