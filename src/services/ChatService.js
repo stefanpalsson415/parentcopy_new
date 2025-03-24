@@ -60,6 +60,7 @@ class ChatService {
   
   // Get AI response to a message
   // Get AI response to a message
+// Get AI response to a message
 async getAIResponse(text, familyId, previousMessages) {
   try {
     // Log request with more details for debugging
@@ -85,134 +86,83 @@ async getAIResponse(text, familyId, previousMessages) {
     const startTime = Date.now();
     console.log(`Starting AI response generation at ${new Date().toISOString()}`);
       
-      // Get family data from Firestore for context
-      let familyData = {};
-      try {
-        console.log("Getting family context for:", familyId);
-        familyData = await this.getFamilyContext(familyId);
-        console.log("Got family context with keys:", Object.keys(familyData));
-      } catch (contextError) {
-        console.error("Error getting family context:", contextError);
-        return "I'm having trouble accessing your family data right now. Please try again in a moment.";
-      }
-      
-      // Check if we actually got meaningful family data
-      if (!familyData || Object.keys(familyData).length < 3) {
-        console.warn("Insufficient family data for personalized response");
-        return "I couldn't retrieve your complete family data. Please try refreshing the page or logging in again.";
-      }
-      
-      // Add knowledge base to context
-      familyData.knowledgeBase = knowledgeBase;
-      
-      // Format messages for Claude API
-      // Format messages for Claude API
-const formattedMessages = previousMessages
-.slice(-10) // Last 10 messages for context
-.map(msg => ({
-  role: msg.sender === 'allie' ? 'assistant' : 'user',
-  content: msg.text
-}));
-
-// Add the current message
-formattedMessages.push({
-role: 'user',
-content: text
-});
-
-// Add relationship-specific context if the message is about relationships
-const relationshipKeywords = [
-  'relationship', 'partner', 'marriage', 'date', 'night', 'couple', 'strategies',
-  'connect', 'connection', 'love', 'romance', 'argue', 'fight', 'conflict',
-  'communication', 'misunderstanding', 'quality time', 'together', 'affection',
-  'listen', 'understanding', 'support', 'intimate', 'check-in', 'appreciation'
-];
-
-const isRelationshipQuestion = relationshipKeywords.some(keyword => 
-  text.toLowerCase().includes(keyword)
-);
-
-if (isRelationshipQuestion) {
-  console.log("Detected relationship question, adding specialized context");
-
-  // Get the 10 strategic actions data
-  const strategiesData = familyData.relationshipData?.allStrategies || [];
-  
-  // Identify least implemented strategies
-  const lowImplementedStrategies = [...strategiesData]
-    .sort((a, b) => (a.implementation || 0) - (b.implementation || 0))
-    .slice(0, 3);
-  
-  // Check if we have couple check-in data
-  const hasCoupleData = familyData.coupleData && 
-    (familyData.coupleData.satisfaction || familyData.coupleData.communication);
-  
-  // Prepare extra relationship context to send to Claude
-  const relationshipContext = {
-    detectedTopic: 'relationship',
-    specializedKnowledge: true,
-    strategies: strategiesData,
-    lowImplementedStrategies: lowImplementedStrategies.map(s => s.name || s.id),
-    coupleData: familyData.coupleData || {},
-    hasRecentCheckIn: !!familyData.coupleData?.lastCheckIn,
-    suggestionPriority: 'high',
-    relationshipFeatures: [
-      'DailyCheckInTool', 'DateNightPlanner', 'GratitudeTracker',
-      'StrategicActionsTracker', 'RelationshipMeeting'
-    ]
-  };
-
-  // Add to the context
-  familyData.specializedContext = relationshipContext;
-  
-  // Add relationship whitepaper content if available
-  if (familyData.knowledgeBase?.whitepapers?.parentingStrategies) {
-    familyData.whitepaperContent = familyData.knowledgeBase.whitepapers.parentingStrategies;
-  }
-}      
-      console.log("Sending to Claude API:", {
-        messageCount: formattedMessages.length,
-        contextSize: JSON.stringify(familyData).length,
-        familyDataKeys: Object.keys(familyData)
-      });
-      
-      // Call the Claude API through our service
-      let response;
-      try {
-        response = await ClaudeService.generateResponse(
-          formattedMessages, 
-          familyData
-        );
-        console.log("Claude API call succeeded with response length:", response?.length);
-      } catch (apiError) {
-        console.error("Claude API error details:", apiError);
-        // Try fallback response first before giving up
-        response = ClaudeService.createPersonalizedResponse(text, familyData);
-        console.log("Using fallback personalized response:", response?.substring(0, 50) + "...");
-      }
-      
-      // If we got a response, return it
-      if (response && response.length > 0) {
-        return response;
-      }
-      
-      // If we got here, something went wrong but didn't throw an error
-      return "I should be able to answer this with your family's data, but I'm having trouble processing it right now. Could you try asking in a different way?";
-    } catch (error) {
-      console.error("Error getting AI response:", error);
-      
-      // Provide more specific error message for common issues
-      if (error.message?.includes("timeout")) {
-        return "I'm taking longer than expected to process your question. This might be due to high demand. Please try again in a moment.";
-      }
-      
-      if (text.toLowerCase().includes("survey") || text.toLowerCase().includes("data")) {
-        return "I'd like to analyze your survey data, but I'm having trouble accessing it right now. Please try refreshing the page or asking again in a few moments.";
-      }
-      
-      return "I'm having trouble processing your question right now. While I'm reconnecting, you can explore the dashboard for insights or check your tasks in the Tasks tab.";
+    // Get family data from Firestore for context
+    let familyData = {};
+    try {
+      console.log("Getting family context for:", familyId);
+      familyData = await this.getFamilyContext(familyId);
+      console.log("Got family context with keys:", Object.keys(familyData));
+    } catch (contextError) {
+      console.error("Error getting family context:", contextError);
+      return "I'm having trouble accessing your family data right now. Please try again in a moment.";
     }
+      
+    // Check if we actually got meaningful family data
+    if (!familyData || Object.keys(familyData).length < 3) {
+      console.warn("Insufficient family data for personalized response");
+      return "I couldn't retrieve your complete family data. Please try refreshing the page or logging in again.";
+    }
+      
+    // Add knowledge base to context
+    familyData.knowledgeBase = knowledgeBase;
+      
+    // Format messages for Claude API
+    const formattedMessages = previousMessages
+      .slice(-10) // Last 10 messages for context
+      .map(msg => ({
+        role: msg.sender === 'allie' ? 'assistant' : 'user',
+        content: msg.text
+      }));
+
+    // Add the current message
+    formattedMessages.push({
+      role: 'user',
+      content: text
+    });
+    
+    console.log("Sending to Claude API via proxy:", {
+      messageCount: formattedMessages.length,
+      contextSize: JSON.stringify(familyData).length,
+      familyDataKeys: Object.keys(familyData)
+    });
+      
+    // Call the Claude API through our service with updated code
+    let response;
+    try {
+      response = await ClaudeService.generateResponse(
+        formattedMessages, 
+        familyData
+      );
+      console.log("Claude API call succeeded with response length:", response?.length);
+    } catch (apiError) {
+      console.error("Claude API error details:", apiError);
+      // Try fallback response first before giving up
+      response = ClaudeService.createPersonalizedResponse(text, familyData);
+      console.log("Using fallback personalized response:", response?.substring(0, 50) + "...");
+    }
+      
+    // If we got a response, return it
+    if (response && response.length > 0) {
+      return response;
+    }
+      
+    // If we got here, something went wrong but didn't throw an error
+    return "I should be able to answer this with your family's data, but I'm having trouble processing it right now. Could you try asking in a different way?";
+  } catch (error) {
+    console.error("Error getting AI response:", error);
+      
+    // Provide more specific error message for common issues
+    if (error.message?.includes("timeout")) {
+      return "I'm taking longer than expected to process your question. This might be due to high demand. Please try again in a moment.";
+    }
+      
+    if (text.toLowerCase().includes("survey") || text.toLowerCase().includes("data")) {
+      return "I'd like to analyze your survey data, but I'm having trouble accessing it right now. Please try refreshing the page or asking again in a few moments.";
+    }
+      
+    return "I'm having trouble processing your question right now. While I'm reconnecting, you can explore the dashboard for insights or check your tasks in the Tasks tab.";
   }
+}
 
   // Get family context for AI response
   async getFamilyContext(familyId) {

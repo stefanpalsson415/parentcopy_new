@@ -2,65 +2,126 @@
 // src/services/ClaudeService.js
 class ClaudeService {
   constructor() {
-    this.apiKey = process.env.REACT_APP_CLAUDE_API_KEY;
-    this.apiUrl = 'https://api.anthropic.com/v1/messages';
-    this.model = 'claude-3-opus-20240229'; // You can change this to the model you want to use
+    this.proxyUrl = 'http://localhost:3001/api/claude';
+    this.model = 'claude-3-opus-20240229';
     
-    if (!this.apiKey) {
-      console.warn("Claude API key is not set. Please check your .env file.");
-    } else {
-      console.log("Claude service initialized with direct API access");
-    }
+    console.log("Claude service initialized to use local proxy server");
   }
   
-// Add this method to your ClaudeService class
-
-// Test Hello World function
-async testHelloWorld() {
-  try {
-    console.log("Testing Hello World function...");
-    
-    // Simple test to check API connectivity
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
+  async generateResponse(messages, familyContext) {
+    try {
+      // Format system prompt with family context
+      const systemPrompt = this.formatSystemPrompt(familyContext || {});
+      
+      // Log for debugging
+      console.log("Claude API request via proxy:", { 
+        messagesCount: messages.length, 
+        systemPromptLength: systemPrompt.length
+      });
+      
+      // Format the messages for Claude API
+      const lastUserMessage = messages[messages.length - 1]?.content || "";
+      
+      // Prepare request payload for Claude API
+      const payload = {
         model: this.model,
-        max_tokens: 100,
+        max_tokens: 4000,
         messages: [
           {
             role: "user",
-            content: "Say hello world!"
+            content: lastUserMessage
           }
         ],
-        system: "You are a helpful assistant that responds with just 'Hello World!'"
-      })
-    });
-    
-    // Check if the response is OK
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Claude API returned ${response.status}: ${errorText}`);
+        system: systemPrompt
+      };
+      
+      // Add a timeout to the API call
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
+      // Make the API call through our proxy server
+      const response = await fetch(this.proxyUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Claude API error response:", errorText);
+        throw new Error(`Claude API returned ${response.status}: ${errorText}`);
+      }
+      
+      const result = await response.json();
+      
+      // Check for valid response
+      if (!result || !result.content || !result.content[0]) {
+        console.error("Invalid response format from Claude API:", result);
+        throw new Error("Invalid response format from Claude API");
+      }
+      
+      return result.content[0].text;
+    } catch (error) {
+      console.error("Error in Claude API call:", error);
+      
+      // Fall back to personalized response on failure
+      return this.createPersonalizedResponse(
+        messages[messages.length - 1]?.content || "", 
+        familyContext
+      );
     }
-    
-    const result = await response.json();
-    
-    return {
-      message: "Claude API connection successful!",
-      content: result.content[0].text,
-      timestamp: new Date().toISOString()
-    };
-  } catch (error) {
-    console.error("Error in Hello World test:", error);
-    throw error;
   }
-}
-
-
+  
+  // Test Hello World function
+  async testHelloWorld() {
+    try {
+      console.log("Testing Hello World function via proxy...");
+      
+      // Simple test to check API connectivity through proxy
+      const response = await fetch(this.proxyUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: this.model,
+          max_tokens: 100,
+          messages: [
+            {
+              role: "user",
+              content: "Say hello world!"
+            }
+          ],
+          system: "You are a helpful assistant that responds with just 'Hello World!'"
+        })
+      });
+      
+      // Check if the response is OK
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Proxy server returned ${response.status}: ${errorText}`);
+      }
+      
+      const result = await response.json();
+      
+      return {
+        message: "Claude API connection via proxy successful!",
+        content: result.content[0].text,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error("Detailed error in Hello World test:", error);
+      throw error;
+    }
+  }
+  
+  // Keep the rest of your methods (formatSystemPrompt, createPersonalizedResponse, etc.)
+  // ..
   async generateResponse(messages, familyContext) {
     try {
       // Format system prompt with family context

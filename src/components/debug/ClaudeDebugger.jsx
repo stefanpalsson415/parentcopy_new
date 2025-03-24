@@ -48,6 +48,53 @@ const ClaudeDebugger = () => {
     }
   };
 
+// Add this function to ClaudeDebugger.jsx
+const testChatMessage = async () => {
+  setLoading(true);
+  setError(null);
+  setResponse(null);
+  
+  try {
+    addLog("Testing chat message formatting...");
+    
+    const testMessages = [
+      { role: 'user', content: "Hello" },
+      { role: 'assistant', content: "Hi there!" },
+      { role: 'user', content: "Tell me about my family data" }
+    ];
+    
+    // Use the same message format that ChatService uses
+    const result = await ClaudeService.generateResponse(
+      testMessages,
+      { 
+        familyName: "Test",
+        familyId: "test123",
+        adults: 2,
+        children: [{ name: "Test Child", age: 5 }],
+        currentWeek: 1
+      }
+    );
+    
+    addLog(`Received chat message response of length: ${result?.length || 0}`);
+    setResponse(result);
+  } catch (err) {
+    addLog(`Error: ${err.message}`);
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Add this button to the UI
+<button
+  onClick={testChatMessage}
+  disabled={loading}
+  className="ml-2 px-4 py-2 bg-blue-600 text-white rounded-md font-roboto disabled:bg-gray-300"
+>
+  {loading ? 'Testing...' : 'Test Chat Message'}
+</button>
+
+
   const testHelloWorld = async () => {
     setLoading(true);
     setError(null);
