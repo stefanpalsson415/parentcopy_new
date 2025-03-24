@@ -35,6 +35,26 @@ const ClaudeDebugger = () => {
     }
   };
 
+  const testHelloWorld = async () => {
+    setLoading(true);
+    setError(null);
+    setResponse(null);
+    
+    try {
+      addLog("Testing Hello World function...");
+      
+      const result = await ClaudeService.testHelloWorld();
+      
+      addLog(`Received Hello World response: ${JSON.stringify(result)}`);
+      setResponse(JSON.stringify(result, null, 2));
+    } catch (err) {
+      addLog(`Error: ${err.message}`);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto mt-10 p-6 bg-white rounded-lg shadow-lg">
       <h1 className="text-2xl font-bold mb-6 font-roboto">Claude API Debugger</h1>
@@ -50,13 +70,23 @@ const ClaudeDebugger = () => {
         />
       </div>
       
-      <button
-        onClick={testClaudeAPI}
-        disabled={loading || !inputText.trim()}
-        className="px-4 py-2 bg-black text-white rounded-md font-roboto disabled:bg-gray-300"
-      >
-        {loading ? 'Testing...' : 'Test Claude API'}
-      </button>
+      <div className="flex mb-4">
+        <button
+          onClick={testClaudeAPI}
+          disabled={loading || !inputText.trim()}
+          className="px-4 py-2 bg-black text-white rounded-md font-roboto disabled:bg-gray-300"
+        >
+          {loading ? 'Testing...' : 'Test Claude API'}
+        </button>
+
+        <button
+          onClick={testHelloWorld}
+          disabled={loading}
+          className="ml-2 px-4 py-2 bg-green-600 text-white rounded-md font-roboto disabled:bg-gray-300"
+        >
+          {loading ? 'Testing...' : 'Test Hello World'}
+        </button>
+      </div>
       
       {error && (
         <div className="mt-6 p-4 bg-red-50 text-red-700 rounded-md font-roboto">

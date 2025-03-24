@@ -90,6 +90,8 @@ class ClaudeService {
       const callClaudeAPI = httpsCallable(functions, 'callClaudeAPI', {
         timeout: 60000 // 60 second timeout
       });
+
+      
       
       // Call the function with clearer logging
       console.log("Calling Claude via Firebase function proxy - sending request now");
@@ -114,6 +116,35 @@ class ClaudeService {
       throw error;
     }
   }  
+
+  // Test Hello World function
+async testHelloWorld() {
+  try {
+    console.log("Testing Hello World function...");
+    
+    // Get Firebase Functions instance
+    const functions = getFunctions();
+    
+    // Create a callable function with a shorter timeout
+    const helloWorld = httpsCallable(functions, 'helloWorld', {
+      timeout: 10000 // 10 second timeout for quick testing
+    });
+    
+    // Call the function with a simple payload
+    const result = await helloWorld({ 
+      name: "Test User",
+      timestamp: new Date().toISOString()
+    });
+    
+    console.log("Hello World function result:", result.data);
+    return result.data;
+  } catch (error) {
+    console.error("Firebase Hello World function error:", error.message);
+    console.error("Error code:", error.code);
+    console.error("Error details:", error.details);
+    throw error;
+  }
+}
   // Create personalized response from context
   createPersonalizedResponse(userMessage, context) {
     const userMessageLower = userMessage.toLowerCase();
