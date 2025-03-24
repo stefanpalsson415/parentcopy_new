@@ -13,6 +13,54 @@ class ClaudeService {
     }
   }
   
+// Add this method to your ClaudeService class
+
+// Test Hello World function
+async testHelloWorld() {
+  try {
+    console.log("Testing Hello World function...");
+    
+    // Simple test to check API connectivity
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': this.apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: this.model,
+        max_tokens: 100,
+        messages: [
+          {
+            role: "user",
+            content: "Say hello world!"
+          }
+        ],
+        system: "You are a helpful assistant that responds with just 'Hello World!'"
+      })
+    });
+    
+    // Check if the response is OK
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Claude API returned ${response.status}: ${errorText}`);
+    }
+    
+    const result = await response.json();
+    
+    return {
+      message: "Claude API connection successful!",
+      content: result.content[0].text,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error("Error in Hello World test:", error);
+    throw error;
+  }
+}
+
+
   async generateResponse(messages, familyContext) {
     try {
       // Format system prompt with family context
@@ -77,8 +125,16 @@ class ClaudeService {
       }
       
       return result.content[0].text;
+    } catch (error) {
+      console.error("Error in Claude API call:", error);
+      
+      // Fall back to personalized response on failure
+      return this.createPersonalizedResponse(
+        messages[messages.length - 1]?.content || "", 
+        familyContext
+      );
     }
-  
+  }  
   // Firebase function proxy method (fixed syntax)
   // Firebase function proxy method (fixed syntax)
   
