@@ -22,6 +22,8 @@ import DailyCheckInTool from './DailyCheckInTool';
 import GratitudeTracker from './GratitudeTracker';
 import DateNightPlanner from './DateNightPlanner';
 import AIRelationshipInsights from './AIRelationshipInsights';
+import SelfCarePlanner from './SelfCarePlanner';
+import TaskDivisionVisualizer from './TaskDivisionVisualizer';
 
 const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const navigate = useNavigate();
@@ -323,24 +325,48 @@ useEffect(() => {
       case 'relationship':
         return (
           <div className="space-y-6">
-          <div className="flex justify-end mb-4">
-            <button 
-              className="px-4 py-2 bg-pink-100 text-pink-800 rounded-md flex items-center hover:bg-pink-200 font-roboto"
-              onClick={handleOpenRelationshipMeeting}
-            >
-              <Heart size={16} className="mr-2" />
-              Start Relationship Meeting
-            </button>
-          </div>
+            <div className="flex justify-end mb-4">
+              <button 
+                className="px-4 py-2 bg-pink-100 text-pink-800 rounded-md flex items-center hover:bg-pink-200 font-roboto"
+                onClick={handleOpenRelationshipMeeting}
+              >
+                <Heart size={16} className="mr-2" />
+                Start Relationship Meeting
+              </button>
+            </div>
             <AIRelationshipInsights />
             <CoupleRelationshipChart />
+            <TaskDivisionVisualizer />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <DailyCheckInTool />
               <GratitudeTracker />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <DateNightPlanner />
+              <SelfCarePlanner />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <RelationshipProgressChart />
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-bold mb-4 font-roboto flex items-center">
+                  <Calendar size={20} className="mr-2 text-black" />
+                  Future Planning Tools
+                </h3>
+                <p className="text-sm text-gray-600 mb-4 font-roboto">
+                  Planning for your family's future together strengthens your bond and ensures alignment on important decisions.
+                </p>
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                  <p className="text-sm font-roboto">
+                    Future planning tools will be available in the next update. These will include:
+                  </p>
+                  <ul className="mt-2 space-y-1 text-sm list-disc pl-5 font-roboto">
+                    <li>Financial planning templates</li>
+                    <li>Education and career discussions</li>
+                    <li>Family vision board creation</li>
+                    <li>Long-term goal setting exercises</li>
+                  </ul>
+                </div>
+              </div>
             </div>
             <StrategicActionsTracker />
           </div>

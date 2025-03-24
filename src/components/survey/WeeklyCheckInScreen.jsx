@@ -152,7 +152,6 @@ const generateAIExplanation = (question) => {
   const currentQuestion = weeklyQuestions[currentQuestionIndex];
   
 // Add relationship questions to the weekly check-in
-// Add relationship questions to the weekly check-in
 const addRelationshipQuestions = (questions) => {
   // Only add these for parents
   if (selectedUser.role !== 'parent') return questions;
@@ -191,6 +190,33 @@ const addRelationshipQuestions = (questions) => {
         "Problem-Solving",
         "None of these strategies"
       ]
+    },
+    {
+      id: `rel-week-${currentWeek}-q4`,
+      text: "Have you been able to prioritize self-care this week?",
+      category: "Self-Care Impact",
+      type: "multipleChoice",
+      options: [
+        "Not at all",
+        "Very little time",
+        "Some time",
+        "Adequate time",
+        "Plenty of time"
+      ]
+    },
+    {
+      id: `rel-week-${currentWeek}-q5`,
+      text: "Which area would most improve your relationship right now?",
+      category: "Relationship Priorities",
+      type: "multipleChoice",
+      options: [
+        "More quality time together",
+        "Better workload sharing",
+        "Improved communication",
+        "More appreciation/recognition",
+        "More time for individual interests",
+        "Other"
+      ]
     }
   ];
   
@@ -198,9 +224,12 @@ const addRelationshipQuestions = (questions) => {
   return [...questions, ...relationshipQuestions];
 };
 
-// Modify the return statement to include relationship questions
-//return addRelationshipQuestions(filteredQuestions);
-
+// Add relationship questions to weekly questions
+useEffect(() => {
+  if (weeklyQuestions.length > 0 && selectedUser && selectedUser.role === 'parent') {
+    setWeeklyQuestions(addRelationshipQuestions(weeklyQuestions));
+  }
+}, [weeklyQuestions.length]); // Run once when weekly questions are loaded
 
 
   // Handle parent selection

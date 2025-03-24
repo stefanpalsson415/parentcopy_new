@@ -106,18 +106,41 @@ async getAIResponse(text, familyId, previousMessages) {
       familyData.knowledgeBase = knowledgeBase;
       
       // Format messages for Claude API
-      const formattedMessages = previousMessages
-        .slice(-10) // Last 10 messages for context
-        .map(msg => ({
-          role: msg.sender === 'allie' ? 'assistant' : 'user',
-          content: msg.text
-        }));
-      
-      // Add the current message
-      formattedMessages.push({
-        role: 'user',
-        content: text
-      });
+      // Format messages for Claude API
+const formattedMessages = previousMessages
+.slice(-10) // Last 10 messages for context
+.map(msg => ({
+  role: msg.sender === 'allie' ? 'assistant' : 'user',
+  content: msg.text
+}));
+
+// Add the current message
+formattedMessages.push({
+role: 'user',
+content: text
+});
+
+// Add relationship-specific context if the message is about relationships
+if (text.toLowerCase().includes('relationship') || 
+  text.toLowerCase().includes('partner') || 
+  text.toLowerCase().includes('marriage') || 
+  text.toLowerCase().includes('date night') || 
+  text.toLowerCase().includes('strategies')) {
+
+console.log("Detected relationship question, adding specialized context");
+
+// Prepare extra relationship context to send to Claude
+const relationshipContext = {
+  detectedTopic: 'relationship',
+  specializedKnowledge: true,
+  strategies: familyData.relationshipData?.allStrategies || [],
+  coupleData: familyData.coupleData || {},
+  suggestionPriority: 'high'
+};
+
+// Add to the context
+familyData.specializedContext = relationshipContext;
+}
       
       console.log("Sending to Claude API:", {
         messageCount: formattedMessages.length,

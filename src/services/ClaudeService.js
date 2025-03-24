@@ -1,11 +1,17 @@
-// src/services/ClaudeService.js
-import { getFunctions, httpsCallable } from 'firebase/functions';
+
+// At the top of src/services/ClaudeService.js, update the import line:
+import { getFunctions, httpsCallable, connectFunctionsEmulator } from 'firebase/functions';
 import { functions } from '../services/firebase';
 
 class ClaudeService {
   constructor() {
     // Switch to using Firebase Function proxy
     this.useServerProxy = true;
+    
+    // Initialize the functions with the correct region
+    this.functions = getFunctions();
+    connectFunctionsEmulator(this.functions, "localhost", 5001); // For local development
+    
     console.log("Claude service initialized to use Firebase Function proxy");
   }
   
@@ -79,18 +85,16 @@ class ClaudeService {
   // Firebase function proxy method (fixed syntax)
   async claudeProxy(data) {
     try {
-      // Get Firebase Functions instance
-      const functions = getFunctions();
-      
-      // Add timeout handling for the function call
+      // Use the functions instance from the constructor
       console.log("Preparing to call Claude via Firebase function proxy");
       console.log(`Data payload: system length: ${data.system.length}, messages: ${data.messages.length}`);
       
-      // Create a callable function
-      const callClaudeAPI = httpsCallable(functions, 'callClaudeAPI', {
+      // Create a callable function with the correct region
+      const callClaudeAPI = httpsCallable(this.functions, 'callClaudeAPI', {
         timeout: 60000 // 60 second timeout
       });
-
+      
+    
       
       
       // Call the function with clearer logging
@@ -118,17 +122,13 @@ class ClaudeService {
   }  
 
   // Test Hello World function
-async testHelloWorld() {
-  try {
-    console.log("Testing Hello World function...");
-    
-    // Get Firebase Functions instance
-    const functions = getFunctions();
-    
-    // Create a callable function with a shorter timeout
-    const helloWorld = httpsCallable(functions, 'helloWorld', {
-      timeout: 10000 // 10 second timeout for quick testing
-    });
+  async testHelloWorld() {
+    try {
+      console.log("Testing Hello World function...");
+      
+      const helloWorld = httpsCallable(this.functions, 'helloWorld', {
+        timeout: 10000
+      });
     
     // Call the function with a simple payload
     const result = await helloWorld({ 
@@ -407,16 +407,28 @@ async testHelloWorld() {
     ` : ''}
     
     You can help with:
-    1. Explaining how to use the Allie app
-    2. Providing insights about family survey results
-    3. Offering research-backed parenting advice
-    4. Suggesting ways to improve family balance
-    5. Answering questions about the app's mission and methodology
-    6. Giving relationship advice based on the 10 strategies
-    7. Connecting workload balance to relationship health
-    8. Adding tasks and meetings to calendars
-    9. Managing calendar integrations
-    10. Analyzing their specific survey data and tasks
+1. Explaining how to use the Allie app
+2. Providing insights about family survey results
+3. Offering research-backed parenting advice
+4. Suggesting ways to improve family balance
+5. Answering questions about the app's mission and methodology
+6. Giving relationship advice based on the 10 strategies
+7. Connecting workload balance to relationship health
+8. Adding tasks and meetings to calendars
+9. Managing calendar integrations
+10. Analyzing their specific survey data and tasks
+11. Recommending self-care activities for each parent
+12. Providing guidance on implementing the 10 relationship strategies
+13. Suggesting date night ideas based on the family's schedule and preferences
+14. Creating balanced task division plans for couples
+15. Facilitating deeper relationship discussions through thoughtful prompts
+
+For relationship questions specifically:
+- Use the 10 strategic actions as your framework for advice
+- Emphasize the connection between workload balance and relationship health
+- Suggest specific tool features like Date Night Planner and Self-Care Planner
+- Recommend relevant check-ins or meetings when appropriate
+- Highlight the importance of both visible task sharing and emotional labor sharing
     
     Always be supportive, practical, and focused on improving family dynamics through better balance.
     Remember that all data is confidential to this family.

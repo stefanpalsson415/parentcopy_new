@@ -13,20 +13,19 @@
       }
     ]
   },
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "ignore": [
-        "node_modules",
-        ".git",
-        "firebase-debug.log",
-        "firebase-debug.*.log"
-      ],
-      "predeploy": [
-        "echo 'Skipping lint'"
-      ],
-      "runtime": "nodejs18"
-    }
-  ]
+  "functions": {
+    "source": "functions",
+    "codebase": "default",
+    "ignore": [
+      "node_modules",
+      ".git",
+      "firebase-debug.log",
+      "firebase-debug.*.log"
+    ],
+    "predeploy": [
+      "echo 'Skipping lint'"
+    ],
+    "runtime": "nodejs18",
+    "region": ["europe-west1"]
+  }
 }
