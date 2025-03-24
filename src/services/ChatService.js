@@ -59,16 +59,31 @@ class ChatService {
   }
   
   // Get AI response to a message
-  async getAIResponse(text, familyId, previousMessages) {
-    try {
-      // Log request for debugging
-      console.log("Allie Chat request:", { text, familyId });
-      
-      // Better error handling for missing familyId
-      if (!familyId) {
-        console.warn("getAIResponse called without familyId");
-        return "I need access to your family data to provide personalized responses. Please ensure you're logged in correctly.";
-      }
+  // Get AI response to a message
+async getAIResponse(text, familyId, previousMessages) {
+  try {
+    // Log request with more details for debugging
+    console.log("Allie Chat request:", { 
+      text, 
+      familyId, 
+      previousMessagesCount: previousMessages?.length || 0
+    });
+    
+    // Better error handling for missing familyId
+    if (!familyId) {
+      console.warn("getAIResponse called without familyId");
+      return "I need access to your family data to provide personalized responses. Please ensure you're logged in correctly.";
+    }
+    
+    // Verify we have the minimally required data to proceed
+    if (!text || text.trim() === '') {
+      console.warn("Empty message text received");
+      return "I didn't receive any message to respond to. Please try again.";
+    }
+    
+    // Add a start timestamp for performance tracking
+    const startTime = Date.now();
+    console.log(`Starting AI response generation at ${new Date().toISOString()}`);
       
       // Get family data from Firestore for context
       let familyData = {};

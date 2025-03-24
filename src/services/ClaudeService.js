@@ -77,36 +77,43 @@ class ClaudeService {
   
   // Firebase function proxy method (fixed syntax)
   // Firebase function proxy method (fixed syntax)
-// Firebase function proxy method (updated for v2 functions)
-async claudeProxy(data) {
-  try {
-    // Get Firebase Functions instance
-    const functions = getFunctions();
-    
-    // Create a callable function
-    const callClaudeAPI = httpsCallable(functions, 'callClaudeAPI');
-    
-    // Call the function - log more details for debugging
-    console.log("Calling Claude via Firebase function proxy with:", {
-      systemLength: data.system?.length || 0,
-      messagesCount: data.messages?.length || 0
-    });
-    
-    const result = await callClaudeAPI({
-      system: data.system,
-      messages: data.messages
-    });
-    
-    console.log("Response received from Firebase function:", !!result?.data);
-    return result;
-  } catch (error) {
-    console.error("Firebase function error:", error.message);
-    // Log full error details
-    console.error("Error details:", error);
-    throw error;
-  }
-}
-  
+  async claudeProxy(data) {
+    try {
+      // Get Firebase Functions instance
+      const functions = getFunctions();
+      
+      // Add timeout handling for the function call
+      console.log("Preparing to call Claude via Firebase function proxy");
+      console.log(`Data payload: system length: ${data.system.length}, messages: ${data.messages.length}`);
+      
+      // Create a callable function
+      const callClaudeAPI = httpsCallable(functions, 'callClaudeAPI', {
+        timeout: 60000 // 60 second timeout
+      });
+      
+      // Call the function with clearer logging
+      console.log("Calling Claude via Firebase function proxy - sending request now");
+      
+      const result = await callClaudeAPI({
+        system: data.system,
+        messages: data.messages
+      });
+      
+      console.log("Response received from Firebase function:", 
+        result?.data ? `Success: ${typeof result.data} with content` : "No data received");
+      
+      if (result?.data?.content) {
+        console.log(`Content received of length: ${result.data.content.length}`);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error("Firebase function error:", error.message);
+      console.error("Error code:", error.code);
+      console.error("Error details:", error.details);
+      throw error;
+    }
+  }  
   // Create personalized response from context
   createPersonalizedResponse(userMessage, context) {
     const userMessageLower = userMessage.toLowerCase();

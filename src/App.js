@@ -27,6 +27,8 @@ import AIAssistantPage from './components/marketing/AIAssistantPage';
 import { useAuth } from './contexts/AuthContext';
 import FloatingCalendarWidget from './components/calendar/FloatingCalendarWidget';
 import EmailOptIn from './components/marketing/EmailOptIn';
+import ClaudeDebugger from './components/debug/ClaudeDebugger';
+
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 
  // Add this import
@@ -65,6 +67,8 @@ function AppRoutes() {
         <Route path="/mini-results" element={<MiniResultsScreen />} />
         <Route path="/payment" element={<PaymentScreen />} />
         <Route path="/dashboard" element={<DashboardScreen />} />
+        <Route path="/debug/claude" element={<ClaudeDebugger />} />
+
         
         {/* Route for weekly check-in - directs kids to kid-friendly version */}
         <Route path="/weekly-check-in" element={

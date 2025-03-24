@@ -8,10 +8,10 @@ admin.initializeApp();
 // Cloud Function to proxy calls to Claude API
 exports.callClaudeAPI = functions.https.onCall(async (data, context) => {
   try {
+    // You can use an environment variable or secrets manager in production
     const CLAUDE_API_KEY = 'sk-ant-api03-wYazj0X00yKvWF_TCwYGGsT6pJrW5ytBEowQ7R-OiW8TX_vnPBeUFJlkxKJDEyJ9xM88Bi9bt9ChNpsIJOvYkg-aMXNIg-ZYDQQG';
-    
-    console.log("callClaudeAPI function called!");
-    console.log("Data received:", {
+
+    console.log("Received request for Claude API:", {
       systemLength: data.system ? data.system.length : 0,
       messagesCount: data.messages ? data.messages.length : 0
     });
@@ -34,14 +34,24 @@ exports.callClaudeAPI = functions.https.onCall(async (data, context) => {
       }
     );
     
-    console.log("Claude API response received with status:", response.status);
+    console.log("Claude API response received");
+    
+    // Return the Claude API response
     return response.data;
   } catch (error) {
     console.error("Error calling Claude API:", error.message);
     
+    // More detailed error handling
     if (error.response) {
       console.error("Response error:", error.response.status, error.response.data);
-      throw new functions.https.HttpsError('invalid-argument', `Claude API error: ${error.response.status}`);
+      throw new functions.https.HttpsError(
+        'unknown', 
+        `Claude API error: ${error.response.status}`,
+        {
+          status: error.response.status,
+          data: error.response.data
+        }
+      );
     } else if (error.request) {
       console.error("No response received");
       throw new functions.https.HttpsError('unavailable', 'No response from Claude API');
@@ -52,12 +62,10 @@ exports.callClaudeAPI = functions.https.onCall(async (data, context) => {
   }
 });
 
-// Test endpoint
+// Separate test function
 exports.testClaudeAPI = functions.https.onRequest(async (req, res) => {
   try {
     console.log("Test Claude API endpoint hit");
-    
-    const CLAUDE_API_KEY = 'sk-ant-api03-wYazj0X00yKvWF_TCwYGGsT6pJrW5ytBEowQ7R-OiW8TX_vnPBeUFJlkxKJDEyJ9xM88Bi9bt9ChNpsIJOvYkg-aMXNIg-ZYDQQG';
     
     // Make a simple call to Claude
     const response = await axios.post(
@@ -71,7 +79,7 @@ exports.testClaudeAPI = functions.https.onRequest(async (req, res) => {
       {
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': CLAUDE_API_KEY,
+          'x-api-key': 'sk-ant-api03-wYazj0X00yKvWF_TCwYGGsT6pJrW5ytBEowQ7R-OiW8TX_vnPBeUFJlkxKJDEyJ9xM88Bi9bt9ChNpsIJOvYkg-aMXNIg-ZYDQQG',
           'anthropic-version': '2023-06-01'
         }
       }
@@ -79,7 +87,7 @@ exports.testClaudeAPI = functions.https.onRequest(async (req, res) => {
     
     res.json({ success: true, data: response.data });
   } catch (error) {
-    console.error("Error in test endpoint:", error.message);
+    console.error("Error in test endpoint:", error);
     res.status(500).json({ error: error.message });
   }
 });
