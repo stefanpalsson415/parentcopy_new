@@ -21,6 +21,8 @@
 .env
 .vscode/.env
 functions/firebase-debug.log
+firebase-debug.log
+*.log
 
 
 
