@@ -194,44 +194,7 @@ export function SurveyProvider({ children }) {
       ]
     };
     
-    // Define weight attributes for each question category
-    const weightAttributes = {
-      "Visible Household Tasks": {
-        baseWeight: 2,
-        frequency: "weekly",
-        invisibility: "highly",
-        emotionalLabor: "minimal",
-        researchImpact: "medium",
-        childDevelopment: "high",
-        relationshipImpact: "moderate" // New factor
-      },
-      "Invisible Household Tasks": {
-        baseWeight: 4,
-        frequency: "daily",
-        invisibility: "completely",
-        emotionalLabor: "high",
-        researchImpact: "high",
-        childDevelopment: "moderate",
-        relationshipImpact: "high" // New factor
-      },
-      "Visible Parental Tasks": {
-        baseWeight: 3,
-        frequency: "daily",
-        invisibility: "partially",
-        emotionalLabor: "moderate",
-        researchImpact: "high",
-        childDevelopment: "high",
-        relationshipImpact: "moderate" // New factor
-      },
-      "Invisible Parental Tasks": {
-        baseWeight: 5,
-        frequency: "daily",
-        invisibility: "completely",
-        emotionalLabor: "extreme",
-        researchImpact: "high",
-        childDevelopment: "high",
-        relationshipImpact: "extreme" // New factor
-      }
+   
       // Define weight attributes for each question category
 const weightAttributes = {
   "Visible Household Tasks": {
