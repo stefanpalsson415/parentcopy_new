@@ -1,22 +1,16 @@
 
-// At the top of src/services/ClaudeService.js, update the import line:
-import { getFunctions, httpsCallable, connectFunctionsEmulator } from 'firebase/functions';
-import { functions } from '../services/firebase';
-
+// src/services/ClaudeService.js
 class ClaudeService {
   constructor() {
-    // Switch to using Firebase Function proxy
-    this.useServerProxy = true;
+    this.apiKey = process.env.REACT_APP_CLAUDE_API_KEY;
+    this.apiUrl = 'https://api.anthropic.com/v1/messages';
+    this.model = 'claude-3-opus-20240229'; // You can change this to the model you want to use
     
-    // Initialize the functions with the correct region
-    this.functions = getFunctions();
-// Only connect to the emulator in development
-if (process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost') {
-  console.log("Using Firebase functions emulator");
-  connectFunctionsEmulator(this.functions, "localhost", 5001);
-}
-    
-    console.log("Claude service initialized to use Firebase Function proxy");
+    if (!this.apiKey) {
+      console.warn("Claude API key is not set. Please check your .env file.");
+    } else {
+      console.log("Claude service initialized with direct API access");
+    }
   }
   
   async generateResponse(messages, familyContext) {
@@ -25,130 +19,71 @@ if (process.env.NODE_ENV === 'development' || window.location.hostname === 'loca
       const systemPrompt = this.formatSystemPrompt(familyContext || {});
       
       // Log for debugging
-      console.log("Claude API request:", { 
+      console.log("Claude API direct request:", { 
         messagesCount: messages.length, 
-        systemPromptLength: systemPrompt.length,
-        useServerProxy: this.useServerProxy
+        systemPromptLength: systemPrompt.length
       });
       
-      if (this.useServerProxy) {
-        // Call the secure Cloud Function
-        console.log("Using Firebase Function to call Claude API");
-        
-        // Add a timeout to the API call
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Request timed out")), 30000)
-        );
-        
-        const result = await Promise.race([
-          this.claudeProxy({
-            system: systemPrompt,
-            messages: messages
-          }),
-          timeoutPromise
-        ]);
-        
-        // Check for valid response
-        if (!result || !result.data || !result.data.content || !result.data.content[0]) {
-          console.error("Invalid response format from Claude proxy:", result);
-          throw new Error("Invalid response format from Claude proxy");
-        }
-        
-        return result.data.content[0].text;
-      } else {
-        // Direct API call method (fallback)
-        console.log("Making direct API call to Claude API");
-        
-        // Default response when direct API is not configured
-        return this.createPersonalizedResponse(
-          messages[messages.length - 1]?.content || "", 
-          familyContext
-        );
-      }
-    } catch (error) {
-      console.error("Error calling Claude API:", error);
-      console.error("Error details:", error.message, error.stack);
-      
-      // For debugging - log the family context keys
-      if (familyContext) {
-        console.log("Family context keys:", Object.keys(familyContext));
-        console.log("Context size:", JSON.stringify(familyContext).length);
+      if (!this.apiKey) {
+        throw new Error("Claude API key is not set. Please check your .env file.");
       }
       
-      // Still fall back to local responses if all else fails
-      if (familyContext && Object.keys(familyContext).length > 3) {
-        console.log("Falling back to local personalized response");
-        return this.createPersonalizedResponse(messages[messages.length - 1]?.content || "", familyContext);
+      // Format the messages for Claude API
+      const lastUserMessage = messages[messages.length - 1]?.content || "";
+      
+      // Prepare request payload for Claude API
+      const payload = {
+        model: this.model,
+        max_tokens: 4000,
+        messages: [
+          {
+            role: "user",
+            content: lastUserMessage
+          }
+        ],
+        system: systemPrompt
+      };
+      
+      // Add a timeout to the API call
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
+      // Make the direct API call to Claude
+      const response = await fetch(this.apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Claude API error response:", errorText);
+        throw new Error(`Claude API returned ${response.status}: ${errorText}`);
       }
       
-      return this.getContextualResponse(messages[messages.length - 1]?.content || "", familyContext);
+      const result = await response.json();
+      
+      // Check for valid response
+      if (!result || !result.content || !result.content[0]) {
+        console.error("Invalid response format from Claude API:", result);
+        throw new Error("Invalid response format from Claude API");
+      }
+      
+      return result.content[0].text;
     }
-  }
   
   // Firebase function proxy method (fixed syntax)
   // Firebase function proxy method (fixed syntax)
-  async claudeProxy(data) {
-    try {
-      // Use the functions instance from the constructor
-      console.log("Preparing to call Claude via Firebase function proxy");
-      console.log(`Data payload: system length: ${data.system.length}, messages: ${data.messages.length}`);
-      
-      // Create a callable function with the correct region
-      const callClaudeAPI = httpsCallable(this.functions, 'callClaudeAPI', {
-        timeout: 60000 // 60 second timeout
-      });
-      
-    
-      
-      
-      // Call the function with clearer logging
-      console.log("Calling Claude via Firebase function proxy - sending request now");
-      
-      const result = await callClaudeAPI({
-        system: data.system,
-        messages: data.messages
-      });
-      
-      console.log("Response received from Firebase function:", 
-        result?.data ? `Success: ${typeof result.data} with content` : "No data received");
-      
-      if (result?.data?.content) {
-        console.log(`Content received of length: ${result.data.content.length}`);
-      }
-      
-      return result;
-    } catch (error) {
-      console.error("Firebase function error:", error.message);
-      console.error("Error code:", error.code);
-      console.error("Error details:", error.details);
-      throw error;
-    }
-  }  
-
+  
   // Test Hello World function
-  async testHelloWorld() {
-    try {
-      console.log("Testing Hello World function...");
-      
-      const helloWorld = httpsCallable(this.functions, 'helloWorld', {
-        timeout: 30000
-      });
-    
-    // Call the function with a simple payload
-    const result = await helloWorld({ 
-      name: "Test User",
-      timestamp: new Date().toISOString()
-    });
-    
-    console.log("Hello World function result:", result.data);
-    return result.data;
-  } catch (error) {
-    console.error("Firebase Hello World function error:", error.message);
-    console.error("Error code:", error.code);
-    console.error("Error details:", error.details);
-    throw error;
-  }
-}
+  
   // Create personalized response from context
   createPersonalizedResponse(userMessage, context) {
     const userMessageLower = userMessage.toLowerCase();

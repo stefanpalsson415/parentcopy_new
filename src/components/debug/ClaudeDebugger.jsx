@@ -3,10 +3,12 @@ import ClaudeService from '../../services/ClaudeService';
 
 const ClaudeDebugger = () => {
   const [inputText, setInputText] = useState('');
+  const [apiKey, setApiKey] = useState('');
   const [response, setResponse] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [useEnvKey, setUseEnvKey] = useState(true);
 
   const addLog = (message) => {
     setLogs(prev => [...prev, `[${new Date().toISOString()}] ${message}`]);
@@ -20,10 +22,21 @@ const ClaudeDebugger = () => {
     try {
       addLog(`Testing Claude API with input: "${inputText}"`);
       
+      // Temporarily set the API key for testing if not using .env
+      if (!useEnvKey && apiKey) {
+        ClaudeService.apiKey = apiKey;
+        addLog("Using manually entered API key for testing");
+      }
+      
       const result = await ClaudeService.generateResponse(
         [{ role: 'user', content: inputText }],
         { system: 'You are a helpful assistant.' }
       );
+      
+      // Reset to env API key after test
+      if (!useEnvKey && apiKey) {
+        ClaudeService.apiKey = process.env.REACT_APP_CLAUDE_API_KEY;
+      }
       
       addLog(`Received response of length: ${result?.length || 0}`);
       setResponse(result);
@@ -60,14 +73,34 @@ const ClaudeDebugger = () => {
       <h1 className="text-2xl font-bold mb-6 font-roboto">Claude API Debugger</h1>
       
       <div className="mb-6">
-        <label className="block text-sm font-medium mb-2 font-roboto">Test Message</label>
-        <textarea
-          className="w-full p-3 border rounded-md font-roboto"
-          rows="4"
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          placeholder="Enter a test message for Claude API"
-        />
+        <div className="flex items-center mb-2">
+          <input
+            type="checkbox"
+            id="useEnvKey"
+            checked={useEnvKey}
+            onChange={() => setUseEnvKey(!useEnvKey)}
+            className="mr-2"
+          />
+          <label htmlFor="useEnvKey" className="text-sm font-medium font-roboto">
+            Use API key from .env file
+          </label>
+        </div>
+        
+        {!useEnvKey && (
+          <div>
+            <label className="block text-sm font-medium mb-2 font-roboto">Claude API Key (for testing only)</label>
+            <input
+              type="password"
+              className="w-full p-3 border rounded-md font-roboto"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="Enter your Claude API key for testing"
+            />
+            <p className="text-xs text-red-500 mt-1">
+              Warning: Never commit this key to Git or share it publicly
+            </p>
+          </div>
+        )}
       </div>
       
       <div className="flex mb-4">
