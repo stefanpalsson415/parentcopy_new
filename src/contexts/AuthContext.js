@@ -31,47 +31,43 @@ export function AuthProvider({ children }) {
     return DatabaseService.signIn(email, password);
   }
 
-// Sign in with Google
-async function signInWithGoogle() {
-  return DatabaseService.signInWithGoogle();
-}
-
-// Link existing account with Google
-async function linkAccountWithGoogle() {
-  if (!currentUser) throw new Error("No user is signed in");
-  return DatabaseService.linkAccountWithGoogle(currentUser);
-}
-
-// Update family member with Google info
-async function updateMemberWithGoogleAuth(familyId, memberId, userData) {
-  return DatabaseService.updateMemberWithGoogleAuth(familyId, memberId, userData);
-}
-
-
-// Added helper function to ensure families are loaded
-async function ensureFamiliesLoaded(userId) {
-  try {
-    console.log("Ensuring families are loaded for user:", userId);
-    
-    // First load all families
-    const families = await loadAllFamilies(userId);
-    console.log("Found families:", families.length);
-    
-    // Then if there are families, load the primary family
-    if (families && families.length > 0) {
-      await loadFamilyData(userId);
-    }
-    
-    return families;
-  } catch (error) {
-    console.error("Error ensuring families are loaded:", error);
-    throw error;
+  // Sign in with Google
+  async function signInWithGoogle() {
+    return DatabaseService.signInWithGoogle();
   }
-}
 
+  // Link existing account with Google
+  async function linkAccountWithGoogle() {
+    if (!currentUser) throw new Error("No user is signed in");
+    return DatabaseService.linkAccountWithGoogle(currentUser);
+  }
 
+  // Update family member with Google info
+  async function updateMemberWithGoogleAuth(familyId, memberId, userData) {
+    return DatabaseService.updateMemberWithGoogleAuth(familyId, memberId, userData);
+  }
 
-  
+  // Added helper function to ensure families are loaded
+  async function ensureFamiliesLoaded(userId) {
+    try {
+      console.log("Ensuring families are loaded for user:", userId);
+      
+      // First load all families
+      const families = await loadAllFamilies(userId);
+      console.log("Found families:", families.length);
+      
+      // Then if there are families, load the primary family
+      if (families && families.length > 0) {
+        await loadFamilyData(userId);
+      }
+      
+      return families;
+    } catch (error) {
+      console.error("Error ensuring families are loaded:", error);
+      throw error;
+    }
+  }
+
   // Logout function
   async function logout() {
     return DatabaseService.signOut();
@@ -149,7 +145,9 @@ async function ensureFamiliesLoaded(userId) {
       console.error("Error loading family data:", error);
       throw error;
     }
-  }  // Load all families for a user
+  }
+
+  // Load all families for a user
   async function loadAllFamilies(userId) {
     try {
       console.log("Loading all families for user:", userId);
@@ -163,8 +161,38 @@ async function ensureFamiliesLoaded(userId) {
     }
   }
 
+  // Add this function to check if we're returning from a redirect
+  const checkAuthStateOnLoad = async () => {
+    try {
+      // Check if we have a pending redirect operation
+      const user = await DatabaseService.handleGoogleRedirectResult();
+      if (user) {
+        console.log("Google sign-in completed after redirect:", user.email);
+        
+        // Load family data for this user
+        if (user.uid) {
+          await loadAllFamilies(user.uid);
+          await loadFamilyData(user.uid);
+          
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error("Error checking auth state on load:", error);
+      return false;
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
+    
+    // First check if we're returning from a redirect
+    checkAuthStateOnLoad().then(wasRedirect => {
+      if (wasRedirect) {
+        console.log("Processed redirect login");
+      }
+    });
     
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!isMounted) return;
@@ -204,6 +232,23 @@ async function ensureFamiliesLoaded(userId) {
     };
   }, []);
 
+  // Handle Google redirect result
+  useEffect(() => {
+    const checkRedirectResult = async () => {
+      try {
+        const user = await DatabaseService.handleGoogleRedirectResult();
+        if (user) {
+          console.log("Google sign-in redirect result:", user.email);
+          // We already have an auth state listener that will update UI
+        }
+      } catch (error) {
+        console.error("Error handling Google redirect:", error);
+      }
+    };
+    
+    checkRedirectResult();
+  }, []);
+
   // Context value
   const value = {
     currentUser,
@@ -212,13 +257,14 @@ async function ensureFamiliesLoaded(userId) {
     signup,
     login,
     logout,
-    signInWithGoogle,   // Add this
-    linkAccountWithGoogle,  // Add this
-    updateMemberWithGoogleAuth,  // Add this
+    signInWithGoogle,
+    handleGoogleRedirectResult: DatabaseService.handleGoogleRedirectResult, // Added this
+    linkAccountWithGoogle,
+    updateMemberWithGoogleAuth,
     createFamily,
     loadFamilyData,
     loadAllFamilies,
-    ensureFamiliesLoaded, // Add the new function here
+    ensureFamiliesLoaded,
     reload: () => loadFamilyData(currentUser?.uid)
   };
 

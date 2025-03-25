@@ -12,7 +12,8 @@ import {
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, auth, storage } from './firebase';
 import { 
-  signInWithPopup, linkWithPopup
+  signInWithPopup, linkWithPopup, 
+  signInWithRedirect, getRedirectResult
 } from 'firebase/auth';
 
 class DatabaseService {
@@ -65,11 +66,42 @@ class DatabaseService {
 // Sign in with Google
 async signInWithGoogle() {
   try {
-    const { googleProvider, auth } = require('./firebase');
-    const result = await signInWithPopup(auth, googleProvider);
-    return result.user;
+    const { auth, googleProvider } = require('./firebase');
+    
+    // Use redirect method instead of popup
+    // This handles the auth flow differently
+    await signInWithRedirect(auth, googleProvider);
+    
+    // Note: We don't need to return anything here because
+    // redirect will take the user away from this page
+    // The result will be handled in a different function
+    
+    return null; // Function won't actually return here due to redirect
   } catch (error) {
-    console.error("Error signing in with Google:", error);
+    console.error("Error redirecting to Google auth:", error);
+    throw error;
+  }
+}
+
+// Add this new function to handle the redirect result
+async handleGoogleRedirectResult() {
+  try {
+    const { auth } = require('./firebase');
+    
+    // Get the result of the redirect operation
+    const result = await getRedirectResult(auth);
+    
+    if (result) {
+      // User is signed in
+      console.log("Redirect result successful:", result.user.email);
+      return result.user;
+    } else {
+      // No redirect result, user might be starting the flow
+      console.log("No redirect result yet");
+      return null;
+    }
+  } catch (error) {
+    console.error("Error handling Google redirect:", error);
     throw error;
   }
 }
