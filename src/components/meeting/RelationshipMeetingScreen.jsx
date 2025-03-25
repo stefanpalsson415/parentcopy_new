@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Clock, ChevronDown, ChevronUp, MessageCircle, Calendar, CheckCircle, Star, Smile, Sparkles } from 'lucide-react';
+import { Heart, Clock, ChevronDown, ChevronUp, MessageCircle, Calendar, CheckCircle, Star, Smile, Sparkles, Brain } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import AllieAIEngineService from '../../services/AllieAIEngineService';
+import CalendarService from '../../services/CalendarService';
 
 // Confetti effect for celebration
 const Celebration = () => {
@@ -110,6 +111,10 @@ const RelationshipMeetingScreen = ({ onClose }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   
+  // New state variables for AI agenda and calendar
+  const [aiAgenda, setAiAgenda] = useState(null);
+  const [isAddingToCalendar, setIsAddingToCalendar] = useState(false);
+  
   // Toggle section expansion
   const toggleSection = (sectionId) => {
     setExpandedSection(expandedSection === sectionId ? null : sectionId);
@@ -148,6 +153,72 @@ const RelationshipMeetingScreen = ({ onClose }) => {
     
     loadMeetingData();
   }, [currentWeek, familyId, getCoupleCheckInData, getRelationshipStrategies]);
+
+  // Load AI agenda
+  useEffect(() => {
+    const loadAIAgenda = async () => {
+      if (!familyId || !currentWeek) return;
+      
+      try {
+        console.log("Loading AI relationship meeting agenda...");
+        const meetingAgenda = await AllieAIEngineService.generateRelationshipInsights(
+          familyId,
+          currentWeek,
+          [],
+          [],
+          {}
+        );
+        setAiAgenda(meetingAgenda);
+        console.log("AI relationship agenda loaded:", meetingAgenda);
+      } catch (error) {
+        console.error("Error loading relationship meeting agenda:", error);
+      }
+    };
+    
+    loadAIAgenda();
+  }, [familyId, currentWeek]);
+  
+  // Add meeting to calendar
+  const addMeetingToCalendar = async () => {
+    try {
+      setIsAddingToCalendar(true);
+      
+      // Create a meeting date (default to weekend evening)
+      const meetingDate = new Date();
+      // Find the next Saturday
+      meetingDate.setDate(meetingDate.getDate() + (6 - meetingDate.getDay() + 7) % 7);
+      meetingDate.setHours(20, 0, 0, 0); // 8 PM
+      
+      // Create meeting event
+      const event = {
+        summary: `Week ${currentWeek} Relationship Meeting`,
+        description: 'Time to connect and strengthen your relationship with guided discussion topics.',
+        start: {
+          dateTime: meetingDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: new Date(meetingDate.getTime() + 30*60000).toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        colorId: '3' // Red
+      };
+      
+      // Add to calendar
+      const result = await CalendarService.addEvent(event);
+      
+      if (result.success) {
+        alert("Relationship meeting added to your calendar!");
+      } else {
+        alert("Couldn't add to calendar. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error adding meeting to calendar:", error);
+      alert("There was an error adding the meeting to your calendar.");
+    } finally {
+      setIsAddingToCalendar(false);
+    }
+  };
   
   // Generate discussion topics based on couple data and strategies
   const generateDiscussionTopics = (coupleData, strategies) => {
@@ -250,6 +321,57 @@ const RelationshipMeetingScreen = ({ onClose }) => {
     }
     
     return topics;
+  };
+  
+  // Render AI agenda for the discussion step
+  const renderAIAgenda = () => {
+    if (!aiAgenda) return null;
+    
+    return (
+      <div className="mb-6 bg-white rounded-lg p-4 border border-pink-100">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-medium font-roboto">AI-Generated Discussion Guide</h3>
+          <button
+            onClick={addMeetingToCalendar}
+            disabled={isAddingToCalendar}
+            className="flex items-center text-xs px-3 py-1 bg-black text-white rounded font-roboto"
+          >
+            {isAddingToCalendar ? (
+              <>
+                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
+                Adding...
+              </>
+            ) : (
+              <>
+                <Calendar size={12} className="mr-1" />
+                Schedule
+              </>
+            )}
+          </button>
+        </div>
+        
+        {aiAgenda.map((insight, index) => (
+          <div key={index} className={`mb-4 p-3 rounded-lg border ${
+            insight.category === 'connection' ? 'bg-pink-50 border-pink-200' :
+            insight.category === 'workload' ? 'bg-blue-50 border-blue-200' :
+            insight.category === 'gratitude' ? 'bg-yellow-50 border-yellow-200' :
+            'bg-green-50 border-green-200'
+          }`}>
+            <h4 className="font-medium text-sm mb-1 font-roboto">{insight.title}</h4>
+            <p className="text-xs text-gray-600 mb-2 font-roboto">{insight.description}</p>
+            
+            {insight.actionable && (
+              <div className="mt-2 p-2 bg-white rounded text-xs">
+                <p className="font-medium font-roboto flex items-center">
+                  <Lightbulb size={14} className="mr-2 text-yellow-600" />
+                  Try this: {insight.actionable}
+                </p>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
   };
   
   // Handle topic response changes
@@ -489,6 +611,9 @@ const RelationshipMeetingScreen = ({ onClose }) => {
                 listening to your partner. Capture key insights in the text areas below.
               </p>
             </div>
+            
+            {/* AI Agenda Section */}
+            {renderAIAgenda()}
             
             {/* Discussion topics */}
             {discussionTopics.map(topic => (

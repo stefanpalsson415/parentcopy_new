@@ -1,6 +1,9 @@
+// src/components/assessment/CoupleCheckInScreen.jsx
 import React, { useState, useEffect } from 'react';
 import { Heart, Clock, CheckCircle, Calendar, MessageCircle, Smile, Award, Lightbulb, Map, Users, Brain } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
+import AllieAIEngineService from '../../services/AllieAIEngineService';
+import CalendarService from '../../services/CalendarService';
 
 const CoupleCheckInScreen = ({ onClose }) => {
   const { 
@@ -10,7 +13,8 @@ const CoupleCheckInScreen = ({ onClose }) => {
     surveyResponses,
     getRelationshipStrategies,
     selectedUser,
-    getCoupleCheckInData
+    getCoupleCheckInData,
+    familyId
   } = useFamily();
   
   const [activeStep, setActiveStep] = useState(0);
@@ -83,6 +87,10 @@ const CoupleCheckInScreen = ({ onClose }) => {
   const [saved, setSaved] = useState(false);
   const [strategies, setStrategies] = useState([]);
   
+  // New state variables for enhanced features
+  const [aiInsights, setAiInsights] = useState(null);
+  const [isAddingToCalendar, setIsAddingToCalendar] = useState(false);
+  
   // Load relationship strategy data if available
   useEffect(() => {
     const loadStrategies = async () => {
@@ -141,68 +149,89 @@ const CoupleCheckInScreen = ({ onClose }) => {
     loadStrategies();
   }, [getRelationshipStrategies]);
   
+  // New effect to load AI insights after completion
+  useEffect(() => {
+    if (saved && familyId) {
+      const loadAIInsights = async () => {
+        try {
+          // Use AllieAIEngineService instead of EnhancedAIService from the Google Doc
+          const insights = await AllieAIEngineService.generateRelationshipInsights(
+            familyId,
+            currentWeek,
+            responses,
+            strategies,
+            {}
+          );
+          setAiInsights(insights);
+        } catch (error) {
+          console.error("Error loading AI relationship insights:", error);
+        }
+      };
+      
+      loadAIInsights();
+    }
+  }, [saved, familyId, currentWeek, responses, strategies]);
+  
   // Define check-in steps with enhanced questions
-const steps = [
-  {
-    title: "Relationship Health",
-    description: "How would you rate your current relationship satisfaction?",
-    fields: [
-      {
-        id: "satisfaction",
-        label: "Overall Relationship Satisfaction",
-        type: "slider"
-      },
-      {
-        id: "communication",
-        label: "Communication Quality",
-        type: "slider"
-      },
-      {
-        id: "emotionalConnection",
-        label: "Emotional Connection",
-        type: "slider"
-      },
-      {
-        id: "workloadBalance",
-        label: "Workload Balance Impact on Relationship",
-        type: "slider",
-        description: "How is the current workload balance affecting your relationship?"
-      }
-    ]
-  },
-  // Add a new section for deeper relationship metrics
-  {
-    title: "Relationship Dynamics",
-    description: "These questions help us understand your unique relationship patterns",
-    fields: [
-      {
-        id: "conflictResolution",
-        label: "Conflict Resolution",
-        type: "slider",
-        description: "How effectively are you resolving disagreements this week?"
-      },
-      {
-        id: "qualityTime",
-        label: "Quality Time Together",
-        type: "slider",
-        description: "How satisfied are you with the amount of quality time you've had together?"
-      },
-      {
-        id: "stressManagement",
-        label: "Shared Stress Management",
-        type: "slider",
-        description: "How well have you supported each other through stressful moments?"
-      },
-      {
-        id: "parentingTeam", 
-        label: "Parenting Team Effectiveness",
-        type: "slider",
-        description: "How well are you working together as parents this week?"
-      }
-    ]
-  },
-  // Keep the original strategy check-in sections...
-  // ...
+  const steps = [
+    {
+      title: "Relationship Health",
+      description: "How would you rate your current relationship satisfaction?",
+      fields: [
+        {
+          id: "satisfaction",
+          label: "Overall Relationship Satisfaction",
+          type: "slider"
+        },
+        {
+          id: "communication",
+          label: "Communication Quality",
+          type: "slider"
+        },
+        {
+          id: "emotionalConnection",
+          label: "Emotional Connection",
+          type: "slider"
+        },
+        {
+          id: "workloadBalance",
+          label: "Workload Balance Impact on Relationship",
+          type: "slider",
+          description: "How is the current workload balance affecting your relationship?"
+        }
+      ]
+    },
+    // Add a new section for deeper relationship metrics
+    {
+      title: "Relationship Dynamics",
+      description: "These questions help us understand your unique relationship patterns",
+      fields: [
+        {
+          id: "conflictResolution",
+          label: "Conflict Resolution",
+          type: "slider",
+          description: "How effectively are you resolving disagreements this week?"
+        },
+        {
+          id: "qualityTime",
+          label: "Quality Time Together",
+          type: "slider",
+          description: "How satisfied are you with the amount of quality time you've had together?"
+        },
+        {
+          id: "stressManagement",
+          label: "Shared Stress Management",
+          type: "slider",
+          description: "How well have you supported each other through stressful moments?"
+        },
+        {
+          id: "parentingTeam", 
+          label: "Parenting Team Effectiveness",
+          type: "slider",
+          description: "How well are you working together as parents this week?"
+        }
+      ]
+    },
     {
       title: "Strategy Check-in: Connection",
       description: "Let's review how you're implementing these relationship-strengthening strategies",
@@ -357,6 +386,45 @@ const steps = [
     }
   };
   
+  // New function to schedule a relationship meeting
+  const scheduleRelationshipMeeting = async () => {
+    try {
+      setIsAddingToCalendar(true);
+      
+      // Set meeting date to this weekend
+      const meetingDate = new Date();
+      // Find the next Saturday
+      meetingDate.setDate(meetingDate.getDate() + (6 - meetingDate.getDay() + 7) % 7);
+      meetingDate.setHours(20, 0, 0, 0); // 8 PM
+      
+      // Create event
+      const event = {
+        summary: 'Relationship Meeting',
+        description: 'Time to connect and strengthen your relationship based on your check-in results.',
+        start: {
+          dateTime: meetingDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: new Date(meetingDate.getTime() + 30*60000).toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        colorId: '3' // Red
+      };
+      
+      const result = await CalendarService.addEvent(event);
+      
+      if (result.success) {
+        alert("Relationship meeting added to your calendar!");
+      }
+    } catch (error) {
+      console.error("Error scheduling relationship meeting:", error);
+      alert("There was an error scheduling your meeting. Please try again.");
+    } finally {
+      setIsAddingToCalendar(false);
+    }
+  };
+  
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -371,9 +439,9 @@ const steps = [
       });
       
       setSaved(true);
-      setTimeout(() => {
-        onClose(true); // Close with success
-      }, 2000);
+      
+      // Don't close automatically to allow AI insights to load and be displayed
+      // The user can close manually after viewing insights
     } catch (error) {
       console.error("Error saving check-in data:", error);
       alert("There was an error saving your responses. Please try again.");
@@ -614,6 +682,7 @@ const steps = [
     );
   };
   
+  // Modified completion screen with AI insights
   if (saved) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -623,44 +692,55 @@ const steps = [
           </div>
           <h3 className="text-xl font-bold mb-2 font-roboto text-center">Check-in Complete!</h3>
           
-          {/* AI Feedback - this will be available if the AI returned insights */}
-          {getCoupleCheckInData(currentWeek)?.aiInsights ? (
+          {/* AI Insights Section */}
+          {aiInsights && aiInsights.length > 0 ? (
             <div className="mt-4">
               <div className="p-4 bg-purple-50 rounded-lg border border-purple-200 mb-4">
                 <h4 className="font-medium flex items-center font-roboto">
                   <Brain size={16} className="text-purple-600 mr-2" />
                   Allie's Relationship Insights
                 </h4>
-                <p className="text-sm mt-2 font-roboto">{getCoupleCheckInData(currentWeek).aiInsights.assessment}</p>
+                
+                <div className="space-y-3 mt-3">
+                  {aiInsights.map((insight, index) => (
+                    <div key={index} className={`p-3 rounded-lg border ${
+                      insight.category === 'connection' ? 'bg-pink-50 border-pink-200' :
+                      insight.category === 'workload' ? 'bg-blue-50 border-blue-200' :
+                      insight.category === 'gratitude' ? 'bg-yellow-50 border-yellow-200' :
+                      'bg-green-50 border-green-200'
+                    }`}>
+                      <h5 className="text-sm font-medium mb-1 font-roboto">{insight.title}</h5>
+                      <p className="text-xs font-roboto">{insight.description}</p>
+                      
+                      {insight.actionable && (
+                        <div className="mt-2 p-2 bg-white rounded text-xs">
+                          <span className="font-medium font-roboto">Try this: </span>
+                          <span className="font-roboto">{insight.actionable}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
               
-              <h5 className="font-medium mb-2 font-roboto">Your Relationship Strengths</h5>
-              <div className="space-y-2 mb-4">
-                {getCoupleCheckInData(currentWeek).aiInsights.strengths.map((strength, index) => (
-                  <div key={index} className="p-2 bg-green-50 rounded border border-green-100">
-                    <p className="text-sm font-medium font-roboto">{strength.title}</p>
-                    <p className="text-xs font-roboto">{strength.description}</p>
-                  </div>
-                ))}
-              </div>
-              
-              <h5 className="font-medium mb-2 font-roboto">Growth Opportunities</h5>
-              <div className="space-y-2 mb-4">
-                {getCoupleCheckInData(currentWeek).aiInsights.growthAreas.map((area, index) => (
-                  <div key={index} className="p-2 bg-blue-50 rounded border border-blue-100">
-                    <p className="text-sm font-medium font-roboto">{area.title}</p>
-                    <p className="text-xs font-roboto">{area.description}</p>
-                    <p className="text-xs font-medium mt-1 font-roboto">Try this: {area.suggestion}</p>
-                  </div>
-                ))}
-              </div>
-              
-              <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200 mt-4">
-                <h5 className="text-sm font-medium flex items-center font-roboto">
-                  <Lightbulb size={14} className="text-yellow-600 mr-2" />
-                  This Week's Recommendation
-                </h5>
-                <p className="text-sm mt-1 font-roboto">{getCoupleCheckInData(currentWeek).aiInsights.weeklyRecommendation}</p>
+              <div className="flex justify-center space-x-4">
+                <button
+                  onClick={scheduleRelationshipMeeting}
+                  disabled={isAddingToCalendar}
+                  className="px-4 py-2 bg-pink-100 text-pink-800 rounded-lg font-roboto flex items-center"
+                >
+                  {isAddingToCalendar ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-pink-800 border-t-transparent rounded-full animate-spin mr-2"></div>
+                      Scheduling...
+                    </>
+                  ) : (
+                    <>
+                      <Calendar size={16} className="mr-2" />
+                      Schedule Relationship Meeting
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           ) : (

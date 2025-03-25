@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Download, X, ChevronDown, ChevronUp, Sparkles, Star, Users } from 'lucide-react';
+import { 
+  Clock, Download, X, ChevronDown, ChevronUp, Sparkles, Star, 
+  Users, RefreshCw, User, Calendar, CheckCircle, Trash2, Edit 
+} from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useSurvey } from '../../contexts/SurveyContext';
 import AllieAIEngineService from '../../services/AllieAIEngineService';
-
+import CalendarService from '../../services/CalendarService';
 
 // Confetti effect component for celebration
 const Fireworks = () => {
@@ -109,6 +112,7 @@ const FamilyMeetingScreen = ({ onClose }) => {
   const [suggestedGoals, setSuggestedGoals] = useState([]);
   const [selectedActionItems, setSelectedActionItems] = useState([]);
   const [selectedGoals, setSelectedGoals] = useState([]);
+  const [isAddingToCalendar, setIsAddingToCalendar] = useState(false);
   const [agenda, setAgenda] = useState(null);
   
   // Generate agenda topics based on family data
@@ -206,26 +210,55 @@ const FamilyMeetingScreen = ({ onClose }) => {
     setSuggestedGoals(suggestions.goals);
   }, []);
   
-// Add this useEffect hook after your existing useEffect hooks
-useEffect(() => {
-  const loadAgenda = async () => {
-    if (!familyId || !currentWeek) return;
+  // Add this useEffect hook after your existing useEffect hooks
+  useEffect(() => {
+    const loadAgenda = async () => {
+      if (!familyId || !currentWeek) return;
+      
+      try {
+        console.log("Loading AI meeting agenda...");
+        const meetingAgenda = await AllieAIEngineService.generateFamilyMeetingAgenda(
+          familyId,
+          currentWeek
+        );
+        setAgenda(meetingAgenda);
+        console.log("AI agenda loaded:", meetingAgenda);
+      } catch (error) {
+        console.error("Error loading meeting agenda:", error);
+      }
+    };
     
+    loadAgenda();
+  }, [familyId, currentWeek]);
+
+  // Add this new function to handle calendar integration
+  const addMeetingToCalendar = async () => {
     try {
-      console.log("Loading AI meeting agenda...");
-      const meetingAgenda = await AllieAIEngineService.generateFamilyMeetingAgenda(
-        familyId,
-        currentWeek
-      );
-      setAgenda(meetingAgenda);
-      console.log("AI agenda loaded:", meetingAgenda);
+      setIsAddingToCalendar(true);
+      
+      // Create a meeting date (default to next day)
+      const meetingDate = new Date();
+      meetingDate.setDate(meetingDate.getDate() + 1);
+      meetingDate.setHours(19, 0, 0, 0); // 7 PM
+      
+      // Create meeting event
+      const event = CalendarService.createFamilyMeetingEvent(currentWeek, meetingDate);
+      
+      // Add to calendar
+      const result = await CalendarService.addEvent(event);
+      
+      if (result.success) {
+        alert("Family meeting added to your calendar!");
+      } else {
+        alert("Couldn't add to calendar. Please try again.");
+      }
     } catch (error) {
-      console.error("Error loading meeting agenda:", error);
+      console.error("Error adding meeting to calendar:", error);
+      alert("There was an error adding the meeting to your calendar.");
+    } finally {
+      setIsAddingToCalendar(false);
     }
   };
-  
-  loadAgenda();
-}, [familyId, currentWeek]);
 
   // Generate weekly report data
   const generateWeeklyReport = () => {
@@ -289,91 +322,88 @@ useEffect(() => {
       setExpandedSection(sectionId);
     }
   };
+  
   // Helper function to analyze weekly trends in survey data
-const analyzeWeeklyTrends = () => {
-  // In a real implementation, this would analyze actual survey data
-  return {
-    mostImprovedArea: "Visible Household Tasks",
-    leastImprovedArea: "Invisible Parental Tasks",
-    biggestImbalance: 25,
-    overallTrend: "improving"
+  const analyzeWeeklyTrends = () => {
+    // In a real implementation, this would analyze actual survey data
+    return {
+      mostImprovedArea: "Visible Household Tasks",
+      leastImprovedArea: "Invisible Parental Tasks",
+      biggestImbalance: 25,
+      overallTrend: "improving"
+    };
   };
-};
 
-// Helper function to analyze task completion patterns
-const analyzeTaskCompletionPatterns = () => {
-  // In a real implementation, this would analyze actual task data
-  return {
-    completionRate: 68,
-    bestCompleter: "Papa",
-    incompleteReason: "Lack of time",
-    recommendedTaskType: "Visible Household"
+  // Helper function to analyze task completion patterns
+  const analyzeTaskCompletionPatterns = () => {
+    // In a real implementation, this would analyze actual task data
+    return {
+      completionRate: 68,
+      bestCompleter: "Papa",
+      incompleteReason: "Lack of time",
+      recommendedTaskType: "Visible Household"
+    };
   };
-};
 
-
-  // Update in src/components/meeting/FamilyMeetingScreen.jsx
-
-// Add this function to generate better meeting agenda topics
-const generateEnhancedAgendaTopics = () => {
-  // Get survey data trends
-  const trends = analyzeWeeklyTrends();
-  
-  // Get task completion analysis
-  const taskAnalysis = analyzeTaskCompletionPatterns();
-  
-  return [
-    {
-      id: 'wentWell',
-      title: '1. Celebrate Progress',
-      duration: '10 min',
-      description: "Acknowledge improvements and wins from this week",
-      guideQuestions: [
-        'Which tasks did each person successfully complete?',
-        `In which area have we improved the most? (${trends.mostImprovedArea})`,
-        'What new balance strategies worked well this week?'
-      ],
-      insights: [
-        `Your family improved most in ${trends.mostImprovedArea} this week`,
-        `${taskAnalysis.bestCompleter} completed the most tasks this week!`,
-        `You've maintained a ${taskAnalysis.completionRate}% task completion rate`
-      ]
-    },
-    {
-      id: 'couldImprove',
-      title: '2. Address Challenges',
-      duration: '10 min',
-      description: "Identify what's still not working well",
-      guideQuestions: [
-        `Why does ${trends.leastImprovedArea} remain challenging?`,
-        'What obstacles prevented task completion this week?',
-        'Which responsibilities still feel unbalanced?'
-      ],
-      insights: [
-        `${trends.leastImprovedArea} still shows a ${trends.biggestImbalance}% imbalance`,
-        `${taskAnalysis.incompleteReason} was the most common reason tasks weren't completed`,
-        'Tasks in the morning routines category had the lowest completion rate'
-      ]
-    },
-    {
-      id: 'actionItems',
-      title: "3. Next Week's Plan",
-      duration: '10 min',
-      description: "Create specific actions for next week based on data",
-      guideQuestions: [
-        `How can we better balance ${trends.leastImprovedArea}?`,
-        'Which new tasks would have the biggest impact?',
-        'What support does each family member need next week?'
-      ],
-      insights: [
-        `Based on your patterns, ${taskAnalysis.recommendedTaskType} tasks are most effective for your family`,
-        'Morning routines need special attention next week',
-        'Consider redistributing the emotional support tasks which are currently 70% handled by Mama'
-      ]
-    }
-  ];
-};
-  
+  // Add this function to generate better meeting agenda topics
+  const generateEnhancedAgendaTopics = () => {
+    // Get survey data trends
+    const trends = analyzeWeeklyTrends();
+    
+    // Get task completion analysis
+    const taskAnalysis = analyzeTaskCompletionPatterns();
+    
+    return [
+      {
+        id: 'wentWell',
+        title: '1. Celebrate Progress',
+        duration: '10 min',
+        description: "Acknowledge improvements and wins from this week",
+        guideQuestions: [
+          'Which tasks did each person successfully complete?',
+          `In which area have we improved the most? (${trends.mostImprovedArea})`,
+          'What new balance strategies worked well this week?'
+        ],
+        insights: [
+          `Your family improved most in ${trends.mostImprovedArea} this week`,
+          `${taskAnalysis.bestCompleter} completed the most tasks this week!`,
+          `You've maintained a ${taskAnalysis.completionRate}% task completion rate`
+        ]
+      },
+      {
+        id: 'couldImprove',
+        title: '2. Address Challenges',
+        duration: '10 min',
+        description: "Identify what's still not working well",
+        guideQuestions: [
+          `Why does ${trends.leastImprovedArea} remain challenging?`,
+          'What obstacles prevented task completion this week?',
+          'Which responsibilities still feel unbalanced?'
+        ],
+        insights: [
+          `${trends.leastImprovedArea} still shows a ${trends.biggestImbalance}% imbalance`,
+          `${taskAnalysis.incompleteReason} was the most common reason tasks weren't completed`,
+          'Tasks in the morning routines category had the lowest completion rate'
+        ]
+      },
+      {
+        id: 'actionItems',
+        title: "3. Next Week's Plan",
+        duration: '10 min',
+        description: "Create specific actions for next week based on data",
+        guideQuestions: [
+          `How can we better balance ${trends.leastImprovedArea}?`,
+          'Which new tasks would have the biggest impact?',
+          'What support does each family member need next week?'
+        ],
+        insights: [
+          `Based on your patterns, ${taskAnalysis.recommendedTaskType} tasks are most effective for your family`,
+          'Morning routines need special attention next week',
+          'Consider redistributing the emotional support tasks which are currently 70% handled by Mama'
+        ]
+      }
+    ];
+  };
   
   // Handle meeting completion
   const handleCompleteMeeting = async () => {
@@ -446,16 +476,16 @@ const generateEnhancedAgendaTopics = () => {
         {/* Header */}
         <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
           <div>
-            <h2 className="text-xl font-bold">Week {currentWeek} Family Meeting</h2>
+            <h2 className="text-xl font-bold font-roboto">Week {currentWeek} Family Meeting</h2>
             <div className="flex items-center text-gray-600 text-sm">
               <Clock size={16} className="mr-1" />
-              <span>30 minutes</span>
+              <span className="font-roboto">30 minutes</span>
             </div>
           </div>
           
           <div className="flex items-center space-x-2">
             <button 
-              className={`px-3 py-1 rounded-md text-sm font-medium ${
+              className={`px-3 py-1 rounded-md text-sm font-medium font-roboto ${
                 viewMode === 'agenda' ? 'bg-blue-600 text-white' : 'bg-gray-200'
               }`}
               onClick={() => setViewMode('agenda')}
@@ -463,7 +493,7 @@ const generateEnhancedAgendaTopics = () => {
               Agenda
             </button>
             <button 
-              className={`px-3 py-1 rounded-md text-sm font-medium ${
+              className={`px-3 py-1 rounded-md text-sm font-medium font-roboto ${
                 viewMode === 'report' ? 'bg-blue-600 text-white' : 'bg-gray-200'
               }`}
               onClick={() => setViewMode('report')}
@@ -483,8 +513,8 @@ const generateEnhancedAgendaTopics = () => {
           /* Agenda View */
           <div className="p-4 space-y-4">
             <div className="bg-blue-50 p-4 rounded mb-4">
-              <h3 className="font-medium text-blue-800">Meeting Purpose</h3>
-              <p className="text-sm mt-1">
+              <h3 className="font-medium text-blue-800 font-roboto">Meeting Purpose</h3>
+              <p className="text-sm mt-1 font-roboto">
                 This family meeting helps you discuss your progress in balancing family responsibilities 
                 and set goals for the upcoming week. Use the discussion points below for a productive conversation.
               </p>
@@ -492,15 +522,15 @@ const generateEnhancedAgendaTopics = () => {
             
             {/* Family Retrospective Info */}
             <div className="p-4 border rounded-lg mb-4 bg-gradient-to-r from-blue-50 to-indigo-50">
-              <h4 className="font-medium mb-3 text-blue-800">About Sprint Retrospectives</h4>
-              <p className="text-sm text-blue-700 mb-2">
+              <h4 className="font-medium mb-3 text-blue-800 font-roboto">About Sprint Retrospectives</h4>
+              <p className="text-sm text-blue-700 mb-2 font-roboto">
                 We're using a format that professional teams use to improve how they work together! This simple 
                 structure helps families reflect on what's working and what needs improvement.
               </p>
               <div className="flex flex-wrap gap-2 mt-3">
-                <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">✓ What Went Well</span>
-                <span className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded">⚠ What Could Improve</span>
-                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">→ Action Items</span>
+                <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded font-roboto">✓ What Went Well</span>
+                <span className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-roboto">⚠ What Could Improve</span>
+                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-roboto">→ Action Items</span>
               </div>
             </div>
             
@@ -508,84 +538,104 @@ const generateEnhancedAgendaTopics = () => {
             <div className="space-y-6">
               {/* What Went Well Section */}
               <div className="p-4 border rounded-lg bg-green-50">
-                <h4 className="font-medium mb-2 flex items-center text-green-800">
+                <h4 className="font-medium mb-2 flex items-center text-green-800 font-roboto">
                   <span className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center mr-2 text-green-600">✓</span>
                   What Went Well
                 </h4>
-                <p className="text-sm text-green-700 mb-3">
+                <p className="text-sm text-green-700 mb-3 font-roboto">
                   Celebrate your family's wins this week! What are you proud of? What balanced tasks did you accomplish?
                 </p>
                 <textarea
                   placeholder="Share your family's successes this week..."
-                  className="w-full p-3 border border-green-200 rounded-md h-24 bg-white"
+                  className="w-full p-3 border border-green-200 rounded-md h-24 bg-white font-roboto"
                   value={meetingNotes.wentWell || ''}
                   onChange={(e) => handleInputChange('wentWell', e.target.value)}
                 />
               </div>
               
-{/* AI-Generated Agenda */}
-{agenda && (
-  <div className="mb-6">
-    <h3 className="text-xl font-bold mb-4 font-roboto">This Week's Agenda</h3>
-    
-    <div className="bg-white rounded-lg shadow-sm p-6">
-      <p className="text-gray-700 mb-4 font-roboto">{agenda.introduction}</p>
-      
-      {agenda.timeEstimate && (
-        <div className="mb-4">
-          <div className="flex items-center mb-2">
-            <Clock className="text-gray-500 mr-2" size={18} />
-            <span className="text-gray-500 font-roboto">Suggested time: {agenda.timeEstimate}</span>
-          </div>
-        </div>
-      )}
-      
-      {agenda.sections && agenda.sections.map((section, index) => (
-        <div key={index} className="mb-6">
-          <h4 className="font-bold text-lg mb-2 font-roboto">{section.title}</h4>
-          <ul className="list-disc pl-5 space-y-1">
-            {section.items && section.items.map((item, itemIndex) => (
-              <li key={itemIndex} className="text-gray-700 font-roboto">{item}</li>
-            ))}
-          </ul>
-          {section.notes && (
-            <p className="text-sm text-gray-500 mt-2 italic font-roboto">{section.notes}</p>
-          )}
-        </div>
-      ))}
-      
-      {agenda.discussionQuestions && agenda.discussionQuestions.length > 0 && (
-        <div className="mb-6">
-          <h4 className="font-bold text-lg mb-2 font-roboto">Discussion Questions</h4>
-          <ul className="list-disc pl-5 space-y-1">
-            {agenda.discussionQuestions.map((question, index) => (
-              <li key={index} className="text-gray-700 font-roboto">{question}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      
-      {agenda.closingThoughts && (
-        <div className="p-4 bg-gray-50 rounded border">
-          <p className="text-gray-700 font-roboto">{agenda.closingThoughts}</p>
-        </div>
-      )}
-    </div>
-  </div>
-)}
+              {/* AI-Generated Agenda */}
+              {agenda && (
+                <div className="mb-6">
+                  <h3 className="text-xl font-bold mb-4 font-roboto">This Week's Agenda</h3>
+                  
+                  <div className="bg-white rounded-lg shadow-sm p-6">
+                    <p className="text-gray-700 mb-4 font-roboto">{agenda.introduction}</p>
+                    
+                    {agenda.timeEstimate && (
+                      <div className="mb-4">
+                        <div className="flex items-center mb-2">
+                          <Clock className="text-gray-500 mr-2" size={18} />
+                          <span className="text-gray-500 font-roboto">Suggested time: {agenda.timeEstimate}</span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {agenda.sections && agenda.sections.map((section, index) => (
+                      <div key={index} className="mb-6">
+                        <h4 className="font-bold text-lg mb-2 font-roboto">{section.title}</h4>
+                        <ul className="list-disc pl-5 space-y-1">
+                          {section.items && section.items.map((item, itemIndex) => (
+                            <li key={itemIndex} className="text-gray-700 font-roboto">{item}</li>
+                          ))}
+                        </ul>
+                        {section.notes && (
+                          <p className="text-sm text-gray-500 mt-2 italic font-roboto">{section.notes}</p>
+                        )}
+                      </div>
+                    ))}
+                    
+                    {agenda.discussionQuestions && agenda.discussionQuestions.length > 0 && (
+                      <div className="mb-6">
+                        <h4 className="font-bold text-lg mb-2 font-roboto">Discussion Questions</h4>
+                        <ul className="list-disc pl-5 space-y-1">
+                          {agenda.discussionQuestions.map((question, index) => (
+                            <li key={index} className="text-gray-700 font-roboto">{question}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {agenda.closingThoughts && (
+                      <div className="p-4 bg-gray-50 rounded border">
+                        <p className="text-gray-700 font-roboto">{agenda.closingThoughts}</p>
+                      </div>
+                    )}
+                    
+                    <div className="mt-4 flex justify-end">
+                      <button
+                        onClick={addMeetingToCalendar}
+                        disabled={isAddingToCalendar}
+                        className="flex items-center px-4 py-2 bg-black text-white rounded font-roboto"
+                      >
+                        {isAddingToCalendar ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                            Adding to Calendar...
+                          </>
+                        ) : (
+                          <>
+                            <Calendar size={16} className="mr-2" />
+                            Add to Calendar
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* What Could Improve Section */}
               <div className="p-4 border rounded-lg bg-amber-50">
-                <h4 className="font-medium mb-2 flex items-center text-amber-800">
+                <h4 className="font-medium mb-2 flex items-center text-amber-800 font-roboto">
                   <span className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center mr-2 text-amber-600">⚠</span>
                   What Could Improve
                 </h4>
-                <p className="text-sm text-amber-700 mb-3">
+                <p className="text-sm text-amber-700 mb-3 font-roboto">
                   What challenges did your family face? Where do you see room for better balance?
                 </p>
                 <textarea
                   placeholder="Discuss areas where your family could improve next week..."
-                  className="w-full p-3 border border-amber-200 rounded-md h-24 bg-white"
+                  className="w-full p-3 border border-amber-200 rounded-md h-24 bg-white font-roboto"
                   value={meetingNotes.couldImprove || ''}
                   onChange={(e) => handleInputChange('couldImprove', e.target.value)}
                 />
@@ -593,17 +643,17 @@ const generateEnhancedAgendaTopics = () => {
               
               {/* Action Items Section */}
               <div className="p-4 border rounded-lg bg-blue-50">
-                <h4 className="font-medium mb-2 flex items-center text-blue-800">
+                <h4 className="font-medium mb-2 flex items-center text-blue-800 font-roboto">
                   <span className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center mr-2 text-blue-600">→</span>
                   Action Items
                 </h4>
-                <p className="text-sm text-blue-700 mb-3">
+                <p className="text-sm text-blue-700 mb-3 font-roboto">
                   What specific changes will your family commit to next week? Who will do what?
                 </p>
                 
                 {/* Suggested Action Items */}
                 <div className="mb-4">
-                  <h5 className="text-sm font-medium mb-2">Suggested Action Items (Select up to 3):</h5>
+                  <h5 className="text-sm font-medium mb-2 font-roboto">Suggested Action Items (Select up to 3):</h5>
                   <div className="space-y-2">
                     {suggestedActionItems.map((item, index) => (
                       <div 
@@ -627,7 +677,7 @@ const generateEnhancedAgendaTopics = () => {
                           }`}>
                             {selectedActionItems.includes(item) && '✓'}
                           </div>
-                          <span className="text-sm">{item}</span>
+                          <span className="text-sm font-roboto">{item}</span>
                         </div>
                       </div>
                     ))}
@@ -637,51 +687,51 @@ const generateEnhancedAgendaTopics = () => {
                 {/* Custom Action Items */}
                 <textarea
                   placeholder="Add your own action items here..."
-                  className="w-full p-3 border border-blue-200 rounded-md h-24 bg-white"
+                  className="w-full p-3 border border-blue-200 rounded-md h-24 bg-white font-roboto"
                   value={meetingNotes.actionItems || ''}
                   onChange={(e) => handleInputChange('actionItems', e.target.value)}
                 />
               </div>
               
-{/* Add this new component to the Family Meeting Screen */}
-<div className="p-4 border rounded-lg mb-4 bg-gradient-to-r from-purple-50 to-blue-50">
-  <h4 className="font-medium mb-3 text-purple-800">Weight-Based Insights</h4>
-  <p className="text-sm text-purple-700 mb-2">
-    Our advanced task weight analysis has identified high-impact areas to focus on:
-  </p>
-  
-  <div className="space-y-3 mt-4">
-    <div className="p-3 bg-white rounded-lg border border-purple-200">
-      <h5 className="text-sm font-medium">Highest Weighted Imbalance</h5>
-      <p className="text-xs mt-1">
-        Emotional Labor tasks (weighted heavily for invisibility and mental load)
-        show a 50% imbalance. Consider discussing ways to share these responsibilities.
-      </p>
-    </div>
-    
-    <div className="p-3 bg-white rounded-lg border border-purple-200">
-      <h5 className="text-sm font-medium">Child Development Impact</h5>
-      <p className="text-xs mt-1">
-        Tasks with high visibility to children have a strong impact on future expectations.
-        Currently, these tasks have a 20% imbalance.
-      </p>
-    </div>
-  </div>
-</div>
+              {/* Add this new component to the Family Meeting Screen */}
+              <div className="p-4 border rounded-lg mb-4 bg-gradient-to-r from-purple-50 to-blue-50">
+                <h4 className="font-medium mb-3 text-purple-800 font-roboto">Weight-Based Insights</h4>
+                <p className="text-sm text-purple-700 mb-2 font-roboto">
+                  Our advanced task weight analysis has identified high-impact areas to focus on:
+                </p>
+                
+                <div className="space-y-3 mt-4">
+                  <div className="p-3 bg-white rounded-lg border border-purple-200">
+                    <h5 className="text-sm font-medium font-roboto">Highest Weighted Imbalance</h5>
+                    <p className="text-xs mt-1 font-roboto">
+                      Emotional Labor tasks (weighted heavily for invisibility and mental load)
+                      show a 50% imbalance. Consider discussing ways to share these responsibilities.
+                    </p>
+                  </div>
+                  
+                  <div className="p-3 bg-white rounded-lg border border-purple-200">
+                    <h5 className="text-sm font-medium font-roboto">Child Development Impact</h5>
+                    <p className="text-xs mt-1 font-roboto">
+                      Tasks with high visibility to children have a strong impact on future expectations.
+                      Currently, these tasks have a 20% imbalance.
+                    </p>
+                  </div>
+                </div>
+              </div>
 
               {/* Next Week Goals Section */}
               <div className="p-4 border rounded-lg bg-purple-50">
-                <h4 className="font-medium mb-2 flex items-center text-purple-800">
+                <h4 className="font-medium mb-2 flex items-center text-purple-800 font-roboto">
                   <span className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center mr-2 text-purple-600">🎯</span>
                   Next Week's Goals
                 </h4>
-                <p className="text-sm text-purple-700 mb-3">
+                <p className="text-sm text-purple-700 mb-3 font-roboto">
                   What would a successful Week {currentWeek + 1} look like for your family?
                 </p>
                 
                 {/* Suggested Goals */}
                 <div className="mb-4">
-                  <h5 className="text-sm font-medium mb-2">Suggested Goals (Select up to 2):</h5>
+                  <h5 className="text-sm font-medium mb-2 font-roboto">Suggested Goals (Select up to 2):</h5>
                   <div className="space-y-2">
                     {suggestedGoals.map((goal, index) => (
                       <div 
@@ -705,7 +755,7 @@ const generateEnhancedAgendaTopics = () => {
                           }`}>
                             {selectedGoals.includes(goal) && '✓'}
                           </div>
-                          <span className="text-sm">{goal}</span>
+                          <span className="text-sm font-roboto">{goal}</span>
                         </div>
                       </div>
                     ))}
@@ -714,7 +764,7 @@ const generateEnhancedAgendaTopics = () => {
                 
                 <textarea
                   placeholder="Add your own goals here..."
-                  className="w-full p-3 border border-purple-200 rounded-md h-24 bg-white"
+                  className="w-full p-3 border border-purple-200 rounded-md h-24 bg-white font-roboto"
                   value={meetingNotes.nextWeekGoals || ''}
                   onChange={(e) => handleInputChange('nextWeekGoals', e.target.value)}
                 />
@@ -722,10 +772,10 @@ const generateEnhancedAgendaTopics = () => {
               
               {/* Additional Notes */}
               <div className="p-4 border rounded-lg">
-                <h4 className="font-medium mb-2">Additional Notes</h4>
+                <h4 className="font-medium mb-2 font-roboto">Additional Notes</h4>
                 <textarea
                   placeholder="Any other comments or observations from the family meeting..."
-                  className="w-full p-3 border rounded-md h-24"
+                  className="w-full p-3 border rounded-md h-24 font-roboto"
                   value={meetingNotes.additionalNotes}
                   onChange={(e) => handleInputChange('additionalNotes', e.target.value)}
                 />
@@ -736,14 +786,14 @@ const generateEnhancedAgendaTopics = () => {
             <div className="flex justify-end pt-4 space-x-3">
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-gray-700 border rounded-md hover:bg-gray-50"
+                className="px-4 py-2 text-gray-700 border rounded-md hover:bg-gray-50 font-roboto"
                 disabled={isSaving}
               >
                 Cancel
               </button>
               <button
                 onClick={handleCompleteMeeting}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-roboto"
                 disabled={isSaving}
               >
                 {isSaving ? 'Saving...' : 'Complete Meeting'}
@@ -756,7 +806,7 @@ const generateEnhancedAgendaTopics = () => {
             <div className="flex justify-end mb-2">
               <button
                 onClick={handleDownloadReport}
-                className="flex items-center text-sm text-blue-600"
+                className="flex items-center text-sm text-blue-600 font-roboto"
               >
                 <Download size={16} className="mr-1" />
                 Download Report
@@ -765,11 +815,11 @@ const generateEnhancedAgendaTopics = () => {
             
             {/* Balance Score Card */}
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="font-medium mb-3">Weekly Balance Score</h3>
+              <h3 className="font-medium mb-3 font-roboto">Weekly Balance Score</h3>
               <div className="mb-4">
                 <div className="flex justify-between mb-1">
-                  <span className="font-medium">Mama ({weeklyReport.balanceScore.mama}%)</span>
-                  <span className="font-medium">Papa ({weeklyReport.balanceScore.papa}%)</span>
+                  <span className="font-medium font-roboto">Mama ({weeklyReport.balanceScore.mama}%)</span>
+                  <span className="font-medium font-roboto">Papa ({weeklyReport.balanceScore.papa}%)</span>
                 </div>
                 <div className="h-2 bg-gray-200 rounded overflow-hidden">
                   <div 
@@ -779,7 +829,7 @@ const generateEnhancedAgendaTopics = () => {
                 </div>
               </div>
               
-              <p className="text-sm text-gray-800">
+              <p className="text-sm text-gray-800 font-roboto">
                 This week's balance shows Mama handling {weeklyReport.balanceScore.mama}% of the family tasks.
                 {weeklyReport.balanceScore.mama > 60 
                   ? " There's still room for improvement in balancing responsibilities."
@@ -790,13 +840,13 @@ const generateEnhancedAgendaTopics = () => {
             
             {/* Task Completion Summary */}
             <div className="border rounded-lg p-4">
-              <h3 className="font-medium mb-3">Task Completion</h3>
+              <h3 className="font-medium mb-3 font-roboto">Task Completion</h3>
               <div className="space-y-2">
                 {Object.entries(weeklyReport.tasks).map(([parent, data]) => (
                   <div key={parent} className="flex justify-between items-center">
-                    <span className="capitalize">{parent}</span>
+                    <span className="capitalize font-roboto">{parent}</span>
                     <div className="flex items-center">
-                      <span className="mr-2">
+                      <span className="mr-2 font-roboto">
                         {data.completed} of {data.total} tasks completed
                       </span>
                       <div className="w-32 h-2 bg-gray-200 rounded overflow-hidden">
@@ -813,8 +863,8 @@ const generateEnhancedAgendaTopics = () => {
             
             {/* Survey Highlights */}
             <div className="border rounded-lg p-4">
-              <h3 className="font-medium mb-3">Survey Highlights</h3>
-              <ul className="list-disc pl-5 space-y-1 text-sm">
+              <h3 className="font-medium mb-3 font-roboto">Survey Highlights</h3>
+              <ul className="list-disc pl-5 space-y-1 text-sm font-roboto">
                 {weeklyReport.surveyHighlights.map((highlight, idx) => (
                   <li key={idx}>{highlight}</li>
                 ))}
@@ -823,8 +873,8 @@ const generateEnhancedAgendaTopics = () => {
             
             {/* Areas for Improvement */}
             <div className="border rounded-lg p-4">
-              <h3 className="font-medium mb-3">Areas for Discussion</h3>
-              <ul className="list-disc pl-5 space-y-1 text-sm">
+              <h3 className="font-medium mb-3 font-roboto">Areas for Discussion</h3>
+              <ul className="list-disc pl-5 space-y-1 text-sm font-roboto">
                 {weeklyReport.discrepancies.map((item, idx) => (
                   <li key={idx}>{item}</li>
                 ))}
@@ -835,13 +885,13 @@ const generateEnhancedAgendaTopics = () => {
             <div className="flex justify-end pt-4 space-x-3">
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-gray-700 border rounded-md hover:bg-gray-50"
+                className="px-4 py-2 text-gray-700 border rounded-md hover:bg-gray-50 font-roboto"
               >
                 Close
               </button>
               <button
                 onClick={() => setViewMode('agenda')}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-roboto"
               >
                 Back to Agenda
               </button>
@@ -857,14 +907,14 @@ const generateEnhancedAgendaTopics = () => {
                 <Sparkles size={24} className="text-green-600" />
               </div>
               
-              <h3 className="text-xl font-bold mb-2">Family Meeting Complete!</h3>
-              <p className="text-gray-600 mb-6">
+              <h3 className="text-xl font-bold mb-2 font-roboto">Family Meeting Complete!</h3>
+              <p className="text-gray-600 mb-6 font-roboto">
                 Your family has completed the meeting for Week {currentWeek}. Ready to wrap up the week together?
               </p>
               
               <button
                 onClick={handleCompleteWeekTogether}
-                className="w-full py-3 px-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-md text-lg font-bold flex items-center justify-center hover:from-blue-600 hover:to-purple-700 transition-all"
+                className="w-full py-3 px-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-md text-lg font-bold flex items-center justify-center hover:from-blue-600 hover:to-purple-700 transition-all font-roboto"
                 disabled={isCompleting}
               >
                 {isCompleting ? (
@@ -886,7 +936,7 @@ const generateEnhancedAgendaTopics = () => {
               
               <button
                 onClick={() => setShowConfirmation(false)}
-                className="mt-4 text-gray-600 hover:text-gray-800"
+                className="mt-4 text-gray-600 hover:text-gray-800 font-roboto"
                 disabled={isCompleting}
               >
                 Not yet
