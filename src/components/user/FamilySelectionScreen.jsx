@@ -401,6 +401,19 @@ const getDefaultProfileImage = (member) => {
     return (
       <div className="min-h-screen bg-white flex flex-col">
   <div className="flex-1 flex flex-col items-center justify-center p-6">
+  {familyMembers.some(m => !m.profilePicture) && (
+    <div className="bg-gradient-to-r from-pink-100 to-purple-100 p-4 rounded-lg shadow-sm mb-6 max-w-md w-full">
+      <div className="flex items-start">
+        <Camera className="text-purple-600 mr-3 mt-1 flex-shrink-0" size={20} />
+        <div>
+          <h4 className="font-medium text-purple-800 font-roboto">Make Allie Personal!</h4>
+          <p className="text-sm text-purple-700 mt-1 font-roboto">
+            Adding family photos makes Allie feel more personalized and helps us create a better experience just for you.
+          </p>
+        </div>
+      </div>
+    </div>
+  )}
     {familyMembers.some(m => !m.profilePicture) && (
       <div className="bg-gradient-to-r from-pink-100 to-purple-100 p-4 rounded-lg shadow-sm mb-6 max-w-md w-full">
         <div className="flex items-start">
@@ -417,11 +430,11 @@ const getDefaultProfileImage = (member) => {
           <div className="w-full max-w-md">
             {/* Header */}
             <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-black mb-2">Allie</h1>
-              <p className="text-gray-600">
-                Log in to access your family's workload balancer
-              </p>
-            </div>
+  <a href="/" className="text-3xl font-bold text-black mb-2 inline-block hover:underline">Allie</a>
+  <p className="text-gray-600 font-roboto">
+    Log in to access your family's workload balancer
+  </p>
+</div>
             
             {/* Login Form */}
             <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
@@ -602,12 +615,12 @@ const getDefaultProfileImage = (member) => {
       <div className="min-h-screen bg-white flex flex-col">
         <div className="flex-1 flex flex-col items-center justify-center p-6">
           <div className="w-full max-w-md">
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-black mb-2">Allie</h1>
-              <p className="text-gray-600">
-                Welcome to Allie, your family workload balancer
-              </p>
-            </div>
+          <div className="text-center mb-8">
+  <a href="/" className="text-3xl font-bold text-black mb-2 inline-block hover:underline">Allie</a>
+  <p className="text-gray-600 font-roboto">
+    Welcome to Allie, your family workload balancer
+  </p>
+</div>
             
             <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
               <h2 className="text-xl font-semibold mb-4 text-center">No Families Found</h2>
@@ -671,11 +684,11 @@ const getDefaultProfileImage = (member) => {
         <div className="w-full max-w-md">
           {/* Header with Logout */}
           <div className="flex justify-between items-center mb-8">
-            <h1 className="text-3xl font-bold text-black">Allie</h1>
-            <button 
-              onClick={handleLogout}
-              className="text-sm text-gray-600 hover:text-gray-800 flex items-center"
-            >
+  <a href="/" className="text-3xl font-bold text-black hover:underline">Allie</a>
+  <button 
+    onClick={handleLogout}
+    className="text-sm text-gray-600 hover:text-gray-800 flex items-center"
+  >
               <LogOut size={16} className="mr-1" />
               Log Out
             </button>
