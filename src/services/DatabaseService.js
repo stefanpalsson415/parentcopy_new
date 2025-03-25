@@ -4,16 +4,13 @@ import {
   getDocs, addDoc, query, where, serverTimestamp,
   arrayUnion
 } from 'firebase/firestore';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut 
-} from 'firebase/auth';
+
+
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, auth, storage } from './firebase';
 import { 
   signInWithPopup, linkWithPopup, 
-  signInWithRedirect, getRedirectResult
+  signInWithRedirect, getRedirectResult,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut
 } from 'firebase/auth';
 
 class DatabaseService {
@@ -68,17 +65,14 @@ async signInWithGoogle() {
   try {
     const { auth, googleProvider } = require('./firebase');
     
-    // Use redirect method instead of popup
-    // This handles the auth flow differently
-    await signInWithRedirect(auth, googleProvider);
+    // Use popup method instead of redirect for development
+    console.log("Attempting Google sign-in with popup");
+    const result = await signInWithPopup(auth, googleProvider);
+    console.log("Google sign-in successful:", result.user?.email);
     
-    // Note: We don't need to return anything here because
-    // redirect will take the user away from this page
-    // The result will be handled in a different function
-    
-    return null; // Function won't actually return here due to redirect
+    return result.user;
   } catch (error) {
-    console.error("Error redirecting to Google auth:", error);
+    console.error("Error with Google sign-in popup:", error);
     throw error;
   }
 }
@@ -117,6 +111,30 @@ async linkAccountWithGoogle(user) {
     throw error;
   }
 }
+
+// Development login function - use only for testing
+async signInForDevelopment(email = "test@example.com") {
+  try {
+    console.log("DEVELOPMENT MODE: Creating test user");
+    
+    // Create a mock user
+    const mockUser = {
+      uid: "test-user-" + Date.now(),
+      email: email,
+      displayName: "Test User",
+      photoURL: null
+    };
+    
+    // For testing only - in a real app, this would be handled by Firebase Auth
+    localStorage.setItem('devModeUser', JSON.stringify(mockUser));
+    
+    return mockUser;
+  } catch (error) {
+    console.error("Error in development login:", error);
+    throw error;
+  }
+}
+
 
 // Add Google auth info to family member
 async updateMemberWithGoogleAuth(familyId, memberId, userData) {

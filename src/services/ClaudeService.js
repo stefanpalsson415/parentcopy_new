@@ -39,6 +39,7 @@ class ClaudeService {
       const timeoutId = setTimeout(() => controller.abort(), 30000);
       
       // Make the API call through our proxy server
+      console.log("Attempting to connect to proxy at:", this.proxyUrl);
       const response = await fetch(this.proxyUrl, {
         method: 'POST',
         headers: {
@@ -51,9 +52,9 @@ class ClaudeService {
       clearTimeout(timeoutId);
       
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Claude API error response:", errorText);
-        throw new Error(`Claude API returned ${response.status}: ${errorText}`);
+        console.warn("Claude proxy returned error status:", response.status);
+        // Instead of throwing, return a personalized response
+        return this.createPersonalizedResponse(lastUserMessage, context);
       }
       
       const result = await response.json();
@@ -61,7 +62,7 @@ class ClaudeService {
       // Check for valid response
       if (!result || !result.content || !result.content[0]) {
         console.error("Invalid response format from Claude API:", result);
-        throw new Error("Invalid response format from Claude API");
+        return this.createPersonalizedResponse(lastUserMessage, context);
       }
       
       return result.content[0].text;

@@ -14,10 +14,15 @@ const firebaseConfig = {
   measurementId: "G-7T846QZH0J"
 };
 
-// Add localhost to authorized domains if developing locally
+// For localhost testing with Firebase Auth
 if (window.location.hostname === "localhost") {
-  firebaseConfig.authDomain = "localhost";
+  console.log("Using emulation mode for authentication on localhost");
+  firebaseConfig.authDomain = window.location.hostname;
 }
+
+
+
+
 // Initialize Firebase services
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -28,9 +33,6 @@ const googleProvider = new GoogleAuthProvider();
 
 googleProvider.setCustomParameters({
   prompt: 'select_account',
-  // Add the exact redirect URL that matches what you've set in Google Cloud Console
-  redirect_uri: window.location.origin
 });
-
 
 export { db, auth, storage, functions, googleProvider };
