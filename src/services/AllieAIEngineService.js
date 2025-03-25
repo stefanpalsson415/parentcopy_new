@@ -11,11 +11,17 @@ class AllieAIEngineService {
       // Get family data
       const familyData = await this.getFamilyData(familyId);
       
-      // Get survey responses
+      // Get survey responses and full question set
       const surveyResponses = await this.getSurveyResponses(familyId);
+      const fullQuestionSet = await this.getFullQuestionSet();
+      
+      // Combine responses with question metadata for better insights
+      const enhancedResponses = this.enhanceResponsesWithMetadata(surveyResponses, fullQuestionSet);
       
       // Analyze previous tasks
       const previousTasksAnalysis = this.analyzePreviousTasks(previousTasks);
+      
+      // ...rest of function...
       
       // Create prompt for Claude
       const systemPrompt = `You are Allie, an AI designed to create personalized family task recommendations to improve workload balance.
@@ -215,6 +221,8 @@ async generateRelationshipInsights(familyId, currentWeek, relationshipData, stra
     return null;
   }
 }
+
+
 
 // Process relationship feedback to improve AI recommendations
 async processRelationshipFeedback(familyId, weekNum, memberId, relationshipResponses) {
@@ -416,6 +424,41 @@ async generateCoupleCheckInFeedback(familyId, weekNumber, checkInData) {
     return [];
   }
   
+
+// Helper to enhance survey responses with question metadata
+enhanceResponsesWithMetadata(responses, fullQuestionSet) {
+  const enhanced = {};
+  
+  Object.entries(responses).forEach(([questionId, response]) => {
+    // Find this question in the full set
+    const questionData = fullQuestionSet.find(q => q.id === questionId);
+    
+    if (questionData) {
+      enhanced[questionId] = {
+        response,
+        category: questionData.category,
+        weight: questionData.totalWeight,
+        text: questionData.text,
+        // Add any other metadata that might be useful
+      };
+    } else {
+      // If not found, just keep the response
+      enhanced[questionId] = { response };
+    }
+  });
+  
+  return enhanced;
+}
+
+// Helper to get the full question set from SurveyContext
+async getFullQuestionSet() {
+  // This would ideally import directly from SurveyContext
+  // For now, we'll use a simplified approach for illustration
+  return this.fullQuestionSet || [];
+}
+
+
+
   analyzePreviousTasks(tasks) {
     // Group tasks by type/category
     const tasksByType = {};

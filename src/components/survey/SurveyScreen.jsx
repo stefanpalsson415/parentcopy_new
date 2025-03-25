@@ -187,29 +187,35 @@ const handleSelectParent = (parent) => {
   
   // Handle pause
   // Handle pause/exit
-const handlePause = async () => {
-  if (isProcessing) return; // Prevent multiple actions while processing
-  
-  setIsProcessing(true);
-  
-  try {
-    // Save the current progress without marking as completed
-    if (selectedUser && Object.keys(currentSurveyResponses).length > 0) {
-      console.log("Saving survey progress before pausing...");
-      await saveSurveyProgress(selectedUser.id, currentSurveyResponses);
-      console.log("Progress saved successfully");
-    }
+  const handlePause = async () => {
+    if (isProcessing) return; // Prevent multiple actions while processing
     
-    // Now navigate to dashboard
-    navigate('/dashboard');
-  } catch (error) {
-    console.error('Error saving survey progress:', error);
-    alert('There was an error saving your progress, but you can continue later.');
-    navigate('/dashboard');
-  } finally {
-    setIsProcessing(false);
-  }
-};
+    setIsProcessing(true);
+    
+    try {
+      // Save the current progress without marking as completed
+      if (selectedUser && Object.keys(currentSurveyResponses).length > 0) {
+        console.log("Saving survey progress before pausing...");
+        await saveSurveyProgress(selectedUser.id, currentSurveyResponses);
+        console.log("Progress saved successfully");
+        
+        // Set a flag in localStorage to indicate survey is in progress
+        localStorage.setItem('surveyInProgress', JSON.stringify({
+          userId: selectedUser.id,
+          timestamp: new Date().getTime()
+        }));
+      }
+      
+      // Navigate to family selection instead of dashboard when survey incomplete
+      navigate('/login');
+    } catch (error) {
+      console.error('Error saving survey progress:', error);
+      alert('There was an error saving your progress, but you can continue later.');
+      navigate('/login');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
   
   // Skip question
   const handleSkip = () => {

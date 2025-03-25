@@ -186,11 +186,19 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   }, [familyId, currentWeek]);
   
   // Redirect if no user is selected after loading attempt completes
-  useEffect(() => {
-    if (!selectedUser && !loadingFamily) {
-      navigate('/');
-    }
-  }, [selectedUser, navigate, loadingFamily]);
+  // Redirect if no user is selected or initial survey incomplete
+useEffect(() => {
+  if (!selectedUser && !loadingFamily) {
+    navigate('/');
+    return;
+  }
+  
+  // If user exists but hasn't completed initial survey, redirect to survey
+  if (selectedUser && !loadingFamily && !selectedUser.completed) {
+    console.log("User hasn't completed initial survey, redirecting to survey");
+    navigate('/survey');
+  }
+}, [selectedUser, navigate, loadingFamily]);
   
   // Handle logout/switch user
   const handleLogout = () => {

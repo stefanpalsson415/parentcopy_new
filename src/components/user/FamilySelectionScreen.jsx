@@ -176,10 +176,13 @@ const getDefaultProfileImage = (member) => {
   // Get the next action for a family member
   const getNextAction = (member) => {
     if (!member.completed) {
+      // Check if they have any saved responses (in progress)
+      const hasInProgressSurvey = Object.keys(currentSurveyResponses || {}).length > 0;
+      
       return {
-        text: "Initial survey needed",
+        text: hasInProgressSurvey ? "Resume initial survey" : "Initial survey needed",
         icon: <AlertCircle size={12} className="mr-1" />,
-        className: "text-amber-600"
+        className: hasInProgressSurvey ? "text-blue-600" : "text-amber-600"
       };
     }
     
@@ -392,7 +395,20 @@ const getDefaultProfileImage = (member) => {
   const renderLoginForm = () => {
     return (
       <div className="min-h-screen bg-white flex flex-col">
-        <div className="flex-1 flex flex-col items-center justify-center p-6">
+  <div className="flex-1 flex flex-col items-center justify-center p-6">
+    {familyMembers.some(m => !m.profilePicture) && (
+      <div className="bg-gradient-to-r from-pink-100 to-purple-100 p-4 rounded-lg shadow-sm mb-6 max-w-md w-full">
+        <div className="flex items-start">
+          <Camera className="text-purple-600 mr-3 mt-1 flex-shrink-0" size={20} />
+          <div>
+            <h4 className="font-medium text-purple-800 font-roboto">Make Allie Personal!</h4>
+            <p className="text-sm text-purple-700 mt-1 font-roboto">
+              Adding family photos makes Allie feel more personalized and helps us create a better experience just for you.
+            </p>
+          </div>
+        </div>
+      </div>
+    )}
           <div className="w-full max-w-md">
             {/* Header */}
             <div className="text-center mb-8">

@@ -229,27 +229,51 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
     
     let filteredList = questionSet;
     
-    // For weekly survey, use exactly 20 questions for any child
-    if (surveyType === "weekly" && selectedUser && selectedUser.role === 'child') {
-      const categories = [
-        "Visible Household Tasks",
-        "Invisible Household Tasks",
-        "Visible Parental Tasks",
-        "Invisible Parental Tasks"
-      ];
-      
-      const weeklyKidQuestions = [];
-      categories.forEach(category => {
-        const categoryQuestions = questionSet.filter(q => q.category === category);
-        // Pick 5 questions per category (20 total)
-        for (let i = 0; i < 5; i++) {
-          const index = (i < categoryQuestions.length) ? i : i % categoryQuestions.length;
-          weeklyKidQuestions.push(categoryQuestions[index]);
-        }
-      });
-      
-      filteredList = weeklyKidQuestions;
-    } 
+   // For weekly survey, use 30 questions for kids
+   if (surveyType === "weekly" && selectedUser && selectedUser.role === 'child') {
+    const categories = [
+      "Visible Household Tasks",
+      "Invisible Household Tasks",
+      "Visible Parental Tasks",
+      "Invisible Parental Tasks"
+    ];
+    
+    const weeklyKidQuestions = [];
+    categories.forEach(category => {
+      const categoryQuestions = questionSet.filter(q => q.category === category);
+      // Pick 7-8 questions per category (~30 total)
+      for (let i = 0; i < (category === "Visible Household Tasks" || category === "Invisible Household Tasks" ? 8 : 7); i++) {
+        const index = (i < categoryQuestions.length) ? i : i % categoryQuestions.length;
+        weeklyKidQuestions.push(categoryQuestions[index]);
+      }
+    });
+    
+    filteredList = weeklyKidQuestions;
+  } 
+// For initial survey, limit to 50 for kids
+else if (selectedUser && selectedUser.role === 'child') {
+  // Pick 50 questions total (roughly 12-13 per category)
+  const categories = [
+    "Visible Household Tasks",
+    "Invisible Household Tasks",
+    "Visible Parental Tasks",
+    "Invisible Parental Tasks"
+  ];
+  
+  const childQuestions = [];
+  categories.forEach(category => {
+    const categoryQuestions = questionSet.filter(q => q.category === category);
+    // Pick questions based on age-appropriate complexity
+    const questionsPerCategory = 13;
+    for (let i = 0; i < questionsPerCategory; i++) {
+      const index = (i < categoryQuestions.length) ? i : i % categoryQuestions.length;
+      childQuestions.push(categoryQuestions[index]);
+    }
+  });
+  
+  // Limit to exactly 50 questions
+  filteredList = childQuestions.slice(0, 50);
+}
     // For initial survey, filter based on age
     else if (selectedUser && selectedUser.role === 'child' && selectedUser.age < 8) {
       // Pick simpler questions - 10 from each category
@@ -623,7 +647,12 @@ const handleSelectParent = (parent) => {
       }
       
       // Now navigate to dashboard
-      navigate('/dashboard');
+      localStorage.setItem('surveyInProgress', JSON.stringify({
+        userId: selectedUser.id,
+        timestamp: new Date().getTime(),
+        isSurveyType: surveyType
+      }));
+      navigate('/login');
     } catch (error) {
       console.error('Error saving survey progress:', error);
       alert('There was an error saving your progress, but you can continue later.');
