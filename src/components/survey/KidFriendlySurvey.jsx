@@ -212,25 +212,26 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   }, []);
   
   // Set up questions for kids based on survey type
-  useEffect(() => {
-    if (!fullQuestionSet || fullQuestionSet.length === 0) return;
-    
-    let questionSet;
-    
-    // Determine which questions to use based on the survey type
-    if (surveyType === "weekly") {
-      console.log(`Generating weekly questions for week ${currentWeek}`);
-      questionSet = generateWeeklyQuestions(currentWeek);
-      console.log(`Generated ${questionSet.length} weekly questions`);
-    } else {
-      console.log(`Using full question set with ${fullQuestionSet.length} questions`);
-      questionSet = fullQuestionSet;
-    }
-    
-    let filteredList = questionSet;
-    
-   // For weekly survey, use 30 questions for kids
-   if (surveyType === "weekly" && selectedUser && selectedUser.role === 'child') {
+// Set up questions for kids based on survey type
+useEffect(() => {
+  if (!fullQuestionSet || fullQuestionSet.length === 0) return;
+  
+  let questionSet;
+  
+  // Determine which questions to use based on the survey type
+  if (surveyType === "weekly") {
+    console.log(`Generating weekly questions for week ${currentWeek}`);
+    questionSet = generateWeeklyQuestions(currentWeek, true); // Pass true to indicate child
+    console.log(`Generated ${questionSet.length} weekly questions`);
+  } else {
+    console.log(`Using full question set with ${fullQuestionSet.length} questions`);
+    questionSet = fullQuestionSet;
+  }
+  
+  let filteredList = questionSet;
+  
+  // For weekly survey, use exactly 30 questions for any child
+  if (surveyType === "weekly" && selectedUser && selectedUser.role === 'child') {
     const categories = [
       "Visible Household Tasks",
       "Invisible Household Tasks",
@@ -242,7 +243,10 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
     categories.forEach(category => {
       const categoryQuestions = questionSet.filter(q => q.category === category);
       // Pick 7-8 questions per category (~30 total)
-      for (let i = 0; i < (category === "Visible Household Tasks" || category === "Invisible Household Tasks" ? 8 : 7); i++) {
+      const questionsForCategory = category === "Visible Household Tasks" || 
+                                 category === "Invisible Household Tasks" ? 8 : 7;
+      
+      for (let i = 0; i < questionsForCategory; i++) {
         const index = (i < categoryQuestions.length) ? i : i % categoryQuestions.length;
         weeklyKidQuestions.push(categoryQuestions[index]);
       }
@@ -250,75 +254,44 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
     
     filteredList = weeklyKidQuestions;
   } 
-// For initial survey, limit to 50 for kids
-else if (selectedUser && selectedUser.role === 'child') {
-  // Pick 50 questions total (roughly 12-13 per category)
-  const categories = [
-    "Visible Household Tasks",
-    "Invisible Household Tasks",
-    "Visible Parental Tasks",
-    "Invisible Parental Tasks"
-  ];
-  
-  const childQuestions = [];
-  categories.forEach(category => {
-    const categoryQuestions = questionSet.filter(q => q.category === category);
-    // Pick questions based on age-appropriate complexity
-    const questionsPerCategory = 13;
-    for (let i = 0; i < questionsPerCategory; i++) {
-      const index = (i < categoryQuestions.length) ? i : i % categoryQuestions.length;
-      childQuestions.push(categoryQuestions[index]);
-    }
-  });
-  
-  // Limit to exactly 50 questions
-  filteredList = childQuestions.slice(0, 50);
-}
-    // For initial survey, filter based on age
-    else if (selectedUser && selectedUser.role === 'child' && selectedUser.age < 8) {
-      // Pick simpler questions - 10 from each category
-      const categories = [
-        "Visible Household Tasks",
-        "Invisible Household Tasks",
-        "Visible Parental Tasks",
-        "Invisible Parental Tasks"
-      ];
-      
-      const simpleQuestions = [];
-      categories.forEach(category => {
-        const categoryQuestions = questionSet.filter(q => q.category === category);
-        // Pick 10 questions from each category (40 total)
-        for (let i = 0; i < 10; i++) {
-          const index = (i < categoryQuestions.length) ? i : i % categoryQuestions.length;
-          simpleQuestions.push(categoryQuestions[index]);
-        }
-      });
-      
-      filteredList = simpleQuestions;
-    } else if (selectedUser && selectedUser.role === 'child' && selectedUser.age < 18) {
-      // For older children, use more questions (60 total)
-      const categories = [
-        "Visible Household Tasks",
-        "Invisible Household Tasks",
-        "Visible Parental Tasks",
-        "Invisible Parental Tasks"
-      ];
-      
-      const mediumQuestions = [];
-      categories.forEach(category => {
-        const categoryQuestions = questionSet.filter(q => q.category === category);
-        // Pick 15 questions per category (60 total)
-        for (let i = 0; i < 15; i++) {
-          const index = (i < categoryQuestions.length) ? i : i % categoryQuestions.length;
-          mediumQuestions.push(categoryQuestions[index]);
-        }
-      });
-      
-      filteredList = mediumQuestions;
-    }
+  // For initial survey, use exactly 50 questions for children of any age
+  else if (selectedUser && selectedUser.role === 'child') {
+    const categories = [
+      "Visible Household Tasks",
+      "Invisible Household Tasks",
+      "Visible Parental Tasks",
+      "Invisible Parental Tasks"
+    ];
     
-    setQuestions(filteredList || []);    
-  }, [fullQuestionSet, selectedUser, surveyType, currentWeek, generateWeeklyQuestions]);
+    // 50 questions total - get around 12-13 per category
+    const childQuestions = [];
+    categories.forEach(category => {
+      const categoryQuestions = questionSet.filter(q => q.category === category);
+      
+      // Adjust questions per category based on age - simpler for younger kids
+      const questionsPerCategory = 13;
+      
+      // Sort by complexity if child is young (below 8)
+      if (selectedUser.age < 8) {
+        // Sort by complexity - use baseWeight as a proxy for complexity
+        categoryQuestions.sort((a, b) => parseFloat(a.baseWeight || 3) - parseFloat(b.baseWeight || 3));
+      }
+      
+      // Select questions
+      for (let i = 0; i < questionsPerCategory; i++) {
+        if (i < categoryQuestions.length) {
+          childQuestions.push(categoryQuestions[i]);
+        }
+      }
+    });
+    
+    // Ensure we have exactly 50 questions
+    filteredList = childQuestions.slice(0, 50);
+    console.log(`Generated ${filteredList.length} initial survey questions for child`);
+  }
+  
+  setQuestions(filteredList || []);    
+}, [fullQuestionSet, selectedUser, surveyType, currentWeek, generateWeeklyQuestions]);
   
   // FIXED: Enhanced useEffect to properly restore survey progress
   useEffect(() => {
