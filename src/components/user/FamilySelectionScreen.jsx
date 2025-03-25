@@ -6,6 +6,8 @@ import { useFamily } from '../../contexts/FamilyContext';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../services/firebase';
 import DatabaseService from '../../services/DatabaseService';
+import { useSurvey } from '../../contexts/SurveyContext';
+
 
 
 const FamilySelectionScreen = () => {
@@ -29,6 +31,8 @@ const FamilySelectionScreen = () => {
   familyName,
   familyPicture
   } = useFamily();
+  const { currentSurveyResponses } = useSurvey();
+
   
   const navigate = useNavigate();
   
@@ -42,6 +46,7 @@ const FamilySelectionScreen = () => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [showEmptyState, setShowEmptyState] = useState(false);
+  
  
   
   const [uploadType, setUploadType] = useState(null);
