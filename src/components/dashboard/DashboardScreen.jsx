@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Filter, Settings, Users, Heart,Info, Calendar } from 'lucide-react';
+import { LogOut, Filter, Settings, Users, Heart, Info, Calendar, Bell } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import DashboardTab from './tabs/DashboardTab';
 import TasksTab from './tabs/TasksTab';
 import WeekHistoryTab from './tabs/WeekHistoryTab';
+import RelationshipTab from './tabs/RelationshipTab';  // Import the new RelationshipTab
 import HowThisWorksScreen from '../education/HowThisWorksScreen';
 import PersonalizedApproachScreen from '../education/PersonalizedApproachScreen';
 import InitialSurveyTab from './tabs/InitialSurveyTab';
@@ -11,19 +12,9 @@ import UserSettingsScreen from '../user/UserSettingsScreen';
 import FamilyMeetingScreen from '../meeting/FamilyMeetingScreen';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import CoupleRelationshipChart from './CoupleRelationshipChart';
 import AllieChat from '../chat/AllieChat';
-
-import { Brain, Lightbulb } from 'lucide-react';
-import StrategicActionsTracker from './StrategicActionsTracker';
 import RelationshipMeetingScreen from '../meeting/RelationshipMeetingScreen';
-import RelationshipProgressChart from './RelationshipProgressChart';
-import DailyCheckInTool from './DailyCheckInTool';
-import GratitudeTracker from './GratitudeTracker';
-import DateNightPlanner from './DateNightPlanner';
-import AIRelationshipInsights from './AIRelationshipInsights';
-import SelfCarePlanner from './SelfCarePlanner';
-import TaskDivisionVisualizer from './TaskDivisionVisualizer';
+import FloatingCalendarWidget from '../calendar/FloatingCalendarWidget';
 
 const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const navigate = useNavigate();
@@ -35,9 +26,9 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
     completedWeeks,
     currentWeek,
     familyName,
-    familyId,  // Add this line to get familyId from context
-    familyPicture  // Added this line to get familyPicture from context
-
+    familyId,
+    familyPicture,
+    taskRecommendations
   } = useFamily();
   
   const { loadFamilyData } = useAuth();
@@ -49,15 +40,44 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const [loadError, setLoadError] = useState(null);
   const [insights, setInsights] = useState([]);
   const [showRelationshipMeeting, setShowRelationshipMeeting] = useState(false);
+  const [notifications, setNotifications] = useState({
+    tasks: 0,
+    relationships: 0,
+    dashboard: 0
+  });
 
   const [allieAIEngineService, setAllieAIEngineService] = useState(null);
 
-useEffect(() => {
-  // Dynamically import the service to avoid circular dependencies
-  import('../../services/AllieAIEngineService').then(module => {
-    setAllieAIEngineService(module.default);
-  });
-}, []);
+  useEffect(() => {
+    // Dynamically import the service to avoid circular dependencies
+    import('../../services/AllieAIEngineService').then(module => {
+      setAllieAIEngineService(module.default);
+    });
+  }, []);
+
+  // Calculate notifications
+  useEffect(() => {
+    // Count incomplete tasks for task tab notification
+    const incompleteTasks = taskRecommendations ? 
+      taskRecommendations.filter(t => !t.completed && canCompleteTask(t)).length : 0;
+    
+    // Simple placeholder for relationship notifications (replace with real logic)
+    const relationshipNotifs = selectedUser?.role === 'parent' ? 2 : 0;
+    
+    setNotifications({
+      tasks: incompleteTasks,
+      relationships: relationshipNotifs, 
+      dashboard: 0  // Add dashboard notifications if needed
+    });
+  }, [taskRecommendations, selectedUser]);
+
+  // Check if user can complete a task (helper for notifications)
+  const canCompleteTask = (task) => {
+    return selectedUser && 
+           selectedUser.role === 'parent' && 
+           (selectedUser.name === task.assignedToName || 
+            selectedUser.roleType === task.assignedTo);
+  };
 
   // Consolidated family loading from all possible sources
   useEffect(() => {
@@ -126,7 +146,7 @@ useEffect(() => {
     };
     
     loadFamilyFromAllSources();
-  }, [selectedUser, familyMembers, location, loadFamilyData, familyId, currentWeek]); // Dependencies cover all possible sources
+  }, [selectedUser, familyMembers, location, loadFamilyData, familyId, currentWeek]);
 
   useEffect(() => {
     const loadDashboardData = async () => {
@@ -172,9 +192,6 @@ useEffect(() => {
     }
   }, [selectedUser, navigate, loadingFamily]);
   
-  // Check if all family members have completed the survey
-  const allSurveysCompleted = familyMembers.every(member => member.completed);
-  
   // Handle logout/switch user
   const handleLogout = () => {
     navigate('/login');
@@ -187,7 +204,6 @@ useEffect(() => {
   const handleCloseRelationshipMeeting = () => {
     setShowRelationshipMeeting(false);
   };
-
 
   // Start weekly check-in
   const handleStartWeeklyCheckIn = () => {
@@ -259,141 +275,13 @@ useEffect(() => {
   
   // Generate tab content based on active tab
   const renderTabContent = () => {
-    // If not all surveys are completed, show waiting screen
-    if (!allSurveysCompleted) {
-      return (
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-center py-6">
-            <div className="mx-auto mb-4 w-12 h-12 flex items-center justify-center rounded-full bg-amber-100 text-amber-500">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-bold mb-2 font-roboto">Waiting for All Survey Responses</h3>
-            <p className="text-gray-600 mb-4 font-roboto">
-              All family members need to complete the initial survey before we can generate accurate reports.
-            </p>
-              
-            <div className="mb-6">
-              <h4 className="font-medium mb-2 font-roboto">Family Progress</h4>
-              <div className="flex flex-wrap justify-center gap-3 max-w-sm mx-auto">
-                {familyMembers.map(member => (
-                  <div key={member.id} className="flex flex-col items-center">
-                    <div className="w-12 h-12 rounded-full overflow-hidden mb-1 border-2 border-gray-200">
-                      <img 
-                        src={member.profilePicture} 
-                        alt={member.name} 
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <span className="text-sm font-roboto">{member.name}</span>
-                    <span className={`text-xs ${member.completed ? 'text-green-500' : 'text-amber-500'} font-roboto`}>
-                      {member.completed ? 'Completed' : 'Pending'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-              
-            <div className="flex space-x-3">
-              <button
-                className="px-4 py-2 bg-black text-white rounded font-roboto"
-                onClick={handleLogout}
-              >
-                Switch User
-              </button>
-              {!selectedUser.completed && (
-                <button
-                  className="px-4 py-2 bg-black text-white rounded font-roboto"
-                  onClick={() => navigate('/survey')}
-                >
-                  Start Initial Survey
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    }
-    
-    // Render appropriate tab content
     switch (activeTab) {
       case 'how-it-works':
         return <HowThisWorksScreen />;
       case 'personalized':
         return <PersonalizedApproachScreen />;
       case 'relationship':
-        return (
-          <div className="space-y-6">
-            <div className="flex justify-between mb-4">
-  <button 
-    className="px-4 py-2 bg-blue-100 text-blue-800 rounded-md flex items-center hover:bg-blue-200 font-roboto"
-    onClick={() => {
-      // Show tour of relationship features
-      const features = [
-        { id: 'daily-checkin', name: 'Daily Check-ins', description: 'Set aside 5-10 minutes each day to connect with your partner' },
-        { id: 'gratitude', name: 'Gratitude Tracker', description: 'Express appreciation to strengthen your bond' },
-        { id: 'date-night', name: 'Date Night Planner', description: 'Schedule quality time together' },
-        { id: 'strategic-actions', name: 'Strategic Actions', description: 'Track your implementation of the 10 key relationship strategies' },
-        { id: 'relationship-meeting', name: 'Relationship Meeting', description: 'Have a structured 15-20 minute conversation about your relationship' }
-      ];
-      
-      // Show modal explaining the features
-      alert("Relationship Features Tour:\n\n" + 
-        features.map(f => `${f.name}: ${f.description}`).join("\n\n") +
-        "\n\nUse these tools together for a stronger relationship!"
-      );
-    }}
-  >
-    <Info size={16} className="mr-2" />
-    Relationship Features Tour
-  </button>
-  
-  <button 
-    className="px-4 py-2 bg-pink-100 text-pink-800 rounded-md flex items-center hover:bg-pink-200 font-roboto"
-    onClick={handleOpenRelationshipMeeting}
-  >
-    <Heart size={16} className="mr-2" />
-    Start Relationship Meeting
-  </button>
-</div>
-            <AIRelationshipInsights />
-            <CoupleRelationshipChart />
-            <TaskDivisionVisualizer />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <DailyCheckInTool />
-              <GratitudeTracker />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <DateNightPlanner />
-              <SelfCarePlanner />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <RelationshipProgressChart />
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-bold mb-4 font-roboto flex items-center">
-                  <Calendar size={20} className="mr-2 text-black" />
-                  Future Planning Tools
-                </h3>
-                <p className="text-sm text-gray-600 mb-4 font-roboto">
-                  Planning for your family's future together strengthens your bond and ensures alignment on important decisions.
-                </p>
-                <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-                  <p className="text-sm font-roboto">
-                    Future planning tools will be available in the next update. These will include:
-                  </p>
-                  <ul className="mt-2 space-y-1 text-sm list-disc pl-5 font-roboto">
-                    <li>Financial planning templates</li>
-                    <li>Education and career discussions</li>
-                    <li>Family vision board creation</li>
-                    <li>Long-term goal setting exercises</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-            <StrategicActionsTracker />
-          </div>
-        );
+        return <RelationshipTab onOpenRelationshipMeeting={handleOpenRelationshipMeeting} />;
       case 'dashboard':
         return <DashboardTab />;
       case 'tasks':
@@ -475,12 +363,17 @@ useEffect(() => {
       
       {/* Navigation Tabs */}
       <div className="fixed top-24 left-0 right-0 z-10 bg-gray-50 border-b shadow-sm">
-      <div className="container mx-auto flex overflow-x-auto px-4 py-2">
+        <div className="container mx-auto flex overflow-x-auto px-4 py-2">
           <button 
-            className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'tasks' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+            className={`px-4 py-2 font-medium whitespace-nowrap font-roboto relative ${activeTab === 'tasks' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
             onClick={() => setActiveTab('tasks')}
           >
             {selectedUser ? `${selectedUser.name}'s Tasks` : 'My Tasks'}
+            {notifications.tasks > 0 && (
+              <span className="absolute top-0 right-0 transform translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
+                {notifications.tasks}
+              </span>
+            )}
           </button>
           <button 
             className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'dashboard' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
@@ -490,12 +383,17 @@ useEffect(() => {
           </button>
           
           {/* Relationship Tab */}
-          {selectedUser && selectedUser.role === 'parent' && (
+          {selectedUser && (
             <button 
-              className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'relationship' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+              className={`px-4 py-2 font-medium whitespace-nowrap font-roboto relative ${activeTab === 'relationship' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
               onClick={() => setActiveTab('relationship')}
             >
               Relationship
+              {notifications.relationships > 0 && selectedUser.role === 'parent' && (
+                <span className="absolute top-0 right-0 transform translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
+                  {notifications.relationships}
+                </span>
+              )}
             </button>
           )}
           
@@ -522,7 +420,7 @@ useEffect(() => {
       
       {/* Main Content */}
       <div className="container mx-auto px-4 pt-40 pb-6">
-      {/* Tab content */}
+        {/* Tab content */}
         {renderTabContent()}
       </div>
 
@@ -543,6 +441,9 @@ useEffect(() => {
       
       {/* Allie Chat Widget */}
       <AllieChat />
+      
+      {/* Floating Calendar Widget */}
+      <FloatingCalendarWidget />
     </div>
   );
 };
