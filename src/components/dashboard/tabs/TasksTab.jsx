@@ -58,6 +58,8 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   const [kidTaskObservation, setKidTaskObservation] = useState("");
   const [savingTasks, setSavingTasks] = useState({});
   const [saveErrors, setSaveErrors] = useState({});
+  const [expandedTasks, setExpandedTasks] = useState({});
+
   
   // Expand/collapse section states
   const [expandedSections, setExpandedSections] = useState({
@@ -102,6 +104,15 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     }
   };
 
+// Toggle task expansion
+const toggleTaskExpansion = (taskId) => {
+  setExpandedTasks(prev => ({
+    ...prev,
+    [taskId]: !prev[taskId]
+  }));
+};
+
+
   // Calculate days until check-in
   const calculateDaysUntilCheckIn = () => {
     const today = new Date();
@@ -133,6 +144,25 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     const canStart = calculateDaysUntilCheckIn() <= 2;
     setCanStartCheckIn(canStart);
   }, [checkInDueDate]);
+
+// Initialize task expansion based on logged-in user
+useEffect(() => {
+  if (selectedUser && taskRecommendations.length > 0) {
+    const initialExpandedState = {};
+    
+    taskRecommendations.forEach(task => {
+      // If the task is assigned to the current user's role, expand it
+      // Otherwise collapse it
+      initialExpandedState[task.id] = (
+        selectedUser.roleType === task.assignedTo || 
+        selectedUser.name === task.assignedToName
+      );
+    });
+    
+    setExpandedTasks(initialExpandedState);
+  }
+}, [selectedUser, taskRecommendations]);
+
 
   // Load tasks for the current week
   useEffect(() => {
@@ -930,139 +960,153 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
       {expandedSections.papa && (
         <div className="space-y-3">
           {taskRecommendations
-            .filter(task => task.assignedTo?.toLowerCase() === "papa".toLowerCase())
-            .map(task => (
-              <div key={task.id} className={`rounded-lg border shadow ${task.completed ? 'bg-green-50' : 'bg-white'}`}>
-                <div className="p-4">
-                  <div className="flex items-start">
-                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                      task.completed ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
-                    }`}>
-                      {task.completed ? <CheckCircle size={16} /> : <Target size={16} />}
-                    </div>
-                      
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start">
-                        <h4 className="font-medium text-lg font-roboto">{task.title}</h4>
-                        
-                        {/* Task type label */}
-                        <div className="flex items-center gap-2">
-                          {task.taskType === 'ai' && (
-                            <span className="px-2 py-0.5 bg-black text-white text-xs rounded-full flex items-center">
-                              <Brain size={10} className="mr-1" />
-                              AI Insight
-                            </span>
-                          )}
-                          {task.taskType === 'survey-based' && (
-                            <span className="px-2 py-0.5 bg-gray-800 text-white text-xs rounded-full flex items-center">
-                              <CheckCircle2 size={10} className="mr-1" />
-                              Survey Data
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                        
-                      <div className="mt-2">
-                        <p className="text-gray-600 font-roboto">
-                          {task.description}
-                        </p>
-                        
-                        {/* Show completion date if task is completed */}
-                        {task.completed && task.completedDate && (
-                          <p className="text-sm text-green-600 mt-2 font-roboto">
-                            Completed on {formatDate(task.completedDate)}
-                          </p>
-                        )}
-                      </div>
-                      
-                      {/* Survey Insights / AI Insights */}
-                      {(task.insight || (task.taskType === 'ai' && task.insight)) && (
-                        <div className="bg-blue-50 p-4 rounded-lg mt-4 border border-blue-200">
-                          <div className="flex items-start">
-                            <Info size={20} className="text-blue-600 mr-3 flex-shrink-0 mt-0.5" />
-                            <div>
-                              <h5 className="font-bold text-blue-900 text-sm mb-1 font-roboto">
-                                {task.taskType === 'ai' ? 'AI Insight:' : 'Survey Insight:'}
-                              </h5>
-                              <p className="text-sm text-blue-800 font-roboto">{task.insight}</p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* How to Complete This Task */}
-                      <div className="mt-4">
-                        <h5 className="font-medium text-sm mb-2 font-roboto">How to Complete This Task:</h5>
-                        <div className="bg-gray-50 p-4 rounded-lg mb-4 text-sm font-roboto">
-                          <p>{task.details || "Choose one task that your partner usually handles and complete it fully, from start to finish."}</p>
-                        </div>
-                      </div>
-                      
-                      {/* Comments Section with Always-Visible Input */}
-                      <div className="mt-4 pt-4 border-t">
-                        <h5 className="text-sm font-medium mb-2 font-roboto">
-                          {task.completed ? 'Your Completion Notes:' : 'Describe How You Completed This Task:'}
+  .filter(task => task.assignedTo?.toLowerCase() === "papa".toLowerCase())
+  .map(task => (
+    <div key={task.id} className={`rounded-lg border shadow ${task.completed ? 'bg-green-50' : 'bg-white'}`}>
+      <div className="p-4">
+        <div className="flex items-start">
+          <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+            task.completed ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
+          }`}>
+            {task.completed ? <CheckCircle size={16} /> : <Target size={16} />}
+          </div>
+              
+          <div className="flex-1">
+            {/* Always visible header - clickable to expand/collapse */}
+            <div 
+              className="flex justify-between items-start cursor-pointer" 
+              onClick={() => toggleTaskExpansion(task.id)}
+            >
+              <h4 className="font-medium text-lg font-roboto">{task.title}</h4>
+              
+              <div className="flex items-center gap-2">
+                {task.taskType === 'ai' && (
+                  <span className="px-2 py-0.5 bg-black text-white text-xs rounded-full flex items-center">
+                    <Brain size={10} className="mr-1" />
+                    AI Insight
+                  </span>
+                )}
+                {task.taskType === 'survey-based' && (
+                  <span className="px-2 py-0.5 bg-gray-800 text-white text-xs rounded-full flex items-center">
+                    <CheckCircle2 size={10} className="mr-1" />
+                    Survey Data
+                  </span>
+                )}
+                {/* Expand/collapse icon */}
+                {expandedTasks[task.id] ? 
+                  <ChevronUp size={16} className="text-gray-500" /> : 
+                  <ChevronDown size={16} className="text-gray-500" />
+                }
+              </div>
+            </div>
+                
+            {/* Task description - always visible */}
+            <div className="mt-2">
+              <p className="text-gray-600 font-roboto">
+                {task.description}
+              </p>
+              
+              {/* Show completion date if task is completed */}
+              {task.completed && task.completedDate && (
+                <p className="text-sm text-green-600 mt-2 font-roboto">
+                  Completed on {formatDate(task.completedDate)}
+                </p>
+              )}
+            </div>
+            
+            {/* Expandable content */}
+            {expandedTasks[task.id] && (
+              <>
+                {/* Survey Insights / AI Insights */}
+                {(task.insight || (task.taskType === 'ai' && task.insight)) && (
+                  <div className="bg-blue-50 p-4 rounded-lg mt-4 border border-blue-200">
+                    <div className="flex items-start">
+                      <Info size={20} className="text-blue-600 mr-3 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h5 className="font-bold text-blue-900 text-sm mb-1 font-roboto">
+                          {task.taskType === 'ai' ? 'AI Insight:' : 'Survey Insight:'}
                         </h5>
-                        
-                        {/* Existing comments */}
-                        {renderComments(task.comments)}
-                        
-                        {/* Always-visible comment input */}
-                        {!task.completed && canCompleteTask(task) && (
-                          <div>
-                            <textarea
-                              className="w-full border rounded p-2 text-sm font-roboto mb-2"
-                              rows="3"
-                              placeholder="Describe what you did and what you learned from this task..."
-                              value={commentInputs[task.id] || ''}
-                              onChange={(e) => setCommentInputs({...commentInputs, [task.id]: e.target.value})}
-                              disabled={isSubmittingComment || savingTasks[task.id]}
-                            ></textarea>
-                            
-                            {/* Error message if saving failed */}
-                            {saveErrors[task.id] && (
-                              <div className="text-xs text-red-600 mb-2 font-roboto">
-                                {saveErrors[task.id]}
-                              </div>
-                            )}
-                            
-                            <div className="flex justify-end">
-                              <button
-                                onClick={() => handleCompleteWithComment(task.id)}
-                                disabled={!commentInputs[task.id]?.trim() || isSubmittingComment || savingTasks[task.id]}
-                                className="px-4 py-2 bg-green-500 text-white rounded flex items-center font-roboto disabled:bg-gray-300 disabled:cursor-not-allowed"
-                              >
-                                {savingTasks[task.id] ? (
-                                  <>
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                                    Saving...
-                                  </>
-                                ) : (
-                                  <>
-                                    <CheckCircle size={16} className="mr-2" />
-                                    Mark Complete
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Completion status notification */}
-                        {task.completed && (
-                          <div className="bg-green-50 p-3 rounded-lg border border-green-200 text-center">
-                            <CheckCircle className="inline-block text-green-600 mr-2" size={16} />
-                            <span className="text-green-800 font-medium font-roboto">
-                              Task completed on {formatDate(task.completedDate)}
-                            </span>
-                          </div>
-                        )}
+                        <p className="text-sm text-blue-800 font-roboto">{task.insight}</p>
                       </div>
                     </div>
                   </div>
+                )}
+                
+                {/* How to Complete This Task */}
+                <div className="mt-4">
+                  <h5 className="font-medium text-sm mb-2 font-roboto">How to Complete This Task:</h5>
+                  <div className="bg-gray-50 p-4 rounded-lg mb-4 text-sm font-roboto">
+                    <p>{task.details || "Choose one task that your partner usually handles and complete it fully, from start to finish."}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+                
+                {/* Comments Section with Always-Visible Input */}
+                <div className="mt-4 pt-4 border-t">
+                  <h5 className="text-sm font-medium mb-2 font-roboto">
+                    {task.completed ? 'Your Completion Notes:' : 'Describe How You Completed This Task:'}
+                  </h5>
+                  
+                  {/* Existing comments */}
+                  {renderComments(task.comments)}
+                  
+                  {/* Always-visible comment input */}
+                  {!task.completed && canCompleteTask(task) && (
+                    <div>
+                      <textarea
+                        className="w-full border rounded p-2 text-sm font-roboto mb-2"
+                        rows="3"
+                        placeholder="Describe what you did and what you learned from this task..."
+                        value={commentInputs[task.id] || ''}
+                        onChange={(e) => setCommentInputs({...commentInputs, [task.id]: e.target.value})}
+                        disabled={isSubmittingComment || savingTasks[task.id]}
+                      ></textarea>
+                      
+                      {/* Error message if saving failed */}
+                      {saveErrors[task.id] && (
+                        <div className="text-xs text-red-600 mb-2 font-roboto">
+                          {saveErrors[task.id]}
+                        </div>
+                      )}
+                      
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => handleCompleteWithComment(task.id)}
+                          disabled={!commentInputs[task.id]?.trim() || isSubmittingComment || savingTasks[task.id]}
+                          className="px-4 py-2 bg-green-500 text-white rounded flex items-center font-roboto disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        >
+                          {savingTasks[task.id] ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle size={16} className="mr-2" />
+                              Mark Complete
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Completion status notification */}
+                  {task.completed && (
+                    <div className="bg-green-50 p-3 rounded-lg border border-green-200 text-center">
+                      <CheckCircle className="inline-block text-green-600 mr-2" size={16} />
+                      <span className="text-green-800 font-medium font-roboto">
+                        Task completed on {formatDate(task.completedDate)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  ))}
             
           {/* Show message if no tasks */}
           {taskRecommendations.filter(task => task?.assignedTo?.toLowerCase() === "papa".toLowerCase()).length === 0 && (
@@ -1079,139 +1123,153 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
       {expandedSections.mama && (
         <div className="space-y-3">
           {taskRecommendations
-            .filter(task => task.assignedTo?.toLowerCase() === "mama".toLowerCase())
-            .map(task => (
-              <div key={task.id} className={`rounded-lg border shadow ${task.completed ? 'bg-green-50' : 'bg-white'}`}>
-                <div className="p-4">
-                  <div className="flex items-start">
-                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                      task.completed ? 'bg-green-100 text-green-600' : 'bg-purple-100 text-purple-600'
-                    }`}>
-                      {task.completed ? <CheckCircle size={16} /> : <Target size={16} />}
-                    </div>
-                      
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start">
-                        <h4 className="font-medium text-lg font-roboto">{task.title}</h4>
-                        
-                        {/* Task type label */}
-                        <div className="flex items-center gap-2">
-                          {task.taskType === 'ai' && (
-                            <span className="px-2 py-0.5 bg-black text-white text-xs rounded-full flex items-center">
-                              <Brain size={10} className="mr-1" />
-                              AI Insight
-                            </span>
-                          )}
-                          {task.taskType === 'survey-based' && (
-                            <span className="px-2 py-0.5 bg-gray-800 text-white text-xs rounded-full flex items-center">
-                              <CheckCircle2 size={10} className="mr-1" />
-                              Survey Data
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                        
-                      <div className="mt-2">
-                        <p className="text-gray-600 font-roboto">
-                          {task.description}
-                        </p>
-                        
-                        {/* Show completion date if task is completed */}
-                        {task.completed && task.completedDate && (
-                          <p className="text-sm text-green-600 mt-2 font-roboto">
-                            Completed on {formatDate(task.completedDate)}
-                          </p>
-                        )}
-                      </div>
-                      
-                      {/* Survey Insights / AI Insights */}
-                      {(task.insight || (task.taskType === 'ai' && task.insight)) && (
-                        <div className="bg-blue-50 p-4 rounded-lg mt-4 border border-blue-200">
-                          <div className="flex items-start">
-                            <Info size={20} className="text-blue-600 mr-3 flex-shrink-0 mt-0.5" />
-                            <div>
-                              <h5 className="font-bold text-blue-900 text-sm mb-1 font-roboto">
-                                {task.taskType === 'ai' ? 'AI Insight:' : 'Survey Insight:'}
-                              </h5>
-                              <p className="text-sm text-blue-800 font-roboto">{task.insight}</p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* How to Complete This Task */}
-                      <div className="mt-4">
-                        <h5 className="font-medium text-sm mb-2 font-roboto">How to Complete This Task:</h5>
-                        <div className="bg-gray-50 p-4 rounded-lg mb-4 text-sm font-roboto">
-                          <p>{task.details || "Choose one task that your partner usually handles and complete it fully, from start to finish."}</p>
-                        </div>
-                      </div>
-                      
-                      {/* Comments Section with Always-Visible Input */}
-                      <div className="mt-4 pt-4 border-t">
-                        <h5 className="text-sm font-medium mb-2 font-roboto">
-                          {task.completed ? 'Your Completion Notes:' : 'Describe How You Completed This Task:'}
+  .filter(task => task.assignedTo?.toLowerCase() === "mama".toLowerCase())
+  .map(task => (
+    <div key={task.id} className={`rounded-lg border shadow ${task.completed ? 'bg-green-50' : 'bg-white'}`}>
+      <div className="p-4">
+        <div className="flex items-start">
+          <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+            task.completed ? 'bg-green-100 text-green-600' : 'bg-purple-100 text-purple-600'
+          }`}>
+            {task.completed ? <CheckCircle size={16} /> : <Target size={16} />}
+          </div>
+              
+          <div className="flex-1">
+            {/* Always visible header - clickable to expand/collapse */}
+            <div 
+              className="flex justify-between items-start cursor-pointer" 
+              onClick={() => toggleTaskExpansion(task.id)}
+            >
+              <h4 className="font-medium text-lg font-roboto">{task.title}</h4>
+              
+              <div className="flex items-center gap-2">
+                {task.taskType === 'ai' && (
+                  <span className="px-2 py-0.5 bg-black text-white text-xs rounded-full flex items-center">
+                    <Brain size={10} className="mr-1" />
+                    AI Insight
+                  </span>
+                )}
+                {task.taskType === 'survey-based' && (
+                  <span className="px-2 py-0.5 bg-gray-800 text-white text-xs rounded-full flex items-center">
+                    <CheckCircle2 size={10} className="mr-1" />
+                    Survey Data
+                  </span>
+                )}
+                {/* Expand/collapse icon */}
+                {expandedTasks[task.id] ? 
+                  <ChevronUp size={16} className="text-gray-500" /> : 
+                  <ChevronDown size={16} className="text-gray-500" />
+                }
+              </div>
+            </div>
+                
+            {/* Task description - always visible */}
+            <div className="mt-2">
+              <p className="text-gray-600 font-roboto">
+                {task.description}
+              </p>
+              
+              {/* Show completion date if task is completed */}
+              {task.completed && task.completedDate && (
+                <p className="text-sm text-green-600 mt-2 font-roboto">
+                  Completed on {formatDate(task.completedDate)}
+                </p>
+              )}
+            </div>
+            
+            {/* Expandable content */}
+            {expandedTasks[task.id] && (
+              <>
+                {/* Survey Insights / AI Insights */}
+                {(task.insight || (task.taskType === 'ai' && task.insight)) && (
+                  <div className="bg-blue-50 p-4 rounded-lg mt-4 border border-blue-200">
+                    <div className="flex items-start">
+                      <Info size={20} className="text-blue-600 mr-3 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h5 className="font-bold text-blue-900 text-sm mb-1 font-roboto">
+                          {task.taskType === 'ai' ? 'AI Insight:' : 'Survey Insight:'}
                         </h5>
-                        
-                        {/* Existing comments */}
-                        {renderComments(task.comments)}
-                        
-                        {/* Always-visible comment input */}
-                        {!task.completed && canCompleteTask(task) && (
-                          <div>
-                            <textarea
-                              className="w-full border rounded p-2 text-sm font-roboto mb-2"
-                              rows="3"
-                              placeholder="Describe what you did and what you learned from this task..."
-                              value={commentInputs[task.id] || ''}
-                              onChange={(e) => setCommentInputs({...commentInputs, [task.id]: e.target.value})}
-                              disabled={isSubmittingComment || savingTasks[task.id]}
-                            ></textarea>
-                            
-                            {/* Error message if saving failed */}
-                            {saveErrors[task.id] && (
-                              <div className="text-xs text-red-600 mb-2 font-roboto">
-                                {saveErrors[task.id]}
-                              </div>
-                            )}
-                            
-                            <div className="flex justify-end">
-                              <button
-                                onClick={() => handleCompleteWithComment(task.id)}
-                                disabled={!commentInputs[task.id]?.trim() || isSubmittingComment || savingTasks[task.id]}
-                                className="px-4 py-2 bg-green-500 text-white rounded flex items-center font-roboto disabled:bg-gray-300 disabled:cursor-not-allowed"
-                              >
-                                {savingTasks[task.id] ? (
-                                  <>
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                                    Saving...
-                                  </>
-                                ) : (
-                                  <>
-                                    <CheckCircle size={16} className="mr-2" />
-                                    Mark Complete
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Completion status notification */}
-                        {task.completed && (
-                          <div className="bg-green-50 p-3 rounded-lg border border-green-200 text-center">
-                            <CheckCircle className="inline-block text-green-600 mr-2" size={16} />
-                            <span className="text-green-800 font-medium font-roboto">
-                              Task completed on {formatDate(task.completedDate)}
-                            </span>
-                          </div>
-                        )}
+                        <p className="text-sm text-blue-800 font-roboto">{task.insight}</p>
                       </div>
                     </div>
                   </div>
+                )}
+                
+                {/* How to Complete This Task */}
+                <div className="mt-4">
+                  <h5 className="font-medium text-sm mb-2 font-roboto">How to Complete This Task:</h5>
+                  <div className="bg-gray-50 p-4 rounded-lg mb-4 text-sm font-roboto">
+                    <p>{task.details || "Choose one task that your partner usually handles and complete it fully, from start to finish."}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+                
+                {/* Comments Section with Always-Visible Input */}
+                <div className="mt-4 pt-4 border-t">
+                  <h5 className="text-sm font-medium mb-2 font-roboto">
+                    {task.completed ? 'Your Completion Notes:' : 'Describe How You Completed This Task:'}
+                  </h5>
+                  
+                  {/* Existing comments */}
+                  {renderComments(task.comments)}
+                  
+                  {/* Always-visible comment input */}
+                  {!task.completed && canCompleteTask(task) && (
+                    <div>
+                      <textarea
+                        className="w-full border rounded p-2 text-sm font-roboto mb-2"
+                        rows="3"
+                        placeholder="Describe what you did and what you learned from this task..."
+                        value={commentInputs[task.id] || ''}
+                        onChange={(e) => setCommentInputs({...commentInputs, [task.id]: e.target.value})}
+                        disabled={isSubmittingComment || savingTasks[task.id]}
+                      ></textarea>
+                      
+                      {/* Error message if saving failed */}
+                      {saveErrors[task.id] && (
+                        <div className="text-xs text-red-600 mb-2 font-roboto">
+                          {saveErrors[task.id]}
+                        </div>
+                      )}
+                      
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => handleCompleteWithComment(task.id)}
+                          disabled={!commentInputs[task.id]?.trim() || isSubmittingComment || savingTasks[task.id]}
+                          className="px-4 py-2 bg-green-500 text-white rounded flex items-center font-roboto disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        >
+                          {savingTasks[task.id] ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle size={16} className="mr-2" />
+                              Mark Complete
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Completion status notification */}
+                  {task.completed && (
+                    <div className="bg-green-50 p-3 rounded-lg border border-green-200 text-center">
+                      <CheckCircle className="inline-block text-green-600 mr-2" size={16} />
+                      <span className="text-green-800 font-medium font-roboto">
+                        Task completed on {formatDate(task.completedDate)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  ))}
             
           {/* Show message if no tasks */}
           {taskRecommendations.filter(task => task?.assignedTo?.toLowerCase() === "mama".toLowerCase()).length === 0 && (

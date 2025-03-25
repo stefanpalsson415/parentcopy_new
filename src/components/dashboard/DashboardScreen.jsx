@@ -370,10 +370,10 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
           >
             {selectedUser ? `${selectedUser.name}'s Tasks` : 'My Tasks'}
             {notifications.tasks > 0 && (
-              <span className="absolute top-0 right-0 transform translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
-                {notifications.tasks}
-              </span>
-            )}
+  <span className="absolute top-1 right-0 transform translate-x-1/2 -translate-y-1/4 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
+    {notifications.tasks}
+  </span>
+)}
           </button>
           <button 
             className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'dashboard' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}

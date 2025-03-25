@@ -116,78 +116,7 @@ export function FamilyProvider({ children }) {
     }
   }, [initialFamilyData, currentUser]);
 
-  // Force-add parent tasks if needed
-useEffect(() => {
-  if (taskRecommendations.length > 0) {
-    // Count tasks per parent
-    const papaTasks = taskRecommendations.filter(t => 
-      t.assignedTo?.toLowerCase() === "papa".toLowerCase()
-    );
-    
-    const mamaTasks = taskRecommendations.filter(t => 
-      t.assignedTo?.toLowerCase() === "mama".toLowerCase()
-    );
-    
-    // If we don't have enough tasks, add placeholder ones
-    const updatedTasks = [...taskRecommendations];
-    
-    // Add Papa tasks if needed
-    if (papaTasks.length < 3) {
-      for (let i = papaTasks.length; i < 3; i++) {
-        updatedTasks.push({
-          id: `${currentWeek}-papa-placeholder-${i}`,
-          title: `Week ${currentWeek}: Task ${i+1} for Papa`,
-          description: "This task was added automatically to ensure three tasks per parent",
-          assignedTo: "Papa",
-          assignedToName: "Papa",
-          focusArea: i === 0 ? "Meal Planning" : i === 1 ? "Family Calendar" : "Emotional Support",
-          category: i === 0 ? "Visible Household Tasks" : i === 1 ? "Invisible Household Tasks" : "Invisible Parental Tasks",
-          taskType: i === 0 ? "survey-based" : i === 1 ? "ai" : "relationship",
-          insight: "This task was created to ensure each parent has three tasks.",
-          completed: false,
-          completedDate: null,
-          comments: []
-        });
-      }
-    }
-    
-    // Add Mama tasks if needed
-    if (mamaTasks.length < 3) {
-      for (let i = mamaTasks.length; i < 3; i++) {
-        updatedTasks.push({
-          id: `${currentWeek}-mama-placeholder-${i}`,
-          title: `Week ${currentWeek}: Task ${i+1} for Mama`,
-          description: "This task was added automatically to ensure three tasks per parent",
-          assignedTo: "Mama",
-          assignedToName: "Mama",
-          focusArea: i === 0 ? "Homework Support" : i === 1 ? "School Communication" : "Social Planning",
-          category: i === 0 ? "Visible Parental Tasks" : i === 1 ? "Invisible Parental Tasks" : "Invisible Household Tasks",
-          taskType: i === 0 ? "survey-based" : i === 1 ? "ai" : "relationship",
-          insight: "This task was created to ensure each parent has three tasks.",
-          completed: false,
-          completedDate: null,
-          comments: []
-        });
-      }
-    }
-    
-    // Only update if we added tasks
-    if (updatedTasks.length > taskRecommendations.length) {
-      console.log("Adding placeholder tasks to ensure three per parent", {
-        before: taskRecommendations.length,
-        after: updatedTasks.length
-      });
-      setTaskRecommendations(updatedTasks);
-      
-      // Optionally save these to the database
-      if (familyId) {
-        DatabaseService.saveFamilyData({ tasks: updatedTasks }, familyId)
-          .then(() => console.log("Placeholder tasks saved to database"))
-          .catch(err => console.error("Error saving placeholder tasks:", err));
-      }
-    }
-  }
-}, [taskRecommendations.length, currentWeek, familyId]);
+
 
   // Update favicon helper function
   const updateFavicon = (imageUrl) => {

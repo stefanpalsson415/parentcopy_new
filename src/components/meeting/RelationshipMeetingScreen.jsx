@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Clock, ChevronDown, ChevronUp, MessageCircle, Calendar, CheckCircle, Star, Smile, Sparkles, Brain } from 'lucide-react';
+import { Heart, Clock, ChevronDown, ChevronUp, MessageCircle, Calendar, CheckCircle, Star, Smile, Sparkles, Brain, Lightbulb } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import AllieAIEngineService from '../../services/AllieAIEngineService';
 import CalendarService from '../../services/CalendarService';
