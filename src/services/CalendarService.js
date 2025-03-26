@@ -102,106 +102,105 @@ class CalendarService {
     }
   }
 
-  // Initialize Google Calendar API
-// Initialize Google Calendar API with Firebase Auth token
-async initializeGoogleCalendar() {
-  return new Promise((resolve, reject) => {
-    // For testing/development, create a mock implementation
-    const mockMode = false; // Set to false to use real Google API
-    
-    if (mockMode) {
-      console.log("Using mock Google Calendar implementation");
-      this.googleApiLoaded = true;
+  // Initialize Google Calendar API with Firebase Auth token
+  async initializeGoogleCalendar() {
+    return new Promise((resolve, reject) => {
+      // For testing/development, create a mock implementation
+      const mockMode = false; // Set to false to use real Google API
       
-      // Create mock functions for testing
-      if (!window.gapi) {
-        window.gapi = {
-          auth2: {
-            getAuthInstance: () => ({
-              isSignedIn: { get: () => false },
-              signIn: async () => true,
-              signOut: async () => true
-            })
-          },
-          client: {
-            calendar: {
-              events: {
-                insert: async () => ({ result: { id: 'mock-event-id', htmlLink: '#' } })
-              },
-              calendarList: {
-                list: async () => ({ result: { items: [
-                  { id: 'primary', summary: 'Primary Calendar' },
-                  { id: 'work', summary: 'Work Calendar' },
-                  { id: 'family', summary: 'Family Calendar' }
-                ]}})
+      if (mockMode) {
+        console.log("Using mock Google Calendar implementation");
+        this.googleApiLoaded = true;
+        
+        // Create mock functions for testing
+        if (!window.gapi) {
+          window.gapi = {
+            auth2: {
+              getAuthInstance: () => ({
+                isSignedIn: { get: () => false },
+                signIn: async () => true,
+                signOut: async () => true
+              })
+            },
+            client: {
+              calendar: {
+                events: {
+                  insert: async () => ({ result: { id: 'mock-event-id', htmlLink: '#' } })
+                },
+                calendarList: {
+                  list: async () => ({ result: { items: [
+                    { id: 'primary', summary: 'Primary Calendar' },
+                    { id: 'work', summary: 'Work Calendar' },
+                    { id: 'family', summary: 'Family Calendar' }
+                  ]}})
+                }
               }
             }
-          }
-        };
-      }
-      
-      resolve(true);
-      return;
-    }
+          };
+        }
         
-    // Real implementation
-    if (!window.gapi) {
-      const script = document.createElement('script');
-      script.src = 'https://apis.google.com/js/api.js';
-      script.onload = () => {
+        resolve(true);
+        return;
+      }
+          
+      // Real implementation
+      if (!window.gapi) {
+        const script = document.createElement('script');
+        script.src = 'https://apis.google.com/js/api.js';
+        script.onload = () => {
+          window.gapi.load('client:auth2', () => {
+            this.initializeGapiClient(resolve, reject);
+          });
+        };
+        script.onerror = (error) => {
+          console.error("Error loading Google API script:", error);
+          reject(error);
+        };
+        document.body.appendChild(script);
+      } else {
+        // API already loaded, initialize client
         window.gapi.load('client:auth2', () => {
           this.initializeGapiClient(resolve, reject);
         });
-      };
-      script.onerror = (error) => {
-        console.error("Error loading Google API script:", error);
-        reject(error);
-      };
-      document.body.appendChild(script);
-    } else {
-      // API already loaded, initialize client
-      window.gapi.load('client:auth2', () => {
-        this.initializeGapiClient(resolve, reject);
-      });
-    }
-  });
-}
-
-// Separated the GAPI client initialization for better reuse
-async initializeGapiClient(resolve, reject) {
-  try {
-    // Initialize the client
-    await window.gapi.client.init({
-      apiKey: process.env.REACT_APP_GOOGLE_API_KEY || 'YOUR_API_KEY',
-      clientId: process.env.REACT_APP_GOOGLE_CLIENT_ID || 'YOUR_CLIENT_ID',
-      scope: 'https://www.googleapis.com/auth/calendar',
-      discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
-    });
-    
-    // Check if we already have a Google auth token from our main auth
-    const auth = window.gapi.auth2.getAuthInstance();
-    
-    // If there's an authenticated user from Firebase with Google
-    // reuse that auth token if possible
-    if (window.localStorage.getItem('googleAuthToken')) {
-      try {
-        // Set the auth token in gapi
-        const token = JSON.parse(window.localStorage.getItem('googleAuthToken'));
-        auth.currentUser.get().setAuthResponse(token);
-        console.log("Reused existing Google auth token");
-      } catch (e) {
-        console.error("Error reusing Google auth token:", e);
-        // If we can't reuse the token, we'll just proceed normally
       }
-    }
-    
-    this.googleApiLoaded = true;
-    resolve(true);
-  } catch (error) {
-    console.error("Error initializing Google API:", error);
-    reject(error);
+    });
   }
-}
+
+  // Separated the GAPI client initialization for better reuse
+  async initializeGapiClient(resolve, reject) {
+    try {
+      // Initialize the client
+      await window.gapi.client.init({
+        apiKey: process.env.REACT_APP_GOOGLE_API_KEY || 'YOUR_API_KEY',
+        clientId: process.env.REACT_APP_GOOGLE_CLIENT_ID || 'YOUR_CLIENT_ID',
+        scope: 'https://www.googleapis.com/auth/calendar',
+        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
+      });
+      
+      // Check if we already have a Google auth token from our main auth
+      const auth = window.gapi.auth2.getAuthInstance();
+      
+      // If there's an authenticated user from Firebase with Google
+      // reuse that auth token if possible
+      if (window.localStorage.getItem('googleAuthToken')) {
+        try {
+          // Set the auth token in gapi
+          const token = JSON.parse(window.localStorage.getItem('googleAuthToken'));
+          auth.currentUser.get().setAuthResponse(token);
+          console.log("Reused existing Google auth token");
+        } catch (e) {
+          console.error("Error reusing Google auth token:", e);
+          // If we can't reuse the token, we'll just proceed normally
+        }
+      }
+      
+      this.googleApiLoaded = true;
+      resolve(true);
+    } catch (error) {
+      console.error("Error initializing Google API:", error);
+      reject(error);
+    }
+  }
 
   // Initialize Apple Calendar integration
   async initializeAppleCalendar() {
@@ -227,28 +226,28 @@ async initializeGapiClient(resolve, reject) {
   }
 
   // Sign in to Google Calendar
-async signInToGoogle() {
-  if (!this.googleApiLoaded) {
-    await this.initializeGoogleCalendar();
-  }
-  
-  try {
-    const authInstance = window.gapi.auth2.getAuthInstance();
-    const result = await authInstance.signIn();
-    
-    // Store the token for reuse
-    if (result && result.getAuthResponse) {
-      const authResponse = result.getAuthResponse();
-      window.localStorage.setItem('googleAuthToken', JSON.stringify(authResponse));
-      console.log("Saved Google auth token for reuse");
+  async signInToGoogle() {
+    if (!this.googleApiLoaded) {
+      await this.initializeGoogleCalendar();
     }
     
-    return !!result;
-  } catch (error) {
-    console.error("Error signing in to Google:", error);
-    throw error;
+    try {
+      const authInstance = window.gapi.auth2.getAuthInstance();
+      const result = await authInstance.signIn();
+      
+      // Store the token for reuse
+      if (result && result.getAuthResponse) {
+        const authResponse = result.getAuthResponse();
+        window.localStorage.setItem('googleAuthToken', JSON.stringify(authResponse));
+        console.log("Saved Google auth token for reuse");
+      }
+      
+      return !!result;
+    } catch (error) {
+      console.error("Error signing in to Google:", error);
+      throw error;
+    }
   }
-}
 
   // Check if signed in to Google
   isSignedInToGoogle() {

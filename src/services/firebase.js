@@ -1,8 +1,8 @@
+// src/services/firebase.js
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
-import { getFunctions } from 'firebase/functions'; // Add this import
 
 const firebaseConfig = {
   apiKey: "AIzaSyALjXkZiFZ_Fy143N_dzdaUbyDCtabBr7Y",
@@ -14,32 +14,18 @@ const firebaseConfig = {
   measurementId: "G-7T846QZH0J"
 };
 
-// For localhost testing with Firebase Auth
-if (window.location.hostname === "localhost") {
-  console.log("Using emulation mode for authentication on localhost");
-  firebaseConfig.authDomain = "parentload-ba995.firebaseapp.com"; // Keep the original authDomain
-}
-
-
-
-// Initialize Firebase services
+// Initialize Firebase app FIRST, before any services
 const app = initializeApp(firebaseConfig);
+
+// Then initialize services
 const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
-const functions = getFunctions(app); // Add this line
 const googleProvider = new GoogleAuthProvider();
 
 // Add scopes
 googleProvider.addScope('profile');
 googleProvider.addScope('email');
 
-googleProvider.setCustomParameters({
-  prompt: 'select_account',
-  // Add localhost as a permitted redirect URI
-  redirect_uri: window.location.hostname === 'localhost' 
-    ? 'http://localhost:3000/onboarding' 
-    : undefined
-});
-
-export { db, auth, storage, functions, googleProvider };
+// Export app first, then services
+export { app, db, auth, storage, googleProvider };

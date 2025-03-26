@@ -420,35 +420,23 @@ const OnboardingFlow = () => {
       </p>
       <button
 
-  onClick={async () => {
+onClick={async (e) => {
   try {
     // Add loading state
-    const button = event.currentTarget;
+    const button = e.currentTarget;
     button.disabled = true;
     button.innerHTML = 'Connecting...';
     
-    // Call the signInWithGoogle function
-    const user = await signInWithGoogle();
+    // Call the signInWithGoogle function - this will redirect
+    await signInWithGoogle();
     
-    if (user) {
-      console.log("Successfully signed in with Google:", user);
-      // Pre-fill parent info with Google account info
-      updateParent(index, 'name', user.displayName || parent.name);
-      updateParent(index, 'email', user.email || parent.email);
-      updateParent(index, 'googleAuth', true);
-      // Generate a random password since we'll use Google auth
-      updateParent(index, 'password', Math.random().toString(36).slice(-8));
-      
-      // Show success message
-      alert(`Successfully connected Google account for ${parent.role}!`);
-    }
-    
+    // Note: The code below won't execute immediately because of the redirect
+    // User will need to be processed after the redirect completes
   } catch (error) {
     console.error("Google sign-in error:", error);
-    // Don't show error to user as we already handled it in signInWithGoogle
-  } finally {
+    
     // Reset button state
-    const button = event.currentTarget;
+    const button = e.currentTarget;
     button.disabled = false;
     button.innerHTML = `
       <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -456,6 +444,7 @@ const OnboardingFlow = () => {
       </svg>
       Sign in with Google as ${parent.role}
     `;
+  
   }
 }}
   className="w-full flex items-center justify-center bg-white border border-gray-300 rounded-md p-2 font-roboto hover:bg-gray-50"

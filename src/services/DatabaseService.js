@@ -1,3 +1,12 @@
+// First import Firebase
+import { app, db, auth, storage, googleProvider } from './firebase';
+
+// Then import Firebase functions
+import { 
+  signInWithPopup, signInWithRedirect, getRedirectResult,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword, linkWithPopup, signOut
+} from 'firebase/auth';
+
 // src/services/DatabaseService.js
 import { 
   collection, doc, setDoc, getDoc, updateDoc, 
@@ -5,13 +14,8 @@ import {
   arrayUnion
 } from 'firebase/firestore';
 
-
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, auth, storage } from './firebase';
-import { 
-  signInWithPopup, linkWithPopup, 
-  signInWithRedirect, getRedirectResult,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut
-} from 'firebase/auth';
+
 
 class DatabaseService {
   constructor() {
@@ -62,18 +66,20 @@ class DatabaseService {
 
   async signInWithGoogle() {
     try {
-      // Import directly from firebase.js instead of requiring
-      const { googleProvider } = require('./firebase');
+      console.log("Starting Google sign-in");
+      
+      // Import directly from firebase.js to ensure proper initialization order
+      const { auth, googleProvider } = require('./firebase');
       const { signInWithPopup } = require('firebase/auth');
-      const { auth } = require('./firebase');
       
-      // Use the existing provider rather than creating a new one
-      console.log("Starting Google sign-in with popup...");
+      console.log("Firebase auth status:", !!auth);
       
-      // Make sure we clear any previous auth state
-      await auth.signOut();
+      // Ensure Firebase is initialized
+      if (!auth) {
+        throw new Error("Firebase auth not initialized - check firebase.js");
+      }
       
-      // Use the signInWithPopup method
+      // Use signInWithPopup with explicit authentication instance 
       const result = await signInWithPopup(auth, googleProvider);
       console.log("Google sign-in successful:", result.user?.email);
       
@@ -81,15 +87,41 @@ class DatabaseService {
     } catch (error) {
       console.error("Google sign-in error details:", error);
       
-      // More specific error handling
+      // More detailed error handling for different scenarios
       if (error.code === 'auth/cancelled-popup-request') {
         console.log("User cancelled the sign-in popup");
       } else if (error.code === 'auth/popup-blocked') {
         alert("The sign-in popup was blocked by your browser. Please allow popups for this site.");
+      } else if (error.code === 'auth/unauthorized-domain') {
+        console.error("The domain is not authorized for OAuth operations");
+        alert("Authentication error: This domain is not authorized for sign-in. Please use the deployed app version.");
       } else {
-        // More helpful error message
-        alert("Error connecting Google account: " + (error.message || "Unknown error"));
+        alert("Google sign-in error: " + error.message);
       }
+      
+      throw error;
+    }
+  }
+  
+  // Add this new function to handle the redirect result
+  async handleGoogleRedirectResult() {
+    try {
+      const { getRedirectResult } = require('firebase/auth');
+      
+      // Get the result of the redirect operation
+      const result = await getRedirectResult(this.auth);
+      
+      if (result) {
+        // User is signed in
+        console.log("Redirect result successful:", result.user.email);
+        return result.user;
+      } else {
+        // No redirect result, user might be starting the flow
+        console.log("No redirect result yet");
+        return null;
+      }
+    } catch (error) {
+      console.error("Error handling Google redirect:", error);
       throw error;
     }
   }
