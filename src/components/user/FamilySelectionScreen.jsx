@@ -231,23 +231,51 @@ const getDefaultProfileImage = (member) => {
   
   const handleImageFile = async (file) => {
     setIsUploading(true);
+    
+    // Safety timeout to prevent endless loading
+    const safetyTimeout = setTimeout(() => {
+      console.log("Safety timeout triggered - resetting upload state");
+      setIsUploading(false);
+      setShowProfileUpload(false);
+      alert("Upload timed out. Please try again.");
+    }, 30000); // 30 seconds timeout
+    
     try {
+      // Add detailed logging
+      console.log("Starting upload with details:", {
+        uploadForMember,
+        familyId,
+        fileType: file.type,
+        fileSize: file.size,
+        authState: !!currentUser
+      });
+      
+      if (!uploadForMember || !uploadForMember.id) {
+        throw new Error("Missing member information for upload");
+      }
+      
       if (uploadForMember.id === 'family') {
         // Handle family picture upload
-        const storageRef = ref(storage, `families/${familyId}/${Date.now()}_${file.name}`);
-        const snapshot = await uploadBytes(storageRef, file);
-        const imageUrl = await getDownloadURL(snapshot.ref);
+        if (!familyId) {
+          throw new Error("Missing family ID for family picture upload");
+        }
         
-        // Update family picture in context
-        await DatabaseService.saveFamilyData({ familyPicture: imageUrl }, familyId);
+        console.log("Uploading family picture for family ID:", familyId);
+        
+        // Use DatabaseService method instead of direct storage access
+        const imageUrl = await DatabaseService.uploadFamilyPicture(familyId, file);
+        console.log("Family picture uploaded successfully:", imageUrl);
+        
         setShowProfileUpload(false);
       } else {
         // Handle individual profile upload
-        const storageRef = ref(storage, `profiles/${uploadForMember.id}/${Date.now()}_${file.name}`);
-        const snapshot = await uploadBytes(storageRef, file);
-        const imageUrl = await getDownloadURL(snapshot.ref);
+        console.log("Uploading profile picture for member ID:", uploadForMember.id);
         
-        // Here's the fix: updateMemberProfile should take the memberId and data
+        // Directly use DatabaseService to handle the upload
+        const imageUrl = await DatabaseService.uploadProfileImage(uploadForMember.id, file);
+        console.log("Profile picture uploaded successfully:", imageUrl);
+        
+        // Now update the member profile with the new image URL
         await updateMemberProfile(uploadForMember.id, { profilePicture: imageUrl });
         
         // Update local state to show the new image immediately
@@ -258,18 +286,22 @@ const getDefaultProfileImage = (member) => {
           return member;
         });
         
-        // This was missing - update the familyMembers state
         setFamilyMembers(updatedMembers);
-        
         setShowProfileUpload(false);
       }
+      
+      // Clear the safety timeout since upload completed successfully
+      clearTimeout(safetyTimeout);
     } catch (error) {
+      // Clear the safety timeout on error
+      clearTimeout(safetyTimeout);
+      
       console.error("Error uploading image:", error);
-      // Log specific error details for debugging
       console.log("Upload error details:", {
         memberId: uploadForMember?.id,
-        error: error.message,
-        code: error.code
+        errorMessage: error.message,
+        errorCode: error.code,
+        errorStack: error.stack
       });
       
       let errorMessage = "Failed to upload image. Please try again.";
@@ -282,10 +314,9 @@ const getDefaultProfileImage = (member) => {
         errorMessage = "An unknown error occurred during upload.";
       }
       
-      // Show error message to user
       alert(errorMessage);
     } finally {
-      // Make sure this always runs to reset loading state
+      // Make absolutely sure loading state is reset
       setIsUploading(false);
     }
   };

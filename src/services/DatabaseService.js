@@ -225,23 +225,44 @@ async updateMemberWithGoogleAuth(familyId, memberId, userData) {
   // ---- Storage Methods ----
 
   // Upload image to Firebase Storage
-  async uploadProfileImage(userId, file) {
-    try {
-      // Create a unique path for the file
-      const storageRef = ref(this.storage, `profile-pictures/${userId}_${Date.now()}`);
-      
-      // Upload the file to Firebase Storage
-      const snapshot = await uploadBytes(storageRef, file);
-      
-      // Get the download URL
-      const downloadURL = await getDownloadURL(snapshot.ref);
-      
-      return downloadURL;
-    } catch (error) {
-      console.error("Error uploading image:", error);
-      throw error;
-    }
+  // Upload image to Firebase Storage
+async uploadProfileImage(userId, file) {
+  try {
+    console.log("DatabaseService: Starting profile image upload for user ID:", userId);
+    
+    // Add file extension to create a better filename
+    const fileExtension = file.name.split('.').pop();
+    const fileName = `${userId}_${Date.now()}.${fileExtension}`;
+    
+    // Create a unique path for the file
+    const storageRef = ref(this.storage, `profile-pictures/${fileName}`);
+    console.log("Storage reference created:", storageRef);
+    
+    // Upload the file to Firebase Storage with explicit content type
+    const metadata = {
+      contentType: file.type
+    };
+    
+    console.log("Uploading file to storage...");
+    const snapshot = await uploadBytes(storageRef, file, metadata);
+    console.log("File uploaded successfully, getting URL...");
+    
+    // Get the download URL
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    console.log("Download URL obtained:", downloadURL);
+    
+    return downloadURL;
+  } catch (error) {
+    console.error("DatabaseService Error uploading image:", error);
+    console.log("Error details:", {
+      userId,
+      errorCode: error.code,
+      errorMessage: error.message,
+      errorStack: error.stack
+    });
+    throw error;
   }
+}
 
   // Upload family picture to Firebase Storage
   async uploadFamilyPicture(familyId, file) {
