@@ -30,8 +30,16 @@ const storage = getStorage(app);
 const functions = getFunctions(app); // Add this line
 const googleProvider = new GoogleAuthProvider();
 
+// Add scopes
+googleProvider.addScope('profile');
+googleProvider.addScope('email');
+
 googleProvider.setCustomParameters({
   prompt: 'select_account',
+  // Add localhost as a permitted redirect URI
+  redirect_uri: window.location.hostname === 'localhost' 
+    ? 'http://localhost:3000/onboarding' 
+    : undefined
 });
 
 export { db, auth, storage, functions, googleProvider };

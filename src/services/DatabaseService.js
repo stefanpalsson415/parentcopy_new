@@ -62,42 +62,37 @@ class DatabaseService {
 
   async signInWithGoogle() {
     try {
+      // Import directly from firebase.js instead of requiring
+      const { googleProvider } = require('./firebase');
+      const { signInWithPopup } = require('firebase/auth');
       const { auth } = require('./firebase');
-      const { GoogleAuthProvider, signInWithPopup } = require('firebase/auth');
       
-      // Create a fresh Google provider - don't reuse the imported one
-      const googleProvider = new GoogleAuthProvider();
-      
-      // Add the basic Google scopes
-      googleProvider.addScope('profile');
-      googleProvider.addScope('email');
-      
-      // Calendar scopes - only add these if Google auth is already working
-      // googleProvider.addScope('https://www.googleapis.com/auth/calendar');
-      // googleProvider.addScope('https://www.googleapis.com/auth/calendar.events');
-      
-      // Important: Add these specific parameters for the popup
-      googleProvider.setCustomParameters({
-        prompt: 'select_account'
-      });
-      
+      // Use the existing provider rather than creating a new one
       console.log("Starting Google sign-in with popup...");
+      
+      // Make sure we clear any previous auth state
+      await auth.signOut();
+      
+      // Use the signInWithPopup method
       const result = await signInWithPopup(auth, googleProvider);
       console.log("Google sign-in successful:", result.user?.email);
       
       return result.user;
     } catch (error) {
       console.error("Google sign-in error details:", error);
+      
       // More specific error handling
       if (error.code === 'auth/cancelled-popup-request') {
         console.log("User cancelled the sign-in popup");
       } else if (error.code === 'auth/popup-blocked') {
         alert("The sign-in popup was blocked by your browser. Please allow popups for this site.");
+      } else {
+        // More helpful error message
+        alert("Error connecting Google account: " + (error.message || "Unknown error"));
       }
       throw error;
     }
   }
-
 // Add this new function to handle the redirect result
 async handleGoogleRedirectResult() {
   try {
