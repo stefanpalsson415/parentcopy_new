@@ -457,7 +457,10 @@ const OnboardingFlow = () => {
         updatedParents[index] = {
           ...updatedParents[index],
           email: user.email,
-          name: updatedParents[index].name || user.displayName,
+          // Don't change the name if already entered by user
+          // If no name is set yet and displayName is available, use that
+          // But don't default to the email prefix
+          name: updatedParents[index].name || (user.displayName || ''),
           googleAuth: {
             uid: user.uid,
             email: user.email,
@@ -490,7 +493,7 @@ const OnboardingFlow = () => {
   ) : parent.googleAuth ? (
     <div className="flex items-center">
       <CheckCircle size={16} className="mr-2" />
-      Connected as {parent.googleAuth.email.split('@')[0]}
+      Connected with Google
     </div>
   ) : (
     <>
@@ -513,17 +516,30 @@ const OnboardingFlow = () => {
     </div>
     
     {/* Email field */}
-<label className="block">
-  <span className="text-gray-700 text-sm font-roboto">Email</span>
+    <label className="block">
+  <span className="text-gray-700 text-sm font-roboto">
+    Name
+    {parent.googleAuth && !parent.name && (
+      <span className="text-amber-600 ml-1 font-medium">
+        ← Please add your name
+      </span>
+    )}
+  </span>
   <input
-    type="email"
-    className={`w-full p-2 border rounded mt-1 font-roboto ${validationErrors[`parent_${index}_email`] ? 'border-red-500' : ''}`}
-    placeholder={`${parent.role}'s email`}
-    value={parent.email}
-    onChange={e => updateParent(index, 'email', e.target.value)}
+    type="text"
+    className={`w-full p-2 border rounded mt-1 font-roboto ${
+      validationErrors[`parent_${index}_name`] 
+        ? 'border-red-500' 
+        : parent.googleAuth && !parent.name 
+          ? 'border-amber-500 bg-amber-50' 
+          : ''
+    }`}
+    placeholder={`${parent.role}'s name`}
+    value={parent.name}
+    onChange={e => updateParent(index, 'name', e.target.value)}
   />
-  {validationErrors[`parent_${index}_email`] && (
-    <p className="text-red-500 text-xs mt-1 font-roboto">{validationErrors[`parent_${index}_email`]}</p>
+  {validationErrors[`parent_${index}_name`] && (
+    <p className="text-red-500 text-xs mt-1 font-roboto">{validationErrors[`parent_${index}_name`]}</p>
   )}
 </label>
 
