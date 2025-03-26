@@ -180,20 +180,25 @@ const OnboardingFlow = () => {
         }
         break;
       
-      case 5: // Parent information
+        case 5: // Parent information
         familyData.parents.forEach((parent, index) => {
           if (!parent.name.trim()) {
             errors[`parent_${index}_name`] = 'Name is required';
           }
+          
           if (!parent.email.trim()) {
             errors[`parent_${index}_email`] = 'Email is required';
           } else if (!/\S+@\S+\.\S+/.test(parent.email)) {
             errors[`parent_${index}_email`] = 'Email is invalid';
           }
-          if (!parent.password.trim()) {
-            errors[`parent_${index}_password`] = 'Password is required';
-          } else if (parent.password.length < 6) {
-            errors[`parent_${index}_password`] = 'Password must be at least 6 characters';
+          
+          // Only validate password if not using Google Auth
+          if (!parent.googleAuth) {
+            if (!parent.password.trim()) {
+              errors[`parent_${index}_password`] = 'Password is required';
+            } else if (parent.password.length < 6) {
+              errors[`parent_${index}_password`] = 'Password must be at least 6 characters';
+            }
           }
         });
         break;
@@ -416,6 +421,20 @@ const OnboardingFlow = () => {
   <div key={index} className="mb-4 p-4 border rounded bg-white">
     <h3 className="font-medium text-lg mb-3 font-roboto">{parent.role} Information</h3>
     
+{/* Google auth info banner */}
+{parent.googleAuth && (
+  <div className="mt-3 p-2 bg-green-50 rounded-lg border border-green-200">
+    <p className="text-sm text-green-700 flex items-center font-roboto">
+      <CheckCircle size={16} className="mr-1" />
+      Google account connected: {parent.googleAuth.email}
+    </p>
+    <p className="text-xs text-green-600 mt-1 font-roboto">
+      Calendar integration and simplified login are enabled
+    </p>
+  </div>
+)}
+
+
     {/* Google Sign-in Button */}
     <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
       <p className="text-sm text-blue-700 mb-3 font-roboto">
@@ -430,8 +449,6 @@ const OnboardingFlow = () => {
       // Call the signInWithGoogle function
       const user = await signInWithGoogle();
       
-      // Here's a key part we were missing - if we get a user back, 
-      // we need to update the parent's information
       if (user) {
         console.log("Successfully signed in with Google:", user.email);
         
@@ -461,11 +478,20 @@ const OnboardingFlow = () => {
       setSigningInParent(null);
     }
   }}
-  disabled={signingInParent === parent.role}
-  className="w-full flex items-center justify-center bg-white border border-gray-300 rounded-md p-2 font-roboto hover:bg-gray-50"
+  disabled={signingInParent === parent.role || parent.googleAuth} // Disable if already connected
+  className={`w-full flex items-center justify-center rounded-md p-2 font-roboto ${
+    parent.googleAuth 
+      ? 'bg-green-50 border border-green-300 text-green-700' 
+      : 'bg-white border border-gray-300 hover:bg-gray-50'
+  }`}
 >
   {signingInParent === parent.role ? (
     <span>Connecting...</span>
+  ) : parent.googleAuth ? (
+    <div className="flex items-center">
+      <CheckCircle size={16} className="mr-2" />
+      Connected as {parent.googleAuth.email.split('@')[0]}
+    </div>
   ) : (
     <>
       <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -486,47 +512,37 @@ const OnboardingFlow = () => {
       </div>
     </div>
     
-    <div className="space-y-3">
-      <label className="block">
-        <span className="text-gray-700 text-sm font-roboto">Name</span>
-        <input
-          type="text"
-          className={`w-full p-2 border rounded mt-1 font-roboto ${validationErrors[`parent_${index}_name`] ? 'border-red-500' : ''}`}
-          placeholder={`${parent.role}'s name`}
-          value={parent.name}
-          onChange={e => updateParent(index, 'name', e.target.value)}
-        />
-        {validationErrors[`parent_${index}_name`] && (
-          <p className="text-red-500 text-xs mt-1 font-roboto">{validationErrors[`parent_${index}_name`]}</p>
-        )}
-      </label>
-      <label className="block">
-        <span className="text-gray-700 text-sm font-roboto">Email</span>
-        <input
-          type="email"
-          className={`w-full p-2 border rounded mt-1 font-roboto ${validationErrors[`parent_${index}_email`] ? 'border-red-500' : ''}`}
-          placeholder={`${parent.role}'s email`}
-          value={parent.email}
-          onChange={e => updateParent(index, 'email', e.target.value)}
-        />
-        {validationErrors[`parent_${index}_email`] && (
-          <p className="text-red-500 text-xs mt-1 font-roboto">{validationErrors[`parent_${index}_email`]}</p>
-        )}
-      </label>
-      <label className="block">
-        <span className="text-gray-700 text-sm font-roboto">Password</span>
-        <input
-          type="password"
-          className={`w-full p-2 border rounded mt-1 font-roboto ${validationErrors[`parent_${index}_password`] ? 'border-red-500' : ''}`}
-          placeholder="Create a password"
-          value={parent.password}
-          onChange={e => updateParent(index, 'password', e.target.value)}
-        />
-        {validationErrors[`parent_${index}_password`] && (
-          <p className="text-red-500 text-xs mt-1 font-roboto">{validationErrors[`parent_${index}_password`]}</p>
-        )}
-      </label>
-    </div>
+    {/* Email field */}
+<label className="block">
+  <span className="text-gray-700 text-sm font-roboto">Email</span>
+  <input
+    type="email"
+    className={`w-full p-2 border rounded mt-1 font-roboto ${validationErrors[`parent_${index}_email`] ? 'border-red-500' : ''}`}
+    placeholder={`${parent.role}'s email`}
+    value={parent.email}
+    onChange={e => updateParent(index, 'email', e.target.value)}
+  />
+  {validationErrors[`parent_${index}_email`] && (
+    <p className="text-red-500 text-xs mt-1 font-roboto">{validationErrors[`parent_${index}_email`]}</p>
+  )}
+</label>
+
+{/* Only show password field if not using Google Auth */}
+{!parent.googleAuth && (
+  <label className="block">
+    <span className="text-gray-700 text-sm font-roboto">Password</span>
+    <input
+      type="password"
+      className={`w-full p-2 border rounded mt-1 font-roboto ${validationErrors[`parent_${index}_password`] ? 'border-red-500' : ''}`}
+      placeholder="Password"
+      value={parent.password}
+      onChange={e => updateParent(index, 'password', e.target.value)}
+    />
+    {validationErrors[`parent_${index}_password`] && (
+      <p className="text-red-500 text-xs mt-1 font-roboto">{validationErrors[`parent_${index}_password`]}</p>
+    )}
+  </label>
+)}
     
     {parent.googleAuth && (
       <div className="mt-3 p-2 bg-green-50 rounded-lg border border-green-200">

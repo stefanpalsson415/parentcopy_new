@@ -27,5 +27,8 @@ const googleProvider = new GoogleAuthProvider();
 googleProvider.addScope('profile');
 googleProvider.addScope('email');
 
+// Force Google to show account selection screen every time
+googleProvider.setCustomParameters({ prompt: 'select_account' });
+
 // Export app first, then services
 export { app, db, auth, storage, googleProvider };
