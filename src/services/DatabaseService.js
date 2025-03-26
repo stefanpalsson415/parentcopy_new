@@ -60,53 +60,41 @@ class DatabaseService {
     return this.auth.currentUser;
   }
 
-  async signInWithGoogle(includeCalendarScope = true) {
+  async signInWithGoogle() {
     try {
       const { auth } = require('./firebase');
       const { GoogleAuthProvider, signInWithPopup } = require('firebase/auth');
       
-      // Create a new provider instance each time to ensure scopes are correctly applied
+      // Create a fresh Google provider - don't reuse the imported one
       const googleProvider = new GoogleAuthProvider();
       
-      // Add required scopes
+      // Add the basic Google scopes
       googleProvider.addScope('profile');
       googleProvider.addScope('email');
       
-      // Add calendar scope if requested
-      if (includeCalendarScope) {
-        googleProvider.addScope('https://www.googleapis.com/auth/calendar');
-        googleProvider.addScope('https://www.googleapis.com/auth/calendar.events');
-      }
+      // Calendar scopes - only add these if Google auth is already working
+      // googleProvider.addScope('https://www.googleapis.com/auth/calendar');
+      // googleProvider.addScope('https://www.googleapis.com/auth/calendar.events');
       
-      console.log("Attempting Google sign-in with popup, including calendar access:", includeCalendarScope);
+      // Important: Add these specific parameters for the popup
+      googleProvider.setCustomParameters({
+        prompt: 'select_account'
+      });
       
-      // Force a new window to open with size parameters for better UX
+      console.log("Starting Google sign-in with popup...");
       const result = await signInWithPopup(auth, googleProvider);
       console.log("Google sign-in successful:", result.user?.email);
       
-      // Store auth token for calendar service to use
-      if (result.credential && result.credential.accessToken) {
-        localStorage.setItem('googleAuthToken', result.credential.accessToken);
-        console.log("Stored Google auth token for calendar access");
-      }
-      
       return result.user;
     } catch (error) {
-      // Provide more detailed error handling
-      console.error("Error with Google sign-in popup:", error);
-      
-      if (error.code === 'auth/popup-blocked') {
-        alert("Popup was blocked by your browser. Please allow popups for this site or try again.");
-      } else if (error.code === 'auth/popup-closed-by-user') {
-        console.log("Sign-in popup was closed by the user");
-      } else if (error.code === 'auth/cancelled-popup-request') {
-        console.log("Another popup was requested before this one completed");
-      } else {
-        // For all other errors, rethrow
-        throw error;
+      console.error("Google sign-in error details:", error);
+      // More specific error handling
+      if (error.code === 'auth/cancelled-popup-request') {
+        console.log("User cancelled the sign-in popup");
+      } else if (error.code === 'auth/popup-blocked') {
+        alert("The sign-in popup was blocked by your browser. Please allow popups for this site.");
       }
-      
-      return null;
+      throw error;
     }
   }
 
