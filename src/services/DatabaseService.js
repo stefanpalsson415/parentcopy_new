@@ -754,26 +754,34 @@ async getFamilyMeetingNotes(familyId, weekNumber) {
 const parentUsers = [];
 const parentData = Array.isArray(parents) ? parents : [];
 for (const parent of parentData) {
-  if (parent.email && parent.password) {
-          try {
-            const user = await this.createUser(parent.email, parent.password);
-            parentUsers.push({
-              uid: user.uid,
-              email: parent.email,
-              role: parent.role
-            });
-            console.log(`Created user for ${parent.role}:`, user.uid);
-          } catch (error) {
-            console.error(`Error creating user for ${parent.role}:`, error);
-            // Continue with other parents even if one fails
-          }
-        }
-      }
-      
-      if (parentUsers.length === 0) {
-        throw new Error("No parent users could be created");
-      }
-      
+  if (parent.googleAuth) {
+    // For Google-authenticated parents, use their existing Google UID
+    parentUsers.push({
+      uid: parent.googleAuth.uid,
+      email: parent.googleAuth.email || parent.email,
+      role: parent.role
+    });
+    console.log(`Using existing Google account for ${parent.role}:`, parent.googleAuth.uid);
+  } else if (parent.email && parent.password) {
+    // For traditional email/password parents
+    try {
+      const user = await this.createUser(parent.email, parent.password);
+      parentUsers.push({
+        uid: user.uid,
+        email: parent.email,
+        role: parent.role
+      });
+      console.log(`Created user for ${parent.role}:`, user.uid);
+    } catch (error) {
+      console.error(`Error creating user for ${parent.role}:`, error);
+      // Continue with other parents even if one fails
+    }
+  }
+}
+
+if (parentUsers.length === 0) {
+  throw new Error("No parent users could be created");
+}      
       // Generate a simple family ID instead of using addDoc
       // Generate a simple family ID instead of using addDoc
 const familyId = Date.now().toString(36) + Math.random().toString(36).substring(2);

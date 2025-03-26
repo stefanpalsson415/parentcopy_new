@@ -2,13 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Check, Edit, Trash2, User, Mail, Key, UserPlus, 
-  Save, AlertCircle, Brain, Users 
+  Save, AlertCircle, Brain, Users, Camera, LogOut, CheckCircle, Lock
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../../services/firebase';
+import DatabaseService from '../../services/DatabaseService';
 
 const UserSignupScreen = () => {
-  const { createFamily, signInWithGoogle } = useAuth();
+  const { 
+    currentUser, 
+    availableFamilies, 
+    loadFamilyData, 
+    createFamily,
+    familyData: authFamilyData, 
+    login, 
+    logout, 
+    loadAllFamilies,
+    ensureFamiliesLoaded,
+    signInWithGoogle 
+  } = useAuth();
+  
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -31,7 +45,17 @@ const UserSignupScreen = () => {
   const [validationErrors, setValidationErrors] = useState({});
   const [googleAuthPrompt, setGoogleAuthPrompt] = useState(false);
   const [pendingFamilyData, setPendingFamilyData] = useState(null);
-  const [error, setError] = useState(''); // Add this for error handling
+  const [error, setError] = useState(''); 
+  const [showProfileUpload, setShowProfileUpload] = useState(false);
+  const [uploadForMember, setUploadForMember] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [showLoginForm, setShowLoginForm] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [showEmptyState, setShowEmptyState] = useState(false);
+  const [uploadType, setUploadType] = useState(null);
 
   // Check if coming from payment with family data
   useEffect(() => {
@@ -51,62 +75,42 @@ const UserSignupScreen = () => {
     }
   }, [location]);
 
-  // Rest of the component stays the same...
-
-// Add right after the useEffect for location data (around line 55)
-useEffect(() => {
   // Check if we should prompt for Google Auth
-  if (location?.state?.useGoogleAuth && pendingFamilyData?.parents?.length > 0) {
-    // Show a dialog asking which parent should connect with Google
-    const selectParentForGoogle = async (parentIndex) => {
-      try {
-        setIsSubmitting(true);
-        const user = await signInWithGoogle();
-        
-        // Update the parent's info
-        const updatedParents = [...pendingFamilyData.parents];
-        updatedParents[parentIndex] = {
-          ...updatedParents[parentIndex],
-          googleAuth: true,
-          email: user.email || updatedParents[parentIndex].email,
-          name: updatedParents[parentIndex].name || user.displayName
-        };
-        
-        setPendingFamilyData({...pendingFamilyData, parents: updatedParents});
-        
-        // Show success message
-        alert(`Successfully connected ${updatedParents[parentIndex].role} with Google!`);
-      } catch (error) {
-        console.error("Google sign-in error:", error);
-        alert("Google sign-in failed. Please try again or use email signup.");
-      } finally {
-        setIsSubmitting(false);
-      }
-    };
-    
-    // Add a modal or option to select which parent
-    // For simplicity, we're just adding this to state for now
-    setGoogleAuthPrompt(true);
-  }
-}, [location, pendingFamilyData]);
-
-  // Check if coming from payment with family data
   useEffect(() => {
-    if (location?.state?.fromPayment && location?.state?.familyData) {
-      const receivedData = location.state.familyData;
-      console.log("Received family data from payment:", location.state.familyData);
+    // Check if we should prompt for Google Auth
+    if (location?.state?.useGoogleAuth && pendingFamilyData?.parents?.length > 0) {
+      // Show a dialog asking which parent should connect with Google
+      const selectParentForGoogle = async (parentIndex) => {
+        try {
+          setIsSubmitting(true);
+          const user = await signInWithGoogle();
+          
+          // Update the parent's info
+          const updatedParents = [...pendingFamilyData.parents];
+          updatedParents[parentIndex] = {
+            ...updatedParents[parentIndex],
+            googleAuth: true,
+            email: user.email || updatedParents[parentIndex].email,
+            name: updatedParents[parentIndex].name || user.displayName
+          };
+          
+          setPendingFamilyData({...pendingFamilyData, parents: updatedParents});
+          
+          // Show success message
+          alert(`Successfully connected ${updatedParents[parentIndex].role} with Google!`);
+        } catch (error) {
+          console.error("Google sign-in error:", error);
+          alert("Google sign-in failed. Please try again or use email signup.");
+        } finally {
+          setIsSubmitting(false);
+        }
+      };
       
-      // Set the received data
-      setFamilyData({
-        familyName: receivedData.familyName || '',
-        parents: receivedData.parents || [
-          { name: '', role: 'Mama', email: '', password: '' },
-          { name: '', role: 'Papa', email: '', password: '' }
-        ],
-        children: receivedData.children || [{ name: '', age: '' }]
-      });
+      // Add a modal or option to select which parent
+      // For simplicity, we're just adding this to state for now
+      setGoogleAuthPrompt(true);
     }
-  }, [location]);
+  }, [location, pendingFamilyData]);
 
   // Handle parent input change
   const handleParentChange = (index, field, value) => {
@@ -182,10 +186,13 @@ useEffect(() => {
         errors[`parent_${index}_email`] = 'Email is invalid';
       }
       
-      if (!parent.password.trim()) {
-        errors[`parent_${index}_password`] = 'Password is required';
-      } else if (parent.password.length < 6) {
-        errors[`parent_${index}_password`] = 'Password must be at least 6 characters';
+      // Only validate password if not using Google Auth
+      if (!parent.googleAuth) {
+        if (!parent.password.trim()) {
+          errors[`parent_${index}_password`] = 'Password is required';
+        } else if (parent.password.length < 6) {
+          errors[`parent_${index}_password`] = 'Password must be at least 6 characters';
+        }
       }
     });
     
@@ -248,6 +255,126 @@ useEffect(() => {
     }
   };
 
+  // Handle image upload
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (file && uploadForMember) {
+      handleImageFile(file);
+    }
+  };
+  
+  const handleImageFile = async (file) => {
+    setIsUploading(true);
+    try {
+      if (uploadForMember.id === 'family') {
+        // For the signup screen, we'll store the temporary family picture
+        // using a timestamp ID since we don't have a familyId yet
+        const tempId = Date.now().toString();
+        const storageRef = ref(storage, `temp-families/${tempId}/${file.name}`);
+        const snapshot = await uploadBytes(storageRef, file);
+        const imageUrl = await getDownloadURL(snapshot.ref);
+        
+        // Store the family picture URL in the familyData state
+        // We'll use this when creating the family in handleSubmit
+        setFamilyData({...familyData, familyPicture: imageUrl});
+        setShowProfileUpload(false);
+      } else {
+        // Handle individual profile upload
+        const storageRef = ref(storage, `temp-profiles/${Date.now()}_${file.name}`);
+        const snapshot = await uploadBytes(storageRef, file);
+        const imageUrl = await getDownloadURL(snapshot.ref);
+        
+        // Update the appropriate parent or child with the profile picture
+        if (uploadForMember.role === 'parent') {
+          const updatedParents = familyData.parents.map((parent, i) => 
+            parent.role === uploadForMember.role ? {...parent, profilePicture: imageUrl} : parent
+          );
+          setFamilyData({...familyData, parents: updatedParents});
+        } else {
+          // Must be a child
+          const updatedChildren = familyData.children.map((child, i) => 
+            i === parseInt(uploadForMember.id) ? {...child, profilePicture: imageUrl} : child
+          );
+          setFamilyData({...familyData, children: updatedChildren});
+        }
+        setShowProfileUpload(false);
+      }
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      let errorMessage = "Failed to upload image. Please try again.";
+      
+      if (error.code === 'storage/unauthorized') {
+        errorMessage = "You don't have permission to upload files.";
+      } else if (error.code === 'storage/canceled') {
+        errorMessage = "Upload was canceled.";
+      } else if (error.code === 'storage/unknown') {
+        errorMessage = "An unknown error occurred during upload.";
+      }
+      
+      alert(errorMessage);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Handle login
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setIsLoggingIn(true);
+    setLoginError('');
+    
+    try {
+      const user = await login(email, password);
+      console.log("Login successful:", user);
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Explicitly load all families
+      const families = await loadAllFamilies(user.uid);
+      console.log("Loaded families:", families);
+
+      // If families exist, load the first one to populate familyMembers
+      if (families && families.length > 0) {
+        console.log("Loading first family:", families[0].familyId);
+        await loadFamilyData(families[0].familyId);
+      }
+      
+      // Stay on the family selection screen
+      setShowLoginForm(false);
+    } catch (error) {
+      console.error("Login error:", error);
+      setLoginError('Invalid email or password. Please try again.');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+  
+  // Handle logout
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setShowLoginForm(true);
+      navigate('/login');
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
+
+  // Get default profile image based on role
+  const getDefaultProfileImage = (member) => {
+    if (!member.profilePicture) {
+      if (member.role === 'parent') {
+        return member.roleType === 'Mama' 
+          ? 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48Y2lyY2xlIGN4PSIxMjgiIGN5PSIxMjgiIHI9IjEyOCIgZmlsbD0iI2U5YjFkYSIvPjxjaXJjbGUgY3g9IjEyOCIgY3k9IjkwIiByPSI0MCIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yMTUsMTcyLjVjMCwzNS05NSwzNS05NSwzNXMtOTUsMC05NS0zNWMwLTIzLjMsOTUtMTAsOTUtMTBTMjE1LDE0OS4yLDIxNSwxNzIuNVoiIGZpbGw9IiNmZmYiLz48L3N2Zz4=' 
+          : 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48Y2lyY2xlIGN4PSIxMjgiIGN5PSIxMjgiIHI9IjEyOCIgZmlsbD0iIzg0YzRlMiIvPjxjaXJjbGUgY3g9IjEyOCIgY3k9IjkwIiByPSI0MCIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yMTUsMTcyLjVjMCwzNS05NSwzNS05NSwzNXMtOTUsMC05NS0zNWMwLTIzLjMsOTUtMTAsOTUtMTBTMjE1LDE0OS4yLDIxNSwxNzIuNVoiIGZpbGw9IiNmZmYiLz48L3N2Zz4=';
+      } else {
+        // Child icon
+        return 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48Y2lyY2xlIGN4PSIxMjgiIGN5PSIxMjgiIHI9IjEyOCIgZmlsbD0iI2ZkZTY4YSIvPjxjaXJjbGUgY3g9IjEyOCIgY3k9IjkwIiByPSI0MCIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yMTUsMTcyLjVjMCwzNS05NSwzNS05NSwzNXMtOTUsMC05NS0zNWMwLTIzLjMsOTUtMTAsOTUtMTBTMjE1LDE0OS4yLDIxNSwxNzIuNVoiIGZpbGw9IiNmZmYiLz48L3N2Zz4=';
+      }
+    }
+    return member.profilePicture;
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-8 font-roboto">
       <div className="container mx-auto px-4 max-w-3xl">
@@ -268,6 +395,20 @@ useEffect(() => {
                 Just review your family information below to create your Allie account. You'll be balancing family responsibilities in just a moment!
               </p>
             </div>
+
+            {familyData.parents.some(p => !p.profilePicture) && (
+              <div className="bg-gradient-to-r from-pink-100 to-purple-100 p-4 rounded-lg shadow-sm mb-6">
+                <div className="flex items-start">
+                  <Camera className="text-purple-600 mr-3 mt-1 flex-shrink-0" size={20} />
+                  <div>
+                    <h4 className="font-medium text-purple-800 font-roboto">Make Allie Personal!</h4>
+                    <p className="text-sm text-purple-700 mt-1 font-roboto">
+                      Adding family photos makes Allie feel more personalized and helps us create a better experience just for you.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             
             {/* Family Name Section */}
             <div className="mb-6 border-b pb-6">
@@ -331,16 +472,108 @@ useEffect(() => {
                   {familyData.parents.map((parent, index) => (
                     <div key={index} className="mb-4 p-4 border rounded bg-white">
                       <h4 className="font-medium mb-3">{parent.role} Information</h4>
+
+                      {/* Google auth info banner */}
+                      {parent.googleAuth && (
+                        <div className="mt-3 p-2 bg-green-50 rounded-lg border border-green-200">
+                          <p className="text-sm text-green-700 flex items-center font-roboto">
+                            <CheckCircle size={16} className="mr-1" />
+                            Google account connected: {parent.googleAuth.email}
+                          </p>
+                          <p className="text-xs text-green-600 mt-1 font-roboto">
+                            Calendar integration and simplified login are enabled
+                          </p>
+                        </div>
+                      )}
+                      
+                      <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <p className="text-sm text-blue-700 mb-3 font-roboto">
+                          <strong>Recommended:</strong> Sign in with Google to enable calendar integration and simplify account management.
+                        </p>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const user = await signInWithGoogle();
+                              
+                              if (user) {
+                                console.log("Successfully signed in with Google:", user);
+                                
+                                // Update the parent's info
+                                const updatedParents = [...familyData.parents];
+                                updatedParents[index] = {
+                                  ...updatedParents[index],
+                                  googleAuth: {
+                                    uid: user.uid,
+                                    email: user.email,
+                                    displayName: user.displayName,
+                                    photoURL: user.photoURL
+                                  },
+                                  email: user.email,
+                                  name: updatedParents[index].name || user.displayName || ''
+                                };
+                                
+                                setFamilyData({...familyData, parents: updatedParents});
+                              }
+                            } catch (error) {
+                              console.error("Google sign-in error:", error);
+                              alert("Google sign-in failed. Please try again or use email signup.");
+                            }
+                          }}
+                          disabled={parent.googleAuth}
+                          className={`w-full flex items-center justify-center rounded-md p-2 font-roboto ${
+                            parent.googleAuth 
+                              ? 'bg-green-50 border border-green-300 text-green-700' 
+                              : 'bg-white border border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {parent.googleAuth ? (
+                            <div className="flex items-center">
+                              <CheckCircle size={16} className="mr-2" />
+                              Connected with Google
+                            </div>
+                          ) : (
+                            <>
+                              <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#4285F4"/>
+                              </svg>
+                              Sign in with Google as {parent.role}
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      
+                      <div className="relative mb-4">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-gray-300"></div>
+                        </div>
+                        <div className="relative flex justify-center">
+                          <span className="px-2 bg-white text-gray-500 text-sm">or enter manually</span>
+                        </div>
+                      </div>
+
                       <div className="space-y-3">
                         <div>
-                          <label className="block text-sm text-gray-700 mb-1">Name</label>
+                          <label className="block text-sm text-gray-700 mb-1">
+                            Name
+                            {parent.googleAuth && !parent.name && (
+                              <span className="text-amber-600 ml-1 font-medium">
+                                ← Please add your name
+                              </span>
+                            )}
+                          </label>
                           <div className="flex items-center border rounded overflow-hidden">
                             <div className="bg-gray-100 p-2 flex items-center justify-center">
                               <User size={18} className="text-gray-500" />
                             </div>
                             <input
                               type="text"
-                              className={`w-full p-2 focus:outline-none ${validationErrors[`parent_${index}_name`] ? 'border-red-500 bg-red-50' : ''}`}
+                              className={`w-full p-2 focus:outline-none ${
+                                validationErrors[`parent_${index}_name`] 
+                                  ? 'border-red-500 bg-red-50' 
+                                  : parent.googleAuth && !parent.name 
+                                    ? 'border-amber-500 bg-amber-50' 
+                                    : ''
+                              }`}
                               placeholder={`${parent.role}'s name`}
                               value={parent.name}
                               onChange={(e) => handleParentChange(index, 'name', e.target.value)}
@@ -370,24 +603,27 @@ useEffect(() => {
                           )}
                         </div>
                         
-                        <div>
-                          <label className="block text-sm text-gray-700 mb-1">Password</label>
-                          <div className="flex items-center border rounded overflow-hidden">
-                            <div className="bg-gray-100 p-2 flex items-center justify-center">
-                              <Key size={18} className="text-gray-500" />
+                        {/* Only show password field if not using Google Auth */}
+                        {!parent.googleAuth && (
+                          <div>
+                            <label className="block text-sm text-gray-700 mb-1">Password</label>
+                            <div className="flex items-center border rounded overflow-hidden">
+                              <div className="bg-gray-100 p-2 flex items-center justify-center">
+                                <Key size={18} className="text-gray-500" />
+                              </div>
+                              <input
+                                type="password"
+                                className={`w-full p-2 focus:outline-none ${validationErrors[`parent_${index}_password`] ? 'border-red-500 bg-red-50' : ''}`}
+                                placeholder="Password"
+                                value={parent.password}
+                                onChange={(e) => handleParentChange(index, 'password', e.target.value)}
+                              />
                             </div>
-                            <input
-                              type="password"
-                              className={`w-full p-2 focus:outline-none ${validationErrors[`parent_${index}_password`] ? 'border-red-500 bg-red-50' : ''}`}
-                              placeholder="Password"
-                              value={parent.password}
-                              onChange={(e) => handleParentChange(index, 'password', e.target.value)}
-                            />
+                            {validationErrors[`parent_${index}_password`] && (
+                              <p className="text-red-500 text-xs mt-1">{validationErrors[`parent_${index}_password`]}</p>
+                            )}
                           </div>
-                          {validationErrors[`parent_${index}_password`] && (
-                            <p className="text-red-500 text-xs mt-1">{validationErrors[`parent_${index}_password`]}</p>
-                          )}
-                        </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -402,6 +638,12 @@ useEffect(() => {
                       <div>
                         <p className="font-medium">{parent.name || `[${parent.role}]`}</p>
                         <p className="text-sm text-gray-500">{parent.email}</p>
+                        {parent.googleAuth && (
+                          <span className="text-xs text-green-600 flex items-center mt-1">
+                            <CheckCircle size={12} className="mr-1" />
+                            Connected with Google
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -502,59 +744,6 @@ useEffect(() => {
             </div>
           </div>
           
-{/* Personalized Insights Section */}
-{familyData.priorities && familyData.communication && (
-  <div className="mb-8 bg-purple-50 p-6 rounded-lg">
-    <h4 className="font-medium mb-3 flex items-center">
-      <Brain className="text-purple-600 mr-2" size={20} />
-      Personalized Family Insights
-    </h4>
-    
-    <div className="space-y-4">
-      {familyData.priorities.highestPriority && (
-        <div className="bg-white p-3 rounded border border-purple-100">
-          <p className="text-sm">
-            <span className="font-medium">Priority Focus:</span> Your family identified 
-            <span className="text-purple-700 font-medium"> {familyData.priorities.highestPriority.toLowerCase()} </span> 
-            as your highest priority area. Allie's AI will customize tasks to address this area first.
-          </p>
-        </div>
-      )}
-      
-      {familyData.communication.style && (
-        <div className="bg-white p-3 rounded border border-purple-100">
-          <p className="text-sm">
-            <span className="font-medium">Communication Style:</span> Based on your
-            <span className="text-purple-700 font-medium"> {familyData.communication.style} </span>
-            communication style, we've tailored your family meeting guides for maximum effectiveness.
-          </p>
-        </div>
-      )}
-      
-      {familyData.mainChallenge && (
-        <div className="bg-white p-3 rounded border border-purple-100">
-          <p className="text-sm">
-            <span className="font-medium">Primary Challenge:</span> We'll focus on addressing your
-            <span className="text-purple-700 font-medium"> {familyData.mainChallenge} </span>
-            challenge with specialized tools and approaches.
-          </p>
-        </div>
-      )}
-      
-      {familyData.children && familyData.children.length > 0 && (
-        <div className="bg-white p-3 rounded border border-purple-100">
-          <p className="text-sm">
-            <span className="font-medium">Child-Specific Insights:</span> We've customized the experience for
-            <span className="text-purple-700 font-medium"> {familyData.children.map(c => c.name).join(', ')} </span>
-            with age-appropriate content and activities.
-          </p>
-        </div>
-      )}
-    </div>
-  </div>
-)}
-
-
           {/* Benefits Section */}
           <div className="bg-black text-white p-5 rounded-lg mb-6">
             <h3 className="font-medium text-lg mb-3 flex items-center">
@@ -583,84 +772,29 @@ useEffect(() => {
           
           {/* Final Call to Action */}
           <div className="flex flex-col space-y-4">
-          <button
-  onClick={handleSubmit}
-  disabled={isSubmitting}
-  className="w-full py-3 bg-black text-white rounded-md hover:bg-gray-800 font-medium flex items-center justify-center"
->
-  {isSubmitting ? (
-    <>
-      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-      Creating Your Family...
-    </>
-  ) : (
-    <>Create Your Allie Family</>
-  )}
-</button>
+            <button
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="w-full py-3 bg-black text-white rounded-md hover:bg-gray-800 font-medium flex items-center justify-center"
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Creating Your Family...
+                </>
+              ) : (
+                <>Create Your Allie Family</>
+              )}
+            </button>
 
-<div className="flex items-center my-4">
-  <div className="flex-1 border-t border-gray-300"></div>
-  <p className="mx-4 text-sm text-gray-500">or</p>
-  <div className="flex-1 border-t border-gray-300"></div>
-</div>
-
-<button
-  onClick={async () => {
-    setIsSubmitting(true);
-    try {
-      const user = await signInWithGoogle();
-      
-      // If we have family data, update the parent with Google info
-      if (familyData.parents && familyData.parents.length > 0) {
-        // Find the parent that matches the Google email
-        const parentIndex = familyData.parents.findIndex(
-          p => p.email.toLowerCase() === user.email.toLowerCase()
-        );
-        
-        if (parentIndex >= 0) {
-          // Update the parent's info
-          const updatedParents = [...familyData.parents];
-          updatedParents[parentIndex] = {
-            ...updatedParents[parentIndex],
-            googleAuth: true,
-            name: updatedParents[parentIndex].name || user.displayName
-          };
-          
-          setFamilyData({...familyData, parents: updatedParents});
-          
-          // If all required info is there, create the family
-          if (validateForm()) {
-            await handleSubmit();
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Google sign-in error:", error);
-      setError("Google sign-in failed. Please try again or use email.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }}
-  disabled={isSubmitting}
-  className="w-full py-3 border border-gray-300 rounded-md hover:bg-gray-50 flex items-center justify-center"
->
-  <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#4285F4"/>
-    <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#34A853"/>
-    <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#FBBC05"/>
-    <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#EA4335"/>
-  </svg>
-  Continue with Google
-</button>
-
-<button
-  onClick={() => navigate('/')}
-  disabled={isSubmitting}
-  className="px-4 py-2 text-gray-600 hover:text-gray-800 flex items-center justify-center mt-4"
->
-  <ArrowLeft size={16} className="mr-1" />
-  Cancel
-</button>
+            <button
+              onClick={() => navigate('/')}
+              disabled={isSubmitting}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800 flex items-center justify-center mt-4"
+            >
+              <ArrowLeft size={16} className="mr-1" />
+              Cancel
+            </button>
             
             {Object.keys(validationErrors).length > 0 && (
               <div className="p-3 bg-red-50 text-red-700 rounded flex items-start">
@@ -683,6 +817,62 @@ useEffect(() => {
           <p>Allie v1.0 | Creating balanced, happier families</p>
         </div>
       </div>
+
+      {/* Profile picture upload modal */}
+      {showProfileUpload && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+            <h3 className="text-lg font-medium mb-4">Update Profile Picture</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Select a new photo for {uploadForMember?.name}
+            </p>
+              
+            <div className="flex justify-center mb-4">
+              <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-gray-200">
+                <img 
+                  src={uploadForMember?.profilePicture || getDefaultProfileImage(uploadForMember)} 
+                  alt="Current profile" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </div>
+              
+            <div className="flex items-center justify-center mb-4">
+              {isUploading ? (
+                <div className="px-4 py-2 bg-gray-100 text-gray-700 rounded border border-gray-300 flex items-center">
+                  <div className="w-4 h-4 border-2 border-t-transparent border-black rounded-full animate-spin mr-2"></div>
+                  <span className="text-sm">Uploading...</span>
+                </div>
+              ) : (
+                <label 
+                  htmlFor="image-upload" 
+                  className="flex flex-col items-center px-4 py-3 bg-gray-50 text-black rounded cursor-pointer border border-gray-300 hover:bg-gray-100"
+                >
+                  <User size={20} className="mb-1" />
+                  <span className="text-sm">Upload Photo</span>
+                  <input
+                    id="image-upload"
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                  />
+                </label>
+              )}
+            </div>
+              
+            <div className="flex justify-end">
+              <button
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                onClick={() => setShowProfileUpload(false)}
+                disabled={isUploading}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -24,6 +24,7 @@ const FamilySelectionScreen = () => {
     familyMembers, 
     selectedUser, 
     selectFamilyMember, 
+    setFamilyMembers,
     updateMemberProfile,
     completedWeeks,
   currentWeek, 
@@ -245,11 +246,32 @@ const getDefaultProfileImage = (member) => {
         const storageRef = ref(storage, `profiles/${uploadForMember.id}/${Date.now()}_${file.name}`);
         const snapshot = await uploadBytes(storageRef, file);
         const imageUrl = await getDownloadURL(snapshot.ref);
+        
+        // Here's the fix: updateMemberProfile should take the memberId and data
         await updateMemberProfile(uploadForMember.id, { profilePicture: imageUrl });
+        
+        // Update local state to show the new image immediately
+        const updatedMembers = familyMembers.map(member => {
+          if (member.id === uploadForMember.id) {
+            return {...member, profilePicture: imageUrl};
+          }
+          return member;
+        });
+        
+        // This was missing - update the familyMembers state
+        setFamilyMembers(updatedMembers);
+        
         setShowProfileUpload(false);
       }
     } catch (error) {
       console.error("Error uploading image:", error);
+      // Log specific error details for debugging
+      console.log("Upload error details:", {
+        memberId: uploadForMember?.id,
+        error: error.message,
+        code: error.code
+      });
+      
       let errorMessage = "Failed to upload image. Please try again.";
       
       if (error.code === 'storage/unauthorized') {
@@ -260,8 +282,10 @@ const getDefaultProfileImage = (member) => {
         errorMessage = "An unknown error occurred during upload.";
       }
       
+      // Show error message to user
       alert(errorMessage);
     } finally {
+      // Make sure this always runs to reset loading state
       setIsUploading(false);
     }
   };
@@ -400,6 +424,21 @@ const getDefaultProfileImage = (member) => {
   const renderLoginForm = () => {
     return (
       <div className="min-h-screen bg-white flex flex-col">
+        {familyMembers.some(m => !m.profilePicture) && (
+  <div className="flex-1 flex flex-col items-center justify-center p-6">
+    <div className="bg-gradient-to-r from-pink-100 to-purple-100 p-4 rounded-lg shadow-sm mb-6 max-w-md w-full">
+      <div className="flex items-start">
+        <Camera className="text-purple-600 mr-3 mt-1 flex-shrink-0" size={20} />
+        <div>
+          <h4 className="font-medium text-purple-800 font-roboto">Make Allie Personal!</h4>
+          <p className="text-sm text-purple-700 mt-1 font-roboto">
+            Adding family photos makes Allie feel more personalized and helps us create a better experience just for you.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
   <div className="flex-1 flex flex-col items-center justify-center p-6">
   {familyMembers.some(m => !m.profilePicture) && (
     <div className="bg-gradient-to-r from-pink-100 to-purple-100 p-4 rounded-lg shadow-sm mb-6 max-w-md w-full">
