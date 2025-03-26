@@ -60,18 +60,35 @@ class DatabaseService {
     return this.auth.currentUser;
   }
 
-  async signInWithGoogle() {
+  async signInWithGoogle(includeCalendarScope = true) {
     try {
-      const { auth, googleProvider } = require('./firebase');
+      const { auth } = require('./firebase');
+      const { GoogleAuthProvider, signInWithPopup } = require('firebase/auth');
       
-      // Add additional scopes if needed
+      // Create a new provider instance each time to ensure scopes are correctly applied
+      const googleProvider = new GoogleAuthProvider();
+      
+      // Add required scopes
       googleProvider.addScope('profile');
       googleProvider.addScope('email');
       
-      console.log("Attempting Google sign-in with popup");
+      // Add calendar scope if requested
+      if (includeCalendarScope) {
+        googleProvider.addScope('https://www.googleapis.com/auth/calendar');
+        googleProvider.addScope('https://www.googleapis.com/auth/calendar.events');
+      }
+      
+      console.log("Attempting Google sign-in with popup, including calendar access:", includeCalendarScope);
+      
       // Force a new window to open with size parameters for better UX
       const result = await signInWithPopup(auth, googleProvider);
       console.log("Google sign-in successful:", result.user?.email);
+      
+      // Store auth token for calendar service to use
+      if (result.credential && result.credential.accessToken) {
+        localStorage.setItem('googleAuthToken', result.credential.accessToken);
+        console.log("Stored Google auth token for calendar access");
+      }
       
       return result.user;
     } catch (error) {
@@ -82,6 +99,8 @@ class DatabaseService {
         alert("Popup was blocked by your browser. Please allow popups for this site or try again.");
       } else if (error.code === 'auth/popup-closed-by-user') {
         console.log("Sign-in popup was closed by the user");
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        console.log("Another popup was requested before this one completed");
       } else {
         // For all other errors, rethrow
         throw error;

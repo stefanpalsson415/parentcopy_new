@@ -103,11 +103,11 @@ class CalendarService {
   }
 
   // Initialize Google Calendar API
-  // Initialize Google Calendar API
+// Initialize Google Calendar API with Firebase Auth token
 async initializeGoogleCalendar() {
   return new Promise((resolve, reject) => {
     // For testing/development, create a mock implementation
-    const mockMode = true; // Set to false in production with real API keys
+    const mockMode = false; // Set to false to use real Google API
     
     if (mockMode) {
       console.log("Using mock Google Calendar implementation");
@@ -143,7 +143,7 @@ async initializeGoogleCalendar() {
       resolve(true);
       return;
     }
-    
+        
     // Real implementation
     if (!window.gapi) {
       const script = document.createElement('script');

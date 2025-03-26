@@ -15,6 +15,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import AllieChat from '../chat/AllieChat';
 import RelationshipMeetingScreen from '../meeting/RelationshipMeetingScreen';
 import FloatingCalendarWidget from '../calendar/FloatingCalendarWidget';
+// At the top of the file, add these imports:
+import GoogleCalendarConnect from '../calendar/GoogleCalendarConnect';
+import CalendarService from '../../services/CalendarService';
 
 const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const navigate = useNavigate();
@@ -47,6 +50,28 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   });
 
   const [allieAIEngineService, setAllieAIEngineService] = useState(null);
+
+  // Add inside the component function, near other useState calls:
+const { currentUser } = useAuth();
+const [calendarConnected, setCalendarConnected] = useState(false);
+
+// Add this useEffect to check calendar connected status:
+useEffect(() => {
+  // Check if calendar is already connected
+  const checkCalendarConnection = async () => {
+    if (currentUser) {
+      try {
+        await CalendarService.initializeGoogleCalendar();
+        const isConnected = CalendarService.isSignedInToGoogle();
+        setCalendarConnected(isConnected);
+      } catch (error) {
+        console.error("Error checking calendar connection:", error);
+      }
+    }
+  };
+  
+  checkCalendarConnection();
+}, [currentUser]);
 
   useEffect(() => {
     // Dynamically import the service to avoid circular dependencies
@@ -368,6 +393,16 @@ useEffect(() => {
           </div>
         </div>
       </div>
+
+      {/* Only show if calendar is not connected */}
+{(!calendarConnected && currentUser) && (
+  <div className="mb-4">
+    <GoogleCalendarConnect 
+      onSuccess={() => setCalendarConnected(true)}
+      buttonText="Connect Calendar for Task Reminders"
+    />
+  </div>
+)}
       
       {/* Navigation Tabs */}
       <div className="fixed top-24 left-0 right-0 z-10 bg-gray-50 border-b shadow-sm">

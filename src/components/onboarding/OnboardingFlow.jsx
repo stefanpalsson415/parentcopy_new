@@ -407,51 +407,103 @@ const ImprovedOnboardingFlow = () => {
               We'll use this information to create profiles for each parent in your family.
             </p>
             {familyData.parents.map((parent, index) => (
-              <div key={index} className="mb-6 p-4 border rounded bg-white">
-                <h3 className="font-medium text-lg mb-3 font-roboto">{parent.role} Information</h3>
-                <div className="space-y-4">
-                  <label className="block">
-                    <span className="text-gray-700 text-sm font-roboto">Name</span>
-                    <input
-                      type="text"
-                      className={`w-full p-2 border rounded mt-1 font-roboto ${validationErrors[`parent_${index}_name`] ? 'border-red-500' : ''}`}
-                      placeholder={`${parent.role}'s name`}
-                      value={parent.name}
-                      onChange={e => updateParent(index, 'name', e.target.value)}
-                    />
-                    {validationErrors[`parent_${index}_name`] && (
-                      <p className="text-red-500 text-xs mt-1 font-roboto">{validationErrors[`parent_${index}_name`]}</p>
-                    )}
-                  </label>
-                  <label className="block">
-                    <span className="text-gray-700 text-sm font-roboto">Email</span>
-                    <input
-                      type="email"
-                      className={`w-full p-2 border rounded mt-1 font-roboto ${validationErrors[`parent_${index}_email`] ? 'border-red-500' : ''}`}
-                      placeholder={`${parent.role}'s email`}
-                      value={parent.email}
-                      onChange={e => updateParent(index, 'email', e.target.value)}
-                    />
-                    {validationErrors[`parent_${index}_email`] && (
-                      <p className="text-red-500 text-xs mt-1 font-roboto">{validationErrors[`parent_${index}_email`]}</p>
-                    )}
-                  </label>
-                  <label className="block">
-                    <span className="text-gray-700 text-sm font-roboto">Password</span>
-                    <input
-                      type="password"
-                      className={`w-full p-2 border rounded mt-1 font-roboto ${validationErrors[`parent_${index}_password`] ? 'border-red-500' : ''}`}
-                      placeholder="Create a password"
-                      value={parent.password}
-                      onChange={e => updateParent(index, 'password', e.target.value)}
-                    />
-                    {validationErrors[`parent_${index}_password`] && (
-                      <p className="text-red-500 text-xs mt-1 font-roboto">{validationErrors[`parent_${index}_password`]}</p>
-                    )}
-                  </label>
-                </div>
-              </div>
-            ))}
+  <div key={index} className="mb-4 p-4 border rounded bg-white">
+    <h3 className="font-medium text-lg mb-3 font-roboto">{parent.role} Information</h3>
+    
+    {/* Google Sign-in Button */}
+    <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+      <p className="text-sm text-blue-700 mb-3 font-roboto">
+        <strong>Recommended:</strong> Sign in with Google to enable calendar integration and simplify account management.
+      </p>
+      <button
+        onClick={async () => {
+          try {
+            const { signInWithGoogle } = require('../../contexts/AuthContext');
+            const user = await signInWithGoogle();
+            if (user) {
+              // Pre-fill parent info with Google account info
+              updateParent(index, 'name', user.displayName || parent.name);
+              updateParent(index, 'email', user.email || parent.email);
+              updateParent(index, 'googleAuth', true);
+              // Generate a random password since we'll use Google auth
+              updateParent(index, 'password', Math.random().toString(36).slice(-8));
+            }
+          } catch (error) {
+            console.error("Google sign-in error:", error);
+          }
+        }}
+        className="w-full flex items-center justify-center bg-white border border-gray-300 rounded-md p-2 font-roboto hover:bg-gray-50"
+      >
+        <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#4285F4"/>
+        </svg>
+        Sign in with Google as {parent.role}
+      </button>
+    </div>
+    
+    <div className="relative mb-4">
+      <div className="absolute inset-0 flex items-center">
+        <div className="w-full border-t border-gray-300"></div>
+      </div>
+      <div className="relative flex justify-center">
+        <span className="px-2 bg-white text-gray-500 text-sm font-roboto">or enter manually</span>
+      </div>
+    </div>
+    
+    <div className="space-y-3">
+      <label className="block">
+        <span className="text-gray-700 text-sm font-roboto">Name</span>
+        <input
+          type="text"
+          className={`w-full p-2 border rounded mt-1 font-roboto ${validationErrors[`parent_${index}_name`] ? 'border-red-500' : ''}`}
+          placeholder={`${parent.role}'s name`}
+          value={parent.name}
+          onChange={e => updateParent(index, 'name', e.target.value)}
+        />
+        {validationErrors[`parent_${index}_name`] && (
+          <p className="text-red-500 text-xs mt-1 font-roboto">{validationErrors[`parent_${index}_name`]}</p>
+        )}
+      </label>
+      <label className="block">
+        <span className="text-gray-700 text-sm font-roboto">Email</span>
+        <input
+          type="email"
+          className={`w-full p-2 border rounded mt-1 font-roboto ${validationErrors[`parent_${index}_email`] ? 'border-red-500' : ''}`}
+          placeholder={`${parent.role}'s email`}
+          value={parent.email}
+          onChange={e => updateParent(index, 'email', e.target.value)}
+        />
+        {validationErrors[`parent_${index}_email`] && (
+          <p className="text-red-500 text-xs mt-1 font-roboto">{validationErrors[`parent_${index}_email`]}</p>
+        )}
+      </label>
+      <label className="block">
+        <span className="text-gray-700 text-sm font-roboto">Password</span>
+        <input
+          type="password"
+          className={`w-full p-2 border rounded mt-1 font-roboto ${validationErrors[`parent_${index}_password`] ? 'border-red-500' : ''}`}
+          placeholder="Create a password"
+          value={parent.password}
+          onChange={e => updateParent(index, 'password', e.target.value)}
+        />
+        {validationErrors[`parent_${index}_password`] && (
+          <p className="text-red-500 text-xs mt-1 font-roboto">{validationErrors[`parent_${index}_password`]}</p>
+        )}
+      </label>
+    </div>
+    
+    {parent.googleAuth && (
+      <div className="mt-3 p-2 bg-green-50 rounded-lg border border-green-200">
+        <p className="text-sm text-green-700 flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+          </svg>
+          Google account connected. Calendar integration will be available!
+        </p>
+      </div>
+    )}
+  </div>
+))}
           </div>
         );
         
