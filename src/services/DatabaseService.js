@@ -68,19 +68,16 @@ class DatabaseService {
     try {
       console.log("Starting Google sign-in");
       
-      // Import directly from firebase.js to ensure proper initialization order
-      const { auth, googleProvider } = require('./firebase');
-      const { signInWithPopup } = require('firebase/auth');
-      
-      console.log("Firebase auth status:", !!auth);
+      // Don't use require within function - use the imported instances
+      // from the top of the file instead
       
       // Ensure Firebase is initialized
-      if (!auth) {
+      if (!this.auth) {
         throw new Error("Firebase auth not initialized - check firebase.js");
       }
       
-      // Use signInWithPopup with explicit authentication instance 
-      const result = await signInWithPopup(auth, googleProvider);
+      // Use the imported googleProvider
+      const result = await signInWithPopup(this.auth, googleProvider);
       console.log("Google sign-in successful:", result.user?.email);
       
       return result.user;
