@@ -17,7 +17,7 @@ const UserSettingsScreen = ({ onClose }) => {
     updateFamilyPicture
   } = useFamily();
   
-  const { currentUser,linkAccountWithGoogle } = useAuth();
+  const { currentUser, linkAccountWithGoogle } = useAuth();
   
   const [newFamilyName, setNewFamilyName] = useState(familyName || '');
   const [isUploading, setIsUploading] = useState(false);
@@ -243,14 +243,31 @@ const UserSettingsScreen = ({ onClose }) => {
     
     return (
       <div className="space-y-6">
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-          <h4 className="font-medium text-blue-800 flex items-center">
-            <Calendar className="mr-2" size={18} />
-            Calendar Integration
-          </h4>
-          <p className="text-sm mt-2 text-blue-700">
-            Connect your calendar to Allie to add family meetings, tasks, and reminders directly to your existing calendar system.
-          </p>
+        <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 mb-6">
+          <div className="flex items-start">
+            <Calendar className="text-blue-600 mr-3 mt-1 flex-shrink-0" size={22} />
+            <div>
+              <h4 className="font-medium text-blue-800 font-roboto">How Calendar Integration Works</h4>
+              <p className="text-sm text-blue-700 mt-1 font-roboto">
+                Allie uses your Google account to sync family meetings, tasks, and events with your calendar. 
+                This keeps your family schedule in one place and sends helpful reminders.
+              </p>
+              
+              {!isGoogleSignedIn && (
+                <div className="mt-3">
+                  <button
+                    onClick={handleGoogleSignIn}
+                    className="px-3 py-1.5 flex items-center justify-center bg-white rounded border border-blue-300 text-blue-700 hover:bg-blue-50 text-sm font-roboto"
+                  >
+                    <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#4285F4"/>
+                    </svg>
+                    Connect Google Calendar Now
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
         
         {/* Default Calendar Selection */}
@@ -515,7 +532,7 @@ const UserSettingsScreen = ({ onClose }) => {
           >
             {isSaving ? (
               <span className="flex items-center">
-                <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2"></div>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                 Saving...
               </span>
             ) : (
@@ -637,7 +654,7 @@ const UserSettingsScreen = ({ onClose }) => {
         {/* Profile Settings */}
 {settingsTab === 'profile' && (
   <div className="p-6">
-    <h3 className="text-lg font-semibold mb-4">Personal Settings</h3>
+    <h3 className="text-lg font-semibold mb-4 font-roboto">Personal Settings</h3>
     
     <div className="flex flex-col md:flex-row md:items-start gap-6">
       {/* Profile Picture */}
@@ -778,7 +795,7 @@ if (confirmDisconnect) {
         {/* Family Settings */}
         {settingsTab === 'family' && (
           <div className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Family Settings</h3>
+            <h3 className="text-lg font-semibold mb-4 font-roboto">Family Settings</h3>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Family Name */}
@@ -856,33 +873,7 @@ if (confirmDisconnect) {
 {settingsTab === 'calendar' && (
   
   <div className="p-6">
-    <h3 className="text-lg font-semibold mb-4">Calendar Integration</h3>
-    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 mb-6">
-  <div className="flex items-start">
-    <Calendar className="text-blue-600 mr-3 mt-1 flex-shrink-0" size={22} />
-    <div>
-      <h4 className="font-medium text-blue-800 font-roboto">How Calendar Integration Works</h4>
-      <p className="text-sm text-blue-700 mt-1 font-roboto">
-        Allie uses your Google account to sync family meetings, tasks, and events with your calendar. 
-        This keeps your family schedule in one place and sends helpful reminders.
-      </p>
-      
-      {!isGoogleSignedIn && (
-        <div className="mt-3">
-          <button
-            onClick={handleGoogleSignIn}
-            className="px-3 py-1.5 flex items-center justify-center bg-white rounded border border-blue-300 text-blue-700 hover:bg-blue-50 text-sm font-roboto"
-          >
-            <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#4285F4"/>
-            </svg>
-            Connect Google Calendar Now
-          </button>
-        </div>
-      )}
-    </div>
-  </div>
-</div>
+    <h3 className="text-lg font-semibold mb-4 font-roboto">Calendar Integration</h3>
     
     <CalendarSettingsTab userId={currentUser?.uid} />
   </div>
@@ -891,7 +882,7 @@ if (confirmDisconnect) {
         {/* App Settings */}
         {settingsTab === 'app' && (
           <div className="p-6">
-            <h3 className="text-lg font-semibold mb-4">App Settings</h3>
+            <h3 className="text-lg font-semibold mb-4 font-roboto">App Settings</h3>
             
             <div className="space-y-6">
               {/* Email Notifications */}
