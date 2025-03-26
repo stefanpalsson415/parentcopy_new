@@ -56,6 +56,8 @@ const OnboardingFlow = () => {
       setHeaderTitle("We help your family");
     }
   }, [familyData.familyName]);
+
+  
   
   // Handle data updates
   const updateFamily = (key, value) => {
@@ -426,9 +428,33 @@ const OnboardingFlow = () => {
       setSigningInParent(parent.role);
       
       // Call the signInWithGoogle function
-      await signInWithGoogle();
+      const user = await signInWithGoogle();
       
-      // No need to reset state here as redirect will happen
+      // Here's a key part we were missing - if we get a user back, 
+      // we need to update the parent's information
+      if (user) {
+        console.log("Successfully signed in with Google:", user.email);
+        
+        // Update the parent's information with Google data
+        const updatedParents = [...familyData.parents];
+        updatedParents[index] = {
+          ...updatedParents[index],
+          email: user.email,
+          name: updatedParents[index].name || user.displayName,
+          googleAuth: {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL
+          }
+        };
+        
+        // Update family data with the new parent info
+        setFamilyData({...familyData, parents: updatedParents});
+        
+        // Clear the signing in state
+        setSigningInParent(null);
+      }
     } catch (error) {
       console.error("Google sign-in error:", error);
       // Reset loading state
