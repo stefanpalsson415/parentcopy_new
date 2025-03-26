@@ -537,15 +537,29 @@ const getDefaultProfileImage = (member) => {
 </div>
 
 <button
-  onClick={() => {
+  onClick={async () => {
     setIsLoggingIn(true);
+    setLoginError('');
     try {
-      // Call Google sign-in from AuthContext - this will redirect away
-      signInWithGoogle();
-      // No need for further processing here since we'll redirect
+      // Call Google sign-in and properly handle the async response
+      const user = await signInWithGoogle();
+      if (user) {
+        console.log("Successfully signed in with Google:", user.email);
+        
+        // Load family data for this user
+        const families = await loadAllFamilies(user.uid);
+        if (families && families.length > 0) {
+          await loadFamilyData(families[0].familyId);
+        }
+        
+        setShowLoginForm(false);
+      } else {
+        // User cancelled or something went wrong but was handled in the service
+        setIsLoggingIn(false);
+      }
     } catch (error) {
-      console.error("Google sign-in redirect error:", error);
-      setLoginError('Google sign-in failed. Please try again.');
+      console.error("Google sign-in error:", error);
+      setLoginError('Google sign-in failed: ' + (error.message || 'Unknown error'));
       setIsLoggingIn(false);
     }
   }}

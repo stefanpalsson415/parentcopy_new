@@ -17,11 +17,8 @@ const firebaseConfig = {
 // For localhost testing with Firebase Auth
 if (window.location.hostname === "localhost") {
   console.log("Using emulation mode for authentication on localhost");
-  firebaseConfig.authDomain = window.location.hostname;
+  firebaseConfig.authDomain = "parentload-ba995.firebaseapp.com"; // Keep the original authDomain
 }
-
-
-
 
 // Initialize Firebase services
 const app = initializeApp(firebaseConfig);

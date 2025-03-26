@@ -60,22 +60,36 @@ class DatabaseService {
     return this.auth.currentUser;
   }
 
-// Sign in with Google
-async signInWithGoogle() {
-  try {
-    const { auth, googleProvider } = require('./firebase');
-    
-    // Use popup method instead of redirect for development
-    console.log("Attempting Google sign-in with popup");
-    const result = await signInWithPopup(auth, googleProvider);
-    console.log("Google sign-in successful:", result.user?.email);
-    
-    return result.user;
-  } catch (error) {
-    console.error("Error with Google sign-in popup:", error);
-    throw error;
+  async signInWithGoogle() {
+    try {
+      const { auth, googleProvider } = require('./firebase');
+      
+      // Add additional scopes if needed
+      googleProvider.addScope('profile');
+      googleProvider.addScope('email');
+      
+      console.log("Attempting Google sign-in with popup");
+      // Force a new window to open with size parameters for better UX
+      const result = await signInWithPopup(auth, googleProvider);
+      console.log("Google sign-in successful:", result.user?.email);
+      
+      return result.user;
+    } catch (error) {
+      // Provide more detailed error handling
+      console.error("Error with Google sign-in popup:", error);
+      
+      if (error.code === 'auth/popup-blocked') {
+        alert("Popup was blocked by your browser. Please allow popups for this site or try again.");
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        console.log("Sign-in popup was closed by the user");
+      } else {
+        // For all other errors, rethrow
+        throw error;
+      }
+      
+      return null;
+    }
   }
-}
 
 // Add this new function to handle the redirect result
 async handleGoogleRedirectResult() {
