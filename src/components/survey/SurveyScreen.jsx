@@ -19,7 +19,8 @@ const SurveyScreen = () => {
     currentSurveyResponses,
     updateSurveyResponse,
     resetSurvey,
-    getSurveyProgress
+    getSurveyProgress,
+    updateQuestionWeight  // Add this line
   } = useSurvey();
   
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -34,6 +35,20 @@ const SurveyScreen = () => {
   const [lastSaved, setLastSaved] = useState(null);
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
   const autoSaveIntervalRef = useRef(null);
+  const [editingWeight, setEditingWeight] = useState(false);
+const [weightBeingEdited, setWeightBeingEdited] = useState(null);
+
+
+const [localCurrentQuestion, setLocalCurrentQuestion] = useState(null);
+
+// Create a currentQuestion reference that uses the local state when available
+const currentQuestion = localCurrentQuestion || fullQuestionSet[currentQuestionIndex];
+
+// Update setCurrentQuestion function
+const setCurrentQuestion = (updatedQuestion) => {
+  setLocalCurrentQuestion(updatedQuestion);
+};
+
   
   // Redirect if no user is selected
   useEffect(() => {
@@ -184,6 +199,9 @@ const SurveyScreen = () => {
       }
     };
     
+    setLocalCurrentQuestion(null);
+
+
     // Set a small timeout to ensure component is fully rendered
     const timer = setTimeout(() => {
       // Clean up previous listeners if they exist
@@ -205,8 +223,6 @@ const SurveyScreen = () => {
     };
   }, [currentQuestionIndex, viewingQuestionList, isProcessing]);
   
-  // Get current question
-  const currentQuestion = fullQuestionSet[currentQuestionIndex];
   
   // Auto-save function
   const handleAutoSave = useCallback(async () => {
@@ -289,46 +305,49 @@ const SurveyScreen = () => {
     }
   };
   
-  const handleCompleteSurvey = async () => {
-    if (isProcessing) return; // Prevent multiple submissions
+  // In src/components/survey/SurveyScreen.jsx
+// Find the handleCompleteSurvey function (around line 200-240)
+
+const handleCompleteSurvey = async () => {
+  if (isProcessing) return; // Prevent multiple submissions
+  
+  setIsProcessing(true);
+  
+  try {
+    console.log("Saving survey responses...");
     
-    setIsProcessing(true);
+    // First save responses synchronously
+    const result = await completeInitialSurvey(selectedUser.id, currentSurveyResponses);
     
-    try {
-      console.log("Saving survey responses...");
-      
-      // First save responses synchronously
-      const result = await completeInitialSurvey(selectedUser.id, currentSurveyResponses);
-      
-      if (!result) {
-        throw new Error("Survey completion failed");
-      }
-      
-      // Remove the in-progress flag
-      localStorage.removeItem('surveyInProgress');
-      
-      // Show loading screen AFTER successful save
-      navigate('/loading');
-      
-      // Check if all family members have completed the survey
-      const allCompleted = familyMembers.every(member => member.completed || member.id === selectedUser.id);
-      
-      // Use a shorter timeout and navigate based on completion status
-      setTimeout(() => {
-        if (allCompleted) {
-          console.log("All family members completed survey, navigating to dashboard");
-          window.location.href = '/dashboard'; // Hard navigation instead of router navigate
-        } else {
-          console.log("Some family members still need to complete survey, navigating to family selection");
-          window.location.href = '/login'; // Go to family selection screen
-        }
-      }, 2000);
-    } catch (error) {
-      console.error('Error completing survey:', error);
-      alert('There was an error saving your survey. Please try again.');
-      setIsProcessing(false);
+    if (!result) {
+      throw new Error("Survey completion failed");
     }
-  };
+    
+    // Remove the in-progress flag
+    localStorage.removeItem('surveyInProgress');
+    
+    // Show loading screen AFTER successful save
+    navigate('/loading');
+    
+    // Check if all family members have completed the survey
+    const allCompleted = familyMembers.every(member => member.completed || member.id === selectedUser.id);
+    
+    // Use a shorter timeout and navigate based on completion status
+    setTimeout(() => {
+      if (allCompleted) {
+        console.log("All family members completed survey, navigating to dashboard");
+        window.location.href = '/dashboard'; // Hard navigation to dashboard for all members
+      } else {
+        console.log("Some family members still need to complete survey, navigating to family selection");
+        window.location.href = '/login'; // Go to family selection screen
+      }
+    }, 2000);
+  } catch (error) {
+    console.error('Error completing survey:', error);
+    alert('There was an error saving your survey. Please try again.');
+    setIsProcessing(false);
+  }
+};
   
   // Move to previous question
   const handlePrevious = () => {
@@ -605,93 +624,229 @@ const handlePause = async () => {
               </p>
               
               {/* Weight metrics visualization */}
-              {showWeightMetrics && (
-                <div className="mb-4 p-3 bg-gray-50 rounded-md border">
-                  <h4 className="text-sm font-medium mb-2 flex items-center">
-                    <Scale size={16} className="mr-2 text-gray-700" />
-                    Task Weight Analysis
-                  </h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Base Time:</span>
-                        <span className="font-medium">{currentQuestion.baseWeight}/5</span>
-                      </div>
-                      <div className="w-full bg-gray-200 h-1.5 mt-1 rounded-full overflow-hidden">
-                        <div 
-                          className="bg-blue-500 h-full rounded-full" 
-                          style={{ width: `${(currentQuestion.baseWeight / 5) * 100}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                    <div className="text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Frequency:</span>
-                        <span className="font-medium">{currentQuestion.frequency}</span>
-                      </div>
-                      <div className="w-full bg-gray-200 h-1.5 mt-1 rounded-full overflow-hidden">
-                        <div 
-                          className="bg-green-500 h-full rounded-full" 
-                          style={{ 
-                            width: `${
-                              currentQuestion.frequency === 'daily' ? 100 :
-                              currentQuestion.frequency === 'several' ? 80 :
-                              currentQuestion.frequency === 'weekly' ? 60 :
-                              currentQuestion.frequency === 'monthly' ? 40 : 
-                              20
-                            }%` 
-                          }}
-                        ></div>
-                      </div>
-                    </div>
-                    <div className="text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Invisibility:</span>
-                        <span className="font-medium">{currentQuestion.invisibility}</span>
-                      </div>
-                      <div className="w-full bg-gray-200 h-1.5 mt-1 rounded-full overflow-hidden">
-                        <div 
-                          className="bg-purple-500 h-full rounded-full" 
-                          style={{ 
-                            width: `${
-                              currentQuestion.invisibility === 'completely' ? 100 :
-                              currentQuestion.invisibility === 'mostly' ? 75 :
-                              currentQuestion.invisibility === 'partially' ? 50 : 
-                              25
-                            }%` 
-                          }}
-                        ></div>
-                      </div>
-                    </div>
-                    <div className="text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Emotional Labor:</span>
-                        <span className="font-medium">{currentQuestion.emotionalLabor}</span>
-                      </div>
-                      <div className="w-full bg-gray-200 h-1.5 mt-1 rounded-full overflow-hidden">
-                        <div 
-                          className="bg-red-500 h-full rounded-full" 
-                          style={{ 
-                            width: `${
-                              currentQuestion.emotionalLabor === 'extreme' ? 100 :
-                              currentQuestion.emotionalLabor === 'high' ? 80 :
-                              currentQuestion.emotionalLabor === 'moderate' ? 60 :
-                              currentQuestion.emotionalLabor === 'low' ? 40 : 
-                              20
-                            }%` 
-                          }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2 pt-2 border-t text-xs text-gray-600">
-                    <div className="flex justify-between">
-                      <span>Total Weight Impact:</span>
-                      <span className="font-bold">{parseFloat(currentQuestion.totalWeight).toFixed(1)}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+{showWeightMetrics && (
+  <div className="mb-4 p-3 bg-gray-50 rounded-md border">
+    <div className="flex justify-between items-center mb-2">
+      <h4 className="text-sm font-medium flex items-center">
+        <Scale size={16} className="mr-2 text-gray-700" />
+        Task Weight Analysis
+      </h4>
+      <button
+        onClick={() => setEditingWeight(!editingWeight)}
+        className="text-xs text-blue-600 flex items-center hover:underline"
+      >
+        {editingWeight ? (
+          <>Cancel Editing</>
+        ) : (
+          <>Adjust Weights</>
+        )}
+      </button>
+    </div>
+    <div className="grid grid-cols-2 gap-2">
+      <div className="text-xs">
+        <div className="flex items-center justify-between">
+          <span className="text-gray-600">Base Time:</span>
+          {editingWeight ? (
+            <div className="flex items-center">
+              <button
+                className="px-1 bg-gray-200 text-gray-700 rounded-l"
+                onClick={() => {
+                  if (currentQuestion.baseWeight > 1) {
+                    const result = updateQuestionWeight(
+                      currentQuestion.id,
+                      'baseWeight',
+                      Math.max(1, currentQuestion.baseWeight - 1)
+                    );
+                    if (result) {
+                      // Update the current question with new weights
+                      setCurrentQuestion(result.updatedQuestion);
+                    }
+                  }
+                }}
+              >
+                -
+              </button>
+              <span className="font-medium px-2">{currentQuestion.baseWeight}/5</span>
+              <button
+                className="px-1 bg-gray-200 text-gray-700 rounded-r"
+                onClick={() => {
+                  if (currentQuestion.baseWeight < 5) {
+                    const result = updateQuestionWeight(
+                      currentQuestion.id,
+                      'baseWeight',
+                      Math.min(5, currentQuestion.baseWeight + 1)
+                    );
+                    if (result) {
+                      // Update the current question with new weights
+                      setCurrentQuestion(result.updatedQuestion);
+                    }
+                  }
+                }}
+              >
+                +
+              </button>
+            </div>
+          ) : (
+            <span className="font-medium">{currentQuestion.baseWeight}/5</span>
+          )}
+        </div>
+        <div className="w-full bg-gray-200 h-1.5 mt-1 rounded-full overflow-hidden">
+          <div 
+            className="bg-blue-500 h-full rounded-full" 
+            style={{ width: `${(currentQuestion.baseWeight / 5) * 100}%` }}
+          ></div>
+        </div>
+      </div>
+      <div className="text-xs">
+        <div className="flex items-center justify-between">
+          <span className="text-gray-600">Frequency:</span>
+          {editingWeight ? (
+            <div className="flex items-center">
+              <select
+                className="text-xs p-1 border rounded"
+                value={currentQuestion.frequency}
+                onChange={(e) => {
+                  const result = updateQuestionWeight(
+                    currentQuestion.id,
+                    'frequency',
+                    e.target.value
+                  );
+                  if (result) {
+                    // Update the current question with new weights
+                    setCurrentQuestion(result.updatedQuestion);
+                  }
+                }}
+              >
+                <option value="daily">Daily</option>
+                <option value="several">Several Times Weekly</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+              </select>
+            </div>
+          ) : (
+            <span className="font-medium">{currentQuestion.frequency}</span>
+          )}
+        </div>
+        <div className="w-full bg-gray-200 h-1.5 mt-1 rounded-full overflow-hidden">
+          <div 
+            className="bg-green-500 h-full rounded-full" 
+            style={{ 
+              width: `${
+                currentQuestion.frequency === 'daily' ? 100 :
+                currentQuestion.frequency === 'several' ? 80 :
+                currentQuestion.frequency === 'weekly' ? 60 :
+                currentQuestion.frequency === 'monthly' ? 40 : 
+                20
+              }%` 
+            }}
+          ></div>
+        </div>
+      </div>
+      <div className="text-xs">
+        <div className="flex items-center justify-between">
+          <span className="text-gray-600">Invisibility:</span>
+          {editingWeight ? (
+            <div className="flex items-center">
+              <select
+                className="text-xs p-1 border rounded"
+                value={currentQuestion.invisibility}
+                onChange={(e) => {
+                  const result = updateQuestionWeight(
+                    currentQuestion.id,
+                    'invisibility',
+                    e.target.value
+                  );
+                  if (result) {
+                    // Update the current question with new weights
+                    setCurrentQuestion(result.updatedQuestion);
+                  }
+                }}
+              >
+                <option value="highly">Highly Visible</option>
+                <option value="partially">Partially Visible</option>
+                <option value="mostly">Mostly Invisible</option>
+                <option value="completely">Completely Invisible</option>
+              </select>
+            </div>
+          ) : (
+            <span className="font-medium">{currentQuestion.invisibility}</span>
+          )}
+        </div>
+        <div className="w-full bg-gray-200 h-1.5 mt-1 rounded-full overflow-hidden">
+          <div 
+            className="bg-purple-500 h-full rounded-full" 
+            style={{ 
+              width: `${
+                currentQuestion.invisibility === 'completely' ? 100 :
+                currentQuestion.invisibility === 'mostly' ? 75 :
+                currentQuestion.invisibility === 'partially' ? 50 : 
+                25
+              }%` 
+            }}
+          ></div>
+        </div>
+      </div>
+      <div className="text-xs">
+        <div className="flex items-center justify-between">
+          <span className="text-gray-600">Emotional Labor:</span>
+          {editingWeight ? (
+            <div className="flex items-center">
+              <select
+                className="text-xs p-1 border rounded"
+                value={currentQuestion.emotionalLabor}
+                onChange={(e) => {
+                  const result = updateQuestionWeight(
+                    currentQuestion.id,
+                    'emotionalLabor',
+                    e.target.value
+                  );
+                  if (result) {
+                    // Update the current question with new weights
+                    setCurrentQuestion(result.updatedQuestion);
+                  }
+                }}
+              >
+                <option value="minimal">Minimal</option>
+                <option value="low">Low</option>
+                <option value="moderate">Moderate</option>
+                <option value="high">High</option>
+                <option value="extreme">Extreme</option>
+              </select>
+            </div>
+          ) : (
+            <span className="font-medium">{currentQuestion.emotionalLabor}</span>
+          )}
+        </div>
+        <div className="w-full bg-gray-200 h-1.5 mt-1 rounded-full overflow-hidden">
+          <div 
+            className="bg-red-500 h-full rounded-full" 
+            style={{ 
+              width: `${
+                currentQuestion.emotionalLabor === 'extreme' ? 100 :
+                currentQuestion.emotionalLabor === 'high' ? 80 :
+                currentQuestion.emotionalLabor === 'moderate' ? 60 :
+                currentQuestion.emotionalLabor === 'low' ? 40 : 
+                20
+              }%` 
+            }}
+          ></div>
+        </div>
+      </div>
+    </div>
+    <div className="mt-2 pt-2 border-t text-xs text-gray-600">
+      <div className="flex justify-between">
+        <span>Total Weight Impact:</span>
+        <span className="font-bold">{parseFloat(currentQuestion.totalWeight).toFixed(1)}</span>
+      </div>
+    </div>
+    {editingWeight && (
+      <div className="mt-2 p-2 bg-blue-50 rounded-md text-xs text-blue-700">
+        <p>Adjusting weights will help Allie understand how you prioritize different tasks. Similar tasks will be updated with your preferences.</p>
+      </div>
+    )}
+  </div>
+)}
               
               {/* Task explanation toggle */}
               <div className="flex justify-center space-x-4">

@@ -442,173 +442,173 @@ export function SurveyProvider({ children }) {
     return questions;
   };
 
- // Generate weekly check-in questions with fixed counts (40 for parents, 30 for children)
- const generateWeeklyQuestions = (weekNumber, isChild = false) => {
-  // Select questions from each category, based on week number for variety
-  const weeklyQuestions = [];
-  
-  const categories = [
-    "Visible Household Tasks",
-    "Invisible Household Tasks",
-    "Visible Parental Tasks",
-    "Invisible Parental Tasks"
-  ];
-  
-  // Focus areas based on week number
-  const weeklyFocus = [
-    null, // Week 0 (unused)
-    "high-impact", // Week 1: Focus on high-impact tasks
-    "relationship", // Week 2: Focus on relationship impact
-    "invisible", // Week 3: Focus on invisible work
-    "emotional", // Week 4: Focus on emotional labor
-    "child-development", // Week 5: Focus on child development
-    "balancing", // Week 6: Focus on balance management
-    "progress", // Week 7: Focus on progress areas
-    "challenge" // Week 8: Focus on challenge areas
-  ][weekNumber % 9] || "high-impact"; // Default to high-impact for other weeks
-  
-  console.log(`Week ${weekNumber} focus: ${weeklyFocus}`);
-  
-  // Helper function to select questions based on weekly focus
-  const selectFocusQuestions = (categoryQuestions) => {
-    let filteredQuestions = [...categoryQuestions];
+  // Generate weekly check-in questions with fixed counts (40 for parents, 30 for children)
+  const generateWeeklyQuestions = (weekNumber, isChild = false) => {
+    // Select questions from each category, based on week number for variety
+    const weeklyQuestions = [];
     
-    // Pre-filter based on focus area
-    switch(weeklyFocus) {
-      case "high-impact":
-        // Sort by total weight and take top questions
-        filteredQuestions.sort((a, b) => parseFloat(b.totalWeight) - parseFloat(a.totalWeight));
-        break;
-      case "relationship":
-        // Prioritize relationship impact questions
-        filteredQuestions.sort((a, b) => {
-          const impactValues = { "extreme": 3, "high": 2, "moderate": 1, "minimal": 0 };
-          return impactValues[b.relationshipImpact || 'minimal'] - impactValues[a.relationshipImpact || 'minimal'];
-        });
-        break;
-      case "invisible":
-        // Prioritize invisibility questions
-        filteredQuestions.sort((a, b) => {
-          const invisValues = { "completely": 3, "mostly": 2, "partially": 1, "highly": 0 };
-          return invisValues[b.invisibility || 'highly'] - invisValues[a.invisibility || 'highly'];
-        });
-        break;
-      case "emotional":
-        // Prioritize emotional labor questions
-        filteredQuestions.sort((a, b) => {
-          const emotionalValues = { "extreme": 3, "high": 2, "moderate": 1, "minimal": 0 };
-          return emotionalValues[b.emotionalLabor || 'minimal'] - emotionalValues[a.emotionalLabor || 'minimal'];
-        });
-        break;
-      case "child-development":
-        // Prioritize child development questions
-        filteredQuestions.sort((a, b) => {
-          const devValues = { "high": 2, "moderate": 1, "limited": 0 };
-          return devValues[b.childDevelopment || 'limited'] - devValues[a.childDevelopment || 'limited'];
-        });
-        break;
-      case "balancing":
-        // Prioritize balance questions
-        filteredQuestions = filteredQuestions.filter(q => q.isBalanceQuestion === true);
-        if (filteredQuestions.length < 5) {
-          // If not enough balance questions, add some high-impact ones
-          const additionalQuestions = categoryQuestions
-            .filter(q => !q.isBalanceQuestion)
-            .sort((a, b) => parseFloat(b.totalWeight || 0) - parseFloat(a.totalWeight || 0))
-            .slice(0, 5 - filteredQuestions.length);
-          
-          filteredQuestions = [...filteredQuestions, ...additionalQuestions];
-        }
-        break;
-      case "progress":
-      case "challenge":
-        // These would use historical data in a real implementation
-        // For now, just use high-impact questions
-        filteredQuestions.sort((a, b) => parseFloat(b.totalWeight || 0) - parseFloat(a.totalWeight || 0));
-        break;
-    }
+    const categories = [
+      "Visible Household Tasks",
+      "Invisible Household Tasks",
+      "Visible Parental Tasks",
+      "Invisible Parental Tasks"
+    ];
     
-    // Take top 3 based on focus
-    const primaryQuestions = filteredQuestions.slice(0, 3);
+    // Focus areas based on week number
+    const weeklyFocus = [
+      null, // Week 0 (unused)
+      "high-impact", // Week 1: Focus on high-impact tasks
+      "relationship", // Week 2: Focus on relationship impact
+      "invisible", // Week 3: Focus on invisible work
+      "emotional", // Week 4: Focus on emotional labor
+      "child-development", // Week 5: Focus on child development
+      "balancing", // Week 6: Focus on balance management
+      "progress", // Week 7: Focus on progress areas
+      "challenge" // Week 8: Focus on challenge areas
+    ][weekNumber % 9] || "high-impact"; // Default to high-impact for other weeks
     
-    // Add 2 random other questions for variety
-    const remainingQuestions = filteredQuestions
-      .filter(q => !primaryQuestions.includes(q))
-      .sort(() => 0.5 - Math.random())
-      .slice(0, 2);
+    console.log(`Week ${weekNumber} focus: ${weeklyFocus}`);
     
-    // Mix and return questions
-    return [...primaryQuestions, ...remainingQuestions].sort(() => 0.5 - Math.random());
-  };
-  
-  // Calculate max questions per category - for 40 total, get 10 per category
-  // The actual number might be slightly less due to available questions
-  const maxQuestionsPerCategory = Math.ceil(maxTotalQuestions / categories.length);
-  
-  // Track our total questions
-  let totalQuestionsAdded = 0;
-  const maxTotalQuestions = isChild ? 30 : 40;
-  
-  // Process each category to select questions
-  categories.forEach(category => {
-    // Skip if we already have enough questions
-    if (totalQuestionsAdded >= maxTotalQuestions) return;
-    
-    const categoryQuestions = fullQuestionSet.filter(q => q.category === category);
-    
-    // Select questions based on weekly focus - but limit to maxQuestionsPerCategory
-    const selectedQuestions = selectFocusQuestions(categoryQuestions).slice(0, maxQuestionsPerCategory);
-    
-    // Add weekly explanations while staying within our total limit
-    selectedQuestions.forEach(question => {
-      // Skip if we've reached our quota
-      if (totalQuestionsAdded >= maxTotalQuestions) return;
+    // Helper function to select questions based on weekly focus
+    const selectFocusQuestions = (categoryQuestions) => {
+      let filteredQuestions = [...categoryQuestions];
       
-      let weeklyExplanation = `We're asking about this again to track changes over time and see if our recommendations are helping create more balance in your family. This is a ${parseFloat(question.totalWeight) > 10 ? 'high-impact' : 'standard'} task.`;
-      
-      // Add focus-specific explanation
+      // Pre-filter based on focus area
       switch(weeklyFocus) {
         case "high-impact":
-          weeklyExplanation += ` This week we're focusing on high-impact tasks that significantly affect your family balance.`;
+          // Sort by total weight and take top questions
+          filteredQuestions.sort((a, b) => parseFloat(b.totalWeight) - parseFloat(a.totalWeight));
           break;
         case "relationship":
-          weeklyExplanation += ` This week we're focusing on tasks that impact your relationship satisfaction.`;
+          // Prioritize relationship impact questions
+          filteredQuestions.sort((a, b) => {
+            const impactValues = { "extreme": 3, "high": 2, "moderate": 1, "minimal": 0 };
+            return impactValues[b.relationshipImpact || 'minimal'] - impactValues[a.relationshipImpact || 'minimal'];
+          });
           break;
         case "invisible":
-          weeklyExplanation += ` This week we're focusing on invisible work that often goes unrecognized.`;
+          // Prioritize invisibility questions
+          filteredQuestions.sort((a, b) => {
+            const invisValues = { "completely": 3, "mostly": 2, "partially": 1, "highly": 0 };
+            return invisValues[b.invisibility || 'highly'] - invisValues[a.invisibility || 'highly'];
+          });
           break;
         case "emotional":
-          weeklyExplanation += ` This week we're focusing on emotional labor that can be draining when imbalanced.`;
+          // Prioritize emotional labor questions
+          filteredQuestions.sort((a, b) => {
+            const emotionalValues = { "extreme": 3, "high": 2, "moderate": 1, "minimal": 0 };
+            return emotionalValues[b.emotionalLabor || 'minimal'] - emotionalValues[a.emotionalLabor || 'minimal'];
+          });
           break;
         case "child-development":
-          weeklyExplanation += ` This week we're focusing on tasks that affect how your children perceive gender roles.`;
+          // Prioritize child development questions
+          filteredQuestions.sort((a, b) => {
+            const devValues = { "high": 2, "moderate": 1, "limited": 0 };
+            return devValues[b.childDevelopment || 'limited'] - devValues[a.childDevelopment || 'limited'];
+          });
           break;
         case "balancing":
-          weeklyExplanation += ` This week we're focusing on how responsibility is distributed at a meta level.`;
+          // Prioritize balance questions
+          filteredQuestions = filteredQuestions.filter(q => q.isBalanceQuestion === true);
+          if (filteredQuestions.length < 5) {
+            // If not enough balance questions, add some high-impact ones
+            const additionalQuestions = categoryQuestions
+              .filter(q => !q.isBalanceQuestion)
+              .sort((a, b) => parseFloat(b.totalWeight || 0) - parseFloat(a.totalWeight || 0))
+              .slice(0, 5 - filteredQuestions.length);
+            
+            filteredQuestions = [...filteredQuestions, ...additionalQuestions];
+          }
           break;
         case "progress":
-          weeklyExplanation += ` This week we're focusing on areas where you've made progress to maintain momentum.`;
-          break;
         case "challenge":
-          weeklyExplanation += ` This week we're focusing on challenging areas that need more attention.`;
+          // These would use historical data in a real implementation
+          // For now, just use high-impact questions
+          filteredQuestions.sort((a, b) => parseFloat(b.totalWeight || 0) - parseFloat(a.totalWeight || 0));
           break;
       }
       
-      weeklyQuestions.push({
-        ...question,
-        weeklyExplanation
-      });
+      // Take top 3 based on focus
+      const primaryQuestions = filteredQuestions.slice(0, 3);
       
-      // Increment our counter
-      totalQuestionsAdded++;
+      // Add 2 random other questions for variety
+      const remainingQuestions = filteredQuestions
+        .filter(q => !primaryQuestions.includes(q))
+        .sort(() => 0.5 - Math.random())
+        .slice(0, 2);
+      
+      // Mix and return questions
+      return [...primaryQuestions, ...remainingQuestions].sort(() => 0.5 - Math.random());
+    };
+    
+    // Calculate max questions per category - for 40 total, get 10 per category
+    // The actual number might be slightly less due to available questions
+    const maxQuestionsPerCategory = Math.ceil(maxTotalQuestions / categories.length);
+    
+    // Track our total questions
+    let totalQuestionsAdded = 0;
+    const maxTotalQuestions = isChild ? 30 : 40;
+    
+    // Process each category to select questions
+    categories.forEach(category => {
+      // Skip if we already have enough questions
+      if (totalQuestionsAdded >= maxTotalQuestions) return;
+      
+      const categoryQuestions = fullQuestionSet.filter(q => q.category === category);
+      
+      // Select questions based on weekly focus - but limit to maxQuestionsPerCategory
+      const selectedQuestions = selectFocusQuestions(categoryQuestions).slice(0, maxQuestionsPerCategory);
+      
+      // Add weekly explanations while staying within our total limit
+      selectedQuestions.forEach(question => {
+        // Skip if we've reached our quota
+        if (totalQuestionsAdded >= maxTotalQuestions) return;
+        
+        let weeklyExplanation = `We're asking about this again to track changes over time and see if our recommendations are helping create more balance in your family. This is a ${parseFloat(question.totalWeight) > 10 ? 'high-impact' : 'standard'} task.`;
+        
+        // Add focus-specific explanation
+        switch(weeklyFocus) {
+          case "high-impact":
+            weeklyExplanation += ` This week we're focusing on high-impact tasks that significantly affect your family balance.`;
+            break;
+          case "relationship":
+            weeklyExplanation += ` This week we're focusing on tasks that impact your relationship satisfaction.`;
+            break;
+          case "invisible":
+            weeklyExplanation += ` This week we're focusing on invisible work that often goes unrecognized.`;
+            break;
+          case "emotional":
+            weeklyExplanation += ` This week we're focusing on emotional labor that can be draining when imbalanced.`;
+            break;
+          case "child-development":
+            weeklyExplanation += ` This week we're focusing on tasks that affect how your children perceive gender roles.`;
+            break;
+          case "balancing":
+            weeklyExplanation += ` This week we're focusing on how responsibility is distributed at a meta level.`;
+            break;
+          case "progress":
+            weeklyExplanation += ` This week we're focusing on areas where you've made progress to maintain momentum.`;
+            break;
+          case "challenge":
+            weeklyExplanation += ` This week we're focusing on challenging areas that need more attention.`;
+            break;
+        }
+        
+        weeklyQuestions.push({
+          ...question,
+          weeklyExplanation
+        });
+        
+        // Increment our counter
+        totalQuestionsAdded++;
+      });
     });
-  });
-  
-  console.log(`Generated ${weeklyQuestions.length} weekly check-in questions`);
-  
-  // Finally, return the weekly questions - capped at maxTotalQuestions
-  return weeklyQuestions.slice(0, maxTotalQuestions);
-};
+    
+    console.log(`Generated ${weeklyQuestions.length} weekly check-in questions`);
+    
+    // Finally, return the weekly questions - capped at maxTotalQuestions
+    return weeklyQuestions.slice(0, maxTotalQuestions);
+  };
   
   // Initial questions
   const fullQuestionSet = generateFullQuestionSet();
@@ -616,6 +616,8 @@ export function SurveyProvider({ children }) {
   // State for temporary survey progress
   const [currentSurveyResponsesState, setCurrentSurveyResponsesState] = useState({});
   const [completedQuestions, setCompletedQuestions] = useState([]);
+  // NEW: Add state for user-modified weights
+  const [userModifiedWeights, setUserModifiedWeights] = useState({});
 
   // Add or update a survey response
   const updateSurveyResponse = (questionId, answer) => {
@@ -636,11 +638,11 @@ export function SurveyProvider({ children }) {
   };
 
   // Get survey progress percentage
-const getSurveyProgress = (totalQuestions) => {
-  // Add 1 to current index to show true progress (since we're on question currentIndex + 1)
-  // This ensures the progress bar accurately reflects where we are in the survey
-  return Math.min(((completedQuestions.length + 1) / totalQuestions) * 100, 100);
-};
+  const getSurveyProgress = (totalQuestions) => {
+    // Add 1 to current index to show true progress (since we're on question currentIndex + 1)
+    // This ensures the progress bar accurately reflects where we are in the survey
+    return Math.min(((completedQuestions.length + 1) / totalQuestions) * 100, 100);
+  };
   
   // Set survey responses from outside (like when loading saved responses)
   const setCurrentSurveyResponses = (responses) => {
@@ -649,6 +651,93 @@ const getSurveyProgress = (totalQuestions) => {
     // Update completedQuestions state based on the responses
     const questionIds = Object.keys(responses);
     setCompletedQuestions(questionIds);
+  };
+  
+  // NEW: Update weight attributes for a question
+  const updateQuestionWeight = (questionId, attributeName, newValue) => {
+    // Find the question in the fullQuestionSet
+    const questionIndex = fullQuestionSet.findIndex(q => q.id === questionId);
+    
+    if (questionIndex !== -1) {
+      // Create a deep copy of the question set
+      const updatedQuestionSet = [...fullQuestionSet];
+      
+      // Update the specified weight attribute
+      updatedQuestionSet[questionIndex] = {
+        ...updatedQuestionSet[questionIndex],
+        [attributeName]: newValue
+      };
+      
+      // Recalculate the total weight
+      const updatedWeight = calculateTaskWeight(updatedQuestionSet[questionIndex], {
+        highestPriority: "Invisible Parental Tasks",
+        secondaryPriority: "Visible Parental Tasks",
+        tertiaryPriority: "Invisible Household Tasks"
+      });      updatedQuestionSet[questionIndex].totalWeight = updatedWeight.toFixed(2);
+      
+      // Store the modified weight in user preferences
+      setUserModifiedWeights(prev => ({
+        ...prev,
+        [questionId]: {
+          ...(prev[questionId] || {}),
+          [attributeName]: newValue,
+          totalWeight: updatedWeight.toFixed(2)
+        }
+      }));
+      
+      // Apply to similar questions in the same category
+      const currentQuestion = updatedQuestionSet[questionIndex];
+      const category = currentQuestion.category;
+      
+      // Find similar questions by keyword matching
+      const questionText = currentQuestion.text.toLowerCase();
+      const keywords = questionText.split(' ')
+        .filter(word => word.length > 4)  // Only consider meaningful words
+        .filter(word => !['what', 'when', 'where', 'which', 'their', 'about', 'would', 'could'].includes(word));
+      
+      // Update similar questions
+      updatedQuestionSet.forEach((q, idx) => {
+        // Skip the current question and questions from different categories
+        if (idx === questionIndex || q.category !== category) return;
+        
+        // Check if this question has similar keywords
+        const qText = q.text.toLowerCase();
+        const hasSimilarKeywords = keywords.some(keyword => qText.includes(keyword));
+        
+        if (hasSimilarKeywords) {
+          // Update the attribute for similar questions
+          updatedQuestionSet[idx] = {
+            ...updatedQuestionSet[idx],
+            [attributeName]: newValue
+          };
+          
+          // Recalculate weight
+          const similarQuestionWeight = calculateTaskWeight(updatedQuestionSet[idx], {
+            highestPriority: "Invisible Parental Tasks",
+            secondaryPriority: "Visible Parental Tasks",
+            tertiaryPriority: "Invisible Household Tasks"
+          });          updatedQuestionSet[idx].totalWeight = similarQuestionWeight.toFixed(2);
+          
+          // Store this modification too
+          setUserModifiedWeights(prev => ({
+            ...prev,
+            [q.id]: {
+              ...(prev[q.id] || {}),
+              [attributeName]: newValue,
+              totalWeight: similarQuestionWeight.toFixed(2)
+            }
+          }));
+        }
+      });
+      
+      // Return the updated question set and the updated question
+      return {
+        questionSet: updatedQuestionSet,
+        updatedQuestion: updatedQuestionSet[questionIndex]
+      };
+    }
+    
+    return null;
   };
   
   // Get questions for a specific category
@@ -707,6 +796,9 @@ const getSurveyProgress = (totalQuestions) => {
     setCurrentSurveyResponses,
     // New property for relationship questions
     relationshipQuestions: fullQuestionSet.filter(q => q.category === "Relationship Health"),
+    // NEW: Add the user-modified weights state and update function
+    userModifiedWeights,
+    updateQuestionWeight,
     // ... other getter functions
     // New getter functions
     getQuestionsByCategory,

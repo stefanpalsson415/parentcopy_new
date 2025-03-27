@@ -18,6 +18,9 @@ import FloatingCalendarWidget from '../calendar/FloatingCalendarWidget';
 // At the top of the file, add these imports:
 import GoogleCalendarConnect from '../calendar/GoogleCalendarConnect';
 import CalendarService from '../../services/CalendarService';
+import DashboardTutorial from '../onboarding/DashboardTutorial';
+import ErrorBoundary from '../common/ErrorBoundary';
+
 
 const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const navigate = useNavigate();
@@ -37,6 +40,7 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const { loadFamilyData } = useAuth();
   
   const [activeTab, setActiveTab] = useState('tasks');
+  const [showTutorial, setShowTutorial] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showFamilyMeeting, setShowFamilyMeeting] = useState(false);
   const [loadingFamily, setLoadingFamily] = useState(false);
@@ -103,6 +107,23 @@ useEffect(() => {
            (selectedUser.name === task.assignedToName || 
             selectedUser.roleType === task.assignedTo);
   };
+
+// Add this useEffect after the other useEffects
+useEffect(() => {
+  // Check if we should show the tutorial
+  const tutorialCompleted = localStorage.getItem('dashboardTutorialCompleted');
+  const isFirstDashboardVisit = !tutorialCompleted;
+  
+  if (isFirstDashboardVisit) {
+    // We'll show the tutorial after a small delay to ensure dashboard is fully loaded
+    const timer = setTimeout(() => {
+      setShowTutorial(true);
+    }, 1000);
+    
+    return () => clearTimeout(timer);
+  }
+}, []);
+
 
   // Consolidated family loading from all possible sources
   useEffect(() => {
@@ -408,6 +429,8 @@ useEffect(() => {
       <div className="fixed top-24 left-0 right-0 z-10 bg-gray-50 border-b shadow-sm">
         <div className="container mx-auto flex overflow-x-auto px-4 py-2">
           <button 
+            id="tasks-tab" // Add this line
+
             className={`px-4 py-2 font-medium whitespace-nowrap font-roboto relative ${activeTab === 'tasks' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
             onClick={() => setActiveTab('tasks')}
           >
@@ -419,6 +442,8 @@ useEffect(() => {
 )}
           </button>
           <button 
+            id="dashboard-tab"
+
             className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'dashboard' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
             onClick={() => setActiveTab('dashboard')}
           >
@@ -428,6 +453,8 @@ useEffect(() => {
           {/* Relationship Tab */}
           {selectedUser && (
             <button 
+            id="relationship-tab"
+
               className={`px-4 py-2 font-medium whitespace-nowrap font-roboto relative ${activeTab === 'relationship' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
               onClick={() => setActiveTab('relationship')}
             >
@@ -463,9 +490,11 @@ useEffect(() => {
       
       {/* Main Content */}
       <div className="container mx-auto px-4 pt-40 pb-6">
-        {/* Tab content */}
-        {renderTabContent()}
-      </div>
+  <ErrorBoundary>
+    {/* Tab content */}
+    {renderTabContent()}
+  </ErrorBoundary>
+</div>
 
       {/* Settings Modal */}
       {showSettings && (
@@ -483,11 +512,19 @@ useEffect(() => {
       )}
       
       {/* Allie Chat Widget */}
+      <div id="chat-button"> {/* Add this wrapper with ID */}
+
       <AllieChat />
       
       {/* Floating Calendar Widget */}
       <FloatingCalendarWidget />
-    </div>
+    {/* Right before the final closing div tag */}
+{showTutorial && (
+  <DashboardTutorial 
+    onComplete={() => setShowTutorial(false)} 
+  />
+)}
+</div>
   );
 };
 
