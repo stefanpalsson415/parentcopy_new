@@ -19,6 +19,7 @@ const FamilySelectionScreen = () => {
     logout, 
     loadAllFamilies,
     getMemberSurveyResponses,
+    updateFamilyPicture,
     ensureFamiliesLoaded,
     signInWithGoogle  } = useAuth();
   const { 
@@ -274,6 +275,58 @@ const getDefaultProfileImage = (member) => {
   const handleImageFile = async (file) => {
     setIsUploading(true);
     
+    // Validate file size before attempting upload
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      setIsUploading(false);
+      alert("File is too large. Please select an image under 5MB.");
+      return;
+    }
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setIsUploading(false);
+      alert("Please select a valid image file.");
+      return;
+    }
+    
+    // Helper function to resize images before upload
+const resizeImageFile = (file, maxWidth) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        // Only resize if the image is larger than maxWidth
+        if (img.width <= maxWidth) {
+          resolve(file); // Return original file if it's already small enough
+          return;
+        }
+        
+        const canvas = document.createElement('canvas');
+        const scale = maxWidth / img.width;
+        canvas.width = maxWidth;
+        canvas.height = img.height * scale;
+        
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        // Convert to blob
+        canvas.toBlob((blob) => {
+          // Create a new file from the blob
+          const resizedFile = new File([blob], file.name, {
+            type: file.type,
+            lastModified: Date.now(),
+          });
+          resolve(resizedFile);
+        }, file.type, 0.8); // 80% quality JPEG
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+    
+    
     // Safety timeout to prevent endless loading
     const safetyTimeout = setTimeout(() => {
       console.log("Safety timeout triggered - resetting upload state");
@@ -304,17 +357,26 @@ const getDefaultProfileImage = (member) => {
         
         console.log("Uploading family picture for family ID:", familyId);
         
+        // Create a smaller preview first to improve performance
+        const resizedImage = await resizeImageFile(file, 800); // Resize to max 800px width
+        
         // Use DatabaseService method instead of direct storage access
-        const imageUrl = await DatabaseService.uploadFamilyPicture(familyId, file);
+        const imageUrl = await DatabaseService.uploadFamilyPicture(familyId, resizedImage);
         console.log("Family picture uploaded successfully:", imageUrl);
         
+        // Update the family picture in state
+        await updateFamilyPicture(imageUrl);
+
         setShowProfileUpload(false);
       } else {
         // Handle individual profile upload
         console.log("Uploading profile picture for member ID:", uploadForMember.id);
         
+        // Create a smaller preview first to improve performance
+        const resizedImage = await resizeImageFile(file, 400); // Resize to max 400px width
+        
         // Directly use DatabaseService to handle the upload
-        const imageUrl = await DatabaseService.uploadProfileImage(uploadForMember.id, file);
+        const imageUrl = await DatabaseService.uploadProfileImage(uploadForMember.id, resizedImage);
         console.log("Profile picture uploaded successfully:", imageUrl);
         
         // Now update the member profile with the new image URL
@@ -867,6 +929,26 @@ if (someCompleted && someIncomplete) {
 return (
   <div className="min-h-screen bg-white flex flex-col">
   <div className="flex-1 flex flex-col items-center justify-center p-6">
+    {/* Profile Pictures Callout */}
+{familyMembers.some(m => !m.profilePicture) && (
+  <div className="fixed right-4 top-32 w-64 rounded-lg border-2 border-pink-400 bg-gradient-to-br from-pink-50 to-purple-50 p-4 shadow-lg transform rotate-3 z-10">
+    <div className="absolute -top-3 -right-2 bg-yellow-400 text-black text-xs px-2 py-1 rounded-full font-bold animate-pulse">
+      New!
+    </div>
+    <div className="text-center mb-2">
+      <Camera className="text-purple-600 w-10 h-10 mx-auto" />
+      <h3 className="font-bold text-purple-800 mt-1 font-roboto">Picture Perfect!</h3>
+    </div>
+    <p className="text-sm text-purple-700 font-roboto">
+      Add profile pics to make Allie more fun! Our AI works 73% better when it can see your smiling faces! 😊
+    </p>
+    <div className="text-center mt-3">
+      <div className="text-xs text-gray-500 italic font-roboto">
+        *According to our very scientific happiness research
+      </div>
+    </div>
+  </div>
+)}
     {familyMembers.some(m => !m.profilePicture) && (
       <div className="bg-gradient-to-r from-pink-100 to-purple-100 p-4 rounded-lg shadow-sm mb-6 max-w-md w-full">
         <div className="flex items-start">
@@ -1005,70 +1087,75 @@ return (
       </div>
 
       {/* Profile picture upload modal */}
-      {showProfileUpload && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
-            <h3 className="text-lg font-medium mb-4">Update Profile Picture</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Select a new photo for {uploadForMember?.name}
-            </p>
-              
-            <div className="flex justify-center mb-4">
-              <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-gray-200">
-                <img 
-                  src={uploadForMember?.profilePicture || getDefaultProfileImage(uploadForMember)} 
-                  alt="Current profile" 
-                  className="w-full h-full object-cover"
-                />
-              </div>
+{showProfileUpload && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+      <h3 className="text-lg font-medium mb-4 font-roboto">Update Profile Picture</h3>
+      <p className="text-sm text-gray-600 mb-4 font-roboto">
+        Select a new photo for {uploadForMember?.name}
+      </p>
+        
+      <div className="flex justify-center mb-4">
+        <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-gray-200 relative">
+          <img 
+            src={uploadForMember?.profilePicture || getDefaultProfileImage(uploadForMember)} 
+            alt="Current profile" 
+            className="w-full h-full object-cover"
+          />
+          {isUploading && (
+            <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+              <div className="w-10 h-10 border-4 border-t-transparent border-white rounded-full animate-spin"></div>
             </div>
-              
-            <div className="flex items-center justify-center mb-4">
-              {isUploading ? (
-                <div className="px-4 py-2 bg-gray-100 text-gray-700 rounded border border-gray-300 flex items-center">
-                  <div className="w-4 h-4 border-2 border-t-transparent border-black rounded-full animate-spin mr-2"></div>
-                  <span className="text-sm">Uploading...</span>
-                </div>
-              ) : (
-                <div className="flex space-x-3">
-                  <label 
-                    htmlFor="image-upload" 
-                    className="flex flex-col items-center px-4 py-3 bg-gray-50 text-black rounded cursor-pointer border border-gray-300 hover:bg-gray-100"
-                  >
-                    <Upload size={20} className="mb-1" />
-                    <span className="text-sm">Upload Photo</span>
-                    <input
-                      id="image-upload"
-                      type="file"
-                      className="hidden"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                    />
-                  </label>
-                  
-                  <button
-                    onClick={openCameraCapture}
-                    className="flex flex-col items-center px-4 py-3 bg-blue-50 text-blue-700 rounded cursor-pointer border border-blue-300 hover:bg-blue-100"
-                  >
-                    <Camera size={20} className="mb-1" />
-                    <span className="text-sm">Take Photo</span>
-                  </button>
-                </div>
-              )}
-            </div>
-              
-            <div className="flex justify-end">
-              <button
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                onClick={() => setShowProfileUpload(false)}
-                disabled={isUploading}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
+          )}
+        </div>
+      </div>
+      
+      {isUploading ? (
+        <div className="text-center mb-4">
+          <p className="text-purple-600 font-roboto animate-pulse">Uploading your beautiful image...</p>
+          <p className="text-sm text-gray-600 font-roboto">This will just take a moment</p>
+        </div>
+      ) : (
+        <div className="flex space-x-3 justify-center mb-4">
+          <label 
+            htmlFor="image-upload" 
+            className="flex flex-col items-center px-4 py-3 bg-black text-white rounded cursor-pointer border border-black hover:bg-gray-800 transition-colors"
+          >
+            <Upload size={20} className="mb-1" />
+            <span className="text-sm font-roboto">Choose File</span>
+            <span className="text-xs text-gray-300 font-roboto">Max 5MB</span>
+            <input
+              id="image-upload"
+              type="file"
+              className="hidden"
+              accept="image/*"
+              onChange={handleImageUpload}
+            />
+          </label>
+          
+          <button
+            onClick={openCameraCapture}
+            className="flex flex-col items-center px-4 py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded cursor-pointer border border-transparent hover:opacity-90 transition-opacity"
+          >
+            <Camera size={20} className="mb-1" />
+            <span className="text-sm font-roboto">Take Photo</span>
+            <span className="text-xs font-roboto">Use camera</span>
+          </button>
         </div>
       )}
+        
+      <div className="flex justify-end">
+        <button
+          className="px-4 py-2 text-gray-600 hover:text-gray-800 font-roboto"
+          onClick={() => setShowProfileUpload(false)}
+          disabled={isUploading}
+        >
+          {isUploading ? "Please wait..." : "Cancel"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 };
