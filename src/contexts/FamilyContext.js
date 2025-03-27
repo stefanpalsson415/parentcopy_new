@@ -394,11 +394,53 @@ const updateRelationshipStrategy = async (strategyId, updateData) => {
   };
 
   // Complete initial survey
-  const completeInitialSurvey = async (memberId, responses) => {
+ // Complete initial survey with enhanced error handling and analytics
+const completeInitialSurvey = async (memberId, responses) => {
+  try {
+    console.log(`Starting initial survey completion for member ${memberId}`);
+    if (!familyId) throw new Error("No family ID available");
+    
+    // Backup current state in case we need to restore
+    const previousMembers = [...familyMembers];
+    const previousResponses = {...surveyResponses};
+    
     try {
-      if (!familyId) throw new Error("No family ID available");
+      // 1. First update Firebase (do this first to ensure data is saved)
+      console.log("Updating member survey completion status...");
+      await DatabaseService.updateMemberSurveyCompletion(familyId, memberId, 'initial', true);
       
-      // Update local state
+      console.log("Saving survey responses...");
+      // Try to use the enhanced method if questionMetadata is available
+      const fullQuestionSet = surveyDataRef.current?.fullQuestionSet || [];
+      if (fullQuestionSet.length > 0) {
+        // Create question metadata map
+        const questionMetadata = {};
+        fullQuestionSet.forEach(q => {
+          questionMetadata[q.id] = {
+            category: q.category,
+            totalWeight: q.totalWeight,
+            baseWeight: q.baseWeight,
+            frequency: q.frequency,
+            invisibility: q.invisibility,
+            emotionalLabor: q.emotionalLabor,
+            childDevelopment: q.childDevelopment
+          };
+        });
+        
+        // Use enhanced method
+        await DatabaseService.saveSurveyResponsesWithMetadata(
+          familyId, 
+          memberId, 
+          'initial', 
+          responses, 
+          questionMetadata
+        );
+      } else {
+        // Fall back to regular method
+        await DatabaseService.saveSurveyResponses(familyId, memberId, 'initial', responses);
+      }
+      
+      // 2. Update local state after successful Firebase update
       const updatedMembers = familyMembers.map(member => {
         if (member.id === memberId) {
           return {
@@ -413,11 +455,7 @@ const updateRelationshipStrategy = async (strategyId, updateData) => {
       setFamilyMembers(updatedMembers);
       setSurveyResponses({ ...surveyResponses, ...responses });
       
-      // Update Firebase
-      await DatabaseService.updateMemberSurveyCompletion(familyId, memberId, 'initial', true);
-      await DatabaseService.saveSurveyResponses(familyId, memberId, 'initial', responses);
-      
-      // Update selected user if that's the one completing the survey
+      // 3. Update selected user if that's the one completing the survey
       if (selectedUser && selectedUser.id === memberId) {
         setSelectedUser({
           ...selectedUser,
@@ -426,15 +464,13 @@ const updateRelationshipStrategy = async (strategyId, updateData) => {
         });
       }
       
-
-    
-
-      // Store initial survey data in week history
+      // 4. Store initial survey data in week history
       const allComplete = updatedMembers.every(member => member.completed);
       if (allComplete) {
+        console.log("All family members have completed the survey. Updating week history...");
         // Create initial survey snapshot using current responses
         const initialSurveyData = {
-          responses: responses, // Use the responses that were just submitted
+          responses: responses,
           completionDate: new Date().toISOString(),
           familyMembers: updatedMembers.map(m => ({
             id: m.id,
@@ -456,14 +492,64 @@ const updateRelationshipStrategy = async (strategyId, updateData) => {
         await DatabaseService.saveFamilyData({ 
           weekHistory: updatedHistory
         }, familyId);
+        
+        // 5. Store AI preferences in dedicated storage
+        try {
+          // Extract AI-related data from survey
+          const aiPreferences = extractAIPreferencesFromSurvey(responses);
+          await DatabaseService.storeAIPreferences(familyId, {
+            priorities: familyPriorities,
+            aiPreferences: aiPreferences
+          });
+        } catch (aiError) {
+          console.error("Error storing AI preferences:", aiError);
+          // Non-critical error, don't block completion
+        }
       }
       
+      // Record survey completion analytics
+      try {
+        await DatabaseService.recordAnalyticsEvent(familyId, {
+          event: 'survey_completed',
+          memberId: memberId,
+          surveyType: 'initial',
+          questionCount: Object.keys(responses).length,
+          timestamp: new Date().toISOString()
+        });
+      } catch (analyticsError) {
+        console.error("Analytics error:", analyticsError);
+        // Non-critical error, don't block completion
+      }
+      
+      console.log("Initial survey completion successful");
       return true;
     } catch (error) {
-      setError(error.message);
+      // If Firebase update fails, restore state to avoid inconsistency
+      console.error("Firebase update failed, restoring state:", error);
+      setFamilyMembers(previousMembers);
+      setSurveyResponses(previousResponses);
       throw error;
     }
+  } catch (error) {
+    console.error("Complete initial survey error:", error);
+    setError(error.message || "Failed to complete survey");
+    throw error;
+  }
+};
+
+// Helper function to extract AI preferences from survey responses
+const extractAIPreferencesFromSurvey = (responses) => {
+  // Default preferences
+  const preferences = {
+    style: 'friendly',
+    length: 'balanced',
+    topics: ['Balance insights', 'Parenting tips']
   };
+  
+  // In a real implementation, we would analyze responses
+  // to determine user preferences. For now, return defaults.
+  return preferences;
+};
 
   // Save survey progress without marking as completed
   const saveSurveyProgress = async (memberId, responses) => {

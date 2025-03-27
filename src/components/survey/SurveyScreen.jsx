@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Info, HelpCircle, Scale, Brain, Heart, Clock } from 'lucide-react';
+import { LogOut, Info, HelpCircle, Scale, Brain, Heart, Clock, ArrowLeft, ArrowRight, Save } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useSurvey } from '../../contexts/SurveyContext';
 
@@ -10,7 +10,7 @@ const SurveyScreen = () => {
     selectedUser,
     familyMembers,
     completeInitialSurvey,
-    saveSurveyProgress, // Add this line
+    saveSurveyProgress,
     familyPriorities
   } = useFamily();
   
@@ -30,8 +30,10 @@ const SurveyScreen = () => {
   const keyboardInitialized = useRef(false);
   const [showWeightMetrics, setShowWeightMetrics] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-
-
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState(null);
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  const autoSaveIntervalRef = useRef(null);
   
   // Redirect if no user is selected
   useEffect(() => {
@@ -41,66 +43,99 @@ const SurveyScreen = () => {
   }, [selectedUser, navigate]);
   
   // Check for saved progress when component mounts
-useEffect(() => {
-  // Check if we have a current user and they have saved progress
-  if (selectedUser) {
-    try {
-      const surveyProgress = localStorage.getItem('surveyInProgress');
-      if (surveyProgress) {
-        const progress = JSON.parse(surveyProgress);
-        
-        // Only load progress if it belongs to this user
-        if (progress.userId === selectedUser.id) {
-          console.log("Found saved progress for this user, not resetting survey");
-          // Don't reset the survey, keep the loaded progress
-          return;
+  useEffect(() => {
+    // Check if we have a current user and they have saved progress
+    if (selectedUser) {
+      try {
+        const surveyProgress = localStorage.getItem('surveyInProgress');
+        if (surveyProgress) {
+          const progress = JSON.parse(surveyProgress);
+          
+          // Only load progress if it belongs to this user
+          if (progress.userId === selectedUser.id) {
+            console.log("Found saved progress for this user, not resetting survey");
+            // Don't reset the survey, keep the loaded progress
+            return;
+          }
         }
+      } catch (e) {
+        console.error("Error checking survey progress:", e);
       }
-    } catch (e) {
-      console.error("Error checking survey progress:", e);
     }
-  }
-  
-  // Only reset if we didn't find saved progress for this user
-  resetSurvey();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [selectedUser?.id]);
+    
+    // Only reset if we didn't find saved progress for this user
+    resetSurvey();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedUser?.id]);
 
-// Restore survey progress when component mounts
-useEffect(() => {
-  // Only run this if we have a selected user and current responses
-  if (selectedUser && currentSurveyResponses && Object.keys(currentSurveyResponses).length > 0) {
-    console.log("Found", Object.keys(currentSurveyResponses).length, "saved responses");
-    
-    // Find the last answered question index
-    let lastAnsweredIndex = -1;
-    
-    // Check which questions have answers
-    fullQuestionSet.forEach((question, index) => {
-      if (currentSurveyResponses[question.id]) {
-        lastAnsweredIndex = Math.max(lastAnsweredIndex, index);
+  // Restore survey progress when component mounts
+  useEffect(() => {
+    // Only run this if we have a selected user and current responses
+    if (selectedUser && currentSurveyResponses && Object.keys(currentSurveyResponses).length > 0) {
+      console.log("Found", Object.keys(currentSurveyResponses).length, "saved responses");
+      
+      // Find the last answered question index
+      let lastAnsweredIndex = -1;
+      
+      // Check which questions have answers
+      fullQuestionSet.forEach((question, index) => {
+        if (currentSurveyResponses[question.id]) {
+          lastAnsweredIndex = Math.max(lastAnsweredIndex, index);
+        }
+      });
+      
+      // If we found saved answers, jump to the next unanswered question
+      if (lastAnsweredIndex >= 0) {
+        console.log(`Found progress! Last answered question: ${lastAnsweredIndex}`);
+        
+        // Set current question to the next unanswered one
+        const nextIndex = Math.min(lastAnsweredIndex + 1, fullQuestionSet.length - 1);
+        setCurrentQuestionIndex(nextIndex);
+        
+        // Set selected parent based on the response to the current question
+        if (nextIndex > 0 && nextIndex <= lastAnsweredIndex) {
+          setSelectedParent(currentSurveyResponses[fullQuestionSet[nextIndex].id] || null);
+        } else {
+          setSelectedParent(null);
+        }
+        
+        console.log(`Restored to question ${nextIndex + 1} with ${Object.keys(currentSurveyResponses).length} saved answers`);
+
+        // Set the last saved timestamp
+        setLastSaved(new Date());
       }
-    });
-    
-    // If we found saved answers, jump to the next unanswered question
-    if (lastAnsweredIndex >= 0) {
-      console.log(`Found progress! Last answered question: ${lastAnsweredIndex}`);
-      
-      // Set current question to the next unanswered one
-      const nextIndex = Math.min(lastAnsweredIndex + 1, fullQuestionSet.length - 1);
-      setCurrentQuestionIndex(nextIndex);
-      
-      // Set selected parent based on the response to the current question
-      if (nextIndex > 0 && nextIndex <= lastAnsweredIndex) {
-        setSelectedParent(currentSurveyResponses[fullQuestionSet[nextIndex].id] || null);
-      } else {
-        setSelectedParent(null);
-      }
-      
-      console.log(`Restored to question ${nextIndex + 1} with ${Object.keys(currentSurveyResponses).length} saved answers`);
     }
-  }
-}, [selectedUser, fullQuestionSet, currentSurveyResponses]);
+  }, [selectedUser, fullQuestionSet, currentSurveyResponses]);
+
+  // Setup auto-save functionality
+  useEffect(() => {
+    if (selectedUser && autoSaveEnabled) {
+      // Clear any existing interval
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current);
+      }
+      
+      // Set up auto-save every 30 seconds
+      autoSaveIntervalRef.current = setInterval(() => {
+        // Only auto-save if we have responses and aren't in the middle of processing
+        if (
+          selectedUser && 
+          Object.keys(currentSurveyResponses).length > 0 &&
+          !isProcessing && 
+          !isSaving
+        ) {
+          handleAutoSave();
+        }
+      }, 30000); // 30 seconds
+    }
+    
+    // Cleanup interval on unmount
+    return () => {
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current);
+      }
+    };
+  }, [selectedUser, autoSaveEnabled, currentSurveyResponses, isProcessing]);
   
   // Find Mama and Papa users from family members
   const mamaUser = familyMembers.find(m => m.roleType === 'Mama' || m.name === 'Mama');
@@ -118,76 +153,139 @@ useEffect(() => {
     }
   };
   
-  // Set up keyboard shortcuts
-useEffect(() => {
-  // Function to handle key press
-  const handleKeyPress = (e) => {
-    if (viewingQuestionList || isProcessing) return;
+  // Set up keyboard shortcuts with debouncing
+  useEffect(() => {
+    // Function to handle key press
+    const handleKeyPress = (e) => {
+      if (viewingQuestionList || isProcessing) return;
       
-    // 'M' key selects Mama
-    if (e.key.toLowerCase() === 'm') {
-      handleSelectParent('Mama');
-    }
-    // 'P' key selects Papa
-    else if (e.key.toLowerCase() === 'p') {
-      handleSelectParent('Papa');
-    }
-  };
+      // 'M' key selects Mama
+      if (e.key.toLowerCase() === 'm') {
+        handleSelectParent('Mama');
+      }
+      // 'P' key selects Papa
+      else if (e.key.toLowerCase() === 'p') {
+        handleSelectParent('Papa');
+      }
+      // Left arrow for previous question
+      else if (e.key === 'ArrowLeft') {
+        if (currentQuestionIndex > 0) {
+          handlePrevious();
+        }
+      }
+      // Right arrow for next question (skip)
+      else if (e.key === 'ArrowRight') {
+        handleSkip();
+      }
+      // 'S' key to manually save progress
+      else if (e.key.toLowerCase() === 's' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        handleManualSave();
+      }
+    };
     
-  // Set a small timeout to ensure component is fully rendered
-  const timer = setTimeout(() => {
-    // Clean up previous listeners if they exist
-    if (keyboardInitialized.current) {
-      window.removeEventListener('keydown', handleKeyPress);
-    }
+    // Set a small timeout to ensure component is fully rendered
+    const timer = setTimeout(() => {
+      // Clean up previous listeners if they exist
+      if (keyboardInitialized.current) {
+        window.removeEventListener('keydown', handleKeyPress);
+      }
+      
+      // Add new listener
+      window.addEventListener('keydown', handleKeyPress);
+      keyboardInitialized.current = true;
+    }, 200);
     
-    // Add new listener
-    window.addEventListener('keydown', handleKeyPress);
-    keyboardInitialized.current = true;
-  }, 200);
-    
-  // Cleanup function
-  return () => {
-    clearTimeout(timer);
-    if (keyboardInitialized.current) {
-      window.removeEventListener('keydown', handleKeyPress);
-    }
-  };
-}, [currentQuestionIndex, viewingQuestionList, isProcessing]);
+    // Cleanup function
+    return () => {
+      clearTimeout(timer);
+      if (keyboardInitialized.current) {
+        window.removeEventListener('keydown', handleKeyPress);
+      }
+    };
+  }, [currentQuestionIndex, viewingQuestionList, isProcessing]);
   
   // Get current question
   const currentQuestion = fullQuestionSet[currentQuestionIndex];
   
+  // Auto-save function
+  const handleAutoSave = useCallback(async () => {
+    if (!selectedUser || isSaving) return;
+    
+    setIsSaving(true);
+    
+    try {
+      console.log("Auto-saving survey progress...");
+      await saveSurveyProgress(selectedUser.id, currentSurveyResponses);
+      
+      // Store survey in progress flag
+      localStorage.setItem('surveyInProgress', JSON.stringify({
+        userId: selectedUser.id,
+        timestamp: new Date().getTime()
+      }));
+      
+      setLastSaved(new Date());
+      console.log("Survey progress auto-saved");
+    } catch (error) {
+      console.error("Error auto-saving survey progress:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [selectedUser, currentSurveyResponses, saveSurveyProgress, isSaving]);
+  
+  // Manual save function
+  const handleManualSave = async () => {
+    if (!selectedUser || isSaving) return;
+    
+    setIsSaving(true);
+    
+    try {
+      console.log("Manually saving survey progress...");
+      await saveSurveyProgress(selectedUser.id, currentSurveyResponses);
+      
+      // Store survey in progress flag
+      localStorage.setItem('surveyInProgress', JSON.stringify({
+        userId: selectedUser.id,
+        timestamp: new Date().getTime()
+      }));
+      
+      setLastSaved(new Date());
+      console.log("Survey progress saved manually");
+    } catch (error) {
+      console.error("Error saving survey progress:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-  
   // Handle parent selection
-const handleSelectParent = (parent) => {
-  if (isProcessing) return; // Prevent multiple selections while processing
-  setIsProcessing(true);
-  
-  setSelectedParent(parent);
-  
-  // Save response
-  if (currentQuestion) {
-    updateSurveyResponse(currentQuestion.id, parent);
-  
-    // Wait a moment to show selection before moving to next question
-    setTimeout(() => {
-      if (currentQuestionIndex < fullQuestionSet.length - 1) {
-        // Use functional state update to ensure we're using the latest value
-        setCurrentQuestionIndex(prevIndex => prevIndex + 1);
-        setSelectedParent(null);
-        setShowWeightInfo(false);
-        setShowExplanation(false);
-        setShowWeightMetrics(false);
-        setIsProcessing(false); // Reset processing state
-      } else {
-        // Survey completed, save responses
-        handleCompleteSurvey();
-      }
-    }, 500);
-  }
-};
+  const handleSelectParent = (parent) => {
+    if (isProcessing) return; // Prevent multiple selections while processing
+    setIsProcessing(true);
+    
+    setSelectedParent(parent);
+    
+    // Save response
+    if (currentQuestion) {
+      updateSurveyResponse(currentQuestion.id, parent);
+    
+      // Wait a moment to show selection before moving to next question
+      setTimeout(() => {
+        if (currentQuestionIndex < fullQuestionSet.length - 1) {
+          // Use functional state update to ensure we're using the latest value
+          setCurrentQuestionIndex(prevIndex => prevIndex + 1);
+          setSelectedParent(null);
+          setShowWeightInfo(false);
+          setShowExplanation(false);
+          setShowWeightMetrics(false);
+          setIsProcessing(false); // Reset processing state
+        } else {
+          // Survey completed, save responses
+          handleCompleteSurvey();
+        }
+      }, 500);
+    }
+  };
   
   const handleCompleteSurvey = async () => {
     if (isProcessing) return; // Prevent multiple submissions
@@ -202,6 +300,9 @@ const handleSelectParent = (parent) => {
       if (!result) {
         throw new Error("Survey completion failed");
       }
+      
+      // Remove the in-progress flag from localStorage
+      localStorage.removeItem('surveyInProgress');
       
       console.log("Survey saved successfully, navigating to loading screen");
       // Only navigate after confirmed save
@@ -241,7 +342,6 @@ const handleSelectParent = (parent) => {
     setShowWeightMetrics(false);
   };
   
-  // Handle pause
   // Handle pause/exit
   const handlePause = async () => {
     if (isProcessing) return; // Prevent multiple actions while processing
@@ -262,12 +362,12 @@ const handleSelectParent = (parent) => {
         }));
       }
       
-      // Navigate to family selection instead of dashboard when survey incomplete
-      navigate('/login');
+      // Navigate to survey dashboard instead of login
+      navigate('/survey-dashboard');
     } catch (error) {
       console.error('Error saving survey progress:', error);
       alert('There was an error saving your progress, but you can continue later.');
-      navigate('/login');
+      navigate('/survey-dashboard');
     } finally {
       setIsProcessing(false);
     }
@@ -332,33 +432,58 @@ const handleSelectParent = (parent) => {
     }
   };
   
+  // Format time
+  const formatTime = (date) => {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+  
   // If no selected user or no current question, return loading
   if (!selectedUser || !currentQuestion) {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+    return <div className="flex items-center justify-center h-screen font-roboto">Loading...</div>;
   }
   
   return (
-    <div className="flex flex-col min-h-screen bg-white">
+    <div className="flex flex-col min-h-screen bg-white font-roboto">
       {/* Header */}
       <div className="bg-black text-white p-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center">
             <div className="w-8 h-8 rounded-full overflow-hidden mr-2">
               <img 
-                src={selectedUser.profilePicture} 
+                src={selectedUser.profilePicture || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48Y2lyY2xlIGN4PSIxMjgiIGN5PSIxMjgiIHI9IjEyOCIgZmlsbD0iI2ZkZTY4YSIvPjxjaXJjbGUgY3g9IjEyOCIgY3k9IjkwIiByPSI0MCIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yMTUsMTcyLjVjMCwzNS05NSwzNS05NSwzNXMtOTUsMC05NS0zNWMwLTIzLjMsOTUtMTAsOTUtMTBTMjE1LDE0OS4yLDIxNSwxNzIuNVoiIGZpbGw9IiNmZmYiLz48L3N2Zz4='} 
                 alt={selectedUser.name}
                 className="w-full h-full object-cover"
               />
             </div>
             <span>{selectedUser.name}</span>
           </div>
-          <button 
-            onClick={handleLogout}
-            className="flex items-center text-sm bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded"
-          >
-            <LogOut size={14} className="mr-1" />
-            Switch User
-          </button>
+          
+          <div className="flex items-center">
+            {/* Auto-save status */}
+            {lastSaved && (
+              <div className="mr-4 text-xs flex items-center">
+                {isSaving ? (
+                  <span className="flex items-center">
+                    <div className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin mr-1"></div>
+                    Saving...
+                  </span>
+                ) : (
+                  <span className="flex items-center text-gray-300">
+                    <Save size={12} className="mr-1" />
+                    Last saved: {formatTime(lastSaved)}
+                  </span>
+                )}
+              </div>
+            )}
+            
+            <button 
+              onClick={handleLogout}
+              className="flex items-center text-sm bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded"
+            >
+              <LogOut size={14} className="mr-1" />
+              Switch User
+            </button>
+          </div>
         </div>
       </div>
         
@@ -432,12 +557,22 @@ const handleSelectParent = (parent) => {
             {/* Survey title */}
             <div className="text-center mb-4">
               <h2 className="text-2xl font-bold">Initial Survey Assessment</h2>
-              <button 
-                onClick={toggleQuestionList}
-                className="text-sm text-blue-600 mt-1"
-              >
-                View All Questions
-              </button>
+              <div className="flex justify-center space-x-4">
+                <button 
+                  onClick={toggleQuestionList}
+                  className="text-sm text-blue-600 mt-1 hover:underline"
+                >
+                  View All Questions
+                </button>
+                <button 
+                  onClick={handleManualSave}
+                  className="text-sm text-blue-600 mt-1 hover:underline flex items-center"
+                  disabled={isSaving}
+                >
+                  <Save size={14} className="mr-1" />
+                  {isSaving ? 'Saving...' : 'Save Progress'}
+                </button>
+              </div>
             </div>
               
             {/* Question */}
@@ -697,12 +832,13 @@ const handleSelectParent = (parent) => {
           <button 
             onClick={handlePrevious}
             disabled={currentQuestionIndex === 0}
-            className={`px-4 py-2 border rounded ${
+            className={`px-4 py-2 border rounded flex items-center ${
               currentQuestionIndex === 0 
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
                 : 'bg-white hover:bg-gray-50'
             }`}
           >
+            <ArrowLeft size={16} className="mr-1" />
             Previous
           </button>
           <button 
@@ -712,11 +848,39 @@ const handleSelectParent = (parent) => {
             Pause Survey
           </button>
           <button 
-            className="px-4 py-2 border rounded bg-white hover:bg-gray-50"
+            className="px-4 py-2 border rounded bg-white hover:bg-gray-50 flex items-center"
             onClick={handleSkip}
           >
             Skip
+            <ArrowRight size={16} className="ml-1" />
           </button>
+        </div>
+      </div>
+
+      {/* Keyboard shortcuts help - fixed at bottom */}
+      <div className="fixed bottom-16 right-4 bg-white p-2 rounded-lg shadow-lg border text-xs text-gray-700 w-64">
+        <p className="font-medium mb-1">Keyboard shortcuts:</p>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <span>M key</span>
+            <span className="text-gray-500">Select Mama</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>P key</span>
+            <span className="text-gray-500">Select Papa</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>←</span>
+            <span className="text-gray-500">Previous question</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>→</span>
+            <span className="text-gray-500">Skip question</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>Ctrl+S</span>
+            <span className="text-gray-500">Save progress</span>
+          </div>
         </div>
       </div>
     </div>

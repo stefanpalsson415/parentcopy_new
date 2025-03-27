@@ -49,6 +49,8 @@ function AppRoutes() {
         <Route path="/onboarding" element={<OnboardingFlow />} />
         <Route path="/signup" element={<UserSignupScreen />} />
         <Route path="/email-opt-in" element={<EmailOptIn />} />
+<Route path="/survey-dashboard" element={<FamilySurveyDashboard />} />
+        
 
 
         <Route path="/how-it-works" element={<HowThisWorksScreen />} />

@@ -1,37 +1,33 @@
 import React from 'react';
+import { CheckCircle } from 'lucide-react';
 
-const LoadingScreen = () => {
+const LoadingScreen = ({ message = "Processing your survey data...", showCheckmark = true }) => {
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50">
-      <div className="text-center p-6">
-        <h2 className="text-2xl font-bold mb-4">Analyzing your responses...</h2>
-        <div className="relative w-64 h-2 bg-gray-200 rounded-full overflow-hidden mx-auto">
-          <div className="absolute top-0 left-0 h-full bg-blue-500 animate-pulse" style={{ width: '75%' }} />
-          <div className="absolute top-0 left-0 h-full bg-blue-600 animate-loading" style={{ width: '40%' }} />
-        </div>
-        <p className="text-gray-600 mt-4">This will just take a moment</p>
+    <div className="min-h-screen flex items-center justify-center bg-white font-roboto">
+      <div className="text-center p-6 max-w-md">
+        {showCheckmark && (
+          <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+            <CheckCircle size={32} className="text-green-600" />
+          </div>
+        )}
         
-        <div className="mt-8 max-w-md mx-auto">
-          <p className="text-sm text-gray-500 italic">
-            "Balancing family responsibilities leads to happier families and stronger relationships."
-          </p>
+        <h2 className="text-2xl font-medium mb-3 font-roboto">
+          {message}
+        </h2>
+        
+        <p className="text-gray-600 mb-8">
+          We're preparing your personalized family dashboard...
+        </p>
+        
+        <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
+          <div className="absolute inset-0 bg-black opacity-10"></div>
+          <div className="absolute top-0 bottom-0 left-0 bg-black w-2/3 animate-pulse"></div>
+        </div>
+        
+        <div className="flex justify-center">
+          <div className="w-10 h-10 border-4 border-gray-200 border-t-black rounded-full animate-spin"></div>
         </div>
       </div>
-      
-      <style jsx="true">{`
-        @keyframes loading {
-          0% {
-            left: -40%;
-          }
-          100% {
-            left: 100%;
-          }
-        }
-        
-        .animate-loading {
-          animation: loading 1.5s ease-in-out infinite;
-        }
-      `}</style>
     </div>
   );
 };

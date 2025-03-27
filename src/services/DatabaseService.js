@@ -561,6 +561,43 @@ async loadCoupleCheckInData(familyId) {
     }
   }
 
+  // Enhanced survey response storage with metadata
+  async saveSurveyResponsesWithMetadata(familyId, memberId, surveyType, responses, questionMetadata) {
+    try {
+      if (!familyId) throw new Error("No family ID available");
+      
+      const enrichedResponses = {};
+        
+      // Add metadata to each response
+      Object.entries(responses).forEach(([questionId, answer]) => {
+        const metadata = questionMetadata[questionId] || {};
+          
+        enrichedResponses[questionId] = {
+          answer,
+          category: metadata.category || 'unknown',
+          weight: metadata.totalWeight || '1',
+          timestamp: new Date().toISOString()
+        };
+      });
+        
+      // Save to Firestore
+      const docRef = doc(this.db, "surveyResponses", `${familyId}-${memberId}-${surveyType}`);
+      await setDoc(docRef, {
+        familyId,
+        memberId,
+        surveyType,
+        responses: enrichedResponses,
+        completedAt: serverTimestamp()
+      });
+      
+      console.log(`Saved ${Object.keys(enrichedResponses).length} enriched survey responses for ${memberId}`);
+      return true;
+    } catch (error) {
+      console.error("Error saving survey responses with metadata:", error);
+      throw error;
+    }
+  }
+
   // Load member survey responses
   async loadMemberSurveyResponses(familyId, memberId, surveyType) {
     try {
@@ -869,6 +906,21 @@ console.log("Family data being prepared:", {
       await setDoc(doc(this.db, "families", familyId), familyDoc);
       console.log("Family document created successfully");
       
+      // Record family creation analytics
+      try {
+        await this.recordAnalyticsEvent(familyId, {
+          event: 'family_created',
+          familyName: familyName,
+          memberCount: familyMembers.length,
+          parentCount: parentData.length,
+          childCount: Array.isArray(children) ? children.length : 0,
+          timestamp: new Date().toISOString()
+        });
+      } catch (analyticsError) {
+        console.error("Analytics error during family creation:", analyticsError);
+        // Non-critical, don't block family creation
+      }
+      
       return familyDoc;
     } catch (error) {
       console.error("Error in createFamily:", error);
@@ -909,6 +961,141 @@ console.log("Family data being prepared:", {
     } catch (error) {
       console.error("Error updating profile picture:", error);
       throw error;
+    }
+  }
+
+  // Store AI preferences
+  async storeAIPreferences(familyId, preferences) {
+    try {
+      if (!familyId) throw new Error("No family ID available");
+      
+      // Create a properly structured object for AI use
+      const aiData = {
+        communicationStyle: preferences.communication?.style || 'open',
+        challengeAreas: preferences.communication?.challengeAreas || [],
+        priorities: {
+          highestPriority: preferences.priorities?.highestPriority || null,
+          secondaryPriority: preferences.priorities?.secondaryPriority || null,
+          tertiaryPriority: preferences.priorities?.tertiaryPriority || null
+        },
+        aiPreferences: {
+          style: preferences.aiPreferences?.style || 'friendly',
+          length: preferences.aiPreferences?.length || 'balanced',
+          topics: preferences.aiPreferences?.topics || []
+        },
+        relationship: preferences.relationship || {},
+        updatedAt: serverTimestamp()
+      };
+        
+      // Store in a dedicated collection for AI engine
+      const docRef = doc(this.db, "familyAIData", familyId);
+      await setDoc(docRef, aiData, { merge: true });
+        
+      // Also store in the main family document for completeness
+      await this.saveFamilyData({
+        aiPreferences: preferences.aiPreferences || {},
+        communication: preferences.communication || {},
+        priorities: preferences.priorities || {},
+        relationship: preferences.relationship || {}
+      }, familyId);
+        
+      console.log("AI preferences stored successfully:", familyId);
+      return true;
+    } catch (error) {
+      console.error("Error storing AI preferences:", error);
+      throw error;
+    }
+  }
+
+  // Record analytics events
+  async recordAnalyticsEvent(familyId, eventData) {
+    try {
+      if (!familyId) throw new Error("No family ID available");
+      
+      // Add timestamp if not provided
+      const event = {
+        ...eventData,
+        timestamp: eventData.timestamp || new Date().toISOString(),
+        recordedAt: serverTimestamp()
+      };
+      
+      // Create a unique ID for this event
+      const eventId = `${event.event}_${Date.now()}`;
+      
+      // Store in analytics collection
+      await setDoc(doc(this.db, "analytics", `${familyId}_${eventId}`), event);
+      
+      return true;
+    } catch (error) {
+      console.error("Error recording analytics event:", error);
+      // Don't throw the error to avoid disrupting the user experience
+      return false;
+    }
+  }
+
+  // Record user onboarding progress
+  async recordOnboardingProgress(userId, familyId, step, data) {
+    try {
+      if (!userId) throw new Error("No user ID available");
+      
+      const progressData = {
+        userId,
+        familyId: familyId || null,
+        step,
+        data: data || {},
+        timestamp: new Date().toISOString(),
+        recordedAt: serverTimestamp()
+      };
+      
+      // Store in onboarding progress collection
+      await setDoc(
+        doc(this.db, "onboardingProgress", `${userId}_step${step}`),
+        progressData,
+        { merge: true }
+      );
+      
+      // Also record as an analytics event
+      if (familyId) {
+        await this.recordAnalyticsEvent(familyId, {
+          event: 'onboarding_step_completed',
+          userId,
+          step,
+          data
+        });
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error recording onboarding progress:", error);
+      // Don't throw the error to avoid disrupting the user experience
+      return false;
+    }
+  }
+  
+  // Track onboarding completion
+  async trackOnboardingCompletion(userId, familyId) {
+    try {
+      if (!userId || !familyId) throw new Error("User ID and Family ID are required");
+      
+      // Record completion in user document
+      await setDoc(doc(this.db, "users", userId), {
+        onboardingCompleted: true,
+        onboardingCompletedAt: serverTimestamp(),
+        latestFamilyId: familyId
+      }, { merge: true });
+      
+      // Record as analytics event
+      await this.recordAnalyticsEvent(familyId, {
+        event: 'onboarding_completed',
+        userId,
+        timestamp: new Date().toISOString()
+      });
+      
+      return true;
+    } catch (error) {
+      console.error("Error tracking onboarding completion:", error);
+      // Don't throw the error to avoid disrupting the user experience
+      return false;
     }
   }
 
@@ -953,6 +1140,24 @@ console.log("Family data being prepared:", {
       return hiddenTasks;
     } catch (error) {
       console.error("Error generating AI task recommendations:", error);
+      throw error;
+    }
+  }
+  
+  // Save couple check-in feedback from AI
+  async saveCoupleCheckInFeedback(familyId, weekNumber, feedback) {
+    try {
+      const docRef = doc(this.db, "coupleCheckInFeedback", `${familyId}-week${weekNumber}`);
+      await setDoc(docRef, {
+        familyId,
+        weekNumber,
+        feedback,
+        generatedAt: serverTimestamp()
+      });
+      
+      return true;
+    } catch (error) {
+      console.error("Error saving couple check-in feedback:", error);
       throw error;
     }
   }
