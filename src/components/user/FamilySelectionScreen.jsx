@@ -263,6 +263,8 @@ const getDefaultProfileImage = (member) => {
     e.stopPropagation();
     setUploadForMember(member);
     setShowProfileUpload(true);
+    // Reset any previous upload state
+    setIsUploading(false);
   };
   
   const handleImageUpload = async (e) => {

@@ -225,7 +225,7 @@ async updateMemberWithGoogleAuth(familyId, memberId, userData) {
   // ---- Storage Methods ----
 
   // Upload image to Firebase Storage
-  // Upload image to Firebase Storage
+// Upload image to Firebase Storage
 async uploadProfileImage(userId, file) {
   try {
     console.log("DatabaseService: Starting profile image upload for user ID:", userId);
