@@ -310,10 +310,18 @@ const SurveyScreen = () => {
       // Show loading screen AFTER successful save
       navigate('/loading');
       
-      // Use a shorter timeout and replace navigate to avoid back-button issues
+      // Check if all family members have completed the survey
+      const allCompleted = familyMembers.every(member => member.completed || member.id === selectedUser.id);
+      
+      // Use a shorter timeout and navigate based on completion status
       setTimeout(() => {
-        console.log("Navigating to dashboard");
-        window.location.href = '/dashboard'; // Hard navigation instead of router navigate
+        if (allCompleted) {
+          console.log("All family members completed survey, navigating to dashboard");
+          window.location.href = '/dashboard'; // Hard navigation instead of router navigate
+        } else {
+          console.log("Some family members still need to complete survey, navigating to family selection");
+          window.location.href = '/login'; // Go to family selection screen
+        }
       }, 2000);
     } catch (error) {
       console.error('Error completing survey:', error);
@@ -853,32 +861,7 @@ const handlePause = async () => {
         </div>
       </div>
 
-      {/* Keyboard shortcuts help - fixed at bottom */}
-      <div className="fixed bottom-16 right-4 bg-white p-2 rounded-lg shadow-lg border text-xs text-gray-700 w-64">
-        <p className="font-medium mb-1">Keyboard shortcuts:</p>
-        <div className="space-y-1">
-          <div className="flex items-center justify-between">
-            <span>M key</span>
-            <span className="text-gray-500">Select Mama</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>P key</span>
-            <span className="text-gray-500">Select Papa</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>←</span>
-            <span className="text-gray-500">Previous question</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>→</span>
-            <span className="text-gray-500">Skip question</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>Ctrl+S</span>
-            <span className="text-gray-500">Save progress</span>
-          </div>
-        </div>
-      </div>
+      
     </div>
   );
 };

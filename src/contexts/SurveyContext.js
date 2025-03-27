@@ -694,7 +694,10 @@ const getSurveyProgress = (totalQuestions) => {
 
   // Context value
   const value = {
-    fullQuestionSet,
+    // Filter out relationship questions and cap at 100 for regular survey
+    fullQuestionSet: fullQuestionSet
+      .filter(q => q.category !== "Relationship Health")
+      .slice(0, 100),
     generateWeeklyQuestions,
     currentSurveyResponses: currentSurveyResponsesState,
     completedQuestions,
@@ -702,6 +705,9 @@ const getSurveyProgress = (totalQuestions) => {
     resetSurvey,
     getSurveyProgress,
     setCurrentSurveyResponses,
+    // New property for relationship questions
+    relationshipQuestions: fullQuestionSet.filter(q => q.category === "Relationship Health"),
+    // ... other getter functions
     // New getter functions
     getQuestionsByCategory,
     getHighImpactQuestions,

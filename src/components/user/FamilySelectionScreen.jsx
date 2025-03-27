@@ -520,36 +520,41 @@ const getDefaultProfileImage = (member) => {
   };
   
 // Render the completion screen that matches the screenshot
+// In src/components/user/FamilySelectionScreen.jsx
+// Replace the renderCompletionScreen function around line 600-650
+
 const renderCompletionScreen = () => {
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6">
       <div className="max-w-2xl w-full text-center">
-        {/* Warning icon */}
-        <div className="bg-amber-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-          <AlertCircle size={30} className="text-amber-500" />
+        {/* Warning icon with cleaner design */}
+        <div className="bg-yellow-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-8 border border-yellow-200">
+          <AlertCircle size={28} className="text-yellow-500" />
         </div>
         
-        {/* Title */}
-        <h1 className="text-3xl font-bold text-black mb-4 font-roboto">
+        {/* Title with improved typography */}
+        <h1 className="text-3xl font-bold text-black mb-6 font-roboto">
           Waiting for All Survey Responses
         </h1>
         
-        {/* Subtitle */}
-        <p className="text-gray-600 text-lg mb-10 font-roboto">
+        {/* Subtitle with better spacing */}
+        <p className="text-gray-600 text-lg mb-12 font-roboto max-w-lg mx-auto">
           All family members need to complete the initial survey before we can generate accurate reports.
         </p>
         
-        {/* Family Progress section */}
-        <h2 className="text-xl font-semibold mb-6 font-roboto">Family Progress</h2>
+        {/* Family Progress section with improved spacing */}
+        <h2 className="text-xl font-semibold mb-8 font-roboto">Family Progress</h2>
         
-        {/* Family members in a row */}
-        <div className="flex justify-center flex-wrap gap-8 mb-10">
+        {/* Family members in a row with better spacing and styling */}
+        <div className="flex justify-center flex-wrap gap-12 mb-12">
           {familyMembers.map((member) => (
             <div key={member.id} className="flex flex-col items-center">
-              {/* Profile picture */}
+              {/* Cleaner profile picture styling */}
               <div 
-                className="w-16 h-16 rounded-full overflow-hidden mb-2 cursor-pointer"
-                onClick={() => handleSelectUser(member)}
+                className={`w-20 h-20 rounded-full overflow-hidden mb-3 cursor-pointer border-2 ${
+                  member.completed ? 'border-green-400' : 'border-yellow-400'
+                }`}
+                onClick={() => !member.completed && handleSelectUser(member)}
               >
                 <img 
                   src={member.profilePicture || getDefaultProfileImage(member)}
@@ -558,21 +563,23 @@ const renderCompletionScreen = () => {
                 />
               </div>
               
-              {/* Name */}
-              <p className="font-medium font-roboto">{member.name}</p>
+              {/* Name with better typography */}
+              <p className="font-medium text-lg font-roboto mb-1">{member.name}</p>
               
-              {/* Status - always "Pending" in amber color as shown in screenshot */}
-              <p className="text-amber-500 text-sm font-roboto">
+              {/* Status with appropriate colors */}
+              <p className={`text-sm font-roboto ${
+                member.completed ? "text-green-500 font-medium" : "text-yellow-500 font-medium"
+              }`}>
                 {member.completed ? "Completed" : "Pending"}
               </p>
             </div>
           ))}
         </div>
         
-        {/* Switch User button */}
+        {/* Switch User button with improved styling */}
         <button
           onClick={() => navigate('/login')}
-          className="px-10 py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 font-roboto"
+          className="px-10 py-3 bg-black text-white rounded-md hover:bg-gray-800 font-roboto shadow-sm transition-colors"
         >
           Switch User
         </button>
