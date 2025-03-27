@@ -15,8 +15,24 @@ const FamilySurveyDashboard = () => {
   const { logout } = useAuth();
   
   // Handle selecting a user
-  const handleSelectUser = (member) => {
+  // Handle selecting a user
+const handleSelectUser = (member) => {
+    console.log("Selecting member in dashboard:", member);
+    
+    // First select the family member in context
     selectFamilyMember(member);
+    
+    // Check if this member has a paused survey
+    let hasInProgressSurvey = false;
+    try {
+      const surveyProgress = localStorage.getItem('surveyInProgress');
+      if (surveyProgress) {
+        const progress = JSON.parse(surveyProgress);
+        hasInProgressSurvey = progress.userId === member.id;
+      }
+    } catch (e) {
+      console.error("Error checking survey progress:", e);
+    }
     
     // Navigate to the appropriate survey type based on role
     if (member.role === 'child') {

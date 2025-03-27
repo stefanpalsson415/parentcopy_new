@@ -636,9 +636,11 @@ export function SurveyProvider({ children }) {
   };
 
   // Get survey progress percentage
-  const getSurveyProgress = (totalQuestions) => {
-    return (completedQuestions.length / totalQuestions) * 100;
-  };
+const getSurveyProgress = (totalQuestions) => {
+  // Add 1 to current index to show true progress (since we're on question currentIndex + 1)
+  // This ensures the progress bar accurately reflects where we are in the survey
+  return Math.min(((completedQuestions.length + 1) / totalQuestions) * 100, 100);
+};
   
   // Set survey responses from outside (like when loading saved responses)
   const setCurrentSurveyResponses = (responses) => {

@@ -268,56 +268,57 @@ const SurveyScreen = () => {
     // Save response
     if (currentQuestion) {
       updateSurveyResponse(currentQuestion.id, parent);
-    
-      // Wait a moment to show selection before moving to next question
-      setTimeout(() => {
+      
+      // Use a single timeout with a clear reference
+      const timer = setTimeout(() => {
         if (currentQuestionIndex < fullQuestionSet.length - 1) {
-          // Use functional state update to ensure we're using the latest value
-          setCurrentQuestionIndex(prevIndex => prevIndex + 1);
+          setCurrentQuestionIndex(currentQuestionIndex + 1); // Use direct value instead of functional update
           setSelectedParent(null);
           setShowWeightInfo(false);
           setShowExplanation(false);
           setShowWeightMetrics(false);
-          setIsProcessing(false); // Reset processing state
         } else {
           // Survey completed, save responses
           handleCompleteSurvey();
         }
-      }, 500);
+        setIsProcessing(false); // Reset processing state
+      }, 800); // Increased timeout for better visibility
+      
+      // Cleanup function to prevent memory leaks
+      return () => clearTimeout(timer);
     }
   };
   
   const handleCompleteSurvey = async () => {
     if (isProcessing) return; // Prevent multiple submissions
     
-    setIsProcessing(true); // Add this processing state
+    setIsProcessing(true);
     
     try {
-      // First try to save data before any navigation
       console.log("Saving survey responses...");
+      
+      // First save responses synchronously
       const result = await completeInitialSurvey(selectedUser.id, currentSurveyResponses);
       
       if (!result) {
         throw new Error("Survey completion failed");
       }
       
-      // Remove the in-progress flag from localStorage
+      // Remove the in-progress flag
       localStorage.removeItem('surveyInProgress');
       
-      console.log("Survey saved successfully, navigating to loading screen");
-      // Only navigate after confirmed save
+      // Show loading screen AFTER successful save
       navigate('/loading');
       
-      // Navigate to dashboard after a delay
+      // Use a shorter timeout and replace navigate to avoid back-button issues
       setTimeout(() => {
         console.log("Navigating to dashboard");
-        navigate('/dashboard');
-      }, 1500);
+        window.location.href = '/dashboard'; // Hard navigation instead of router navigate
+      }, 2000);
     } catch (error) {
       console.error('Error completing survey:', error);
       alert('There was an error saving your survey. Please try again.');
-      setIsProcessing(false); // Reset processing state
-      // Don't navigate away on error, stay on the current page
+      setIsProcessing(false);
     }
   };
   
@@ -343,35 +344,35 @@ const SurveyScreen = () => {
   };
   
   // Handle pause/exit
-  const handlePause = async () => {
-    if (isProcessing) return; // Prevent multiple actions while processing
-    
-    setIsProcessing(true);
-    
-    try {
-      // Save the current progress without marking as completed
-      if (selectedUser && Object.keys(currentSurveyResponses).length > 0) {
-        console.log("Saving survey progress before pausing...");
-        await saveSurveyProgress(selectedUser.id, currentSurveyResponses);
-        console.log("Progress saved successfully");
-        
-        // Set a flag in localStorage to indicate survey is in progress
-        localStorage.setItem('surveyInProgress', JSON.stringify({
-          userId: selectedUser.id,
-          timestamp: new Date().getTime()
-        }));
-      }
+const handlePause = async () => {
+  if (isProcessing) return; // Prevent multiple actions while processing
+  
+  setIsProcessing(true);
+  
+  try {
+    // Save the current progress without marking as completed
+    if (selectedUser && Object.keys(currentSurveyResponses).length > 0) {
+      console.log("Saving survey progress before pausing...");
+      await saveSurveyProgress(selectedUser.id, currentSurveyResponses);
+      console.log("Progress saved successfully");
       
-      // Navigate to survey dashboard instead of login
-      navigate('/survey-dashboard');
-    } catch (error) {
-      console.error('Error saving survey progress:', error);
-      alert('There was an error saving your progress, but you can continue later.');
-      navigate('/survey-dashboard');
-    } finally {
-      setIsProcessing(false);
+      // Set a flag in localStorage to indicate survey is in progress
+      localStorage.setItem('surveyInProgress', JSON.stringify({
+        userId: selectedUser.id,
+        timestamp: new Date().getTime()
+      }));
     }
-  };
+    
+    // Navigate to login screen (same as Switch User button)
+    navigate('/login');
+  } catch (error) {
+    console.error('Error saving survey progress:', error);
+    alert('There was an error saving your progress, but you can continue later.');
+    navigate('/login');
+  } finally {
+    setIsProcessing(false);
+  }
+};
   
   // Skip question
   const handleSkip = () => {
@@ -847,13 +848,8 @@ const SurveyScreen = () => {
           >
             Pause Survey
           </button>
-          <button 
-            className="px-4 py-2 border rounded bg-white hover:bg-gray-50 flex items-center"
-            onClick={handleSkip}
-          >
-            Skip
-            <ArrowRight size={16} className="ml-1" />
-          </button>
+          {/* Skip button removed */}
+<div></div> {/* Empty div to maintain layout */}
         </div>
       </div>
 
