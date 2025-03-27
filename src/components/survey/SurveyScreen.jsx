@@ -40,11 +40,67 @@ const SurveyScreen = () => {
     }
   }, [selectedUser, navigate]);
   
-  // Reset survey when component mounts - only once!
-  useEffect(() => {
-    resetSurvey();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+  // Check for saved progress when component mounts
+useEffect(() => {
+  // Check if we have a current user and they have saved progress
+  if (selectedUser) {
+    try {
+      const surveyProgress = localStorage.getItem('surveyInProgress');
+      if (surveyProgress) {
+        const progress = JSON.parse(surveyProgress);
+        
+        // Only load progress if it belongs to this user
+        if (progress.userId === selectedUser.id) {
+          console.log("Found saved progress for this user, not resetting survey");
+          // Don't reset the survey, keep the loaded progress
+          return;
+        }
+      }
+    } catch (e) {
+      console.error("Error checking survey progress:", e);
+    }
+  }
+  
+  // Only reset if we didn't find saved progress for this user
+  resetSurvey();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [selectedUser?.id]);
+
+// Restore survey progress when component mounts
+useEffect(() => {
+  // Only run this if we have a selected user and current responses
+  if (selectedUser && currentSurveyResponses && Object.keys(currentSurveyResponses).length > 0) {
+    console.log("Found", Object.keys(currentSurveyResponses).length, "saved responses");
+    
+    // Find the last answered question index
+    let lastAnsweredIndex = -1;
+    
+    // Check which questions have answers
+    fullQuestionSet.forEach((question, index) => {
+      if (currentSurveyResponses[question.id]) {
+        lastAnsweredIndex = Math.max(lastAnsweredIndex, index);
+      }
+    });
+    
+    // If we found saved answers, jump to the next unanswered question
+    if (lastAnsweredIndex >= 0) {
+      console.log(`Found progress! Last answered question: ${lastAnsweredIndex}`);
+      
+      // Set current question to the next unanswered one
+      const nextIndex = Math.min(lastAnsweredIndex + 1, fullQuestionSet.length - 1);
+      setCurrentQuestionIndex(nextIndex);
+      
+      // Set selected parent based on the response to the current question
+      if (nextIndex > 0 && nextIndex <= lastAnsweredIndex) {
+        setSelectedParent(currentSurveyResponses[fullQuestionSet[nextIndex].id] || null);
+      } else {
+        setSelectedParent(null);
+      }
+      
+      console.log(`Restored to question ${nextIndex + 1} with ${Object.keys(currentSurveyResponses).length} saved answers`);
+    }
+  }
+}, [selectedUser, fullQuestionSet, currentSurveyResponses]);
   
   // Find Mama and Papa users from family members
   const mamaUser = familyMembers.find(m => m.roleType === 'Mama' || m.name === 'Mama');

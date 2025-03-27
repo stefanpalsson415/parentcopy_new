@@ -18,6 +18,7 @@ const FamilySelectionScreen = () => {
     login, 
     logout, 
     loadAllFamilies,
+    getMemberSurveyResponses,
     ensureFamiliesLoaded,
     signInWithGoogle  } = useAuth();
   const { 
@@ -34,7 +35,8 @@ const FamilySelectionScreen = () => {
   } = useFamily();
   const { currentSurveyResponses } = useSurvey();
 
-  
+  const { useSurvey } = require('../../contexts/SurveyContext');
+
   const navigate = useNavigate();
   
   // State management
@@ -48,7 +50,8 @@ const FamilySelectionScreen = () => {
   const [loginError, setLoginError] = useState('');
   const [showEmptyState, setShowEmptyState] = useState(false);
   
- 
+ // Get functions from survey context at component level
+const { setCurrentSurveyResponses } = useSurvey();
   
   const [uploadType, setUploadType] = useState(null);
 
@@ -168,27 +171,67 @@ const getDefaultProfileImage = (member) => {
 };
   
   // Handle selecting a user from the family
-  const handleSelectUser = (member) => {
+  const handleSelectUser = async (member) => {
+    // Select the family member first
     selectFamilyMember(member);
     
     // Navigate to the appropriate screen based on survey completion
     if (member.completed) {
       navigate('/dashboard');
     } else {
-      navigate('/survey');
+      try {
+        // Check if this member has a paused survey
+        let hasInProgressSurvey = false;
+        try {
+          const surveyProgress = localStorage.getItem('surveyInProgress');
+          if (surveyProgress) {
+            const progress = JSON.parse(surveyProgress);
+            hasInProgressSurvey = progress.userId === member.id;
+          }
+        } catch (e) {
+          console.error("Error checking survey progress:", e);
+        }
+        
+        if (hasInProgressSurvey) {
+          // Try to load their saved responses before navigating
+          const responses = await getMemberSurveyResponses(member.id, 'initial');
+          if (responses && Object.keys(responses).length > 0) {
+            // Update the survey context with their saved responses
+            setCurrentSurveyResponses(responses);  // Use the function from the top level
+            console.log("Loaded saved survey progress:", Object.keys(responses).length, "responses");
+          }
+        }
+        
+        // Then navigate to the survey
+        navigate('/survey');
+      } catch (error) {
+        console.error("Error loading saved survey progress:", error);
+        // Still navigate to survey even if loading fails
+        navigate('/survey');
+      }
     }
   };
   
   // Get the next action for a family member
   const getNextAction = (member) => {
     if (!member.completed) {
-      // Check if they have any saved responses (in progress)
-      const hasInProgressSurvey = Object.keys(currentSurveyResponses || {}).length > 0;
+      // Check if this specific member has a surveyInProgress flag in localStorage
+      let hasInProgressSurvey = false;
+      try {
+        const surveyProgress = localStorage.getItem('surveyInProgress');
+        if (surveyProgress) {
+          const progress = JSON.parse(surveyProgress);
+          hasInProgressSurvey = progress.userId === member.id;
+        }
+      } catch (e) {
+        console.error("Error checking survey progress:", e);
+      }
       
       return {
         text: hasInProgressSurvey ? "Resume initial survey" : "Initial survey needed",
         icon: <AlertCircle size={12} className="mr-1" />,
         className: hasInProgressSurvey ? "text-blue-600" : "text-amber-600"
+   
       };
     }
     
@@ -451,6 +494,70 @@ const getDefaultProfileImage = (member) => {
     }
   };
   
+// Render the completion screen that matches the screenshot
+const renderCompletionScreen = () => {
+  return (
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6">
+      <div className="max-w-2xl w-full text-center">
+        {/* Warning icon */}
+        <div className="bg-amber-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+          <AlertCircle size={30} className="text-amber-500" />
+        </div>
+        
+        {/* Title */}
+        <h1 className="text-3xl font-bold text-black mb-4 font-roboto">
+          Waiting for All Survey Responses
+        </h1>
+        
+        {/* Subtitle */}
+        <p className="text-gray-600 text-lg mb-10 font-roboto">
+          All family members need to complete the initial survey before we can generate accurate reports.
+        </p>
+        
+        {/* Family Progress section */}
+        <h2 className="text-xl font-semibold mb-6 font-roboto">Family Progress</h2>
+        
+        {/* Family members in a row */}
+        <div className="flex justify-center flex-wrap gap-8 mb-10">
+          {familyMembers.map((member) => (
+            <div key={member.id} className="flex flex-col items-center">
+              {/* Profile picture */}
+              <div 
+                className="w-16 h-16 rounded-full overflow-hidden mb-2 cursor-pointer"
+                onClick={() => handleSelectUser(member)}
+              >
+                <img 
+                  src={member.profilePicture || getDefaultProfileImage(member)}
+                  alt={member.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              
+              {/* Name */}
+              <p className="font-medium font-roboto">{member.name}</p>
+              
+              {/* Status - always "Pending" in amber color as shown in screenshot */}
+              <p className="text-amber-500 text-sm font-roboto">
+                {member.completed ? "Completed" : "Pending"}
+              </p>
+            </div>
+          ))}
+        </div>
+        
+        {/* Switch User button */}
+        <button
+          onClick={() => navigate('/login')}
+          className="px-10 py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 font-roboto"
+        >
+          Switch User
+        </button>
+      </div>
+    </div>
+  );
+};
+
+
+
   // Login Form UI
   const renderLoginForm = () => {
     return (
@@ -743,14 +850,23 @@ const getDefaultProfileImage = (member) => {
     return renderLoginForm();
   }
   
-  // If there are no family members, show empty state
-  if (showEmptyState) {
-    return renderEmptyState();
-  }
-  
-  // Normal profile selection view
-  return (
-    <div className="min-h-screen bg-white flex flex-col">
+  // Redirect if no family members, show empty state
+if (showEmptyState) {
+  return renderEmptyState();
+}
+
+// Check if some family members have completed the survey but others haven't
+const someCompleted = familyMembers.some(m => m.completed);
+const someIncomplete = familyMembers.some(m => !m.completed);
+
+// If some completed but not all, show the special completion screen
+if (someCompleted && someIncomplete) {
+  return renderCompletionScreen();
+}
+
+// Normal profile selection view
+return (
+  <div className="min-h-screen bg-white flex flex-col">
   <div className="flex-1 flex flex-col items-center justify-center p-6">
     {familyMembers.some(m => !m.profilePicture) && (
       <div className="bg-gradient-to-r from-pink-100 to-purple-100 p-4 rounded-lg shadow-sm mb-6 max-w-md w-full">
