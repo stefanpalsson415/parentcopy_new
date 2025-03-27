@@ -289,44 +289,6 @@ const getDefaultProfileImage = (member) => {
       return;
     }
     
-    // Helper function to resize images before upload
-const resizeImageFile = (file, maxWidth) => {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        // Only resize if the image is larger than maxWidth
-        if (img.width <= maxWidth) {
-          resolve(file); // Return original file if it's already small enough
-          return;
-        }
-        
-        const canvas = document.createElement('canvas');
-        const scale = maxWidth / img.width;
-        canvas.width = maxWidth;
-        canvas.height = img.height * scale;
-        
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        
-        // Convert to blob
-        canvas.toBlob((blob) => {
-          // Create a new file from the blob
-          const resizedFile = new File([blob], file.name, {
-            type: file.type,
-            lastModified: Date.now(),
-          });
-          resolve(resizedFile);
-        }, file.type, 0.8); // 80% quality JPEG
-      };
-      img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-};
-    
-    
     // Safety timeout to prevent endless loading
     const safetyTimeout = setTimeout(() => {
       console.log("Safety timeout triggered - resetting upload state");
@@ -357,26 +319,20 @@ const resizeImageFile = (file, maxWidth) => {
         
         console.log("Uploading family picture for family ID:", familyId);
         
-        // Create a smaller preview first to improve performance
-        const resizedImage = await resizeImageFile(file, 800); // Resize to max 800px width
-        
-        // Use DatabaseService method instead of direct storage access
-        const imageUrl = await DatabaseService.uploadFamilyPicture(familyId, resizedImage);
+        // Use DatabaseService method directly with the original file
+        const imageUrl = await DatabaseService.uploadFamilyPicture(familyId, file);
         console.log("Family picture uploaded successfully:", imageUrl);
         
         // Update the family picture in state
         await updateFamilyPicture(imageUrl);
-
+  
         setShowProfileUpload(false);
       } else {
         // Handle individual profile upload
         console.log("Uploading profile picture for member ID:", uploadForMember.id);
         
-        // Create a smaller preview first to improve performance
-        const resizedImage = await resizeImageFile(file, 400); // Resize to max 400px width
-        
-        // Directly use DatabaseService to handle the upload
-        const imageUrl = await DatabaseService.uploadProfileImage(uploadForMember.id, resizedImage);
+        // Directly use DatabaseService with the original file
+        const imageUrl = await DatabaseService.uploadProfileImage(uploadForMember.id, file);
         console.log("Profile picture uploaded successfully:", imageUrl);
         
         // Now update the member profile with the new image URL
