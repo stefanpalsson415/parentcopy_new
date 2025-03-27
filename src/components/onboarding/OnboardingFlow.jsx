@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowRight, ArrowLeft, CheckCircle, Brain, 
-  Heart, BarChart, Scale, Clock, Users, PlusCircle
+  Heart, BarChart, Sliders, Scale, Clock, Users, PlusCircle
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import GoogleAuthButton from '../common/GoogleAuthButton';

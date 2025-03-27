@@ -18,6 +18,7 @@ import WeeklyCheckInScreen from './components/survey/WeeklyCheckInScreen';
 import LoadingScreen from './components/common/LoadingScreen';
 import UserSignupScreen from './components/user/UserSignupScreen';
 import KidFriendlySurvey from './components/survey/KidFriendlySurvey';
+import FamilySurveyDashboard from './components/survey/FamilySurveyDashboard';
 import PaymentScreen from './components/payment/PaymentScreen';
 import LandingPage from './components/marketing/LandingPage';
 import OnboardingFlow from './components/onboarding/OnboardingFlow';
