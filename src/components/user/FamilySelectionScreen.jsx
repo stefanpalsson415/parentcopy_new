@@ -3,10 +3,10 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Camera, PlusCircle, CheckCircle, AlertCircle, Upload, Calendar, Mail, Lock, User, LogOut } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFamily } from '../../contexts/FamilyContext';
+import { useSurvey } from '../../contexts/SurveyContext';  // Add this here
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../services/firebase';
 import DatabaseService from '../../services/DatabaseService';
-import { useSurvey } from '../../contexts/SurveyContext';
 
 
 
@@ -33,9 +33,8 @@ const FamilySelectionScreen = () => {
   familyName,
   familyPicture
   } = useFamily();
-  const { currentSurveyResponses } = useSurvey();
 
-  const { useSurvey } = require('../../contexts/SurveyContext');
+  const { currentSurveyResponses } = useSurvey();
 
   const navigate = useNavigate();
   
