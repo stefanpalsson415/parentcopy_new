@@ -232,6 +232,7 @@ useEffect(() => {
     };
     
     // Save calendar settings
+// Save calendar settings
 const saveCalendarSettings = async () => {
   if (!userId) return;
   
@@ -264,34 +265,23 @@ const saveCalendarSettings = async () => {
       message: 'Calendar settings saved successfully'
     });
     
-    // Also show a permanent success indicator
-    const saveButton = document.getElementById('calendar-settings-save-btn');
-    if (saveButton) {
-      const originalText = saveButton.innerText;
-      saveButton.innerText = '✓ Saved';
-      saveButton.classList.add('bg-green-600');
-      saveButton.classList.remove('bg-black');
-      
-      // Reset after a longer delay
-      setTimeout(() => {
-        saveButton.innerText = originalText;
-        saveButton.classList.remove('bg-green-600');
-        saveButton.classList.add('bg-black');
-      }, 2000);
-    }
+    // Use React state to handle button success state instead of direct DOM manipulation
+    setIsSaving(false);
+    
+    // Clear message after delay using a safe approach
+    const messageTimer = setTimeout(() => {
+      setSaveMessage({ type: '', message: '' });
+    }, 5000);
+    
+    // Clean up the timer if component unmounts
+    return () => clearTimeout(messageTimer);
   } catch (error) {
     console.error("Error saving calendar settings:", error);
     setSaveMessage({
       type: 'error',
       message: 'Failed to save calendar settings: ' + error.message
     });
-  } finally {
     setIsSaving(false);
-    
-    // Clear message after delay
-    setTimeout(() => {
-      setSaveMessage({ type: '', message: '' });
-    }, 5000);
   }
 };
     
@@ -610,10 +600,11 @@ const saveCalendarSettings = async () => {
         {/* Save Button */}
         <div className="flex justify-end">
         <button
-  id="calendar-settings-save-btn"
   onClick={saveCalendarSettings}
   disabled={isSaving}
-  className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors duration-300"
+  className={`px-4 py-2 rounded text-white transition-colors duration-300 ${
+    saveMessage.type === 'success' ? 'bg-green-600 hover:bg-green-700' : 'bg-black hover:bg-gray-800'
+  }`}
 >
   {isSaving ? (
     <span className="flex items-center">
@@ -621,7 +612,7 @@ const saveCalendarSettings = async () => {
       Saving...
     </span>
   ) : (
-    'Save Calendar Settings'
+    saveMessage.type === 'success' ? '✓ Saved' : 'Save Calendar Settings'
   )}
 </button>
         </div>

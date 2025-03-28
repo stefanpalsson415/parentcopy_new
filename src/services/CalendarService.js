@@ -2,18 +2,19 @@
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 
-constructor() {
-  this.isInitialized = false;
-  this.googleApiLoaded = false;
-  this.appleCalendarAvailable = this.checkAppleCalendarSupport();
-  this.calendarSettings = {};
-  this.activeCalendarType = null;
-  this.mockMode = false; // Set to false to use real Google Calendar API
-  this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY;
-  this.clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
-  console.log("CalendarService initialized. Using real Google Calendar API");
-}
-
+class CalendarService {
+  constructor() {
+    this.isInitialized = false;
+    this.googleApiLoaded = false;
+    this.appleCalendarAvailable = this.checkAppleCalendarSupport();
+    this.calendarSettings = {};
+    this.activeCalendarType = null;
+    this.mockMode = false; // Set to false to use real Google Calendar API
+    this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY;
+    this.clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+    console.log("CalendarService initialized. Using real Google Calendar API");
+  }
+  
   // Check if Apple Calendar is supported
   checkAppleCalendarSupport() {
     return typeof window !== 'undefined' && 
