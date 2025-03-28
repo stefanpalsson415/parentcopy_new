@@ -454,17 +454,16 @@ useEffect(() => {
           {selectedUser && (
             <button 
             id="relationship-tab"
-
-              className={`px-4 py-2 font-medium whitespace-nowrap font-roboto relative ${activeTab === 'relationship' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
-              onClick={() => setActiveTab('relationship')}
-            >
-              Relationship
-              {notifications.relationships > 0 && selectedUser.role === 'parent' && (
-                <span className="absolute top-0 right-0 transform translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
-                  {notifications.relationships}
-                </span>
-              )}
-            </button>
+            className={`px-4 py-2 font-medium whitespace-nowrap font-roboto relative ${activeTab === 'relationship' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+            onClick={() => setActiveTab('relationship')}
+          >
+            Relationship
+            {notifications.relationships > 0 && selectedUser.role === 'parent' && (
+              <span className="absolute top-1 right-1 transform translate-x-1/2 -translate-y-1/4 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
+                {notifications.relationships}
+              </span>
+            )}
+          </button>
           )}
           
           <button 
@@ -489,7 +488,7 @@ useEffect(() => {
       </div>
       
       {/* Main Content */}
-      <div className="container mx-auto px-4 pt-40 pb-6">
+<div className="container mx-auto px-4 pt-24 pb-6">
   <ErrorBoundary>
     {/* Tab content */}
     {renderTabContent()}
