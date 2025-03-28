@@ -35,27 +35,43 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
   }, [currentUser]);
   
   // Handle adding to default calendar
-  const handleAddToCalendar = async () => {
-    setIsLoading(true);
-    setError(null);
+  // Handle adding to default calendar
+const handleAddToCalendar = async () => {
+  setIsLoading(true);
+  setError(null);
+  
+  try {
+    // Initialize the calendar service if needed
+    if (!CalendarService.isInitialized) {
+      await CalendarService.initialize(currentUser?.uid);
+    }
     
-    try {
-      // Initialize the calendar service if needed
-      if (!CalendarService.isInitialized) {
-        await CalendarService.initialize(currentUser?.uid);
-      }
-      
-      // Create event based on item type
-      let event;
-      if (itemType === 'task') {
-        event = CalendarService.createEventFromTask(item);
-      } else if (itemType === 'meeting') {
-        event = CalendarService.createFamilyMeetingEvent(item.weekNumber, customDate || item.date);
-      } else if (itemType === 'reminder') {
-        event = CalendarService.createTaskReminderEvent(item, customDate);
-      } else {
-        throw new Error("Unknown item type");
-      }
+    // Create event based on item type
+    let event;
+    if (itemType === 'task') {
+      event = CalendarService.createEventFromTask(item);
+    } else if (itemType === 'meeting') {
+      event = CalendarService.createFamilyMeetingEvent(item.weekNumber, customDate || item.date);
+    } else if (itemType === 'reminder') {
+      event = CalendarService.createTaskReminderEvent(item, customDate);
+    } else {
+      throw new Error("Unknown item type");
+    }
+    
+    // Add some more detailed event properties
+    event.description = (event.description || '') + 
+      `\n\nAdded from Allie Family Balance App\n${window.location.origin}`;
+    
+    // Add calendar alert/reminder if not already set
+    if (!event.reminders) {
+      event.reminders = {
+        useDefault: false,
+        overrides: [
+          {'method': 'popup', 'minutes': 60}, // 1 hour before
+          {'method': 'email', 'minutes': 1440} // 24 hours before
+        ]
+      };
+    }
       
       // Add to the default calendar
       const result = await CalendarService.addEvent(event);

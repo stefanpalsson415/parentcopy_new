@@ -232,51 +232,68 @@ useEffect(() => {
     };
     
     // Save calendar settings
-    const saveCalendarSettings = async () => {
-      if (!userId) return;
-      
-      setIsSaving(true);
-      setSaveMessage({ type: '', message: '' });
-      
-      try {
-        // Prepare updated settings
-        const updatedSettings = {
-          ...calendarSettings,
-          defaultCalendarType: activeCalendarType,
-          googleCalendar: {
-            ...calendarSettings?.googleCalendar,
-            enabled: activeCalendarType === 'google',
-            calendarId: selectedGoogleCalendar
-          },
-          appleCalendar: {
-            ...calendarSettings?.appleCalendar,
-            enabled: activeCalendarType === 'apple'
-          }
-        };
-        
-        // Save to Firebase
-        await CalendarService.saveUserCalendarSettings(userId, updatedSettings);
-        setCalendarSettings(updatedSettings);
-        
-        setSaveMessage({
-          type: 'success',
-          message: 'Calendar settings saved successfully'
-        });
-      } catch (error) {
-        console.error("Error saving calendar settings:", error);
-        setSaveMessage({
-          type: 'error',
-          message: 'Failed to save calendar settings'
-        });
-      } finally {
-        setIsSaving(false);
-        
-        // Clear message after delay
-        setTimeout(() => {
-          setSaveMessage({ type: '', message: '' });
-        }, 3000);
+const saveCalendarSettings = async () => {
+  if (!userId) return;
+  
+  setIsSaving(true);
+  setSaveMessage({ type: '', message: '' });
+  
+  try {
+    // Prepare updated settings
+    const updatedSettings = {
+      ...calendarSettings,
+      defaultCalendarType: activeCalendarType,
+      googleCalendar: {
+        ...calendarSettings?.googleCalendar,
+        enabled: activeCalendarType === 'google',
+        calendarId: selectedGoogleCalendar
+      },
+      appleCalendar: {
+        ...calendarSettings?.appleCalendar,
+        enabled: activeCalendarType === 'apple'
       }
     };
+    
+    // Save to Firebase
+    await CalendarService.saveUserCalendarSettings(userId, updatedSettings);
+    setCalendarSettings(updatedSettings);
+    
+    // Create a visible success notification
+    setSaveMessage({
+      type: 'success',
+      message: 'Calendar settings saved successfully'
+    });
+    
+    // Also show a permanent success indicator
+    const saveButton = document.getElementById('calendar-settings-save-btn');
+    if (saveButton) {
+      const originalText = saveButton.innerText;
+      saveButton.innerText = '✓ Saved';
+      saveButton.classList.add('bg-green-600');
+      saveButton.classList.remove('bg-black');
+      
+      // Reset after a longer delay
+      setTimeout(() => {
+        saveButton.innerText = originalText;
+        saveButton.classList.remove('bg-green-600');
+        saveButton.classList.add('bg-black');
+      }, 2000);
+    }
+  } catch (error) {
+    console.error("Error saving calendar settings:", error);
+    setSaveMessage({
+      type: 'error',
+      message: 'Failed to save calendar settings: ' + error.message
+    });
+  } finally {
+    setIsSaving(false);
+    
+    // Clear message after delay
+    setTimeout(() => {
+      setSaveMessage({ type: '', message: '' });
+    }, 5000);
+  }
+};
     
     if (isLoading) {
       return (
@@ -570,20 +587,21 @@ useEffect(() => {
         
         {/* Save Button */}
         <div className="flex justify-end">
-          <button
-            onClick={saveCalendarSettings}
-            disabled={isSaving}
-            className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
-          >
-            {isSaving ? (
-              <span className="flex items-center">
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                Saving...
-              </span>
-            ) : (
-              'Save Calendar Settings'
-            )}
-          </button>
+        <button
+  id="calendar-settings-save-btn"
+  onClick={saveCalendarSettings}
+  disabled={isSaving}
+  className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors duration-300"
+>
+  {isSaving ? (
+    <span className="flex items-center">
+      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+      Saving...
+    </span>
+  ) : (
+    'Save Calendar Settings'
+  )}
+</button>
         </div>
         
         {/* Save Message */}
@@ -783,25 +801,53 @@ useEffect(() => {
           </div>
           
           <button
-            onClick={async () => {
-              if (googleAuthStatus.isConnected) {
-
-                // Already connected - ask if they want to disconnect
-                const confirmDisconnect = window.confirm('Are you sure you want to disconnect your Google account?');
-if (confirmDisconnect) {
-                  try {
-                    // We would implement a disconnect function here
-                    alert('Google account disconnected');
-                    // Update the UI
-                    updateMemberProfile(selectedUser.id, { 
-                      googleAuth: null 
-                    });
-                  } catch (error) {
-                    console.error('Error disconnecting Google account:', error);
-                    alert('Failed to disconnect Google account');
-                  }
-                }
-              } else {
+  onClick={async () => {
+    if (googleAuthStatus.isConnected) {
+      // Already connected - ask if they want to disconnect
+      const confirmDisconnect = window.confirm('Are you sure you want to disconnect your Google account?');
+      if (confirmDisconnect) {
+        try {
+          // First try to sign out from Google Auth if available
+          if (window.gapi && window.gapi.auth2) {
+            const auth2 = window.gapi.auth2.getAuthInstance();
+            if (auth2) {
+              await auth2.signOut();
+              console.log("Signed out from Google Auth");
+            }
+          }
+          
+          // Remove Google auth data from member profile
+          await updateMemberProfile(selectedUser.id, { 
+            googleAuth: null 
+          });
+          
+          // Update local state to reflect changes
+          setGoogleAuthStatus({
+            isConnected: false,
+            email: null,
+            loading: false
+          });
+          
+          // Also remove any stored token
+          localStorage.removeItem('googleAuthToken');
+          
+          // Successful disconnect notification
+          const notification = document.createElement('div');
+          notification.innerText = 'Google account disconnected successfully';
+          notification.style.cssText = `
+            position: fixed; bottom: 20px; right: 20px; background: #4caf50;
+            color: white; padding: 12px 20px; border-radius: 4px; z-index: 9999;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-family: Roboto, sans-serif;
+          `;
+          document.body.appendChild(notification);
+          setTimeout(() => notification.remove(), 3000);
+        } catch (error) {
+          console.error('Error disconnecting Google account:', error);
+          alert('Failed to disconnect Google account: ' + error.message);
+        }
+      }
+    } else {
+      // Not connected - connect now
                 // Not connected - connect now
                 try {
                   const user = await linkAccountWithGoogle();

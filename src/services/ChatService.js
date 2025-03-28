@@ -58,110 +58,167 @@ class ChatService {
     }
   }
   
-  // Get AI response to a message
-// Get AI response to a message
-async getAIResponse(text, familyId, previousMessages) {
-  try {
-    // Log request with more details for debugging
-    console.log("Allie Chat request:", { 
-      text, 
-      familyId, 
-      previousMessagesCount: previousMessages?.length || 0
-    });
+  // Helper function to handle calendar-related requests
+  handleCalendarRequest(text, familyContext) {
+    // Check if this is a calendar-related request
+    const isCalendarRequest = text.toLowerCase().includes('calendar') &&
+      (text.toLowerCase().includes('add') || 
+       text.toLowerCase().includes('schedule') || 
+       text.toLowerCase().includes('book') ||
+       text.toLowerCase().includes('sync'));
+       
+    if (!isCalendarRequest) return null;
     
-    // Better error handling for missing familyId
-    if (!familyId) {
-      console.warn("getAIResponse called without familyId");
-      return "I need access to your family data to provide personalized responses. Please ensure you're logged in correctly.";
+    // Get tasks that could be added to calendar
+    const tasks = familyContext.tasks || [];
+    const pendingTasks = tasks.filter(t => !t.completed).slice(0, 3);
+    
+    // Get family meetings
+    const familyMeetings = [];
+    if (familyContext.currentWeek) {
+      const meetingDate = new Date();
+      meetingDate.setDate(meetingDate.getDate() + (7 - meetingDate.getDay())); // Next Sunday
+      meetingDate.setHours(19, 0, 0, 0); // 7:00 PM
+      
+      familyMeetings.push({
+        id: `meeting-${familyContext.currentWeek}`,
+        title: `Week ${familyContext.currentWeek} Family Meeting`,
+        date: meetingDate.toLocaleDateString('en-US', { 
+          weekday: 'long', 
+          month: 'long', 
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        })
+      });
     }
     
-    // Verify we have the minimally required data to proceed
-    if (!text || text.trim() === '') {
-      console.warn("Empty message text received");
-      return "I didn't receive any message to respond to. Please try again.";
-    }
-    
-    // Add a start timestamp for performance tracking
-    const startTime = Date.now();
-    console.log(`Starting AI response generation at ${new Date().toISOString()}`);
-      
-    // Get family data from Firestore for context
-    let familyData = {};
-    try {
-      console.log("Getting family context for:", familyId);
-      familyData = await this.getFamilyContext(familyId);
-      console.log("Got family context with keys:", Object.keys(familyData));
-    } catch (contextError) {
-      console.error("Error getting family context:", contextError);
-      return "I'm having trouble accessing your family data right now. Please try again in a moment.";
-    }
-      
-    // Check if we actually got meaningful family data
-    if (!familyData || Object.keys(familyData).length < 3) {
-      console.warn("Insufficient family data for personalized response");
-      return "I couldn't retrieve your complete family data. Please try refreshing the page or logging in again.";
-    }
-      
-    // Add knowledge base to context
-    familyData.knowledgeBase = knowledgeBase;
-      
-    // Format messages for Claude API
-    const formattedMessages = previousMessages
-      .slice(-10) // Last 10 messages for context
-      .map(msg => ({
-        role: msg.sender === 'allie' ? 'assistant' : 'user',
-        content: msg.text
-      }));
+    // Create a helpful response about calendar integration
+    return `I'd be happy to help with your calendar! You can add tasks and meetings to your calendar in a few ways:
 
-    // Add the current message
-    formattedMessages.push({
-      role: 'user',
-      content: text
-    });
-    
-    console.log("Sending to Claude API via proxy:", {
-      messageCount: formattedMessages.length,
-      contextSize: JSON.stringify(familyData).length,
-      familyDataKeys: Object.keys(familyData)
-    });
-      
-    // Call the Claude API through our service with updated code
-    let response;
-    try {
-      response = await ClaudeService.generateResponse(
-        formattedMessages, 
-        familyData
-      );
-      console.log("Claude API call succeeded with response length:", response?.length);
-    } catch (apiError) {
-      console.error("Claude API error details:", apiError);
-      // Try fallback response first before giving up
-      response = ClaudeService.createPersonalizedResponse(text, familyData);
-      console.log("Using fallback personalized response:", response?.substring(0, 50) + "...");
-    }
-      
-    // If we got a response, return it
-    if (response && response.length > 0) {
-      return response;
-    }
-      
-    // If we got here, something went wrong but didn't throw an error
-    return "I should be able to answer this with your family's data, but I'm having trouble processing it right now. Could you try asking in a different way?";
-  } catch (error) {
-    console.error("Error getting AI response:", error);
-      
-    // Provide more specific error message for common issues
-    if (error.message?.includes("timeout")) {
-      return "I'm taking longer than expected to process your question. This might be due to high demand. Please try again in a moment.";
-    }
-      
-    if (text.toLowerCase().includes("survey") || text.toLowerCase().includes("data")) {
-      return "I'd like to analyze your survey data, but I'm having trouble accessing it right now. Please try refreshing the page or asking again in a few moments.";
-    }
-      
-    return "I'm having trouble processing your question right now. While I'm reconnecting, you can explore the dashboard for insights or check your tasks in the Tasks tab.";
+1. **For tasks**: Click the "Add to Calendar" button on any task card in the Tasks tab
+2. **For family meetings**: Go to the Calendar widget and click "Add to Calendar" next to the upcoming meeting
+3. **For relationship events**: In the Relationship tab, you can schedule date nights and add them directly to your calendar
+
+${pendingTasks.length > 0 ? `**Here are your current tasks that could be added to your calendar:**
+${pendingTasks.map(task => `- ${task.title} (assigned to ${task.assignedToName})`).join('\n')}` : ''}
+
+${familyMeetings.length > 0 ? `**Upcoming family meeting:**
+- ${familyMeetings[0].title} (${familyMeetings[0].date})` : ''}
+
+To set up or change your calendar integration, go to Settings > Calendar.`;
   }
-}
+
+  // Get AI response to a message
+  async getAIResponse(text, familyId, previousMessages) {
+    try {
+      // Log request with more details for debugging
+      console.log("Allie Chat request:", { 
+        text, 
+        familyId, 
+        previousMessagesCount: previousMessages?.length || 0
+      });
+      
+      // Better error handling for missing familyId
+      if (!familyId) {
+        console.warn("getAIResponse called without familyId");
+        return "I need access to your family data to provide personalized responses. Please ensure you're logged in correctly.";
+      }
+      
+      // Verify we have the minimally required data to proceed
+      if (!text || text.trim() === '') {
+        console.warn("Empty message text received");
+        return "I didn't receive any message to respond to. Please try again.";
+      }
+      
+      // Add a start timestamp for performance tracking
+      const startTime = Date.now();
+      console.log(`Starting AI response generation at ${new Date().toISOString()}`);
+        
+      // Get family data from Firestore for context
+      let familyData = {};
+      try {
+        console.log("Getting family context for:", familyId);
+        familyData = await this.getFamilyContext(familyId);
+        console.log("Got family context with keys:", Object.keys(familyData));
+      } catch (contextError) {
+        console.error("Error getting family context:", contextError);
+        return "I'm having trouble accessing your family data right now. Please try again in a moment.";
+      }
+        
+      // Check if we actually got meaningful family data
+      if (!familyData || Object.keys(familyData).length < 3) {
+        console.warn("Insufficient family data for personalized response");
+        return "I couldn't retrieve your complete family data. Please try refreshing the page or logging in again.";
+      }
+      
+      // Check for calendar-related requests
+      const calendarResponse = this.handleCalendarRequest(text, familyData);
+      if (calendarResponse) {
+        console.log("Handling calendar-related request");
+        return calendarResponse;
+      }
+        
+      // Add knowledge base to context
+      familyData.knowledgeBase = knowledgeBase;
+        
+      // Format messages for Claude API
+      const formattedMessages = previousMessages
+        .slice(-10) // Last 10 messages for context
+        .map(msg => ({
+          role: msg.sender === 'allie' ? 'assistant' : 'user',
+          content: msg.text
+        }));
+
+      // Add the current message
+      formattedMessages.push({
+        role: 'user',
+        content: text
+      });
+      
+      console.log("Sending to Claude API via proxy:", {
+        messageCount: formattedMessages.length,
+        contextSize: JSON.stringify(familyData).length,
+        familyDataKeys: Object.keys(familyData)
+      });
+        
+      // Call the Claude API through our service with updated code
+      let response;
+      try {
+        response = await ClaudeService.generateResponse(
+          formattedMessages, 
+          familyData
+        );
+        console.log("Claude API call succeeded with response length:", response?.length);
+      } catch (apiError) {
+        console.error("Claude API error details:", apiError);
+        // Try fallback response first before giving up
+        response = ClaudeService.createPersonalizedResponse(text, familyData);
+        console.log("Using fallback personalized response:", response?.substring(0, 50) + "...");
+      }
+        
+      // If we got a response, return it
+      if (response && response.length > 0) {
+        return response;
+      }
+        
+      // If we got here, something went wrong but didn't throw an error
+      return "I should be able to answer this with your family's data, but I'm having trouble processing it right now. Could you try asking in a different way?";
+    } catch (error) {
+      console.error("Error getting AI response:", error);
+        
+      // Provide more specific error message for common issues
+      if (error.message?.includes("timeout")) {
+        return "I'm taking longer than expected to process your question. This might be due to high demand. Please try again in a moment.";
+      }
+        
+      if (text.toLowerCase().includes("survey") || text.toLowerCase().includes("data")) {
+        return "I'd like to analyze your survey data, but I'm having trouble accessing it right now. Please try refreshing the page or asking again in a few moments.";
+      }
+        
+      return "I'm having trouble processing your question right now. While I'm reconnecting, you can explore the dashboard for insights or check your tasks in the Tasks tab.";
+    }
+  }
 
   // Get family context for AI response
   async getFamilyContext(familyId) {

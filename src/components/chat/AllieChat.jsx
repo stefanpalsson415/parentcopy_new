@@ -98,6 +98,25 @@ const AllieChat = () => {
         <span className="font-roboto">Tips for getting tasks done easily</span>
       </div>
     </div>
+    
+    {/* Add suggestion chips */}
+    <div className="flex justify-center space-x-2 mt-6">
+      <button 
+        onClick={() => sendMessage("How do I add tasks to my calendar?", selectedUser)}
+        className="flex items-center px-3 py-2 bg-black hover:bg-gray-800 text-white rounded-full text-sm font-roboto shadow transition-all duration-150 transform hover:scale-105"
+      >
+        <Calendar size={14} className="mr-1" />
+        <span>Calendar tips</span>
+      </button>
+      
+      <button 
+        onClick={() => sendMessage("What tasks should I do next?", selectedUser)}
+        className="flex items-center px-3 py-2 bg-black hover:bg-gray-800 text-white rounded-full text-sm font-roboto shadow transition-all duration-150 transform hover:scale-105"
+      >
+        <PlusCircle size={14} className="mr-1" />
+        <span>Task suggestions</span>
+      </button>
+    </div>
   </div>
 ) : (
   messages.map((msg, index) => (

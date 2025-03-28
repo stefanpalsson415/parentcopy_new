@@ -189,6 +189,20 @@ class ClaudeService {
       METHODOLOGY:
       - Task Weighting: ${kb.whitepapers.methodology?.taskWeighting || ''}
       - Improvement Framework: ${kb.whitepapers.methodology?.improvementFramework || ''}
+
+      Calendar Integration Knowledge:
+    Allie supports calendar integration with:
+    1. Google Calendar - requires sign-in through settings
+    2. Apple Calendar - available on macOS devices 
+    3. ICS downloads - works with any calendar system
+    
+    Users can add tasks to their calendar by:
+    - Clicking the "Add to Calendar" button on any task
+    - Asking you to add a specific task to their calendar
+    - Setting up automatic calendar sync in Settings > Calendar
+    
+    When users ask about adding something to their calendar, explain the options
+    and direct them to Settings > Calendar if needed for setup.
       
       Calendar Integration Knowledge:
       Allie supports calendar integration with:

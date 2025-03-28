@@ -104,10 +104,11 @@ class CalendarService {
 
   // Initialize Google Calendar API with Firebase Auth token
   // Initialize Google Calendar API with Firebase Auth token
+// Initialize Google Calendar API with Firebase Auth token
 async initializeGoogleCalendar() {
   return new Promise((resolve, reject) => {
-    // For testing/development, create a mock implementation
-    this.mockMode = true; // Use mock mode for stability
+    // FOR PRODUCTION: Set mockMode to false for real calendar integration
+    this.mockMode = false; // Changed to false to use real Google Calendar
     
     if (this.mockMode) {
       console.log("Using mock Google Calendar implementation for stability");
@@ -143,8 +144,7 @@ async initializeGoogleCalendar() {
       
       resolve(true);
       return;
-    }
-        
+    }        
     // Real implementation
     if (!window.gapi) {
       const script = document.createElement('script');
@@ -309,32 +309,75 @@ isSignedInToGoogle() {
   }
 
   // Add event to Google Calendar
-  async addEventToGoogleCalendar(event) {
-    if (!this.googleApiLoaded) {
-      await this.initializeGoogleCalendar();
-    }
-    
-    if (!this.isSignedInToGoogle()) {
-      await this.signInToGoogle();
-    }
-    
-    try {
-      const calendarId = this.calendarSettings?.googleCalendar?.calendarId || 'primary';
-      const response = await window.gapi.client.calendar.events.insert({
-        'calendarId': calendarId,
-        'resource': event
-      });
-      
-      return {
-        success: true,
-        eventId: response.result.id,
-        eventLink: response.result.htmlLink
-      };
-    } catch (error) {
-      console.error("Error adding event to Google Calendar:", error);
-      throw error;
-    }
+  // Add event to Google Calendar
+async addEventToGoogleCalendar(event) {
+  if (!this.googleApiLoaded) {
+    await this.initializeGoogleCalendar();
   }
+  
+  if (!this.isSignedInToGoogle()) {
+    await this.signInToGoogle();
+  }
+  
+  try {
+    const calendarId = this.calendarSettings?.googleCalendar?.calendarId || 'primary';
+    console.log("Adding event to Google Calendar:", {
+      calendarId,
+      eventSummary: event.summary,
+      eventStart: event.start
+    });
+    
+    // Make sure gapi client is initialized with calendar scope
+    if (!window.gapi.client.calendar) {
+      await window.gapi.client.load('calendar', 'v3');
+      console.log("Loaded Google Calendar API");
+    }
+    
+    const response = await window.gapi.client.calendar.events.insert({
+      'calendarId': calendarId,
+      'resource': event
+    });
+    
+    console.log("Successfully added event to Google Calendar:", response.result);
+    
+    // Success notification to the user
+    if (typeof window !== 'undefined') {
+      // Show a temporary success message
+      const notification = document.createElement('div');
+      notification.innerText = `Event "${event.summary}" added to Google Calendar`;
+      notification.style.cssText = `
+        position: fixed; bottom: 20px; right: 20px; background: #4caf50;
+        color: white; padding: 12px 20px; border-radius: 4px; z-index: 9999;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-family: Roboto, sans-serif;
+      `;
+      document.body.appendChild(notification);
+      setTimeout(() => notification.remove(), 5000);
+    }
+    
+    return {
+      success: true,
+      eventId: response.result.id,
+      eventLink: response.result.htmlLink
+    };
+  } catch (error) {
+    console.error("Error adding event to Google Calendar:", error);
+    
+    // Error notification to the user
+    if (typeof window !== 'undefined') {
+      const notification = document.createElement('div');
+      notification.innerText = `Failed to add event to calendar: ${error.message || 'Unknown error'}`;
+      notification.style.cssText = `
+        position: fixed; bottom: 20px; right: 20px; background: #f44336;
+        color: white; padding: 12px 20px; border-radius: 4px; z-index: 9999;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-family: Roboto, sans-serif;
+      `;
+      document.body.appendChild(notification);
+      setTimeout(() => notification.remove(), 5000);
+    }
+    
+    throw error;
+  }
+}
 
   // Add event to Apple Calendar
   async addEventToAppleCalendar(event) {
