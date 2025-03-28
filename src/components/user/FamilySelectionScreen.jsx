@@ -171,46 +171,51 @@ const getDefaultProfileImage = (member) => {
 };
   
   // Handle selecting a user from the family
-  const handleSelectUser = async (member) => {
-    // Select the family member first
-    selectFamilyMember(member);
-    
-    // Navigate to the appropriate screen based on survey completion
-    if (member.completed) {
-      navigate('/dashboard');
-    } else {
+const handleSelectUser = async (member) => {
+  // If we're switching users, clear previous auth state
+  if (selectedUser && selectedUser.id !== member.id) {
+    await clearPreviousUserState();
+  }
+
+  // Select the family member first
+  selectFamilyMember(member);
+  
+  // Navigate to the appropriate screen based on survey completion
+  if (member.completed) {
+    navigate('/dashboard');
+  } else {
+    try {
+      // Check if this member has a paused survey
+      let hasInProgressSurvey = false;
       try {
-        // Check if this member has a paused survey
-        let hasInProgressSurvey = false;
-        try {
-          const surveyProgress = localStorage.getItem('surveyInProgress');
-          if (surveyProgress) {
-            const progress = JSON.parse(surveyProgress);
-            hasInProgressSurvey = progress.userId === member.id;
-          }
-        } catch (e) {
-          console.error("Error checking survey progress:", e);
+        const surveyProgress = localStorage.getItem('surveyInProgress');
+        if (surveyProgress) {
+          const progress = JSON.parse(surveyProgress);
+          hasInProgressSurvey = progress.userId === member.id;
         }
-        
-        if (hasInProgressSurvey) {
-          // Try to load their saved responses before navigating
-          const responses = await getMemberSurveyResponses(member.id, 'initial');
-          if (responses && Object.keys(responses).length > 0) {
-            // Update the survey context with their saved responses
-            setCurrentSurveyResponses(responses);  // Use the function from the top level
-            console.log("Loaded saved survey progress:", Object.keys(responses).length, "responses");
-          }
-        }
-        
-        // Then navigate to the survey
-        navigate('/survey');
-      } catch (error) {
-        console.error("Error loading saved survey progress:", error);
-        // Still navigate to survey even if loading fails
-        navigate('/survey');
+      } catch (e) {
+        console.error("Error checking survey progress:", e);
       }
+      
+      if (hasInProgressSurvey) {
+        // Try to load their saved responses before navigating
+        const responses = await getMemberSurveyResponses(member.id, 'initial');
+        if (responses && Object.keys(responses).length > 0) {
+          // Update the survey context with their saved responses
+          setCurrentSurveyResponses(responses);
+          console.log("Loaded saved survey progress:", Object.keys(responses).length, "responses");
+        }
+      }
+      
+      // Then navigate to the survey
+      navigate('/survey');
+    } catch (error) {
+      console.error("Error loading saved survey progress:", error);
+      // Still navigate to survey even if loading fails
+      navigate('/survey');
     }
-  };
+  }
+};
   
   // Get the next action for a family member
   const getNextAction = (member) => {
@@ -532,18 +537,6 @@ const clearPreviousUserState = async () => {
     console.error("Error during account cleanup:", error);
   }
 };
-
-// Then modify the handleSelectUser function at line ~380 to include a call to this function
-const handleSelectUser = async (member) => {
-  // If we're switching users, clear previous auth state
-  if (selectedUser && selectedUser.id !== member.id) {
-    await clearPreviousUserState();
-  }
-  
-  // Continue with the existing code...
-  // Select the family member first
-  selectFamilyMember(member);
-  // ...
 
 
   const handleLogout = async () => {

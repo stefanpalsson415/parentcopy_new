@@ -30,14 +30,10 @@ import FloatingCalendarWidget from './components/calendar/FloatingCalendarWidget
 import EmailOptIn from './components/marketing/EmailOptIn';
 import ClaudeDebugger from './components/debug/ClaudeDebugger';
 
-import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
-
- // Add this import
-
 // App Routes Component - Used after context providers are set up
 function AppRoutes() {
   const { selectedUser } = useFamily();
-  const { currentUser } = useAuth(); // Add this line
+  const { currentUser } = useAuth();
 
   // Determine if calendar widget should be shown
   const showCalendarWidget = !!currentUser && !!selectedUser && window.location.pathname === '/dashboard';
@@ -50,10 +46,8 @@ function AppRoutes() {
         <Route path="/onboarding" element={<OnboardingFlow />} />
         <Route path="/signup" element={<UserSignupScreen />} />
         <Route path="/email-opt-in" element={<EmailOptIn />} />
-<Route path="/survey-dashboard" element={<FamilySurveyDashboard />} />
+        <Route path="/survey-dashboard" element={<FamilySurveyDashboard />} />
         
-
-
         <Route path="/how-it-works" element={<HowThisWorksScreen />} />
         <Route path="/relationship-features" element={<RelationshipFeaturesPage />} />
         <Route path="/ai-assistant" element={<AIAssistantPage />} />
@@ -71,7 +65,6 @@ function AppRoutes() {
         <Route path="/payment" element={<PaymentScreen />} />
         <Route path="/dashboard" element={<DashboardScreen />} />
         <Route path="/debug/claude" element={<ClaudeDebugger />} />
-
         
         {/* Route for weekly check-in - directs kids to kid-friendly version */}
         <Route path="/weekly-check-in" element={
@@ -89,6 +82,7 @@ function AppRoutes() {
     </>
   );
 }
+
 // Enhanced error boundary with better user feedback and recovery options
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -111,11 +105,6 @@ class ErrorBoundary extends React.Component {
       errorDetails: error.message,
       errorInfo: errorInfo
     });
-    
-    // You could add reporting to a service like Sentry here
-    // if (window.Sentry) {
-    //   window.Sentry.captureException(error, { extra: errorInfo });
-    // }
   }
 
   handleReset = () => {

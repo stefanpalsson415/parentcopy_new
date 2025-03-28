@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, X, MinusSquare, Send, Info } from 'lucide-react';
+import { MessageSquare, X, MinusSquare, Send, Info, Calendar, PlusCircle } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useChat } from '../../contexts/ChatContext';
 import ChatMessage from './ChatMessage';
