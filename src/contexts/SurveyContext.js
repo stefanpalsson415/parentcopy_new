@@ -541,13 +541,15 @@ export function SurveyProvider({ children }) {
       return [...primaryQuestions, ...remainingQuestions].sort(() => 0.5 - Math.random());
     };
     
-    // Calculate max questions per category - for 40 total, get 10 per category
-    // The actual number might be slightly less due to available questions
-    const maxQuestionsPerCategory = Math.ceil(maxTotalQuestions / categories.length);
-    
-    // Track our total questions
-    let totalQuestionsAdded = 0;
-    const maxTotalQuestions = isChild ? 30 : 40;
+    // Define max total questions first
+const maxTotalQuestions = isChild ? 30 : 40;
+
+// Calculate max questions per category - for 40 total, get 10 per category
+// The actual number might be slightly less due to available questions
+const maxQuestionsPerCategory = Math.ceil(maxTotalQuestions / categories.length);
+
+// Track our total questions
+let totalQuestionsAdded = 0;
     
     // Process each category to select questions
     categories.forEach(category => {
