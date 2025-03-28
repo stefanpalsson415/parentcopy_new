@@ -2,16 +2,17 @@
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 
-class CalendarService {
-  constructor() {
-    this.isInitialized = false;
-    this.googleApiLoaded = false;
-    this.appleCalendarAvailable = this.checkAppleCalendarSupport();
-    this.calendarSettings = {};
-    this.activeCalendarType = null;
-    this.mockMode = true; // Set to true to use mock mode for testing
-    console.log("CalendarService initialized. Mock mode:", this.mockMode);
-  }
+constructor() {
+  this.isInitialized = false;
+  this.googleApiLoaded = false;
+  this.appleCalendarAvailable = this.checkAppleCalendarSupport();
+  this.calendarSettings = {};
+  this.activeCalendarType = null;
+  this.mockMode = false; // Set to false to use real Google Calendar API
+  this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY;
+  this.clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+  console.log("CalendarService initialized. Using real Google Calendar API");
+}
 
   // Check if Apple Calendar is supported
   checkAppleCalendarSupport() {
@@ -171,8 +172,8 @@ class CalendarService {
             callback: () => {
               // Initialize the client with your API key and client ID
               window.gapi.client.init({
-                apiKey: 'YOUR_API_KEY',  // Replace with your actual API key
-                clientId: 'YOUR_CLIENT_ID', // Replace with your actual client ID
+                apiKey: this.apiKey,
+                clientId: this.clientId,
                 discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
                 scope: 'https://www.googleapis.com/auth/calendar'
               }).then(() => {
@@ -339,6 +340,55 @@ class CalendarService {
     }
   }
 
+// Debug Google Calendar connection
+async debugGoogleCalendarConnection() {
+  try {
+    console.log("Testing Google Calendar connection...");
+    
+    // Check if gapi is loaded
+    if (!window.gapi) {
+      console.error("Google API (gapi) not loaded");
+      return {
+        success: false,
+        error: "Google API not loaded"
+      };
+    }
+    
+    // Initialize Google Calendar if needed
+    if (!this.googleApiLoaded) {
+      console.log("Initializing Google Calendar API...");
+      await this.initializeGoogleCalendar();
+    }
+    
+    // Check if signed in
+    const isSignedIn = this.isSignedInToGoogle();
+    console.log("Is signed in to Google:", isSignedIn);
+    
+    if (!isSignedIn) {
+      console.log("Attempting to sign in to Google...");
+      await this.signInToGoogle();
+    }
+    
+    // Test API by listing calendars
+    console.log("Listing available calendars...");
+    const calendars = await this.listUserCalendars();
+    console.log("Available calendars:", calendars);
+    
+    return {
+      success: true,
+      message: "Google Calendar API test successful",
+      calendars: calendars
+    };
+  } catch (error) {
+    console.error("Error testing Google Calendar connection:", error);
+    return {
+      success: false,
+      error: error.message || "Unknown error"
+    };
+  }
+}
+
+
   // Add event to Google Calendar
   async addEventToGoogleCalendar(event) {
     console.log("Adding event to Google Calendar");
@@ -362,12 +412,12 @@ class CalendarService {
     }
     
     try {
-      // In mock mode, return mock response
+      // Check if we should use mock mode as fallback
       if (this.mockMode) {
         console.log("Mock adding event to Google Calendar:", event.summary);
         
         // Show a temporary success message
-        this.showNotification(`Event "${event.summary}" added to Google Calendar`, "success");
+        this.showNotification(`Event "${event.summary}" added to Google Calendar (mock)`, "success");
         
         return {
           success: true,
@@ -376,12 +426,24 @@ class CalendarService {
         };
       }
       
+      // Real Google Calendar integration
       const calendarId = this.calendarSettings?.googleCalendar?.calendarId || 'primary';
       console.log("Adding event to Google Calendar:", {
         calendarId,
         eventSummary: event.summary,
         eventStart: event.start
       });
+      
+      // Debug API state and ensure we're properly initialized
+      if (!window.gapi || !window.gapi.client) {
+        console.log("Google API client not fully loaded, initializing...");
+        await this.initializeGoogleCalendar();
+      }
+      
+      if (!this.isSignedInToGoogle()) {
+        console.log("Not signed in to Google, attempting to sign in");
+        await this.signInToGoogle();
+      }
       
       // Make sure gapi client is initialized with calendar scope
       if (!window.gapi.client.calendar) {

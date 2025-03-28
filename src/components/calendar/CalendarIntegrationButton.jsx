@@ -22,11 +22,22 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
           
           // Check if signed in to Google (if that's the active type)
           if (settings?.defaultCalendarType === 'google') {
+            console.log("Initializing Google Calendar...");
             await CalendarService.initializeGoogleCalendar();
-            setIsSignedIn(CalendarService.isSignedInToGoogle());
+            
+            // Test Google sign-in state
+            const signedIn = CalendarService.isSignedInToGoogle();
+            console.log("Google Calendar sign-in state:", signedIn);
+            setIsSignedIn(signedIn);
+            
+            // If not signed in, we'll handle this when the user clicks the button
+            if (!signedIn) {
+              console.log("Not signed in to Google Calendar. Will prompt on button click.");
+            }
           }
         } catch (error) {
           console.error("Error loading calendar settings:", error);
+          // Still allow the component to render even if there's an error
         }
       }
     };
