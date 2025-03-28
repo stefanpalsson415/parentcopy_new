@@ -2,7 +2,8 @@
 class ClaudeService {
   constructor() {
     this.proxyUrl = 'http://localhost:3001/api/claude';
-    this.model = 'claude-3-opus-20240229';
+    this.model = 'claude-3-haiku-20240307'; // Using a more cost-effective model
+    this.mockMode = false; // Explicitly disable mock mode
     
     console.log("Claude service initialized to use local proxy server");
   }
@@ -15,7 +16,9 @@ class ClaudeService {
       // Log for debugging
       console.log("Claude API request via proxy:", { 
         messagesCount: messages.length, 
-        systemPromptLength: systemPrompt.length
+        systemPromptLength: systemPrompt.length,
+        model: this.model,
+        mockMode: this.mockMode
       });
       
       // Get the last user message
