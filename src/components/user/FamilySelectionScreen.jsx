@@ -171,8 +171,20 @@ const getDefaultProfileImage = (member) => {
 };
   
   // Handle selecting a user from the family
+// Add this after the handleLogin function
+const clearPreviousUserState = async () => {
+  // Clear any stored auth and login state
+  localStorage.removeItem('googleAuthToken');
+  localStorage.removeItem('selectedUserId');
+  
+  // Note: We're NOT logging out from Firebase or Google Auth
+  // This was causing the unexpected logout behavior
+  console.log("Cleared previous user state without logging out");
+};
+
+// Handle selecting a user from the family
 const handleSelectUser = async (member) => {
-  // If we're switching users, clear previous auth state
+  // If we're switching users, clear previous user state
   if (selectedUser && selectedUser.id !== member.id) {
     await clearPreviousUserState();
   }
@@ -514,29 +526,7 @@ const handleSelectUser = async (member) => {
   }
   };
   
-// Add this after the handleLogin function
-const clearPreviousUserState = async () => {
-  // Clear any stored auth and login state
-  localStorage.removeItem('googleAuthToken');
-  localStorage.removeItem('selectedUserId');
-  
-  try {
-    // Force sign out from Google Auth
-    if (window.gapi && window.gapi.auth2) {
-      const auth2 = window.gapi.auth2.getAuthInstance();
-      if (auth2) {
-        await auth2.signOut();
-        console.log("Signed out from Google Auth");
-      }
-    }
-    
-    // Force sign out from Firebase Auth
-    await logout();
-    console.log("Signed out from Firebase Auth");
-  } catch (error) {
-    console.error("Error during account cleanup:", error);
-  }
-};
+
 
 
   const handleLogout = async () => {
