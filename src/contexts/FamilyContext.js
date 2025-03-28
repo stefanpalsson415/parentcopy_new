@@ -465,33 +465,49 @@ const completeInitialSurvey = async (memberId, responses) => {
       }
       
       // 4. Store initial survey data in week history
-      const allComplete = updatedMembers.every(member => member.completed);
-      if (allComplete) {
-        console.log("All family members have completed the survey. Updating week history...");
-        // Create initial survey snapshot using current responses
-        const initialSurveyData = {
-          responses: responses,
-          completionDate: new Date().toISOString(),
-          familyMembers: updatedMembers.map(m => ({
-            id: m.id,
-            name: m.name,
-            role: m.role,
-            completedDate: m.completedDate
-          }))
-        };
-        
-        // Update week history
-        const updatedHistory = {
-          ...weekHistory,
-          initial: initialSurveyData
-        };
-        
-        setWeekHistory(updatedHistory);
-        
-        // Save to Firebase
-        await DatabaseService.saveFamilyData({ 
-          weekHistory: updatedHistory
-        }, familyId);
+const allComplete = updatedMembers.every(member => member.completed);
+if (allComplete) {
+  console.log("All family members have completed the survey. Updating week history...");
+  // Create initial survey snapshot using current responses
+  const initialSurveyData = {
+    responses: responses,
+    completionDate: new Date().toISOString(),
+    familyMembers: updatedMembers.map(m => ({
+      id: m.id,
+      name: m.name,
+      role: m.role,
+      completedDate: m.completedDate
+    }))
+  };
+  
+  // Update week history
+  const updatedHistory = {
+    ...weekHistory,
+    initial: initialSurveyData
+  };
+  
+  setWeekHistory(updatedHistory);
+  
+  // Generate initial tasks based on survey results
+  try {
+    console.log("Generating initial tasks based on survey responses");
+    const initialTasks = generateNewWeekTasks(1, [], responses);
+    
+    // Update tasks in state
+    setTaskRecommendations(initialTasks);
+    
+    // Save to Firebase - include tasks and week history
+    await DatabaseService.saveFamilyData({ 
+      weekHistory: updatedHistory,
+      tasks: initialTasks,
+      updatedAt: new Date().toISOString()
+    }, familyId);
+    
+    console.log(`Generated ${initialTasks.length} initial tasks based on survey data`);
+  } catch (taskError) {
+    console.error("Error generating initial tasks:", taskError);
+    // Continue with survey completion even if task generation fails
+  }
         
         // 5. Store AI preferences in dedicated storage
         try {
@@ -1970,25 +1986,85 @@ const assignTo = itemLower.includes("papa") ? "Papa" :
   };
 
   // Load tasks for the current week
-  const loadCurrentWeekTasks = async () => {
-    try {
-      if (!familyId) throw new Error("No family ID available");
-      
-      console.log(`Loading tasks for Week ${currentWeek} from Firebase...`);
-      const tasks = await DatabaseService.getTasksForWeek(familyId, currentWeek);
-      console.log(`Received ${tasks?.length || 0} tasks from Firebase:`, tasks);
-      
-      if (tasks && tasks.length > 0) {
-        console.log("Updating task recommendations with fresh data");
-        setTaskRecommendations(tasks);
-      }
+const loadCurrentWeekTasks = async () => {
+  try {
+    if (!familyId) throw new Error("No family ID available");
+    
+    console.log(`Loading tasks for Week ${currentWeek} from Firebase...`);
+    const tasks = await DatabaseService.getTasksForWeek(familyId, currentWeek);
+    console.log(`Received ${tasks?.length || 0} tasks from Firebase:`, tasks);
+    
+    // If we have tasks, use them
+    if (tasks && tasks.length > 0) {
+      console.log("Updating task recommendations with existing tasks");
+      setTaskRecommendations(tasks);
       return tasks;
-    } catch (error) {
-      console.error("Error loading current week tasks:", error);
-      setError(error.message);
-      return null;
     }
-  };
+    
+    // If we don't have tasks but have survey data, generate new tasks
+    console.log("No tasks found - checking if we can generate from survey data");
+    
+    // Get survey responses
+    let surveyResponses = {};
+    
+    // First try to get from stored responses
+    if (Object.keys(surveyResponses).length === 0) {
+      try {
+        // Load from week history
+        const initialData = weekHistory.initial;
+        if (initialData && initialData.responses) {
+          console.log("Using survey responses from initial week history");
+          surveyResponses = initialData.responses;
+        }
+      } catch (e) {
+        console.warn("Error accessing initial survey data:", e);
+      }
+    }
+    
+    // If we still don't have responses, try to load from Firebase
+    if (Object.keys(surveyResponses).length === 0) {
+      try {
+        console.log("Loading survey responses from Firebase");
+        const dbResponses = await DatabaseService.loadSurveyResponses(familyId);
+        if (dbResponses && Object.keys(dbResponses).length > 0) {
+          console.log("Found survey responses in Firebase");
+          surveyResponses = dbResponses;
+        }
+      } catch (e) {
+        console.warn("Error loading survey responses from Firebase:", e);
+      }
+    }
+    
+    // If we have survey responses, generate tasks
+    if (Object.keys(surveyResponses).length > 0) {
+      console.log("Generating tasks from survey responses");
+      
+      // Generate new tasks
+      const newTasks = generateNewWeekTasks(currentWeek, [], surveyResponses);
+      console.log(`Generated ${newTasks.length} tasks for week ${currentWeek}`);
+      
+      // Save tasks to Firebase
+      if (newTasks.length > 0) {
+        console.log("Saving generated tasks to Firebase");
+        await DatabaseService.saveFamilyData({
+          tasks: newTasks,
+          updatedAt: new Date().toISOString()
+        }, familyId);
+      }
+      
+      // Update state
+      setTaskRecommendations(newTasks);
+      return newTasks;
+    }
+    
+    console.log("Could not generate tasks - no survey data available");
+    return [];
+  } catch (error) {
+    console.error("Error loading current week tasks:", error);
+    setError(error.message);
+    return [];
+  }
+};
 
   // Get historical data for a specific week
   const getWeekHistoryData = (weekNumber) => {

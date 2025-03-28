@@ -77,12 +77,27 @@ useEffect(() => {
   checkCalendarConnection();
 }, [currentUser]);
 
-  useEffect(() => {
-    // Dynamically import the service to avoid circular dependencies
-    import('../../services/AllieAIEngineService').then(module => {
-      setAllieAIEngineService(module.default);
-    });
-  }, []);
+useEffect(() => {
+  // Dynamically import the service to avoid circular dependencies
+  import('../../services/AllieAIEngineService').then(module => {
+    setAllieAIEngineService(module.default);
+    console.log("AllieAIEngineService loaded successfully");
+    
+    // If family data is available, try to load AI insights right away
+    if (familyId && currentWeek && module.default) {
+      module.default.generateDashboardInsights(familyId, currentWeek)
+        .then(aiInsights => {
+          if (aiInsights && aiInsights.length > 0) {
+            setInsights(aiInsights);
+            console.log("AI insights loaded:", aiInsights);
+          }
+        })
+        .catch(err => console.error("Error loading initial AI insights:", err));
+    }
+  }).catch(error => {
+    console.error("Failed to load AI Engine service:", error);
+  });
+}, [familyId, currentWeek]);
 
   // Calculate notifications
   useEffect(() => {

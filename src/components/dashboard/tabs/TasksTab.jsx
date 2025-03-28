@@ -11,6 +11,8 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../../services/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../services/firebase';
+import AllieAIEngineService from '../../../services/AllieAIEngineService';
+
 
 // Helper function to format dates consistently
 const formatDate = (date) => {

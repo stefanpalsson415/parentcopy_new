@@ -264,6 +264,46 @@ async uploadProfileImage(userId, file) {
   }
 }
 
+// Load all survey responses for a family
+async loadSurveyResponses(familyId) {
+  try {
+    console.log("Loading all survey responses for family:", familyId);
+    
+    // Query all survey response documents for this family
+    const surveyResponsesQuery = query(
+      collection(this.db, "surveyResponses"), 
+      where("familyId", "==", familyId)
+    );
+    
+    const querySnapshot = await getDocs(surveyResponsesQuery);
+    
+    // Combine all responses
+    const allResponses = {};
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      if (data.responses) {
+        // Handle both simple and enriched response formats
+        if (typeof Object.values(data.responses)[0] === 'object') {
+          // Enriched format with metadata
+          Object.entries(data.responses).forEach(([key, value]) => {
+            allResponses[key] = value.answer || value;
+          });
+        } else {
+          // Simple format
+          Object.assign(allResponses, data.responses);
+        }
+      }
+    });
+    
+    console.log(`Found ${Object.keys(allResponses).length} survey responses`);
+    return allResponses;
+  } catch (error) {
+    console.error("Error loading survey responses:", error);
+    return {};
+  }
+}
+
+
   // Upload family picture to Firebase Storage
   async uploadFamilyPicture(familyId, file) {
     try {

@@ -25,6 +25,51 @@ const UserSettingsScreen = ({ onClose }) => {
   const [uploadError, setUploadError] = useState(null);
   const [settingsTab, setSettingsTab] = useState('profile'); // 'profile', 'family', 'app', or 'calendar'
 
+// Track Google auth status
+const [googleAuthStatus, setGoogleAuthStatus] = useState({
+  isConnected: false,
+  email: null,
+  loading: true
+});
+
+// Check Google auth status when component mounts
+useEffect(() => {
+  const checkGoogleAuthStatus = async () => {
+    try {
+      // First check if user is signed in via Google provider
+      const isGoogleUser = currentUser?.providerData?.some(
+        provider => provider.providerId === 'google.com'
+      );
+      
+      // Also check if the selected user has googleAuth data
+      const hasGoogleAuthData = selectedUser?.googleAuth?.uid;
+      
+      // Set status based on checks
+      setGoogleAuthStatus({
+        isConnected: isGoogleUser || !!hasGoogleAuthData,
+        email: hasGoogleAuthData ? selectedUser.googleAuth.email : currentUser?.email,
+        loading: false
+      });
+      
+      console.log("Google auth status checked:", {
+        isGoogleUser,
+        hasGoogleAuthData,
+        user: selectedUser?.name
+      });
+    } catch (error) {
+      console.error("Error checking Google auth status:", error);
+      setGoogleAuthStatus({
+        isConnected: false,
+        email: null,
+        loading: false
+      });
+    }
+  };
+  
+  checkGoogleAuthStatus();
+}, [currentUser, selectedUser]);
+
+
   
   // Handle family name update
   const handleFamilyNameUpdate = async () => {
@@ -726,16 +771,21 @@ const UserSettingsScreen = ({ onClose }) => {
             <div>
               <h5 className="text-sm font-medium">Google Account</h5>
               <p className="text-xs text-gray-500">
-                {selectedUser?.googleAuth 
-                  ? `Connected as ${selectedUser.googleAuth.email || currentUser?.email}`
-                  : 'Not connected'}
-              </p>
+  {googleAuthStatus.loading ? (
+    "Checking status..."
+  ) : googleAuthStatus.isConnected ? (
+    `Connected as ${googleAuthStatus.email || currentUser?.email}`
+  ) : (
+    'Not connected'
+  )}
+</p>
             </div>
           </div>
           
           <button
             onClick={async () => {
-              if (selectedUser?.googleAuth) {
+              if (googleAuthStatus.isConnected) {
+
                 // Already connected - ask if they want to disconnect
                 const confirmDisconnect = window.confirm('Are you sure you want to disconnect your Google account?');
 if (confirmDisconnect) {
@@ -780,7 +830,8 @@ if (confirmDisconnect) {
                 : 'bg-black text-white hover:bg-gray-800'
             }`}
           >
-            {selectedUser?.googleAuth ? 'Disconnect' : 'Connect'}
+            {googleAuthStatus.isConnected ? 'Disconnect' : 'Connect'}
+
           </button>
         </div>
         
