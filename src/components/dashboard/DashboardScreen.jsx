@@ -513,18 +513,19 @@ useEffect(() => {
       
       {/* Allie Chat Widget */}
       <div id="chat-button"> {/* Add this wrapper with ID */}
-
-      <AllieChat />
+        <AllieChat />
+      </div>
       
       {/* Floating Calendar Widget */}
       <FloatingCalendarWidget />
-    {/* Right before the final closing div tag */}
-{showTutorial && (
-  <DashboardTutorial 
-    onComplete={() => setShowTutorial(false)} 
-  />
-)}
-</div>
+
+      {/* Right before the final closing div tag */}
+      {showTutorial && (
+        <DashboardTutorial 
+          onComplete={() => setShowTutorial(false)} 
+        />
+      )}
+    </div>
   );
 };
 
