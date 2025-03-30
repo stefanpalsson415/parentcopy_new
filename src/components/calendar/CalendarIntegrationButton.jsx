@@ -45,8 +45,31 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
     loadSettings();
   }, [currentUser]);
   
+  
+  // Add this after other useEffects in CalendarIntegrationButton.jsx
+useEffect(() => {
+  // Check if this event was already added
+  try {
+    const addedEvents = JSON.parse(localStorage.getItem('addedCalendarEvents') || '{}');
+    const eventKey = `${itemType}-${item.id}`;
+    if (addedEvents[eventKey]) {
+      // This event was already added
+      setIsAdded(true);
+      
+      // Reset after 2 seconds to allow re-adding if needed
+      setTimeout(() => {
+        setIsAdded(false);
+      }, 2000);
+    }
+  } catch (error) {
+    console.error("Error checking added events:", error);
+  }
+}, [item.id, itemType]);
+  
+  
   // Handle adding to default calendar
   // Handle adding to default calendar
+// Update the handleAddToCalendar function
 const handleAddToCalendar = async () => {
   setIsLoading(true);
   setError(null);
@@ -84,30 +107,40 @@ const handleAddToCalendar = async () => {
       };
     }
       
-      // Add to the default calendar
-      const result = await CalendarService.addEvent(event);
-      console.log("Event added to calendar:", result);
-      
-      // Mark as added
-      setIsAdded(true);
-      
-      // Reset after 3 seconds
-      setTimeout(() => {
-        setIsAdded(false);
-      }, 3000);
-    } catch (error) {
-      console.error("Error adding to calendar:", error);
-      setError(error.message || "Failed to add to calendar");
-      
-      // Reset error after 3 seconds
-      setTimeout(() => {
-        setError(null);
-      }, 3000);
-    } finally {
-      setIsLoading(false);
-      setShowOptions(false);
+    // Add to the default calendar
+    const result = await CalendarService.addEvent(event);
+    console.log("Event added to calendar:", result);
+    
+    // Store the event ID in localStorage to remember it was added
+    if (result && result.eventId) {
+      const addedEvents = JSON.parse(localStorage.getItem('addedCalendarEvents') || '{}');
+      addedEvents[`${itemType}-${item.id}`] = {
+        eventId: result.eventId,
+        addedAt: new Date().toISOString()
+      };
+      localStorage.setItem('addedCalendarEvents', JSON.stringify(addedEvents));
     }
-  };
+    
+    // Mark as added
+    setIsAdded(true);
+    
+    // Reset after 3 seconds
+    setTimeout(() => {
+      setIsAdded(false);
+    }, 3000);
+  } catch (error) {
+    console.error("Error adding to calendar:", error);
+    setError(error.message || "Failed to add to calendar");
+    
+    // Reset error after 3 seconds
+    setTimeout(() => {
+      setError(null);
+    }, 3000);
+  } finally {
+    setIsLoading(false);
+    setShowOptions(false);
+  }
+};
   
   // Handle adding to specific calendar type
   const handleAddToSpecificCalendar = async (calendarType) => {

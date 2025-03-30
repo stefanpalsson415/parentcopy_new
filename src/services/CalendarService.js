@@ -113,6 +113,7 @@ class CalendarService {
   }
 
   // Initialize Google Calendar API with Firebase Auth token
+  // Update the initializeGoogleCalendar method around line 235
   async initializeGoogleCalendar() {
     console.log("Initializing Google Calendar");
     
@@ -122,12 +123,12 @@ class CalendarService {
       this.googleApiLoaded = true;
       this.calendarConnected = true;
       
-      // Create mock functions for testing
+      // Set up mock gapi
       if (!window.gapi) {
         window.gapi = {
           auth2: {
             getAuthInstance: () => ({
-              isSignedIn: { get: () => true }, // Return true to simulate successful sign-in
+              isSignedIn: { get: () => true },
               signIn: async () => true,
               signOut: async () => true
             })
@@ -152,16 +153,37 @@ class CalendarService {
       return true;
     }
     
-    // Wrap in Promise to handle async loading
+    // Real implementation
     return new Promise((resolve, reject) => {
       try {
-        // Check if gapi is already loaded
-        if (window.gapi && window.gapi.client) {
-          this.googleApiLoaded = true;
-          resolve(true);
-          return;
+        // Check if script is already loaded
+        if (window.gapi) {
+          console.log("Google API client already loaded");
+          
+          // Even if gapi is loaded, we need to ensure auth2 is initialized
+          if (window.gapi.auth2 && window.gapi.auth2.getAuthInstance()) {
+            console.log("Google Auth2 already initialized");
+            this.googleApiLoaded = true;
+            resolve(true);
+            return;
+          } else if (window.gapi.client) {
+            // Auth2 not initialized but client is available
+            console.log("Initializing Google Auth2...");
+            this.initializeAuth2()
+              .then(() => {
+                this.googleApiLoaded = true;
+                resolve(true);
+              })
+              .catch(err => {
+                console.error("Error initializing Auth2:", err);
+                this.mockMode = true;
+                resolve(true);
+              });
+            return;
+          }
         }
         
+        console.log("Loading Google API script");
         // Load the Google API script
         const script = document.createElement('script');
         script.src = 'https://apis.google.com/js/api.js';
@@ -169,61 +191,97 @@ class CalendarService {
         script.defer = true;
         
         script.onload = () => {
-          window.gapi.load('client:auth2', {
-            callback: () => {
-              // Initialize the client with your API key and client ID
-              window.gapi.client.init({
-                apiKey: this.apiKey,
-                clientId: this.clientId,
-                discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
-                scope: 'https://www.googleapis.com/auth/calendar'
-              }).then(() => {
+          console.log("Google API script loaded, loading client and auth2 modules");
+          window.gapi.load('client:auth2', () => {
+            console.log("Gapi client and auth2 loaded, initializing client");
+            this.initializeAuth2()
+              .then(() => {
                 this.googleApiLoaded = true;
                 resolve(true);
-              }).catch(err => {
-                console.error("Error initializing Google API client:", err);
-                
-                // Fall back to mock mode
-                console.log("Falling back to mock mode due to API initialization error");
+              })
+              .catch(err => {
+                console.error("Error initializing Auth2:", err);
                 this.mockMode = true;
-                this.googleApiLoaded = true;
                 resolve(true);
               });
-            },
-            onerror: (error) => {
-              console.error("Error loading Google client library:", error);
-              
-              // Fall back to mock mode
-              console.log("Falling back to mock mode due to library load error");
-              this.mockMode = true;
-              this.googleApiLoaded = true;
-              resolve(true);
-            }
           });
         };
         
         script.onerror = (error) => {
           console.error("Error loading Google API script:", error);
-          
-          // Fall back to mock mode
-          console.log("Falling back to mock mode due to script load error");
           this.mockMode = true;
-          this.googleApiLoaded = true;
           resolve(true);
         };
         
         document.body.appendChild(script);
       } catch (error) {
         console.error("Unexpected error in initializeGoogleCalendar:", error);
-        
-        // Fall back to mock mode
-        console.log("Falling back to mock mode due to unexpected error");
         this.mockMode = true;
-        this.googleApiLoaded = true;
         resolve(true);
       }
     });
   }
+  
+  // Add this helper method for Auth2 initialization
+  async initializeAuth2() {
+    return window.gapi.client.init({
+      apiKey: this.apiKey,
+      clientId: this.clientId,
+      discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+      scope: 'https://www.googleapis.com/auth/calendar'
+    });
+  }
+
+
+
+// Add after the listUserCalendars method
+async debugGoogleCalendarConnection() {
+  try {
+    console.log("Testing Google Calendar connection...");
+    
+    // Check if gapi is loaded
+    if (!window.gapi) {
+      console.error("Google API (gapi) not loaded");
+      return {
+        success: false,
+        error: "Google API not loaded"
+      };
+    }
+    
+    // Initialize Google Calendar if needed
+    if (!this.googleApiLoaded) {
+      console.log("Initializing Google Calendar API...");
+      await this.initializeGoogleCalendar();
+    }
+    
+    // Check if signed in
+    const isSignedIn = this.isSignedInToGoogle();
+    console.log("Is signed in to Google:", isSignedIn);
+    
+    if (!isSignedIn) {
+      console.log("Attempting to sign in to Google...");
+      await this.signInToGoogle();
+    }
+    
+    // Test API by listing calendars
+    console.log("Listing available calendars...");
+    const calendars = await this.listUserCalendars();
+    console.log("Available calendars:", calendars);
+    
+    return {
+      success: true,
+      message: "Google Calendar API test successful",
+      calendars: calendars
+    };
+  } catch (error) {
+    console.error("Error testing Google Calendar connection:", error);
+    return {
+      success: false,
+      error: error.message || "Unknown error"
+    };
+  }
+}
+
 
   // Initialize Apple Calendar integration
   async initializeAppleCalendar() {
@@ -253,7 +311,38 @@ class CalendarService {
         return true;
       }
       
-      const authInstance = window.gapi.auth2.getAuthInstance();
+      // Check if auth2 is available and initialized
+      if (!window.gapi || !window.gapi.auth2) {
+        console.log("Auth2 not available, initializing Google Calendar again");
+        await this.initializeGoogleCalendar();
+        
+        // If still not available, fall back to mock mode
+        if (!window.gapi || !window.gapi.auth2) {
+          console.log("Auth2 still not available after initialization, falling back to mock mode");
+          this.mockMode = true;
+          this.calendarConnected = true;
+          return true;
+        }
+      }
+      
+      // Get auth instance, re-initialize if null
+      let authInstance = window.gapi.auth2.getAuthInstance();
+      if (!authInstance) {
+        console.log("Auth instance is null, re-initializing");
+        await this.initializeAuth2();
+        authInstance = window.gapi.auth2.getAuthInstance();
+        
+        // If still null, fall back to mock mode
+        if (!authInstance) {
+          console.log("Auth instance still null after re-initialization, falling back to mock mode");
+          this.mockMode = true;
+          this.calendarConnected = true;
+          return true;
+        }
+      }
+      
+      // Now attempt sign in
+      console.log("Attempting to sign in to Google Calendar");
       const result = await authInstance.signIn();
       
       // Store the token for reuse
@@ -264,7 +353,7 @@ class CalendarService {
       }
       
       this.calendarConnected = true;
-      return !!result;
+      return true;
     } catch (error) {
       console.error("Error signing in to Google:", error);
       
@@ -276,7 +365,6 @@ class CalendarService {
     }
   }
 
-  // Check if signed in to Google
   isSignedInToGoogle() {
     // Always return true in mock mode
     if (this.mockMode) return true;
@@ -287,7 +375,13 @@ class CalendarService {
     }
     
     try {
-      return window.gapi.auth2.getAuthInstance().isSignedIn.get();
+      // First check if auth instance exists
+      const authInstance = window.gapi.auth2.getAuthInstance();
+      if (!authInstance) {
+        console.warn("Google Auth instance is null");
+        return false;
+      }
+      return authInstance.isSignedIn.get();
     } catch (error) {
       console.error("Error checking Google sign-in status:", error);
       return false;
@@ -396,6 +490,7 @@ async debugGoogleCalendarConnection() {
     
     if (!this.googleApiLoaded) {
       try {
+        console.log("Google Calendar not initialized, initializing now");
         await this.initializeGoogleCalendar();
       } catch (error) {
         console.error("Failed to initialize Google Calendar:", error);
@@ -405,6 +500,7 @@ async debugGoogleCalendarConnection() {
     
     if (!this.isSignedInToGoogle()) {
       try {
+        console.log("Not signed in to Google Calendar, signing in now");
         await this.signInToGoogle();
       } catch (error) {
         console.error("Failed to sign in to Google Calendar:", error);
@@ -417,12 +513,16 @@ async debugGoogleCalendarConnection() {
       if (this.mockMode) {
         console.log("Mock adding event to Google Calendar:", event.summary);
         
+        // Generate a unique ID with timestamp
+        const mockEventId = 'mock-event-id-' + Date.now();
+        console.log(`Generated mock event ID: ${mockEventId}`);
+        
         // Show a temporary success message
         this.showNotification(`Event "${event.summary}" added to Google Calendar (mock)`, "success");
         
         return {
           success: true,
-          eventId: 'mock-event-id-' + Date.now(),
+          eventId: mockEventId,
           eventLink: '#'
         };
       }
@@ -436,6 +536,14 @@ async debugGoogleCalendarConnection() {
       });
       
       // Debug API state and ensure we're properly initialized
+      console.log("Current Google API state:", {
+        isGapiDefined: !!window.gapi,
+        isClientDefined: !!(window.gapi && window.gapi.client),
+        isAuth2Defined: !!(window.gapi && window.gapi.auth2),
+        isCalendarDefined: !!(window.gapi && window.gapi.client && window.gapi.client.calendar),
+        authInstance: !!(window.gapi && window.gapi.auth2 && window.gapi.auth2.getAuthInstance())
+      });
+      
       if (!window.gapi || !window.gapi.client) {
         console.log("Google API client not fully loaded, initializing...");
         await this.initializeGoogleCalendar();
@@ -448,10 +556,13 @@ async debugGoogleCalendarConnection() {
       
       // Make sure gapi client is initialized with calendar scope
       if (!window.gapi.client.calendar) {
+        console.log("Calendar API not loaded, loading it now");
         await window.gapi.client.load('calendar', 'v3');
         console.log("Loaded Google Calendar API");
       }
       
+      // Attempt to make the API call
+      console.log("Calling Google Calendar API to insert event");
       const response = await window.gapi.client.calendar.events.insert({
         'calendarId': calendarId,
         'resource': event
