@@ -36,25 +36,32 @@ const [googleAuthStatus, setGoogleAuthStatus] = useState({
 useEffect(() => {
   const checkGoogleAuthStatus = async () => {
     try {
-      // First check if user is signed in via Google provider
-      const isGoogleUser = currentUser?.providerData?.some(
+      // First check if the selected user has googleAuth data
+      const hasGoogleAuthData = selectedUser?.googleAuth?.uid;
+      
+      // Only check the current Firebase user if it matches the selected family member
+      const isCurrentUserMatch = currentUser?.uid === selectedUser?.id;
+      
+      // Check if the current user is signed in via Google provider
+      const isGoogleUser = isCurrentUserMatch && currentUser?.providerData?.some(
         provider => provider.providerId === 'google.com'
       );
       
-      // Also check if the selected user has googleAuth data
-      const hasGoogleAuthData = selectedUser?.googleAuth?.uid;
-      
-      // Set status based on checks
-      setGoogleAuthStatus({
-        isConnected: isGoogleUser || !!hasGoogleAuthData,
-        email: hasGoogleAuthData ? selectedUser.googleAuth.email : currentUser?.email,
-        loading: false
-      });
-      
-      console.log("Google auth status checked:", {
+      console.log("Google auth check:", {
+        selectedUserId: selectedUser?.id,
+        currentUserId: currentUser?.uid,
+        isCurrentUserMatch,
         isGoogleUser,
         hasGoogleAuthData,
-        user: selectedUser?.name
+        googleAuth: selectedUser?.googleAuth
+      });
+      
+      // Set status based on checks - prioritize the selected user's data
+      setGoogleAuthStatus({
+        isConnected: !!hasGoogleAuthData || (isCurrentUserMatch && isGoogleUser),
+        email: hasGoogleAuthData ? selectedUser.googleAuth.email : 
+               (isCurrentUserMatch ? currentUser?.email : null),
+        loading: false
       });
     } catch (error) {
       console.error("Error checking Google auth status:", error);

@@ -51,147 +51,165 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
   
   
   // Add this after other useEffects in CalendarIntegrationButton.jsx
-useEffect(() => {
-  // Check if this event was already added
-  try {
-    const addedEvents = JSON.parse(localStorage.getItem('addedCalendarEvents') || '{}');
-    const eventKey = `${itemType}-${item.id}`;
-    if (addedEvents[eventKey]) {
-      // This event was already added
-      setIsAdded(true);
-      
-      // Reset after 2 seconds to allow re-adding if needed
-      setTimeout(() => {
-        setIsAdded(false);
-      }, 2000);
-    }
-  } catch (error) {
-    console.error("Error checking added events:", error);
-  }
-}, [item.id, itemType]);
-  
-  
-  // Handle adding to default calendar
-  // Handle adding to default calendar
-// Handle adding to default calendar
-// Handle adding to default calendar
-const handleAddToCalendar = async () => {
-  setIsLoading(true);
-  setError(null);
-  
-  try {
-    // If there's no default calendar type set, show calendar options instead
-    if (!calendarSettings?.defaultCalendarType) {
-      setShowOptions(true);
-      setIsLoading(false);
-      return;
-    }
-    
-    // Get user-specific Google auth token if available
-    const userToken = localStorage.getItem(`googleToken_${selectedUser?.id}`);
-    if (userToken && calendarSettings.defaultCalendarType === 'google') {
-      console.log("Using user-specific Google token for calendar integration");
-    }
-    
-    // Make sure we're signed in to Google if using Google Calendar
-    if (calendarSettings.defaultCalendarType === 'google' && !isSignedIn) {
-      console.log("Not signed in to Google Calendar, attempting to sign in");
-      try {
-        await CalendarService.signInToGoogle();
-        setIsSignedIn(true);
-      } catch (signInError) {
-        console.error("Error signing in to Google Calendar:", signInError);
-        throw new Error("Could not sign in to Google Calendar. Please try again.");
-      }
-    }
-    
-    // Create event based on item type with better date handling
-    let event;
-    let eventDate = customDate;
-    
-    // Convert string date to Date object if needed
-    if (typeof eventDate === 'string') {
-      eventDate = new Date(eventDate);
-    } else if (item.date && typeof item.date === 'string') {
-      eventDate = new Date(item.date);
-    } else if (!eventDate) {
-      // Default to tomorrow at 10am if no date provided
-      eventDate = new Date();
-      eventDate.setDate(eventDate.getDate() + 1);
-      eventDate.setHours(10, 0, 0, 0);
-    }
-    
-    if (itemType === 'task') {
-      event = CalendarService.createEventFromTask(item);
-      
-      // Use custom date if provided
-      if (eventDate) {
-        event.start.dateTime = eventDate.toISOString();
-        const endTime = new Date(eventDate);
-        endTime.setHours(endTime.getHours() + 1);
-        event.end.dateTime = endTime.toISOString();
-      }
-    } else if (itemType === 'meeting') {
-      event = CalendarService.createFamilyMeetingEvent(item.weekNumber, eventDate);
-    } else if (itemType === 'reminder') {
-      event = CalendarService.createTaskReminderEvent(item, eventDate);
-    } else {
-      throw new Error("Unknown item type");
-    }
-    
-    // Add some more detailed event properties
-    event.description = (event.description || '') + 
-      `\n\nAdded from Allie Family Balance App\n${window.location.origin}`;
-    
-    // Add calendar alert/reminder if not already set
-    if (!event.reminders) {
-      event.reminders = {
-        useDefault: false,
-        overrides: [
-          {'method': 'popup', 'minutes': 60}, // 1 hour before
-          {'method': 'email', 'minutes': 1440} // 24 hours before
-        ]
-      };
-    }
-      
-    // Add to the default calendar
-    const result = await CalendarService.addEvent(event);
-    console.log("Event added to calendar:", result);
-    
-    // Store the event ID in localStorage to remember it was added
-    if (result && result.eventId) {
+  useEffect(() => {
+    // Check if this event was already added
+    try {
       const addedEvents = JSON.parse(localStorage.getItem('addedCalendarEvents') || '{}');
       const eventKey = `${itemType}-${item.id}`;
-      addedEvents[eventKey] = {
-        eventId: result.eventId,
-        addedAt: new Date().toISOString(),
-        summary: event.summary,
-        isMock: result.isMock
-      };
-      localStorage.setItem('addedCalendarEvents', JSON.stringify(addedEvents));
+      if (addedEvents[eventKey]) {
+        // This event was already added
+        setIsAdded(true);
+        
+        // Reset after 2 seconds to allow re-adding if needed
+        setTimeout(() => {
+          setIsAdded(false);
+        }, 2000);
+      }
+    } catch (error) {
+      console.error("Error checking added events:", error);
     }
+  }, [item.id, itemType]);
+  
+  // Add this function to get user-specific Google token
+  const getUserSpecificGoogleToken = () => {
+    try {
+      // Try to get user-specific token first
+      const userToken = localStorage.getItem(`googleToken_${selectedUser?.id}`);
+      if (userToken) {
+        return JSON.parse(userToken);
+      }
+      
+      // Fall back to general token
+      const generalToken = localStorage.getItem('googleAuthToken');
+      if (generalToken) {
+        return JSON.parse(generalToken);
+      }
+      
+      return null;
+    } catch (e) {
+      console.error("Error getting user token:", e);
+      return null;
+    }
+  };
+  
+  // Handle adding to default calendar
+  const handleAddToCalendar = async () => {
+    setIsLoading(true);
+    setError(null);
     
-    // Mark as added
-    setIsAdded(true);
-    
-    // Only reset after longer time for user feedback
-    setTimeout(() => {
-      // Only reset if the component is still mounted
-      setIsAdded(false);
-    }, 5000);
-  } catch (error) {
-    console.error("Error adding to calendar:", error);
-    setError(error.message || "Failed to add to calendar");
-    
-    // Reset error after 3 seconds
-    setTimeout(() => {
-      setError(null);
-    }, 3000);
-  } finally {
-    setIsLoading(false);
-    setShowOptions(false);
-  }
-};
+    try {
+      // If there's no default calendar type set, show calendar options instead
+      if (!calendarSettings?.defaultCalendarType) {
+        setShowOptions(true);
+        setIsLoading(false);
+        return;
+      }
+      
+      // Get user-specific Google auth token if available
+      const userToken = getUserSpecificGoogleToken();
+      if (userToken && calendarSettings.defaultCalendarType === 'google') {
+        console.log("Using user-specific Google token for calendar integration");
+      }
+      
+      // Make sure we're signed in to Google if using Google Calendar
+      if (calendarSettings.defaultCalendarType === 'google' && !isSignedIn) {
+        console.log("Not signed in to Google Calendar, signing in now");
+        try {
+          await CalendarService.signInToGoogle();
+          setIsSignedIn(true);
+        } catch (signInError) {
+          console.error("Error signing in to Google Calendar:", signInError);
+          throw new Error("Could not sign in to Google Calendar. Please try again.");
+        }
+      }
+      
+      // Create event based on item type with better date handling
+      let event;
+      let eventDate = customDate;
+      
+      // Convert string date to Date object if needed
+      if (typeof eventDate === 'string') {
+        eventDate = new Date(eventDate);
+      } else if (item.date && typeof item.date === 'string') {
+        eventDate = new Date(item.date);
+      } else if (!eventDate) {
+        // Default to tomorrow at 10am if no date provided
+        eventDate = new Date();
+        eventDate.setDate(eventDate.getDate() + 1);
+        eventDate.setHours(10, 0, 0, 0);
+      }
+      
+      if (itemType === 'task') {
+        event = CalendarService.createEventFromTask(item);
+        
+        // Use custom date if provided
+        if (eventDate) {
+          event.start.dateTime = eventDate.toISOString();
+          const endTime = new Date(eventDate);
+          endTime.setHours(endTime.getHours() + 1);
+          event.end.dateTime = endTime.toISOString();
+        }
+      } else if (itemType === 'meeting') {
+        event = CalendarService.createFamilyMeetingEvent(item.weekNumber, eventDate);
+      } else if (itemType === 'reminder') {
+        event = CalendarService.createTaskReminderEvent(item, eventDate);
+      } else {
+        throw new Error("Unknown item type");
+      }
+      
+      // Add some more detailed event properties
+      event.description = (event.description || '') + 
+        `\n\nAdded from Allie Family Balance App\n${window.location.origin}`;
+      
+      // Add calendar alert/reminder if not already set
+      if (!event.reminders) {
+        event.reminders = {
+          useDefault: false,
+          overrides: [
+            {'method': 'popup', 'minutes': 60}, // 1 hour before
+            {'method': 'email', 'minutes': 1440} // 24 hours before
+          ]
+        };
+      }
+        
+      // Add to the default calendar
+      const result = await CalendarService.addEvent(event);
+      console.log("Event added to calendar:", result);
+      
+      // Store the event ID in localStorage to remember it was added
+      if (result && result.eventId) {
+        const addedEvents = JSON.parse(localStorage.getItem('addedCalendarEvents') || '{}');
+        const eventKey = `${itemType}-${item.id}`;
+        addedEvents[eventKey] = {
+          eventId: result.eventId,
+          addedAt: new Date().toISOString(),
+          summary: event.summary,
+          isMock: result.isMock
+        };
+        localStorage.setItem('addedCalendarEvents', JSON.stringify(addedEvents));
+      }
+      
+      // Mark as added
+      setIsAdded(true);
+      
+      // Only reset after longer time for user feedback
+      setTimeout(() => {
+        // Only reset if the component is still mounted
+        setIsAdded(false);
+      }, 5000);
+    } catch (error) {
+      console.error("Error adding to calendar:", error);
+      setError(error.message || "Failed to add to calendar");
+      
+      // Reset error after 3 seconds
+      setTimeout(() => {
+        setError(null);
+      }, 3000);
+    } finally {
+      setIsLoading(false);
+      setShowOptions(false);
+    }
+  };
   
   // Handle adding to specific calendar type
   const handleAddToSpecificCalendar = async (calendarType) => {

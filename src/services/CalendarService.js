@@ -131,7 +131,6 @@ class CalendarService {
     }
   }
 
-  // Initialize Google Calendar API with improved error handling
   async initializeGoogleCalendar() {
     console.log("Initializing Google Calendar integration");
     
@@ -143,9 +142,26 @@ class CalendarService {
       return true;
     }
     
+    // Check for stored token before deciding to use mock mode
+    try {
+      const storedToken = localStorage.getItem('googleAuthToken');
+      if (storedToken) {
+        const tokenData = JSON.parse(storedToken);
+        const now = Date.now();
+        const expiresAt = tokenData.expires_at || (tokenData.expires_in * 1000 + tokenData.first_issued_at);
+        
+        // If token is valid and not expired, don't use mock mode
+        if (expiresAt > now) {
+          console.log("Found valid Google auth token, using real mode");
+          this.mockMode = false;
+        }
+      }
+    } catch (e) {
+      console.warn("Error checking stored token:", e);
+    }
+    
     // If already in mock mode, set up mock objects and return
-    if (this.mockMode) {
-      console.log("Using mock Google Calendar implementation");
+    if (this.mockMode) {      console.log("Using mock Google Calendar implementation");
       this.googleApiLoaded = true;
       
       // Set up mock gapi
@@ -552,20 +568,43 @@ class CalendarService {
 
   // Add event to Google Calendar with robust error handling
   // Add event to Google Calendar with robust error handling
-async addEventToGoogleCalendar(event) {
-  console.log("Adding event to Google Calendar");
-  
-  if (!this.googleApiLoaded) {
-    try {
-      console.log("Google Calendar not initialized, initializing now");
-      await this.initializeGoogleCalendar();
-    } catch (error) {
-      console.error("Failed to initialize Google Calendar:", error);
-      this.showNotification("Failed to connect to Google Calendar. Please try again later.", "error");
-      this.mockMode = true;
-      return this.addEventToGoogleCalendar(event);
+  async addEventToGoogleCalendar(event) {
+    console.log("Adding event to Google Calendar");
+    
+    // Reset mock mode to ensure we try real mode first
+    const originalMockMode = this.mockMode;
+    this.mockMode = false;
+    
+    if (!this.googleApiLoaded) {
+      try {
+        console.log("Google Calendar not initialized, initializing now");
+        await this.initializeGoogleCalendar();
+      } catch (error) {
+        console.error("Failed to initialize Google Calendar:", error);
+        this.showNotification("Failed to connect to Google Calendar. Please try again later.", "error");
+        this.mockMode = true;
+        return this.addEventToGoogleCalendar(event);
+      }
     }
-  }
+    
+    // Force sign-in check every time
+    if (!this.isSignedInToGoogle()) {
+      try {
+        console.log("Not signed in to Google Calendar, attempting to sign in");
+        await this.signInToGoogle();
+        
+        // Double-check that sign-in worked
+        if (!this.isSignedInToGoogle()) {
+          console.log("Sign-in attempt failed, falling back to mock mode");
+          this.mockMode = true;
+          return this.addEventToGoogleCalendar(event);
+        }
+      } catch (error) {
+        console.error("Failed to sign in to Google:", error);
+        this.mockMode = true;
+        return this.addEventToGoogleCalendar(event);
+      }
+    }
   
   if (this.mockMode) {
     console.log("Mock adding event to Google Calendar:", event.summary);
