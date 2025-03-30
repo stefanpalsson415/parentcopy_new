@@ -14,8 +14,8 @@ class CalendarService {
     this.mockMode = false;
     
     // Read API credentials from environment variables
-    this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
-    this.clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
+    this.apiKey = 'AIzaSyAmR2paggX1Emt4RpGGnlHuadqpveSY0aI';
+    this.clientId = '363935868004-1vd75fqpf2e6i8dl73pi4p56br8i4h9p.apps.googleusercontent.com';
     
     // Force real mode only when we have credentials
     this.forceRealMode = !!(this.apiKey && this.clientId);
@@ -896,6 +896,120 @@ class CalendarService {
       };
     }
   }
+
+// Add detailed diagnostic for Google Calendar issues
+async diagnoseGoogleCalendarIssues() {
+  let diagnosticReport = [];
+  
+  try {
+    diagnosticReport.push("==== Google Calendar Diagnostic Report ====");
+    
+    // Check environment variables
+    diagnosticReport.push("\n1. API Credentials Check:");
+    diagnosticReport.push(`- API Key available: ${this.apiKey ? 'Yes' : 'No'}`);
+    diagnosticReport.push(`- Client ID available: ${this.clientId ? 'Yes' : 'No'}`);
+    diagnosticReport.push(`- Mock mode active: ${this.mockMode ? 'Yes' : 'No'}`);
+    diagnosticReport.push(`- AppleCalendar available: ${this.appleCalendarAvailable ? 'Yes' : 'No'}`);
+    
+    // Check GAPI initialization
+    diagnosticReport.push("\n2. Google API Status:");
+    diagnosticReport.push(`- GAPI loaded: ${window.gapi ? 'Yes' : 'No'}`);
+    
+    if (window.gapi) {
+      diagnosticReport.push(`- GAPI client loaded: ${window.gapi.client ? 'Yes' : 'No'}`);
+      diagnosticReport.push(`- GAPI auth2 loaded: ${window.gapi.auth2 ? 'Yes' : 'No'}`);
+      
+      // Check auth state
+      if (window.gapi.auth2) {
+        try {
+          const authInstance = window.gapi.auth2.getAuthInstance();
+          diagnosticReport.push(`- Auth instance available: ${authInstance ? 'Yes' : 'No'}`);
+          
+          if (authInstance) {
+            const isSignedIn = authInstance.isSignedIn.get();
+            diagnosticReport.push(`- User signed in: ${isSignedIn ? 'Yes' : 'No'}`);
+            
+            if (isSignedIn) {
+              const user = authInstance.currentUser.get();
+              const profile = user.getBasicProfile();
+              diagnosticReport.push(`- Signed in user: ${profile.getEmail()}`);
+              diagnosticReport.push(`- Access token available: ${user.getAuthResponse().access_token ? 'Yes' : 'No'}`);
+            }
+          }
+        } catch (e) {
+          diagnosticReport.push(`- Error checking auth state: ${e.message}`);
+        }
+      }
+    }
+    
+    // Check for stored tokens
+    diagnosticReport.push("\n3. Stored Token Check:");
+    const storedToken = localStorage.getItem('googleAuthToken');
+    diagnosticReport.push(`- Token in localStorage: ${storedToken ? 'Yes' : 'No'}`);
+    
+    if (storedToken) {
+      try {
+        const token = JSON.parse(storedToken);
+        const now = Date.now();
+        const expiresAt = token.expires_at || (token.first_issued_at + token.expires_in * 1000);
+        const isExpired = now > expiresAt;
+        
+        diagnosticReport.push(`- Token expired: ${isExpired ? 'Yes' : 'No'}`);
+        if (isExpired) {
+          diagnosticReport.push(`- Expired at: ${new Date(expiresAt).toLocaleString()}`);
+        } else {
+          diagnosticReport.push(`- Expires in: ${Math.round((expiresAt - now) / 60000)} minutes`);
+        }
+      } catch (e) {
+        diagnosticReport.push(`- Error parsing stored token: ${e.message}`);
+      }
+    }
+    
+    // Add browser info
+    diagnosticReport.push("\n4. Browser Information:");
+    diagnosticReport.push(`- User Agent: ${navigator.userAgent}`);
+    diagnosticReport.push(`- Platform: ${navigator.platform}`);
+    diagnosticReport.push(`- Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
+    
+    // Test calendar API connection
+    diagnosticReport.push("\n5. Calendar API Connection Test:");
+    if (window.gapi && window.gapi.client && window.gapi.client.calendar) {
+      try {
+        diagnosticReport.push("- Attempting to list calendars...");
+        const response = await window.gapi.client.calendar.calendarList.list();
+        diagnosticReport.push(`- API call successful: ${response.status === 200 ? 'Yes' : 'No'}`);
+        diagnosticReport.push(`- Calendars found: ${response.result.items ? response.result.items.length : 0}`);
+      } catch (e) {
+        diagnosticReport.push(`- API call failed: ${e.message}`);
+      }
+    } else {
+      diagnosticReport.push("- Calendar API not initialized yet");
+    }
+    
+    // Add recommendations
+    diagnosticReport.push("\n6. Recommendations:");
+    if (!this.apiKey || !this.clientId) {
+      diagnosticReport.push("- CRITICAL: Set up your API credentials in .env file");
+      diagnosticReport.push("  Add the following to your .env file:");
+      diagnosticReport.push("  REACT_APP_GOOGLE_API_KEY=your_api_key");
+      diagnosticReport.push("  REACT_APP_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com");
+    }
+    
+    if (!window.gapi) {
+      diagnosticReport.push("- The Google API script failed to load. Check your internet connection.");
+    } else if (!window.gapi.auth2) {
+      diagnosticReport.push("- The Google Auth module failed to initialize. Try clearing your browser cache.");
+    } else if (window.gapi.auth2 && !this.isSignedInToGoogle()) {
+      diagnosticReport.push("- You need to sign in to Google Calendar. Click the 'Connect Google Calendar' button.");
+    }
+    
+    return diagnosticReport.join("\n");
+  } catch (error) {
+    console.error("Error running diagnostic:", error);
+    return `Error during diagnostic: ${error.message}`;
+  }
+}
+
 
   // Create event object from a task
   createEventFromTask(task) {
