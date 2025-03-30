@@ -4,7 +4,7 @@ import { auth } from '../services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { db } from '../services/firebase';
 import DatabaseService from '../services/DatabaseService';
-import { doc, getDoc, query, collection, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, query, collection, where, getDocs, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 // Create the authentication context
 const AuthContext = createContext();
@@ -254,23 +254,70 @@ export function AuthProvider({ children }) {
   }, []);
 
   // Context value
-  const value = {
-    currentUser,
-    familyData,
-    availableFamilies,
-    signup,
-    login,
-    logout,
-    signInWithGoogle,
-    handleGoogleRedirectResult: DatabaseService.handleGoogleRedirectResult, // Added this
-    linkAccountWithGoogle,
-    updateMemberWithGoogleAuth,
-    createFamily,
-    loadFamilyData,
-    loadAllFamilies,
-    ensureFamiliesLoaded,
-    reload: () => loadFamilyData(currentUser?.uid)
-  };
+  // Updated value object in AuthContext.js
+const value = {
+  currentUser,
+  familyData,
+  availableFamilies,
+  signup,
+  login,
+  logout,
+  signInWithGoogle,
+  handleGoogleRedirectResult: DatabaseService.handleGoogleRedirectResult,
+  linkAccountWithGoogle,
+  updateMemberWithGoogleAuth,
+  createFamily,
+  loadFamilyData,
+  loadAllFamilies,
+  ensureFamiliesLoaded,
+  reload: () => loadFamilyData(currentUser?.uid),
+  // Add this new function
+  linkGoogleToFamilyMember: async (familyId, memberData, googleUser) => {
+    try {
+      if (!familyId || !memberData || !googleUser) {
+        throw new Error("Missing required parameters for linking Google account");
+      }
+      console.log(`Linking Google account ${googleUser.email} to family member ${memberData.name}`);
+      
+      // Get current family data
+      const docRef = doc(db, "families", familyId);
+      const familyDoc = await getDoc(docRef);
+      
+      if (!familyDoc.exists()) {
+        throw new Error("Family not found");
+      }
+      
+      // Update the specific family member with Google auth info
+      const updatedMembers = familyDoc.data().familyMembers.map(member => {
+        if (member.id === memberData.id) {
+          return {
+            ...member,
+            googleAuth: {
+              uid: googleUser.uid,
+              email: googleUser.email,
+              displayName: googleUser.displayName,
+              photoURL: googleUser.photoURL,
+              lastSignIn: new Date().toISOString()
+            }
+          };
+        }
+        return member;
+      });
+      
+      // Save updated members back to the database
+      await updateDoc(docRef, {
+        familyMembers: updatedMembers,
+        updatedAt: serverTimestamp()
+      });
+      
+      console.log(`Successfully linked Google account to ${memberData.name}`);
+      return true;
+    } catch (error) {
+      console.error("Error linking Google account to family member:", error);
+      throw error;
+    }
+  }
+};
 
   return (
     <AuthContext.Provider value={value}>
