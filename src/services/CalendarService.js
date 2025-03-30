@@ -12,8 +12,20 @@ class CalendarService {
     this.mockMode = false; // Set to false to use real Google Calendar API
     this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY;
     this.clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
-    this.forceRealMode = true; // Add this line to prevent fallback to mock mode
-    console.log("CalendarService initialized. Using real Google Calendar API");
+    this.forceRealMode = true;
+    
+    // Better initialization logging
+    console.log("CalendarService initialized with:");
+    console.log("- API Key available:", !!this.apiKey);
+    console.log("- Client ID available:", !!this.clientId);
+    console.log("- Mock mode:", this.mockMode);
+    console.log("- Force real mode:", this.forceRealMode);
+    
+    // Alert if API keys are missing
+    if (!this.apiKey || !this.clientId) {
+      console.error("⚠️ CRITICAL: Missing Google API credentials. Calendar integration will fail.");
+      console.error("Make sure REACT_APP_GOOGLE_API_KEY and REACT_APP_GOOGLE_CLIENT_ID are set in your .env file");
+    }
     
     // Log the available API key and client ID (with partial masking for security)
     if (this.apiKey) {
@@ -172,9 +184,9 @@ async initializeGoogleCalendar() {
   
   // IMPORTANT: We'll use a more modern approach for Google auth
   return new Promise((resolve, reject) => {
-    // Step 1: First check if the gapi script is already loaded
-    if (window.gapi) {
-      console.log("Google API script already loaded");
+    // First check if the gapi script is already loaded
+    if (window.gapi && window.gapi.client) {
+      console.log("Google API script and client already loaded, reinitializing");
       this._initializeGapiClient()
         .then(() => {
           this.googleApiLoaded = true;
@@ -185,6 +197,7 @@ async initializeGoogleCalendar() {
           if (this.forceRealMode) {
             reject(err);
           } else {
+            console.warn("Falling back to mock mode due to gapi init error");
             this.mockMode = true;
             resolve(true);
           }
@@ -192,7 +205,28 @@ async initializeGoogleCalendar() {
       return;
     }
     
-    // Step 2: If not loaded, inject the Google API script
+    // If gapi is loaded but client isn't, just initialize client
+    if (window.gapi) {
+      console.log("Google API script loaded but client not initialized");
+      this._initializeGapiClient()
+        .then(() => {
+          this.googleApiLoaded = true;
+          resolve(true);
+        })
+        .catch(err => {
+          console.error("Error initializing gapi client:", err);
+          if (this.forceRealMode) {
+            reject(err);
+          } else {
+            console.warn("Falling back to mock mode due to gapi init error");
+            this.mockMode = true;
+            resolve(true);
+          }
+        });
+      return;
+    }
+    
+    // If not loaded, inject the Google API script
     console.log("Loading Google API script");
     const script = document.createElement('script');
     script.src = 'https://apis.google.com/js/api.js';
@@ -211,6 +245,7 @@ async initializeGoogleCalendar() {
           if (this.forceRealMode) {
             reject(err);
           } else {
+            console.warn("Falling back to mock mode due to gapi init error");
             this.mockMode = true;
             resolve(true);
           }
@@ -222,6 +257,7 @@ async initializeGoogleCalendar() {
       if (this.forceRealMode) {
         reject(new Error("Failed to load Google API script"));
       } else {
+        console.warn("Falling back to mock mode due to script load error");
         this.mockMode = true;
         resolve(true);
       }
@@ -962,6 +998,110 @@ async updateEventInGoogleCalendar(eventId, updatedEvent, calendarId = 'primary')
     // Fall back to ICS approach for compatibility
     return this.generateICSFile(event);
   }
+
+// Debug helper for Google Calendar issues
+async diagnoseGoogleCalendarIssues() {
+  console.log("=== Google Calendar Diagnostic ===");
+  
+  try {
+    console.log("Environment:", {
+      apiKey: this.apiKey ? `Available (${this.apiKey.length} chars)` : "Missing",
+      clientId: this.clientId ? `Available (${this.clientId.length} chars)` : "Missing",
+      mockMode: this.mockMode,
+      forceRealMode: this.forceRealMode,
+      googleApiLoaded: this.googleApiLoaded,
+      calendarConnected: this.calendarConnected,
+      browserInfo: navigator.userAgent
+    });
+    
+    // Check if gapi is loaded
+    console.log("GAPI loaded:", !!window.gapi);
+    
+    if (window.gapi) {
+      console.log("GAPI client loaded:", !!window.gapi.client);
+      console.log("GAPI auth2 loaded:", !!window.gapi.auth2);
+      
+      if (window.gapi.auth2) {
+        try {
+          const authInstance = window.gapi.auth2.getAuthInstance();
+          console.log("Auth instance available:", !!authInstance);
+          
+          if (authInstance) {
+            const isSignedIn = authInstance.isSignedIn.get();
+            console.log("Is signed in:", isSignedIn);
+            
+            if (isSignedIn) {
+              const user = authInstance.currentUser.get();
+              const profile = user.getBasicProfile();
+              console.log("User signed in:", {
+                email: profile ? profile.getEmail() : "Unknown",
+                name: profile ? profile.getName() : "Unknown",
+                id: user.getId()
+              });
+              
+              const authResponse = user.getAuthResponse();
+              console.log("Auth response valid:", {
+                tokenAvailable: !!authResponse.access_token,
+                tokenLength: authResponse.access_token ? authResponse.access_token.length : 0,
+                expiresIn: authResponse.expires_in,
+                expiresAt: new Date(authResponse.expires_at).toLocaleString()
+              });
+            }
+          }
+        } catch (e) {
+          console.error("Error checking auth state:", e);
+        }
+      }
+      
+      // Check if Calendar API is available
+      console.log("Calendar API loaded:", !!(window.gapi.client && window.gapi.client.calendar));
+      
+      // Try listing calendars as a test
+      if (window.gapi.client && window.gapi.client.calendar) {
+        try {
+          console.log("Attempting to list calendars...");
+          const response = await window.gapi.client.calendar.calendarList.list();
+          console.log("Calendar list succeeded:", {
+            status: response.status,
+            calendarCount: response.result.items ? response.result.items.length : 0
+          });
+        } catch (e) {
+          console.error("Error listing calendars:", e);
+        }
+      }
+    }
+    
+    // Check local storage for tokens
+    try {
+      const storedToken = localStorage.getItem('googleAuthToken');
+      console.log("Stored token available:", !!storedToken);
+      
+      if (storedToken) {
+        const tokenData = JSON.parse(storedToken);
+        const now = Date.now();
+        const expiresAt = tokenData.expires_at || (tokenData.expires_in * 1000 + tokenData.first_issued_at);
+        const isExpired = expiresAt < now;
+        
+        console.log("Token status:", {
+          expired: isExpired,
+          expiresAt: new Date(expiresAt).toLocaleString(),
+          timeUntilExpiry: isExpired ? "Expired" : `${Math.round((expiresAt - now) / 60000)} minutes`,
+          stored_at: tokenData.stored_at ? new Date(tokenData.stored_at).toLocaleString() : "Unknown"
+        });
+      }
+    } catch (e) {
+      console.error("Error checking stored token:", e);
+    }
+    
+    console.log("=== End of Diagnostic ===");
+    
+    return "Diagnostic complete. Check console for details.";
+  } catch (error) {
+    console.error("Error in diagnostic:", error);
+    return `Diagnostic error: ${error.message}`;
+  }
+}
+
 
   // Generate an ICS file for download (works with Apple Calendar, Outlook, etc.)
   async generateICSFile(event) {

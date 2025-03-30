@@ -47,6 +47,10 @@ export function AuthProvider({ children }) {
     return DatabaseService.updateMemberWithGoogleAuth(familyId, memberId, userData);
   }
 
+
+
+
+  
   // Added helper function to ensure families are loaded
   async function ensureFamiliesLoaded(userId) {
     try {

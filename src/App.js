@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { FamilyProvider } from './contexts/FamilyContext';
@@ -30,13 +30,31 @@ import FloatingCalendarWidget from './components/calendar/FloatingCalendarWidget
 import EmailOptIn from './components/marketing/EmailOptIn';
 import ClaudeDebugger from './components/debug/ClaudeDebugger';
 
+
 // App Routes Component - Used after context providers are set up
 function AppRoutes() {
   const { selectedUser } = useFamily();
   const { currentUser } = useAuth();
+  useEffect(() => {
+    // Check for required environment variables on startup
+    if (!process.env.REACT_APP_GOOGLE_API_KEY || !process.env.REACT_APP_GOOGLE_CLIENT_ID) {
+      console.error("Missing Google API credentials in environment variables!");
+      console.error("Make sure to add REACT_APP_GOOGLE_API_KEY and REACT_APP_GOOGLE_CLIENT_ID to your .env file");
+    } else {
+      console.log("Google API credentials found in environment variables");
+    }
+  }, []);
+
+
+
 
   // Determine if calendar widget should be shown
   const showCalendarWidget = !!currentUser && !!selectedUser && window.location.pathname === '/dashboard';
+
+// Add this after the imports
+
+
+
 
   return (
     <>

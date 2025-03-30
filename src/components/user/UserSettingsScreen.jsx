@@ -617,7 +617,28 @@ const saveCalendarSettings = async () => {
             </div>
           </div>
         </div>
-        
+        {/* Diagnostic Button */}
+{process.env.NODE_ENV === 'development' && (
+  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+    <h4 className="font-medium mb-2">Diagnostic Tools</h4>
+    <button
+      onClick={async () => {
+        try {
+          const result = await CalendarService.diagnoseGoogleCalendarIssues();
+          alert(result);
+        } catch (error) {
+          console.error("Error running diagnostic:", error);
+          alert(`Error running diagnostic: ${error.message}`);
+        }
+      }}
+      className="px-3 py-1 bg-yellow-100 border border-yellow-300 rounded text-yellow-800 text-sm"
+    >
+      Run Google Calendar Diagnostic
+    </button>
+  </div>
+)}
+
+
         {/* Save Button */}
         <div className="flex justify-end">
         <button
@@ -864,17 +885,10 @@ const saveCalendarSettings = async () => {
           
           // Also remove any stored token
           localStorage.removeItem('googleAuthToken');
+          localStorage.removeItem(`googleToken_${selectedUser.id}`);
           
-          // Successful disconnect notification
-          const notification = document.createElement('div');
-          notification.innerText = 'Google account disconnected successfully';
-          notification.style.cssText = `
-            position: fixed; bottom: 20px; right: 20px; background: #4caf50;
-            color: white; padding: 12px 20px; border-radius: 4px; z-index: 9999;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-family: Roboto, sans-serif;
-          `;
-          document.body.appendChild(notification);
-          setTimeout(() => notification.remove(), 3000);
+          // Show success notification
+          alert('Google account disconnected successfully!');
         } catch (error) {
           console.error('Error disconnecting Google account:', error);
           alert('Failed to disconnect Google account: ' + error.message);
@@ -882,28 +896,55 @@ const saveCalendarSettings = async () => {
       }
     } else {
       // Not connected - connect now
-                // Not connected - connect now
-                try {
-                  const user = await linkAccountWithGoogle();
-                  
-                  // Update the member profile with Google data
-                  await updateMemberProfile(selectedUser.id, {
-                    googleAuth: {
-                      uid: user.uid,
-                      email: user.email,
-                      displayName: user.displayName,
-                      photoURL: user.photoURL,
-                      lastConnected: new Date().toISOString()
-                    }
-                  });
-                  
-                  alert('Google account connected successfully!');
-                } catch (error) {
-                  console.error('Error connecting Google account:', error);
-                  alert('Failed to connect Google account. Please try again.');
-                }
-              }
-            }}
+      try {
+        // First make sure we're logged out of any previous Google session
+        if (window.gapi && window.gapi.auth2) {
+          try {
+            const auth2 = window.gapi.auth2.getAuthInstance();
+            if (auth2 && auth2.isSignedIn.get()) {
+              await auth2.signOut();
+              console.log("Signed out from previous Google session");
+            }
+          } catch (e) {
+            console.log("No previous Google session to sign out from");
+          }
+        }
+        
+        // Now connect with Google
+        const user = await linkAccountWithGoogle();
+        
+        // Store token specifically for this user
+        localStorage.setItem(`googleToken_${selectedUser.id}`, JSON.stringify({
+          email: user.email,
+          uid: user.uid,
+          timestamp: Date.now()
+        }));
+        
+        // Update the member profile with Google data - IMPORTANT: only for this specific member
+        await updateMemberProfile(selectedUser.id, {
+          googleAuth: {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+            lastConnected: new Date().toISOString()
+          }
+        });
+        
+        // Update status locally
+        setGoogleAuthStatus({
+          isConnected: true,
+          email: user.email,
+          loading: false
+        });
+        
+        alert('Google account connected successfully!');
+      } catch (error) {
+        console.error('Error connecting Google account:', error);
+        alert('Failed to connect Google account. Please try again.');
+      }
+    }
+  }}
             className={`px-3 py-1.5 rounded text-sm ${
               selectedUser?.googleAuth 
                 ? 'border border-gray-300 text-gray-700 hover:bg-gray-100' 
