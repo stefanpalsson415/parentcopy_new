@@ -519,6 +519,27 @@ const saveCalendarSettings = async () => {
     </button>
   </div>
 )}
+
+{/* Diagnostic Button */}
+{process.env.NODE_ENV === 'development' && (
+  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+    <h4 className="font-medium mb-2">Diagnostic Tools</h4>
+    <button
+      onClick={async () => {
+        try {
+          const result = await CalendarService.diagnoseGoogleCalendarIssues();
+          alert(result);
+        } catch (error) {
+          console.error("Error running diagnostic:", error);
+          alert(`Error running diagnostic: ${error.message}`);
+        }
+      }}
+      className="px-3 py-1 bg-yellow-100 border border-yellow-300 rounded text-yellow-800 text-sm"
+    >
+      Run Google Calendar Diagnostic
+    </button>
+  </div>
+)}
         {/* ICS Download Settings */}
         {activeCalendarType === 'ics' && (
           <div className="bg-white p-4 rounded-lg border">

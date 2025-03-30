@@ -4,6 +4,8 @@ import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import CalendarService from '../../services/CalendarService';
 import CalendarIntegrationButton from './CalendarIntegrationButton';
+import GoogleCalendarEvents from './GoogleCalendarEvents';
+
 
 const FloatingCalendarWidget = () => {
   const { currentUser } = useAuth();
@@ -211,6 +213,13 @@ const FloatingCalendarWidget = () => {
             </div>
           </div>
           
+{/* Add this section to display upcoming events from Google Calendar */}
+<div className="mt-4">
+  <h4 className="text-sm font-medium mb-2">Upcoming Google Calendar Events</h4>
+  <GoogleCalendarEvents selectedDate={selectedDate} />
+</div>
+
+
           {/* Selected Date */}
           <div className="mb-4">
             <h4 className="text-sm font-medium text-gray-700 font-roboto">{formatDate(selectedDate)}</h4>
