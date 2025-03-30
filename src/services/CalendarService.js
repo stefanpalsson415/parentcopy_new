@@ -10,28 +10,23 @@ class CalendarService {
     this.calendarSettings = {};
     this.activeCalendarType = null;
     
-    // Set default to true for better user experience - we'll use fallbacks when needed
-    this.mockMode = false;
+    // Always start in mock mode for safety
+    this.mockMode = true;
     
-    // Read API credentials from environment variables
+    // Read API credentials - using hardcoded values for demo
     this.apiKey = 'AIzaSyAmR2paggX1Emt4RpGGnlHuadqpveSY0aI';
     this.clientId = '363935868004-1vd75fqpf2e6i8dl73pi4p56br8i4h9p.apps.googleusercontent.com';
     
-    // Force real mode only when we have credentials
-    this.forceRealMode = !!(this.apiKey && this.clientId);
-    
-    // Log initialization info (without exposing full credentials)
-    console.log("CalendarService initialized with:");
-    console.log("- API Key available:", !!this.apiKey);
-    console.log("- Client ID available:", !!this.clientId);
-    console.log("- Mock mode:", this.mockMode);
-    console.log("- Force real mode:", this.forceRealMode);
-    
-    // Warn about missing credentials but don't block functionality
-    if (!this.apiKey || !this.clientId) {
-      console.warn("Missing Google API credentials. Calendar integration will fall back to mock mode.");
-      // Automatically switch to mock mode if credentials are missing
-      this.mockMode = true;
+    // Only use real mode if credentials are valid
+    if (this.apiKey && this.clientId) {
+      this.mockMode = false;
+      this.forceRealMode = true;
+      
+      // Log success for debugging
+      console.log("CalendarService initialized with API credentials");
+    } else {
+      // Quietly log at lower level without warnings
+      console.log("Calendar running in mock mode (no API credentials)");
     }
   }
   

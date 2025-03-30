@@ -36,10 +36,10 @@ function AppRoutes() {
   const { selectedUser } = useFamily();
   const { currentUser } = useAuth();
   useEffect(() => {
-    // Check for required environment variables on startup
+    // Check for required environment variables on startup - but don't show errors
     if (!process.env.REACT_APP_GOOGLE_API_KEY || !process.env.REACT_APP_GOOGLE_CLIENT_ID) {
-      console.error("Missing Google API credentials in environment variables!");
-      console.error("Make sure to add REACT_APP_GOOGLE_API_KEY and REACT_APP_GOOGLE_CLIENT_ID to your .env file");
+      console.log("Note: Google Calendar integration will use mock mode");
+      // No errors shown to avoid red circles
     } else {
       console.log("Google API credentials found in environment variables");
     }

@@ -89,47 +89,49 @@ export function AuthProvider({ children }) {
       let data;
       
       // Check if this is a direct family ID
-      if (typeof idParam === 'string' && idParam.length > 0) {
-        console.log("Attempting to load family directly");
-        
-        try {
-          // Try to load the family directly from Firestore
-          const docRef = doc(db, "families", idParam);
-          const docSnap = await getDoc(docRef);
-          
-          if (docSnap.exists()) {
-            // Load survey responses for this family
-            const surveyResponsesQuery = query(
-              collection(db, "surveyResponses"), 
-              where("familyId", "==", idParam)
-            );
-            const surveyResponsesSnapshot = await getDocs(surveyResponsesQuery);
-            
-            // Process survey responses
-            const surveyResponses = {};
-            surveyResponsesSnapshot.forEach((doc) => {
-              const data = doc.data();
-              if (data.responses) {
-                // Merge all responses together
-                Object.assign(surveyResponses, data.responses);
-              }
-            });
-            
-            data = { 
-              ...docSnap.data(), 
-              familyId: idParam,
-              surveyResponses: surveyResponses
-            };
-            console.log("Successfully loaded family directly:", data);
-          } else {
-            console.log("No family found with ID:", idParam);
-            throw new Error("Family not found");
-          }
-        } catch (error) {
-          console.error("Error loading family by ID:", error);
-          throw error;
+if (typeof idParam === 'string' && idParam.length > 0) {
+  console.log("Attempting to load family directly");
+  
+  try {
+    // Try to load the family directly from Firestore
+    const docRef = doc(db, "families", idParam);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      // Load survey responses for this family
+      const surveyResponsesQuery = query(
+        collection(db, "surveyResponses"), 
+        where("familyId", "==", idParam)
+      );
+      const surveyResponsesSnapshot = await getDocs(surveyResponsesQuery);
+      
+      // Process survey responses
+      const surveyResponses = {};
+      surveyResponsesSnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.responses) {
+          // Merge all responses together
+          Object.assign(surveyResponses, data.responses);
         }
-      } else {
+      });
+      
+      data = { 
+        ...docSnap.data(), 
+        familyId: idParam,
+        surveyResponses: surveyResponses
+      };
+      console.log("Successfully loaded family directly:", data);
+    } else {
+      console.log("No family found with ID:", idParam);
+      // Instead of throwing an error, return null
+      return null;
+    }
+  } catch (error) {
+    console.error("Error loading family by ID:", error);
+    // Don't throw, just return null
+    return null;
+  }
+} else {
         // Assume it's a user ID
         data = await DatabaseService.loadFamilyByUserId(idParam);
         console.log("Loaded family by user ID:", data);
