@@ -856,6 +856,7 @@ const saveCalendarSettings = async () => {
           </div>
           
           <button
+
   onClick={async () => {
     if (googleAuthStatus.isConnected) {
       // Already connected - ask if they want to disconnect
@@ -945,15 +946,14 @@ const saveCalendarSettings = async () => {
       }
     }
   }}
-            className={`px-3 py-1.5 rounded text-sm ${
-              selectedUser?.googleAuth 
-                ? 'border border-gray-300 text-gray-700 hover:bg-gray-100' 
-                : 'bg-black text-white hover:bg-gray-800'
-            }`}
-          >
-            {googleAuthStatus.isConnected ? 'Disconnect' : 'Connect'}
-
-          </button>
+  className={`px-3 py-1.5 rounded text-sm ${
+    selectedUser?.googleAuth 
+      ? 'border border-gray-300 text-gray-700 hover:bg-gray-100' 
+      : 'bg-black text-white hover:bg-gray-800'
+  }`}
+>
+  {googleAuthStatus.isConnected ? 'Disconnect' : 'Connect'}
+</button>
         </div>
         
         <p className="text-xs text-gray-500 mt-3">

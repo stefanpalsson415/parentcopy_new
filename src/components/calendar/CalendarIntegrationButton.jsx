@@ -2,9 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, Check, AlertCircle, Clock, Download } from 'lucide-react';
 import CalendarService from '../../services/CalendarService';
 import { useAuth } from '../../contexts/AuthContext';
+import { useFamily } from '../../contexts/FamilyContext';
 
+
+// New code
 const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
   const { currentUser } = useAuth();
+  const { selectedUser } = useFamily();
   const [isLoading, setIsLoading] = useState(false);
   const [isAdded, setIsAdded] = useState(false);
   const [error, setError] = useState(null);
@@ -81,6 +85,12 @@ const handleAddToCalendar = async () => {
       setShowOptions(true);
       setIsLoading(false);
       return;
+    }
+    
+    // Get user-specific Google auth token if available
+    const userToken = localStorage.getItem(`googleToken_${selectedUser?.id}`);
+    if (userToken && calendarSettings.defaultCalendarType === 'google') {
+      console.log("Using user-specific Google token for calendar integration");
     }
     
     // Make sure we're signed in to Google if using Google Calendar
