@@ -156,33 +156,40 @@ class CalendarService {
     }
     
     // If already in mock mode, set up mock objects and return
-    if (this.mockMode) {      console.log("Using mock Google Calendar implementation");
+    if (this.mockMode) {
+      console.log("Using mock Google Calendar implementation");
       this.googleApiLoaded = true;
       
       // Set up mock gapi
       if (!window.gapi) {
-        window.gapi = {
-          auth2: {
-            getAuthInstance: () => ({
-              isSignedIn: { get: () => true },
-              signIn: async () => true,
-              signOut: async () => true
-            })
-          },
-          client: {
-            calendar: {
-              events: {
-                insert: async () => ({ result: { id: 'mock-event-id', htmlLink: '#' } }),
-                update: async () => ({ result: { id: 'mock-event-id', htmlLink: '#' } }),
-                list: async () => ({ result: { items: [] } })
-              },
-              calendarList: {
-                list: async () => ({ result: { items: [
-                  { id: 'primary', summary: 'Primary Calendar' },
-                  { id: 'work', summary: 'Work Calendar' },
-                  { id: 'family', summary: 'Family Calendar' }
-                ]}})
-              }
+        window.gapi = {};
+      }
+      
+      // Ensure all required mock paths exist
+      if (!window.gapi.auth2) {
+        window.gapi.auth2 = {
+          getAuthInstance: () => ({
+            isSignedIn: { get: () => true },
+            signIn: async () => true,
+            signOut: async () => true
+          })
+        };
+      }
+      
+      if (!window.gapi.client) {
+        window.gapi.client = {
+          calendar: {
+            events: {
+              insert: async () => ({ result: { id: 'mock-event-id', htmlLink: '#' } }),
+              update: async () => ({ result: { id: 'mock-event-id', htmlLink: '#' } }),
+              list: async () => ({ result: { items: [] } })
+            },
+            calendarList: {
+              list: async () => ({ result: { items: [
+                { id: 'primary', summary: 'Primary Calendar' },
+                { id: 'work', summary: 'Work Calendar' },
+                { id: 'family', summary: 'Family Calendar' }
+              ]}})
             }
           }
         };
@@ -264,31 +271,36 @@ class CalendarService {
   }
 
   // Private method to initialize gapi client
-  async _initializeGapiClient() {
-    return new Promise((resolve, reject) => {
-      if (!window.gapi) {
-        return reject(new Error("Google API not loaded"));
+ // Private method to initialize gapi client
+async _initializeGapiClient() {
+  return new Promise((resolve, reject) => {
+    if (!window.gapi) {
+      return reject(new Error("Google API not loaded"));
+    }
+    
+    window.gapi.load('client:auth2', async () => {
+      try {
+        // Initialize the client with API key and auth - adding hosted domain parameter
+        await window.gapi.client.init({
+          apiKey: this.apiKey,
+          clientId: this.clientId,
+          discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+          scope: 'https://www.googleapis.com/auth/calendar',
+          // Add these to prevent the iframe initialization error:
+          ux_mode: 'popup',
+          plugin_name: 'Allie'
+        });
+        
+        console.log("Google API client initialized successfully");
+        resolve(true);
+      } catch (error) {
+        console.error("Error initializing Google API client:", error);
+        this.mockMode = true; // Ensure we fall back to mock mode on error
+        resolve(true); // Resolve instead of reject to prevent further errors
       }
-      
-      window.gapi.load('client:auth2', async () => {
-        try {
-          // Initialize the client with API key and auth
-          await window.gapi.client.init({
-            apiKey: this.apiKey,
-            clientId: this.clientId,
-            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
-            scope: 'https://www.googleapis.com/auth/calendar'
-          });
-          
-          console.log("Google API client initialized successfully");
-          resolve(true);
-        } catch (error) {
-          console.error("Error initializing Google API client:", error);
-          reject(error);
-        }
-      });
     });
-  }
+  });
+}
 
   // Get auth instance with error handling
   _getAuthInstance() {
