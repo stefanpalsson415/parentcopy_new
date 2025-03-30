@@ -563,43 +563,44 @@ class CalendarService {
 
   // Add event to Google Calendar with robust error handling
   // Add event to Google Calendar with robust error handling
-  async addEventToGoogleCalendar(event) {
-    console.log("Adding event to Google Calendar");
-    
-    // Reset mock mode to ensure we try real mode first
-    const originalMockMode = this.mockMode;
-    this.mockMode = false;
-    
-    if (!this.googleApiLoaded) {
-      try {
-        console.log("Google Calendar not initialized, initializing now");
-        await this.initializeGoogleCalendar();
-      } catch (error) {
-        console.error("Failed to initialize Google Calendar:", error);
-        this.showNotification("Failed to connect to Google Calendar. Please try again later.", "error");
+  // Replace the entire addEventToGoogleCalendar method in src/services/CalendarService.js (around line 500)
+async addEventToGoogleCalendar(event) {
+  console.log("Adding event to Google Calendar");
+  
+  // Reset mock mode to ensure we try real mode first
+  const originalMockMode = this.mockMode;
+  this.mockMode = false;
+  
+  if (!this.googleApiLoaded) {
+    try {
+      console.log("Google Calendar not initialized, initializing now");
+      await this.initializeGoogleCalendar();
+    } catch (error) {
+      console.error("Failed to initialize Google Calendar:", error);
+      this.showNotification("Failed to connect to Google Calendar. Please try again later.", "error");
+      this.mockMode = true;
+      return this.addEventToGoogleCalendar(event);
+    }
+  }
+  
+  // Force sign-in check every time
+  if (!this.isSignedInToGoogle()) {
+    try {
+      console.log("Not signed in to Google Calendar, attempting to sign in");
+      await this.signInToGoogle();
+      
+      // Double-check that sign-in worked
+      if (!this.isSignedInToGoogle()) {
+        console.log("Sign-in attempt failed, falling back to mock mode");
         this.mockMode = true;
         return this.addEventToGoogleCalendar(event);
       }
+    } catch (error) {
+      console.error("Failed to sign in to Google:", error);
+      this.mockMode = true;
+      return this.addEventToGoogleCalendar(event);
     }
-    
-    // Force sign-in check every time
-    if (!this.isSignedInToGoogle()) {
-      try {
-        console.log("Not signed in to Google Calendar, attempting to sign in");
-        await this.signInToGoogle();
-        
-        // Double-check that sign-in worked
-        if (!this.isSignedInToGoogle()) {
-          console.log("Sign-in attempt failed, falling back to mock mode");
-          this.mockMode = true;
-          return this.addEventToGoogleCalendar(event);
-        }
-      } catch (error) {
-        console.error("Failed to sign in to Google:", error);
-        this.mockMode = true;
-        return this.addEventToGoogleCalendar(event);
-      }
-    }
+  }
   
   if (this.mockMode) {
     console.log("Mock adding event to Google Calendar:", event.summary);

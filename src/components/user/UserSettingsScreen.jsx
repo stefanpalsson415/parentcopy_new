@@ -33,6 +33,8 @@ const [googleAuthStatus, setGoogleAuthStatus] = useState({
 });
 
 // Check Google auth status when component mounts
+// Replace the useEffect block that checks Google auth status in UserSettingsScreen.jsx (around line 64)
+// Check Google auth status when component mounts
 useEffect(() => {
   const checkGoogleAuthStatus = async () => {
     try {
@@ -864,95 +866,96 @@ const saveCalendarSettings = async () => {
           
           <button
 
-  onClick={async () => {
-    if (googleAuthStatus.isConnected) {
-      // Already connected - ask if they want to disconnect
-      const confirmDisconnect = window.confirm('Are you sure you want to disconnect your Google account?');
-      if (confirmDisconnect) {
-        try {
-          // First try to sign out from Google Auth if available
-          if (window.gapi && window.gapi.auth2) {
-            const auth2 = window.gapi.auth2.getAuthInstance();
-            if (auth2) {
-              await auth2.signOut();
-              console.log("Signed out from Google Auth");
-            }
-          }
-          
-          // Remove Google auth data from member profile
-          await updateMemberProfile(selectedUser.id, { 
-            googleAuth: null 
-          });
-          
-          // Update local state to reflect changes
-          setGoogleAuthStatus({
-            isConnected: false,
-            email: null,
-            loading: false
-          });
-          
-          // Also remove any stored token
-          localStorage.removeItem('googleAuthToken');
-          localStorage.removeItem(`googleToken_${selectedUser.id}`);
-          
-          // Show success notification
-          alert('Google account disconnected successfully!');
-        } catch (error) {
-          console.error('Error disconnecting Google account:', error);
-          alert('Failed to disconnect Google account: ' + error.message);
-        }
-      }
-    } else {
-      // Not connected - connect now
+  // Replace the onClick handler for the Google connect/disconnect button
+onClick={async () => {
+  if (googleAuthStatus.isConnected) {
+    // Already connected - ask if they want to disconnect
+    const confirmDisconnect = window.confirm('Are you sure you want to disconnect your Google account?');
+    if (confirmDisconnect) {
       try {
-        // First make sure we're logged out of any previous Google session
+        // First try to sign out from Google Auth if available
         if (window.gapi && window.gapi.auth2) {
-          try {
-            const auth2 = window.gapi.auth2.getAuthInstance();
-            if (auth2 && auth2.isSignedIn.get()) {
-              await auth2.signOut();
-              console.log("Signed out from previous Google session");
-            }
-          } catch (e) {
-            console.log("No previous Google session to sign out from");
+          const auth2 = window.gapi.auth2.getAuthInstance();
+          if (auth2) {
+            await auth2.signOut();
+            console.log("Signed out from Google Auth");
           }
         }
         
-        // Now connect with Google
-        const user = await linkAccountWithGoogle();
-        
-        // Store token specifically for this user
-        localStorage.setItem(`googleToken_${selectedUser.id}`, JSON.stringify({
-          email: user.email,
-          uid: user.uid,
-          timestamp: Date.now()
-        }));
-        
-        // Update the member profile with Google data - IMPORTANT: only for this specific member
-        await updateMemberProfile(selectedUser.id, {
-          googleAuth: {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName,
-            photoURL: user.photoURL,
-            lastConnected: new Date().toISOString()
-          }
+        // Remove Google auth data from member profile
+        await updateMemberProfile(selectedUser.id, { 
+          googleAuth: null 
         });
         
-        // Update status locally
+        // Update local state to reflect changes
         setGoogleAuthStatus({
-          isConnected: true,
-          email: user.email,
+          isConnected: false,
+          email: null,
           loading: false
         });
         
-        alert('Google account connected successfully!');
+        // Also remove any stored token
+        localStorage.removeItem('googleAuthToken');
+        localStorage.removeItem(`googleToken_${selectedUser.id}`);
+        
+        // Show success notification
+        alert('Google account disconnected successfully!');
       } catch (error) {
-        console.error('Error connecting Google account:', error);
-        alert('Failed to connect Google account. Please try again.');
+        console.error('Error disconnecting Google account:', error);
+        alert('Failed to disconnect Google account: ' + error.message);
       }
     }
-  }}
+  } else {
+    // Not connected - connect now
+    try {
+      // First make sure we're logged out of any previous Google session
+      if (window.gapi && window.gapi.auth2) {
+        try {
+          const auth2 = window.gapi.auth2.getAuthInstance();
+          if (auth2 && auth2.isSignedIn.get()) {
+            await auth2.signOut();
+            console.log("Signed out from previous Google session");
+          }
+        } catch (e) {
+          console.log("No previous Google session to sign out from");
+        }
+      }
+      
+      // Now connect with Google
+      const user = await linkAccountWithGoogle();
+      
+      // Store token specifically for this user
+      localStorage.setItem(`googleToken_${selectedUser.id}`, JSON.stringify({
+        email: user.email,
+        uid: user.uid,
+        timestamp: Date.now()
+      }));
+      
+      // Update the member profile with Google data - IMPORTANT: only for this specific member
+      await updateMemberProfile(selectedUser.id, {
+        googleAuth: {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+          lastConnected: new Date().toISOString()
+        }
+      });
+      
+      // Update status locally
+      setGoogleAuthStatus({
+        isConnected: true,
+        email: user.email,
+        loading: false
+      });
+      
+      alert('Google account connected successfully!');
+    } catch (error) {
+      console.error('Error connecting Google account:', error);
+      alert('Failed to connect Google account. Please try again.');
+    }
+  }
+}}
   className={`px-3 py-1.5 rounded text-sm ${
     selectedUser?.googleAuth 
       ? 'border border-gray-300 text-gray-700 hover:bg-gray-100' 

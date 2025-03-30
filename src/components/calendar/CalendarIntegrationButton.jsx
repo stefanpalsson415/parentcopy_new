@@ -92,6 +92,30 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
     }
   };
   
+
+// Add this function to get user-specific Google token
+const getUserSpecificGoogleToken = () => {
+  try {
+    // Try to get user-specific token first
+    const userToken = localStorage.getItem(`googleToken_${selectedUser?.id}`);
+    if (userToken) {
+      return JSON.parse(userToken);
+    }
+    
+    // Fall back to general token
+    const generalToken = localStorage.getItem('googleAuthToken');
+    if (generalToken) {
+      return JSON.parse(generalToken);
+    }
+    
+    return null;
+  } catch (e) {
+    console.error("Error getting user token:", e);
+    return null;
+  }
+};
+
+
   // Handle adding to default calendar
   const handleAddToCalendar = async () => {
     setIsLoading(true);
@@ -105,11 +129,12 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
         return;
       }
       
-      // Get user-specific Google auth token if available
-      const userToken = getUserSpecificGoogleToken();
-      if (userToken && calendarSettings.defaultCalendarType === 'google') {
-        console.log("Using user-specific Google token for calendar integration");
-      }
+      
+// Get user-specific Google auth token if available
+const userToken = getUserSpecificGoogleToken();
+if (userToken && calendarSettings.defaultCalendarType === 'google') {
+  console.log("Using user-specific Google token for calendar integration");
+}
       
       // Make sure we're signed in to Google if using Google Calendar
       if (calendarSettings.defaultCalendarType === 'google' && !isSignedIn) {
