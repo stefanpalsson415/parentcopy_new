@@ -93,28 +93,6 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
   };
   
 
-// Add this function to get user-specific Google token
-const getUserSpecificGoogleToken = () => {
-  try {
-    // Try to get user-specific token first
-    const userToken = localStorage.getItem(`googleToken_${selectedUser?.id}`);
-    if (userToken) {
-      return JSON.parse(userToken);
-    }
-    
-    // Fall back to general token
-    const generalToken = localStorage.getItem('googleAuthToken');
-    if (generalToken) {
-      return JSON.parse(generalToken);
-    }
-    
-    return null;
-  } catch (e) {
-    console.error("Error getting user token:", e);
-    return null;
-  }
-};
-
 
   // Handle adding to default calendar
   const handleAddToCalendar = async () => {
