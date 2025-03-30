@@ -141,8 +141,24 @@ class CalendarService {
   // Initialize Google Calendar API with Firebase Auth token
   // Initialize Google Calendar API with Firebase Auth token
 // Initialize Google Calendar API with proper OAuth flow
+// Initialize Google Calendar API with proper OAuth flow
 async initializeGoogleCalendar() {
   console.log("Initializing Google Calendar with modern auth flow");
+  
+  // First check if we have API credentials
+  if (!this.apiKey || !this.clientId) {
+    console.error("Missing Google API credentials. Calendar integration will fail.");
+    console.error(`API Key available: ${this.apiKey ? 'Yes' : 'No'}`);
+    console.error(`Client ID available: ${this.clientId ? 'Yes' : 'No'}`);
+    
+    if (this.forceRealMode) {
+      throw new Error("Missing required Google API credentials");
+    } else {
+      console.warn("Falling back to mock mode due to missing credentials");
+      this.mockMode = true;
+      return true;
+    }
+  }
   
   // If using mock mode, set up simulated functions
   if (this.mockMode && !this.forceRealMode) {
@@ -182,11 +198,10 @@ async initializeGoogleCalendar() {
     return true;
   }
   
-  // IMPORTANT: We'll use a more modern approach for Google auth
   return new Promise((resolve, reject) => {
     // First check if the gapi script is already loaded
     if (window.gapi && window.gapi.client) {
-      console.log("Google API script and client already loaded, reinitializing");
+      console.log("Google API script and client already loaded, initializing");
       this._initializeGapiClient()
         .then(() => {
           this.googleApiLoaded = true;
@@ -371,6 +386,7 @@ async debugGoogleCalendarConnection() {
 
   // Sign in to Google Calendar
   // Sign in to Google Calendar
+// Sign in to Google Calendar with proper error handling
 // Sign in to Google Calendar with proper error handling
 async signInToGoogle() {
   console.log("Attempting to sign in to Google Calendar");
