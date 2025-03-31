@@ -71,60 +71,58 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
   }, [item.id, itemType]);
   
   // Add this function to get user-specific Google token
-  const getUserSpecificGoogleToken = () => {
-    try {
-      // Try to get user-specific token first
-      const userToken = localStorage.getItem(`googleToken_${selectedUser?.id}`);
-      if (userToken) {
-        return JSON.parse(userToken);
-      }
-      
-      // Fall back to general token
-      const generalToken = localStorage.getItem('googleAuthToken');
-      if (generalToken) {
-        return JSON.parse(generalToken);
-      }
-      
-      return null;
-    } catch (e) {
-      console.error("Error getting user token:", e);
-      return null;
+const getUserSpecificGoogleToken = () => {
+  try {
+    // Try to get user-specific token first
+    const userToken = localStorage.getItem(`googleToken_${selectedUser?.id}`);
+    if (userToken) {
+      return JSON.parse(userToken);
     }
-  };
+    
+    // Fall back to general token
+    const generalToken = localStorage.getItem('googleAuthToken');
+    if (generalToken) {
+      return JSON.parse(generalToken);
+    }
+    
+    return null;
+  } catch (e) {
+    console.error("Error getting user token:", e);
+    return null;
+  }
+};
   
 
 
-  // Handle adding to default calendar
-  const handleAddToCalendar = async () => {
-    setIsLoading(true);
-    setError(null);
+const handleAddToCalendar = async () => {
+  setIsLoading(true);
+  setError(null);
+  
+  try {
+    // If there's no default calendar type set, show calendar options instead
+    if (!calendarSettings?.defaultCalendarType) {
+      setShowOptions(true);
+      setIsLoading(false);
+      return;
+    }
     
-    try {
-      // If there's no default calendar type set, show calendar options instead
-      if (!calendarSettings?.defaultCalendarType) {
-        setShowOptions(true);
-        setIsLoading(false);
-        return;
+    // Get user-specific Google auth token if available
+    const userToken = getUserSpecificGoogleToken();
+    if (userToken && calendarSettings.defaultCalendarType === 'google') {
+      console.log("Using user-specific Google token for calendar integration");
+    }
+    
+    // Make sure we're signed in to Google if using Google Calendar
+    if (calendarSettings.defaultCalendarType === 'google' && !isSignedIn) {
+      console.log("Not signed in to Google Calendar, signing in now");
+      try {
+        await CalendarService.signInToGoogle();
+        setIsSignedIn(true);
+      } catch (signInError) {
+        console.error("Error signing in to Google Calendar:", signInError);
+        throw new Error("Could not sign in to Google Calendar. Please try again.");
       }
-      
-      
-// Get user-specific Google auth token if available
-const userToken = getUserSpecificGoogleToken();
-if (userToken && calendarSettings.defaultCalendarType === 'google') {
-  console.log("Using user-specific Google token for calendar integration");
-}
-      
-      // Make sure we're signed in to Google if using Google Calendar
-      if (calendarSettings.defaultCalendarType === 'google' && !isSignedIn) {
-        console.log("Not signed in to Google Calendar, signing in now");
-        try {
-          await CalendarService.signInToGoogle();
-          setIsSignedIn(true);
-        } catch (signInError) {
-          console.error("Error signing in to Google Calendar:", signInError);
-          throw new Error("Could not sign in to Google Calendar. Please try again.");
-        }
-      }
+    }
       
       // Create event based on item type with better date handling
       let event;

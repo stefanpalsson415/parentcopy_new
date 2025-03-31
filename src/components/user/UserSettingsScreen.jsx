@@ -35,6 +35,7 @@ const [googleAuthStatus, setGoogleAuthStatus] = useState({
 // Check Google auth status when component mounts
 // Replace the useEffect block that checks Google auth status in UserSettingsScreen.jsx (around line 64)
 // Check Google auth status when component mounts
+// Replace the useEffect block that checks Google auth status in UserSettingsScreen.jsx (around line 64)
 useEffect(() => {
   const checkGoogleAuthStatus = async () => {
     try {
@@ -867,6 +868,7 @@ const saveCalendarSettings = async () => {
           <button
 
   // Replace the onClick handler for the Google connect/disconnect button
+// Replace the onClick handler for the Google connect/disconnect button
 onClick={async () => {
   if (googleAuthStatus.isConnected) {
     // Already connected - ask if they want to disconnect
@@ -956,11 +958,11 @@ onClick={async () => {
     }
   }
 }}
-  className={`px-3 py-1.5 rounded text-sm ${
-    selectedUser?.googleAuth 
-      ? 'border border-gray-300 text-gray-700 hover:bg-gray-100' 
-      : 'bg-black text-white hover:bg-gray-800'
-  }`}
+className={`px-3 py-1.5 rounded text-sm ${
+  selectedUser?.googleAuth 
+    ? 'border border-gray-300 text-gray-700 hover:bg-gray-100' 
+    : 'bg-black text-white hover:bg-gray-800'
+}`}
 >
   {googleAuthStatus.isConnected ? 'Disconnect' : 'Connect'}
 </button>
