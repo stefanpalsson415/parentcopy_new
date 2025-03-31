@@ -171,71 +171,69 @@ const getDefaultProfileImage = (member) => {
 };
   
 const clearPreviousUserState = async () => {
-  // Only clear the selected user ID
-  localStorage.removeItem('selectedUserId');
-  
-  // Important: Do NOT remove any googleTokens
-  // Each user should keep their own token
-  
-  console.log("Cleared previous user selection without affecting Google auth");
+  // DO NOT DO ANYTHING other than log
+  console.log("clearPreviousUserState called - doing nothing to prevent auth issues");
+  // We're intentionally NOT clearing anything to preserve Google auth data
 };
+
+// In FamilySelectionScreen.jsx - replace the entire handleSelectUser function (around line 300-350)
 
 const handleSelectUser = async (member) => {
   console.log(`Selecting family member: ${member.name}, ID: ${member.id}`);
   
-  // Save the previously selected user ID before changing
-  const previousUserId = selectedUser?.id;
-  if (previousUserId && previousUserId !== member.id) {
-    console.log(`Switching from user ${previousUserId} to ${member.id}`);
-  }
-  
-  // Select the family member
-  selectFamilyMember(member);
-  
-  // Store the selected user ID
-  localStorage.setItem('selectedUserId', member.id);
-  
-  // Debug log to show which Google auth data this user has
-  if (member.googleAuth) {
-    console.log(`Selected user has Google auth data: ${member.googleAuth.email}`);
-  } else {
-    console.log(`Selected user does NOT have Google auth data`);
-  }
-  
-  // Navigate to the appropriate screen based on survey completion
-  if (member.completed) {
-    navigate('/dashboard');
-  } else {
-    try {
-      // Check if this member has a paused survey
-      let hasInProgressSurvey = false;
-      try {
-        const surveyProgress = localStorage.getItem('surveyInProgress');
-        if (surveyProgress) {
-          const progress = JSON.parse(surveyProgress);
-          hasInProgressSurvey = progress.userId === member.id;
-        }
-      } catch (e) {
-        console.error("Error checking survey progress:", e);
-      }
-      
-      if (hasInProgressSurvey) {
-        // Try to load their saved responses before navigating
-        const responses = await getMemberSurveyResponses(member.id, 'initial');
-        if (responses && Object.keys(responses).length > 0) {
-          // Update the survey context with their saved responses
-          setCurrentSurveyResponses(responses);
-          console.log("Loaded saved survey progress:", Object.keys(responses).length, "responses");
-        }
-      }
-      
-      // Then navigate to the survey
-      navigate('/survey');
-    } catch (error) {
-      console.error("Error loading saved survey progress:", error);
-      // Still navigate to survey even if loading fails
-      navigate('/survey');
+  try {
+    // IMPORTANT: Store the selected user ID FIRST, before anything else
+    localStorage.setItem('selectedUserId', member.id);
+    
+    // Select the family member in context
+    selectFamilyMember(member);
+    
+    // Debug log to show which Google auth data this user has
+    if (member.googleAuth) {
+      console.log(`Selected user has Google auth data: ${member.googleAuth.email}`);
+    } else {
+      console.log(`Selected user does NOT have Google auth data`);
     }
+    
+    // Navigate to the appropriate screen based on survey completion
+    if (member.completed) {
+      navigate('/dashboard');
+    } else {
+      try {
+        // Check if this member has a paused survey
+        let hasInProgressSurvey = false;
+        try {
+          const surveyProgress = localStorage.getItem('surveyInProgress');
+          if (surveyProgress) {
+            const progress = JSON.parse(surveyProgress);
+            hasInProgressSurvey = progress.userId === member.id;
+          }
+        } catch (e) {
+          console.error("Error checking survey progress:", e);
+        }
+        
+        if (hasInProgressSurvey) {
+          // Try to load their saved responses before navigating
+          const responses = await getMemberSurveyResponses(member.id, 'initial');
+          if (responses && Object.keys(responses).length > 0) {
+            // Update the survey context with their saved responses
+            setCurrentSurveyResponses(responses);
+            console.log("Loaded saved survey progress:", Object.keys(responses).length, "responses");
+          }
+        }
+        
+        // Then navigate to the survey
+        navigate('/survey');
+      } catch (error) {
+        console.error("Error loading saved survey progress:", error);
+        // Still navigate to survey even if loading fails
+        navigate('/survey');
+      }
+    }
+  } catch (error) {
+    console.error("Error in handleSelectUser:", error);
+    // If there's an error, try a basic navigation
+    navigate(member.completed ? '/dashboard' : '/survey');
   }
 };
 

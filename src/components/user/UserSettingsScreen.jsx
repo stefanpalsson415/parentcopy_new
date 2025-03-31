@@ -32,6 +32,34 @@ const [googleAuthStatus, setGoogleAuthStatus] = useState({
   loading: true
 });
 
+
+// In UserSettingsScreen.jsx - Add this effect near the top of the component (around line 40-60)
+
+// Add this useEffect right after the existing state declarations
+useEffect(() => {
+  // Ensure we're showing data for the correct user
+  console.log("UserSettingsScreen selected user:", 
+    selectedUser ? 
+    {
+      id: selectedUser.id,
+      name: selectedUser.name,
+      email: selectedUser.email,
+      role: selectedUser.roleType,
+      hasGoogleAuth: !!selectedUser.googleAuth
+    } : 'none');
+  
+  if (selectedUser && currentUser) {
+    console.log("Current auth user email:", currentUser.email);
+    console.log("Selected user email:", selectedUser.email);
+    
+    // Log Google auth data if available
+    if (selectedUser.googleAuth) {
+      console.log("Google auth email:", selectedUser.googleAuth.email);
+    }
+  }
+}, [selectedUser, currentUser]);
+
+
 useEffect(() => {
   const checkGoogleAuthStatus = async () => {
     try {
@@ -1028,15 +1056,22 @@ const saveCalendarSettings = async () => {
           />
         </div>
         
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-          <input
-            type="email"
-            className="w-full p-2 border rounded bg-gray-50"
-            value={currentUser?.email || ''}
-            readOnly
-          />
-        </div>
+        // In UserSettingsScreen.jsx - Replace the Email input field (around line 520-530)
+
+<div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+  <input
+    type="email"
+    className="w-full p-2 border rounded bg-gray-50"
+    value={selectedUser?.email || currentUser?.email || ''}
+    readOnly
+  />
+  {selectedUser?.googleAuth && (
+    <p className="text-xs text-green-600 mt-1">
+      Google account connected: {selectedUser.googleAuth.email}
+    </p>
+  )}
+</div>
       </div>
     </div>
     

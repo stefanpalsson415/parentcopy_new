@@ -167,6 +167,38 @@ if (typeof idParam === 'string' && idParam.length > 0) {
     }
   }
 
+// In AuthContext.js - Add this function around line 110 (after the loadFamilyData function)
+
+async function setSelectedFamilyMember(memberId) {
+  try {
+    console.log("Explicitly setting selected family member:", memberId);
+    
+    if (!familyData || !familyData.familyMembers) {
+      console.error("No family data available to select member");
+      return false;
+    }
+    
+    // Find the member in the family data
+    const member = familyData.familyMembers.find(m => m.id === memberId);
+    if (!member) {
+      console.error("Member not found in family:", memberId);
+      return false;
+    }
+    
+    // Store the selection in localStorage
+    localStorage.setItem('selectedUserId', memberId);
+    console.log("Selected user ID stored:", memberId);
+    
+    // Return the member data
+    return member;
+  } catch (error) {
+    console.error("Error setting selected family member:", error);
+    return false;
+  }
+}
+
+
+
   // Add this function to check if we're returning from a redirect
   const checkAuthStateOnLoad = async () => {
     try {
@@ -272,6 +304,7 @@ const value = {
   loadFamilyData,
   loadAllFamilies,
   ensureFamiliesLoaded,
+  setSelectedFamilyMember, // Add this new function
   reload: () => loadFamilyData(currentUser?.uid),
   // Add this new function
   // Current code (around line ~400)
