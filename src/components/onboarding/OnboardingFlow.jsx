@@ -385,7 +385,7 @@ const OnboardingFlow = () => {
                   <p className="text-sm text-blue-700 mb-3 font-roboto">
                     <strong>Recommended:</strong> Sign in with Google to enable calendar integration and simplify account management.
                   </p>
-                  // Replace the Google auth button onClick handler in the parent setup step
+                  
 <GoogleAuthButton
   buttonText={`Sign in with Google as ${parent.role}`}
   parentRole={parent.role} // Pass the parent role to the component
