@@ -30,6 +30,26 @@ class CalendarService {
     }
   }
   
+// Get user-specific credentials
+getUserGoogleCredentials(userId) {
+  try {
+    if (!userId) return null;
+    
+    const userToken = localStorage.getItem(`googleToken_${userId}`);
+    if (userToken) {
+      const tokenData = JSON.parse(userToken);
+      console.log(`Found user-specific Google token for user ${userId}`);
+      return tokenData;
+    }
+    
+    return null;
+  } catch (e) {
+    console.error("Error getting user-specific credentials:", e);
+    return null;
+  }
+}
+
+
   // Check if Apple Calendar is supported
   checkAppleCalendarSupport() {
     return typeof window !== 'undefined' && 
