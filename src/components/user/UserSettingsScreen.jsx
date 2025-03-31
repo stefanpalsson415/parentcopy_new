@@ -80,6 +80,7 @@ useEffect(() => {
 }, [currentUser, selectedUser]);
 
 // Helper function to clear only the specific user's Google auth data without affecting others
+// Helper function to clear only the specific user's Google auth data without affecting others
 const clearUserGoogleAuth = async (userId) => {
   try {
     console.log(`Clearing Google auth data specifically for user ${userId}`);

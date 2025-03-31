@@ -385,31 +385,49 @@ const OnboardingFlow = () => {
                   <p className="text-sm text-blue-700 mb-3 font-roboto">
                     <strong>Recommended:</strong> Sign in with Google to enable calendar integration and simplify account management.
                   </p>
-                  <GoogleAuthButton
-                    buttonText={`Sign in with Google as ${parent.role}`}
-                    onSuccess={async (user) => {
-                      if (user) {
-                        console.log("Successfully signed in with Google:", user.email);
-                        
-                        // Update the parent's information with Google data
-                        const updatedParents = [...familyData.parents];
-                        updatedParents[index] = {
-                          ...updatedParents[index],
-                          email: user.email,
-                          name: updatedParents[index].name || (user.displayName || ''),
-                          googleAuth: {
-                            uid: user.uid,
-                            email: user.email,
-                            displayName: user.displayName,
-                            photoURL: user.photoURL
-                          }
-                        };
-                        
-                        // Update family data with the new parent info
-                        setFamilyData({...familyData, parents: updatedParents});
-                      }
-                    }}
-                  />
+                  // Replace the Google auth button onClick handler in the parent setup step
+<GoogleAuthButton
+  buttonText={`Sign in with Google as ${parent.role}`}
+  parentRole={parent.role} // Pass the parent role to the component
+  onSuccess={async (user) => {
+    if (user) {
+      console.log("Successfully signed in with Google:", user.email);
+      
+      // Update the parent's information with Google data
+      const updatedParents = [...familyData.parents];
+      updatedParents[index] = {
+        ...updatedParents[index],
+        email: user.email,
+        name: updatedParents[index].name || (user.displayName || ''),
+        googleAuth: {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL
+        },
+        // Important: Add a unique identifier for this specific parent
+        googleAuthSpecificId: `${user.uid}_${parent.role.toLowerCase()}`
+      };
+      
+      // Update family data with the new parent info
+      setFamilyData({...familyData, parents: updatedParents});
+      
+      // Store token specifically for this parent role
+      try {
+        const parentId = `${parent.role.toLowerCase()}_${Date.now()}`;
+        localStorage.setItem(`googleToken_${parentId}`, JSON.stringify({
+          email: user.email,
+          uid: user.uid,
+          role: parent.role,
+          timestamp: Date.now()
+        }));
+        console.log(`Stored Google token for ${parent.role} with ID: ${parentId}`);
+      } catch (e) {
+        console.error("Failed to store token:", e);
+      }
+    }
+  }}
+/>
                 </div>
                 
                 <div className="relative mb-4">

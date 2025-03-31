@@ -1004,6 +1004,135 @@ console.log("Family data being prepared:", {
     }
   }
 
+// Create a new family
+async createFamily(familyData) {
+  try {
+    const { familyName, parents, children } = familyData;
+    
+    // Create user accounts for parents
+    const parentUsers = [];
+    const parentData = Array.isArray(parents) ? parents : [];
+    for (const parent of parentData) {
+      if (parent.googleAuth) {
+        // For Google-authenticated parents, use their existing Google UID
+        parentUsers.push({
+          uid: parent.googleAuth.uid,
+          email: parent.googleAuth.email || parent.email,
+          role: parent.role
+        });
+        console.log(`Using existing Google account for ${parent.role}:`, parent.googleAuth.uid);
+      } else if (parent.email && parent.password) {
+        // For traditional email/password parents
+        try {
+          const user = await this.createUser(parent.email, parent.password);
+          parentUsers.push({
+            uid: user.uid,
+            email: parent.email,
+            role: parent.role
+          });
+          console.log(`Created user for ${parent.role}:`, user.uid);
+        } catch (error) {
+          console.error(`Error creating user for ${parent.role}:`, error);
+          // Continue with other parents even if one fails
+        }
+      }
+    }
+
+    if (parentUsers.length === 0) {
+      throw new Error("No parent users could be created");
+    }      
+      // Generate a simple family ID instead of using addDoc
+      // Generate a simple family ID instead of using addDoc
+    const familyId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+    console.log("Generated familyId:", familyId);
+    console.log("Parent users created:", parentUsers);
+    console.log("Family data being prepared:", {
+      familyName,
+      parentData: parentData.map(p => ({...p, password: '****'})),
+      childrenData: Array.isArray(children) ? children : []
+    });
+          
+          // Create family members array
+          const familyMembers = [
+            ...parentData.map((parent, index) => {
+              const userId = parentUsers[index]?.uid || `${parent.role.toLowerCase()}-${familyId}`;
+              console.log(`Creating family member for ${parent.name} with ID ${userId}`);
+              return {
+                id: userId,
+                name: parent.name,
+                role: 'parent',
+                roleType: parent.role,
+                email: parent.email,
+                completed: false,
+                completedDate: null,
+                weeklyCompleted: [],
+                profilePicture: '/api/placeholder/150/150', // Default placeholder
+                // Important: Preserve the Google auth data if it exists
+                googleAuth: parent.googleAuth || null
+              };
+            }),
+            ...(Array.isArray(children) ? children : []).map(child => {
+
+              const childId = `${child.name.toLowerCase()}-${familyId}`;
+              console.log(`Creating family member for child ${child.name} with ID ${childId}`);
+              return {
+                id: childId,
+                name: child.name,
+                role: 'child',
+                age: child.age,
+                completed: false,
+                completedDate: null,
+                weeklyCompleted: [],
+                profilePicture: '/api/placeholder/150/150' // Default placeholder
+              };
+            })
+          ];
+          
+          // Prepare family document data
+          const familyDoc = {
+            familyId,
+            familyName,
+            familyMembers,
+            tasks: [],
+            completedWeeks: [],
+            currentWeek: 1,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            memberIds: parentUsers.map(user => user.uid),
+            surveySchedule: {}, // Initialize empty survey schedule
+            familyPicture: null // Initialize empty family picture
+          };
+          
+          console.log("Attempting to save family document:", familyId);
+          
+          // Create the family document directly with a specific ID
+          await setDoc(doc(this.db, "families", familyId), familyDoc);
+          console.log("Family document created successfully");
+          
+          // Record family creation analytics
+          try {
+            await this.recordAnalyticsEvent(familyId, {
+              event: 'family_created',
+              familyName: familyName,
+              memberCount: familyMembers.length,
+              parentCount: parentData.length,
+              childCount: Array.isArray(children) ? children.length : 0,
+              timestamp: new Date().toISOString()
+            });
+          } catch (analyticsError) {
+            console.error("Analytics error during family creation:", analyticsError);
+            // Non-critical, don't block family creation
+          }
+          
+          return familyDoc;
+        } catch (error) {
+          console.error("Error in createFamily:", error);
+          throw error;
+        }
+      }
+
+
+
   // Store AI preferences
   async storeAIPreferences(familyId, preferences) {
     try {
