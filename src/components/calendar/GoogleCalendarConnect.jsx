@@ -26,43 +26,69 @@ const GoogleCalendarConnect = ({ onSuccess, buttonText = "Connect Calendar", sho
     checkConnection();
   }, [currentUser]);
   
-  const handleConnect = async () => {
-    setIsLoading(true);
-    setError(null);
+  // NEW CODE
+const handleConnect = async () => {
+  setIsLoading(true);
+  setError(null);
+  
+  try {
+    // First try to initialize Google Calendar without signing in
+    console.log("Initializing Google Calendar connection...");
+    await CalendarService.initializeGoogleCalendar();
     
-    try {
-      await CalendarService.signInToGoogle();
-      setIsConnected(true);
-      
-      // Load available calendars
-      const calendars = await CalendarService.listUserCalendars();
-      console.log("Available calendars:", calendars);
-      
-      // Update calendar settings
-      if (currentUser) {
-        const settings = await CalendarService.loadUserCalendarSettings(currentUser.uid) || {};
-        await CalendarService.saveUserCalendarSettings(currentUser.uid, {
-          ...settings,
-          defaultCalendarType: 'google',
-          googleCalendar: {
-            enabled: true,
-            calendarId: 'primary'
-          }
-        });
-      }
-      
-      // Call onSuccess callback if provided
-      if (onSuccess) onSuccess(true);
-    } catch (error) {
-      console.error("Error connecting to Google Calendar:", error);
-      setError(error.message || "Failed to connect. Please try again.");
-      
-      // Call onSuccess callback with false to indicate failure
-      if (onSuccess) onSuccess(false);
-    } finally {
-      setIsLoading(false);
+    // Show debugging info in dev mode
+    if (process.env.NODE_ENV === 'development') {
+      console.log("Google Calendar config:", CalendarService.debugGoogleAuthConfig());
     }
-  };
+    
+    // Then attempt to sign in - this will now throw errors instead of falling back to mock mode
+    console.log("Starting Google sign-in process...");
+    const user = await CalendarService.signInToGoogle();
+    console.log("Sign-in successful:", user);
+    
+    // Update connection state
+    setIsConnected(true);
+    
+    // Load available calendars
+    const calendars = await CalendarService.listUserCalendars();
+    console.log("Available calendars:", calendars);
+    
+    // Update calendar settings
+    if (currentUser) {
+      const settings = await CalendarService.loadUserCalendarSettings(currentUser.uid) || {};
+      await CalendarService.saveUserCalendarSettings(currentUser.uid, {
+        ...settings,
+        defaultCalendarType: 'google',
+        googleCalendar: {
+          enabled: true,
+          calendarId: 'primary'
+        }
+      });
+    }
+    
+    // Call onSuccess callback if provided
+    if (onSuccess) onSuccess(true);
+  } catch (error) {
+    console.error("Error connecting to Google Calendar:", error);
+    
+    // More informative error messages
+    let errorMessage = error.message || "Failed to connect to Google Calendar.";
+    
+    // Check if it's a verification issue based on error message
+    if (errorMessage.includes("verification") || 
+        errorMessage.includes("access_denied") || 
+        errorMessage.includes("not verified")) {
+      errorMessage = "Google Calendar connection failed. This app needs to be verified by Google for Calendar access. Please contact the developer.";
+    }
+    
+    setError(errorMessage);
+    
+    // Call onSuccess callback with false to indicate failure
+    if (onSuccess) onSuccess(false);
+  } finally {
+    setIsLoading(false);
+  }
+};
   
   return (
     <div className="w-full">
