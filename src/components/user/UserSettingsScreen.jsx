@@ -645,6 +645,41 @@ const saveCalendarSettings = async () => {
     Repair Google Auth Data
   </button>
 </div>
+
+{/* Repair Button */}
+<div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+  <h4 className="font-medium mb-2">Repair Google Auth</h4>
+  <p className="text-sm text-red-700 mb-2">
+    If you're experiencing issues with Google accounts showing the wrong email or not connecting properly, 
+    you can try to repair the Google auth data.
+  </p>
+  <button
+    onClick={async () => {
+      try {
+        if (!familyId) {
+          alert("No family ID available");
+          return;
+        }
+        
+        const result = await DatabaseService.repairFamilyGoogleAuth(familyId);
+        console.log("Google auth repair result:", result);
+        
+        if (result.success) {
+          alert("Google auth data has been repaired successfully. Please refresh the page to see the changes.");
+          window.location.reload();
+        } else {
+          alert("Failed to repair Google auth data: " + (result.error || "Unknown error"));
+        }
+      } catch (error) {
+        console.error("Error running Google auth repair:", error);
+        alert(`Error running repair: ${error.message}`);
+      }
+    }}
+    className="px-3 py-1 bg-red-100 border border-red-300 rounded text-red-800 text-sm"
+  >
+    Repair Google Auth Data
+  </button>
+</div>
         {/* Apple Calendar Settings */}
         {activeCalendarType === 'apple' && (
           <div className="bg-white p-4 rounded-lg border">
@@ -1034,66 +1069,66 @@ const saveCalendarSettings = async () => {
           <button
 
   // Replace the onClick handler for the Google connect/disconnect button
-  onClick={async () => {
-    if (googleAuthStatus.isConnected) {
-      // Already connected - ask if they want to disconnect
-      const confirmDisconnect = window.confirm('Are you sure you want to disconnect your Google account?');
-      if (confirmDisconnect) {
-        try {
-          // Clear only this specific user's Google auth data
-          await clearUserGoogleAuth(selectedUser.id);
-          
-          // Update local state to reflect changes
-          setGoogleAuthStatus({
-            isConnected: false,
-            email: null,
-            loading: false
-          });
-          
-          alert('Google account disconnected successfully!');
-        } catch (error) {
-          console.error('Error disconnecting Google account:', error);
-          alert('Failed to disconnect Google account: ' + error.message);
-        }
-      }
-    } else {
-      // Not connected - connect now
+onClick={async () => {
+  if (googleAuthStatus.isConnected) {
+    // Already connected - ask if they want to disconnect
+    const confirmDisconnect = window.confirm('Are you sure you want to disconnect your Google account?');
+    if (confirmDisconnect) {
       try {
-        // Now connect with Google
-        const user = await linkAccountWithGoogle();
+        // Clear only this specific user's Google auth data
+        await clearUserGoogleAuth(selectedUser.id);
         
-        // Store token specifically for this user
-        localStorage.setItem(`googleToken_${selectedUser.id}`, JSON.stringify({
-          email: user.email,
-          uid: user.uid,
-          timestamp: Date.now()
-        }));
-        
-        // Update the member profile with Google data - IMPORTANT: only for this specific member
-        await updateMemberProfile(selectedUser.id, {
-          googleAuth: {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName,
-            photoURL: user.photoURL,
-            lastConnected: new Date().toISOString()
-          }
-        });
-        
-        // Update status locally
+        // Update local state to reflect changes
         setGoogleAuthStatus({
-          isConnected: true,
-          email: user.email,
+          isConnected: false,
+          email: null,
           loading: false
         });
         
-        alert('Google account connected successfully!');
+        alert('Google account disconnected successfully!');
       } catch (error) {
-        console.error('Error connecting Google account:', error);
-        alert('Failed to connect Google account. Please try again.');
+        console.error('Error disconnecting Google account:', error);
+        alert('Failed to disconnect Google account: ' + error.message);
       }
     }
-  }}
+  } else {
+    // Not connected - connect now
+    try {
+      // Now connect with Google
+      const user = await linkAccountWithGoogle();
+      
+      // Store token specifically for this user
+      localStorage.setItem(`googleToken_${selectedUser.id}`, JSON.stringify({
+        email: user.email,
+        uid: user.uid,
+        timestamp: Date.now()
+      }));
+      
+      // Update the member profile with Google data - IMPORTANT: only for this specific member
+      await updateMemberProfile(selectedUser.id, {
+        googleAuth: {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+          lastConnected: new Date().toISOString()
+        }
+      });
+      
+      // Update status locally
+      setGoogleAuthStatus({
+        isConnected: true,
+        email: user.email,
+        loading: false
+      });
+      
+      alert('Google account connected successfully!');
+    } catch (error) {
+      console.error('Error connecting Google account:', error);
+      alert('Failed to connect Google account. Please try again.');
+    }
+  }
+}}
 className={`px-3 py-1.5 rounded text-sm ${
   selectedUser?.googleAuth 
     ? 'border border-gray-300 text-gray-700 hover:bg-gray-100' 

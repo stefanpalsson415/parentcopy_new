@@ -528,6 +528,62 @@ async repairFamilyGoogleAuth(familyId) {
   }
 }
 
+// Complete Google Auth Reset
+async resetUserGoogleAuth(familyId, userData) {
+  try {
+    if (!familyId) {
+      throw new Error("Missing family ID");
+    }
+    
+    console.log("Performing COMPLETE Google auth reset for family:", familyId);
+    console.log("User data provided:", userData);
+    
+    // Get current family data
+    const docRef = doc(this.db, "families", familyId);
+    const familyDoc = await getDoc(docRef);
+    
+    if (!familyDoc.exists()) {
+      throw new Error("Family not found");
+    }
+    
+    const familyData = familyDoc.data();
+    const familyMembers = familyData.familyMembers || [];
+    
+    // Clear ALL Google auth data from localStorage
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('googleToken_') || key === 'googleAuthToken') {
+        console.log(`Removing localStorage key: ${key}`);
+        localStorage.removeItem(key);
+      }
+    });
+    
+    // Clean all family members' Google auth data
+    const updatedMembers = familyMembers.map(member => ({
+      ...member,
+      googleAuth: null
+    }));
+    
+    // Update the family doc to clear all Google auth data
+    await updateDoc(docRef, {
+      familyMembers: updatedMembers,
+      updatedAt: serverTimestamp()
+    });
+    
+    console.log("All Google auth data has been cleared");
+    
+    return {
+      success: true,
+      message: "All Google auth data has been reset"
+    };
+  } catch (error) {
+    console.error("Error resetting Google auth:", error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
 // Upload image to Firebase Storage
 async uploadProfileImage(userId, file) {
   try {
