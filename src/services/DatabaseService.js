@@ -369,7 +369,164 @@ async diagnoseAndFixGoogleAuth(familyId) {
   }
 }
 
+// Add this after the diagnoseAndFixGoogleAuth function in DatabaseService.js (around line 450-500)
 
+async repairFamilyGoogleAuth(familyId) {
+  try {
+    console.log("Starting comprehensive Google auth repair for family:", familyId);
+    
+    // Get current family data
+    const docRef = doc(this.db, "families", familyId);
+    const familyDoc = await getDoc(docRef);
+    
+    if (!familyDoc.exists()) {
+      throw new Error("Family not found");
+    }
+    
+    const familyData = familyDoc.data();
+    const familyMembers = familyData.familyMembers || [];
+    
+    // Check each localStorage token and create a mapping of tokens
+    const tokenMap = {};
+    const allKeys = Object.keys(localStorage);
+    
+    // Find all Google tokens in localStorage
+    const tokenKeys = allKeys.filter(key => 
+      key.startsWith('googleToken_') || 
+      key === 'googleAuthToken'
+    );
+    
+    console.log("Found token keys:", tokenKeys);
+    
+    // Parse all tokens and categorize by email
+    tokenKeys.forEach(key => {
+      try {
+        const tokenData = JSON.parse(localStorage.getItem(key));
+        if (tokenData && tokenData.email) {
+          tokenMap[tokenData.email] = {
+            ...tokenData,
+            key: key
+          };
+          console.log(`Token for ${tokenData.email} found with key ${key}`);
+        }
+      } catch (e) {
+        console.warn(`Failed to parse token for key ${key}:`, e);
+      }
+    });
+    
+    console.log("Token map created:", Object.keys(tokenMap));
+    
+    // Build a map of parent roles to emails from the family data
+    // This helps us determine which token belongs to which parent
+    const roleToEmailMap = {};
+    const updatedMembers = [];
+    
+    // First pass: gather role to email mappings from the family data
+    familyMembers.forEach(member => {
+      if (member.role === 'parent') {
+        roleToEmailMap[member.roleType] = member.email;
+        console.log(`Role ${member.roleType} mapped to email ${member.email}`);
+      }
+    });
+    
+    // Second pass: update Google auth data for each member
+    for (const member of familyMembers) {
+      let updatedMember = { ...member };
+      
+      if (member.role === 'parent') {
+        const memberEmail = member.email;
+        console.log(`Processing member ${member.name} with email ${memberEmail}`);
+        
+        // Find token by email
+        const tokenByEmail = tokenMap[memberEmail];
+        
+        if (tokenByEmail) {
+          console.log(`Found token matching member email ${memberEmail}`);
+          
+          // Update member's Google auth data
+          updatedMember.googleAuth = {
+            uid: tokenByEmail.uid,
+            email: tokenByEmail.email,
+            displayName: member.name,
+            photoURL: member.profilePicture,
+            lastSignIn: new Date().toISOString()
+          };
+          
+          // Store token specifically for this member's ID
+          try {
+            localStorage.setItem(`googleToken_${member.id}`, JSON.stringify({
+              email: tokenByEmail.email,
+              uid: tokenByEmail.uid,
+              timestamp: Date.now()
+            }));
+            console.log(`Stored token for member ID ${member.id}`);
+          } catch (e) {
+            console.warn(`Failed to store token for member ${member.id}:`, e);
+          }
+        } else {
+          console.log(`No token found for member email ${memberEmail}`);
+          
+          // Try to find token by role type (fallback)
+          const roleKey = `googleToken_${member.roleType.toLowerCase()}`;
+          const tokenByRole = Object.values(tokenMap).find(t => 
+            t.key === roleKey || 
+            (t.role && t.role.toLowerCase() === member.roleType.toLowerCase())
+          );
+          
+          if (tokenByRole) {
+            console.log(`Found token by role for ${member.roleType}: ${tokenByRole.email}`);
+            
+            // Update member's Google auth data
+            updatedMember.googleAuth = {
+              uid: tokenByRole.uid,
+              email: tokenByRole.email,
+              displayName: member.name,
+              photoURL: member.profilePicture,
+              lastSignIn: new Date().toISOString()
+            };
+            
+            // Store token specifically for this member's ID
+            try {
+              localStorage.setItem(`googleToken_${member.id}`, JSON.stringify({
+                email: tokenByRole.email,
+                uid: tokenByRole.uid,
+                timestamp: Date.now()
+              }));
+              console.log(`Stored token for member ID ${member.id} by role`);
+            } catch (e) {
+              console.warn(`Failed to store token for member ${member.id}:`, e);
+            }
+          } else {
+            // Clear any incorrect Google auth data
+            console.log(`No token found for member ${member.name}, clearing any incorrect Google auth data`);
+            updatedMember.googleAuth = null;
+          }
+        }
+      }
+      
+      updatedMembers.push(updatedMember);
+    }
+    
+    // Update the family document with the corrected members
+    await updateDoc(docRef, {
+      familyMembers: updatedMembers,
+      updatedAt: serverTimestamp()
+    });
+    
+    console.log("Family members updated with corrected Google auth data:", updatedMembers.length);
+    
+    return {
+      success: true,
+      message: `Google auth data repaired for ${updatedMembers.length} family members.`
+    };
+  } catch (error) {
+    console.error("Error repairing family Google auth:", error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
 
 // Upload image to Firebase Storage
 async uploadProfileImage(userId, file) {

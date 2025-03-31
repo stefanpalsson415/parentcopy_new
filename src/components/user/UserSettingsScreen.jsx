@@ -35,20 +35,43 @@ const [googleAuthStatus, setGoogleAuthStatus] = useState({
 useEffect(() => {
   const checkGoogleAuthStatus = async () => {
     try {
-      // IMPORTANT: We specifically want to use the selected user's Google auth data,
-      // not the currently logged-in Firebase user
+      if (!selectedUser) {
+        setGoogleAuthStatus({
+          isConnected: false,
+          email: null,
+          loading: false
+        });
+        return;
+      }
       
       console.log("Checking Google auth for selected user:", {
-        selectedUserId: selectedUser?.id,
-        selectedUserName: selectedUser?.name,
-        selectedUserEmail: selectedUser?.email,
-        hasGoogleAuthData: !!selectedUser?.googleAuth,
-        googleAuthEmail: selectedUser?.googleAuth?.email
+        selectedUserId: selectedUser.id,
+        selectedUserName: selectedUser.name,
+        selectedUserRole: selectedUser.roleType,
+        selectedUserEmail: selectedUser.email,
+        hasGoogleAuthData: !!selectedUser.googleAuth
       });
       
-      // First priority: Use the Google auth data stored in the selected user's profile
-      if (selectedUser?.googleAuth?.email) {
+      // CRITICAL: First check the selected user's googleAuth property
+      if (selectedUser.googleAuth && selectedUser.googleAuth.email) {
         console.log(`User ${selectedUser.name} has Google auth data with email: ${selectedUser.googleAuth.email}`);
+        
+        // Double-check if we have a token for this user
+        try {
+          const userToken = localStorage.getItem(`googleToken_${selectedUser.id}`);
+          
+          // If we don't have a token for this user but have googleAuth data, create one
+          if (!userToken && selectedUser.googleAuth.uid) {
+            localStorage.setItem(`googleToken_${selectedUser.id}`, JSON.stringify({
+              email: selectedUser.googleAuth.email,
+              uid: selectedUser.googleAuth.uid,
+              timestamp: Date.now()
+            }));
+            console.log(`Created missing token for ${selectedUser.name}`);
+          }
+        } catch (e) {
+          console.warn("Error checking/creating user token:", e);
+        }
         
         setGoogleAuthStatus({
           isConnected: true,
@@ -58,13 +81,25 @@ useEffect(() => {
         return;
       }
       
-      // Second priority: Check if there's a saved token specifically for this user
+      // Look for a token specifically for this user
+      const userTokenKey = `googleToken_${selectedUser.id}`;
       try {
-        const userToken = localStorage.getItem(`googleToken_${selectedUser?.id}`);
+        const userToken = localStorage.getItem(userTokenKey);
         if (userToken) {
           const tokenData = JSON.parse(userToken);
-          if (tokenData.email) {
-            console.log(`Found token for ${selectedUser?.name} with email: ${tokenData.email}`);
+          if (tokenData && tokenData.email) {
+            console.log(`Found token for ${selectedUser.name} with email: ${tokenData.email}`);
+            
+            // Update the user's profile with this Google auth data
+            // This fixes cases where the token exists but the profile doesn't have googleAuth data
+            await updateMemberProfile(selectedUser.id, {
+              googleAuth: {
+                uid: tokenData.uid,
+                email: tokenData.email,
+                lastConnected: new Date().toISOString()
+              }
+            });
+            
             setGoogleAuthStatus({
               isConnected: true,
               email: tokenData.email,
@@ -73,30 +108,37 @@ useEffect(() => {
             return;
           }
         }
-      } catch (tokenError) {
-        console.error("Error checking user token:", tokenError);
+      } catch (e) {
+        console.warn(`Error checking token for ${userTokenKey}:`, e);
       }
       
-      // Final check: For the current Firebase user only if it matches the selected user
-      const isCurrentUserMatch = currentUser?.uid === selectedUser?.id;
-      if (isCurrentUserMatch) {
-        const isGoogleUser = currentUser?.providerData?.some(
-          provider => provider.providerId === 'google.com'
-        );
-        
-        if (isGoogleUser) {
-          console.log(`Current Firebase user matches selected user and is signed in with Google: ${currentUser.email}`);
-          setGoogleAuthStatus({
-            isConnected: true,
-            email: currentUser.email,
-            loading: false
-          });
-          return;
+      // Finally, check for role-based token as a fallback
+      try {
+        if (selectedUser.roleType) {
+          const roleToken = localStorage.getItem(`googleToken_${selectedUser.roleType.toLowerCase()}`);
+          if (roleToken) {
+            const tokenData = JSON.parse(roleToken);
+            if (tokenData && tokenData.email) {
+              console.log(`Found role-based token for ${selectedUser.roleType} with email: ${tokenData.email}`);
+              
+              // Don't automatically update the user profile with this data
+              // Just show the status for now
+              setGoogleAuthStatus({
+                isConnected: true,
+                email: tokenData.email,
+                loading: false,
+                isRoleBased: true
+              });
+              return;
+            }
+          }
         }
+      } catch (e) {
+        console.warn("Error checking role token:", e);
       }
       
-      // If we reach here, the user doesn't have Google auth connected
-      console.log(`User ${selectedUser?.name} does NOT have Google auth connected`);
+      // No valid Google auth data found
+      console.log(`User ${selectedUser.name} does NOT have Google auth connected`);
       setGoogleAuthStatus({
         isConnected: false,
         email: null,
@@ -107,7 +149,8 @@ useEffect(() => {
       setGoogleAuthStatus({
         isConnected: false,
         email: null,
-        loading: false
+        loading: false,
+        error: error.message
       });
     }
   };
@@ -566,6 +609,42 @@ const saveCalendarSettings = async () => {
   </div>
 )}
 
+// Add this after the existing diagnostic button in UserSettingsScreen.jsx (around line 500-550 in the Calendar Settings section)
+
+{/* Repair Button */}
+<div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+  <h4 className="font-medium mb-2">Repair Google Auth</h4>
+  <p className="text-sm text-red-700 mb-2">
+    If you're experiencing issues with Google accounts showing the wrong email or not connecting properly, 
+    you can try to repair the Google auth data.
+  </p>
+  <button
+    onClick={async () => {
+      try {
+        if (!familyId) {
+          alert("No family ID available");
+          return;
+        }
+        
+        const result = await DatabaseService.repairFamilyGoogleAuth(familyId);
+        console.log("Google auth repair result:", result);
+        
+        if (result.success) {
+          alert("Google auth data has been repaired successfully. Please refresh the page to see the changes.");
+          window.location.reload();
+        } else {
+          alert("Failed to repair Google auth data: " + (result.error || "Unknown error"));
+        }
+      } catch (error) {
+        console.error("Error running Google auth repair:", error);
+        alert(`Error running repair: ${error.message}`);
+      }
+    }}
+    className="px-3 py-1 bg-red-100 border border-red-300 rounded text-red-800 text-sm"
+  >
+    Repair Google Auth Data
+  </button>
+</div>
         {/* Apple Calendar Settings */}
         {activeCalendarType === 'apple' && (
           <div className="bg-white p-4 rounded-lg border">
