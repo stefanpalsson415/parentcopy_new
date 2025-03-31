@@ -32,38 +32,74 @@ const [googleAuthStatus, setGoogleAuthStatus] = useState({
   loading: true
 });
 
-// Check Google auth status when component mounts
-// Replace the useEffect block that checks Google auth status in UserSettingsScreen.jsx (around line 64)
-// Check Google auth status when component mounts
-// Replace the useEffect block that checks Google auth status in UserSettingsScreen.jsx (around line 64)
 useEffect(() => {
   const checkGoogleAuthStatus = async () => {
     try {
-      // First check if the selected user has googleAuth data
-      const hasGoogleAuthData = selectedUser?.googleAuth?.uid;
+      // IMPORTANT: We specifically want to use the selected user's Google auth data,
+      // not the currently logged-in Firebase user
       
-      // Only check the current Firebase user if it matches the selected family member
-      const isCurrentUserMatch = currentUser?.uid === selectedUser?.id;
-      
-      // Check if the current user is signed in via Google provider
-      const isGoogleUser = isCurrentUserMatch && currentUser?.providerData?.some(
-        provider => provider.providerId === 'google.com'
-      );
-      
-      console.log("Google auth check:", {
+      console.log("Checking Google auth for selected user:", {
         selectedUserId: selectedUser?.id,
-        currentUserId: currentUser?.uid,
-        isCurrentUserMatch,
-        isGoogleUser,
-        hasGoogleAuthData,
-        googleAuth: selectedUser?.googleAuth
+        selectedUserName: selectedUser?.name,
+        selectedUserEmail: selectedUser?.email,
+        hasGoogleAuthData: !!selectedUser?.googleAuth,
+        googleAuthEmail: selectedUser?.googleAuth?.email
       });
       
-      // Set status based on checks - prioritize the selected user's data
+      // First priority: Use the Google auth data stored in the selected user's profile
+      if (selectedUser?.googleAuth?.email) {
+        console.log(`User ${selectedUser.name} has Google auth data with email: ${selectedUser.googleAuth.email}`);
+        
+        setGoogleAuthStatus({
+          isConnected: true,
+          email: selectedUser.googleAuth.email,
+          loading: false
+        });
+        return;
+      }
+      
+      // Second priority: Check if there's a saved token specifically for this user
+      try {
+        const userToken = localStorage.getItem(`googleToken_${selectedUser?.id}`);
+        if (userToken) {
+          const tokenData = JSON.parse(userToken);
+          if (tokenData.email) {
+            console.log(`Found token for ${selectedUser?.name} with email: ${tokenData.email}`);
+            setGoogleAuthStatus({
+              isConnected: true,
+              email: tokenData.email,
+              loading: false
+            });
+            return;
+          }
+        }
+      } catch (tokenError) {
+        console.error("Error checking user token:", tokenError);
+      }
+      
+      // Final check: For the current Firebase user only if it matches the selected user
+      const isCurrentUserMatch = currentUser?.uid === selectedUser?.id;
+      if (isCurrentUserMatch) {
+        const isGoogleUser = currentUser?.providerData?.some(
+          provider => provider.providerId === 'google.com'
+        );
+        
+        if (isGoogleUser) {
+          console.log(`Current Firebase user matches selected user and is signed in with Google: ${currentUser.email}`);
+          setGoogleAuthStatus({
+            isConnected: true,
+            email: currentUser.email,
+            loading: false
+          });
+          return;
+        }
+      }
+      
+      // If we reach here, the user doesn't have Google auth connected
+      console.log(`User ${selectedUser?.name} does NOT have Google auth connected`);
       setGoogleAuthStatus({
-        isConnected: !!hasGoogleAuthData || (isCurrentUserMatch && isGoogleUser),
-        email: hasGoogleAuthData ? selectedUser.googleAuth.email : 
-               (isCurrentUserMatch ? currentUser?.email : null),
+        isConnected: false,
+        email: null,
         loading: false
       });
     } catch (error) {
@@ -76,9 +112,10 @@ useEffect(() => {
     }
   };
   
-  checkGoogleAuthStatus();
+  if (selectedUser) {
+    checkGoogleAuthStatus();
+  }
 }, [currentUser, selectedUser]);
-
 // Helper function to clear only the specific user's Google auth data without affecting others
 const clearUserGoogleAuth = async (userId) => {
   try {
@@ -496,6 +533,39 @@ const saveCalendarSettings = async () => {
           </div>
         )}
         
+{/* Diagnostic Button */}
+{process.env.NODE_ENV === 'development' && (
+  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+    <h4 className="font-medium mb-2">Google Auth Diagnostic</h4>
+    <button
+      onClick={async () => {
+        try {
+          if (!familyId) {
+            alert("No family ID available");
+            return;
+          }
+          
+          const result = await DatabaseService.diagnoseAndFixGoogleAuth(familyId);
+          console.log("Google auth diagnostic result:", result);
+          
+          if (result.success) {
+            alert("Diagnosis complete. Check console for detailed report.\n\n" + 
+                 (result.needsRepair ? "Repairs were needed and applied." : "No repairs needed."));
+          } else {
+            alert("Diagnosis failed: " + result.report);
+          }
+        } catch (error) {
+          console.error("Error running Google auth diagnostic:", error);
+          alert(`Error running diagnostic: ${error.message}`);
+        }
+      }}
+      className="px-3 py-1 bg-yellow-100 border border-yellow-300 rounded text-yellow-800 text-sm"
+    >
+      Run Google Auth Diagnostic
+    </button>
+  </div>
+)}
+
         {/* Apple Calendar Settings */}
         {activeCalendarType === 'apple' && (
           <div className="bg-white p-4 rounded-lg border">

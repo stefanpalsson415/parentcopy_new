@@ -30,39 +30,55 @@ class CalendarService {
     }
   }
   
-// Get user-specific credentials and do thorough logging
-getUserGoogleCredentials(userId) {
-  try {
-    if (!userId) {
-      console.warn("Attempted to get Google credentials without userId");
+  getUserGoogleCredentials(userId) {
+    try {
+      if (!userId) {
+        console.warn("Attempted to get Google credentials without userId");
+        return null;
+      }
+      
+      console.log(`Looking for user-specific Google token for user ${userId}`);
+      
+      // Try all possible formats of user tokens
+      const possibleTokenKeys = [
+        `googleToken_${userId}`,
+        `googleToken_${userId.toLowerCase()}`,
+        `googleToken_mama`,
+        `googleToken_papa`
+      ];
+      
+      // Check each possible key
+      for (const tokenKey of possibleTokenKeys) {
+        const token = localStorage.getItem(tokenKey);
+        if (token) {
+          try {
+            const tokenData = JSON.parse(token);
+            console.log(`Found Google token using key "${tokenKey}" for user ${userId} (${tokenData.email || 'no email'})`);
+            
+            // Return immediately if we have a token with the right email
+            if (tokenData.email) {
+              return tokenData;
+            }
+          } catch (parseError) {
+            console.warn(`Found invalid token for key ${tokenKey}:`, parseError);
+          }
+        }
+      }
+      
+      // As a last resort, try the general token
+      const generalToken = localStorage.getItem('googleAuthToken');
+      if (generalToken) {
+        console.warn(`No specific token found for ${userId}, falling back to general token`);
+        return JSON.parse(generalToken);
+      }
+      
+      console.log(`No Google tokens found for user ${userId}`);
+      return null;
+    } catch (e) {
+      console.error("Error getting user-specific credentials:", e);
       return null;
     }
-    
-    console.log(`Looking for user-specific Google token for user ${userId}`);
-    
-    // First try the user-specific token
-    const userToken = localStorage.getItem(`googleToken_${userId}`);
-    if (userToken) {
-      const tokenData = JSON.parse(userToken);
-      console.log(`Found user-specific Google token for user ${userId} (${tokenData.email})`);
-      return tokenData;
-    }
-    
-    // Fall back to general token, but log this as it may indicate an issue
-    const generalToken = localStorage.getItem('googleAuthToken');
-    if (generalToken) {
-      console.warn(`No user-specific token found for ${userId}, falling back to general token`);
-      return JSON.parse(generalToken);
-    }
-    
-    console.log(`No Google tokens found for user ${userId}`);
-    return null;
-  } catch (e) {
-    console.error("Error getting user-specific credentials:", e);
-    return null;
   }
-}
-
 
   // Check if Apple Calendar is supported
   checkAppleCalendarSupport() {

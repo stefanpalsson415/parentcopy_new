@@ -242,10 +242,135 @@ async updateMemberWithGoogleAuth(familyId, memberId, userData) {
   }
 }
 
+// Add this diagnostic and repair function to the DatabaseService class
+async diagnoseAndFixGoogleAuth(familyId) {
+  try {
+    if (!familyId) {
+      throw new Error("Missing family ID for diagnosis");
+    }
+    
+    console.log(`Running Google auth diagnosis for family: ${familyId}`);
+    
+    // Get current family data
+    const docRef = doc(this.db, "families", familyId);
+    const familyDoc = await getDoc(docRef);
+    
+    if (!familyDoc.exists()) {
+      throw new Error("Family not found");
+    }
+    
+    const familyData = familyDoc.data();
+    const familyMembers = familyData.familyMembers || [];
+    
+    // Check each family member's Google auth status
+    const report = [];
+    let needsRepair = false;
+    
+    for (const member of familyMembers) {
+      if (member.role === 'parent') {
+        report.push(`Member: ${member.name} (${member.roleType}), Email: ${member.email}`);
+        
+        if (member.googleAuth) {
+          report.push(`  ✓ Has Google auth data: ${member.googleAuth.email}`);
+          
+          // Check if tokens exist for this user
+          const hasUserToken = localStorage.getItem(`googleToken_${member.id}`);
+          if (hasUserToken) {
+            report.push(`  ✓ Has localStorage token`);
+          } else {
+            report.push(`  ✗ Missing localStorage token - will create`);
+            
+            // Create token from member data
+            try {
+              localStorage.setItem(`googleToken_${member.id}`, JSON.stringify({
+                email: member.googleAuth.email,
+                uid: member.googleAuth.uid,
+                timestamp: Date.now()
+              }));
+              report.push(`  ✓ Created missing token`);
+            } catch (e) {
+              report.push(`  ✗ Failed to create token: ${e.message}`);
+            }
+          }
+        } else {
+          report.push(`  ✗ NO Google auth data`);
+          needsRepair = true;
+          
+          // Check if we can find a token for this user
+          const possibleTokenKeys = [
+            `googleToken_${member.id}`,
+            `googleToken_${member.roleType.toLowerCase()}`,
+            `googleToken_${member.email.replace('@', '_').replace('.', '_')}`
+          ];
+          
+          let foundToken = null;
+          for (const key of possibleTokenKeys) {
+            const token = localStorage.getItem(key);
+            if (token) {
+              try {
+                const tokenData = JSON.parse(token);
+                report.push(`  ✓ Found token with key: ${key}, email: ${tokenData.email}`);
+                foundToken = tokenData;
+                break;
+              } catch (e) {
+                report.push(`  ✗ Invalid token found with key ${key}`);
+              }
+            }
+          }
+          
+          if (foundToken) {
+            report.push(`  ➤ Will repair Google auth data for ${member.name}`);
+            
+            // Update the member with the found token data
+            const updatedMembers = familyMembers.map(m => {
+              if (m.id === member.id) {
+                return {
+                  ...m,
+                  googleAuth: {
+                    uid: foundToken.uid,
+                    email: foundToken.email,
+                    displayName: foundToken.displayName || member.name,
+                    lastSignIn: new Date().toISOString()
+                  }
+                };
+              }
+              return m;
+            });
+            
+            // Save the updated members
+            await updateDoc(docRef, {
+              familyMembers: updatedMembers,
+              updatedAt: serverTimestamp()
+            });
+            
+            report.push(`  ✓ Repaired Google auth data for ${member.name}`);
+          } else {
+            report.push(`  ✗ No token found, cannot repair automatically`);
+          }
+        }
+      }
+    }
+    
+    const reportText = report.join('\n');
+    console.log("Google auth diagnosis report:\n" + reportText);
+    
+    return {
+      report: reportText,
+      needsRepair,
+      success: true
+    };
+  } catch (error) {
+    console.error("Error diagnosing Google auth:", error);
+    return {
+      report: `Error: ${error.message}`,
+      needsRepair: false,
+      success: false
+    };
+  }
+}
 
-  // ---- Storage Methods ----
 
-  // Upload image to Firebase Storage
+
 // Upload image to Firebase Storage
 async uploadProfileImage(userId, file) {
   try {

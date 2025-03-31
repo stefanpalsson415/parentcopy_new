@@ -170,24 +170,37 @@ const getDefaultProfileImage = (member) => {
   return member.profilePicture;
 };
   
-  // Handle selecting a user from the family
-// Add this after the handleLogin function
 const clearPreviousUserState = async () => {
-  // Clear any stored auth and login state
-  localStorage.removeItem('googleAuthToken');
+  // Only clear the selected user ID
   localStorage.removeItem('selectedUserId');
   
-  // Note: We're NOT logging out from Firebase or Google Auth
-  // This was causing the unexpected logout behavior
-  console.log("Cleared previous user state without logging out");
+  // Important: Do NOT remove any googleTokens
+  // Each user should keep their own token
+  
+  console.log("Cleared previous user selection without affecting Google auth");
 };
 
 const handleSelectUser = async (member) => {
   console.log(`Selecting family member: ${member.name}, ID: ${member.id}`);
   
-  // Select the family member without clearing any state
-  // This ensures we don't lose Google auth data between user switches
+  // Save the previously selected user ID before changing
+  const previousUserId = selectedUser?.id;
+  if (previousUserId && previousUserId !== member.id) {
+    console.log(`Switching from user ${previousUserId} to ${member.id}`);
+  }
+  
+  // Select the family member
   selectFamilyMember(member);
+  
+  // Store the selected user ID
+  localStorage.setItem('selectedUserId', member.id);
+  
+  // Debug log to show which Google auth data this user has
+  if (member.googleAuth) {
+    console.log(`Selected user has Google auth data: ${member.googleAuth.email}`);
+  } else {
+    console.log(`Selected user does NOT have Google auth data`);
+  }
   
   // Navigate to the appropriate screen based on survey completion
   if (member.completed) {
@@ -225,7 +238,7 @@ const handleSelectUser = async (member) => {
     }
   }
 };
-  
+
   // Get the next action for a family member
   const getNextAction = (member) => {
     if (!member.completed) {
