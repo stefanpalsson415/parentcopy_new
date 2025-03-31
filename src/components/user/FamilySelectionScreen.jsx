@@ -182,14 +182,11 @@ const clearPreviousUserState = async () => {
   console.log("Cleared previous user state without logging out");
 };
 
-// Handle selecting a user from the family
 const handleSelectUser = async (member) => {
-  // If we're switching users, clear previous user state
-  if (selectedUser && selectedUser.id !== member.id) {
-    await clearPreviousUserState();
-  }
-
-  // Select the family member first
+  console.log(`Selecting family member: ${member.name}, ID: ${member.id}`);
+  
+  // Select the family member without clearing any state
+  // This ensures we don't lose Google auth data between user switches
   selectFamilyMember(member);
   
   // Navigate to the appropriate screen based on survey completion

@@ -30,18 +30,32 @@ class CalendarService {
     }
   }
   
-// Get user-specific credentials
+// Get user-specific credentials and do thorough logging
 getUserGoogleCredentials(userId) {
   try {
-    if (!userId) return null;
+    if (!userId) {
+      console.warn("Attempted to get Google credentials without userId");
+      return null;
+    }
     
+    console.log(`Looking for user-specific Google token for user ${userId}`);
+    
+    // First try the user-specific token
     const userToken = localStorage.getItem(`googleToken_${userId}`);
     if (userToken) {
       const tokenData = JSON.parse(userToken);
-      console.log(`Found user-specific Google token for user ${userId}`);
+      console.log(`Found user-specific Google token for user ${userId} (${tokenData.email})`);
       return tokenData;
     }
     
+    // Fall back to general token, but log this as it may indicate an issue
+    const generalToken = localStorage.getItem('googleAuthToken');
+    if (generalToken) {
+      console.warn(`No user-specific token found for ${userId}, falling back to general token`);
+      return JSON.parse(generalToken);
+    }
+    
+    console.log(`No Google tokens found for user ${userId}`);
     return null;
   } catch (e) {
     console.error("Error getting user-specific credentials:", e);

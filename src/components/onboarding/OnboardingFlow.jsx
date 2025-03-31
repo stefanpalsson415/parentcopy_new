@@ -386,12 +386,15 @@ const OnboardingFlow = () => {
                     <strong>Recommended:</strong> Sign in with Google to enable calendar integration and simplify account management.
                   </p>
                   
-<GoogleAuthButton
+                  <GoogleAuthButton
   buttonText={`Sign in with Google as ${parent.role}`}
-  parentRole={parent.role} // Pass the parent role to the component
+  parentRole={parent.role}
   onSuccess={async (user) => {
     if (user) {
       console.log("Successfully signed in with Google:", user.email);
+      
+      // Create a stable user ID that will match what gets created in the database
+      const stableUserId = user.uid;
       
       // Update the parent's information with Google data
       const updatedParents = [...familyData.parents];
@@ -403,32 +406,38 @@ const OnboardingFlow = () => {
           uid: user.uid,
           email: user.email,
           displayName: user.displayName,
-          photoURL: user.photoURL
-        },
-        // Important: Add a unique identifier for this specific parent
-        googleAuthSpecificId: `${user.uid}_${parent.role.toLowerCase()}`
+          photoURL: user.photoURL,
+          lastSignIn: new Date().toISOString()
+        }
       };
       
       // Update family data with the new parent info
       setFamilyData({...familyData, parents: updatedParents});
       
-      // Store token specifically for this parent role
+      // Store token with the user's UID which will be their user ID
       try {
-        const parentId = `${parent.role.toLowerCase()}_${Date.now()}`;
-        localStorage.setItem(`googleToken_${parentId}`, JSON.stringify({
+        // Store with consistent key format that matches what's used elsewhere
+        localStorage.setItem(`googleToken_${stableUserId}`, JSON.stringify({
           email: user.email,
           uid: user.uid,
           role: parent.role,
           timestamp: Date.now()
         }));
-        console.log(`Stored Google token for ${parent.role} with ID: ${parentId}`);
+        console.log(`Stored Google token for ${parent.role} with stable ID: ${stableUserId}`);
+        
+        // Also store role-specific token for fallback
+        localStorage.setItem(`googleToken_${parent.role.toLowerCase()}`, JSON.stringify({
+          email: user.email,
+          uid: user.uid,
+          role: parent.role,
+          timestamp: Date.now()
+        }));
       } catch (e) {
         console.error("Failed to store token:", e);
       }
     }
   }}
-/>
-                </div>
+/>                </div>
                 
                 <div className="relative mb-4">
                   <div className="absolute inset-0 flex items-center">

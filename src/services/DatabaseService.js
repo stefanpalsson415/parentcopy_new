@@ -182,8 +182,12 @@ async signInForDevelopment(email = "test@example.com") {
 
 
 // Add Google auth info to family member
+// Add Google auth info to family member
 async updateMemberWithGoogleAuth(familyId, memberId, userData) {
   try {
+    console.log(`Updating Google auth for family ${familyId}, member ${memberId} with user data:`, 
+      { email: userData.email, uid: userData.uid });
+    
     // Get current family data
     const docRef = doc(this.db, "families", familyId);
     const familyDoc = await getDoc(docRef);
@@ -195,16 +199,20 @@ async updateMemberWithGoogleAuth(familyId, memberId, userData) {
     // Update the correct family member with Google auth info
     const updatedMembers = familyDoc.data().familyMembers.map(member => {
       if (member.id === memberId) {
+        console.log(`Found matching member: ${member.name}, updating Google auth information`);
         return {
           ...member,
           googleAuth: {
             uid: userData.uid,
             email: userData.email,
+            displayName: userData.displayName || member.name,
             photoURL: userData.photoURL || member.profilePicture,
             lastSignIn: new Date().toISOString()
           }
         };
       }
+      
+      // Important: Don't touch other members' Google auth data
       return member;
     });
     
@@ -214,6 +222,19 @@ async updateMemberWithGoogleAuth(familyId, memberId, userData) {
       updatedAt: serverTimestamp()
     });
     
+    // Also store this Google auth information in user-specific localStorage
+    try {
+      localStorage.setItem(`googleToken_${memberId}`, JSON.stringify({
+        uid: userData.uid,
+        email: userData.email,
+        timestamp: Date.now()
+      }));
+      console.log(`Stored Google token for user ${memberId} in localStorage`);
+    } catch (e) {
+      console.warn(`Failed to store Google token in localStorage: ${e.message}`);
+    }
+    
+    console.log(`Successfully updated Google auth for member ${memberId}`);
     return true;
   } catch (error) {
     console.error("Error updating member with Google auth:", error);
@@ -852,29 +873,32 @@ async getFamilyMeetingNotes(familyId, weekNumber) {
 const parentUsers = [];
 const parentData = Array.isArray(parents) ? parents : [];
 for (const parent of parentData) {
-  if (parent.googleAuth) {
-    // For Google-authenticated parents, use their existing Google UID
+  // When creating Google-authenticated parents, make sure to preserve the Google auth data
+// Around line 715-720 in createFamily method
+if (parent.googleAuth) {
+  // For Google-authenticated parents, use their existing Google UID
+  parentUsers.push({
+    uid: parent.googleAuth.uid,
+    email: parent.googleAuth.email || parent.email,
+    role: parent.role,
+    googleAuth: parent.googleAuth // Make sure we're passing the full googleAuth object
+  });
+  console.log(`Using existing Google account for ${parent.role}:`, parent.googleAuth.uid);
+} else if (parent.email && parent.password) {
+  // For traditional email/password parents
+  try {
+    const user = await this.createUser(parent.email, parent.password);
     parentUsers.push({
-      uid: parent.googleAuth.uid,
-      email: parent.googleAuth.email || parent.email,
+      uid: user.uid,
+      email: parent.email,
       role: parent.role
     });
-    console.log(`Using existing Google account for ${parent.role}:`, parent.googleAuth.uid);
-  } else if (parent.email && parent.password) {
-    // For traditional email/password parents
-    try {
-      const user = await this.createUser(parent.email, parent.password);
-      parentUsers.push({
-        uid: user.uid,
-        email: parent.email,
-        role: parent.role
-      });
-      console.log(`Created user for ${parent.role}:`, user.uid);
-    } catch (error) {
-      console.error(`Error creating user for ${parent.role}:`, error);
-      // Continue with other parents even if one fails
-    }
+    console.log(`Created user for ${parent.role}:`, user.uid);
+  } catch (error) {
+    console.error(`Error creating user for ${parent.role}:`, error);
+    // Continue with other parents even if one fails
   }
+}
 }
 
 if (parentUsers.length === 0) {
@@ -892,23 +916,25 @@ console.log("Family data being prepared:", {
 });
       
       // Create family members array
-      const familyMembers = [
-        ...parentData.map((parent, index) => {
-          const userId = parentUsers[index]?.uid || `${parent.role.toLowerCase()}-${familyId}`;
-          console.log(`Creating family member for ${parent.name} with ID ${userId}`);
-          return {
-            id: userId,
-            name: parent.name,
-            role: 'parent',
-            roleType: parent.role,
-            email: parent.email,
-            completed: false,
-            completedDate: null,
-            weeklyCompleted: [],
-            profilePicture: '/api/placeholder/150/150' // Default placeholder
-          };
-        }),
-        ...(Array.isArray(children) ? children : []).map(child => {
+const familyMembers = [
+  ...parentData.map((parent, index) => {
+    const userId = parentUsers[index]?.uid || `${parent.role.toLowerCase()}-${familyId}`;
+    console.log(`Creating family member for ${parent.name} with ID ${userId}`);
+    return {
+      id: userId,
+      name: parent.name,
+      role: 'parent',
+      roleType: parent.role,
+      email: parent.email,
+      completed: false,
+      completedDate: null,
+      weeklyCompleted: [],
+      profilePicture: '/api/placeholder/150/150', // Default placeholder
+      // Important: Preserve the Google auth data if it exists
+      googleAuth: parent.googleAuth || null
+    };
+  }),
+  ...(Array.isArray(children) ? children : []).map(child => {
 
           const childId = `${child.name.toLowerCase()}-${familyId}`;
           console.log(`Creating family member for child ${child.name} with ID ${childId}`);
