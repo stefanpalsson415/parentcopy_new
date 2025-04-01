@@ -61,6 +61,7 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
     
     setIsLoading(true);
     setError(null);
+    setIsAdded(false); // Reset added state to show proper feedback
     
     try {
       // Create event based on item type with better date handling
@@ -97,6 +98,12 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
         throw new Error("Unknown item type");
       }
       
+      console.log("Adding event to calendar:", {
+        type: calendarSettings?.defaultCalendarType,
+        eventSummary: event.summary,
+        date: event.start.dateTime
+      });
+      
       // Add the event to the calendar
       const result = await CalendarService.addEvent(event);
       
@@ -109,7 +116,7 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
             eventId: result.eventId,
             addedAt: new Date().toISOString(),
             summary: event.summary,
-            isMock: result.isMock
+            calendarType: calendarSettings?.defaultCalendarType
           };
           localStorage.setItem('addedCalendarEvents', JSON.stringify(addedEvents));
         }
@@ -122,11 +129,13 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
           setIsAdded(false);
         }, 5000);
       } else {
-        setError(result.error || "Failed to add to calendar");
+        // If there's an error, show it
+        throw new Error(result.error || "Failed to add to calendar");
       }
     } catch (error) {
       console.error("Error adding to calendar:", error);
       setError(error.message || "Failed to add to calendar");
+      setIsAdded(false); // Ensure failed state is properly reflected
     } finally {
       setIsLoading(false);
       setShowOptions(false);
@@ -137,8 +146,11 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
   const handleAddToSpecificCalendar = async (calendarType) => {
     setIsLoading(true);
     setError(null);
+    setIsAdded(false); // Reset added state
     
     try {
+      console.log(`Adding to specific calendar type: ${calendarType}`);
+      
       // Create the appropriate event type
       let event;
       
@@ -167,6 +179,11 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
       } else {
         throw new Error("Unknown item type");
       }
+      
+      console.log(`Adding event to ${calendarType} calendar:`, {
+        summary: event.summary,
+        date: event.start.dateTime
+      });
       
       // Add to the specified calendar
       const result = await CalendarService.addEvent(event, calendarType);
@@ -218,6 +235,7 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
     } catch (error) {
       console.error(`Error adding to ${calendarType} calendar:`, error);
       setError(error.message || `Failed to add to ${calendarType} calendar`);
+      setIsAdded(false); // Ensure failed state is properly reflected
     } finally {
       setIsLoading(false);
       setShowOptions(false);

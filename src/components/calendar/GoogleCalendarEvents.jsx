@@ -1,6 +1,6 @@
 // src/components/calendar/GoogleCalendarEvents.jsx
 import React, { useState, useEffect } from 'react';
-import { Calendar, ExternalLink, AlertCircle } from 'lucide-react';
+import { Calendar, ExternalLink, AlertCircle, RefreshCw } from 'lucide-react';
 import CalendarService from '../../services/CalendarService';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -10,6 +10,7 @@ const GoogleCalendarEvents = ({ selectedDate }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [calendarConnected, setCalendarConnected] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0); // Used to trigger refresh
   
   useEffect(() => {
     // Only load events if we have a date and user
@@ -41,9 +42,16 @@ const GoogleCalendarEvents = ({ selectedDate }) => {
         const endDate = new Date(selectedDate);
         endDate.setHours(23, 59, 59, 999);
         
+        console.log("Fetching Google Calendar events for:", {
+          date: selectedDate.toDateString(), 
+          startDate: startDate.toISOString(), 
+          endDate: endDate.toISOString()
+        });
+        
         // Get events for the selected date
         const eventList = await CalendarService.getEventsFromCalendar(startDate, endDate);
         if (isMounted) {
+          console.log(`Found ${eventList?.length || 0} events for selected date`);
           setEvents(eventList || []);
         }
       } catch (error) {
@@ -78,7 +86,12 @@ const GoogleCalendarEvents = ({ selectedDate }) => {
     return () => {
       isMounted = false;
     };
-  }, [selectedDate, currentUser]);
+  }, [selectedDate, currentUser, refreshKey]);
+  
+  // Manually refresh events
+  const handleRefresh = () => {
+    setRefreshKey(prev => prev + 1);
+  };
   
   // Format event time to a readable format
   const formatEventTime = (dateTimeString) => {
@@ -141,24 +154,51 @@ const GoogleCalendarEvents = ({ selectedDate }) => {
     return (
       <div className="p-3 bg-red-50 rounded text-sm text-red-700 font-roboto flex items-start">
         <AlertCircle size={14} className="mr-2 mt-0.5 flex-shrink-0" />
-        <p>{error}</p>
+        <div className="flex-1">
+          <p>{error}</p>
+          <button 
+            onClick={handleRefresh}
+            className="text-xs text-red-800 hover:underline mt-1 flex items-center"
+          >
+            <RefreshCw size={10} className="mr-1" />
+            Try Again
+          </button>
+        </div>
       </div>
     );
   }
   
   if (events.length === 0) {
     return (
-      <div className="p-3 bg-gray-50 rounded text-sm text-gray-500 font-roboto">
+      <div className="p-3 bg-gray-50 rounded text-sm text-gray-500 font-roboto flex items-center justify-between">
         <p>No events scheduled for this date</p>
+        <button 
+          onClick={handleRefresh}
+          className="text-xs text-gray-600 hover:text-gray-800"
+          title="Refresh events"
+        >
+          <RefreshCw size={12} />
+        </button>
       </div>
     );
   }
   
   return (
     <div className="space-y-2 font-roboto">
+      <div className="flex justify-between items-center mb-1">
+        <h5 className="text-xs text-gray-500 font-roboto">{events.length} event{events.length !== 1 ? 's' : ''}</h5>
+        <button 
+          onClick={handleRefresh}
+          className="text-xs text-gray-600 hover:text-gray-800 p-1 rounded-full hover:bg-gray-100"
+          title="Refresh events"
+        >
+          <RefreshCw size={12} />
+        </button>
+      </div>
+      
       {events.map((event, index) => (
         <div key={event.id || index} className="p-2 border rounded-lg flex justify-between items-center">
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{event.summary}</p>
             <p className="text-xs text-gray-500">
               {formatEventTime(event.start?.dateTime)} - {formatEventTime(event.end?.dateTime)}
@@ -170,7 +210,7 @@ const GoogleCalendarEvents = ({ selectedDate }) => {
               href={event.htmlLink} 
               target="_blank" 
               rel="noopener noreferrer"
-              className="text-blue-600 hover:text-blue-800"
+              className="text-blue-600 hover:text-blue-800 ml-2 flex-shrink-0"
             >
               <ExternalLink size={14} />
             </a>

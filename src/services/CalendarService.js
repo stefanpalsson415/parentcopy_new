@@ -736,6 +736,65 @@ class CalendarService {
     }
   }
 
+// Debug Google Calendar connection
+async debugGoogleCalendarConnection() {
+  console.log("Running Google Calendar connection diagnostic");
+  
+  try {
+    // Step 1: Initialize Google Calendar API
+    await this.initializeGoogleCalendar();
+    console.log("✓ Google Calendar API initialized");
+    
+    // Step 2: Check if signed in
+    const isSignedIn = this.isSignedInToGoogle();
+    console.log(`${isSignedIn ? '✓' : '✗'} Google sign-in status: ${isSignedIn ? 'Signed in' : 'Not signed in'}`);
+    
+    if (!isSignedIn) {
+      console.log("Attempting to sign in to Google");
+      await this.signInToGoogle();
+      console.log("✓ Successfully signed in to Google");
+    }
+    
+    // Step 3: List calendars
+    const calendars = await this.listUserCalendars();
+    console.log(`✓ Successfully listed ${calendars.length} calendars`);
+    
+    // Step 4: Create a test event
+    const testEvent = {
+      'summary': 'Allie Test Event',
+      'description': 'This is a test event created by Allie to verify Google Calendar integration',
+      'start': {
+        'dateTime': new Date(Date.now() + 3600000).toISOString(),
+        'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      'end': {
+        'dateTime': new Date(Date.now() + 7200000).toISOString(),
+        'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
+      }
+    };
+    
+    console.log("Testing event creation...");
+    const result = await this.addEventToGoogleCalendar(testEvent);
+    console.log(`✓ Successfully created test event with ID: ${result.eventId}`);
+    
+    return {
+      success: true,
+      message: "Google Calendar integration is working correctly",
+      calendars: calendars,
+      testEventId: result.eventId
+    };
+  } catch (error) {
+    console.error("Google Calendar diagnostic failed:", error);
+    
+    return {
+      success: false,
+      error: error.message || "Unknown error",
+      stage: "Google Calendar diagnostic"
+    };
+  }
+}
+
+
   // Diagnose Google Calendar issues
   async diagnoseGoogleCalendarIssues() {
     try {
