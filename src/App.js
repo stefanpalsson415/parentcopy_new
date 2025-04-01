@@ -101,7 +101,7 @@ function AppRoutes() {
   );
 }
 
-// Enhanced error boundary with better user feedback and recovery options
+/// In src/App.js - around line 290-330
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
