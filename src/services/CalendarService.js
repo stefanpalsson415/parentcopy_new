@@ -1,6 +1,7 @@
 // src/services/CalendarService.js
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
+import GoogleAuthManager from '../utils/GoogleAuthManager';
 
 class CalendarService {
   constructor() {
@@ -9,10 +10,6 @@ class CalendarService {
     this.appleCalendarAvailable = this.checkAppleCalendarSupport();
     this.calendarSettings = {};
     this.activeCalendarType = null;
-    
-    // Auth state tracking to prevent multiple popups
-    this.authInProgress = false;
-    this.lastAuthAttempt = 0;
     
     // Get API credentials from environment variables
     this.apiKey = 'AIzaSyAmR2paggX1Emt4RpGGnlHuadqpveSY0aI';
@@ -99,408 +96,193 @@ class CalendarService {
     }
   }
 
-  // Replace the entire initializeGoogleCalendar method (around lines 130-200)
-async initializeGoogleCalendar() {
-  // If already initialized, return immediately
-  if (this.googleApiLoaded) return true;
-  
-  return new Promise((resolve, reject) => {
-    try {
-      // Use a more reliable approach to load the gapi script
-      if (!window.gapi) {
-        console.log("Loading Google API script");
-        const script = document.createElement('script');
-        script.src = 'https://apis.google.com/js/api.js';
-        script.onload = () => {
-          // Now load the gapi.client
-          window.gapi.load('client', async () => {
-            try {
-              // Initialize without auth2 first
-              await window.gapi.client.init({
-                apiKey: this.apiKey,
-                discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
-              });
-              
-              // Then load auth2 separately
-              window.gapi.load('auth2', async () => {
-                try {
-                  // Initialize auth2 with client ID separately
-                  await window.gapi.auth2.init({
-                    client_id: this.clientId,
-                    scope: 'https://www.googleapis.com/auth/calendar.events'
-                  });
-                  
-                  this.googleApiLoaded = true;
-                  resolve(true);
-                } catch (authError) {
-                  console.error("Error initializing auth2:", authError);
-                  resolve(false);
-                }
-              });
-            } catch (error) {
-              console.error("Error initializing gapi client:", error);
-              resolve(false);
-            }
-          });
-        };
-        
-        script.onerror = () => {
-          console.error("Failed to load Google API script");
-          resolve(false);
-        };
-        
-        document.body.appendChild(script);
-      } else {
-        // If gapi is already loaded but not fully initialized
-        if (!window.gapi.client) {
-          window.gapi.load('client', async () => {
-            try {
-              await window.gapi.client.init({
-                apiKey: this.apiKey,
-                discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
-              });
-              
-              window.gapi.load('auth2', async () => {
-                try {
-                  await window.gapi.auth2.init({
-                    client_id: this.clientId,
-                    scope: 'https://www.googleapis.com/auth/calendar.events'
-                  });
-                  
-                  this.googleApiLoaded = true;
-                  resolve(true);
-                } catch (authError) {
-                  console.error("Error initializing auth2:", authError);
-                  resolve(false);
-                }
-              });
-            } catch (error) {
-              console.error("Error initializing gapi client:", error);
-              resolve(false);
-            }
-          });
-        } else if (!window.gapi.auth2) {
-          // If client is loaded but auth2 is not
-          window.gapi.load('auth2', async () => {
-            try {
-              await window.gapi.auth2.init({
-                client_id: this.clientId,
-                scope: 'https://www.googleapis.com/auth/calendar.events'
-              });
-              
-              this.googleApiLoaded = true;
-              resolve(true);
-            } catch (authError) {
-              console.error("Error initializing auth2:", authError);
-              resolve(false);
-            }
-          });
-        } else {
-          // Everything is already loaded
-          this.googleApiLoaded = true;
-          resolve(true);
-        }
-      }
-    } catch (error) {
-      console.error("Error in Google Calendar initialization:", error);
-      resolve(false);
-    }
-  });
-}
-
- // Private method to initialize gapi client
-async _initializeGapiClient() {
-  return new Promise(async (resolve, reject) => {
-    if (!window.gapi) {
-      return reject(new Error("Google API not loaded"));
-    }
+  async initializeGoogleCalendar() {
+    // If already initialized, return immediately
+    if (this.googleApiLoaded) return true;
     
-    try {
-      // Use a more explicit way to initialize the client with API key and auth
-      await window.gapi.client.init({
-        apiKey: this.apiKey || 'AIzaSyALjXkZiFZ_Fy143N_dzdaUbyDCtabBr7Y', // Fallback API key
-        clientId: this.clientId || '363935868004-baf70v82iuhs34s1hi4f4tnt62hgr1qm.apps.googleusercontent.com', // Fallback client ID
-        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
-        scope: 'https://www.googleapis.com/auth/calendar.events',
-        ux_mode: 'popup'
-      });
-      
-      console.log("Google API client initialized successfully");
-      resolve(true);
-    } catch (error) {
-      console.error("Error initializing Google API client:", error);
-      reject(error);
-    }
-  });
-}
-
-// Replace the _getAuthInstance method (around lines 300-330)
-_getAuthInstance() {
-  try {
-    if (!window.gapi) {
-      console.warn("Google API not available");
-      return null;
-    }
-    
-    if (!window.gapi.auth2) {
-      console.warn("Google Auth2 not loaded yet");
-      return null;
-    }
-    
-    let authInstance;
-    try {
-      authInstance = window.gapi.auth2.getAuthInstance();
-    } catch (e) {
-      console.warn("Error getting auth instance, trying to initialize it");
-    }
-    
-    if (!authInstance) {
-      console.log("Auth instance not initialized, creating it");
+    return new Promise((resolve, reject) => {
       try {
-        authInstance = window.gapi.auth2.init({
-          client_id: this.clientId,
+        // Load the Google API script if not already loaded
+        if (!window.gapi) {
+          console.log("Loading Google API script");
+          const script = document.createElement('script');
+          script.src = 'https://apis.google.com/js/api.js';
+          script.onload = () => this._initGapiClient(resolve, reject);
+          script.onerror = () => {
+            console.error("Failed to load Google API script");
+            reject(new Error("Failed to load Google API script"));
+          };
+          document.body.appendChild(script);
+        } else {
+          this._initGapiClient(resolve, reject);
+        }
+      } catch (error) {
+        console.error("Error in Google Calendar initialization:", error);
+        reject(error);
+      }
+    });
+  }
+
+  _initGapiClient(resolve, reject) {
+    // Load the client library
+    window.gapi.load('client:auth2', async () => {
+      try {
+        // Initialize the client with API key and auth
+        await window.gapi.client.init({
+          apiKey: this.apiKey,
+          clientId: this.clientId,
+          discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
           scope: 'https://www.googleapis.com/auth/calendar.events'
         });
-        return authInstance;
-      } catch (initError) {
-        console.error("Error initializing auth instance:", initError);
-        return null;
+        
+        this.googleApiLoaded = true;
+        console.log("Google API client initialized successfully");
+        resolve(true);
+      } catch (error) {
+        console.error("Error initializing Google API client:", error);
+        reject(error);
       }
-    }
-    
-    return authInstance;
-  } catch (error) {
-    console.error("Error getting auth instance:", error);
-    return null;
-  }
-}
-
-  // Replace the signInToGoogle method (around lines 350-400)
-async signInToGoogle() {
-  // Prevent multiple auth attempts within 3 seconds
-  const now = Date.now();
-  if (this.authInProgress || (now - this.lastAuthAttempt < 3000)) {
-    console.log("Auth attempt blocked - already in progress or too soon");
-    throw new Error("Authentication already in progress. Please wait a moment.");
-  }
-  
-  this.authInProgress = true;
-  this.lastAuthAttempt = now;
-  
-  try {
-    console.log("Attempting to sign in to Google Calendar");
-    
-    // Make sure we load the script first if it's not already loaded
-    if (!window.gapi) {
-      const scriptLoaded = await new Promise((resolve) => {
-        const script = document.createElement('script');
-        script.src = 'https://apis.google.com/js/api.js';
-        script.onload = () => resolve(true);
-        script.onerror = () => resolve(false);
-        document.body.appendChild(script);
-      });
-      
-      if (!scriptLoaded) {
-        throw new Error("Failed to load Google API script");
-      }
-    }
-    
-    // Initialize Google Calendar if needed
-    if (!this.googleApiLoaded) {
-      const initialized = await this.initializeGoogleCalendar();
-      if (!initialized) {
-        throw new Error("Failed to initialize Google Calendar API");
-      }
-    }
-    
-    // Verify auth2 is available
-    if (!window.gapi.auth2) {
-      // Load auth2 if not available
-      await new Promise((resolve, reject) => {
-        window.gapi.load('auth2', () => resolve(true));
-      });
-      
-      // Initialize auth2
-      await window.gapi.auth2.init({
-        client_id: this.clientId,
-        scope: 'https://www.googleapis.com/auth/calendar.events'
-      });
-    }
-    
-    const authInstance = window.gapi.auth2.getAuthInstance();
-    if (!authInstance) {
-      throw new Error("Google Auth instance is not available");
-    }
-    
-    // Start the sign-in process
-    console.log("Starting Google sign-in process");
-    
-    // Use options to improve sign-in experience
-    const user = await authInstance.signIn({
-      prompt: 'select_account', // Allow account selection
-      ux_mode: 'popup'
     });
-    
-    console.log("Google sign-in successful");
-    
-    // Store the token for reuse
-    if (user && user.getAuthResponse) {
-      const authResponse = user.getAuthResponse();
-      const profile = user.getBasicProfile();
-      
-      const tokenData = {
-        ...authResponse,
-        email: profile ? profile.getEmail() : null,
-        name: profile ? profile.getName() : null,
-        stored_at: Date.now(),
-        expires_at: authResponse.expires_at
-      };
-      
-      localStorage.setItem('googleAuthToken', JSON.stringify(tokenData));
-      console.log("Saved Google auth token for reuse");
-    }
-    
-    this.showNotification("Successfully connected to Google Calendar!", "success");
-    return user;
-  } catch (error) {
-    console.error("Error signing in to Google:", error);
-    
-    // Provide improved error message
-    let errorMessage = "Failed to connect to Google Calendar.";
-    
-    if (error.error === "popup_blocked_by_browser") {
-      errorMessage = "Popup blocked by browser. Please allow popups for this site and try again.";
-    } else if (error.error === "access_denied") {
-      errorMessage = "Google access was denied. Please try again.";
-    } else if (error.message) {
-      errorMessage += " Error: " + error.message;
-    }
-    
-    this.showNotification(errorMessage, "error");
-    throw error;
-  } finally {
-    this.authInProgress = false;
   }
-}
 
-  // Check if signed in to Google
-  isSignedInToGoogle() {
-    if (!this.googleApiLoaded || !window.gapi || !window.gapi.auth2) {
-      console.warn("Google API not fully loaded when checking sign-in status");
-      return false;
+  async signInToGoogle(userId) {
+    if (!userId) {
+      throw new Error("User ID is required for Google sign-in");
     }
     
     try {
-      const authInstance = this._getAuthInstance();
-      if (!authInstance) {
-        console.warn("Google Auth instance is null");
-        return false;
-      }
-      return authInstance.isSignedIn.get();
-    } catch (error) {
-      console.error("Error checking Google sign-in status:", error);
-      return false;
-    }
-  }
-
-  // Sign out from Google
-  async signOutFromGoogle() {
-    if (!this.googleApiLoaded || !window.gapi || !window.gapi.auth2) {
-      console.warn("Google API not fully loaded when attempting sign-out");
-      return false;
-    }
-    
-    try {
-      const authInstance = this._getAuthInstance();
-      if (!authInstance) {
-        console.warn("Google Auth instance is null");
-        return false;
-      }
+      console.log(`Signing in to Google Calendar for user: ${userId}`);
       
-      await authInstance.signOut();
-      localStorage.removeItem('googleAuthToken');
-      console.log("Signed out from Google successfully");
-      return true;
-    } catch (error) {
-      console.error("Error signing out from Google:", error);
-      return false;
-    }
-  }
-
-  // Get events from Google Calendar
-  async getEventsFromCalendar(timeMin, timeMax, calendarId = 'primary') {
-    console.log("Getting events from Google Calendar");
-    
-    try {
+      // Make sure API is initialized first
       if (!this.googleApiLoaded) {
         await this.initializeGoogleCalendar();
       }
       
-      if (!this.isSignedInToGoogle()) {
-        await this.signInToGoogle();
+      // Use the GoogleAuthManager to authenticate this specific user
+      const userData = await GoogleAuthManager.authenticateUser(userId);
+      
+      if (!userData) {
+        throw new Error("Google authentication failed");
       }
       
-      // Ensure calendar API is loaded
-      if (!window.gapi.client.calendar) {
-        await window.gapi.client.load('calendar', 'v3');
-      }
-      
-      // Get events from the calendar
-      const response = await window.gapi.client.calendar.events.list({
-        'calendarId': calendarId,
-        'timeMin': timeMin.toISOString(),
-        'timeMax': timeMax.toISOString(),
-        'singleEvents': true,
-        'orderBy': 'startTime'
-      });
-      
-      return response.result.items || [];
+      console.log(`Successfully signed in to Google as ${userData.email} for user ${userId}`);
+      return userData;
     } catch (error) {
-      console.error("Error getting events from Google Calendar:", error);
+      console.error("Error signing in to Google:", error);
       
-      // If we get a 401 Unauthorized, try to refresh the token
-      if (error.status === 401) {
-        try {
-          console.log("Got 401 error, trying to refresh auth");
-          await this.signInToGoogle();
-          return this.getEventsFromCalendar(timeMin, timeMax, calendarId);
-        } catch (refreshError) {
-          console.error("Error refreshing auth:", refreshError);
-        }
+      // Provide improved error message
+      let errorMessage = "Failed to connect to Google Calendar.";
+      
+      if (error.error === "popup_blocked_by_browser") {
+        errorMessage = "Popup blocked by browser. Please allow popups for this site and try again.";
+      } else if (error.error === "access_denied") {
+        errorMessage = "Google access was denied. Please try again.";
+      } else if (error.message) {
+        errorMessage += " Error: " + error.message;
       }
       
+      this.showNotification(errorMessage, "error");
+      throw error;
+    }
+  }
+
+  // Check if a specific user is signed in to Google
+  isSignedInToGoogle(userId) {
+    if (!userId) return false;
+    
+    return GoogleAuthManager.isUserAuthenticated(userId);
+  }
+
+  // Sign out from Google for a specific user
+  async signOutFromGoogle(userId) {
+    if (!userId) {
+      throw new Error("User ID is required to sign out");
+    }
+    
+    try {
+      const result = await GoogleAuthManager.signOutUser(userId);
+      console.log(`Signed out from Google for user ${userId}: ${result ? 'Success' : 'Failed'}`);
+      return result;
+    } catch (error) {
+      console.error(`Error signing out from Google for user ${userId}:`, error);
+      return false;
+    }
+  }
+
+  // Get events from Google Calendar for a specific user
+  async getEventsFromCalendar(userId, timeMin, timeMax, calendarId = 'primary') {
+    if (!userId) {
+      throw new Error("User ID is required to access calendar");
+    }
+    
+    console.log(`Getting events from Google Calendar for user ${userId}`);
+    
+    try {
+      // Make sure Google API is initialized
+      if (!this.googleApiLoaded) {
+        await this.initializeGoogleCalendar();
+      }
+      
+      // Use GoogleAuthManager to execute with auth
+      return await GoogleAuthManager.executeWithAuth(userId, async () => {
+        // Ensure calendar API is loaded
+        if (!window.gapi.client.calendar) {
+          await window.gapi.client.load('calendar', 'v3');
+        }
+        
+        // Get events from the calendar
+        const response = await window.gapi.client.calendar.events.list({
+          'calendarId': calendarId,
+          'timeMin': timeMin.toISOString(),
+          'timeMax': timeMax.toISOString(),
+          'singleEvents': true,
+          'orderBy': 'startTime'
+        });
+        
+        return response.result.items || [];
+      });
+    } catch (error) {
+      console.error(`Error getting events from Google Calendar for user ${userId}:`, error);
       throw error;
     }
   }
 
   // List user's calendars
-  async listUserCalendars() {
-    console.log("Listing user calendars");
+  async listUserCalendars(userId) {
+    if (!userId) {
+      throw new Error("User ID is required to list calendars");
+    }
+    
+    console.log(`Listing calendars for user ${userId}`);
     
     try {
+      // Make sure Google API is initialized
       if (!this.googleApiLoaded) {
         await this.initializeGoogleCalendar();
       }
       
-      if (!this.isSignedInToGoogle()) {
-        await this.signInToGoogle();
-      }
-      
-      // Ensure calendar API is loaded
-      if (!window.gapi.client.calendar) {
-        await window.gapi.client.load('calendar', 'v3');
-      }
-      
-      const response = await window.gapi.client.calendar.calendarList.list();
-      return response.result.items || [];
+      // Use GoogleAuthManager to execute with auth
+      return await GoogleAuthManager.executeWithAuth(userId, async () => {
+        // Ensure calendar API is loaded
+        if (!window.gapi.client.calendar) {
+          await window.gapi.client.load('calendar', 'v3');
+        }
+        
+        const response = await window.gapi.client.calendar.calendarList.list();
+        return response.result.items || [];
+      });
     } catch (error) {
-      console.error("Error listing calendars:", error);
+      console.error(`Error listing calendars for user ${userId}:`, error);
       throw error;
     }
   }
 
   // General method to add an event to user's calendar
-  async addEvent(event, calendarType = null) {
+  async addEvent(event, userId, calendarType = null) {
+    if (!userId) {
+      throw new Error("User ID is required to add events");
+    }
+    
     const targetCalendar = calendarType || this.activeCalendarType;
     
     if (!targetCalendar) {
@@ -510,7 +292,7 @@ async signInToGoogle() {
     
     try {
       if (targetCalendar === 'google') {
-        return await this.addEventToGoogleCalendar(event);
+        return await this.addEventToGoogleCalendar(event, userId);
       } else if (targetCalendar === 'apple') {
         return await this.addEventToAppleCalendar(event);
       } else if (targetCalendar === 'ics') {
@@ -524,74 +306,50 @@ async signInToGoogle() {
     }
   }
 
-  // Add event to Google Calendar
-  async addEventToGoogleCalendar(event) {
-    console.log("Adding event to Google Calendar", event);
-    
-    if (!this.googleApiLoaded) {
-      try {
-        console.log("Google Calendar not initialized, initializing now");
-        await this.initializeGoogleCalendar();
-      } catch (error) {
-        console.error("Failed to initialize Google Calendar:", error);
-        this.showNotification("Failed to connect to Google Calendar. Please try again later.", "error");
-        throw error;
-      }
+  // Add event to Google Calendar for a specific user
+  async addEventToGoogleCalendar(event, userId) {
+    if (!userId) {
+      throw new Error("User ID is required to add event to Google Calendar");
     }
     
-    // Force sign-in check every time
-    if (!this.isSignedInToGoogle()) {
-      try {
-        console.log("Not signed in to Google Calendar, attempting to sign in");
-        await this.signInToGoogle();
-        
-        // Double-check that sign-in worked
-        if (!this.isSignedInToGoogle()) {
-          console.log("Sign-in attempt failed");
-          throw new Error("Google sign-in failed. Please try again.");
-        }
-      } catch (error) {
-        console.error("Failed to sign in to Google:", error);
-        throw error;
-      }
-    }
+    console.log(`Adding event to Google Calendar for user ${userId}`, event);
     
     try {
-      // Get the calendar ID from settings or default to primary
-      const calendarId = this.calendarSettings?.googleCalendar?.calendarId || 'primary';
-      console.log("Adding event to Google Calendar:", {
-        calendarId,
-        eventSummary: event.summary,
-        eventStart: event.start
-      });
-      
-      // Ensure calendar API is loaded
-      if (!window.gapi.client.calendar) {
-        console.log("Calendar API not loaded, loading it now");
-        await window.gapi.client.load('calendar', 'v3');
-        console.log("Loaded Google Calendar API");
+      // Make sure Google API is initialized
+      if (!this.googleApiLoaded) {
+        await this.initializeGoogleCalendar();
       }
       
-      // Make the API call to insert the event
-      console.log("Calling Google Calendar API to insert event");
-      const response = await window.gapi.client.calendar.events.insert({
-        'calendarId': calendarId,
-        'resource': event
+      // Get the calendar ID from settings or default to primary
+      const calendarId = this.calendarSettings?.googleCalendar?.calendarId || 'primary';
+      
+      // Use GoogleAuthManager to execute with auth
+      return await GoogleAuthManager.executeWithAuth(userId, async () => {
+        // Ensure calendar API is loaded
+        if (!window.gapi.client.calendar) {
+          await window.gapi.client.load('calendar', 'v3');
+        }
+        
+        // Make the API call to insert the event
+        const response = await window.gapi.client.calendar.events.insert({
+          'calendarId': calendarId,
+          'resource': event
+        });
+        
+        console.log(`Successfully added event to Google Calendar for user ${userId}:`, response.result);
+        
+        // Success notification to the user
+        this.showNotification(`Event "${event.summary}" added to Google Calendar`, "success");
+        
+        return {
+          success: true,
+          eventId: response.result.id,
+          eventLink: response.result.htmlLink,
+          isMock: false
+        };
       });
-      
-      console.log("Successfully added event to Google Calendar:", response.result);
-      
-      // Success notification to the user
-      this.showNotification(`Event "${event.summary}" added to Google Calendar`, "success");
-      
-      return {
-        success: true,
-        eventId: response.result.id,
-        eventLink: response.result.htmlLink,
-        isMock: false
-      };
     } catch (error) {
-      console.error("Error adding event to Google Calendar:", error);
+      console.error(`Error adding event to Google Calendar for user ${userId}:`, error);
       
       // Error notification to the user
       this.showNotification(`Failed to add event to calendar: ${error.message || 'Unknown error'}`, "error");
@@ -781,8 +539,15 @@ async signInToGoogle() {
   }
 
   // Debug Google Calendar connection
-  async debugGoogleCalendarConnection() {
-    console.log("Running Google Calendar connection diagnostic");
+  async debugGoogleCalendarConnection(userId) {
+    if (!userId) {
+      return {
+        success: false,
+        error: "User ID is required for debugging Google Calendar"
+      };
+    }
+    
+    console.log(`Running Google Calendar connection diagnostic for user ${userId}`);
     
     try {
       // Step 1: Initialize Google Calendar API
@@ -790,18 +555,18 @@ async signInToGoogle() {
       console.log("✓ Google Calendar API initialized");
       
       // Step 2: Check if signed in
-      const isSignedIn = this.isSignedInToGoogle();
-      console.log(`${isSignedIn ? '✓' : '✗'} Google sign-in status: ${isSignedIn ? 'Signed in' : 'Not signed in'}`);
+      const isSignedIn = this.isSignedInToGoogle(userId);
+      console.log(`${isSignedIn ? '✓' : '✗'} Google sign-in status for user ${userId}: ${isSignedIn ? 'Signed in' : 'Not signed in'}`);
       
       if (!isSignedIn) {
-        console.log("Attempting to sign in to Google");
-        await this.signInToGoogle();
-        console.log("✓ Successfully signed in to Google");
+        console.log(`Attempting to sign in to Google for user ${userId}`);
+        await this.signInToGoogle(userId);
+        console.log(`✓ Successfully signed in to Google for user ${userId}`);
       }
       
       // Step 3: List calendars
-      const calendars = await this.listUserCalendars();
-      console.log(`✓ Successfully listed ${calendars.length} calendars`);
+      const calendars = await this.listUserCalendars(userId);
+      console.log(`✓ Successfully listed ${calendars.length} calendars for user ${userId}`);
       
       // Step 4: Create a test event
       const testEvent = {
@@ -817,18 +582,18 @@ async signInToGoogle() {
         }
       };
       
-      console.log("Testing event creation...");
-      const result = await this.addEventToGoogleCalendar(testEvent);
+      console.log(`Testing event creation for user ${userId}...`);
+      const result = await this.addEventToGoogleCalendar(testEvent, userId);
       console.log(`✓ Successfully created test event with ID: ${result.eventId}`);
       
       return {
         success: true,
-        message: "Google Calendar integration is working correctly",
+        message: `Google Calendar integration is working correctly for user ${userId}`,
         calendars: calendars,
         testEventId: result.eventId
       };
     } catch (error) {
-      console.error("Google Calendar diagnostic failed:", error);
+      console.error(`Google Calendar diagnostic failed for user ${userId}:`, error);
       
       return {
         success: false,
@@ -838,70 +603,14 @@ async signInToGoogle() {
     }
   }
 
-// Debug Google Calendar connection
-async debugGoogleCalendarConnection() {
-  console.log("Running Google Calendar connection diagnostic");
-  
-  try {
-    // Step 1: Initialize Google Calendar API
-    await this.initializeGoogleCalendar();
-    console.log("✓ Google Calendar API initialized");
-    
-    // Step 2: Check if signed in
-    const isSignedIn = this.isSignedInToGoogle();
-    console.log(`${isSignedIn ? '✓' : '✗'} Google sign-in status: ${isSignedIn ? 'Signed in' : 'Not signed in'}`);
-    
-    if (!isSignedIn) {
-      console.log("Attempting to sign in to Google");
-      await this.signInToGoogle();
-      console.log("✓ Successfully signed in to Google");
-    }
-    
-    // Step 3: List calendars
-    const calendars = await this.listUserCalendars();
-    console.log(`✓ Successfully listed ${calendars.length} calendars`);
-    
-    // Step 4: Create a test event
-    const testEvent = {
-      'summary': 'Allie Test Event',
-      'description': 'This is a test event created by Allie to verify Google Calendar integration',
-      'start': {
-        'dateTime': new Date(Date.now() + 3600000).toISOString(),
-        'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      'end': {
-        'dateTime': new Date(Date.now() + 7200000).toISOString(),
-        'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
-      }
-    };
-    
-    console.log("Testing event creation...");
-    const result = await this.addEventToGoogleCalendar(testEvent);
-    console.log(`✓ Successfully created test event with ID: ${result.eventId}`);
-    
-    return {
-      success: true,
-      message: "Google Calendar integration is working correctly",
-      calendars: calendars,
-      testEventId: result.eventId
-    };
-  } catch (error) {
-    console.error("Google Calendar diagnostic failed:", error);
-    
-    return {
-      success: false,
-      error: error.message || "Unknown error",
-      stage: "Google Calendar diagnostic"
-    };
-  }
-}
-
-
   // Diagnose Google Calendar issues
-  async diagnoseGoogleCalendarIssues() {
+  async diagnoseGoogleCalendarIssues(userId) {
     try {
       let report = "Google Calendar Diagnostic Report\n";
       report += "===============================\n\n";
+      
+      // Include user information
+      report += `User ID: ${userId || 'Not provided'}\n\n`;
       
       // Check environment variables
       report += "API Credentials Check:\n";
@@ -920,103 +629,122 @@ async debugGoogleCalendarConnection() {
       }
       report += "\n";
       
-      // Check authentication status
-      report += "Authentication Status:\n";
-      if (window.gapi && window.gapi.auth2) {
-        try {
-          const authInstance = this._getAuthInstance();
-          if (authInstance) {
-            const isSignedIn = authInstance.isSignedIn.get();
-            report += `- Signed in: ${isSignedIn ? 'Yes' : 'No'}\n`;
-            
-            if (isSignedIn) {
-              const user = authInstance.currentUser.get();
-              const profile = user.getBasicProfile();
-              const email = profile ? profile.getEmail() : 'Unknown';
-              report += `- Signed in as: ${email}\n`;
-              
-              const auth = user.getAuthResponse();
-              report += `- Token expires at: ${new Date(auth.expires_at * 1000).toLocaleString()}\n`;
-              report += `- Token valid: ${auth.expires_at * 1000 > Date.now() ? 'Yes' : 'No'}\n`;
-            }
-          } else {
-            report += "- Auth instance not available\n";
+      // Check user-specific tokens
+      if (userId) {
+        report += `User-Specific Authentication Status (${userId}):\n`;
+        
+        // Check if the user has a token
+        const userToken = GoogleAuthManager.getUserToken(userId);
+        report += `- Token found for user: ${userToken ? 'Yes' : 'No'}\n`;
+        
+        if (userToken) {
+          report += `- Token email: ${userToken.email || 'Not available'}\n`;
+          report += `- Token timestamp: ${new Date(userToken.timestamp).toLocaleString()}\n`;
+          if (userToken.expires_at) {
+            report += `- Token expires at: ${new Date(userToken.expires_at * 1000).toLocaleString()}\n`;
+            report += `- Token valid: ${userToken.expires_at * 1000 > Date.now() ? 'Yes' : 'No'}\n`;
           }
-        } catch (e) {
-          report += `- Error checking auth status: ${e.message}\n`;
         }
-      } else {
-        report += "- Cannot check auth status (gapi.auth2 not loaded)\n";
       }
       report += "\n";
       
-      // Check localStorage for tokens
+      // Check localStorage for all tokens
       report += "Token Storage Check:\n";
       try {
-        const token = localStorage.getItem('googleAuthToken');
-        report += `- Token in localStorage: ${token ? 'Yes' : 'No'}\n`;
+        const allStorageKeys = Object.keys(localStorage);
+        const googleTokenKeys = allStorageKeys.filter(key => 
+          key.startsWith('googleToken_') || key === 'googleAuthToken'
+        );
         
-        if (token) {
-          const tokenData = JSON.parse(token);
-          report += `- Token email: ${tokenData.email || 'Not available'}\n`;
-          report += `- Token stored at: ${new Date(tokenData.stored_at).toLocaleString()}\n`;
-          report += `- Token expires at: ${new Date(tokenData.expires_at * 1000).toLocaleString()}\n`;
-          report += `- Token valid: ${tokenData.expires_at * 1000 > Date.now() ? 'Yes' : 'No'}\n`;
-        }
-      } catch (e) {
-        report += `- Error reading token from localStorage: ${e.message}\n`;
-      }
-      
-      // Check for user-specific tokens
-      const tokenKeys = Object.keys(localStorage).filter(key => key.startsWith('googleToken_'));
-      if (tokenKeys.length > 0) {
-        report += `- Found ${tokenKeys.length} user-specific tokens:\n`;
-        tokenKeys.forEach(key => {
-          try {
-            const tokenData = JSON.parse(localStorage.getItem(key));
-            report += `  * ${key}: ${tokenData.email || 'No email'}\n`;
-          } catch (e) {
-            report += `  * ${key}: Error parsing token\n`;
-          }
-        });
-      } else {
-        report += "- No user-specific tokens found\n";
-      }
-      
-      // Try to list calendars as a final test
-      report += "\nCalendar Access Test:\n";
-      try {
-        await this.initializeGoogleCalendar();
-        report += "- API initialized: Yes\n";
+        report += `- Found ${googleTokenKeys.length} Google auth tokens in storage\n`;
         
-        if (this.isSignedInToGoogle()) {
-          report += "- Signed in: Yes\n";
-          
-          try {
-            const calendars = await this.listUserCalendars();
-            report += `- Calendar access: Yes (${calendars.length} calendars)\n`;
-            
-            if (calendars.length > 0) {
-              report += "- Available calendars:\n";
-              calendars.forEach(cal => {
-                report += `  * ${cal.summary} (${cal.id})\n`;
-              });
+        if (googleTokenKeys.length > 0) {
+          googleTokenKeys.forEach(key => {
+            try {
+              const tokenData = JSON.parse(localStorage.getItem(key));
+              report += `  * ${key}: ${tokenData.email || 'No email'} (stored: ${new Date(tokenData.timestamp || 0).toLocaleString()})\n`;
+            } catch (e) {
+              report += `  * ${key}: Error parsing token data\n`;
             }
-          } catch (e) {
-            report += `- Calendar access: No (${e.message})\n`;
-          }
-        } else {
-          report += "- Signed in: No\n";
-          report += "- Calendar access: Cannot test (not signed in)\n";
+          });
         }
       } catch (e) {
-        report += `- API initialized: No (${e.message})\n`;
-        report += "- Calendar access: Cannot test (API not initialized)\n";
+        report += `- Error checking localStorage: ${e.message}\n`;
+      }
+      report += "\n";
+      
+      // Try to list calendars for this user
+      if (userId) {
+        report += "Calendar Access Test:\n";
+        try {
+          await this.initializeGoogleCalendar();
+          report += "- API initialized: Yes\n";
+          
+          const isSignedIn = this.isSignedInToGoogle(userId);
+          report += `- User signed in: ${isSignedIn ? 'Yes' : 'No'}\n`;
+          
+          if (isSignedIn) {
+            try {
+              const calendars = await this.listUserCalendars(userId);
+              report += `- Calendar access: Yes (${calendars.length} calendars)\n`;
+              
+              if (calendars.length > 0) {
+                report += "- Available calendars:\n";
+                calendars.forEach(cal => {
+                  report += `  * ${cal.summary} (${cal.id})\n`;
+                });
+              }
+            } catch (e) {
+              report += `- Calendar access: No (${e.message})\n`;
+            }
+          } else {
+            report += "- Calendar access: Cannot test (not signed in)\n";
+          }
+        } catch (e) {
+          report += `- API initialized: No (${e.message})\n`;
+          report += "- Calendar access: Cannot test (API not initialized)\n";
+        }
       }
       
       return report;
     } catch (error) {
       return `Error running diagnostic: ${error.message}`;
+    }
+  }
+
+  // Fix calendar issues for a specific user
+  async repairUserCalendarAuth(userId) {
+    if (!userId) {
+      return {
+        success: false,
+        error: "User ID is required to repair calendar auth"
+      };
+    }
+    
+    try {
+      console.log(`Attempting to repair calendar auth for user ${userId}`);
+      
+      // First, clear any existing tokens for this user
+      GoogleAuthManager.clearUserToken(userId);
+      
+      // Reinitialize Google calendar API
+      await this.initializeGoogleCalendar();
+      
+      // Try to sign in again
+      const userData = await this.signInToGoogle(userId);
+      
+      return {
+        success: true,
+        message: `Successfully repaired Google Calendar auth for user ${userId}`,
+        email: userData.email
+      };
+    } catch (error) {
+      console.error(`Failed to repair calendar auth for user ${userId}:`, error);
+      
+      return {
+        success: false,
+        error: error.message || "Unknown error"
+      };
     }
   }
 }

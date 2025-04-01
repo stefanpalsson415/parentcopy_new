@@ -4,6 +4,7 @@ import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import DatabaseService from '../../services/DatabaseService';
 import CalendarService from '../../services/CalendarService';
+import GoogleAuthManager from '../../utils/GoogleAuthManager';
 import { Calendar, Download, ChevronDown, ChevronUp, Settings, Globe, Check, Apple } from 'lucide-react';
 
 const UserSettingsScreen = ({ onClose }) => {
@@ -68,106 +69,50 @@ const UserSettingsScreen = ({ onClose }) => {
           return;
         }
         
-        console.log("Checking Google auth for selected user:", {
-          selectedUserId: selectedUser.id,
-          selectedUserName: selectedUser.name,
-          selectedUserRole: selectedUser.roleType,
-          selectedUserEmail: selectedUser.email,
-          hasGoogleAuthData: !!selectedUser.googleAuth
-        });
+        console.log("Checking Google auth for selected user:", selectedUser.id);
         
-        // CRITICAL: First check the selected user's googleAuth property
-        if (selectedUser.googleAuth && selectedUser.googleAuth.email) {
-          console.log(`User ${selectedUser.name} has Google auth data with email: ${selectedUser.googleAuth.email}`);
+        // Use our GoogleAuthManager to check if this specific user is authenticated
+        const isConnected = GoogleAuthManager.isUserAuthenticated(selectedUser.id);
+        
+        if (isConnected) {
+          // Get the user's token data
+          const userData = GoogleAuthManager.getUserToken(selectedUser.id);
           
-          // Double-check if we have a token for this user
-          try {
-            const userToken = localStorage.getItem(`googleToken_${selectedUser.id}`);
-            
-            // If we don't have a token for this user but have googleAuth data, create one
-            if (!userToken && selectedUser.googleAuth.uid) {
-              localStorage.setItem(`googleToken_${selectedUser.id}`, JSON.stringify({
-                email: selectedUser.googleAuth.email,
-                uid: selectedUser.googleAuth.uid,
-                timestamp: Date.now()
-              }));
-              console.log(`Created missing token for ${selectedUser.name}`);
-            }
-          } catch (e) {
-            console.warn("Error checking/creating user token:", e);
+          console.log(`User ${selectedUser.name} is connected to Google with email: ${userData.email}`);
+          
+          // Make sure the member's profile has the Google auth data
+          if (!selectedUser.googleAuth || selectedUser.googleAuth.email !== userData.email) {
+            await updateMemberProfile(selectedUser.id, {
+              googleAuth: {
+                uid: userData.uid,
+                email: userData.email,
+                displayName: userData.name,
+                photoURL: userData.photoURL,
+                lastConnected: new Date().toISOString()
+              }
+            });
+          }
+          
+          // Update the state
+          setGoogleAuthStatus({
+            isConnected: true,
+            email: userData.email,
+            loading: false
+          });
+        } else {
+          console.log(`User ${selectedUser.name} is NOT connected to Google`);
+          
+          // Clear any incorrect Google auth data in the user's profile
+          if (selectedUser.googleAuth) {
+            await updateMemberProfile(selectedUser.id, { googleAuth: null });
           }
           
           setGoogleAuthStatus({
-            isConnected: true,
-            email: selectedUser.googleAuth.email,
+            isConnected: false,
+            email: null,
             loading: false
           });
-          return;
         }
-        
-        // Look for a token specifically for this user
-        const userTokenKey = `googleToken_${selectedUser.id}`;
-        try {
-          const userToken = localStorage.getItem(userTokenKey);
-          if (userToken) {
-            const tokenData = JSON.parse(userToken);
-            if (tokenData && tokenData.email) {
-              console.log(`Found token for ${selectedUser.name} with email: ${tokenData.email}`);
-              
-              // Update the user's profile with this Google auth data
-              // This fixes cases where the token exists but the profile doesn't have googleAuth data
-              await updateMemberProfile(selectedUser.id, {
-                googleAuth: {
-                  uid: tokenData.uid,
-                  email: tokenData.email,
-                  lastConnected: new Date().toISOString()
-                }
-              });
-              
-              setGoogleAuthStatus({
-                isConnected: true,
-                email: tokenData.email,
-                loading: false
-              });
-              return;
-            }
-          }
-        } catch (e) {
-          console.warn(`Error checking token for ${userTokenKey}:`, e);
-        }
-        
-        // Finally, check for role-based token as a fallback
-        try {
-          if (selectedUser.roleType) {
-            const roleToken = localStorage.getItem(`googleToken_${selectedUser.roleType.toLowerCase()}`);
-            if (roleToken) {
-              const tokenData = JSON.parse(roleToken);
-              if (tokenData && tokenData.email) {
-                console.log(`Found role-based token for ${selectedUser.roleType} with email: ${tokenData.email}`);
-                
-                // Don't automatically update the user profile with this data
-                // Just show the status for now
-                setGoogleAuthStatus({
-                  isConnected: true,
-                  email: tokenData.email,
-                  loading: false,
-                  isRoleBased: true
-                });
-                return;
-              }
-            }
-          }
-        } catch (e) {
-          console.warn("Error checking role token:", e);
-        }
-        
-        // No valid Google auth data found
-        console.log(`User ${selectedUser.name} does NOT have Google auth connected`);
-        setGoogleAuthStatus({
-          isConnected: false,
-          email: null,
-          loading: false
-        });
       } catch (error) {
         console.error("Error checking Google auth status:", error);
         setGoogleAuthStatus({
@@ -182,15 +127,14 @@ const UserSettingsScreen = ({ onClose }) => {
     if (selectedUser) {
       checkGoogleAuthStatus();
     }
-  }, [currentUser, selectedUser, updateMemberProfile]);
-
+  }, [selectedUser, updateMemberProfile]);
   // Helper function to clear only the specific user's Google auth data without affecting others
   const clearUserGoogleAuth = async (userId) => {
     try {
       console.log(`Clearing Google auth data specifically for user ${userId}`);
       
-      // Only remove this specific user's token
-      localStorage.removeItem(`googleToken_${userId}`);
+      // Use GoogleAuthManager to sign out this specific user
+      await GoogleAuthManager.signOutUser(userId);
       
       // Update the user's profile to remove Google auth data
       await updateMemberProfile(userId, { googleAuth: null });
@@ -327,19 +271,63 @@ const UserSettingsScreen = ({ onClose }) => {
     }, [userId]);
     
     // Handle Google sign in
-    const handleGoogleSignIn = async () => {
-      try {
-        await CalendarService.signInToGoogle();
-        setIsGoogleSignedIn(true);
-        
-        // Load available calendars
-        const calendars = await CalendarService.listUserCalendars();
-        setGoogleCalendars(calendars);
-      } catch (error) {
-        console.error("Error signing in to Google:", error);
-        alert("Failed to sign in to Google Calendar. Please try again.");
-      }
-    };
+    // Replace the handleGoogleSignIn function in CalendarSettingsTab
+const handleGoogleSignIn = async () => {
+  try {
+    if (!userId) {
+      throw new Error("User ID required for Google sign-in");
+    }
+    
+    // Use CalendarService with the user ID
+    await CalendarService.signInToGoogle(userId);
+    setIsGoogleSignedIn(true);
+    
+    // Load available calendars
+    const calendars = await CalendarService.listUserCalendars(userId);
+    setGoogleCalendars(calendars);
+  } catch (error) {
+    console.error("Error signing in to Google:", error);
+    alert("Failed to sign in to Google Calendar: " + (error.message || "Unknown error"));
+  }
+};
+
+// Replace handleGoogleSignOut function in CalendarSettingsTab
+const handleGoogleSignOut = async () => {
+  try {
+    if (!userId) {
+      throw new Error("User ID required for Google sign-out");
+    }
+    
+    // Use CalendarService with the user ID
+    await CalendarService.signOutFromGoogle(userId);
+    setIsGoogleSignedIn(false);
+    setGoogleCalendars([]);
+  } catch (error) {
+    console.error("Error signing out from Google:", error);
+    alert("Failed to sign out from Google: " + (error.message || "Unknown error"));
+  }
+};
+
+// For the Test Google Calendar Connection button - add userId parameter:
+onClick={async () => {
+  try {
+    // Use the current user ID
+    const userId = currentUser?.uid;
+    if (!userId) {
+      alert("No user ID available. Please log in again.");
+      return;
+    }
+    
+    const result = await CalendarService.debugGoogleCalendarConnection(userId);
+    console.log("Google Calendar diagnostic result:", result);
+    alert(result.success 
+      ? `Connection successful! Found ${result.calendars?.length || 0} calendars.` 
+      : `Connection failed: ${result.error}`);
+  } catch (error) {
+    console.error("Error running diagnostic:", error);
+    alert(`Error running diagnostic: ${error.message}`);
+  }
+}}
     
     // Handle Google sign out
     const handleGoogleSignOut = async () => {
@@ -613,18 +601,32 @@ const UserSettingsScreen = ({ onClose }) => {
                   return;
                 }
                 
-                const result = await DatabaseService.repairFamilyGoogleAuth(familyId);
-                console.log("Google auth repair result:", result);
+                if (!selectedUser || !selectedUser.id) {
+                  alert("Please select a family member first");
+                  return;
+                }
+                
+                // Instead of repairing all family members, just repair the selected user
+                const result = await CalendarService.repairUserCalendarAuth(selectedUser.id);
                 
                 if (result.success) {
-                  alert("Google auth data has been repaired successfully. Please refresh the page to see the changes.");
+                  alert(`Successfully repaired Google Calendar auth for ${selectedUser.name}. Connected as: ${result.email}`);
+                  
+                  // Update the Google auth status
+                  setGoogleAuthStatus({
+                    isConnected: true,
+                    email: result.email,
+                    loading: false
+                  });
+                  
+                  // Refresh the UI
                   window.location.reload();
                 } else {
-                  alert("Failed to repair Google auth data: " + (result.error || "Unknown error"));
+                  alert(`Failed to repair Google auth: ${result.error || "Unknown error"}`);
                 }
               } catch (error) {
-                console.error("Error running Google auth repair:", error);
-                alert(`Error running repair: ${error.message}`);
+                console.error("Error repairing Google auth:", error);
+                alert(`Error: ${error.message}`);
               }
             }}
             className="px-3 py-1 bg-red-100 border border-red-300 rounded text-red-800 text-sm"
@@ -1071,23 +1073,16 @@ const UserSettingsScreen = ({ onClose }) => {
                       } else {
                         // Not connected - connect now
                         try {
-                          // Now connect with Google
-                          const user = await linkAccountWithGoogle();
+                          // Connect with Google using our centralized manager
+                          const userData = await GoogleAuthManager.authenticateUser(selectedUser.id);
                           
-                          // Store token specifically for this user
-                          localStorage.setItem(`googleToken_${selectedUser.id}`, JSON.stringify({
-                            email: user.email,
-                            uid: user.uid,
-                            timestamp: Date.now()
-                          }));
-                          
-                          // Update the member profile with Google data - IMPORTANT: only for this specific member
+                          // Update the member profile with Google data
                           await updateMemberProfile(selectedUser.id, {
                             googleAuth: {
-                              uid: user.uid,
-                              email: user.email,
-                              displayName: user.displayName,
-                              photoURL: user.photoURL,
+                              uid: userData.uid,
+                              email: userData.email,
+                              displayName: userData.name,
+                              photoURL: userData.photoURL,
                               lastConnected: new Date().toISOString()
                             }
                           });
@@ -1095,14 +1090,14 @@ const UserSettingsScreen = ({ onClose }) => {
                           // Update status locally
                           setGoogleAuthStatus({
                             isConnected: true,
-                            email: user.email,
+                            email: userData.email,
                             loading: false
                           });
                           
                           alert('Google account connected successfully!');
                         } catch (error) {
                           console.error('Error connecting Google account:', error);
-                          alert('Failed to connect Google account. Please try again.');
+                          alert('Failed to connect Google account: ' + (error.message || 'Unknown error'));
                         }
                       }
                     }}
