@@ -1,3 +1,4 @@
+// src/components/calendar/GoogleCalendarEvents.jsx
 import React, { useState, useEffect } from 'react';
 import { Calendar, ExternalLink, AlertCircle } from 'lucide-react';
 import CalendarService from '../../services/CalendarService';
@@ -11,24 +12,24 @@ const GoogleCalendarEvents = ({ selectedDate }) => {
   const [calendarConnected, setCalendarConnected] = useState(false);
   
   useEffect(() => {
+    // Only load events if we have a date and user
+    if (!selectedDate || !currentUser) {
+      setLoading(false);
+      return;
+    }
+    
+    let isMounted = true;
+    
     const loadEvents = async () => {
-      if (!currentUser) {
-        setLoading(false);
-        return;
-      }
-      
       setLoading(true);
       setError(null);
       
       try {
-        // Initialize Google Calendar
-        await CalendarService.initializeGoogleCalendar();
+        // Check if Google Calendar is connected
+        const isConnected = await checkCalendarConnection();
         
-        // Check if signed in
-        const isSignedIn = CalendarService.isSignedInToGoogle();
-        setCalendarConnected(isSignedIn);
-        
-        if (!isSignedIn) {
+        if (!isConnected) {
+          setCalendarConnected(false);
           setLoading(false);
           return;
         }
@@ -42,17 +43,42 @@ const GoogleCalendarEvents = ({ selectedDate }) => {
         
         // Get events for the selected date
         const eventList = await CalendarService.getEventsFromCalendar(startDate, endDate);
-        setEvents(eventList || []);
+        if (isMounted) {
+          setEvents(eventList || []);
+        }
       } catch (error) {
         console.error("Error loading Google Calendar events:", error);
-        setError(error.message || "Failed to load events");
+        if (isMounted) {
+          setError("Couldn't load events. Please try again.");
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+    
+    // Helper to check if calendar is connected
+    const checkCalendarConnection = async () => {
+      try {
+        await CalendarService.initializeGoogleCalendar();
+        const isSignedIn = CalendarService.isSignedInToGoogle();
+        if (isMounted) {
+          setCalendarConnected(isSignedIn);
+        }
+        return isSignedIn;
+      } catch (error) {
+        console.error("Error checking Google Calendar connection:", error);
+        return false;
       }
     };
     
     loadEvents();
-  }, [currentUser, selectedDate]);
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDate, currentUser]);
   
   // Format event time to a readable format
   const formatEventTime = (dateTimeString) => {
@@ -80,10 +106,26 @@ const GoogleCalendarEvents = ({ selectedDate }) => {
           <button 
             onClick={async () => {
               try {
+                setLoading(true);
                 await CalendarService.signInToGoogle();
                 setCalendarConnected(true);
+                
+                // After successful connection, reload events
+                if (selectedDate) {
+                  const startDate = new Date(selectedDate);
+                  startDate.setHours(0, 0, 0, 0);
+                  
+                  const endDate = new Date(selectedDate);
+                  endDate.setHours(23, 59, 59, 999);
+                  
+                  const eventList = await CalendarService.getEventsFromCalendar(startDate, endDate);
+                  setEvents(eventList || []);
+                }
               } catch (error) {
                 console.error("Error signing in to Google:", error);
+                setError("Couldn't connect to Google Calendar");
+              } finally {
+                setLoading(false);
               }
             }}
             className="text-blue-600 text-xs hover:underline mt-1 font-roboto"
@@ -99,7 +141,7 @@ const GoogleCalendarEvents = ({ selectedDate }) => {
     return (
       <div className="p-3 bg-red-50 rounded text-sm text-red-700 font-roboto flex items-start">
         <AlertCircle size={14} className="mr-2 mt-0.5 flex-shrink-0" />
-        <p>Error loading calendar events: {error}</p>
+        <p>{error}</p>
       </div>
     );
   }
@@ -114,8 +156,8 @@ const GoogleCalendarEvents = ({ selectedDate }) => {
   
   return (
     <div className="space-y-2 font-roboto">
-      {events.map(event => (
-        <div key={event.id} className="p-2 border rounded-lg flex justify-between items-center">
+      {events.map((event, index) => (
+        <div key={event.id || index} className="p-2 border rounded-lg flex justify-between items-center">
           <div>
             <p className="text-sm font-medium truncate">{event.summary}</p>
             <p className="text-xs text-gray-500">

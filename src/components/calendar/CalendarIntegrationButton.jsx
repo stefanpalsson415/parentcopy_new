@@ -1,47 +1,27 @@
+// src/components/calendar/CalendarIntegrationButton.jsx
 import React, { useState, useEffect } from 'react';
-import { Calendar, Check, AlertCircle, Clock, Download } from 'lucide-react';
+import { Calendar, Check, AlertCircle, Clock, Download, Plus } from 'lucide-react';
 import CalendarService from '../../services/CalendarService';
 import { useAuth } from '../../contexts/AuthContext';
-import { useFamily } from '../../contexts/FamilyContext';
 
-
-// New code
 const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
   const { currentUser } = useAuth();
-  const { selectedUser } = useFamily();
   const [isLoading, setIsLoading] = useState(false);
   const [isAdded, setIsAdded] = useState(false);
   const [error, setError] = useState(null);
-  const [isSignedIn, setIsSignedIn] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const [calendarSettings, setCalendarSettings] = useState(null);
   
   // Check if user has calendar settings
   useEffect(() => {
     const loadSettings = async () => {
-      if (currentUser) {
+      if (currentUser && currentUser.uid) {
         try {
           const settings = await CalendarService.loadUserCalendarSettings(currentUser.uid);
           setCalendarSettings(settings);
-          
-          // Check if signed in to Google (if that's the active type)
-          if (settings?.defaultCalendarType === 'google') {
-            console.log("Initializing Google Calendar...");
-            await CalendarService.initializeGoogleCalendar();
-            
-            // Test Google sign-in state
-            const signedIn = CalendarService.isSignedInToGoogle();
-            console.log("Google Calendar sign-in state:", signedIn);
-            setIsSignedIn(signedIn);
-            
-            // If not signed in, we'll handle this when the user clicks the button
-            if (!signedIn) {
-              console.log("Not signed in to Google Calendar. Will prompt on button click.");
-            }
-          }
         } catch (error) {
           console.error("Error loading calendar settings:", error);
-          // Still allow the component to render even if there's an error
+          // Still allow button to function with default settings
         }
       }
     };
@@ -49,81 +29,40 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
     loadSettings();
   }, [currentUser]);
   
-  
-  // Add this after other useEffects in CalendarIntegrationButton.jsx
+  // Check if this event was already added
   useEffect(() => {
-    // Check if this event was already added
+    if (!item || !item.id) return;
+    
     try {
       const addedEvents = JSON.parse(localStorage.getItem('addedCalendarEvents') || '{}');
       const eventKey = `${itemType}-${item.id}`;
       if (addedEvents[eventKey]) {
-        // This event was already added
         setIsAdded(true);
         
-        // Reset after 2 seconds to allow re-adding if needed
-        setTimeout(() => {
+        // Auto-reset after 2 hours to allow re-adding if needed
+        const addedTime = new Date(addedEvents[eventKey].addedAt).getTime();
+        if (Date.now() - addedTime > 7200000) { // 2 hours
+          delete addedEvents[eventKey];
+          localStorage.setItem('addedCalendarEvents', JSON.stringify(addedEvents));
           setIsAdded(false);
-        }, 2000);
+        }
       }
     } catch (error) {
       console.error("Error checking added events:", error);
     }
-  }, [item.id, itemType]);
+  }, [item, itemType]);
   
-  // Add this function to get user-specific Google token
-const getUserSpecificGoogleToken = () => {
-  try {
-    // Try to get user-specific token first
-    const userToken = localStorage.getItem(`googleToken_${selectedUser?.id}`);
-    if (userToken) {
-      return JSON.parse(userToken);
-    }
-    
-    // Fall back to general token
-    const generalToken = localStorage.getItem('googleAuthToken');
-    if (generalToken) {
-      return JSON.parse(generalToken);
-    }
-    
-    return null;
-  } catch (e) {
-    console.error("Error getting user token:", e);
-    return null;
-  }
-};
-  
-
-
-const handleAddToCalendar = async () => {
-  setIsLoading(true);
-  setError(null);
-  
-  try {
+  const handleAddToCalendar = async () => {
     // If there's no default calendar type set, show calendar options instead
     if (!calendarSettings?.defaultCalendarType) {
       setShowOptions(true);
-      setIsLoading(false);
       return;
     }
     
-    // Get user-specific Google auth token if available
-    const userToken = getUserSpecificGoogleToken();
-    if (userToken && calendarSettings.defaultCalendarType === 'google') {
-      console.log("Using user-specific Google token for calendar integration");
-    }
+    setIsLoading(true);
+    setError(null);
     
-    // Make sure we're signed in to Google if using Google Calendar
-    if (calendarSettings.defaultCalendarType === 'google' && !isSignedIn) {
-      console.log("Not signed in to Google Calendar, signing in now");
-      try {
-        await CalendarService.signInToGoogle();
-        setIsSignedIn(true);
-      } catch (signInError) {
-        console.error("Error signing in to Google Calendar:", signInError);
-        throw new Error("Could not sign in to Google Calendar. Please try again.");
-      }
-    }
-      
+    try {
       // Create event based on item type with better date handling
       let event;
       let eventDate = customDate;
@@ -158,54 +97,36 @@ const handleAddToCalendar = async () => {
         throw new Error("Unknown item type");
       }
       
-      // Add some more detailed event properties
-      event.description = (event.description || '') + 
-        `\n\nAdded from Allie Family Balance App\n${window.location.origin}`;
-      
-      // Add calendar alert/reminder if not already set
-      if (!event.reminders) {
-        event.reminders = {
-          useDefault: false,
-          overrides: [
-            {'method': 'popup', 'minutes': 60}, // 1 hour before
-            {'method': 'email', 'minutes': 1440} // 24 hours before
-          ]
-        };
-      }
-        
-      // Add to the default calendar
+      // Add the event to the calendar
       const result = await CalendarService.addEvent(event);
-      console.log("Event added to calendar:", result);
       
-      // Store the event ID in localStorage to remember it was added
-      if (result && result.eventId) {
-        const addedEvents = JSON.parse(localStorage.getItem('addedCalendarEvents') || '{}');
-        const eventKey = `${itemType}-${item.id}`;
-        addedEvents[eventKey] = {
-          eventId: result.eventId,
-          addedAt: new Date().toISOString(),
-          summary: event.summary,
-          isMock: result.isMock
-        };
-        localStorage.setItem('addedCalendarEvents', JSON.stringify(addedEvents));
+      if (result.success) {
+        // Store the event ID in localStorage to remember it was added
+        if (result.eventId) {
+          const addedEvents = JSON.parse(localStorage.getItem('addedCalendarEvents') || '{}');
+          const eventKey = `${itemType}-${item.id}`;
+          addedEvents[eventKey] = {
+            eventId: result.eventId,
+            addedAt: new Date().toISOString(),
+            summary: event.summary,
+            isMock: result.isMock
+          };
+          localStorage.setItem('addedCalendarEvents', JSON.stringify(addedEvents));
+        }
+        
+        // Mark as added
+        setIsAdded(true);
+        
+        // Reset after 5 seconds
+        setTimeout(() => {
+          setIsAdded(false);
+        }, 5000);
+      } else {
+        setError(result.error || "Failed to add to calendar");
       }
-      
-      // Mark as added
-      setIsAdded(true);
-      
-      // Only reset after longer time for user feedback
-      setTimeout(() => {
-        // Only reset if the component is still mounted
-        setIsAdded(false);
-      }, 5000);
     } catch (error) {
       console.error("Error adding to calendar:", error);
       setError(error.message || "Failed to add to calendar");
-      
-      // Reset error after 3 seconds
-      setTimeout(() => {
-        setError(null);
-      }, 3000);
     } finally {
       setIsLoading(false);
       setShowOptions(false);
@@ -218,49 +139,97 @@ const handleAddToCalendar = async () => {
     setError(null);
     
     try {
-      // Create event based on item type
+      // Create the appropriate event type
       let event;
+      
       if (itemType === 'task') {
         event = CalendarService.createEventFromTask(item);
+        
+        // Use custom date if provided
+        if (customDate) {
+          const customDateObj = typeof customDate === 'string' ? new Date(customDate) : customDate;
+          event.start.dateTime = customDateObj.toISOString();
+          
+          const endTime = new Date(customDateObj);
+          endTime.setHours(endTime.getHours() + 1);
+          event.end.dateTime = endTime.toISOString();
+        }
       } else if (itemType === 'meeting') {
-        event = CalendarService.createFamilyMeetingEvent(item.weekNumber, customDate || item.date);
+        event = CalendarService.createFamilyMeetingEvent(
+          item.weekNumber, 
+          typeof customDate === 'string' ? new Date(customDate) : customDate
+        );
       } else if (itemType === 'reminder') {
-        event = CalendarService.createTaskReminderEvent(item, customDate);
+        event = CalendarService.createTaskReminderEvent(
+          item, 
+          typeof customDate === 'string' ? new Date(customDate) : customDate
+        );
       } else {
         throw new Error("Unknown item type");
       }
       
       // Add to the specified calendar
       const result = await CalendarService.addEvent(event, calendarType);
-      console.log(`Event added to ${calendarType} calendar:`, result);
       
-      // Mark as added
-      setIsAdded(true);
-      
-      // Reset after 3 seconds
-      setTimeout(() => {
-        setIsAdded(false);
-      }, 3000);
+      if (result.success) {
+        // Store the event in localStorage
+        if (result.eventId) {
+          const addedEvents = JSON.parse(localStorage.getItem('addedCalendarEvents') || '{}');
+          const eventKey = `${itemType}-${item.id}`;
+          addedEvents[eventKey] = {
+            eventId: result.eventId,
+            addedAt: new Date().toISOString(),
+            summary: event.summary,
+            calendarType
+          };
+          localStorage.setItem('addedCalendarEvents', JSON.stringify(addedEvents));
+        }
+        
+        // Mark as added
+        setIsAdded(true);
+        
+        // Reset after 3 seconds
+        setTimeout(() => {
+          setIsAdded(false);
+        }, 3000);
+        
+        // Save this as the default calendar type for future adds
+        if (currentUser && currentUser.uid) {
+          try {
+            const settings = await CalendarService.loadUserCalendarSettings(currentUser.uid) || {};
+            await CalendarService.saveUserCalendarSettings(currentUser.uid, {
+              ...settings,
+              defaultCalendarType: calendarType
+            });
+            
+            // Update local state
+            setCalendarSettings({
+              ...settings,
+              defaultCalendarType: calendarType
+            });
+          } catch (settingsError) {
+            console.error("Error saving calendar preference:", settingsError);
+            // Non-critical error, don't show to user
+          }
+        }
+      } else {
+        throw new Error(result.error || "Failed to add to calendar");
+      }
     } catch (error) {
       console.error(`Error adding to ${calendarType} calendar:`, error);
       setError(error.message || `Failed to add to ${calendarType} calendar`);
-      
-      // Reset error after 3 seconds
-      setTimeout(() => {
-        setError(null);
-      }, 3000);
     } finally {
       setIsLoading(false);
       setShowOptions(false);
     }
   };
   
-  // No calendar settings yet
+  // If no calendar settings yet
   if (!calendarSettings && !isLoading && !error && !isAdded) {
     return (
       <button
         onClick={() => window.location.href = '/settings?tab=calendar'}
-        className="flex items-center text-xs px-2 py-1 rounded bg-gray-100 text-gray-700 hover:bg-gray-200"
+        className="flex items-center text-xs px-2 py-1 rounded bg-gray-100 text-gray-700 hover:bg-gray-200 font-roboto"
       >
         <Calendar size={12} className="mr-1" />
         Set Up Calendar
@@ -279,7 +248,7 @@ const handleAddToCalendar = async () => {
             : error
               ? 'bg-red-100 text-red-700'
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-        }`}
+        } font-roboto`}
       >
         {isLoading ? (
           <div className="w-3 h-3 border border-gray-500 border-t-transparent rounded-full animate-spin mr-1"></div>
@@ -288,7 +257,7 @@ const handleAddToCalendar = async () => {
         ) : error ? (
           <AlertCircle size={12} className="mr-1" />
         ) : (
-          <Calendar size={12} className="mr-1" />
+          <Plus size={12} className="mr-1" />
         )}
         
         {isAdded 
@@ -302,7 +271,7 @@ const handleAddToCalendar = async () => {
       
       {/* Dropdown menu for calendar options */}
       {showOptions && (
-        <div className="absolute top-full right-0 mt-1 w-48 bg-white rounded-md shadow-lg z-10 border">
+        <div className="absolute top-full right-0 mt-1 w-48 bg-white rounded-md shadow-lg z-10 border font-roboto">
           <div className="py-1">
             <button
               onClick={() => handleAddToSpecificCalendar('google')}
@@ -314,7 +283,9 @@ const handleAddToCalendar = async () => {
             
             <button
               onClick={() => handleAddToSpecificCalendar('apple')}
-              className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              className={`flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 ${
+                !CalendarService.appleCalendarAvailable ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
               disabled={!CalendarService.appleCalendarAvailable}
             >
               <Calendar size={14} className="mr-2 text-gray-600" />
