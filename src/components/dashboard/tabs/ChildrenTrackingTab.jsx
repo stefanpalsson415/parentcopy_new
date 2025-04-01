@@ -6,7 +6,7 @@ import {
   PlusCircle, Edit, Trash2, CheckCircle, Camera,
   MessageCircle, BarChart2, Filter, Info, Brain,
   AlarmClock, School, Music, User, Smile, Frown,
-  Apple, FileText, Award, MapPin, Bell, Coffee
+  Apple, FileText, Award, MapPin, Bell, Sun, Moon, Ban, Palette, ThumbsUp, Coffee
 } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -2741,7 +2741,7 @@ const ChildrenTrackingTab = () => {
                 <input
                   type="text"
                   className="w-full p-2 border rounded font-roboto"
-                  placeholder="E.g., 3'6\" or 107 cm"
+                  placeholder="E.g., 3'6 or 107 cm"
                   value={growthForm.height}
                   onChange={(e) => setGrowthForm({...growthForm, height: e.target.value})}
                 />
