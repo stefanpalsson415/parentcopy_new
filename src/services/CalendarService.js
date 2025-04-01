@@ -15,8 +15,8 @@ class CalendarService {
     this.lastAuthAttempt = 0;
     
     // Get API credentials from environment variables
-    this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY;
-    this.clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+    this.apiKey = 'AIzaSyAmR2paggX1Emt4RpGGnlHuadqpveSY0aI';
+    this.clientId = '363935868004-1vd75fqpf2e6i8dl73pi4p56br8i4h9p.apps.googleusercontent.com';
     
     // Use real integration by default
     this.mockMode = false;
@@ -99,7 +99,6 @@ class CalendarService {
     }
   }
 
-  // Initialize Google Calendar API
   // Initialize Google Calendar API
 async initializeGoogleCalendar() {
   // If already initialized, return immediately
