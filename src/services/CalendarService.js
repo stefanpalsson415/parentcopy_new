@@ -113,6 +113,8 @@ class CalendarService {
             this.mockMode = true; // Fall back to mock mode
             resolve(false); // Resolve with false instead of rejecting
           };
+          script.async = true; // Make script loading async
+          script.defer = true; // Defer loading
           document.body.appendChild(script);
         } else {
           this._initGapiClient(resolve, reject);
@@ -123,6 +125,54 @@ class CalendarService {
         resolve(false); // Resolve with false instead of rejecting
       }
     });
+  }
+  
+  _initGapiClient(resolve, reject) {
+    // Set a timeout to prevent hanging
+    const timeout = setTimeout(() => {
+      console.warn("Google API client initialization timed out");
+      this.mockMode = true;
+      resolve(false);
+    }, 5000);
+    
+    // Try to gracefully load the client library
+    try {
+      window.gapi.load('client:auth2', async () => {
+        try {
+          clearTimeout(timeout);
+          
+          try {
+            // Initialize the client with API key and auth
+            await window.gapi.client.init({
+              apiKey: this.apiKey,
+              clientId: this.clientId,
+              discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+              scope: 'https://www.googleapis.com/auth/calendar.events',
+              ux_mode: 'popup' // Use popup mode for better compatibility
+            });
+            
+            this.googleApiLoaded = true;
+            console.log("Google API client initialized successfully");
+            resolve(true);
+          } catch (error) {
+            // Handle initialization errors gracefully
+            console.warn("Error initializing Google API client:", error);
+            this.mockMode = true;
+            resolve(false);
+          }
+        } catch (error) {
+          clearTimeout(timeout);
+          console.warn("Error loading Google client:", error);
+          this.mockMode = true;
+          resolve(false);
+        }
+      });
+    } catch (error) {
+      clearTimeout(timeout);
+      console.warn("Error in gapi.load:", error);
+      this.mockMode = true;
+      resolve(false);
+    }
   }
 
   _initGapiClient(resolve, reject) {

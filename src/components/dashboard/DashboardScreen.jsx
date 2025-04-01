@@ -82,6 +82,26 @@ useEffect(() => {
 }, [currentUser]);
 
 useEffect(() => {
+  // Suppress Google API errors to avoid console noise
+  import('../utils/CalendarErrorHandler').then(module => {
+    module.default.suppressApiErrors();
+  });
+  
+  // Initialize calendar early but don't block on failures
+  const initializeCalendar = async () => {
+    try {
+      await CalendarService.initializeGoogleCalendar();
+    } catch (error) {
+      console.warn("Calendar initialization failed:", error);
+      // The app will continue without calendar features
+    }
+  };
+  
+  initializeCalendar();
+}, []);
+
+
+useEffect(() => {
   // Dynamically import the service to avoid circular dependencies
   import('../../services/AllieAIEngineService').then(module => {
     setAllieAIEngineService(module.default);

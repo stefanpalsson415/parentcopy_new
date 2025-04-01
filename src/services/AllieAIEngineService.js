@@ -5,37 +5,67 @@ import { doc, getDoc, collection, query, where, getDocs, setDoc, serverTimestamp
 import { db } from './firebase';
 
 class AllieAIEngineService {
-  // Enhanced JSON parsing with fallback handling
-  safelyParseJSON(jsonString, defaultValue) {
+  // Enhanced JSON parsing with better fallback handling
+safelyParseJSON(jsonString, defaultValue) {
+  try {
+    // Handle empty or null responses
+    if (!jsonString || typeof jsonString !== 'string') {
+      console.warn("Invalid input for JSON parsing:", jsonString);
+      return defaultValue;
+    }
+
+    // Try direct parsing first
     try {
-      // First try simple parsing
       return JSON.parse(jsonString);
     } catch (initialError) {
       console.warn("Initial JSON parsing failed, attempting recovery:", initialError.message);
-      
-      try {
-        // Try to find and extract a valid JSON object using regex
-        // This handles cases where Claude adds explanatory text before/after the JSON
-        const jsonMatch = jsonString.match(/(\{[\s\S]*\})/);
-        if (jsonMatch && jsonMatch[0]) {
-          return JSON.parse(jsonMatch[0]);
-        }
-        
-        // If that fails, try to find JSON arrays
-        const jsonArrayMatch = jsonString.match(/(\[[\s\S]*\])/);
-        if (jsonArrayMatch && jsonArrayMatch[0]) {
-          return JSON.parse(jsonArrayMatch[0]);
-        }
-        
-        console.error("Could not extract valid JSON from response");
-        return defaultValue;
-      } catch (recoveryError) {
-        console.error("JSON recovery failed:", recoveryError.message);
-        console.log("Original response:", jsonString.substring(0, 500) + "...");
-        return defaultValue;
-      }
     }
+    
+    // Try to find and extract a valid JSON object
+    try {
+      // Look for anything that looks like a JSON object
+      const objectMatch = jsonString.match(/(\{[\s\S]*\})/);
+      if (objectMatch && objectMatch[0]) {
+        // Further clean the match to ensure it's valid JSON
+        const cleanJSON = objectMatch[0]
+          .replace(/\\'/g, "'")
+          .replace(/\\"/g, '"')
+          .replace(/\n/g, ' ');
+          
+        return JSON.parse(cleanJSON);
+      }
+      
+      // Try to find JSON arrays
+      const arrayMatch = jsonString.match(/(\[[\s\S]*\])/);
+      if (arrayMatch && arrayMatch[0]) {
+        return JSON.parse(arrayMatch[0]);
+      }
+    } catch (recoveryError) {
+      console.warn("JSON extraction failed:", recoveryError.message);
+    }
+    
+    // Last resort: Look for any valid JSON substring
+    const possibleJson = jsonString.split('\n').find(line => {
+      try {
+        JSON.parse(line.trim());
+        return true;
+      } catch (e) {
+        return false;
+      }
+    });
+    
+    if (possibleJson) {
+      return JSON.parse(possibleJson.trim());
+    }
+    
+    console.error("Could not extract valid JSON from response");
+    console.log("Original response:", jsonString.substring(0, 200) + "...");
+    return defaultValue;
+  } catch (error) {
+    console.error("JSON recovery completely failed:", error.message);
+    return defaultValue;
   }
+}
 
   // Generate personalized tasks based on survey data
   async generatePersonalizedTasks(familyId, currentWeek, previousTasks = []) {
