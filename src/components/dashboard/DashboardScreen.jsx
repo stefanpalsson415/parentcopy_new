@@ -21,6 +21,8 @@ import CalendarService from '../../services/CalendarService';
 import DashboardTutorial from '../onboarding/DashboardTutorial';
 import ErrorBoundary from '../common/ErrorBoundary';
 import CalendarErrorHandler from '../../utils/CalendarErrorHandler';
+import ChildrenTrackingTab from './tabs/ChildrenTrackingTab';  // Add this line
+
 
 
 
@@ -380,6 +382,8 @@ useEffect(() => {
           onStartWeeklyCheckIn={handleStartWeeklyCheckIn} 
           onOpenFamilyMeeting={handleOpenFamilyMeeting} 
         />;
+      case 'children':  // Add this case
+        return <ChildrenTrackingTab />;
       case 'initial-survey':
         return <InitialSurveyTab />;
       default:
@@ -503,6 +507,23 @@ useEffect(() => {
           </button>
           )}
           
+{/* Children Tracking Tab - ADD THIS BUTTON */}
+<button 
+      id="children-tab"
+      className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'children' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+      onClick={() => setActiveTab('children')}
+    >
+      Children Tracking
+    </button>
+    
+    <button 
+      className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'initial-survey' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+      onClick={() => setActiveTab('initial-survey')}
+    >
+      Initial Survey
+    </button>
+
+
           <button 
             className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'initial-survey' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
             onClick={() => setActiveTab('initial-survey')}
@@ -510,6 +531,9 @@ useEffect(() => {
             Initial Survey
           </button>
           
+
+
+
           {/* Add completed weeks as tabs */}
           {weekTabs.map(tab => (
             <button 

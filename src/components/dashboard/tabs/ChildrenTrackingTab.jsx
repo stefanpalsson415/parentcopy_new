@@ -2181,4 +2181,1288 @@ const ChildrenTrackingTab = () => {
     return (
       <div className="space-y-6">
         {filteredChildren.map(child => (
-          <div key={child.id} className
+          <div key={child.id} className="bg-white rounded-lg shadow p-4">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center">
+                <div className="w-8 h-8 rounded-full overflow-hidden mr-2">
+                  <img 
+                    src={child.profilePicture || '/api/placeholder/32/32'} 
+                    alt={child.name} 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <h5 className="font-medium font-roboto">{child.name}'s Meal Information</h5>
+              </div>
+              <button 
+                className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
+                onClick={() => handleAddMeal(child.id)}
+              >
+                <PlusCircle size={14} className="mr-1" />
+                Add Meal Info
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Allergies */}
+              <div>
+                <h6 className="text-sm font-medium font-roboto mb-2 flex items-center">
+                  <AlertCircle size={14} className="text-red-500 mr-1" />
+                  Allergies & Restrictions
+                </h6>
+                {childrenData[child.id]?.meals?.allergies?.length > 0 ? (
+                  <div className="space-y-2">
+                    {childrenData[child.id].meals.allergies.map(item => (
+                      <MealItemCard key={item.id} item={item} childId={child.id} category="allergies" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-500 font-roboto">No allergies recorded</p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Dietary Restrictions */}
+              <div>
+                <h6 className="text-sm font-medium font-roboto mb-2 flex items-center">
+                  <Ban size={14} className="text-amber-500 mr-1" />
+                  Dietary Restrictions
+                </h6>
+                {childrenData[child.id]?.meals?.restrictions?.length > 0 ? (
+                  <div className="space-y-2">
+                    {childrenData[child.id].meals.restrictions.map(item => (
+                      <MealItemCard key={item.id} item={item} childId={child.id} category="restrictions" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-500 font-roboto">No dietary restrictions recorded</p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Food Preferences */}
+              <div>
+                <h6 className="text-sm font-medium font-roboto mb-2 flex items-center">
+                  <ThumbsUp size={14} className="text-green-500 mr-1" />
+                  Food Preferences
+                </h6>
+                {childrenData[child.id]?.meals?.preferences?.length > 0 ? (
+                  <div className="space-y-2">
+                    {childrenData[child.id].meals.preferences.map(item => (
+                      <MealItemCard key={item.id} item={item} childId={child.id} category="preferences" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-500 font-roboto">No food preferences recorded</p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Meal planning */}
+              <div className="mt-4">
+                <h6 className="text-sm font-medium font-roboto mb-2">Meal Planning</h6>
+                <div className="bg-gray-50 p-3 rounded-lg text-center">
+                  <Utensils size={24} className="mx-auto text-gray-400 mb-2" />
+                  <p className="text-sm text-gray-500 font-roboto">Meal planning calendar will appear here</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+  
+  // Render the events section
+  const renderEventsSection = () => {
+    const children = familyMembers.filter(member => member.role === 'child');
+    
+    if (children.length === 0) {
+      return (
+        <div className="text-center p-4 bg-gray-50 rounded-lg">
+          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
+        </div>
+      );
+    }
+    
+    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
+    
+    return (
+      <div className="space-y-6">
+        {filteredChildren.map(child => (
+          <div key={child.id} className="bg-white rounded-lg shadow p-4">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center">
+                <div className="w-8 h-8 rounded-full overflow-hidden mr-2">
+                  <img 
+                    src={child.profilePicture || '/api/placeholder/32/32'} 
+                    alt={child.name} 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <h5 className="font-medium font-roboto">{child.name}'s Special Events</h5>
+              </div>
+              <button 
+                className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
+                onClick={() => handleAddEvent(child.id)}
+              >
+                <PlusCircle size={14} className="mr-1" />
+                Add Event
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Upcoming events */}
+              <div>
+                <h6 className="text-sm font-medium font-roboto mb-2">Upcoming Events</h6>
+                {childrenData[child.id]?.events?.filter(e => new Date(e.date) >= new Date()).length > 0 ? (
+                  <div className="space-y-2">
+                    {childrenData[child.id].events
+                      .filter(e => new Date(e.date) >= new Date())
+                      .sort((a, b) => new Date(a.date) - new Date(b.date))
+                      .map(event => (
+                        <EventCard key={event.id} event={event} childId={child.id} />
+                      ))}
+                  </div>
+                ) : (
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-500 font-roboto">No upcoming events</p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Past events */}
+              {childrenData[child.id]?.events?.filter(e => new Date(e.date) < new Date()).length > 0 && (
+                <div>
+                  <h6 className="text-sm font-medium font-roboto mb-2">Past Events</h6>
+                  <div className="space-y-2">
+                    {childrenData[child.id].events
+                      .filter(e => new Date(e.date) < new Date())
+                      .sort((a, b) => new Date(b.date) - new Date(a.date))
+                      .map(event => (
+                        <EventCard key={event.id} event={event} childId={child.id} />
+                      ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Events calendar */}
+              <div className="mt-4">
+                <h6 className="text-sm font-medium font-roboto mb-2">Events Calendar</h6>
+                <div className="bg-gray-50 p-3 rounded-lg text-center">
+                  <Calendar size={24} className="mx-auto text-gray-400 mb-2" />
+                  <p className="text-sm text-gray-500 font-roboto">Events calendar will appear here</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+  
+  // Render the milestones section
+  const renderMilestonesSection = () => {
+    const children = familyMembers.filter(member => member.role === 'child');
+    
+    if (children.length === 0) {
+      return (
+        <div className="text-center p-4 bg-gray-50 rounded-lg">
+          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
+        </div>
+      );
+    }
+    
+    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
+    
+    return (
+      <div className="space-y-6">
+        {filteredChildren.map(child => (
+          <div key={child.id} className="bg-white rounded-lg shadow p-4">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center">
+                <div className="w-8 h-8 rounded-full overflow-hidden mr-2">
+                  <img 
+                    src={child.profilePicture || '/api/placeholder/32/32'} 
+                    alt={child.name} 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <h5 className="font-medium font-roboto">{child.name}'s Milestones</h5>
+              </div>
+              <button 
+                className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
+                onClick={() => handleAddMilestone(child.id)}
+              >
+                <PlusCircle size={14} className="mr-1" />
+                Add Milestone
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Recent milestones */}
+              <div>
+                <h6 className="text-sm font-medium font-roboto mb-2">Recent Milestones</h6>
+                {childrenData[child.id]?.milestones?.length > 0 ? (
+                  <div className="space-y-2">
+                    {childrenData[child.id].milestones
+                      .sort((a, b) => new Date(b.date) - new Date(a.date))
+                      .slice(0, 3)
+                      .map(milestone => (
+                        <MilestoneCard key={milestone.id} milestone={milestone} childId={child.id} />
+                      ))}
+                  </div>
+                ) : (
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-500 font-roboto">No milestones recorded yet</p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Milestone timeline */}
+              <div className="mt-4">
+                <h6 className="text-sm font-medium font-roboto mb-2">Milestone Timeline</h6>
+                {childrenData[child.id]?.milestones?.length > 0 ? (
+                  <div className="relative pt-6 pb-6">
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-px h-full bg-gray-300"></div>
+                    </div>
+                    
+                    <div className="relative space-y-8">
+                      {childrenData[child.id].milestones
+                        .sort((a, b) => new Date(b.date) - new Date(a.date))
+                        .map(milestone => (
+                          <div key={milestone.id} className="relative">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0 h-4 w-4 rounded-full bg-blue-500 z-10"></div>
+                              <div className="ml-6">
+                                <div className="flex items-center">
+                                  {milestone.type === 'achievement' && <Star size={16} className="text-amber-500 mr-1" />}
+                                  {milestone.type === 'growth' && <Activity size={16} className="text-green-500 mr-1" />}
+                                  {milestone.type === 'other' && <Cake size={16} className="text-purple-500 mr-1" />}
+                                  <h6 className="font-medium text-sm font-roboto">{milestone.title}</h6>
+                                </div>
+                                <p className="text-xs text-gray-500 font-roboto">
+                                  {formatDate(milestone.date)}
+                                </p>
+                                {milestone.description && (
+                                  <p className="text-sm mt-1 font-roboto">{milestone.description}</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 p-3 rounded-lg text-center">
+                    <Award size={24} className="mx-auto text-gray-400 mb-2" />
+                    <p className="text-sm text-gray-500 font-roboto">Milestone timeline will appear here</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+  
+  return (
+    <div className="space-y-6">
+      {/* Introduction */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-start">
+          <div className="flex-shrink-0 mr-4">
+            <Users size={32} className="text-black" />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold mb-2 font-roboto">Children Tracking Dashboard</h3>
+            <p className="text-gray-600 font-roboto">
+              Keep track of your children's appointments, growth, routines, academics, activities, 
+              emotional well-being, meals, events, and milestones all in one place.
+            </p>
+          </div>
+        </div>
+        
+        {/* Child selection tabs */}
+        {renderChildrenTabs()}
+        
+        {/* AI insights */}
+        {renderAiInsights()}
+      </div>
+      
+      {/* Medical & Health Appointments Section */}
+      {renderSectionHeader("Medical & Health Appointments", "medical", <Heart size={20} className="text-red-500" />)}
+      {expandedSections.medical && renderMedicalSection()}
+      
+      {/* Growth & Development Section */}
+      {renderSectionHeader("Growth & Development", "growth", <Activity size={20} className="text-green-500" />)}
+      {expandedSections.growth && renderGrowthSection()}
+      
+      {/* Daily Routines Section */}
+      {renderSectionHeader("Daily Routines & Schedules", "routines", <Clock size={20} className="text-blue-500" />)}
+      {expandedSections.routines && renderRoutinesSection()}
+      
+      {/* Homework Section */}
+      {renderSectionHeader("Homework & Academic Checkpoints", "homework", <BookOpen size={20} className="text-amber-500" />)}
+      {expandedSections.homework && renderHomeworkSection()}
+      
+      {/* Activities Section */}
+      {renderSectionHeader("Social & Extracurricular Activities", "activities", <Users size={20} className="text-purple-500" />)}
+      {expandedSections.activities && renderActivitiesSection()}
+      
+      {/* Emotional Check-ins Section */}
+      {renderSectionHeader("Emotional & Behavioral Check-ins", "emotional", <Heart size={20} className="text-pink-500" />)}
+      {expandedSections.emotional && renderEmotionalSection()}
+      
+      {/* Meal Planning Section */}
+      {renderSectionHeader("Meal Planning & Dietary Needs", "meals", <Utensils size={20} className="text-orange-500" />)}
+      {expandedSections.meals && renderMealsSection()}
+      
+      {/* Events Section */}
+      {renderSectionHeader("Family Calendar & Special Events", "events", <Calendar size={20} className="text-indigo-500" />)}
+      {expandedSections.events && renderEventsSection()}
+      
+      {/* Milestones Section */}
+      {renderSectionHeader("Milestone Memories & Celebrations", "milestones", <Award size={20} className="text-yellow-500" />)}
+      {expandedSections.milestones && renderMilestonesSection()}
+      
+      {/* Modal for adding medical appointment */}
+      {showAppointmentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium mb-4 font-roboto">
+              {activeMedicalAppointment ? 'Edit Appointment' : 'Add Medical Appointment'}
+            </h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded font-roboto"
+                  placeholder="E.g., Annual Checkup, Dentist"
+                  value={appointmentForm.title}
+                  onChange={(e) => setAppointmentForm({...appointmentForm, title: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full p-2 border rounded font-roboto"
+                  value={appointmentForm.date}
+                  onChange={(e) => setAppointmentForm({...appointmentForm, date: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Time (optional)
+                </label>
+                <input
+                  type="time"
+                  className="w-full p-2 border rounded font-roboto"
+                  value={appointmentForm.time}
+                  onChange={(e) => setAppointmentForm({...appointmentForm, time: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Doctor/Provider (optional)
+                </label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded font-roboto"
+                  placeholder="E.g., Dr. Smith"
+                  value={appointmentForm.doctor}
+                  onChange={(e) => setAppointmentForm({...appointmentForm, doctor: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Notes (optional)
+                </label>
+                <textarea
+                  className="w-full p-2 border rounded font-roboto"
+                  rows="3"
+                  placeholder="E.g., Bring insurance card, questions to ask"
+                  value={appointmentForm.notes}
+                  onChange={(e) => setAppointmentForm({...appointmentForm, notes: e.target.value})}
+                ></textarea>
+              </div>
+              
+              {activeMedicalAppointment && (
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="completed"
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                    checked={appointmentForm.completed}
+                    onChange={(e) => setAppointmentForm({...appointmentForm, completed: e.target.checked})}
+                  />
+                  <label htmlFor="completed" className="ml-2 block text-sm text-gray-900 font-roboto">
+                    Mark as completed
+                  </label>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                className="px-4 py-2 border rounded font-roboto"
+                onClick={() => setShowAppointmentModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded font-roboto"
+                onClick={handleAppointmentSubmit}
+              >
+                {activeMedicalAppointment ? 'Save Changes' : 'Add Appointment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal for adding milestone */}
+      {showMilestoneModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium mb-4 font-roboto">Add Milestone</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded font-roboto"
+                  placeholder="E.g., First Steps, Lost First Tooth"
+                  value={milestoneForm.title}
+                  onChange={(e) => setMilestoneForm({...milestoneForm, title: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full p-2 border rounded font-roboto"
+                  value={milestoneForm.date}
+                  onChange={(e) => setMilestoneForm({...milestoneForm, date: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Type
+                </label>
+                <select
+                  className="w-full p-2 border rounded font-roboto"
+                  value={milestoneForm.type}
+                  onChange={(e) => setMilestoneForm({...milestoneForm, type: e.target.value})}
+                >
+                  <option value="achievement">Achievement</option>
+                  <option value="growth">Growth & Development</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Description (optional)
+                </label>
+                <textarea
+                  className="w-full p-2 border rounded font-roboto"
+                  rows="3"
+                  placeholder="E.g., Took first steps while at grandma's house"
+                  value={milestoneForm.description}
+                  onChange={(e) => setMilestoneForm({...milestoneForm, description: e.target.value})}
+                ></textarea>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                className="px-4 py-2 border rounded font-roboto"
+                onClick={() => setShowMilestoneModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded font-roboto"
+                onClick={handleMilestoneSubmit}
+              >
+                Add Milestone
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal for adding growth data */}
+      {showGrowthModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium mb-4 font-roboto">Add Growth Measurement</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full p-2 border rounded font-roboto"
+                  value={growthForm.date}
+                  onChange={(e) => setGrowthForm({...growthForm, date: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Height (optional)
+                </label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded font-roboto"
+                  placeholder="E.g., 3'6\" or 107 cm"
+                  value={growthForm.height}
+                  onChange={(e) => setGrowthForm({...growthForm, height: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Weight (optional)
+                </label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded font-roboto"
+                  placeholder="E.g., 45 lbs or 20 kg"
+                  value={growthForm.weight}
+                  onChange={(e) => setGrowthForm({...growthForm, weight: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Shoe Size (optional)
+                </label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded font-roboto"
+                  placeholder="E.g., 5 (US Child)"
+                  value={growthForm.shoeSize}
+                  onChange={(e) => setGrowthForm({...growthForm, shoeSize: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Clothing Size (optional)
+                </label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded font-roboto"
+                  placeholder="E.g., 5T, Small, etc."
+                  value={growthForm.clothingSize}
+                  onChange={(e) => setGrowthForm({...growthForm, clothingSize: e.target.value})}
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                className="px-4 py-2 border rounded font-roboto"
+                onClick={() => setShowGrowthModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded font-roboto"
+                onClick={handleGrowthSubmit}
+              >
+                Add Measurement
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal for adding routine */}
+      {showRoutineModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium mb-4 font-roboto">
+              {activeRoutine ? 'Edit Routine' : 'Add Routine'}
+            </h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded font-roboto"
+                  placeholder="E.g., Morning Prepare for School"
+                  value={routineForm.title}
+                  onChange={(e) => setRoutineForm({...routineForm, title: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Type
+                </label>
+                <select
+                  className="w-full p-2 border rounded font-roboto"
+                  value={routineForm.type}
+                  onChange={(e) => setRoutineForm({...routineForm, type: e.target.value})}
+                >
+                  <option value="morning">Morning</option>
+                  <option value="afternoon">Afternoon</option>
+                  <option value="evening">Evening</option>
+                  <option value="bedtime">Bedtime</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Days
+                </label>
+                <div className="grid grid-cols-7 gap-1">
+                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                    <button
+                      key={day}
+                      type="button"
+                      className={`p-2 text-xs text-center rounded ${
+                        routineForm.days.includes(day) 
+                          ? 'bg-blue-100 text-blue-800 border border-blue-300' 
+                          : 'bg-gray-100 border hover:bg-gray-200'
+                      } font-roboto`}
+                      onClick={() => {
+                        if (routineForm.days.includes(day)) {
+                          setRoutineForm({
+                            ...routineForm, 
+                            days: routineForm.days.filter(d => d !== day)
+                          });
+                        } else {
+                          setRoutineForm({
+                            ...routineForm,
+                            days: [...routineForm.days, day]
+                          });
+                        }
+                      }}
+                    >
+                      {day.substring(0, 3)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Start Time
+                </label>
+                <input
+                  type="time"
+                  className="w-full p-2 border rounded font-roboto"
+                  value={routineForm.startTime}
+                  onChange={(e) => setRoutineForm({...routineForm, startTime: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  End Time (optional)
+                </label>
+                <input
+                  type="time"
+                  className="w-full p-2 border rounded font-roboto"
+                  value={routineForm.endTime}
+                  onChange={(e) => setRoutineForm({...routineForm, endTime: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Description (optional)
+                </label>
+                <textarea
+                  className="w-full p-2 border rounded font-roboto"
+                  rows="3"
+                  placeholder="E.g., Steps involved in the routine"
+                  value={routineForm.description}
+                  onChange={(e) => setRoutineForm({...routineForm, description: e.target.value})}
+                ></textarea>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                className="px-4 py-2 border rounded font-roboto"
+                onClick={() => setShowRoutineModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded font-roboto"
+                onClick={handleRoutineSubmit}
+              >
+                {activeRoutine ? 'Save Changes' : 'Add Routine'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal for adding homework */}
+      {showHomeworkModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium mb-4 font-roboto">
+              {activeHomework ? 'Edit Homework' : 'Add Homework'}
+            </h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded font-roboto"
+                  placeholder="E.g., Math Homework, Science Project"
+                  value={homeworkForm.title}
+                  onChange={(e) => setHomeworkForm({...homeworkForm, title: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Subject
+                </label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded font-roboto"
+                  placeholder="E.g., Math, Science, Reading"
+                  value={homeworkForm.subject}
+                  onChange={(e) => setHomeworkForm({...homeworkForm, subject: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Due Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full p-2 border rounded font-roboto"
+                  value={homeworkForm.dueDate}
+                  onChange={(e) => setHomeworkForm({...homeworkForm, dueDate: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Priority
+                </label>
+                <select
+                  className="w-full p-2 border rounded font-roboto"
+                  value={homeworkForm.priority}
+                  onChange={(e) => setHomeworkForm({...homeworkForm, priority: e.target.value})}
+                >
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Description (optional)
+                </label>
+                <textarea
+                  className="w-full p-2 border rounded font-roboto"
+                  rows="3"
+                  placeholder="E.g., Pages 15-20, Problems 1-10"
+                  value={homeworkForm.description}
+                  onChange={(e) => setHomeworkForm({...homeworkForm, description: e.target.value})}
+                ></textarea>
+              </div>
+              
+              {activeHomework && (
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="completed"
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                    checked={homeworkForm.completed}
+                    onChange={(e) => setHomeworkForm({...homeworkForm, completed: e.target.checked})}
+                  />
+                  <label htmlFor="completed" className="ml-2 block text-sm text-gray-900 font-roboto">
+                    Mark as completed
+                  </label>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                className="px-4 py-2 border rounded font-roboto"
+                onClick={() => setShowHomeworkModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded font-roboto"
+                onClick={handleHomeworkSubmit}
+              >
+                {activeHomework ? 'Save Changes' : 'Add Homework'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal for adding activity */}
+      {showActivityModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium mb-4 font-roboto">
+              {activeActivity ? 'Edit Activity' : 'Add Activity'}
+            </h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded font-roboto"
+                  placeholder="E.g., Soccer Practice, Piano Lessons"
+                  value={activityForm.title}
+                  onChange={(e) => setActivityForm({...activityForm, title: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Type
+                </label>
+                <select
+                  className="w-full p-2 border rounded font-roboto"
+                  value={activityForm.type}
+                  onChange={(e) => setActivityForm({...activityForm, type: e.target.value})}
+                >
+                  <option value="sports">Sports</option>
+                  <option value="art">Arts & Crafts</option>
+                  <option value="music">Music</option>
+                  <option value="social">Social</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Location (optional)
+                </label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded font-roboto"
+                  placeholder="E.g., Community Center, School"
+                  value={activityForm.location}
+                  onChange={(e) => setActivityForm({...activityForm, location: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full p-2 border rounded font-roboto"
+                  value={activityForm.startDate}
+                  onChange={(e) => setActivityForm({...activityForm, startDate: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  End Date (optional)
+                </label>
+                <input
+                  type="date"
+                  className="w-full p-2 border rounded font-roboto"
+                  value={activityForm.endDate}
+                  onChange={(e) => setActivityForm({...activityForm, endDate: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Repeat Days (for recurring activities)
+                </label>
+                <div className="grid grid-cols-7 gap-1">
+                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                    <button
+                      key={day}
+                      type="button"
+                      className={`p-2 text-xs text-center rounded ${
+                        activityForm.repeatDay.includes(day) 
+                          ? 'bg-blue-100 text-blue-800 border border-blue-300' 
+                          : 'bg-gray-100 border hover:bg-gray-200'
+                      } font-roboto`}
+                      onClick={() => {
+                        if (activityForm.repeatDay.includes(day)) {
+                          setActivityForm({
+                            ...activityForm, 
+                            repeatDay: activityForm.repeatDay.filter(d => d !== day)
+                          });
+                        } else {
+                          setActivityForm({
+                            ...activityForm,
+                            repeatDay: [...activityForm.repeatDay, day]
+                          });
+                        }
+                      }}
+                    >
+                      {day.substring(0, 3)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Time (optional)
+                </label>
+                <input
+                  type="time"
+                  className="w-full p-2 border rounded font-roboto"
+                  value={activityForm.time}
+                  onChange={(e) => setActivityForm({...activityForm, time: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Notes (optional)
+                </label>
+                <textarea
+                  className="w-full p-2 border rounded font-roboto"
+                  rows="3"
+                  placeholder="E.g., Bring water bottle, uniform requirements"
+                  value={activityForm.notes}
+                  onChange={(e) => setActivityForm({...activityForm, notes: e.target.value})}
+                ></textarea>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                className="px-4 py-2 border rounded font-roboto"
+                onClick={() => setShowActivityModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded font-roboto"
+                onClick={handleActivitySubmit}
+              >
+                {activeActivity ? 'Save Changes' : 'Add Activity'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal for adding emotional check */}
+      {showEmotionalCheckModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium mb-4 font-roboto">
+              {activeEmotionalCheck ? 'Edit Emotional Check-in' : 'Add Emotional Check-in'}
+            </h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full p-2 border rounded font-roboto"
+                  value={emotionalCheckForm.date}
+                  onChange={(e) => setEmotionalCheckForm({...emotionalCheckForm, date: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Mood
+                </label>
+                <div className="grid grid-cols-5 gap-2">
+                  {['happy', 'sad', 'angry', 'worried', 'excited'].map(mood => (
+                    <button
+                      key={mood}
+                      type="button"
+                      className={`p-3 flex flex-col items-center ${
+                        emotionalCheckForm.mood === mood
+                          ? 'bg-blue-100 border-blue-300 border-2'
+                          : 'bg-gray-50 border'
+                      } rounded-lg`}
+                      onClick={() => setEmotionalCheckForm({...emotionalCheckForm, mood})}
+                    >
+                      <span className="text-2xl mb-1">
+                        {mood === 'happy' && '😊'}
+                        {mood === 'sad' && '😢'}
+                        {mood === 'angry' && '😠'}
+                        {mood === 'worried' && '😟'}
+                        {mood === 'excited' && '😃'}
+                      </span>
+                      <span className="text-xs capitalize font-roboto">{mood}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Notes (optional)
+                </label>
+                <textarea
+                  className="w-full p-2 border rounded font-roboto"
+                  rows="3"
+                  placeholder="E.g., Why they're feeling this way, any context"
+                  value={emotionalCheckForm.notes}
+                  onChange={(e) => setEmotionalCheckForm({...emotionalCheckForm, notes: e.target.value})}
+                ></textarea>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                className="px-4 py-2 border rounded font-roboto"
+                onClick={() => setShowEmotionalCheckModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded font-roboto"
+                onClick={handleEmotionalCheckSubmit}
+              >
+                {activeEmotionalCheck ? 'Save Changes' : 'Add Check-in'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal for adding meal */}
+      {showMealModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium mb-4 font-roboto">Add Meal Information</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Type
+                </label>
+                <select
+                  className="w-full p-2 border rounded font-roboto"
+                  value={mealForm.type}
+                  onChange={(e) => setMealForm({...mealForm, type: e.target.value})}
+                >
+                  <option value="preference">Food Preference</option>
+                  <option value="allergy">Food Allergy</option>
+                  <option value="restriction">Dietary Restriction</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  {mealForm.type === 'preference' ? 'Food Name' : 
+                   mealForm.type === 'allergy' ? 'Allergen' : 'Restriction'}
+                </label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded font-roboto"
+                  placeholder={
+                    mealForm.type === 'preference' ? 'E.g., Broccoli, Pizza' : 
+                    mealForm.type === 'allergy' ? 'E.g., Peanuts, Dairy' : 
+                    'E.g., Vegetarian, Gluten-free'
+                  }
+                  value={mealForm.name}
+                  onChange={(e) => setMealForm({...mealForm, name: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Details (optional)
+                </label>
+                <textarea
+                  className="w-full p-2 border rounded font-roboto"
+                  rows="3"
+                  placeholder={
+                    mealForm.type === 'preference' ? 'E.g., Likes with cheese' : 
+                    mealForm.type === 'allergy' ? 'E.g., Severity, symptoms' : 
+                    'E.g., Religious or personal reasons'
+                  }
+                  value={mealForm.details}
+                  onChange={(e) => setMealForm({...mealForm, details: e.target.value})}
+                ></textarea>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                className="px-4 py-2 border rounded font-roboto"
+                onClick={() => setShowMealModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded font-roboto"
+                onClick={handleMealSubmit}
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal for adding event */}
+      {showEventModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium mb-4 font-roboto">
+              {activeEvent ? 'Edit Event' : 'Add Event'}
+            </h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded font-roboto"
+                  placeholder="E.g., Birthday Party, School Play"
+                  value={eventForm.title}
+                  onChange={(e) => setEventForm({...eventForm, title: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Type
+                </label>
+                <select
+                  className="w-full p-2 border rounded font-roboto"
+                  value={eventForm.type}
+                  onChange={(e) => setEventForm({...eventForm, type: e.target.value})}
+                >
+                  <option value="birthday">Birthday</option>
+                  <option value="holiday">Holiday</option>
+                  <option value="school">School Event</option>
+                  <option value="family">Family Gathering</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full p-2 border rounded font-roboto"
+                  value={eventForm.date}
+                  onChange={(e) => setEventForm({...eventForm, date: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Time (optional)
+                </label>
+                <input
+                  type="time"
+                  className="w-full p-2 border rounded font-roboto"
+                  value={eventForm.time}
+                  onChange={(e) => setEventForm({...eventForm, time: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Location (optional)
+                </label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded font-roboto"
+                  placeholder="E.g., School Auditorium, Grandma's House"
+                  value={eventForm.location}
+                  onChange={(e) => setEventForm({...eventForm, location: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Description (optional)
+                </label>
+                <textarea
+                  className="w-full p-2 border rounded font-roboto"
+                  rows="3"
+                  placeholder="E.g., What to bring, dress code, special notes"
+                  value={eventForm.description}
+                  onChange={(e) => setEventForm({...eventForm, description: e.target.value})}
+                ></textarea>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                className="px-4 py-2 border rounded font-roboto"
+                onClick={() => setShowEventModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded font-roboto"
+                onClick={handleEventSubmit}
+              >
+                {activeEvent ? 'Save Changes' : 'Add Event'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ChildrenTrackingTab;
