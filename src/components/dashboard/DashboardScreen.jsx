@@ -83,7 +83,7 @@ useEffect(() => {
 
 useEffect(() => {
   // Suppress Google API errors to avoid console noise
-  import('../utils/CalendarErrorHandler').then(module => {
+  import('../../utils/CalendarErrorHandler').then(module => {
     module.default.suppressApiErrors();
   });
   

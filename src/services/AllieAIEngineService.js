@@ -6,12 +6,35 @@ import { db } from './firebase';
 
 class AllieAIEngineService {
   // Enhanced JSON parsing with better fallback handling
+// Improved JSON parsing with better text response handling
 safelyParseJSON(jsonString, defaultValue) {
   try {
     // Handle empty or null responses
     if (!jsonString || typeof jsonString !== 'string') {
       console.warn("Invalid input for JSON parsing:", jsonString);
       return defaultValue;
+    }
+
+    // Check if the response is a plain text insight rather than JSON
+    if (jsonString.trim().startsWith("Here are") || 
+        jsonString.trim().startsWith("Based on")) {
+      // Handle plain text responses by converting to our expected format
+      console.log("Received text response instead of JSON, creating structured format");
+      
+      // Extract meaningful content from the text
+      const textLines = jsonString.split('\n').filter(line => line.trim().length > 0);
+      
+      // Create structured insights from text
+      return {
+        insights: [
+          {
+            title: "AI Analysis",
+            category: "Family Balance",
+            description: textLines.slice(0, 3).join(' '),
+            actionItem: textLines.length > 3 ? textLines[3] : "Review your family workload balance."
+          }
+        ]
+      };
     }
 
     // Try direct parsing first
@@ -44,22 +67,8 @@ safelyParseJSON(jsonString, defaultValue) {
       console.warn("JSON extraction failed:", recoveryError.message);
     }
     
-    // Last resort: Look for any valid JSON substring
-    const possibleJson = jsonString.split('\n').find(line => {
-      try {
-        JSON.parse(line.trim());
-        return true;
-      } catch (e) {
-        return false;
-      }
-    });
-    
-    if (possibleJson) {
-      return JSON.parse(possibleJson.trim());
-    }
-    
     console.error("Could not extract valid JSON from response");
-    console.log("Original response:", jsonString.substring(0, 200) + "...");
+    console.log("Response preview:", jsonString.substring(0, 200) + "...");
     return defaultValue;
   } catch (error) {
     console.error("JSON recovery completely failed:", error.message);

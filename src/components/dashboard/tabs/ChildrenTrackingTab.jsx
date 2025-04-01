@@ -42,6 +42,8 @@ const ChildrenTrackingTab = () => {
   const [loading, setLoading] = useState(true);
   const [aiInsights, setAiInsights] = useState([]);
   const [activeChild, setActiveChild] = useState(null);
+  const [tabError, setTabError] = useState(null);
+
   
   // Modal states
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);

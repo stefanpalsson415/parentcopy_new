@@ -4,7 +4,11 @@ class CalendarErrorHandler {
     this.suppressedErrors = [
       'idpiframe_initialization_failed',
       'Failed to execute \'postMessage\'',
-      'gapi.auth2'
+      'gapi.auth2',
+      'Token refresh failed',
+      'Could not extract valid JSON from response',
+      'Could not extract valid JSON',
+      'JSON parsing failed'
     ];
     this.originalConsoleError = null;
   }
@@ -28,7 +32,7 @@ class CalendarErrorHandler {
         this.originalConsoleError.apply(console, args);
       } else {
         // For suppressed errors, log quietly to console.debug instead
-        console.debug('Suppressed Google API error:', ...args);
+        console.debug('Suppressed error:', ...args);
       }
     };
   }
@@ -45,7 +49,7 @@ class CalendarErrorHandler {
   static handlePromise(promise, fallbackValue) {
     return promise.catch(error => {
       // Log error but don't let it break the app
-      console.debug('Calendar operation failed, using fallback:', error);
+      console.debug('Operation failed, using fallback:', error);
       return fallbackValue;
     });
   }
