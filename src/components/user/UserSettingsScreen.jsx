@@ -25,186 +25,182 @@ const UserSettingsScreen = ({ onClose }) => {
   const [uploadError, setUploadError] = useState(null);
   const [settingsTab, setSettingsTab] = useState('profile'); // 'profile', 'family', 'app', or 'calendar'
 
-// Track Google auth status
-const [googleAuthStatus, setGoogleAuthStatus] = useState({
-  isConnected: false,
-  email: null,
-  loading: true
-});
+  // Track Google auth status
+  const [googleAuthStatus, setGoogleAuthStatus] = useState({
+    isConnected: false,
+    email: null,
+    loading: true
+  });
 
-
-// In UserSettingsScreen.jsx - Add this effect near the top of the component (around line 40-60)
-
-// Add this useEffect right after the existing state declarations
-useEffect(() => {
-  // Ensure we're showing data for the correct user
-  console.log("UserSettingsScreen selected user:", 
-    selectedUser ? 
-    {
-      id: selectedUser.id,
-      name: selectedUser.name,
-      email: selectedUser.email,
-      role: selectedUser.roleType,
-      hasGoogleAuth: !!selectedUser.googleAuth
-    } : 'none');
-  
-  if (selectedUser && currentUser) {
-    console.log("Current auth user email:", currentUser.email);
-    console.log("Selected user email:", selectedUser.email);
+  // Add this useEffect right after the existing state declarations
+  useEffect(() => {
+    // Ensure we're showing data for the correct user
+    console.log("UserSettingsScreen selected user:", 
+      selectedUser ? 
+      {
+        id: selectedUser.id,
+        name: selectedUser.name,
+        email: selectedUser.email,
+        role: selectedUser.roleType,
+        hasGoogleAuth: !!selectedUser.googleAuth
+      } : 'none');
     
-    // Log Google auth data if available
-    if (selectedUser.googleAuth) {
-      console.log("Google auth email:", selectedUser.googleAuth.email);
+    if (selectedUser && currentUser) {
+      console.log("Current auth user email:", currentUser.email);
+      console.log("Selected user email:", selectedUser.email);
+      
+      // Log Google auth data if available
+      if (selectedUser.googleAuth) {
+        console.log("Google auth email:", selectedUser.googleAuth.email);
+      }
     }
-  }
-}, [selectedUser, currentUser]);
+  }, [selectedUser, currentUser]);
 
-
-useEffect(() => {
-  const checkGoogleAuthStatus = async () => {
-    try {
-      if (!selectedUser) {
+  useEffect(() => {
+    const checkGoogleAuthStatus = async () => {
+      try {
+        if (!selectedUser) {
+          setGoogleAuthStatus({
+            isConnected: false,
+            email: null,
+            loading: false
+          });
+          return;
+        }
+        
+        console.log("Checking Google auth for selected user:", {
+          selectedUserId: selectedUser.id,
+          selectedUserName: selectedUser.name,
+          selectedUserRole: selectedUser.roleType,
+          selectedUserEmail: selectedUser.email,
+          hasGoogleAuthData: !!selectedUser.googleAuth
+        });
+        
+        // CRITICAL: First check the selected user's googleAuth property
+        if (selectedUser.googleAuth && selectedUser.googleAuth.email) {
+          console.log(`User ${selectedUser.name} has Google auth data with email: ${selectedUser.googleAuth.email}`);
+          
+          // Double-check if we have a token for this user
+          try {
+            const userToken = localStorage.getItem(`googleToken_${selectedUser.id}`);
+            
+            // If we don't have a token for this user but have googleAuth data, create one
+            if (!userToken && selectedUser.googleAuth.uid) {
+              localStorage.setItem(`googleToken_${selectedUser.id}`, JSON.stringify({
+                email: selectedUser.googleAuth.email,
+                uid: selectedUser.googleAuth.uid,
+                timestamp: Date.now()
+              }));
+              console.log(`Created missing token for ${selectedUser.name}`);
+            }
+          } catch (e) {
+            console.warn("Error checking/creating user token:", e);
+          }
+          
+          setGoogleAuthStatus({
+            isConnected: true,
+            email: selectedUser.googleAuth.email,
+            loading: false
+          });
+          return;
+        }
+        
+        // Look for a token specifically for this user
+        const userTokenKey = `googleToken_${selectedUser.id}`;
+        try {
+          const userToken = localStorage.getItem(userTokenKey);
+          if (userToken) {
+            const tokenData = JSON.parse(userToken);
+            if (tokenData && tokenData.email) {
+              console.log(`Found token for ${selectedUser.name} with email: ${tokenData.email}`);
+              
+              // Update the user's profile with this Google auth data
+              // This fixes cases where the token exists but the profile doesn't have googleAuth data
+              await updateMemberProfile(selectedUser.id, {
+                googleAuth: {
+                  uid: tokenData.uid,
+                  email: tokenData.email,
+                  lastConnected: new Date().toISOString()
+                }
+              });
+              
+              setGoogleAuthStatus({
+                isConnected: true,
+                email: tokenData.email,
+                loading: false
+              });
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn(`Error checking token for ${userTokenKey}:`, e);
+        }
+        
+        // Finally, check for role-based token as a fallback
+        try {
+          if (selectedUser.roleType) {
+            const roleToken = localStorage.getItem(`googleToken_${selectedUser.roleType.toLowerCase()}`);
+            if (roleToken) {
+              const tokenData = JSON.parse(roleToken);
+              if (tokenData && tokenData.email) {
+                console.log(`Found role-based token for ${selectedUser.roleType} with email: ${tokenData.email}`);
+                
+                // Don't automatically update the user profile with this data
+                // Just show the status for now
+                setGoogleAuthStatus({
+                  isConnected: true,
+                  email: tokenData.email,
+                  loading: false,
+                  isRoleBased: true
+                });
+                return;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("Error checking role token:", e);
+        }
+        
+        // No valid Google auth data found
+        console.log(`User ${selectedUser.name} does NOT have Google auth connected`);
         setGoogleAuthStatus({
           isConnected: false,
           email: null,
           loading: false
         });
-        return;
-      }
-      
-      console.log("Checking Google auth for selected user:", {
-        selectedUserId: selectedUser.id,
-        selectedUserName: selectedUser.name,
-        selectedUserRole: selectedUser.roleType,
-        selectedUserEmail: selectedUser.email,
-        hasGoogleAuthData: !!selectedUser.googleAuth
-      });
-      
-      // CRITICAL: First check the selected user's googleAuth property
-      if (selectedUser.googleAuth && selectedUser.googleAuth.email) {
-        console.log(`User ${selectedUser.name} has Google auth data with email: ${selectedUser.googleAuth.email}`);
-        
-        // Double-check if we have a token for this user
-        try {
-          const userToken = localStorage.getItem(`googleToken_${selectedUser.id}`);
-          
-          // If we don't have a token for this user but have googleAuth data, create one
-          if (!userToken && selectedUser.googleAuth.uid) {
-            localStorage.setItem(`googleToken_${selectedUser.id}`, JSON.stringify({
-              email: selectedUser.googleAuth.email,
-              uid: selectedUser.googleAuth.uid,
-              timestamp: Date.now()
-            }));
-            console.log(`Created missing token for ${selectedUser.name}`);
-          }
-        } catch (e) {
-          console.warn("Error checking/creating user token:", e);
-        }
-        
+      } catch (error) {
+        console.error("Error checking Google auth status:", error);
         setGoogleAuthStatus({
-          isConnected: true,
-          email: selectedUser.googleAuth.email,
-          loading: false
+          isConnected: false,
+          email: null,
+          loading: false,
+          error: error.message
         });
-        return;
       }
+    };
+    
+    if (selectedUser) {
+      checkGoogleAuthStatus();
+    }
+  }, [currentUser, selectedUser, updateMemberProfile]);
+
+  // Helper function to clear only the specific user's Google auth data without affecting others
+  const clearUserGoogleAuth = async (userId) => {
+    try {
+      console.log(`Clearing Google auth data specifically for user ${userId}`);
       
-      // Look for a token specifically for this user
-      const userTokenKey = `googleToken_${selectedUser.id}`;
-      try {
-        const userToken = localStorage.getItem(userTokenKey);
-        if (userToken) {
-          const tokenData = JSON.parse(userToken);
-          if (tokenData && tokenData.email) {
-            console.log(`Found token for ${selectedUser.name} with email: ${tokenData.email}`);
-            
-            // Update the user's profile with this Google auth data
-            // This fixes cases where the token exists but the profile doesn't have googleAuth data
-            await updateMemberProfile(selectedUser.id, {
-              googleAuth: {
-                uid: tokenData.uid,
-                email: tokenData.email,
-                lastConnected: new Date().toISOString()
-              }
-            });
-            
-            setGoogleAuthStatus({
-              isConnected: true,
-              email: tokenData.email,
-              loading: false
-            });
-            return;
-          }
-        }
-      } catch (e) {
-        console.warn(`Error checking token for ${userTokenKey}:`, e);
-      }
+      // Only remove this specific user's token
+      localStorage.removeItem(`googleToken_${userId}`);
       
-      // Finally, check for role-based token as a fallback
-      try {
-        if (selectedUser.roleType) {
-          const roleToken = localStorage.getItem(`googleToken_${selectedUser.roleType.toLowerCase()}`);
-          if (roleToken) {
-            const tokenData = JSON.parse(roleToken);
-            if (tokenData && tokenData.email) {
-              console.log(`Found role-based token for ${selectedUser.roleType} with email: ${tokenData.email}`);
-              
-              // Don't automatically update the user profile with this data
-              // Just show the status for now
-              setGoogleAuthStatus({
-                isConnected: true,
-                email: tokenData.email,
-                loading: false,
-                isRoleBased: true
-              });
-              return;
-            }
-          }
-        }
-      } catch (e) {
-        console.warn("Error checking role token:", e);
-      }
+      // Update the user's profile to remove Google auth data
+      await updateMemberProfile(userId, { googleAuth: null });
       
-      // No valid Google auth data found
-      console.log(`User ${selectedUser.name} does NOT have Google auth connected`);
-      setGoogleAuthStatus({
-        isConnected: false,
-        email: null,
-        loading: false
-      });
+      return true;
     } catch (error) {
-      console.error("Error checking Google auth status:", error);
-      setGoogleAuthStatus({
-        isConnected: false,
-        email: null,
-        loading: false,
-        error: error.message
-      });
+      console.error("Error clearing user Google auth:", error);
+      return false;
     }
   };
-  
-  if (selectedUser) {
-    checkGoogleAuthStatus();
-  }
-}, [currentUser, selectedUser]);
-// Helper function to clear only the specific user's Google auth data without affecting others
-const clearUserGoogleAuth = async (userId) => {
-  try {
-    console.log(`Clearing Google auth data specifically for user ${userId}`);
-    
-    // Only remove this specific user's token
-    localStorage.removeItem(`googleToken_${userId}`);
-    
-    // Update the user's profile to remove Google auth data
-    await updateMemberProfile(userId, { googleAuth: null });
-    
-    return true;
-  } catch (error) {
-    console.error("Error clearing user Google auth:", error);
-    return false;
-  }
-};
-
   
   // Handle family name update
   const handleFamilyNameUpdate = async () => {
@@ -367,58 +363,57 @@ const clearUserGoogleAuth = async (userId) => {
     };
     
     // Save calendar settings
-// Save calendar settings
-const saveCalendarSettings = async () => {
-  if (!userId) return;
-  
-  setIsSaving(true);
-  setSaveMessage({ type: '', message: '' });
-  
-  try {
-    // Prepare updated settings
-    const updatedSettings = {
-      ...calendarSettings,
-      defaultCalendarType: activeCalendarType,
-      googleCalendar: {
-        ...calendarSettings?.googleCalendar,
-        enabled: activeCalendarType === 'google',
-        calendarId: selectedGoogleCalendar
-      },
-      appleCalendar: {
-        ...calendarSettings?.appleCalendar,
-        enabled: activeCalendarType === 'apple'
+    const saveCalendarSettings = async () => {
+      if (!userId) return;
+      
+      setIsSaving(true);
+      setSaveMessage({ type: '', message: '' });
+      
+      try {
+        // Prepare updated settings
+        const updatedSettings = {
+          ...calendarSettings,
+          defaultCalendarType: activeCalendarType,
+          googleCalendar: {
+            ...calendarSettings?.googleCalendar,
+            enabled: activeCalendarType === 'google',
+            calendarId: selectedGoogleCalendar
+          },
+          appleCalendar: {
+            ...calendarSettings?.appleCalendar,
+            enabled: activeCalendarType === 'apple'
+          }
+        };
+        
+        // Save to Firebase
+        await CalendarService.saveUserCalendarSettings(userId, updatedSettings);
+        setCalendarSettings(updatedSettings);
+        
+        // Create a visible success notification
+        setSaveMessage({
+          type: 'success',
+          message: 'Calendar settings saved successfully'
+        });
+        
+        // Use React state to handle button success state instead of direct DOM manipulation
+        setIsSaving(false);
+        
+        // Clear message after delay using a safe approach
+        const messageTimer = setTimeout(() => {
+          setSaveMessage({ type: '', message: '' });
+        }, 5000);
+        
+        // Clean up the timer if component unmounts
+        return () => clearTimeout(messageTimer);
+      } catch (error) {
+        console.error("Error saving calendar settings:", error);
+        setSaveMessage({
+          type: 'error',
+          message: 'Failed to save calendar settings: ' + error.message
+        });
+        setIsSaving(false);
       }
     };
-    
-    // Save to Firebase
-    await CalendarService.saveUserCalendarSettings(userId, updatedSettings);
-    setCalendarSettings(updatedSettings);
-    
-    // Create a visible success notification
-    setSaveMessage({
-      type: 'success',
-      message: 'Calendar settings saved successfully'
-    });
-    
-    // Use React state to handle button success state instead of direct DOM manipulation
-    setIsSaving(false);
-    
-    // Clear message after delay using a safe approach
-    const messageTimer = setTimeout(() => {
-      setSaveMessage({ type: '', message: '' });
-    }, 5000);
-    
-    // Clean up the timer if component unmounts
-    return () => clearTimeout(messageTimer);
-  } catch (error) {
-    console.error("Error saving calendar settings:", error);
-    setSaveMessage({
-      type: 'error',
-      message: 'Failed to save calendar settings: ' + error.message
-    });
-    setIsSaving(false);
-  }
-};
     
     if (isLoading) {
       return (
@@ -550,7 +545,6 @@ const saveCalendarSettings = async () => {
                   className="px-4 py-2 bg-white border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center mx-auto"
                 >
                   <Globe size={16} className="mr-2" />
-
                   Sign in with Google
                 </button>
               </div>
@@ -604,110 +598,66 @@ const saveCalendarSettings = async () => {
           </div>
         )}
         
-{/* Diagnostic Button */}
-{process.env.NODE_ENV === 'development' && (
-  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-    <h4 className="font-medium mb-2">Google Auth Diagnostic</h4>
-    <button
-      onClick={async () => {
-        try {
-          if (!familyId) {
-            alert("No family ID available");
-            return;
-          }
-          
-          const result = await DatabaseService.diagnoseAndFixGoogleAuth(familyId);
-          console.log("Google auth diagnostic result:", result);
-          
-          if (result.success) {
-            alert("Diagnosis complete. Check console for detailed report.\n\n" + 
-                 (result.needsRepair ? "Repairs were needed and applied." : "No repairs needed."));
-          } else {
-            alert("Diagnosis failed: " + result.report);
-          }
-        } catch (error) {
-          console.error("Error running Google auth diagnostic:", error);
-          alert(`Error running diagnostic: ${error.message}`);
-        }
-      }}
-      className="px-3 py-1 bg-yellow-100 border border-yellow-300 rounded text-yellow-800 text-sm"
-    >
-      Run Google Auth Diagnostic
-    </button>
-  </div>
-)}
+        {/* Repair Button - ONE debug button kept */}
+        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <h4 className="font-medium mb-2">Repair Google Auth</h4>
+          <p className="text-sm text-red-700 mb-2">
+            If you're experiencing issues with Google accounts showing the wrong email or not connecting properly, 
+            you can try to repair the Google auth data.
+          </p>
+          <button
+            onClick={async () => {
+              try {
+                if (!familyId) {
+                  alert("No family ID available");
+                  return;
+                }
+                
+                const result = await DatabaseService.repairFamilyGoogleAuth(familyId);
+                console.log("Google auth repair result:", result);
+                
+                if (result.success) {
+                  alert("Google auth data has been repaired successfully. Please refresh the page to see the changes.");
+                  window.location.reload();
+                } else {
+                  alert("Failed to repair Google auth data: " + (result.error || "Unknown error"));
+                }
+              } catch (error) {
+                console.error("Error running Google auth repair:", error);
+                alert(`Error running repair: ${error.message}`);
+              }
+            }}
+            className="px-3 py-1 bg-red-100 border border-red-300 rounded text-red-800 text-sm"
+          >
+            Repair Google Auth Data
+          </button>
+        </div>
 
-// Add this after the existing diagnostic button in UserSettingsScreen.jsx (around line 500-550 in the Calendar Settings section)
+        {/* Test Calendar Connection - Another debug button kept */}
+        <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <h4 className="font-medium mb-2">Test Google Calendar Connection</h4>
+          <p className="text-sm text-yellow-700 mb-2">
+            Test your Google Calendar connection to ensure it's working properly.
+          </p>
+          <button
+            onClick={async () => {
+              try {
+                const result = await CalendarService.debugGoogleCalendarConnection();
+                console.log("Google Calendar diagnostic result:", result);
+                alert(result.success 
+                  ? `Connection successful! Found ${result.calendars?.length || 0} calendars.` 
+                  : `Connection failed: ${result.error}`);
+              } catch (error) {
+                console.error("Error running diagnostic:", error);
+                alert(`Error running diagnostic: ${error.message}`);
+              }
+            }}
+            className="px-3 py-1 bg-yellow-100 border border-yellow-300 rounded text-yellow-800 text-sm"
+          >
+            Test Google Calendar Connection
+          </button>
+        </div>
 
-{/* Repair Button */}
-<div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-  <h4 className="font-medium mb-2">Repair Google Auth</h4>
-  <p className="text-sm text-red-700 mb-2">
-    If you're experiencing issues with Google accounts showing the wrong email or not connecting properly, 
-    you can try to repair the Google auth data.
-  </p>
-  <button
-    onClick={async () => {
-      try {
-        if (!familyId) {
-          alert("No family ID available");
-          return;
-        }
-        
-        const result = await DatabaseService.repairFamilyGoogleAuth(familyId);
-        console.log("Google auth repair result:", result);
-        
-        if (result.success) {
-          alert("Google auth data has been repaired successfully. Please refresh the page to see the changes.");
-          window.location.reload();
-        } else {
-          alert("Failed to repair Google auth data: " + (result.error || "Unknown error"));
-        }
-      } catch (error) {
-        console.error("Error running Google auth repair:", error);
-        alert(`Error running repair: ${error.message}`);
-      }
-    }}
-    className="px-3 py-1 bg-red-100 border border-red-300 rounded text-red-800 text-sm"
-  >
-    Repair Google Auth Data
-  </button>
-</div>
-
-{/* Repair Button */}
-<div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-  <h4 className="font-medium mb-2">Repair Google Auth</h4>
-  <p className="text-sm text-red-700 mb-2">
-    If you're experiencing issues with Google accounts showing the wrong email or not connecting properly, 
-    you can try to repair the Google auth data.
-  </p>
-  <button
-    onClick={async () => {
-      try {
-        if (!familyId) {
-          alert("No family ID available");
-          return;
-        }
-        
-        const result = await DatabaseService.repairFamilyGoogleAuth(familyId);
-        console.log("Google auth repair result:", result);
-        
-        if (result.success) {
-          alert("Google auth data has been repaired successfully. Please refresh the page to see the changes.");
-          window.location.reload();
-        } else {
-          alert("Failed to repair Google auth data: " + (result.error || "Unknown error"));
-        }
-      } catch (error) {
-        console.error("Error running Google auth repair:", error);
-        alert(`Error running repair: ${error.message}`);
-      }
-    }}
-    className="px-3 py-1 bg-red-100 border border-red-300 rounded text-red-800 text-sm"
-  >
-    Repair Google Auth Data
-  </button>
-</div>
         {/* Apple Calendar Settings */}
         {activeCalendarType === 'apple' && (
           <div className="bg-white p-4 rounded-lg border">
@@ -735,50 +685,7 @@ const saveCalendarSettings = async () => {
             )}
           </div>
         )}
-        {/* Diagnostic Button */}
-{process.env.NODE_ENV === 'development' && (
-  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-    <h4 className="font-medium mb-2">Diagnostic Tools</h4>
-    <button
-      onClick={async () => {
-        try {
-          const result = await CalendarService.debugGoogleCalendarConnection();
-          console.log("Google Calendar diagnostic result:", result);
-          alert(result.success 
-            ? `Connection successful! Found ${result.calendars?.length || 0} calendars.` 
-            : `Connection failed: ${result.error}`);
-        } catch (error) {
-          console.error("Error running diagnostic:", error);
-          alert(`Error running diagnostic: ${error.message}`);
-        }
-      }}
-      className="px-3 py-1 bg-yellow-100 border border-yellow-300 rounded text-yellow-800 text-sm"
-    >
-      Test Google Calendar Connection
-    </button>
-  </div>
-)}
-
-{/* Diagnostic Button */}
-{process.env.NODE_ENV === 'development' && (
-  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-    <h4 className="font-medium mb-2">Diagnostic Tools</h4>
-    <button
-      onClick={async () => {
-        try {
-          const result = await CalendarService.diagnoseGoogleCalendarIssues();
-          alert(result);
-        } catch (error) {
-          console.error("Error running diagnostic:", error);
-          alert(`Error running diagnostic: ${error.message}`);
-        }
-      }}
-      className="px-3 py-1 bg-yellow-100 border border-yellow-300 rounded text-yellow-800 text-sm"
-    >
-      Run Google Calendar Diagnostic
-    </button>
-  </div>
-)}
+        
         {/* ICS Download Settings */}
         {activeCalendarType === 'ics' && (
           <div className="bg-white p-4 rounded-lg border">
@@ -856,46 +763,25 @@ const saveCalendarSettings = async () => {
             </div>
           </div>
         </div>
-        {/* Diagnostic Button */}
-{process.env.NODE_ENV === 'development' && (
-  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-    <h4 className="font-medium mb-2">Diagnostic Tools</h4>
-    <button
-      onClick={async () => {
-        try {
-          const result = await CalendarService.diagnoseGoogleCalendarIssues();
-          alert(result);
-        } catch (error) {
-          console.error("Error running diagnostic:", error);
-          alert(`Error running diagnostic: ${error.message}`);
-        }
-      }}
-      className="px-3 py-1 bg-yellow-100 border border-yellow-300 rounded text-yellow-800 text-sm"
-    >
-      Run Google Calendar Diagnostic
-    </button>
-  </div>
-)}
-
 
         {/* Save Button */}
         <div className="flex justify-end">
-        <button
-  onClick={saveCalendarSettings}
-  disabled={isSaving}
-  className={`px-4 py-2 rounded text-white transition-colors duration-300 ${
-    saveMessage.type === 'success' ? 'bg-green-600 hover:bg-green-700' : 'bg-black hover:bg-gray-800'
-  }`}
->
-  {isSaving ? (
-    <span className="flex items-center">
-      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-      Saving...
-    </span>
-  ) : (
-    saveMessage.type === 'success' ? '✓ Saved' : 'Save Calendar Settings'
-  )}
-</button>
+          <button
+            onClick={saveCalendarSettings}
+            disabled={isSaving}
+            className={`px-4 py-2 rounded text-white transition-colors duration-300 ${
+              saveMessage.type === 'success' ? 'bg-green-600 hover:bg-green-700' : 'bg-black hover:bg-gray-800'
+            }`}
+          >
+            {isSaving ? (
+              <span className="flex items-center">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                Saving...
+              </span>
+            ) : (
+              saveMessage.type === 'success' ? '✓ Saved' : 'Save Calendar Settings'
+            )}
+          </button>
         </div>
         
         {/* Save Message */}
@@ -909,7 +795,6 @@ const saveCalendarSettings = async () => {
       </div>
     );
   };
-
 
   // Update favicon
   const updateFavicon = (imageUrl) => {
@@ -960,16 +845,16 @@ const saveCalendarSettings = async () => {
               </div>
             </button>
             <button
-  className={`px-4 py-3 font-medium ${
-    settingsTab === 'calendar' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'
-  }`}
-  onClick={() => setSettingsTab('calendar')}
->
-  <div className="flex items-center">
-    <Calendar size={16} className="mr-2" />
-    <span>Calendar</span>
-  </div>
-</button>
+              className={`px-4 py-3 font-medium ${
+                settingsTab === 'calendar' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'
+              }`}
+              onClick={() => setSettingsTab('calendar')}
+            >
+              <div className="flex items-center">
+                <Calendar size={16} className="mr-2" />
+                <span>Calendar</span>
+              </div>
+            </button>
             <button
               className={`px-4 py-3 font-medium ${
                 settingsTab === 'app' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'
@@ -984,203 +869,199 @@ const saveCalendarSettings = async () => {
           </div>
         </div>
         
-{/* Chat Settings */}
-<div>
-  <h4 className="font-medium mb-2">Chat Settings</h4>
-  <div className="space-y-2">
-    <label className="flex items-center">
-      <input 
-        type="checkbox" 
-        className="w-4 h-4 mr-2" 
-        defaultChecked 
-        onChange={(e) => {
-          // Save setting to user profile
-          updateMemberProfile(selectedUser.id, { 
-            settings: {
-              ...selectedUser.settings,
-              childrenCanUseChat: e.target.checked
-            }
-          });
-        }}
-      />
-      <span>Allow children to use chat with Allie</span>
-    </label>
-  </div>
-</div>
+        {/* Chat Settings */}
+        <div>
+          <h4 className="font-medium mb-2">Chat Settings</h4>
+          <div className="space-y-2">
+            <label className="flex items-center">
+              <input 
+                type="checkbox" 
+                className="w-4 h-4 mr-2" 
+                defaultChecked 
+                onChange={(e) => {
+                  // Save setting to user profile
+                  updateMemberProfile(selectedUser.id, { 
+                    settings: {
+                      ...selectedUser.settings,
+                      childrenCanUseChat: e.target.checked
+                    }
+                  });
+                }}
+              />
+              <span>Allow children to use chat with Allie</span>
+            </label>
+          </div>
+        </div>
 
         {/* Profile Settings */}
-{settingsTab === 'profile' && (
-  <div className="p-6">
-    <h3 className="text-lg font-semibold mb-4 font-roboto">Personal Settings</h3>
-    
-    <div className="flex flex-col md:flex-row md:items-start gap-6">
-      {/* Profile Picture */}
-      <div className="flex flex-col items-center">
-        <div className="relative">
-          <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-gray-200">
-            <img 
-              src={selectedUser?.profilePicture} 
-              alt={selectedUser?.name} 
-              className="w-full h-full object-cover"
-            />
-          </div>
-          <button
-            className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full"
-            onClick={() => setUploadType('profile')}
-          >
-            <Camera size={16} />
-          </button>
-        </div>
-        <p className="mt-2 text-sm text-gray-500">Update profile picture</p>
-      </div>
-      
-      {/* User Details */}
-      <div className="flex-1 space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-          <input
-            type="text"
-            className="w-full p-2 border rounded"
-            value={selectedUser?.name || ''}
-            readOnly // For now, we're not allowing name changes
-          />
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-          <input
-            type="text"
-            className="w-full p-2 border rounded bg-gray-50"
-            value={selectedUser?.role || ''}
-            readOnly
-          />
-        </div>
-        
-        // In UserSettingsScreen.jsx - Replace the Email input field (around line 520-530)
-
-<div>
-  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-  <input
-    type="email"
-    className="w-full p-2 border rounded bg-gray-50"
-    value={selectedUser?.email || currentUser?.email || ''}
-    readOnly
-  />
-  {selectedUser?.googleAuth && (
-    <p className="text-xs text-green-600 mt-1">
-      Google account connected: {selectedUser.googleAuth.email}
-    </p>
-  )}
-</div>
-      </div>
-    </div>
-    
-    {/* Google Account Linking Section */}
-    <div className="mt-8 border-t pt-6">
-      <h4 className="font-medium mb-4">Connected Accounts</h4>
-      
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center">
-            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border shadow-sm mr-3">
-              <svg className="w-6 h-6" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#4285F4"/>
-              </svg>
+        {settingsTab === 'profile' && (
+          <div className="p-6">
+            <h3 className="text-lg font-semibold mb-4 font-roboto">Personal Settings</h3>
+            
+            <div className="flex flex-col md:flex-row md:items-start gap-6">
+              {/* Profile Picture */}
+              <div className="flex flex-col items-center">
+                <div className="relative">
+                  <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-gray-200">
+                    <img 
+                      src={selectedUser?.profilePicture} 
+                      alt={selectedUser?.name} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <button
+                    className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full"
+                    onClick={() => setUploadType('profile')}
+                  >
+                    <Camera size={16} />
+                  </button>
+                </div>
+                <p className="mt-2 text-sm text-gray-500">Update profile picture</p>
+              </div>
+              
+              {/* User Details */}
+              <div className="flex-1 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <input
+                    type="text"
+                    className="w-full p-2 border rounded"
+                    value={selectedUser?.name || ''}
+                    readOnly // For now, we're not allowing name changes
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                  <input
+                    type="text"
+                    className="w-full p-2 border rounded bg-gray-50"
+                    value={selectedUser?.role || ''}
+                    readOnly
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    className="w-full p-2 border rounded bg-gray-50"
+                    value={selectedUser?.email || currentUser?.email || ''}
+                    readOnly
+                  />
+                  {selectedUser?.googleAuth && (
+                    <p className="text-xs text-green-600 mt-1">
+                      Google account connected: {selectedUser.googleAuth.email}
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
-            <div>
-              <h5 className="text-sm font-medium">Google Account</h5>
-              <p className="text-xs text-gray-500">
-  {googleAuthStatus.loading ? (
-    "Checking status..."
-  ) : googleAuthStatus.isConnected ? (
-    `Connected as ${googleAuthStatus.email || currentUser?.email}`
-  ) : (
-    'Not connected'
-  )}
-</p>
+            
+            {/* Google Account Linking Section */}
+            <div className="mt-8 border-t pt-6">
+              <h4 className="font-medium mb-4">Connected Accounts</h4>
+              
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border shadow-sm mr-3">
+                      <svg className="w-6 h-6" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#4285F4"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h5 className="text-sm font-medium">Google Account</h5>
+                      <p className="text-xs text-gray-500">
+                        {googleAuthStatus.loading ? (
+                          "Checking status..."
+                        ) : googleAuthStatus.isConnected ? (
+                          `Connected as ${googleAuthStatus.email || currentUser?.email}`
+                        ) : (
+                          'Not connected'
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={async () => {
+                      if (googleAuthStatus.isConnected) {
+                        // Already connected - ask if they want to disconnect
+                        const confirmDisconnect = window.confirm('Are you sure you want to disconnect your Google account?');
+                        if (confirmDisconnect) {
+                          try {
+                            // Clear only this specific user's Google auth data
+                            await clearUserGoogleAuth(selectedUser.id);
+                            
+                            // Update local state to reflect changes
+                            setGoogleAuthStatus({
+                              isConnected: false,
+                              email: null,
+                              loading: false
+                            });
+                            
+                            alert('Google account disconnected successfully!');
+                          } catch (error) {
+                            console.error('Error disconnecting Google account:', error);
+                            alert('Failed to disconnect Google account: ' + error.message);
+                          }
+                        }
+                      } else {
+                        // Not connected - connect now
+                        try {
+                          // Now connect with Google
+                          const user = await linkAccountWithGoogle();
+                          
+                          // Store token specifically for this user
+                          localStorage.setItem(`googleToken_${selectedUser.id}`, JSON.stringify({
+                            email: user.email,
+                            uid: user.uid,
+                            timestamp: Date.now()
+                          }));
+                          
+                          // Update the member profile with Google data - IMPORTANT: only for this specific member
+                          await updateMemberProfile(selectedUser.id, {
+                            googleAuth: {
+                              uid: user.uid,
+                              email: user.email,
+                              displayName: user.displayName,
+                              photoURL: user.photoURL,
+                              lastConnected: new Date().toISOString()
+                            }
+                          });
+                          
+                          // Update status locally
+                          setGoogleAuthStatus({
+                            isConnected: true,
+                            email: user.email,
+                            loading: false
+                          });
+                          
+                          alert('Google account connected successfully!');
+                        } catch (error) {
+                          console.error('Error connecting Google account:', error);
+                          alert('Failed to connect Google account. Please try again.');
+                        }
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded text-sm ${
+                      selectedUser?.googleAuth 
+                        ? 'border border-gray-300 text-gray-700 hover:bg-gray-100' 
+                        : 'bg-black text-white hover:bg-gray-800'
+                    }`}
+                  >
+                    {googleAuthStatus.isConnected ? 'Disconnect' : 'Connect'}
+                  </button>
+                </div>
+                
+                <p className="text-xs text-gray-500 mt-3">
+                  Connecting your Google account enables calendar integration and simplifies sign-in.
+                </p>
+              </div>
             </div>
           </div>
-          
-          <button
-
-  // Replace the onClick handler for the Google connect/disconnect button
-onClick={async () => {
-  if (googleAuthStatus.isConnected) {
-    // Already connected - ask if they want to disconnect
-    const confirmDisconnect = window.confirm('Are you sure you want to disconnect your Google account?');
-    if (confirmDisconnect) {
-      try {
-        // Clear only this specific user's Google auth data
-        await clearUserGoogleAuth(selectedUser.id);
-        
-        // Update local state to reflect changes
-        setGoogleAuthStatus({
-          isConnected: false,
-          email: null,
-          loading: false
-        });
-        
-        alert('Google account disconnected successfully!');
-      } catch (error) {
-        console.error('Error disconnecting Google account:', error);
-        alert('Failed to disconnect Google account: ' + error.message);
-      }
-    }
-  } else {
-    // Not connected - connect now
-    try {
-      // Now connect with Google
-      const user = await linkAccountWithGoogle();
-      
-      // Store token specifically for this user
-      localStorage.setItem(`googleToken_${selectedUser.id}`, JSON.stringify({
-        email: user.email,
-        uid: user.uid,
-        timestamp: Date.now()
-      }));
-      
-      // Update the member profile with Google data - IMPORTANT: only for this specific member
-      await updateMemberProfile(selectedUser.id, {
-        googleAuth: {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-          lastConnected: new Date().toISOString()
-        }
-      });
-      
-      // Update status locally
-      setGoogleAuthStatus({
-        isConnected: true,
-        email: user.email,
-        loading: false
-      });
-      
-      alert('Google account connected successfully!');
-    } catch (error) {
-      console.error('Error connecting Google account:', error);
-      alert('Failed to connect Google account. Please try again.');
-    }
-  }
-}}
-className={`px-3 py-1.5 rounded text-sm ${
-  selectedUser?.googleAuth 
-    ? 'border border-gray-300 text-gray-700 hover:bg-gray-100' 
-    : 'bg-black text-white hover:bg-gray-800'
-}`}
->
-  {googleAuthStatus.isConnected ? 'Disconnect' : 'Connect'}
-</button>
-        </div>
-        
-        <p className="text-xs text-gray-500 mt-3">
-          Connecting your Google account enables calendar integration and simplifies sign-in.
-        </p>
-      </div>
-    </div>
-  </div>
-)}
+        )}
         
         {/* Family Settings */}
         {settingsTab === 'family' && (
@@ -1259,15 +1140,14 @@ className={`px-3 py-1.5 rounded text-sm ${
           </div>
         )}
         
-{/* Calendar Settings */}
-{settingsTab === 'calendar' && (
-  
-  <div className="p-6">
-    <h3 className="text-lg font-semibold mb-4 font-roboto">Calendar Integration</h3>
-    
-    <CalendarSettingsTab userId={currentUser?.uid} />
-  </div>
-)}
+        {/* Calendar Settings */}
+        {settingsTab === 'calendar' && (
+          <div className="p-6">
+            <h3 className="text-lg font-semibold mb-4 font-roboto">Calendar Integration</h3>
+            
+            <CalendarSettingsTab userId={currentUser?.uid} />
+          </div>
+        )}
 
         {/* App Settings */}
         {settingsTab === 'app' && (
