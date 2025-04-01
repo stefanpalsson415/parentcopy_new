@@ -86,10 +86,16 @@ class AllieAIEngineService {
         { system: systemPrompt }
       );
       
-      // Parse JSON response
-      const responseData = JSON.parse(claudeResponse);
-      
-      return responseData.tasks;
+      // Parse JSON response with error handling
+      try {
+        const responseData = JSON.parse(claudeResponse);
+        return responseData.tasks;
+      } catch (parseError) {
+        console.error("Error parsing Claude API response for tasks:", parseError);
+        console.log("Raw response from Claude:", claudeResponse.substring(0, 500) + "...");
+        // Return fallback tasks
+        return this.getFallbackTasks(currentWeek, familyId);
+      }
     } catch (error) {
       console.error("Error generating personalized tasks:", error);
       
@@ -98,7 +104,6 @@ class AllieAIEngineService {
     }
   }
   
-  // Replace this function in src/services/AllieAIEngineService.js
 async generateDashboardInsights(familyId, currentWeek) {
   try {
     // Get family data
@@ -159,9 +164,11 @@ async generateDashboardInsights(familyId, currentWeek) {
     // Handle potential malformed JSON responses
     try {
       // Try to parse the response as JSON
-      return JSON.parse(claudeResponse);
+      const parsedResponse = JSON.parse(claudeResponse);
+      return parsedResponse;
     } catch (parseError) {
-      console.error("Error parsing AI response:", parseError);
+      console.error("Error parsing dashboard insights response:", parseError);
+      console.log("Raw response:", claudeResponse.substring(0, 200) + "...");
       
       // If parsing fails, create a fallback insights object
       return {
@@ -244,17 +251,61 @@ async generateRelationshipInsights(familyId, currentWeek, relationshipData, stra
       { system: systemPrompt }
     );
     
-    // Parse JSON response
-    const responseData = JSON.parse(claudeResponse);
-    
-    return responseData.insights;
+    // Parse JSON response with robust error handling
+    try {
+      const responseData = JSON.parse(claudeResponse);
+      return responseData.insights;
+    } catch (parseError) {
+      console.error("Error parsing relationship insights response:", parseError);
+      console.log("Raw response from Claude:", claudeResponse.substring(0, 500) + "...");
+      
+      // Return fallback insights instead of null
+      return [
+        {
+          id: "fallback-1",
+          title: "Emotional Connection",
+          description: "Research indicates that daily check-ins strengthen your emotional bond. Taking 5 minutes a day to connect can boost relationship satisfaction.",
+          actionable: "Try the 5-minute check-in template tonight.",
+          category: "connection"
+        },
+        {
+          id: "fallback-2",
+          title: "Workload Sharing",
+          description: "Balanced sharing of invisible work is linked to higher relationship satisfaction and reduced burnout.",
+          actionable: "Review the Task Division strategy together this week.",
+          category: "workload"
+        },
+        {
+          id: "fallback-3",
+          title: "Appreciation Practice",
+          description: "Expressing gratitude regularly can significantly boost your connection. Try to notice and acknowledge your partner's contributions.",
+          actionable: "Share one thing you appreciate about your partner each day this week.",
+          category: "gratitude"
+        }
+      ];
+    }
   } catch (error) {
     console.error("Error generating relationship insights:", error);
-    return null;
+    
+    // Return fallback insights instead of null
+    return [
+      {
+        id: "error-fallback-1",
+        title: "Communication Focus",
+        description: "Regular communication about expectations and needs helps prevent misunderstandings and builds trust.",
+        actionable: "Schedule a 20-minute check-in this week to discuss family priorities.",
+        category: "connection"
+      },
+      {
+        id: "error-fallback-2", 
+        title: "Balance Together",
+        description: "Approaching workload balance as a team effort rather than a source of conflict leads to stronger relationships.",
+        actionable: "Choose one imbalanced area to address together this week.",
+        category: "workload"
+      }
+    ];
   }
 }
-
-
 
 // Process relationship feedback to improve AI recommendations
 async processRelationshipFeedback(familyId, weekNum, memberId, relationshipResponses) {
@@ -322,13 +373,39 @@ async generateCoupleCheckInFeedback(familyId, weekNumber, checkInData) {
       { system: systemPrompt }
     );
     
-    // Parse JSON response
-    const responseData = JSON.parse(claudeResponse);
-    
-    return responseData;
+    // Parse JSON response with error handling
+    try {
+      const responseData = JSON.parse(claudeResponse);
+      return responseData;
+    } catch (parseError) {
+      console.error("Error parsing couple check-in feedback:", parseError);
+      console.log("Raw response from Claude:", claudeResponse.substring(0, 500) + "...");
+      
+      // Return fallback feedback
+      return {
+        assessment: "Based on your check-in data, you're making progress in your communication and connection.",
+        strengths: [
+          { title: "Communication", description: "You're making an effort to discuss important topics together." },
+          { title: "Teamwork", description: "You're approaching family responsibilities as a team." }
+        ],
+        growthAreas: [
+          { title: "Workload Balance", description: "There's still room for improvement in sharing invisible tasks.", suggestion: "Try swapping responsibility for one mental load task this week." }
+        ],
+        weeklyRecommendation: "Schedule a 15-minute check-in at the end of each day this week to share appreciations and briefly discuss the next day's plan."
+      };
+    }
   } catch (error) {
     console.error("Error generating couple check-in feedback:", error);
-    return null;
+    return {
+      assessment: "We couldn't analyze your specific check-in data, but we can still provide general guidance.",
+      strengths: [
+        { title: "Commitment", description: "By completing check-ins, you're demonstrating commitment to your relationship." }
+      ],
+      growthAreas: [
+        { title: "Consistency", description: "Regular check-ins help build relationship habits.", suggestion: "Set a specific time each week for your relationship check-in." }
+      ],
+      weeklyRecommendation: "Take 10 minutes each day to share one positive observation about your partner or relationship."
+    };
   }
 }
 
@@ -386,10 +463,15 @@ async generateCoupleCheckInFeedback(familyId, weekNumber, checkInData) {
         { system: systemPrompt }
       );
       
-      // Parse JSON response
-      const responseData = JSON.parse(claudeResponse);
-      
-      return responseData.agenda;
+      // Parse JSON response with error handling
+      try {
+        const responseData = JSON.parse(claudeResponse);
+        return responseData.agenda;
+      } catch (parseError) {
+        console.error("Error parsing family meeting agenda:", parseError);
+        console.log("Raw response:", claudeResponse.substring(0, 500) + "...");
+        return this.getFallbackAgenda(weekNumber);
+      }
     } catch (error) {
       console.error("Error generating family meeting agenda:", error);
       
