@@ -109,38 +109,58 @@ class CalendarService {
           script.src = 'https://apis.google.com/js/api.js';
           script.onload = () => this._initGapiClient(resolve, reject);
           script.onerror = () => {
-            console.error("Failed to load Google API script");
-            reject(new Error("Failed to load Google API script"));
+            console.warn("Failed to load Google API script - calendar features will be limited");
+            this.mockMode = true; // Fall back to mock mode
+            resolve(false); // Resolve with false instead of rejecting
           };
           document.body.appendChild(script);
         } else {
           this._initGapiClient(resolve, reject);
         }
       } catch (error) {
-        console.error("Error in Google Calendar initialization:", error);
-        reject(error);
+        console.warn("Error in Google Calendar initialization:", error);
+        this.mockMode = true; // Fall back to mock mode
+        resolve(false); // Resolve with false instead of rejecting
       }
     });
   }
 
   _initGapiClient(resolve, reject) {
+    // Set a timeout to prevent hanging
+    const timeout = setTimeout(() => {
+      console.warn("Google API client initialization timed out");
+      this.mockMode = true;
+      resolve(false);
+    }, 5000);
+    
     // Load the client library
     window.gapi.load('client:auth2', async () => {
       try {
-        // Initialize the client with API key and auth
-        await window.gapi.client.init({
-          apiKey: this.apiKey,
-          clientId: this.clientId,
-          discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
-          scope: 'https://www.googleapis.com/auth/calendar.events'
-        });
+        clearTimeout(timeout);
         
-        this.googleApiLoaded = true;
-        console.log("Google API client initialized successfully");
-        resolve(true);
+        try {
+          // Initialize the client with API key and auth
+          await window.gapi.client.init({
+            apiKey: this.apiKey,
+            clientId: this.clientId,
+            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+            scope: 'https://www.googleapis.com/auth/calendar.events'
+          });
+          
+          this.googleApiLoaded = true;
+          console.log("Google API client initialized successfully");
+          resolve(true);
+        } catch (error) {
+          // Handle initialization errors gracefully
+          console.warn("Error initializing Google API client:", error);
+          this.mockMode = true;
+          resolve(false);
+        }
       } catch (error) {
-        console.error("Error initializing Google API client:", error);
-        reject(error);
+        clearTimeout(timeout);
+        console.warn("Error loading Google client:", error);
+        this.mockMode = true;
+        resolve(false);
       }
     });
   }

@@ -98,73 +98,105 @@ class AllieAIEngineService {
     }
   }
   
-  // Generate dashboard insights based on survey data
-  async generateDashboardInsights(familyId, currentWeek) {
-    try {
-      // Get family data and survey responses
-      const familyData = await this.getFamilyData(familyId);
-      const surveyResponses = await this.getSurveyResponses(familyId);
-      
-      // Check if we have previous week data
-      let previousWeekData = null;
-      if (currentWeek > 1) {
-        // Get previous week data
-        const weekHistoryDoc = await getDoc(doc(db, "weekHistory", `${familyId}-week${currentWeek-1}`));
-        if (weekHistoryDoc.exists()) {
-          previousWeekData = weekHistoryDoc.data();
-        }
+  // Replace this function in src/services/AllieAIEngineService.js
+async generateDashboardInsights(familyId, currentWeek) {
+  try {
+    // Get family data
+    const familyData = await this.getFamilyData(familyId);
+    
+    // Get survey responses
+    const surveyResponses = await this.getSurveyResponses(familyId);
+    
+    // Check if we have previous week data
+    let previousWeekData = null;
+    if (currentWeek > 1) {
+      // Get previous week data
+      const weekHistoryDoc = await getDoc(doc(db, "weekHistory", `${familyId}-week${currentWeek-1}`));
+      if (weekHistoryDoc.exists()) {
+        previousWeekData = weekHistoryDoc.data();
       }
+    }
+    
+    // Create prompt for Claude
+    const systemPrompt = `You are Allie, an AI designed to provide family workload balance insights.
+    
+    Analyze the family's survey data and progress to generate 3-4 meaningful insights about:
+    1. Current imbalance patterns
+    2. Progress since previous weeks
+    3. Impact of completed tasks
+    4. Recommendations for improvement
+    
+    Keep insights concise (2-3 sentences each) and actionable.
+    
+    Your response should be in valid JSON format with this structure:
+    {
+      "insights": [
+        {
+          "title": "string (short, engaging title)",
+          "category": "string (which category this relates to)",
+          "description": "string (the actual insight - 2-3 sentences)",
+          "actionItem": "string (a specific suggestion based on this insight)"
+        }
+      ]
+    }`;
+    
+    const userMessage = `Generate family balance insights for Week ${currentWeek} based on this data:
+    
+    Family Information:
+    ${JSON.stringify(familyData)}
+    
+    Current Survey Results:
+    ${JSON.stringify(surveyResponses)}
+    
+    ${previousWeekData ? `Previous Week Data: ${JSON.stringify(previousWeekData)}` : ''}`;
+    
+    // Call Claude API
+    const claudeResponse = await ClaudeService.generateResponse(
+      [{ role: 'user', content: userMessage }],
+      { system: systemPrompt }
+    );
+    
+    // Handle potential malformed JSON responses
+    try {
+      // Try to parse the response as JSON
+      return JSON.parse(claudeResponse);
+    } catch (parseError) {
+      console.error("Error parsing AI response:", parseError);
       
-      // Create prompt for Claude
-      const systemPrompt = `You are Allie, an AI designed to provide family workload balance insights.
-      
-      Analyze the family's survey data and progress to generate 3-4 meaningful insights about:
-      1. Current imbalance patterns
-      2. Progress since previous weeks
-      3. Impact of completed tasks
-      4. Recommendations for improvement
-      
-      Keep insights concise (2-3 sentences each) and actionable.
-      
-      Your response should be in valid JSON format with this structure:
-      {
-        "insights": [
+      // If parsing fails, create a fallback insights object
+      return {
+        insights: [
           {
-            "title": "string (short, engaging title)",
-            "category": "string (which category this relates to)",
-            "description": "string (the actual insight - 2-3 sentences)",
-            "actionItem": "string (a specific suggestion based on this insight)"
+            title: "Family Balance Check-in",
+            category: "General",
+            description: "We've analyzed your family's survey data. Regular check-ins like this help identify imbalances in household responsibilities and track progress over time.",
+            actionItem: "Continue completing weekly check-ins to gather more data for personalized insights."
+          },
+          {
+            title: "Task Distribution",
+            category: "Task Balance",
+            description: "Sharing household tasks more evenly can reduce stress and improve family dynamics. Consider focusing on one area of imbalance each week.",
+            actionItem: "Choose one imbalanced task category and experiment with swapping responsibilities this week."
           }
         ]
-      }`;
-      
-      const userMessage = `Generate family balance insights for Week ${currentWeek} based on this data:
-      
-      Family Information:
-      ${JSON.stringify(familyData)}
-      
-      Current Survey Results:
-      ${JSON.stringify(surveyResponses)}
-      
-      ${previousWeekData ? `Previous Week Data: ${JSON.stringify(previousWeekData)}` : ''}`;
-      
-      // Call Claude API
-      const claudeResponse = await ClaudeService.generateResponse(
-        [{ role: 'user', content: userMessage }],
-        { system: systemPrompt }
-      );
-      
-      // Parse JSON response
-      const responseData = JSON.parse(claudeResponse);
-      
-      return responseData.insights;
-    } catch (error) {
-      console.error("Error generating dashboard insights:", error);
-      
-      // Fallback insights if AI fails
-      return this.getFallbackInsights();
+      };
     }
+  } catch (error) {
+    console.error("Error generating dashboard insights:", error);
+    
+    // Return fallback insights
+    return {
+      insights: [
+        {
+          title: "Getting Started",
+          category: "General", 
+          description: "Welcome to Allie! As your family completes more tasks and surveys, we'll provide personalized insights to help balance responsibilities.",
+          actionItem: "Complete the weekly tasks and ensure all family members participate in the surveys."
+        }
+      ]
+    };
   }
+}
   
 // Generate relationship insights based on all available data
 async generateRelationshipInsights(familyId, currentWeek, relationshipData, strategies, checkInData) {

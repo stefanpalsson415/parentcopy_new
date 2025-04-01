@@ -20,6 +20,8 @@ import GoogleCalendarConnect from '../calendar/GoogleCalendarConnect';
 import CalendarService from '../../services/CalendarService';
 import DashboardTutorial from '../onboarding/DashboardTutorial';
 import ErrorBoundary from '../common/ErrorBoundary';
+import CalendarErrorHandler from '../../utils/CalendarErrorHandler';
+
 
 
 const DashboardScreen = ({ onOpenFamilyMeeting }) => {
@@ -123,6 +125,26 @@ useEffect(() => {
             selectedUser.roleType === task.assignedTo);
   };
 
+
+// Add this inside the component function, near the start (after useState declarations)
+useEffect(() => {
+  // Suppress Google API errors to avoid console noise
+  CalendarErrorHandler.suppressApiErrors();
+  
+  // Initialize calendar early but don't block on failures
+  const initializeCalendar = async () => {
+    try {
+      await CalendarService.initializeGoogleCalendar();
+    } catch (error) {
+      console.warn("Calendar initialization failed:", error);
+      // The app will continue without calendar features
+    }
+  };
+  
+  initializeCalendar();
+}, []);
+
+  
 // Add this useEffect after the other useEffects
 useEffect(() => {
   // Check if we should show the tutorial

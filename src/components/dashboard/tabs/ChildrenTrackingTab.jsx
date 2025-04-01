@@ -4,7 +4,9 @@ import {
   Heart, AlertCircle, BookOpen, Activity, 
   Users, Cake, Star, Clipboard, Utensils, Gift,
   PlusCircle, Edit, Trash2, CheckCircle, Camera,
-  MessageCircle, BarChart2, Filter, Info, Brain
+  MessageCircle, BarChart2, Filter, Info, Brain,
+  AlarmClock, School, Music, User, Smile, Frown,
+  Apple, FileText, Award, MapPin, Bell, Coffee
 } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -12,6 +14,7 @@ import { storage } from '../../../services/firebase';
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../../services/firebase';
 import DatabaseService from '../../../services/DatabaseService';
+import AllieAIEngineService from '../../../services/AllieAIEngineService';
 
 const ChildrenTrackingTab = () => {
   const { 
@@ -37,8 +40,10 @@ const ChildrenTrackingTab = () => {
   // State for children's data
   const [childrenData, setChildrenData] = useState({});
   const [loading, setLoading] = useState(true);
-  const [activeMedicalAppointment, setActiveMedicalAppointment] = useState(null);
+  const [aiInsights, setAiInsights] = useState([]);
   const [activeChild, setActiveChild] = useState(null);
+  
+  // Modal states
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [appointmentForm, setAppointmentForm] = useState({
     title: '',
@@ -49,6 +54,7 @@ const ChildrenTrackingTab = () => {
     childId: '',
     completed: false
   });
+  
   const [showMilestoneModal, setShowMilestoneModal] = useState(false);
   const [milestoneForm, setMilestoneForm] = useState({
     title: '',
@@ -57,6 +63,8 @@ const ChildrenTrackingTab = () => {
     childId: '',
     type: 'achievement' // achievement, growth, other
   });
+  
+  const [showGrowthModal, setShowGrowthModal] = useState(false);
   const [growthForm, setGrowthForm] = useState({
     height: '',
     weight: '',
@@ -65,8 +73,75 @@ const ChildrenTrackingTab = () => {
     date: '',
     childId: ''
   });
-  const [showGrowthModal, setShowGrowthModal] = useState(false);
-  const [aiInsights, setAiInsights] = useState([]);
+  
+  const [showRoutineModal, setShowRoutineModal] = useState(false);
+  const [routineForm, setRoutineForm] = useState({
+    title: '',
+    days: [], // Monday, Tuesday, etc.
+    startTime: '',
+    endTime: '',
+    description: '',
+    childId: '',
+    type: 'morning' // morning, afternoon, evening, bedtime
+  });
+  
+  const [showHomeworkModal, setShowHomeworkModal] = useState(false);
+  const [homeworkForm, setHomeworkForm] = useState({
+    title: '',
+    subject: '',
+    dueDate: '',
+    description: '',
+    priority: 'medium', // high, medium, low
+    completed: false,
+    childId: ''
+  });
+  
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [activityForm, setActivityForm] = useState({
+    title: '',
+    type: 'sports', // sports, art, music, social, other
+    location: '',
+    startDate: '',
+    endDate: '',
+    repeatDay: [], // Monday, Tuesday, etc.
+    time: '',
+    notes: '',
+    childId: ''
+  });
+  
+  const [showEmotionalCheckModal, setShowEmotionalCheckModal] = useState(false);
+  const [emotionalCheckForm, setEmotionalCheckForm] = useState({
+    date: '',
+    mood: 'happy', // happy, sad, angry, worried, excited
+    notes: '',
+    childId: ''
+  });
+  
+  const [showMealModal, setShowMealModal] = useState(false);
+  const [mealForm, setMealForm] = useState({
+    type: 'preference', // preference, allergy, restriction
+    name: '',
+    details: '',
+    childId: ''
+  });
+  
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [eventForm, setEventForm] = useState({
+    title: '',
+    date: '',
+    time: '',
+    location: '',
+    description: '',
+    childId: '',
+    type: 'birthday' // birthday, holiday, school, family, other
+  });
+  
+  const [activeMedicalAppointment, setActiveMedicalAppointment] = useState(null);
+  const [activeEmotionalCheck, setActiveEmotionalCheck] = useState(null);
+  const [activeRoutine, setActiveRoutine] = useState(null);
+  const [activeHomework, setActiveHomework] = useState(null);
+  const [activeActivity, setActiveActivity] = useState(null);
+  const [activeEvent, setActiveEvent] = useState(null);
   
   // Fetch children's data on component mount
   useEffect(() => {
@@ -98,11 +173,11 @@ const ChildrenTrackingTab = () => {
                   routines: [],
                   homework: [],
                   activities: [],
-                  emotional: [],
+                  emotionalChecks: [],
                   meals: {
                     allergies: [],
                     preferences: [],
-                    mealPlans: []
+                    restrictions: []
                   },
                   events: [],
                   milestones: []
@@ -136,31 +211,64 @@ const ChildrenTrackingTab = () => {
   }, [familyId, familyMembers]);
   
   // Generate AI insights for children data
-  const generateAiInsights = (data) => {
-    // In a real implementation, this would call AllieAIEngineService
-    // For now, generate some sample insights
-    const insights = [
-      {
-        type: "medical",
-        title: "Upcoming Medical Appointments",
-        content: "Sarah has a dental checkup in 2 weeks. Make sure to schedule Emma's annual physical - it's been almost a year.",
-        priority: "medium"
-      },
-      {
-        type: "growth",
-        title: "Growth Milestone Alert",
-        content: "Based on Emma's growth data, she may need new shoes soon. Her last recorded size was from 3 months ago.",
-        priority: "low"
-      },
-      {
-        type: "emotional",
-        title: "Emotional Well-being Patterns",
-        content: "Sarah has reported feeling tired more frequently in the past two weeks. Consider checking in about her sleep schedule.",
-        priority: "high"
+  const generateAiInsights = async (data) => {
+    try {
+      // For a real implementation, we would call AllieAIEngineService
+      // For now, use some hardcoded insights to showcase the feature
+      const insights = [
+        {
+          type: "medical",
+          title: "Upcoming Medical Appointments",
+          content: "Sarah has a dental checkup in 2 weeks. Make sure to schedule Emma's annual physical - it's been almost a year.",
+          priority: "medium"
+        },
+        {
+          type: "growth",
+          title: "Growth Milestone Alert",
+          content: "Based on Emma's growth data, she may need new shoes soon. Her last recorded size was from 3 months ago.",
+          priority: "low"
+        },
+        {
+          type: "emotional",
+          title: "Emotional Well-being Patterns",
+          content: "Sarah has reported feeling tired more frequently in the past two weeks. Consider checking in about her sleep schedule.",
+          priority: "high"
+        },
+        {
+          type: "homework",
+          title: "Academic Progress Insight",
+          content: "Alex has completed 85% of assigned homework this month - great progress! Consider reviewing math concepts where he's had challenges.",
+          priority: "medium"
+        },
+        {
+          type: "meal",
+          title: "Nutritional Balance",
+          content: "Children's recorded meals show low vegetable intake this week. Consider adding more colorful vegetables to dinners.",
+          priority: "medium"
+        }
+      ];
+      
+      // Sort by priority
+      insights.sort((a, b) => {
+        const priorityOrder = { high: 0, medium: 1, low: 2 };
+        return priorityOrder[a.priority] - priorityOrder[b.priority];
+      });
+      
+      setAiInsights(insights);
+      
+      // For real AI integration, would look like:
+      /*
+      if (AllieAIEngineService) {
+        const generatedInsights = await AllieAIEngineService.generateChildrenInsights(
+          familyId, 
+          data
+        );
+        setAiInsights(generatedInsights);
       }
-    ];
-    
-    setAiInsights(insights);
+      */
+    } catch (error) {
+      console.error("Error generating AI insights:", error);
+    }
   };
 
   // Toggle section expansion
@@ -175,7 +283,7 @@ const ChildrenTrackingTab = () => {
   const handleAddAppointment = (childId) => {
     setAppointmentForm({
       title: '',
-      date: '',
+      date: new Date().toISOString().split('T')[0],
       time: '',
       doctor: '',
       notes: '',
@@ -351,6 +459,417 @@ const ChildrenTrackingTab = () => {
       alert("Failed to save growth data. Please try again.");
     }
   };
+
+  // Handle adding a routine
+  const handleAddRoutine = (childId) => {
+    setRoutineForm({
+      title: '',
+      days: [],
+      startTime: '',
+      endTime: '',
+      description: '',
+      childId: childId,
+      type: 'morning'
+    });
+    setActiveRoutine(null);
+    setShowRoutineModal(true);
+  };
+  
+  // Handle routine form submission
+  const handleRoutineSubmit = async () => {
+    try {
+      // Validate form
+      if (!routineForm.title || routineForm.days.length === 0 || !routineForm.startTime) {
+        alert("Please fill in title, days, and start time");
+        return;
+      }
+      
+      // Format routine data
+      const routineData = {
+        ...routineForm,
+        id: activeRoutine ? activeRoutine.id : Date.now().toString(),
+        createdAt: new Date().toISOString()
+      };
+      
+      // Update local state
+      const updatedData = {...childrenData};
+      
+      if (activeRoutine) {
+        // Update existing routine
+        const routineIndex = updatedData[routineForm.childId].routines.findIndex(
+          r => r.id === activeRoutine.id
+        );
+        
+        if (routineIndex !== -1) {
+          updatedData[routineForm.childId].routines[routineIndex] = routineData;
+        }
+      } else {
+        // Add new routine
+        if (!updatedData[routineForm.childId].routines) {
+          updatedData[routineForm.childId].routines = [];
+        }
+        
+        updatedData[routineForm.childId].routines.push(routineData);
+      }
+      
+      // Update state and save to Firebase
+      setChildrenData(updatedData);
+      
+      // Save to Firebase
+      const docRef = doc(db, "families", familyId);
+      await updateDoc(docRef, {
+        [`childrenData.${routineForm.childId}.routines`]: updatedData[routineForm.childId].routines
+      });
+      
+      // Close modal
+      setShowRoutineModal(false);
+      
+    } catch (error) {
+      console.error("Error saving routine:", error);
+      alert("Failed to save routine. Please try again.");
+    }
+  };
+  
+  // Handle adding homework
+  const handleAddHomework = (childId) => {
+    setHomeworkForm({
+      title: '',
+      subject: '',
+      dueDate: new Date().toISOString().split('T')[0],
+      description: '',
+      priority: 'medium',
+      completed: false,
+      childId: childId
+    });
+    setActiveHomework(null);
+    setShowHomeworkModal(true);
+  };
+  
+  // Handle homework form submission
+  const handleHomeworkSubmit = async () => {
+    try {
+      // Validate form
+      if (!homeworkForm.title || !homeworkForm.subject || !homeworkForm.dueDate) {
+        alert("Please fill in title, subject, and due date");
+        return;
+      }
+      
+      // Format homework data
+      const homeworkData = {
+        ...homeworkForm,
+        id: activeHomework ? activeHomework.id : Date.now().toString(),
+        createdAt: new Date().toISOString()
+      };
+      
+      // Update local state
+      const updatedData = {...childrenData};
+      
+      if (activeHomework) {
+        // Update existing homework
+        const homeworkIndex = updatedData[homeworkForm.childId].homework.findIndex(
+          h => h.id === activeHomework.id
+        );
+        
+        if (homeworkIndex !== -1) {
+          updatedData[homeworkForm.childId].homework[homeworkIndex] = homeworkData;
+        }
+      } else {
+        // Add new homework
+        if (!updatedData[homeworkForm.childId].homework) {
+          updatedData[homeworkForm.childId].homework = [];
+        }
+        
+        updatedData[homeworkForm.childId].homework.push(homeworkData);
+      }
+      
+      // Update state and save to Firebase
+      setChildrenData(updatedData);
+      
+      // Save to Firebase
+      const docRef = doc(db, "families", familyId);
+      await updateDoc(docRef, {
+        [`childrenData.${homeworkForm.childId}.homework`]: updatedData[homeworkForm.childId].homework
+      });
+      
+      // Close modal
+      setShowHomeworkModal(false);
+      
+    } catch (error) {
+      console.error("Error saving homework:", error);
+      alert("Failed to save homework. Please try again.");
+    }
+  };
+  
+  // Handle adding activity
+  const handleAddActivity = (childId) => {
+    setActivityForm({
+      title: '',
+      type: 'sports',
+      location: '',
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: '',
+      repeatDay: [],
+      time: '',
+      notes: '',
+      childId: childId
+    });
+    setActiveActivity(null);
+    setShowActivityModal(true);
+  };
+  
+  // Handle activity form submission
+  const handleActivitySubmit = async () => {
+    try {
+      // Validate form
+      if (!activityForm.title || !activityForm.type || !activityForm.startDate) {
+        alert("Please fill in title, type, and start date");
+        return;
+      }
+      
+      // Format activity data
+      const activityData = {
+        ...activityForm,
+        id: activeActivity ? activeActivity.id : Date.now().toString(),
+        createdAt: new Date().toISOString()
+      };
+      
+      // Update local state
+      const updatedData = {...childrenData};
+      
+      if (activeActivity) {
+        // Update existing activity
+        const activityIndex = updatedData[activityForm.childId].activities.findIndex(
+          a => a.id === activeActivity.id
+        );
+        
+        if (activityIndex !== -1) {
+          updatedData[activityForm.childId].activities[activityIndex] = activityData;
+        }
+      } else {
+        // Add new activity
+        if (!updatedData[activityForm.childId].activities) {
+          updatedData[activityForm.childId].activities = [];
+        }
+        
+        updatedData[activityForm.childId].activities.push(activityData);
+      }
+      
+      // Update state and save to Firebase
+      setChildrenData(updatedData);
+      
+      // Save to Firebase
+      const docRef = doc(db, "families", familyId);
+      await updateDoc(docRef, {
+        [`childrenData.${activityForm.childId}.activities`]: updatedData[activityForm.childId].activities
+      });
+      
+      // Close modal
+      setShowActivityModal(false);
+      
+    } catch (error) {
+      console.error("Error saving activity:", error);
+      alert("Failed to save activity. Please try again.");
+    }
+  };
+  
+  // Handle adding emotional check
+  const handleAddEmotionalCheck = (childId) => {
+    setEmotionalCheckForm({
+      date: new Date().toISOString().split('T')[0],
+      mood: 'happy',
+      notes: '',
+      childId: childId
+    });
+    setActiveEmotionalCheck(null);
+    setShowEmotionalCheckModal(true);
+  };
+  
+  // Handle emotional check form submission
+  const handleEmotionalCheckSubmit = async () => {
+    try {
+      // Validate form
+      if (!emotionalCheckForm.date || !emotionalCheckForm.mood) {
+        alert("Please fill in date and mood");
+        return;
+      }
+      
+      // Format emotional check data
+      const emotionalCheckData = {
+        ...emotionalCheckForm,
+        id: activeEmotionalCheck ? activeEmotionalCheck.id : Date.now().toString(),
+        createdAt: new Date().toISOString()
+      };
+      
+      // Update local state
+      const updatedData = {...childrenData};
+      
+      if (activeEmotionalCheck) {
+        // Update existing emotional check
+        const checkIndex = updatedData[emotionalCheckForm.childId].emotionalChecks.findIndex(
+          check => check.id === activeEmotionalCheck.id
+        );
+        
+        if (checkIndex !== -1) {
+          updatedData[emotionalCheckForm.childId].emotionalChecks[checkIndex] = emotionalCheckData;
+        }
+      } else {
+        // Add new emotional check
+        if (!updatedData[emotionalCheckForm.childId].emotionalChecks) {
+          updatedData[emotionalCheckForm.childId].emotionalChecks = [];
+        }
+        
+        updatedData[emotionalCheckForm.childId].emotionalChecks.push(emotionalCheckData);
+      }
+      
+      // Update state and save to Firebase
+      setChildrenData(updatedData);
+      
+      // Save to Firebase
+      const docRef = doc(db, "families", familyId);
+      await updateDoc(docRef, {
+        [`childrenData.${emotionalCheckForm.childId}.emotionalChecks`]: updatedData[emotionalCheckForm.childId].emotionalChecks
+      });
+      
+      // Close modal
+      setShowEmotionalCheckModal(false);
+      
+    } catch (error) {
+      console.error("Error saving emotional check:", error);
+      alert("Failed to save emotional check. Please try again.");
+    }
+  };
+  
+  // Handle adding meal preference/allergy
+  const handleAddMeal = (childId) => {
+    setMealForm({
+      type: 'preference',
+      name: '',
+      details: '',
+      childId: childId
+    });
+    setShowMealModal(true);
+  };
+  
+  // Handle meal form submission
+  const handleMealSubmit = async () => {
+    try {
+      // Validate form
+      if (!mealForm.name) {
+        alert("Please fill in the name field");
+        return;
+      }
+      
+      // Format meal data
+      const mealData = {
+        ...mealForm,
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString()
+      };
+      
+      // Update local state
+      const updatedData = {...childrenData};
+      
+      if (!updatedData[mealForm.childId].meals) {
+        updatedData[mealForm.childId].meals = {
+          allergies: [],
+          preferences: [],
+          restrictions: []
+        };
+      }
+      
+      // Add to appropriate category
+      const category = mealForm.type === 'allergy' ? 'allergies' : 
+                       mealForm.type === 'restriction' ? 'restrictions' : 'preferences';
+      
+      updatedData[mealForm.childId].meals[category].push(mealData);
+      
+      // Update state and save to Firebase
+      setChildrenData(updatedData);
+      
+      // Save to Firebase
+      const docRef = doc(db, "families", familyId);
+      await updateDoc(docRef, {
+        [`childrenData.${mealForm.childId}.meals.${category}`]: updatedData[mealForm.childId].meals[category]
+      });
+      
+      // Close modal
+      setShowMealModal(false);
+      
+    } catch (error) {
+      console.error("Error saving meal data:", error);
+      alert("Failed to save meal data. Please try again.");
+    }
+  };
+  
+  // Handle adding event
+  const handleAddEvent = (childId) => {
+    setEventForm({
+      title: '',
+      date: new Date().toISOString().split('T')[0],
+      time: '',
+      location: '',
+      description: '',
+      childId: childId,
+      type: 'birthday'
+    });
+    setActiveEvent(null);
+    setShowEventModal(true);
+  };
+  
+  // Handle event form submission
+  const handleEventSubmit = async () => {
+    try {
+      // Validate form
+      if (!eventForm.title || !eventForm.date) {
+        alert("Please fill in title and date");
+        return;
+      }
+      
+      // Format event data
+      const eventData = {
+        ...eventForm,
+        id: activeEvent ? activeEvent.id : Date.now().toString(),
+        createdAt: new Date().toISOString()
+      };
+      
+      // Update local state
+      const updatedData = {...childrenData};
+      
+      if (activeEvent) {
+        // Update existing event
+        const eventIndex = updatedData[eventForm.childId].events.findIndex(
+          e => e.id === activeEvent.id
+        );
+        
+        if (eventIndex !== -1) {
+          updatedData[eventForm.childId].events[eventIndex] = eventData;
+        }
+      } else {
+        // Add new event
+        if (!updatedData[eventForm.childId].events) {
+          updatedData[eventForm.childId].events = [];
+        }
+        
+        updatedData[eventForm.childId].events.push(eventData);
+      }
+      
+      // Update state and save to Firebase
+      setChildrenData(updatedData);
+      
+      // Save to Firebase
+      const docRef = doc(db, "families", familyId);
+      await updateDoc(docRef, {
+        [`childrenData.${eventForm.childId}.events`]: updatedData[eventForm.childId].events
+      });
+      
+      // Close modal
+      setShowEventModal(false);
+      
+    } catch (error) {
+      console.error("Error saving event:", error);
+      alert("Failed to save event. Please try again.");
+    }
+  };
   
   // Format date for display
   const formatDate = (dateString) => {
@@ -433,7 +952,9 @@ const ChildrenTrackingTab = () => {
           ))}
           
           <button
-            className="px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center whitespace-nowrap"
+            className={`px-4 py-2 rounded-full flex items-center whitespace-nowrap ${
+              activeChild === null ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'
+            }`}
             onClick={() => setActiveChild(null)}
           >
             <Users size={16} className="mr-2" />
@@ -632,6 +1153,325 @@ const ChildrenTrackingTab = () => {
       </div>
     );
   };
+
+  // Child component for displaying a routine card
+  const RoutineCard = ({ routine, childId }) => {
+    return (
+      <div className="border rounded-lg p-3 mb-3 bg-white">
+        <div className="flex justify-between">
+          <div>
+            <div className="flex items-center">
+              {routine.type === 'morning' && <Coffee size={16} className="text-blue-500 mr-1" />}
+              {routine.type === 'afternoon' && <Sun size={16} className="text-amber-500 mr-1" />}
+              {routine.type === 'evening' && <Moon size={16} className="text-purple-500 mr-1" />}
+              {routine.type === 'bedtime' && <Moon size={16} className="text-indigo-500 mr-1" />}
+              <h5 className="font-medium font-roboto">{routine.title}</h5>
+            </div>
+            <p className="text-sm text-gray-600 font-roboto">
+              Time: {routine.startTime} {routine.endTime && `- ${routine.endTime}`}
+            </p>
+            <p className="text-sm text-gray-600 font-roboto">
+              Days: {routine.days.join(', ')}
+            </p>
+          </div>
+          <div className="flex space-x-2">
+            <button 
+              className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+              onClick={() => {
+                setRoutineForm({...routine, childId});
+                setActiveRoutine(routine);
+                setShowRoutineModal(true);
+              }}
+            >
+              <Edit size={16} />
+            </button>
+          </div>
+        </div>
+        {routine.description && (
+          <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
+            <p>{routine.description}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Child component for displaying a homework card
+  const HomeworkCard = ({ homework, childId }) => {
+    return (
+      <div className={`border rounded-lg p-3 mb-3 ${
+        homework.completed ? 'bg-green-50' : 
+        new Date(homework.dueDate) < new Date() ? 'bg-red-50' : 
+        'bg-white'
+      }`}>
+        <div className="flex justify-between">
+          <div>
+            <div className="flex items-center">
+              {homework.priority === 'high' && <AlertCircle size={16} className="text-red-500 mr-1" />}
+              {homework.priority === 'medium' && <Info size={16} className="text-amber-500 mr-1" />}
+              {homework.priority === 'low' && <Info size={16} className="text-blue-500 mr-1" />}
+              <h5 className="font-medium font-roboto">{homework.title}</h5>
+            </div>
+            <p className="text-sm text-gray-600 font-roboto">
+              Subject: {homework.subject}
+            </p>
+            <p className="text-sm text-gray-600 font-roboto">
+              Due: {formatDate(homework.dueDate)}
+            </p>
+          </div>
+          <div className="flex space-x-2">
+            <button 
+              className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+              onClick={() => {
+                setHomeworkForm({...homework, childId});
+                setActiveHomework(homework);
+                setShowHomeworkModal(true);
+              }}
+            >
+              <Edit size={16} />
+            </button>
+            {!homework.completed && (
+              <button 
+                className="p-1 text-green-600 hover:bg-green-50 rounded"
+                onClick={async () => {
+                  try {
+                    // Update homework as completed
+                    const updatedData = {...childrenData};
+                    const homeworkIndex = updatedData[childId].homework.findIndex(
+                      h => h.id === homework.id
+                    );
+                    
+                    if (homeworkIndex !== -1) {
+                      updatedData[childId].homework[homeworkIndex].completed = true;
+                      
+                      // Update state
+                      setChildrenData(updatedData);
+                      
+                      // Save to Firebase
+                      const docRef = doc(db, "families", familyId);
+                      await updateDoc(docRef, {
+                        [`childrenData.${childId}.homework`]: updatedData[childId].homework
+                      });
+                    }
+                  } catch (error) {
+                    console.error("Error marking homework as completed:", error);
+                  }
+                }}
+              >
+                <CheckCircle size={16} />
+              </button>
+            )}
+          </div>
+        </div>
+        {homework.description && (
+          <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
+            <p>{homework.description}</p>
+          </div>
+        )}
+        {homework.completed && (
+          <div className="mt-2 flex items-center text-sm text-green-600 font-roboto">
+            <CheckCircle size={14} className="mr-1" />
+            Completed
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Child component for displaying an activity card
+  const ActivityCard = ({ activity, childId }) => {
+    return (
+      <div className="border rounded-lg p-3 mb-3 bg-white">
+        <div className="flex justify-between">
+          <div>
+            <div className="flex items-center">
+              {activity.type === 'sports' && <Activity size={16} className="text-green-500 mr-1" />}
+              {activity.type === 'art' && <Palette size={16} className="text-purple-500 mr-1" />}
+              {activity.type === 'music' && <Music size={16} className="text-blue-500 mr-1" />}
+              {activity.type === 'social' && <Users size={16} className="text-amber-500 mr-1" />}
+              {activity.type === 'other' && <Star size={16} className="text-red-500 mr-1" />}
+              <h5 className="font-medium font-roboto">{activity.title}</h5>
+            </div>
+            {activity.location && (
+              <p className="text-sm text-gray-600 font-roboto">
+                Location: {activity.location}
+              </p>
+            )}
+            <p className="text-sm text-gray-600 font-roboto">
+              Dates: {formatDate(activity.startDate)} 
+              {activity.endDate && ` - ${formatDate(activity.endDate)}`}
+            </p>
+            {activity.repeatDay && activity.repeatDay.length > 0 && (
+              <p className="text-sm text-gray-600 font-roboto">
+                Days: {activity.repeatDay.join(', ')}
+              </p>
+            )}
+            {activity.time && (
+              <p className="text-sm text-gray-600 font-roboto">
+                Time: {activity.time}
+              </p>
+            )}
+          </div>
+          <div className="flex space-x-2">
+            <button 
+              className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+              onClick={() => {
+                setActivityForm({...activity, childId});
+                setActiveActivity(activity);
+                setShowActivityModal(true);
+              }}
+            >
+              <Edit size={16} />
+            </button>
+          </div>
+        </div>
+        {activity.notes && (
+          <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
+            <p>{activity.notes}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Child component for displaying an emotional check card
+  const EmotionalCheckCard = ({ check, childId }) => {
+    return (
+      <div className="border rounded-lg p-3 mb-3 bg-white">
+        <div className="flex justify-between">
+          <div>
+            <div className="flex items-center">
+              {check.mood === 'happy' && <Smile size={16} className="text-green-500 mr-1" />}
+              {check.mood === 'sad' && <Frown size={16} className="text-blue-500 mr-1" />}
+              {check.mood === 'angry' && <Frown size={16} className="text-red-500 mr-1" />}
+              {check.mood === 'worried' && <Frown size={16} className="text-amber-500 mr-1" />}
+              {check.mood === 'excited' && <Smile size={16} className="text-purple-500 mr-1" />}
+              <h5 className="font-medium font-roboto">Mood: {check.mood.charAt(0).toUpperCase() + check.mood.slice(1)}</h5>
+            </div>
+            <p className="text-sm text-gray-600 font-roboto">
+              Date: {formatDate(check.date)}
+            </p>
+          </div>
+          <div className="flex space-x-2">
+            <button 
+              className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+              onClick={() => {
+                setEmotionalCheckForm({...check, childId});
+                setActiveEmotionalCheck(check);
+                setShowEmotionalCheckModal(true);
+              }}
+            >
+              <Edit size={16} />
+            </button>
+          </div>
+        </div>
+        {check.notes && (
+          <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
+            <p>{check.notes}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Child component for displaying a meal item card
+  const MealItemCard = ({ item, childId, category }) => {
+    return (
+      <div className={`border rounded-lg p-3 mb-3 ${
+        category === 'allergies' ? 'bg-red-50' : 
+        category === 'restrictions' ? 'bg-amber-50' : 
+        'bg-white'
+      }`}>
+        <div className="flex justify-between">
+          <div>
+            <div className="flex items-center">
+              {category === 'allergies' && <AlertCircle size={16} className="text-red-500 mr-1" />}
+              {category === 'restrictions' && <Ban size={16} className="text-amber-500 mr-1" />}
+              {category === 'preferences' && <ThumbsUp size={16} className="text-green-500 mr-1" />}
+              <h5 className="font-medium font-roboto">{item.name}</h5>
+            </div>
+          </div>
+          <div className="flex space-x-2">
+            <button 
+              className="p-1 text-red-600 hover:bg-red-50 rounded"
+              onClick={async () => {
+                try {
+                  // Remove meal item
+                  const updatedData = {...childrenData};
+                  updatedData[childId].meals[category] = updatedData[childId].meals[category].filter(
+                    i => i.id !== item.id
+                  );
+                  
+                  // Update state
+                  setChildrenData(updatedData);
+                  
+                  // Save to Firebase
+                  const docRef = doc(db, "families", familyId);
+                  await updateDoc(docRef, {
+                    [`childrenData.${childId}.meals.${category}`]: updatedData[childId].meals[category]
+                  });
+                } catch (error) {
+                  console.error("Error removing meal item:", error);
+                }
+              }}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        </div>
+        {item.details && (
+          <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
+            <p>{item.details}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Child component for displaying an event card
+  const EventCard = ({ event, childId }) => {
+    return (
+      <div className="border rounded-lg p-3 mb-3 bg-white">
+        <div className="flex justify-between">
+          <div>
+            <div className="flex items-center">
+              {event.type === 'birthday' && <Cake size={16} className="text-pink-500 mr-1" />}
+              {event.type === 'holiday' && <Gift size={16} className="text-red-500 mr-1" />}
+              {event.type === 'school' && <School size={16} className="text-blue-500 mr-1" />}
+              {event.type === 'family' && <Users size={16} className="text-green-500 mr-1" />}
+              {event.type === 'other' && <Calendar size={16} className="text-purple-500 mr-1" />}
+              <h5 className="font-medium font-roboto">{event.title}</h5>
+            </div>
+            <p className="text-sm text-gray-600 font-roboto">
+              Date: {formatDate(event.date)} {event.time && `at ${event.time}`}
+            </p>
+            {event.location && (
+              <p className="text-sm text-gray-600 font-roboto">
+                Location: {event.location}
+              </p>
+            )}
+          </div>
+          <div className="flex space-x-2">
+            <button 
+              className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+              onClick={() => {
+                setEventForm({...event, childId});
+                setActiveEvent(event);
+                setShowEventModal(true);
+              }}
+            >
+              <Edit size={16} />
+            </button>
+          </div>
+        </div>
+        {event.description && (
+          <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
+            <p>{event.description}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
   
   // Render the medical appointments section
   const renderMedicalSection = () => {
@@ -810,8 +1650,8 @@ const ChildrenTrackingTab = () => {
     );
   };
   
-  // Render the milestones section
-  const renderMilestonesSection = () => {
+  // Render the daily routines section
+  const renderRoutinesSection = () => {
     const children = familyMembers.filter(member => member.role === 'child');
     
     if (children.length === 0) {
@@ -837,369 +1677,508 @@ const ChildrenTrackingTab = () => {
                     className="w-full h-full object-cover"
                   />
                 </div>
-                <h5 className="font-medium font-roboto">{child.name}'s Milestones & Memories</h5>
+                <h5 className="font-medium font-roboto">{child.name}'s Daily Routines</h5>
               </div>
               <button 
                 className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
-                onClick={() => handleAddMilestone(child.id)}
+                onClick={() => handleAddRoutine(child.id)}
               >
                 <PlusCircle size={14} className="mr-1" />
-                Add Milestone
+                Add Routine
               </button>
             </div>
             
-            {childrenData[child.id]?.milestones?.length > 0 ? (
-              <div className="space-y-2">
-                {childrenData[child.id].milestones
-                  .sort((a, b) => new Date(b.date) - new Date(a.date))
-                  .map(milestone => (
-                    <MilestoneCard 
-                      key={milestone.id} 
-                      milestone={milestone} 
-                      childId={child.id} 
-                    />
-                  ))}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Morning routines */}
+                <div>
+                  <h6 className="text-sm font-medium font-roboto mb-2 flex items-center">
+                    <Coffee size={14} className="text-blue-500 mr-1" />
+                    Morning Routines
+                  </h6>
+                  {childrenData[child.id]?.routines?.filter(r => r.type === 'morning').length > 0 ? (
+                    <div className="space-y-2">
+                      {childrenData[child.id].routines
+                        .filter(r => r.type === 'morning')
+                        .map(routine => (
+                          <RoutineCard key={routine.id} routine={routine} childId={child.id} />
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500 font-roboto">No morning routines added</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Afternoon routines */}
+                <div>
+                  <h6 className="text-sm font-medium font-roboto mb-2 flex items-center">
+                    <Sun size={14} className="text-amber-500 mr-1" />
+                    Afternoon Routines
+                  </h6>
+                  {childrenData[child.id]?.routines?.filter(r => r.type === 'afternoon').length > 0 ? (
+                    <div className="space-y-2">
+                      {childrenData[child.id].routines
+                        .filter(r => r.type === 'afternoon')
+                        .map(routine => (
+                          <RoutineCard key={routine.id} routine={routine} childId={child.id} />
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500 font-roboto">No afternoon routines added</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Evening routines */}
+                <div>
+                  <h6 className="text-sm font-medium font-roboto mb-2 flex items-center">
+                    <Moon size={14} className="text-purple-500 mr-1" />
+                    Evening Routines
+                  </h6>
+                  {childrenData[child.id]?.routines?.filter(r => r.type === 'evening').length > 0 ? (
+                    <div className="space-y-2">
+                      {childrenData[child.id].routines
+                        .filter(r => r.type === 'evening')
+                        .map(routine => (
+                          <RoutineCard key={routine.id} routine={routine} childId={child.id} />
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500 font-roboto">No evening routines added</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Bedtime routines */}
+                <div>
+                  <h6 className="text-sm font-medium font-roboto mb-2 flex items-center">
+                    <Moon size={14} className="text-indigo-500 mr-1" />
+                    Bedtime Routines
+                  </h6>
+                  {childrenData[child.id]?.routines?.filter(r => r.type === 'bedtime').length > 0 ? (
+                    <div className="space-y-2">
+                      {childrenData[child.id].routines
+                        .filter(r => r.type === 'bedtime')
+                        .map(routine => (
+                          <RoutineCard key={routine.id} routine={routine} childId={child.id} />
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500 font-roboto">No bedtime routines added</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            ) : (
-              <div className="text-center p-4 bg-gray-50 rounded-lg">
-                <p className="text-gray-500 font-roboto">No milestones added yet</p>
+              
+              {/* Weekly schedule view */}
+              <div className="mt-4">
+                <h6 className="text-sm font-medium font-roboto mb-2">Weekly Schedule</h6>
+                <div className="bg-gray-50 p-3 rounded-lg text-center">
+                  <Calendar size={24} className="mx-auto text-gray-400 mb-2" />
+                  <p className="text-sm text-gray-500 font-roboto">Weekly schedule view will appear here</p>
+                </div>
               </div>
-            )}
+            </div>
           </div>
         ))}
       </div>
     );
   };
   
-  // Render a placeholder for sections not yet implemented
-  const renderPlaceholderSection = (title) => {
-    return (
-      <div className="bg-white rounded-lg shadow p-6 text-center">
-        <div className="mb-4">
-          <Info size={36} className="mx-auto text-gray-400" />
+  // Render the homework section
+  const renderHomeworkSection = () => {
+    const children = familyMembers.filter(member => member.role === 'child');
+    
+    if (children.length === 0) {
+      return (
+        <div className="text-center p-4 bg-gray-50 rounded-lg">
+          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
         </div>
-        <h3 className="text-lg font-medium mb-2 font-roboto">{title} Coming Soon</h3>
-        <p className="text-gray-500 font-roboto">
-          This feature is currently in development and will be available soon.
-        </p>
+      );
+    }
+    
+    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
+    
+    return (
+      <div className="space-y-6">
+        {filteredChildren.map(child => (
+          <div key={child.id} className="bg-white rounded-lg shadow p-4">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center">
+                <div className="w-8 h-8 rounded-full overflow-hidden mr-2">
+                  <img 
+                    src={child.profilePicture || '/api/placeholder/32/32'} 
+                    alt={child.name} 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <h5 className="font-medium font-roboto">{child.name}'s Homework & Academics</h5>
+              </div>
+              <button 
+                className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
+                onClick={() => handleAddHomework(child.id)}
+              >
+                <PlusCircle size={14} className="mr-1" />
+                Add Homework
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Upcoming homework */}
+              <div>
+                <h6 className="text-sm font-medium font-roboto mb-2">Upcoming Homework</h6>
+                {childrenData[child.id]?.homework?.filter(h => !h.completed && new Date(h.dueDate) >= new Date()).length > 0 ? (
+                  <div className="space-y-2">
+                    {childrenData[child.id].homework
+                      .filter(h => !h.completed && new Date(h.dueDate) >= new Date())
+                      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+                      .map(homework => (
+                        <HomeworkCard key={homework.id} homework={homework} childId={child.id} />
+                      ))}
+                  </div>
+                ) : (
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-500 font-roboto">No upcoming homework</p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Overdue homework */}
+              {childrenData[child.id]?.homework?.filter(h => !h.completed && new Date(h.dueDate) < new Date()).length > 0 && (
+                <div>
+                  <h6 className="text-sm font-medium font-roboto mb-2 flex items-center">
+                    <AlertCircle size={14} className="text-red-500 mr-1" />
+                    Overdue Homework
+                  </h6>
+                  <div className="space-y-2">
+                    {childrenData[child.id].homework
+                      .filter(h => !h.completed && new Date(h.dueDate) < new Date())
+                      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+                      .map(homework => (
+                        <HomeworkCard key={homework.id} homework={homework} childId={child.id} />
+                      ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Completed homework */}
+              {childrenData[child.id]?.homework?.filter(h => h.completed).length > 0 && (
+                <div>
+                  <h6 className="text-sm font-medium font-roboto mb-2 flex items-center">
+                    <CheckCircle size={14} className="text-green-500 mr-1" />
+                    Completed Homework
+                  </h6>
+                  <div className="space-y-2">
+                    {childrenData[child.id].homework
+                      .filter(h => h.completed)
+                      .sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate))
+                      .map(homework => (
+                        <HomeworkCard key={homework.id} homework={homework} childId={child.id} />
+                      ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Academic progress chart */}
+              <div className="mt-4">
+                <h6 className="text-sm font-medium font-roboto mb-2">Academic Progress</h6>
+                <div className="bg-gray-50 p-3 rounded-lg text-center">
+                  <BarChart2 size={24} className="mx-auto text-gray-400 mb-2" />
+                  <p className="text-sm text-gray-500 font-roboto">Academic progress chart will appear here</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     );
   };
-
-  // If loading, show a loading state
-  if (loading) {
+  
+  // Render the activities section
+  const renderActivitiesSection = () => {
+    const children = familyMembers.filter(member => member.role === 'child');
+    
+    if (children.length === 0) {
+      return (
+        <div className="text-center p-4 bg-gray-50 rounded-lg">
+          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
+        </div>
+      );
+    }
+    
+    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
+    
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-10 h-10 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
+      <div className="space-y-6">
+        {filteredChildren.map(child => (
+          <div key={child.id} className="bg-white rounded-lg shadow p-4">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center">
+                <div className="w-8 h-8 rounded-full overflow-hidden mr-2">
+                  <img 
+                    src={child.profilePicture || '/api/placeholder/32/32'} 
+                    alt={child.name} 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <h5 className="font-medium font-roboto">{child.name}'s Activities</h5>
+              </div>
+              <button 
+                className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
+                onClick={() => handleAddActivity(child.id)}
+              >
+                <PlusCircle size={14} className="mr-1" />
+                Add Activity
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Activities by type */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Sports activities */}
+                <div>
+                  <h6 className="text-sm font-medium font-roboto mb-2 flex items-center">
+                    <Activity size={14} className="text-green-500 mr-1" />
+                    Sports
+                  </h6>
+                  {childrenData[child.id]?.activities?.filter(a => a.type === 'sports').length > 0 ? (
+                    <div className="space-y-2">
+                      {childrenData[child.id].activities
+                        .filter(a => a.type === 'sports')
+                        .map(activity => (
+                          <ActivityCard key={activity.id} activity={activity} childId={child.id} />
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500 font-roboto">No sports activities</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Art activities */}
+                <div>
+                  <h6 className="text-sm font-medium font-roboto mb-2 flex items-center">
+                    <Palette size={14} className="text-purple-500 mr-1" />
+                    Arts & Crafts
+                  </h6>
+                  {childrenData[child.id]?.activities?.filter(a => a.type === 'art').length > 0 ? (
+                    <div className="space-y-2">
+                      {childrenData[child.id].activities
+                        .filter(a => a.type === 'art')
+                        .map(activity => (
+                          <ActivityCard key={activity.id} activity={activity} childId={child.id} />
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500 font-roboto">No art activities</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Music activities */}
+                <div>
+                  <h6 className="text-sm font-medium font-roboto mb-2 flex items-center">
+                    <Music size={14} className="text-blue-500 mr-1" />
+                    Music
+                  </h6>
+                  {childrenData[child.id]?.activities?.filter(a => a.type === 'music').length > 0 ? (
+                    <div className="space-y-2">
+                      {childrenData[child.id].activities
+                        .filter(a => a.type === 'music')
+                        .map(activity => (
+                          <ActivityCard key={activity.id} activity={activity} childId={child.id} />
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500 font-roboto">No music activities</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Social activities */}
+                <div>
+                  <h6 className="text-sm font-medium font-roboto mb-2 flex items-center">
+                    <Users size={14} className="text-amber-500 mr-1" />
+                    Social
+                  </h6>
+                  {childrenData[child.id]?.activities?.filter(a => a.type === 'social').length > 0 ? (
+                    <div className="space-y-2">
+                      {childrenData[child.id].activities
+                        .filter(a => a.type === 'social')
+                        .map(activity => (
+                          <ActivityCard key={activity.id} activity={activity} childId={child.id} />
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500 font-roboto">No social activities</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Other activities */}
+                {childrenData[child.id]?.activities?.filter(a => a.type === 'other').length > 0 && (
+                  <div>
+                    <h6 className="text-sm font-medium font-roboto mb-2 flex items-center">
+                      <Star size={14} className="text-red-500 mr-1" />
+                      Other Activities
+                    </h6>
+                    <div className="space-y-2">
+                      {childrenData[child.id].activities
+                        .filter(a => a.type === 'other')
+                        .map(activity => (
+                          <ActivityCard key={activity.id} activity={activity} childId={child.id} />
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Activity calendar */}
+              <div className="mt-4">
+                <h6 className="text-sm font-medium font-roboto mb-2">Activity Calendar</h6>
+                <div className="bg-gray-50 p-3 rounded-lg text-center">
+                  <Calendar size={24} className="mx-auto text-gray-400 mb-2" />
+                  <p className="text-sm text-gray-500 font-roboto">Activity calendar will appear here</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     );
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Introduction Card */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-start mb-6">
-          <div className="mr-4 flex-shrink-0">
-            <Users size={32} className="text-black" />
-          </div>
-          <div>
-            <h3 className="text-xl font-bold mb-2 font-roboto">Children Tracking Center</h3>
-            <p className="text-gray-600 font-roboto">
-              Keep track of everything related to your children in one place - from medical appointments 
-              to growth milestones, school activities and more. This helps you coordinate caring responsibilities 
-              and ensures nothing important is overlooked.
-            </p>
-          </div>
+  };
+  
+  // Render the emotional check-ins section
+  const renderEmotionalSection = () => {
+    const children = familyMembers.filter(member => member.role === 'child');
+    
+    if (children.length === 0) {
+      return (
+        <div className="text-center p-4 bg-gray-50 rounded-lg">
+          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
         </div>
-        
-        {/* Children selection tabs */}
-        {renderChildrenTabs()}
-        
-        {/* AI Insights section */}
-        {renderAiInsights()}
-      </div>
-
-      {/* Medical Appointments Section */}
-      {renderSectionHeader("Medical & Health Appointments", "medical", <Activity size={20} className="text-black" />)}
-      {expandedSections.medical && renderMedicalSection()}
-      
-      {/* Growth & Development Section */}
-      {renderSectionHeader("Growth & Development Tracking", "growth", <Activity size={20} className="text-black" />)}
-      {expandedSections.growth && renderGrowthSection()}
-      
-      {/* Daily Routines Section */}
-      {renderSectionHeader("Daily Routines & Schedules", "routines", <Clock size={20} className="text-black" />)}
-      {expandedSections.routines && renderPlaceholderSection("Daily Routines Tracking")}
-      
-      {/* Homework & Academic Section */}
-      {renderSectionHeader("Homework & Academic Tracking", "homework", <BookOpen size={20} className="text-black" />)}
-      {expandedSections.homework && renderPlaceholderSection("Homework Tracking")}
-      
-      {/* Activities Section */}
-      {renderSectionHeader("Social & Extracurricular Activities", "activities", <Users size={20} className="text-black" />)}
-      {expandedSections.activities && renderPlaceholderSection("Activities Tracking")}
-      
-      {/* Emotional Section */}
-      {renderSectionHeader("Emotional & Behavioral Check-Ins", "emotional", <Heart size={20} className="text-black" />)}
-      {expandedSections.emotional && renderPlaceholderSection("Emotional Check-Ins")}
-      
-      {/* Meal Planning Section */}
-      {renderSectionHeader("Meal Planning & Dietary Needs", "meals", <Utensils size={20} className="text-black" />)}
-      {expandedSections.meals && renderPlaceholderSection("Meal Planning")}
-      
-      {/* Special Events Section */}
-      {renderSectionHeader("Family Calendar & Special Events", "events", <Calendar size={20} className="text-black" />)}
-      {expandedSections.events && renderPlaceholderSection("Special Events")}
-      
-      {/* Milestones Section */}
-      {renderSectionHeader("Milestone Memories & Celebrations", "milestones", <Cake size={20} className="text-black" />)}
-      {expandedSections.milestones && renderMilestonesSection()}
-      
-      {/* Medical Appointment Modal */}
-      {showAppointmentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-medium mb-4 font-roboto">
-              {activeMedicalAppointment ? 'Edit Appointment' : 'Add Medical Appointment'}
-            </h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">Title/Type</label>
-                <input 
-                  type="text" 
-                  className="w-full p-2 border rounded font-roboto"
-                  placeholder="e.g., Annual Check-up, Dental Visit"
-                  value={appointmentForm.title}
-                  onChange={(e) => setAppointmentForm({...appointmentForm, title: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">Date</label>
-                <input 
-                  type="date" 
-                  className="w-full p-2 border rounded font-roboto"
-                  value={appointmentForm.date}
-                  onChange={(e) => setAppointmentForm({...appointmentForm, date: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">Time (optional)</label>
-                <input 
-                  type="time" 
-                  className="w-full p-2 border rounded font-roboto"
-                  value={appointmentForm.time}
-                  onChange={(e) => setAppointmentForm({...appointmentForm, time: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">Doctor/Provider (optional)</label>
-                <input 
-                  type="text" 
-                  className="w-full p-2 border rounded font-roboto"
-                  placeholder="e.g., Dr. Smith"
-                  value={appointmentForm.doctor}
-                  onChange={(e) => setAppointmentForm({...appointmentForm, doctor: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">Notes (optional)</label>
-                <textarea 
-                  className="w-full p-2 border rounded font-roboto"
-                  placeholder="Any special instructions or things to remember..."
-                  rows="3"
-                  value={appointmentForm.notes}
-                  onChange={(e) => setAppointmentForm({...appointmentForm, notes: e.target.value})}
-                ></textarea>
-              </div>
-              
+      );
+    }
+    
+    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
+    
+    return (
+      <div className="space-y-6">
+        {filteredChildren.map(child => (
+          <div key={child.id} className="bg-white rounded-lg shadow p-4">
+            <div className="flex justify-between items-center mb-4">
               <div className="flex items-center">
-                <input 
-                  type="checkbox" 
-                  id="completed" 
-                  className="mr-2"
-                  checked={appointmentForm.completed}
-                  onChange={(e) => setAppointmentForm({...appointmentForm, completed: e.target.checked})}
-                />
-                <label htmlFor="completed" className="text-sm text-gray-700 font-roboto">Mark as completed</label>
+                <div className="w-8 h-8 rounded-full overflow-hidden mr-2">
+                  <img 
+                    src={child.profilePicture || '/api/placeholder/32/32'} 
+                    alt={child.name} 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <h5 className="font-medium font-roboto">{child.name}'s Emotional Well-being</h5>
               </div>
-            </div>
-            
-            <div className="flex justify-end mt-6 space-x-3">
-              <button
-                className="px-4 py-2 border rounded font-roboto"
-                onClick={() => setShowAppointmentModal(false)}
+              <button 
+                className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
+                onClick={() => handleAddEmotionalCheck(child.id)}
               >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-black text-white rounded font-roboto"
-                onClick={handleAppointmentSubmit}
-              >
-                {activeMedicalAppointment ? 'Update' : 'Add'} Appointment
+                <PlusCircle size={14} className="mr-1" />
+                Add Check-in
               </button>
             </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Growth Data Modal */}
-      {showGrowthModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-medium mb-4 font-roboto">Add Growth Measurement</h3>
             
             <div className="space-y-4">
+              {/* Latest mood */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">Date</label>
-                <input 
-                  type="date" 
-                  className="w-full p-2 border rounded font-roboto"
-                  value={growthForm.date}
-                  onChange={(e) => setGrowthForm({...growthForm, date: e.target.value})}
-                />
+                <h6 className="text-sm font-medium font-roboto mb-2">Current Mood</h6>
+                {childrenData[child.id]?.emotionalChecks?.length > 0 ? (
+                  <div className="bg-white p-3 rounded-lg border">
+                    {(() => {
+                      const latestCheck = childrenData[child.id].emotionalChecks
+                        .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+                      
+                      return (
+                        <div className="flex flex-col items-center">
+                          <div className="text-4xl mb-2">
+                            {latestCheck.mood === 'happy' && '😊'}
+                            {latestCheck.mood === 'sad' && '😢'}
+                            {latestCheck.mood === 'angry' && '😠'}
+                            {latestCheck.mood === 'worried' && '😟'}
+                            {latestCheck.mood === 'excited' && '😃'}
+                          </div>
+                          <p className="font-medium font-roboto">{latestCheck.mood.charAt(0).toUpperCase() + latestCheck.mood.slice(1)}</p>
+                          <p className="text-sm text-gray-500 font-roboto">Last updated: {formatDate(latestCheck.date)}</p>
+                          {latestCheck.notes && (
+                            <p className="mt-2 text-sm italic font-roboto">"{latestCheck.notes}"</p>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-500 font-roboto">No mood check-ins recorded yet</p>
+                  </div>
+                )}
               </div>
               
+              {/* Mood history */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">Height</label>
-                <input 
-                  type="text" 
-                  className="w-full p-2 border rounded font-roboto"
-                  placeholder="e.g., 3'5\" or 105 cm"
-                  value={growthForm.height}
-                  onChange={(e) => setGrowthForm({...growthForm, height: e.target.value})}
-                />
+                <h6 className="text-sm font-medium font-roboto mb-2">Mood History</h6>
+                {childrenData[child.id]?.emotionalChecks?.length > 0 ? (
+                  <div className="space-y-2">
+                    {childrenData[child.id].emotionalChecks
+                      .sort((a, b) => new Date(b.date) - new Date(a.date))
+                      .slice(0, 5)
+                      .map(check => (
+                        <EmotionalCheckCard key={check.id} check={check} childId={child.id} />
+                      ))}
+                  </div>
+                ) : (
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-500 font-roboto">No mood history available</p>
+                  </div>
+                )}
               </div>
               
+              {/* Mood trends */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">Weight</label>
-                <input 
-                  type="text" 
-                  className="w-full p-2 border rounded font-roboto"
-                  placeholder="e.g., 42 lbs or 19 kg"
-                  value={growthForm.weight}
-                  onChange={(e) => setGrowthForm({...growthForm, weight: e.target.value})}
-                />
+                <h6 className="text-sm font-medium font-roboto mb-2">Mood Trends</h6>
+                <div className="bg-gray-50 p-3 rounded-lg text-center">
+                  <BarChart2 size={24} className="mx-auto text-gray-400 mb-2" />
+                  <p className="text-sm text-gray-500 font-roboto">Mood trend chart will appear here</p>
+                </div>
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">Shoe Size</label>
-                <input 
-                  type="text" 
-                  className="w-full p-2 border rounded font-roboto"
-                  placeholder="e.g., 13C or EU 31"
-                  value={growthForm.shoeSize}
-                  onChange={(e) => setGrowthForm({...growthForm, shoeSize: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">Clothing Size</label>
-                <input 
-                  type="text" 
-                  className="w-full p-2 border rounded font-roboto"
-                  placeholder="e.g., 5T or 6-7y"
-                  value={growthForm.clothingSize}
-                  onChange={(e) => setGrowthForm({...growthForm, clothingSize: e.target.value})}
-                />
-              </div>
-            </div>
-            
-            <div className="flex justify-end mt-6 space-x-3">
-              <button
-                className="px-4 py-2 border rounded font-roboto"
-                onClick={() => setShowGrowthModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-black text-white rounded font-roboto"
-                onClick={handleGrowthSubmit}
-              >
-                Save Measurement
-              </button>
             </div>
           </div>
+        ))}
+      </div>
+    );
+  };
+  
+  // Render the meal planning section
+  const renderMealsSection = () => {
+    const children = familyMembers.filter(member => member.role === 'child');
+    
+    if (children.length === 0) {
+      return (
+        <div className="text-center p-4 bg-gray-50 rounded-lg">
+          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
         </div>
-      )}
-      
-      {/* Milestone Modal */}
-      {showMilestoneModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-medium mb-4 font-roboto">Add Milestone or Memory</h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">Title</label>
-                <input 
-                  type="text" 
-                  className="w-full p-2 border rounded font-roboto"
-                  placeholder="e.g., First Steps, Lost Tooth"
-                  value={milestoneForm.title}
-                  onChange={(e) => setMilestoneForm({...milestoneForm, title: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">Date</label>
-                <input 
-                  type="date" 
-                  className="w-full p-2 border rounded font-roboto"
-                  value={milestoneForm.date}
-                  onChange={(e) => setMilestoneForm({...milestoneForm, date: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">Type</label>
-                <select 
-                  className="w-full p-2 border rounded font-roboto"
-                  value={milestoneForm.type}
-                  onChange={(e) => setMilestoneForm({...milestoneForm, type: e.target.value})}
-                >
-                  <option value="achievement">Achievement</option>
-                  <option value="growth">Growth Milestone</option>
-                  <option value="other">Special Memory</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">Description (optional)</label>
-                <textarea 
-                  className="w-full p-2 border rounded font-roboto"
-                  placeholder="Describe this milestone or memory..."
-                  rows="3"
-                  value={milestoneForm.description}
-                  onChange={(e) => setMilestoneForm({...milestoneForm, description: e.target.value})}
-                ></textarea>
-              </div>
-            </div>
-            
-            <div className="flex justify-end mt-6 space-x-3">
-              <button
-                className="px-4 py-2 border rounded font-roboto"
-                onClick={() => setShowMilestoneModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-black text-white rounded font-roboto"
-                onClick={handleMilestoneSubmit}
-              >
-                Save Milestone
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default ChildrenTrackingTab;
+      );
+    }
+    
+    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
+    
+    return (
+      <div className="space-y-6">
+        {filteredChildren.map(child => (
+          <div key={child.id} className
