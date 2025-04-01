@@ -99,93 +99,76 @@ class CalendarService {
     }
   }
 
-  // In src/services/CalendarService.js - around line 300-350
-async initializeGoogleCalendar() {
-  // If already initialized, return immediately
-  if (this.googleApiLoaded) return true;
-  
-  return new Promise((resolve, reject) => {
-    try {
-      // Improved script loading with better error handling
-      const loadGapiAndInitialize = () => {
-        // Check if gapi is loaded
-        if (typeof window.gapi === 'undefined') {
-          console.log("Loading Google API script");
-          const script = document.createElement('script');
-          script.src = 'https://apis.google.com/js/api.js';
-          script.async = true;
-          script.defer = true;
-          
-          script.onload = () => {
-            try {
-              console.log("Google API script loaded, now loading client");
-              // Load the gapi client
-              window.gapi.load('client:auth2', () => {
-                this._initializeGapiClient()
-                  .then(() => {
-                    this.googleApiLoaded = true;
-                    resolve(true);
-                  })
-                  .catch(err => {
-                    console.error("Error initializing gapi client:", err);
-                    // Return success=false instead of rejecting to prevent unhandled rejections
-                    resolve(false);
-                  });
-              });
-            } catch (innerError) {
-              console.error("Error in gapi.load callback:", innerError);
-              resolve(false);
-            }
-          };
-          
-          script.onerror = (error) => {
-            console.error("Error loading Google API script:", error);
-            resolve(false); // Resolve with false instead of rejecting
-          };
-          
-          document.body.appendChild(script);
-        } else if (!window.gapi.client || !window.gapi.auth2) {
-          // Gapi exists but client or auth2 not loaded
-          try {
-            console.log("Loading gapi client and auth2");
-            window.gapi.load('client:auth2', async () => {
-              try {
-                await this._initializeGapiClient();
-                this.googleApiLoaded = true;
-                resolve(true);
-              } catch (error) {
-                console.error("Error initializing gapi client:", error);
-                resolve(false);
-              }
-            });
-          } catch (error) {
-            console.error("Error loading client:auth2:", error);
-            resolve(false);
+  async initializeGoogleCalendar() {
+    // If already initialized, return immediately
+    if (this.googleApiLoaded) return true;
+    
+    return new Promise((resolve, reject) => {
+      try {
+        // Check if gapi is already available
+        if (typeof window.gapi !== 'undefined') {
+          if (window.gapi.client && window.gapi.auth2) {
+            // Already loaded
+            this.googleApiLoaded = true;
+            resolve(true);
+            return;
           }
-        } else {
-          // Everything is already loaded, just initialize the client
-          this._initializeGapiClient()
-            .then(() => {
+          
+          // Load auth2 if gapi exists but components aren't loaded
+          window.gapi.load('client:auth2', async () => {
+            try {
+              await window.gapi.client.init({
+                apiKey: this.apiKey,
+                clientId: this.clientId,
+                discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+                scope: 'https://www.googleapis.com/auth/calendar.events'
+              });
               this.googleApiLoaded = true;
               resolve(true);
-            })
-            .catch(err => {
-              console.error("Error initializing gapi client:", err);
+            } catch (error) {
+              console.error("Error initializing gapi client:", error);
+              // Don't reject - just resolve with false to prevent unhandled promises
               resolve(false);
-            });
+            }
+          });
+          return;
         }
-      };
-      
-      // Start the loading process
-      loadGapiAndInitialize();
-    } catch (outerError) {
-      console.error("Outer error in initializeGoogleCalendar:", outerError);
-      resolve(false); // Resolve with false instead of rejecting
-    }
-  });
-}
+        
+        // If gapi doesn't exist, load it
+        console.log("Loading Google API script");
+        const script = document.createElement('script');
+        script.src = 'https://apis.google.com/js/api.js';
+        script.onload = () => {
+          window.gapi.load('client:auth2', async () => {
+            try {
+              await window.gapi.client.init({
+                apiKey: this.apiKey,
+                clientId: this.clientId,
+                discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+                scope: 'https://www.googleapis.com/auth/calendar.events'
+              });
+              this.googleApiLoaded = true;
+              resolve(true);
+            } catch (error) {
+              console.error("Error initializing gapi client:", error);
+              resolve(false);
+            }
+          });
+        };
+        
+        script.onerror = () => {
+          console.error("Failed to load Google API script");
+          resolve(false);
+        };
+        
+        document.body.appendChild(script);
+      } catch (error) {
+        console.error("Error in Google Calendar initialization:", error);
+        resolve(false); // Resolve with false instead of rejecting
+      }
+    });
+  }
 
-  // Private method to initialize gapi client
  // Private method to initialize gapi client
 async _initializeGapiClient() {
   return new Promise(async (resolve, reject) => {

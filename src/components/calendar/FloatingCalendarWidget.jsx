@@ -25,9 +25,16 @@ const FloatingCalendarWidget = () => {
   useEffect(() => {
     const loadSettings = async () => {
       if (currentUser) {
-        const settings = await CalendarService.loadUserCalendarSettings(currentUser.uid);
-        setCalendarSettings(settings);
-        setCalendarSetup(!!settings?.defaultCalendarType);
+        try {
+          const settings = await CalendarService.loadUserCalendarSettings(currentUser.uid);
+          setCalendarSettings(settings || {}); // Ensure we never set null
+          setCalendarSetup(!!settings?.defaultCalendarType);
+        } catch (error) {
+          console.error("Error loading calendar settings:", error);
+          // Set default empty settings to prevent errors
+          setCalendarSettings({});
+          setCalendarSetup(false);
+        }
       }
     };
     

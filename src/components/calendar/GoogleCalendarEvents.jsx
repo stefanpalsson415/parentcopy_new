@@ -27,13 +27,34 @@ const GoogleCalendarEvents = ({ selectedDate }) => {
       setError(null);
       
       try {
-        // Check if Google Calendar is connected
-        const isConnected = await checkCalendarConnection();
+        // Use a timeout to prevent hanging indefinitely
+        const connectionPromise = CalendarService.initializeGoogleCalendar();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Connection timed out")), 5000)
+        );
         
-        if (!isConnected) {
-          setCalendarConnected(false);
-          setLoading(false);
-          setEvents([]);
+        try {
+          // Use Promise.race to implement timeout
+          await Promise.race([connectionPromise, timeoutPromise]);
+        } catch (timeoutError) {
+          console.warn("Google Calendar connection timed out");
+          if (isMounted) {
+            setCalendarConnected(false);
+            setLoading(false);
+            return;
+          }
+        }
+        
+        // Check if signed in
+        const isSignedIn = CalendarService.isSignedInToGoogle();
+        if (isMounted) {
+          setCalendarConnected(isSignedIn);
+        }
+        
+        if (!isSignedIn) {
+          if (isMounted) {
+            setLoading(false);
+          }
           return;
         }
         
@@ -44,24 +65,17 @@ const GoogleCalendarEvents = ({ selectedDate }) => {
         const endDate = new Date(selectedDate);
         endDate.setHours(23, 59, 59, 999);
         
-        console.log("Fetching Google Calendar events for:", {
-          date: selectedDate.toDateString(), 
-          startDate: startDate.toISOString(), 
-          endDate: endDate.toISOString()
-        });
-        
         // Get events for the selected date
         try {
           const eventList = await CalendarService.getEventsFromCalendar(startDate, endDate);
           if (isMounted) {
-            console.log(`Found ${eventList?.length || 0} events for selected date`);
             setEvents(eventList || []);
           }
         } catch (eventsError) {
           console.error("Error getting events:", eventsError);
           if (isMounted) {
             setEvents([]);
-            setError("Could not load calendar events. Please try again.");
+            // Don't set error if this fails - just show no events
           }
         }
       } catch (error) {
@@ -74,31 +88,6 @@ const GoogleCalendarEvents = ({ selectedDate }) => {
         if (isMounted) {
           setLoading(false);
         }
-      }
-    };
-    
-    // Helper to check if calendar is connected
-    const checkCalendarConnection = async () => {
-      try {
-        // Set a timeout to avoid hanging indefinitely
-        const connectionPromise = CalendarService.initializeGoogleCalendar();
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Connection timed out")), 5000)
-        );
-        
-        const isInitialized = await Promise.race([connectionPromise, timeoutPromise]);
-        
-        if (isInitialized) {
-          const isSignedIn = CalendarService.isSignedInToGoogle();
-          if (isMounted) {
-            setCalendarConnected(isSignedIn);
-          }
-          return isSignedIn;
-        }
-        return false;
-      } catch (error) {
-        console.error("Error checking Google Calendar connection:", error);
-        return false;
       }
     };
     

@@ -31,18 +31,25 @@ const GoogleCalendarConnect = ({ onSuccess, buttonText = "Connect Calendar", sho
         // Update check timestamp
         localStorage.setItem('gcalCheckTimestamp', Date.now().toString());
         
-        await CalendarService.initializeGoogleCalendar();
-        const signedIn = CalendarService.isSignedInToGoogle();
-        
-        setIsConnected(signedIn);
-        setConnectionStatus(signedIn ? 'connected' : 'initial');
-        localStorage.setItem('gcalConnected', signedIn.toString());
-        
-        if (signedIn && onSuccess) {
-          onSuccess(true);
+        // Use a more resilient approach to check connection
+        try {
+          await CalendarService.initializeGoogleCalendar();
+          const signedIn = CalendarService.isSignedInToGoogle();
+          
+          setIsConnected(signedIn);
+          setConnectionStatus(signedIn ? 'connected' : 'initial');
+          localStorage.setItem('gcalConnected', signedIn.toString());
+          
+          if (signedIn && onSuccess) {
+            onSuccess(true);
+          }
+        } catch (error) {
+          console.log("Calendar connection check failed, assuming not connected");
+          setIsConnected(false);
+          setConnectionStatus('initial');
         }
       } catch (error) {
-        console.error("Error checking Google Calendar connection:", error);
+        console.error("Error in calendar connection check:", error);
         // Don't show error to user for initial check
       }
     };
