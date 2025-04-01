@@ -128,6 +128,7 @@ const UserSettingsScreen = ({ onClose }) => {
       checkGoogleAuthStatus();
     }
   }, [selectedUser, updateMemberProfile]);
+  
   // Helper function to clear only the specific user's Google auth data without affecting others
   const clearUserGoogleAuth = async (userId) => {
     try {
@@ -271,72 +272,39 @@ const UserSettingsScreen = ({ onClose }) => {
     }, [userId]);
     
     // Handle Google sign in
-    // Replace the handleGoogleSignIn function in CalendarSettingsTab
-const handleGoogleSignIn = async () => {
-  try {
-    if (!userId) {
-      throw new Error("User ID required for Google sign-in");
-    }
-    
-    // Use CalendarService with the user ID
-    await CalendarService.signInToGoogle(userId);
-    setIsGoogleSignedIn(true);
-    
-    // Load available calendars
-    const calendars = await CalendarService.listUserCalendars(userId);
-    setGoogleCalendars(calendars);
-  } catch (error) {
-    console.error("Error signing in to Google:", error);
-    alert("Failed to sign in to Google Calendar: " + (error.message || "Unknown error"));
-  }
-};
-
-// Replace handleGoogleSignOut function in CalendarSettingsTab
-const handleGoogleSignOut = async () => {
-  try {
-    if (!userId) {
-      throw new Error("User ID required for Google sign-out");
-    }
-    
-    // Use CalendarService with the user ID
-    await CalendarService.signOutFromGoogle(userId);
-    setIsGoogleSignedIn(false);
-    setGoogleCalendars([]);
-  } catch (error) {
-    console.error("Error signing out from Google:", error);
-    alert("Failed to sign out from Google: " + (error.message || "Unknown error"));
-  }
-};
-
-// For the Test Google Calendar Connection button - add userId parameter:
-onClick={async () => {
-  try {
-    // Use the current user ID
-    const userId = currentUser?.uid;
-    if (!userId) {
-      alert("No user ID available. Please log in again.");
-      return;
-    }
-    
-    const result = await CalendarService.debugGoogleCalendarConnection(userId);
-    console.log("Google Calendar diagnostic result:", result);
-    alert(result.success 
-      ? `Connection successful! Found ${result.calendars?.length || 0} calendars.` 
-      : `Connection failed: ${result.error}`);
-  } catch (error) {
-    console.error("Error running diagnostic:", error);
-    alert(`Error running diagnostic: ${error.message}`);
-  }
-}}
+    const handleGoogleSignIn = async () => {
+      try {
+        if (!userId) {
+          throw new Error("User ID required for Google sign-in");
+        }
+        
+        // Use CalendarService with the user ID
+        await CalendarService.signInToGoogle(userId);
+        setIsGoogleSignedIn(true);
+        
+        // Load available calendars
+        const calendars = await CalendarService.listUserCalendars(userId);
+        setGoogleCalendars(calendars);
+      } catch (error) {
+        console.error("Error signing in to Google:", error);
+        alert("Failed to sign in to Google Calendar: " + (error.message || "Unknown error"));
+      }
+    };
     
     // Handle Google sign out
     const handleGoogleSignOut = async () => {
       try {
-        await CalendarService.signOutFromGoogle();
+        if (!userId) {
+          throw new Error("User ID required for Google sign-out");
+        }
+        
+        // Use CalendarService with the user ID
+        await CalendarService.signOutFromGoogle(userId);
         setIsGoogleSignedIn(false);
         setGoogleCalendars([]);
       } catch (error) {
         console.error("Error signing out from Google:", error);
+        alert("Failed to sign out from Google: " + (error.message || "Unknown error"));
       }
     };
     
@@ -636,65 +604,65 @@ onClick={async () => {
         </div>
 
         {/* Advanced Debug */}
-<div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-  <h4 className="font-medium mb-2">Advanced Google API Debug</h4>
-  <p className="text-sm text-blue-700 mb-2">
-    Try this if Google Calendar connection isn't working at all.
-  </p>
-  <button
-    onClick={async () => {
-      try {
-        // Manually initialize and test Google API
-        alert("Starting Google API diagnostic...");
-        
-        // Step 1: Check for the gapi object
-        if (!window.gapi) {
-          alert("Google API not loaded. Loading it now...");
-          // Load the script
-          const script = document.createElement('script');
-          script.src = 'https://apis.google.com/js/api.js';
-          script.onload = () => alert("Google API script loaded successfully!");
-          script.onerror = () => alert("Failed to load Google API script");
-          document.body.appendChild(script);
-          return;
-        }
-        
-        // Step 2: Check for auth2
-        alert("Attempting to load auth2...");
-        window.gapi.load('client:auth2', () => {
-          alert("Auth2 loaded! Attempting to initialize...");
-          
-          // Step 3: Initialize client
-          window.gapi.client.init({
-            apiKey: 'AIzaSyALjXkZiFZ_Fy143N_dzdaUbyDCtabBr7Y',
-            clientId: '363935868004-baf70v82iuhs34s1hi4f4tnt62hgr1qm.apps.googleusercontent.com',
-            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
-            scope: 'https://www.googleapis.com/auth/calendar.events',
-          }).then(() => {
-            alert("API initialized successfully! Attempting sign-in...");
-            
-            // Step 4: Try sign-in
-            const authInstance = window.gapi.auth2.getAuthInstance();
-            authInstance.signIn()
-              .then(user => {
-                alert("Sign-in successful! Email: " + user.getBasicProfile().getEmail());
-              })
-              .catch(err => {
-                alert("Sign-in failed: " + err.error);
-              });
-          }).catch(err => {
-            alert("API initialization failed: " + err.error);
-          });
-        });
-      } catch (error) {
-        alert("Error in debug process: " + error.message);
-      }
-    }}
-    className="px-3 py-1 bg-blue-100 border border-blue-300 rounded text-blue-800 text-sm"
-  >
-    Manual Google API Debug
-  </button>
-</div>
+        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <h4 className="font-medium mb-2">Advanced Google API Debug</h4>
+          <p className="text-sm text-blue-700 mb-2">
+            Try this if Google Calendar connection isn't working at all.
+          </p>
+          <button
+            onClick={async () => {
+              try {
+                // Manually initialize and test Google API
+                alert("Starting Google API diagnostic...");
+                
+                // Step 1: Check for the gapi object
+                if (!window.gapi) {
+                  alert("Google API not loaded. Loading it now...");
+                  // Load the script
+                  const script = document.createElement('script');
+                  script.src = 'https://apis.google.com/js/api.js';
+                  script.onload = () => alert("Google API script loaded successfully!");
+                  script.onerror = () => alert("Failed to load Google API script");
+                  document.body.appendChild(script);
+                  return;
+                }
+                
+                // Step 2: Check for auth2
+                alert("Attempting to load auth2...");
+                window.gapi.load('client:auth2', () => {
+                  alert("Auth2 loaded! Attempting to initialize...");
+                  
+                  // Step 3: Initialize client
+                  window.gapi.client.init({
+                    apiKey: 'AIzaSyALjXkZiFZ_Fy143N_dzdaUbyDCtabBr7Y',
+                    clientId: '363935868004-baf70v82iuhs34s1hi4f4tnt62hgr1qm.apps.googleusercontent.com',
+                    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+                    scope: 'https://www.googleapis.com/auth/calendar.events',
+                  }).then(() => {
+                    alert("API initialized successfully! Attempting sign-in...");
+                    
+                    // Step 4: Try sign-in
+                    const authInstance = window.gapi.auth2.getAuthInstance();
+                    authInstance.signIn()
+                      .then(user => {
+                        alert("Sign-in successful! Email: " + user.getBasicProfile().getEmail());
+                      })
+                      .catch(err => {
+                        alert("Sign-in failed: " + err.error);
+                      });
+                  }).catch(err => {
+                    alert("API initialization failed: " + err.error);
+                  });
+                });
+              } catch (error) {
+                alert("Error in debug process: " + error.message);
+              }
+            }}
+            className="px-3 py-1 bg-blue-100 border border-blue-300 rounded text-blue-800 text-sm"
+          >
+            Manual Google API Debug
+          </button>
+        </div>
 
         {/* Test Calendar Connection - Another debug button kept */}
         <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
@@ -705,7 +673,14 @@ onClick={async () => {
           <button
             onClick={async () => {
               try {
-                const result = await CalendarService.debugGoogleCalendarConnection();
+                // Use the current user ID
+                const userId = currentUser?.uid;
+                if (!userId) {
+                  alert("No user ID available. Please log in again.");
+                  return;
+                }
+                
+                const result = await CalendarService.debugGoogleCalendarConnection(userId);
                 console.log("Google Calendar diagnostic result:", result);
                 alert(result.success 
                   ? `Connection successful! Found ${result.calendars?.length || 0} calendars.` 
@@ -933,7 +908,7 @@ onClick={async () => {
         </div>
         
         {/* Chat Settings */}
-        <div>
+        <div className="p-4 border-b">
           <h4 className="font-medium mb-2">Chat Settings</h4>
           <div className="space-y-2">
             <label className="flex items-center">
