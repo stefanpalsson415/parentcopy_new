@@ -61,7 +61,7 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
     
     setIsLoading(true);
     setError(null);
-    setIsAdded(false); // Reset added state to show proper feedback
+    // Don't reset isAdded yet to avoid flickering
     
     try {
       // Create event based on item type with better date handling
@@ -105,7 +105,7 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
       });
       
       // Add the event to the calendar
-      const result = await CalendarService.addEvent(event);
+      const result = await CalendarService.addEvent(event, calendarSettings?.defaultCalendarType);
       
       if (result.success) {
         // Store the event ID in localStorage to remember it was added
@@ -146,7 +146,7 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
   const handleAddToSpecificCalendar = async (calendarType) => {
     setIsLoading(true);
     setError(null);
-    setIsAdded(false); // Reset added state
+    // Don't reset isAdded yet to avoid flickering
     
     try {
       console.log(`Adding to specific calendar type: ${calendarType}`);
@@ -235,7 +235,7 @@ const CalendarIntegrationButton = ({ item, itemType, customDate }) => {
     } catch (error) {
       console.error(`Error adding to ${calendarType} calendar:`, error);
       setError(error.message || `Failed to add to ${calendarType} calendar`);
-      setIsAdded(false); // Ensure failed state is properly reflected
+      setIsAdded(false);
     } finally {
       setIsLoading(false);
       setShowOptions(false);
