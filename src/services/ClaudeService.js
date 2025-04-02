@@ -285,7 +285,173 @@ class ClaudeService {
       `;
       }
     }
-      
+    
+    // Add the following childDevelopmentContent to the formatSystemPrompt method
+// in the ClaudeService class:
+
+// In the formatSystemPrompt method, add this block where knowledgeBaseContent is constructed:
+
+const childDevelopmentContent = `
+=== CHILD DEVELOPMENT KNOWLEDGE BASE ===
+
+AGE-APPROPRIATE MILESTONES:
+Infant (0-12 months):
+- Physical: Rolling over (3-6mo), Sitting up (6-9mo), Crawling (7-10mo), First steps (9-15mo)
+- Cognitive: Recognizes faces (2-3mo), Object permanence (4-7mo), Responds to name (5-8mo)
+- Social: Smiles (1-2mo), Babbling (4-6mo), First words (9-14mo), Separation anxiety (8-14mo)
+
+Toddler (1-3 years):
+- Physical: Walking steadily (12-18mo), Climbing (18-24mo), Running (2-3yr), Self-feeding (18-24mo)
+- Cognitive: Follows simple instructions (1-2yr), 50+ words (2yr), Simple phrases (2-3yr)
+- Social: Parallel play (1-2yr), Beginning of sharing (2-3yr), Simple conversations (2-3yr)
+
+Preschool (3-5 years):
+- Physical: Jumps, hops, pedals tricycle (3-4yr), Hand preference established (4-5yr)
+- Cognitive: Asks "why" questions (3-4yr), Understands time concepts (4-5yr), Counts to 10 (4-5yr)
+- Social: Cooperative play (3-4yr), Dramatic play (3-5yr), Understands rules (4-5yr)
+
+School-Age (6-12 years):
+- Physical: Rides bicycle (6-7yr), Improved coordination (7-9yr), Growing endurance (10-12yr)
+- Cognitive: Reading & writing (6-7yr), Problem-solving (8-10yr), Abstract thinking (10-12yr)
+- Social: Best friends (6-8yr), Team play (8-10yr), Peer influence grows (10-12yr)
+
+Adolescent (13-18 years):
+- Physical: Puberty (girls: 8-13yr, boys: 9-14yr), Growth spurts, Increasing strength
+- Cognitive: Abstract reasoning, Planning ahead, Understanding consequences
+- Social: Identity formation, Peer group importance, Testing boundaries
+
+HEALTH CHECKUPS SCHEDULE:
+Infant:
+- Newborn checkup: 3-5 days old
+- Well-baby visits: 1mo, 2mo, 4mo, 6mo, 9mo, 12mo
+- Recommended vaccines: HepB, DTaP, Hib, PCV13, IPV, RV, Influenza (yearly after 6mo)
+
+Toddler:
+- Well-child visits: 15mo, 18mo, 24mo, 30mo, 36mo
+- Recommended vaccines: MMR, Varicella, HepA, DTaP, IPV boosters
+- Dental checkups: First visit by age 1, then every 6 months
+
+Preschool:
+- Well-child visits: Annually
+- Vision screening: 3-5 years
+- Hearing screening: 4-5 years
+- Dental checkups: Every 6 months
+
+School-Age:
+- Well-child visits: Annually
+- Vision & hearing screenings: Every 1-2 years
+- Dental checkups: Every 6 months
+- Sports physicals: As needed for activities
+
+Adolescent:
+- Well-teen visits: Annually
+- HPV vaccine: 11-12 years
+- Tdap booster: 11-12 years
+- MenACWY: 11-12 years, booster at 16
+- Mental health screening: Annually
+
+COMMON PARENTING CHALLENGES BY AGE:
+Infant:
+- Sleep patterns
+- Feeding issues
+- Crying and colic
+- Teething discomfort
+
+Toddler:
+- Tantrums and emotional regulation
+- Picky eating
+- Toilet training
+- Separation anxiety
+
+Preschool:
+- Sibling rivalry
+- Bedtime resistance
+- Imaginary friends
+- Questions about sensitive topics
+
+School-Age:
+- School adjustment
+- Friendship challenges
+- Screen time management
+- Extracurricular balance
+
+Adolescent:
+- Privacy boundaries
+- Academic pressure
+- Social media concerns
+- Identity exploration
+
+CLOTHING SIZE GUIDELINES:
+- Infants: Sizes based on months (0-3mo, 3-6mo, 6-9mo, 9-12mo)
+- Toddlers: Sizes 2T-5T correspond roughly to ages 2-5
+- Children: Sizes 4-16 (often matches age between 4-8, then varies)
+- Shoe sizes: Typically increase by 0.5-1 size every 6mo for infants/toddlers, every year for older children
+
+EDUCATIONAL DEVELOPMENT:
+Infant:
+- Sensory stimulation
+- Language exposure
+- Simple cause-effect toys
+
+Toddler:
+- Basic concepts (colors, shapes, body parts)
+- Simple counting
+- Fine motor skills development
+
+Preschool:
+- Letter and number recognition
+- Basic writing skills
+- Pretend play and storytelling
+
+School-Age:
+- Grade K-2: Learning to read
+- Grade 3-5: Reading to learn
+- Grade 6-8: Critical thinking
+
+EMOTIONAL INTELLIGENCE DEVELOPMENT:
+Infant:
+- Recognizing emotional responses
+- Forming secure attachments
+
+Toddler:
+- Identifying basic emotions
+- Beginning emotional regulation
+
+Preschool:
+- Labeling complex emotions
+- Simple conflict resolution
+
+School-Age:
+- Empathy development
+- Self-regulation strategies
+- Understanding others' perspectives
+
+Adolescent:
+- Identity and values formation
+- Complex emotional management
+- Healthy relationship skills
+
+TRACKING TIPS FOR PARENTS:
+- Growth Patterns: Record height/weight quarterly for infants, bi-annually for older children
+- Developmental Milestones: Note when major skills are achieved
+- Medical History: Keep vaccination records, illness patterns, medication responses
+- School Progress: Save report cards, teacher feedback, test results
+- Emotional Patterns: Track triggers for behavioral challenges, successful coping strategies
+- Social Development: Note friendship patterns, extracurricular interests
+
+CHILDREN'S CLOTHING STORAGE TIPS:
+- Label storage containers by size, not age
+- Note the season on storage containers (e.g., "Size 4T - Summer")
+- Keep a digital inventory of stored clothes with photos
+- Set calendar reminders to check storage 1-2 months before seasonal changes
+- Consider vertical organization systems where you can see all sizes at once
+- Keep a "grow-into" box accessible for items that will fit soon
+`;
+
+// Add this to the existing knowledgeBaseContent
+knowledgeBaseContent += childDevelopmentContent;
+    
+
     // Create a context-rich system prompt
     return `You are Allie, an AI assistant specialized in family workload balance. 
     Your purpose is to help families distribute responsibilities more equitably and improve their dynamics.
