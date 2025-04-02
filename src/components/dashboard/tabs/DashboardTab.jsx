@@ -94,70 +94,72 @@ const DashboardTab = () => {
     return options;
   };
   
-  // Effect to update loading states and calculate weighted data
-  // Effect to update loading states and calculate weighted data
-useEffect(() => {
-  // Simulate loading data
-  const loadData = async () => {
-    // Set loading states
-    setLoading({
-      balance: true,
-      history: true,
-      categories: true,
-      insights: true,
-      weightInsights: true,
-      aiInsights: true
-    });
-    
-    // Get filtered responses based on time period
-    const filteredResponses = getFilteredResponses();
-    
-    // Calculate weight-based metrics
-    if (fullQuestionSet && filteredResponses) {
-      // Calculate weighted scores using the TaskWeightCalculator
-      const scores = calculateBalanceScores(fullQuestionSet, filteredResponses, familyPriorities);
-      setWeightedScores(scores);
+  useEffect(() => {
+    // Simulate loading data
+    const loadData = async () => {
+      // Set loading states
+      setLoading({
+        balance: true,
+        history: true,
+        categories: true,
+        insights: true,
+        weightInsights: true,
+        aiInsights: true
+      });
       
-      // Generate weight-based insights
-      const insights = generateWeightBasedInsights(scores);
-      setWeightedInsights(insights);
+      // Get filtered responses based on time period
+      const filteredResponses = getFilteredResponses();
       
-      // Create data for factor-based charts
-      const factorData = generateWeightByFactorData(filteredResponses);
-      setWeightByFactorData(factorData);
-      
-      // Load AI insights
-      try {
-        if (familyId && currentWeek) {
-          console.log("Loading AI insights...");
-          const insights = await AllieAIEngineService.generateDashboardInsights(
-            familyId, 
-            currentWeek
-          );
-          setAiInsights(insights);
-          console.log("AI insights loaded:", insights);
+      // Calculate weight-based metrics
+      if (fullQuestionSet && filteredResponses) {
+        // Calculate weighted scores using the TaskWeightCalculator
+        const scores = calculateBalanceScores(fullQuestionSet, filteredResponses, familyPriorities);
+        setWeightedScores(scores);
+        
+        // Generate weight-based insights
+        const insights = generateWeightBasedInsights(scores);
+        setWeightedInsights(insights);
+        
+        // Create data for factor-based charts
+        const factorData = generateWeightByFactorData(filteredResponses);
+        setWeightByFactorData(factorData);
+        
+        // Load AI insights
+        try {
+          if (familyId && currentWeek) {
+            console.log("Loading AI insights...");
+            const insights = await AllieAIEngineService.generateDashboardInsights(
+              familyId, 
+              currentWeek
+            );
+            // FIX: Ensure insights is always an array before setting it to state
+            setAiInsights(Array.isArray(insights) ? insights : []);
+            console.log("AI insights loaded:", insights);
+          }
+        } catch (insightError) {
+          console.error("Error loading AI insights:", insightError);
+          // Set to empty array on error
+          setAiInsights([]);
+          // Failure to load insights shouldn't block the whole dashboard
         }
-      } catch (insightError) {
-        console.error("Error loading AI insights:", insightError);
-        // Failure to load insights shouldn't block the whole dashboard
       }
-    }
+      
+      // Finish loading after a small delay to show loading state
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      setLoading({
+        balance: false,
+        history: false,
+        categories: false,
+        insights: false,
+        weightInsights: false,
+        aiInsights: false
+      });
+    };
     
-    // Finish loading after a small delay to show loading state
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    setLoading({
-      balance: false,
-      history: false,
-      categories: false,
-      insights: false,
-      weightInsights: false,
-      aiInsights: false
-    });
-  };
+    loadData();
+  }, [timeFilter, radarFilter, fullQuestionSet, surveyResponses, familyPriorities, familyId, currentWeek]);
   
-  loadData();
-}, [timeFilter, radarFilter, fullQuestionSet, surveyResponses, familyPriorities, familyId, currentWeek]);
   
   // Get filtered responses based on selected time period
   // Get filtered responses based on selected time period
@@ -1334,43 +1336,43 @@ const getFilteredResponses = () => {
   </div>
   
   {expandedSections.aiInsights && (
-    <div className="p-6 pt-0">
-      {loading.aiInsights ? (
-        <div className="h-24 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-            <p className="text-gray-500">Generating AI insights...</p>
+  <div className="p-6 pt-0">
+    {loading.aiInsights ? (
+      <div className="h-24 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-gray-500">Generating AI insights...</p>
+        </div>
+      </div>
+    ) : !aiInsights || !Array.isArray(aiInsights) || aiInsights.length === 0 ? (
+      <div className="text-center p-6 bg-gray-50 rounded-lg">
+        <p className="text-gray-500">
+          Not enough data to generate AI insights yet. Complete more surveys to unlock personalized AI analysis.
+        </p>
+      </div>
+    ) : (
+      <div className="space-y-4">
+        <p className="text-sm text-gray-600 mb-4">
+          Personalized AI-generated insights based on your family's unique data
+        </p>
+        
+        {aiInsights.map((insight, index) => (
+          <div key={index} className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+            <h4 className="font-medium text-purple-800">{insight.title}</h4>
+            <p className="text-sm mt-2 text-purple-700">{insight.description}</p>
+            
+            {insight.actionItem && (
+              <div className="flex items-start mt-3 bg-white p-3 rounded border border-purple-100">
+                <Lightbulb size={16} className="text-purple-600 mt-1 mr-2 flex-shrink-0" />
+                <p className="text-sm">{insight.actionItem}</p>
+              </div>
+            )}
           </div>
-        </div>
-      ) : !aiInsights || aiInsights.length === 0 ? (
-        <div className="text-center p-6 bg-gray-50 rounded-lg">
-          <p className="text-gray-600">
-            Not enough data to generate AI insights yet. Complete more surveys to unlock personalized AI analysis.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600 mb-4">
-            Personalized AI-generated insights based on your family's unique data
-          </p>
-          
-          {aiInsights.map((insight, index) => (
-            <div key={index} className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-              <h4 className="font-medium text-purple-800">{insight.title}</h4>
-              <p className="text-sm mt-2 text-purple-700">{insight.description}</p>
-              
-              {insight.actionItem && (
-                <div className="flex items-start mt-3 bg-white p-3 rounded border border-purple-100">
-                  <Lightbulb size={16} className="text-purple-600 mt-1 mr-2 flex-shrink-0" />
-                  <p className="text-sm">{insight.actionItem}</p>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )}
+        ))}
+      </div>
+    )}
+  </div>
+)}
 </div>
         
         {expandedSections.insights && (

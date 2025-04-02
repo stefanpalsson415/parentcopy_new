@@ -361,10 +361,14 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const displayFamilyName = familyName || "Family";
   const formattedFamilyName = `${displayFamilyName} Family AI Balancer`;
   
+  // Calculate heights for fixed elements
+  const headerHeight = "84px"; // 4rem or 64px is a common header height
+  const navHeight = "56px";    // Typical height for navigation tabs
+  
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
-      <div className="fixed top-0 left-0 right-0 z-20 bg-black text-white p-4 shadow-md">
+      <div className="fixed top-0 left-0 right-0 z-20 bg-black text-white p-4 shadow-md" style={{ height: headerHeight }}>
         <div className="container mx-auto flex justify-between items-center">
           <div className="flex items-center">
             {/* Family photo */}
@@ -407,7 +411,10 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
       </div>
       
       {/* Navigation Tabs */}
-      <div className="fixed top-24 left-0 right-0 z-10 bg-gray-50 border-b shadow-sm">
+      <div 
+        className="fixed left-0 right-0 z-10 bg-gray-50 border-b shadow-sm" 
+        style={{ top: headerHeight, height: navHeight }}
+      >
         <div className="container mx-auto flex overflow-x-auto px-4 py-2">
           <button 
             id="tasks-tab"
@@ -476,7 +483,10 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
       </div>
       
       {/* Main Content */}
-      <div className="container mx-auto px-4 pt-24 pb-6">
+      <div 
+        className="container mx-auto px-4 pb-6" 
+        style={{ paddingTop: `calc(${headerHeight} + ${navHeight} + 1rem)` }}
+      >
         <ErrorBoundary>
           {/* Tab content */}
           {renderTabContent()}

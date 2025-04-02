@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, X, MinusSquare, Send, Info, Calendar, PlusCircle, Mic, User } from 'lucide-react';
+import { MessageSquare, X, MinusSquare, Send, Info, Calendar, PlusCircle, Mic, User, ChevronUp, ChevronDown, Upload } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useChat } from '../../contexts/ChatContext';
 import ChatMessage from './ChatMessage';
@@ -12,8 +12,13 @@ const AllieChat = () => {
   const [canUseChat, setCanUseChat] = useState(true);
   const [isListening, setIsListening] = useState(false);
   const [transcription, setTranscription] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [chatHeight, setChatHeight] = useState(96); // Default height (in rems)
   const messagesEndRef = useRef(null);
   const recognition = useRef(null);
+  const fileInputRef = useRef(null);
   
   // Check if current user can use chat
   useEffect(() => {
@@ -97,6 +102,75 @@ const AllieChat = () => {
       recognition.current.start();
     }
   };
+
+  // Handle image upload
+  const handleImageUpload = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImageFile(file);
+      setImagePreview(reader.result);
+      // Process the image
+      processImage(file);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Process uploaded image
+  const processImage = async (file) => {
+    setIsProcessingImage(true);
+    try {
+      // Here we would normally send the image to a server for OCR processing
+      // For now, we'll simulate this with a timeout and direct message to Allie
+      
+      // Create a message asking Allie to analyze the image
+      const message = "I'm sharing a screenshot of an appointment. Can you extract the details and help me add it to the calendar?";
+      sendMessage(message, selectedUser);
+      
+      // Wait a bit to simulate processing
+      setTimeout(() => {
+        setIsProcessingImage(false);
+        setImageFile(null);
+        setImagePreview(null);
+      }, 1500);
+    } catch (error) {
+      console.error("Error processing image:", error);
+      setIsProcessingImage(false);
+    }
+  };
+
+  // Drag and drop handling
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setImageFile(file);
+          setImagePreview(reader.result);
+          // Process the image
+          processImage(file);
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  };
+
+  // Chat sizing controls
+  const increaseHeight = () => {
+    setChatHeight(prev => Math.min(prev + 10, 140)); // Max height 140rem
+  };
+
+  const decreaseHeight = () => {
+    setChatHeight(prev => Math.max(prev - 10, 56)); // Min height 56rem
+  };
   
   // Helper to detect child tracking patterns
   const suggestChildTrackingMessage = () => {
@@ -140,7 +214,10 @@ const AllieChat = () => {
   return (
     <div className="fixed bottom-4 right-4 z-50">
       {isOpen ? (
-        <div className="bg-white border border-black shadow-lg rounded-lg w-80 sm:w-96 flex flex-col h-96">
+        <div 
+          className="bg-white border border-black shadow-lg rounded-lg w-80 sm:w-96 flex flex-col"
+          style={{ height: `${chatHeight}rem` }}
+        >
           {/* Chat header */}
           <div className="flex justify-between items-center border-b p-3">
             <div className="flex items-center">
@@ -150,6 +227,20 @@ const AllieChat = () => {
               <span className="font-medium">Allie Assistant</span>
             </div>
             <div className="flex">
+              <button 
+                onClick={decreaseHeight} 
+                className="p-1 hover:bg-gray-100 rounded"
+                title="Decrease chat height"
+              >
+                <ChevronDown size={18} />
+              </button>
+              <button 
+                onClick={increaseHeight} 
+                className="p-1 hover:bg-gray-100 rounded"
+                title="Increase chat height"
+              >
+                <ChevronUp size={18} />
+              </button>
               <button 
                 onClick={() => setIsOpen(false)} 
                 className="p-1 hover:bg-gray-100 rounded"
@@ -166,7 +257,11 @@ const AllieChat = () => {
           </div>
           
           {/* Messages area */}
-          <div className="flex-1 overflow-y-auto p-3 bg-gray-50">
+          <div 
+            className="flex-1 overflow-y-auto p-3 bg-gray-50"
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
           {messages.length === 0 ? (
               <div className="text-center text-gray-500 my-4">
                 <p className="mb-2 font-medium font-roboto">Hi, I'm Allie!</p>
@@ -211,12 +306,67 @@ const AllieChat = () => {
                 
                 {/* Child tracking specific suggestions */}
                 {suggestChildTrackingMessage()}
+
+                {/* Upload image prompt */}
+                <div className="mt-6 text-center">
+                  <p className="text-sm text-gray-600 font-roboto mb-2">
+                    Drop an image or screenshot here to let me analyze it
+                  </p>
+                  <button
+                    className="flex items-center mx-auto px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-full text-sm font-roboto"
+                    onClick={() => fileInputRef.current.click()}
+                  >
+                    <Upload size={14} className="mr-1" />
+                    <span>Upload image</span>
+                  </button>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleImageUpload}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                </div>
               </div>
             ) : (
               messages.map((msg, index) => (
                 <ChatMessage key={index} message={msg} />
               ))
             )}
+            
+            {/* Image preview */}
+            {imagePreview && (
+              <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex justify-between items-start mb-2">
+                  <p className="text-sm font-medium font-roboto">Image Preview</p>
+                  <button 
+                    className="text-gray-400 hover:text-gray-600"
+                    onClick={() => {
+                      setImageFile(null);
+                      setImagePreview(null);
+                    }}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="relative">
+                  <img 
+                    src={imagePreview} 
+                    alt="Preview" 
+                    className="w-full rounded-lg"
+                  />
+                  {isProcessingImage && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-lg">
+                      <div className="text-white text-center">
+                        <div className="inline-block w-8 h-8 border-4 border-t-transparent border-white rounded-full animate-spin mb-2"></div>
+                        <p className="text-sm font-roboto">Processing image...</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
             <div ref={messagesEndRef} />
             
             {/* Loading indicator */}
@@ -252,17 +402,25 @@ const AllieChat = () => {
                     <Send size={18} />
                   </button>
                 </div>
-                <button
-                  onClick={toggleListening}
-                  className={`flex items-center justify-center py-2 rounded-md ${
-                    isListening 
-                      ? 'bg-red-500 text-white' 
-                      : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                  }`}
-                >
-                  <Mic size={16} className="mr-2" />
-                  {isListening ? 'Listening...' : 'Speak to Allie'}
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={toggleListening}
+                    className={`flex-1 flex items-center justify-center py-2 rounded-md ${
+                      isListening 
+                        ? 'bg-red-500 text-white' 
+                        : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                    }`}
+                  >
+                    <Mic size={16} className="mr-2" />
+                    {isListening ? 'Listening...' : 'Speak to Allie'}
+                  </button>
+                  <button
+                    className="flex items-center justify-center p-2 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-md"
+                    onClick={() => fileInputRef.current.click()}
+                  >
+                    <Upload size={16} />
+                  </button>
+                </div>
                 {transcription && (
                   <div className="mt-2 p-2 bg-blue-50 rounded-md text-sm">
                     <p className="font-roboto">{transcription}</p>
