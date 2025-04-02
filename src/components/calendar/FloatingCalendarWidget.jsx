@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, X, MinusSquare, ChevronLeft, ChevronRight, ArrowUpRight, AlertCircle, Activity, BookOpen, Heart, Bell } from 'lucide-react';
+import { Calendar, X, MinusSquare, ChevronLeft, ChevronRight, ArrowUpRight, AlertCircle, Activity, BookOpen, Heart, Bell, ChevronUp, ChevronDown, Users, MapPin, Clock } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import CalendarService from '../../services/CalendarService';
@@ -13,7 +13,8 @@ const FloatingCalendarWidget = () => {
     currentWeek, 
     weekStatus,
     familyMembers,
-    familyId
+    familyId,
+    coupleCheckInData
   } = useFamily();
   
   const [isOpen, setIsOpen] = useState(false);
@@ -22,8 +23,10 @@ const FloatingCalendarWidget = () => {
   const [childrenEvents, setChildrenEvents] = useState([]);
   const [childrenAppointments, setChildrenAppointments] = useState([]);
   const [childrenActivities, setChildrenActivities] = useState([]);
+  const [allEvents, setAllEvents] = useState([]);
   const [view, setView] = useState('all'); // 'all', 'tasks', 'appointments', 'activities'
   const [loading, setLoading] = useState(false);
+  const [widgetHeight, setWidgetHeight] = useState(96); // Default height (in rems)
   
   // Helper function to get days in month
   const getDaysInMonth = (year, month) => {
@@ -61,22 +64,57 @@ const FloatingCalendarWidget = () => {
            date.getFullYear() === today.getFullYear();
   };
   
-  // Load children's events when the widget opens
+  // Load all events when the widget opens
   useEffect(() => {
     if (isOpen && familyId) {
-      loadChildrenEvents();
+      loadAllEvents();
     }
   }, [isOpen, familyId, selectedDate]);
   
-  // Load children's events from Firebase
-  const loadChildrenEvents = async () => {
+  // Load all events from various sources
+  const loadAllEvents = async () => {
     try {
       setLoading(true);
       
       // Get children data from Firebase
+      const childrenData = await loadChildrenEvents();
+      
+      // Get family meeting data
+      const familyMeetings = getUpcomingMeetings();
+      
+      // Get relationship events
+      const relationshipEvents = await loadRelationshipEvents();
+      
+      // Get task deadlines
+      const taskEvents = await loadTaskEvents();
+      
+      // Combine all events
+      const combined = [
+        ...childrenData.childrenEvents || [],
+        ...childrenData.childrenAppointments || [],
+        ...childrenData.childrenActivities || [],
+        ...familyMeetings,
+        ...relationshipEvents,
+        ...taskEvents
+      ];
+      
+      setAllEvents(combined);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error loading events:", error);
+      setLoading(false);
+    }
+  };
+
+  // Load children's events from Firebase
+  const loadChildrenEvents = async () => {
+    try {
+      // Get children data from Firebase
       const docRef = await DatabaseService.db.collection("families").doc(familyId).get();
+      const childrenData = { childrenEvents: [], childrenAppointments: [], childrenActivities: [] };
+      
       if (docRef.exists && docRef.data().childrenData) {
-        const childrenData = docRef.data().childrenData;
+        const data = docRef.data().childrenData;
         
         // Process appointments
         const appointments = [];
@@ -84,66 +122,76 @@ const FloatingCalendarWidget = () => {
         const events = [];
         
         // Loop through each child's data
-        Object.entries(childrenData).forEach(([childId, data]) => {
+        Object.entries(data).forEach(([childId, childData]) => {
           const childName = getChildName(childId);
           
           // Medical appointments
-          if (data.medicalAppointments) {
-            data.medicalAppointments.forEach(appointment => {
+          if (childData.medicalAppointments) {
+            childData.medicalAppointments.forEach(appointment => {
               if (!appointment.completed && new Date(appointment.date) >= today) {
-                appointments.push({
+                const event = {
                   ...appointment,
                   childId,
                   childName,
                   eventType: 'appointment',
+                  category: 'medical',
                   dateObj: new Date(appointment.date)
-                });
+                };
+                appointments.push(event);
+                events.push(event);
               }
             });
           }
           
           // Activities
-          if (data.activities) {
-            data.activities.forEach(activity => {
+          if (childData.activities) {
+            childData.activities.forEach(activity => {
               if (new Date(activity.startDate) >= today) {
-                activities.push({
+                const event = {
                   ...activity,
                   childId,
                   childName,
                   eventType: 'activity',
+                  category: 'activity',
                   dateObj: new Date(activity.startDate)
-                });
+                };
+                activities.push(event);
+                events.push(event);
               }
             });
           }
           
           // Events
-          if (data.events) {
-            data.events.forEach(event => {
+          if (childData.events) {
+            childData.events.forEach(event => {
               if (new Date(event.date) >= today) {
-                events.push({
+                const calEvent = {
                   ...event,
                   childId,
                   childName,
                   eventType: 'event',
+                  category: 'event',
                   dateObj: new Date(event.date)
-                });
+                };
+                events.push(calEvent);
               }
             });
           }
           
           // Homework
-          if (data.homework) {
-            data.homework.forEach(homework => {
+          if (childData.homework) {
+            childData.homework.forEach(homework => {
               if (!homework.completed && new Date(homework.dueDate) >= today) {
-                events.push({
+                const event = {
                   ...homework,
                   title: `${homework.title} Due`,
                   childId,
                   childName,
                   eventType: 'homework',
+                  category: 'homework',
                   dateObj: new Date(homework.dueDate)
-                });
+                };
+                events.push(event);
               }
             });
           }
@@ -154,75 +202,115 @@ const FloatingCalendarWidget = () => {
         activities.sort((a, b) => a.dateObj - b.dateObj);
         events.sort((a, b) => a.dateObj - b.dateObj);
         
-        setChildrenAppointments(appointments);
-        setChildrenActivities(activities);
-        setChildrenEvents([...appointments, ...activities, ...events]);
+        childrenData.childrenAppointments = appointments;
+        childrenData.childrenActivities = activities;
+        childrenData.childrenEvents = events;
       }
       
-      setLoading(false);
+      // Set state values
+      setChildrenEvents(childrenData.childrenEvents || []);
+      setChildrenAppointments(childrenData.childrenAppointments || []);
+      setChildrenActivities(childrenData.childrenActivities || []);
+      
+      return childrenData;
     } catch (error) {
       console.error("Error loading children events:", error);
-      setLoading(false);
+      return { childrenEvents: [], childrenAppointments: [], childrenActivities: [] };
     }
   };
   
-  // Generate calendar days
-  const renderCalendarDays = () => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
-    const daysInMonth = getDaysInMonth(year, month);
-    const firstDayOfMonth = getFirstDayOfMonth(year, month);
-    
-    // Generate blank spaces for days before the first of the month
-    const blanks = [];
-    for (let i = 0; i < firstDayOfMonth; i++) {
-      blanks.push(
-        <div key={`blank-${i}`} className="h-8 w-8"></div>
-      );
-    }
-    
-    // Generate calendar days
-    const days = [];
-    for (let d = 1; d <= daysInMonth; d++) {
-      const date = new Date(year, month, d);
-      const isSelectedDate = date.getDate() === selectedDate.getDate() && 
-                            date.getMonth() === selectedDate.getMonth() && 
-                            date.getFullYear() === selectedDate.getFullYear();
+  // Load relationship events
+  const loadRelationshipEvents = async () => {
+    try {
+      const events = [];
       
-      // Check if this date has any events
-      const hasEvents = childrenEvents.some(event => {
-        const eventDate = event.dateObj;
-        return eventDate.getDate() === date.getDate() &&
-               eventDate.getMonth() === date.getMonth() &&
-               eventDate.getFullYear() === date.getFullYear();
-      });
+      // Get couple check-in data
+      if (coupleCheckInData) {
+        Object.entries(coupleCheckInData).forEach(([weekNum, data]) => {
+          if (data.scheduledDate) {
+            const checkInDate = new Date(data.scheduledDate);
+            if (checkInDate >= today) {
+              events.push({
+                id: `couple-checkin-${weekNum}`,
+                title: `Couple Check-in (Week ${weekNum})`,
+                date: data.scheduledDate,
+                dateObj: checkInDate,
+                category: 'relationship',
+                eventType: 'relationship'
+              });
+            }
+          }
+        });
+      }
       
-      days.push(
-        <div 
-          key={`day-${d}`}
-          className={`h-8 w-8 flex items-center justify-center rounded-full cursor-pointer text-sm font-roboto relative
-            ${isSelectedDate ? 'bg-black text-white' : isToday(date) ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
-          onClick={() => setSelectedDate(date)}
-        >
-          {d}
-          {hasEvents && (
-            <span className="absolute bottom-0 right-0 w-2 h-2 bg-blue-500 rounded-full"></span>
-          )}
-        </div>
-      );
+      // Get relationship strategies data
+      const stratDocRef = await DatabaseService.db.collection("relationshipStrategies").doc(familyId).get();
+      if (stratDocRef.exists) {
+        const strategies = stratDocRef.data().strategies || [];
+        
+        strategies.forEach(strategy => {
+          if (strategy.scheduledDate && new Date(strategy.scheduledDate) >= today) {
+            events.push({
+              id: `strategy-${strategy.id}`,
+              title: `Relationship Strategy: ${strategy.name}`,
+              date: strategy.scheduledDate,
+              dateObj: new Date(strategy.scheduledDate),
+              category: 'relationship',
+              eventType: 'strategy'
+            });
+          }
+        });
+      }
+      
+      return events;
+    } catch (error) {
+      console.error("Error loading relationship events:", error);
+      return [];
     }
-    
-    return [...blanks, ...days];
+  };
+  
+  // Load task events
+  const loadTaskEvents = async () => {
+    try {
+      const events = [];
+      
+      // Get tasks with deadlines
+      if (taskRecommendations && taskRecommendations.length > 0) {
+        taskRecommendations.forEach(task => {
+          if (task.dueDate && !task.completed && new Date(task.dueDate) >= today) {
+            events.push({
+              id: `task-${task.id}`,
+              title: `Task Due: ${task.title}`,
+              date: task.dueDate,
+              dateObj: new Date(task.dueDate),
+              category: 'task',
+              eventType: 'task',
+              assignedTo: task.assignedTo,
+              assignedToName: task.assignedToName
+            });
+          }
+        });
+      }
+      
+      return events;
+    } catch (error) {
+      console.error("Error loading task events:", error);
+      return [];
+    }
   };
   
   // Format date for display
-  const formatDate = (date) => {
-    if (!date) return "Not scheduled";
+  const formatDate = (dateString) => {
+    if (!dateString) return "Not scheduled";
     
-    const options = { weekday: 'long', month: 'long', day: 'numeric' };
-    return new Date(date).toLocaleDateString('en-US', options);
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
   };
-
+  
   // Get child name by ID
   const getChildName = (childId) => {
     const child = familyMembers.find(member => member.id === childId);
@@ -242,8 +330,10 @@ const FloatingCalendarWidget = () => {
       meetings.push({
         id: `meeting-${currentWeek}`,
         title: `Week ${currentWeek} Family Meeting`,
-        date: meetingDate,
-        type: 'meeting',
+        date: meetingDate.toISOString(),
+        dateObj: meetingDate,
+        category: 'meeting',
+        eventType: 'meeting',
         weekNumber: currentWeek
       });
     }
@@ -284,6 +374,9 @@ const FloatingCalendarWidget = () => {
       document.body.appendChild(notification);
       setTimeout(() => notification.remove(), 3000);
       
+      // Refresh events
+      loadAllEvents();
+      
     } catch (error) {
       console.error("Error adding task to calendar:", error);
     }
@@ -295,7 +388,7 @@ const FloatingCalendarWidget = () => {
       if (!currentUser || !meeting) return;
       
       // Create event from meeting
-      const event = CalendarService.createFamilyMeetingEvent(meeting.weekNumber, meeting.date);
+      const event = CalendarService.createFamilyMeetingEvent(meeting.weekNumber, meeting.dateObj);
       
       // Add event to calendar
       await CalendarService.addEvent(event, currentUser.uid);
@@ -311,6 +404,9 @@ const FloatingCalendarWidget = () => {
       document.body.appendChild(notification);
       setTimeout(() => notification.remove(), 3000);
       
+      // Refresh events
+      loadAllEvents();
+      
     } catch (error) {
       console.error("Error adding meeting to calendar:", error);
     }
@@ -324,160 +420,183 @@ const FloatingCalendarWidget = () => {
       let calendarEvent;
       
       // Create different event types based on the event type
-      if (event.eventType === 'appointment') {
-        // Medical appointment
-        calendarEvent = {
-          summary: `${event.childName}'s ${event.title}`,
-          description: event.notes || `Medical appointment: ${event.title}`,
-          start: {
-            dateTime: event.time 
-              ? `${event.date}T${event.time}:00` 
-              : `${event.date}T09:00:00`,
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          end: {
-            dateTime: event.time 
-              ? `${event.date}T${event.time.split(':')[0]}:${parseInt(event.time.split(':')[1]) + 30}:00` 
-              : `${event.date}T10:00:00`,
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          reminders: {
-            useDefault: false,
-            overrides: [
-              { method: 'popup', minutes: 24 * 60 }, // 1 day before
-              { method: 'popup', minutes: 60 } // 1 hour before
-            ]
+      switch(event.eventType) {
+        case 'appointment':
+          // Medical appointment
+          calendarEvent = {
+            summary: `${event.childName}'s ${event.title}`,
+            description: event.notes || `Medical appointment: ${event.title}`,
+            start: {
+              dateTime: event.time 
+                ? `${event.date}T${event.time}:00` 
+                : `${event.date}T09:00:00`,
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            end: {
+              dateTime: event.time 
+                ? `${event.date}T${event.time.split(':')[0]}:${parseInt(event.time.split(':')[1]) + 30}:00` 
+                : `${event.date}T10:00:00`,
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            reminders: {
+              useDefault: false,
+              overrides: [
+                { method: 'popup', minutes: 24 * 60 }, // 1 day before
+                { method: 'popup', minutes: 60 } // 1 hour before
+              ]
+            }
+          };
+          break;
+          
+        case 'activity':
+          // Activity (sports, classes, etc.)
+          const startDate = new Date(event.startDate);
+          
+          // Set time if provided
+          if (event.time) {
+            const [hours, minutes] = event.time.split(':');
+            startDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+          } else {
+            startDate.setHours(15, 0, 0, 0); // Default to 3:00 PM
           }
-        };
-      } else if (event.eventType === 'activity') {
-        // Activity (sports, classes, etc.)
-        const startDate = new Date(event.startDate);
-        
-        // Set time if provided
-        if (event.time) {
-          const [hours, minutes] = event.time.split(':');
-          startDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-        } else {
-          startDate.setHours(15, 0, 0, 0); // Default to 3:00 PM
-        }
-        
-        // End date is either the provided end date or 1 hour after start
-        const endDate = event.endDate 
-          ? new Date(event.endDate) 
-          : new Date(startDate.getTime() + 60*60000); // 1 hour
-        
-        // If end date is provided but no end time, use the same time as start
-        if (event.endDate && !event.endTime) {
-          endDate.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
-        }
-        
-        // Add 1 hour to end time if same as start time
-        if (endDate.getTime() === startDate.getTime()) {
-          endDate.setTime(endDate.getTime() + 60*60000);
-        }
-        
-        calendarEvent = {
-          summary: `${event.childName}'s ${event.title}`,
-          description: event.notes || `${event.type.charAt(0).toUpperCase() + event.type.slice(1)} activity: ${event.title}`,
-          location: event.location || '',
-          start: {
-            dateTime: startDate.toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          end: {
-            dateTime: endDate.toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          reminders: {
-            useDefault: false,
-            overrides: [
-              { method: 'popup', minutes: 60 }, // 1 hour before
-              { method: 'popup', minutes: 10 } // 10 minutes before
-            ]
+          
+          // End date is either the provided end date or 1 hour after start
+          const endDate = event.endDate 
+            ? new Date(event.endDate) 
+            : new Date(startDate.getTime() + 60*60000); // 1 hour
+          
+          // If end date is provided but no end time, use the same time as start
+          if (event.endDate && !event.endTime) {
+            endDate.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
           }
-        };
-        
-        // Add recurrence if applicable
-        if (event.repeatDay && event.repeatDay.length > 0) {
-          const dayMap = {
-            'Sunday': 'SU', 'Monday': 'MO', 'Tuesday': 'TU', 'Wednesday': 'WE',
-            'Thursday': 'TH', 'Friday': 'FR', 'Saturday': 'SA'
+          
+          // Add 1 hour to end time if same as start time
+          if (endDate.getTime() === startDate.getTime()) {
+            endDate.setTime(endDate.getTime() + 60*60000);
+          }
+          
+          calendarEvent = {
+            summary: `${event.childName}'s ${event.title}`,
+            description: event.notes || `${event.type?.charAt(0).toUpperCase() + event.type?.slice(1) || 'Activity'}: ${event.title}`,
+            location: event.location || '',
+            start: {
+              dateTime: startDate.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            end: {
+              dateTime: endDate.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            reminders: {
+              useDefault: false,
+              overrides: [
+                { method: 'popup', minutes: 60 }, // 1 hour before
+                { method: 'popup', minutes: 10 } // 10 minutes before
+              ]
+            }
           };
           
-          const byday = event.repeatDay.map(day => dayMap[day]).join(',');
-          calendarEvent.recurrence = [`RRULE:FREQ=WEEKLY;BYDAY=${byday}`];
-        }
-      } else if (event.eventType === 'event') {
-        // Special event
-        const eventDate = new Date(event.date);
-        
-        // Set time if provided
-        if (event.time) {
-          const [hours, minutes] = event.time.split(':');
-          eventDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-        } else {
-          // Default times based on event type
-          if (event.type === 'birthday') {
-            eventDate.setHours(14, 0, 0, 0); // 2:00 PM
-          } else if (event.type === 'school') {
-            eventDate.setHours(9, 0, 0, 0); // 9:00 AM
+          // Add recurrence if applicable
+          if (event.repeatDay && event.repeatDay.length > 0) {
+            const dayMap = {
+              'Sunday': 'SU', 'Monday': 'MO', 'Tuesday': 'TU', 'Wednesday': 'WE',
+              'Thursday': 'TH', 'Friday': 'FR', 'Saturday': 'SA'
+            };
+            
+            const byday = event.repeatDay.map(day => dayMap[day]).join(',');
+            calendarEvent.recurrence = [`RRULE:FREQ=WEEKLY;BYDAY=${byday}`];
+          }
+          break;
+          
+        case 'event':
+          // Special event
+          const eventDate = new Date(event.date);
+          
+          // Set time if provided
+          if (event.time) {
+            const [hours, minutes] = event.time.split(':');
+            eventDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
           } else {
-            eventDate.setHours(12, 0, 0, 0); // 12:00 PM
+            // Default times based on event type
+            if (event.type === 'birthday') {
+              eventDate.setHours(14, 0, 0, 0); // 2:00 PM
+            } else if (event.type === 'school') {
+              eventDate.setHours(9, 0, 0, 0); // 9:00 AM
+            } else {
+              eventDate.setHours(12, 0, 0, 0); // 12:00 PM
+            }
           }
-        }
-        
-        // End time is 2 hours after start
-        const endDate = new Date(eventDate.getTime() + 2*60*60000);
-        
-        calendarEvent = {
-          summary: `${event.childName}'s ${event.title}`,
-          description: event.description || `${event.type.charAt(0).toUpperCase() + event.type.slice(1)} event: ${event.title}`,
-          location: event.location || '',
-          start: {
-            dateTime: eventDate.toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          end: {
-            dateTime: endDate.toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          reminders: {
-            useDefault: false,
-            overrides: [
-              { method: 'popup', minutes: 24 * 60 }, // 1 day before
-              { method: 'popup', minutes: 60 } // 1 hour before
-            ]
+          
+          // End time is 2 hours after start
+          const eventEndDate = new Date(eventDate.getTime() + 2*60*60000);
+          
+          calendarEvent = {
+            summary: `${event.childName}'s ${event.title}`,
+            description: event.description || `${event.type?.charAt(0).toUpperCase() + event.type?.slice(1) || 'Event'}: ${event.title}`,
+            location: event.location || '',
+            start: {
+              dateTime: eventDate.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            end: {
+              dateTime: eventEndDate.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            reminders: {
+              useDefault: false,
+              overrides: [
+                { method: 'popup', minutes: 24 * 60 }, // 1 day before
+                { method: 'popup', minutes: 60 } // 1 hour before
+              ]
+            }
+          };
+          
+          // If it's a birthday, make it recurring annually
+          if (event.type === 'birthday') {
+            calendarEvent.recurrence = ['RRULE:FREQ=YEARLY'];
           }
-        };
-        
-        // If it's a birthday, make it recurring annually
-        if (event.type === 'birthday') {
-          calendarEvent.recurrence = ['RRULE:FREQ=YEARLY'];
-        }
-      } else if (event.eventType === 'homework') {
-        // Homework due date
-        const dueDate = new Date(event.dueDate);
-        dueDate.setHours(17, 0, 0, 0); // Default to 5:00 PM
-        
-        calendarEvent = {
-          summary: `${event.childName}'s ${event.subject} Homework Due`,
-          description: event.description || `${event.title} - ${event.subject} assignment due`,
-          start: {
-            dateTime: dueDate.toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          end: {
-            dateTime: new Date(dueDate.getTime() + 30*60000).toISOString(), // 30 minutes
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          reminders: {
-            useDefault: false,
-            overrides: [
-              { method: 'popup', minutes: 24 * 60 }, // 1 day before
-              { method: 'popup', minutes: 120 } // 2 hours before
-            ]
-          }
-        };
+          break;
+          
+        case 'homework':
+          // Homework due date
+          const dueDate = new Date(event.dueDate);
+          dueDate.setHours(17, 0, 0, 0); // Default to 5:00 PM
+          
+          calendarEvent = {
+            summary: `${event.childName}'s ${event.subject} Homework Due`,
+            description: event.description || `${event.title} - ${event.subject} assignment due`,
+            start: {
+              dateTime: dueDate.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            end: {
+              dateTime: new Date(dueDate.getTime() + 30*60000).toISOString(), // 30 minutes
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            reminders: {
+              useDefault: false,
+              overrides: [
+                { method: 'popup', minutes: 24 * 60 }, // 1 day before
+                { method: 'popup', minutes: 120 } // 2 hours before
+              ]
+            }
+          };
+          break;
+          
+        default:
+          // Default event
+          calendarEvent = {
+            summary: event.title,
+            description: event.description || event.notes || '',
+            start: {
+              dateTime: event.dateObj.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            end: {
+              dateTime: new Date(event.dateObj.getTime() + 60*60000).toISOString(), // 1 hour duration
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            }
+          };
       }
       
       // Add event to calendar
@@ -486,7 +605,7 @@ const FloatingCalendarWidget = () => {
         
         // Show a simple notification
         const notification = document.createElement('div');
-        notification.innerText = `${event.childName}'s ${event.title || 'event'} added to calendar`;
+        notification.innerText = `${event.childName ? `${event.childName}'s ` : ''}${event.title || 'event'} added to calendar`;
         notification.style.cssText = `
           position: fixed; bottom: 20px; right: 20px; background: #4caf50;
           color: white; padding: 12px 20px; border-radius: 4px; z-index: 9999;
@@ -494,6 +613,9 @@ const FloatingCalendarWidget = () => {
         `;
         document.body.appendChild(notification);
         setTimeout(() => notification.remove(), 3000);
+        
+        // Refresh events
+        loadAllEvents();
       }
     } catch (error) {
       console.error("Error adding child event to calendar:", error);
@@ -504,7 +626,7 @@ const FloatingCalendarWidget = () => {
   const getEventsForSelectedDate = () => {
     if (!selectedDate) return [];
     
-    return childrenEvents.filter(event => {
+    return allEvents.filter(event => {
       const eventDate = event.dateObj;
       return eventDate.getDate() === selectedDate.getDate() &&
              eventDate.getMonth() === selectedDate.getMonth() &&
@@ -513,8 +635,8 @@ const FloatingCalendarWidget = () => {
   };
   
   // Get icon for event type
-  const getEventIcon = (eventType) => {
-    switch (eventType) {
+  const getEventIcon = (event) => {
+    switch (event.eventType) {
       case 'appointment':
         return <AlertCircle size={14} className="text-red-500 mr-1" />;
       case 'activity':
@@ -523,9 +645,74 @@ const FloatingCalendarWidget = () => {
         return <BookOpen size={14} className="text-green-500 mr-1" />;
       case 'event':
         return <Bell size={14} className="text-purple-500 mr-1" />;
+      case 'meeting':
+        return <Users size={14} className="text-indigo-500 mr-1" />;
+      case 'relationship':
+        return <Heart size={14} className="text-pink-500 mr-1" />;
+      case 'task':
+        return <Clock size={14} className="text-amber-500 mr-1" />;
       default:
         return <Calendar size={14} className="text-gray-500 mr-1" />;
     }
+  };
+  
+  // Increase widget height
+  const increaseHeight = () => {
+    setWidgetHeight(prev => Math.min(prev + 10, 140)); // Max height 140rem
+  };
+
+  // Decrease widget height
+  const decreaseHeight = () => {
+    setWidgetHeight(prev => Math.max(prev - 10, 56)); // Min height 56rem
+  };
+  
+  // Render the calendar days
+  const renderCalendarDays = () => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const daysInMonth = getDaysInMonth(year, month);
+    const firstDayOfMonth = getFirstDayOfMonth(year, month);
+    
+    // Generate blank spaces for days before the first of the month
+    const blanks = [];
+    for (let i = 0; i < firstDayOfMonth; i++) {
+      blanks.push(
+        <div key={`blank-${i}`} className="h-8 w-8"></div>
+      );
+    }
+    
+    // Generate calendar days
+    const days = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(year, month, d);
+      const isSelectedDate = date.getDate() === selectedDate.getDate() && 
+                            date.getMonth() === selectedDate.getMonth() && 
+                            date.getFullYear() === selectedDate.getFullYear();
+      
+      // Check if this date has any events
+      const hasEvents = allEvents.some(event => {
+        const eventDate = event.dateObj;
+        return eventDate.getDate() === date.getDate() &&
+               eventDate.getMonth() === date.getMonth() &&
+               eventDate.getFullYear() === date.getFullYear();
+      });
+      
+      days.push(
+        <div 
+          key={`day-${d}`}
+          className={`h-8 w-8 flex items-center justify-center rounded-full cursor-pointer text-sm font-roboto relative
+            ${isSelectedDate ? 'bg-black text-white' : isToday(date) ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+          onClick={() => setSelectedDate(date)}
+        >
+          {d}
+          {hasEvents && (
+            <span className="absolute bottom-0 right-0 w-2 h-2 bg-blue-500 rounded-full"></span>
+          )}
+        </div>
+      );
+    }
+    
+    return [...blanks, ...days];
   };
   
   if (!isOpen) {
@@ -543,7 +730,10 @@ const FloatingCalendarWidget = () => {
   
   return (
     <div className="fixed bottom-4 left-4 z-40">
-      <div className="bg-white border border-black shadow-lg rounded-lg w-80 flex flex-col h-96 mb-2">
+      <div 
+        className="bg-white border border-black shadow-lg rounded-lg w-80 flex flex-col"
+        style={{ height: `${widgetHeight}rem` }}
+      >
         {/* Header */}
         <div className="flex justify-between items-center border-b p-3">
           <div className="flex items-center">
@@ -553,6 +743,20 @@ const FloatingCalendarWidget = () => {
             <span className="font-medium font-roboto">Family Calendar</span>
           </div>
           <div className="flex">
+            <button 
+              onClick={decreaseHeight} 
+              className="p-1 hover:bg-gray-100 rounded"
+              title="Decrease widget height"
+            >
+              <ChevronDown size={18} />
+            </button>
+            <button 
+              onClick={increaseHeight} 
+              className="p-1 hover:bg-gray-100 rounded"
+              title="Increase widget height"
+            >
+              <ChevronUp size={18} />
+            </button>
             <button 
               onClick={() => setIsOpen(false)} 
               className="p-1 hover:bg-gray-100 rounded"
@@ -602,7 +806,7 @@ const FloatingCalendarWidget = () => {
           </div>
           
           {/* View filters */}
-          <div className="flex space-x-1 mb-2">
+          <div className="flex flex-wrap gap-1 mb-2">
             <button 
               className={`text-xs px-2 py-1 rounded-full ${view === 'all' ? 'bg-black text-white' : 'bg-gray-100'}`}
               onClick={() => setView('all')}
@@ -619,13 +823,19 @@ const FloatingCalendarWidget = () => {
               className={`text-xs px-2 py-1 rounded-full ${view === 'appointments' ? 'bg-black text-white' : 'bg-gray-100'}`}
               onClick={() => setView('appointments')}
             >
-              Appointments
+              Medical
             </button>
             <button 
               className={`text-xs px-2 py-1 rounded-full ${view === 'activities' ? 'bg-black text-white' : 'bg-gray-100'}`}
               onClick={() => setView('activities')}
             >
               Activities
+            </button>
+            <button 
+              className={`text-xs px-2 py-1 rounded-full ${view === 'meetings' ? 'bg-black text-white' : 'bg-gray-100'}`}
+              onClick={() => setView('meetings')}
+            >
+              Meetings
             </button>
           </div>
           
@@ -647,26 +857,41 @@ const FloatingCalendarWidget = () => {
                 {getEventsForSelectedDate()
                   .filter(event => 
                     view === 'all' || 
-                    (view === 'appointments' && event.eventType === 'appointment') ||
-                    (view === 'activities' && event.eventType === 'activity') ||
-                    (view === 'tasks' && event.eventType === 'homework')
+                    (view === 'appointments' && event.category === 'medical') ||
+                    (view === 'activities' && (event.category === 'activity' || event.eventType === 'activity')) ||
+                    (view === 'tasks' && (event.category === 'task' || event.eventType === 'task' || event.eventType === 'homework')) ||
+                    (view === 'meetings' && (event.category === 'meeting' || event.eventType === 'meeting'))
                   )
                   .map((event, index) => (
                     <div key={index} className="border rounded-lg p-2 hover:bg-gray-50">
                       <div className="flex justify-between">
                         <div>
                           <div className="flex items-center">
-                            {getEventIcon(event.eventType)}
+                            {getEventIcon(event)}
                             <p className="text-sm font-medium font-roboto">{event.title}</p>
                           </div>
                           <p className="text-xs text-gray-500 font-roboto">
-                            For: {event.childName}
-                            {event.time && ` at ${event.time}`}
-                            {event.eventType === 'activity' && event.location && ` - ${event.location}`}
+                            {event.childName && `For: ${event.childName}`}
+                            {event.childName && event.time && ` at ${event.time}`}
+                            {event.childName && event.location && ` - ${event.location}`}
+                            {event.assignedToName && `Assigned to: ${event.assignedToName}`}
+                            {!event.childName && !event.assignedToName && event.time && `At ${event.time}`}
                           </p>
                         </div>
                         <button 
-                          onClick={() => handleAddChildEventToCalendar(event)}
+                          onClick={() => {
+                            if (event.eventType === 'appointment' || event.eventType === 'activity' || 
+                                event.eventType === 'event' || event.eventType === 'homework') {
+                              handleAddChildEventToCalendar(event);
+                            } else if (event.eventType === 'meeting') {
+                              handleAddMeetingToCalendar(event);
+                            } else if (event.eventType === 'task') {
+                              handleAddTaskToCalendar(event);
+                            } else {
+                              // Default handling
+                              handleAddChildEventToCalendar(event);
+                            }
+                          }}
                           className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
                         >
                           Add
@@ -682,112 +907,57 @@ const FloatingCalendarWidget = () => {
             )}
           </div>
           
-          {/* Upcoming children's appointments */}
-          {(view === 'all' || view === 'appointments') && (
-            <div className="mb-4">
-              <h4 className="text-sm font-medium mb-2 font-roboto">Upcoming Medical Appointments</h4>
-              
-              {childrenAppointments.length > 0 ? (
-                <div className="space-y-2">
-                  {childrenAppointments.slice(0, 3).map((appointment, index) => (
-                    <div key={index} className="border rounded-lg p-2 flex justify-between items-center">
-                      <div>
-                        <div className="flex items-center">
-                          <AlertCircle size={14} className="text-red-500 mr-1" />
-                          <p className="text-sm font-medium font-roboto">{appointment.title}</p>
-                        </div>
-                        <p className="text-xs text-gray-500 font-roboto">
-                          {appointment.childName} - {formatDate(appointment.date)}
-                          {appointment.time && ` at ${appointment.time}`}
-                        </p>
-                      </div>
-                      <button 
-                        onClick={() => handleAddChildEventToCalendar(appointment)}
-                        className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
-                      >
-                        Add
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-500 font-roboto">No upcoming appointments</p>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Upcoming children's activities */}
-          {(view === 'all' || view === 'activities') && (
-            <div className="mb-4">
-              <h4 className="text-sm font-medium mb-2 font-roboto">Upcoming Activities</h4>
-              
-              {childrenActivities.length > 0 ? (
-                <div className="space-y-2">
-                  {childrenActivities.slice(0, 3).map((activity, index) => (
-                    <div key={index} className="border rounded-lg p-2 flex justify-between items-center">
-                      <div>
-                        <div className="flex items-center">
-                          <Activity size={14} className="text-blue-500 mr-1" />
-                          <p className="text-sm font-medium font-roboto">{activity.title}</p>
-                        </div>
-                        <p className="text-xs text-gray-500 font-roboto">
-                          {activity.childName} - {formatDate(activity.startDate)}
-                          {activity.time && ` at ${activity.time}`}
-                          {activity.location && ` (${activity.location})`}
-                        </p>
-                      </div>
-                      <button 
-                        onClick={() => handleAddChildEventToCalendar(activity)}
-                        className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
-                      >
-                        Add
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-500 font-roboto">No upcoming activities</p>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Upcoming family meetings */}
+          {/* Upcoming Events Section */}
           <div className="mb-4">
-            <h4 className="text-sm font-medium mb-2 font-roboto">Upcoming Family Meetings</h4>
-            
-            {getUpcomingMeetings().length > 0 ? (
+            <h4 className="text-sm font-medium mb-2 font-roboto">Upcoming Events</h4>
+            {allEvents.length > 0 ? (
               <div className="space-y-2">
-                {getUpcomingMeetings().map(meeting => (
-                  <div key={meeting.id} className="p-2 border rounded-lg flex justify-between items-center">
-                    <div>
-                      <p className="text-sm font-medium font-roboto">{meeting.title}</p>
-                      <p className="text-xs text-gray-500 font-roboto">
-                        {meeting.date.toLocaleDateString('en-US', { 
-                          weekday: 'short', 
-                          month: 'short', 
-                          day: 'numeric',
-                          hour: 'numeric',
-                          minute: '2-digit'
-                        })}
-                      </p>
+                {allEvents
+                  .filter(event => 
+                    view === 'all' || 
+                    (view === 'appointments' && event.category === 'medical') ||
+                    (view === 'activities' && (event.category === 'activity' || event.eventType === 'activity')) ||
+                    (view === 'tasks' && (event.category === 'task' || event.eventType === 'task' || event.eventType === 'homework')) ||
+                    (view === 'meetings' && (event.category === 'meeting' || event.eventType === 'meeting'))
+                  )
+                  .sort((a, b) => a.dateObj - b.dateObj)
+                  .slice(0, 5)
+                  .map((event, index) => (
+                    <div key={index} className="border rounded-lg p-2 flex justify-between items-center">
+                      <div>
+                        <div className="flex items-center">
+                          {getEventIcon(event)}
+                          <p className="text-sm font-medium font-roboto">{event.title}</p>
+                        </div>
+                        <p className="text-xs text-gray-500 font-roboto">
+                          {formatDate(event.date || event.startDate || event.dueDate)}
+                          {event.time && ` at ${event.time}`}
+                        </p>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          if (event.eventType === 'appointment' || event.eventType === 'activity' || 
+                              event.eventType === 'event' || event.eventType === 'homework') {
+                            handleAddChildEventToCalendar(event);
+                          } else if (event.eventType === 'meeting') {
+                            handleAddMeetingToCalendar(event);
+                          } else if (event.eventType === 'task') {
+                            handleAddTaskToCalendar(event);
+                          } else {
+                            // Default handling
+                            handleAddChildEventToCalendar(event);
+                          }
+                        }}
+                        className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
+                      >
+                        Add
+                      </button>
                     </div>
-                    
-                    <button 
-                      onClick={() => handleAddMeetingToCalendar(meeting)}
-                      className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
-                    >
-                      Add
-                    </button>
-                  </div>
-                ))}
+                  ))}
               </div>
             ) : (
               <div className="text-center p-3 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-500 font-roboto">No upcoming meetings scheduled.</p>
+                <p className="text-sm text-gray-500 font-roboto">No upcoming events</p>
               </div>
             )}
           </div>
