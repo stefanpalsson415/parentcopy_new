@@ -4,7 +4,7 @@ import { useFamily } from '../../contexts/FamilyContext';
 import DashboardTab from './tabs/DashboardTab';
 import TasksTab from './tabs/TasksTab';
 import WeekHistoryTab from './tabs/WeekHistoryTab';
-import RelationshipTab from './tabs/RelationshipTab';  // Import the new RelationshipTab
+import RelationshipTab from './tabs/RelationshipTab';
 import HowThisWorksScreen from '../education/HowThisWorksScreen';
 import PersonalizedApproachScreen from '../education/PersonalizedApproachScreen';
 import InitialSurveyTab from './tabs/InitialSurveyTab';
@@ -15,16 +15,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import AllieChat from '../chat/AllieChat';
 import RelationshipMeetingScreen from '../meeting/RelationshipMeetingScreen';
 import FloatingCalendarWidget from '../calendar/FloatingCalendarWidget';
-// At the top of the file, add these imports:
-import GoogleCalendarConnect from '../calendar/GoogleCalendarConnect';
-import CalendarService from '../../services/CalendarService';
 import DashboardTutorial from '../onboarding/DashboardTutorial';
 import ErrorBoundary from '../common/ErrorBoundary';
-import CalendarErrorHandler from '../../utils/CalendarErrorHandler';
-import ChildrenTrackingTab from './tabs/ChildrenTrackingTab';  // Add this line
-
-
-
+import ChildrenTrackingTab from './tabs/ChildrenTrackingTab';
 
 const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const navigate = useNavigate();
@@ -41,7 +34,7 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
     taskRecommendations
   } = useFamily();
   
-  const { loadFamilyData } = useAuth();
+  const { loadFamilyData, currentUser } = useAuth();
   
   const [activeTab, setActiveTab] = useState('tasks');
   const [showTutorial, setShowTutorial] = useState(false);
@@ -58,83 +51,6 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   });
 
   const [allieAIEngineService, setAllieAIEngineService] = useState(null);
-
-  // Add inside the component function, near other useState calls:
-const { currentUser } = useAuth();
-const [calendarConnected, setCalendarConnected] = useState(false);
-
-// Add this useEffect to check calendar connected status:
-useEffect(() => {
-  // Check if calendar is already connected
-  const checkCalendarConnection = async () => {
-    if (currentUser) {
-      try {
-        await CalendarService.initializeGoogleCalendar();
-        const isConnected = CalendarService.isSignedInToGoogle();
-        setCalendarConnected(isConnected);
-      } catch (error) {
-        console.error("Error checking calendar connection:", error);
-      }
-    }
-  };
-  
-  checkCalendarConnection();
-}, [currentUser]);
-
-useEffect(() => {
-  // Suppress Google API errors to avoid console noise
-  import('../../utils/CalendarErrorHandler').then(module => {
-    module.default.suppressApiErrors();
-  });
-  
-  useEffect(() => {
-    // Only attempt to initialize if we're on a tab that needs calendar
-    if (activeTab === 'tasks' || activeTab === 'dashboard' || activeTab === 'relationship') {
-      // Delay calendar initialization to avoid blocking other components
-      const timer = setTimeout(() => {
-        const initializeCalendar = async () => {
-          try {
-            // Only try to initialize if we're not in mock mode
-            if (!CalendarService.mockMode) {
-              await CalendarService.initializeGoogleCalendar();
-              // Only suppress errors after successful initialization
-              CalendarErrorHandler.suppressApiErrors();
-            }
-          } catch (error) {
-            console.warn("Calendar initialization failed, continuing without calendar features:", error);
-            CalendarService.mockMode = true;
-          }
-        };
-        
-        initializeCalendar();
-      }, 1500);  // Delay initialization by 1.5 seconds
-      
-      return () => clearTimeout(timer);
-    }
-  }, [activeTab]);
-
-
-useEffect(() => {
-  // Dynamically import the service to avoid circular dependencies
-  import('../../services/AllieAIEngineService').then(module => {
-    setAllieAIEngineService(module.default);
-    console.log("AllieAIEngineService loaded successfully");
-    
-    // If family data is available, try to load AI insights right away
-    if (familyId && currentWeek && module.default) {
-      module.default.generateDashboardInsights(familyId, currentWeek)
-        .then(aiInsights => {
-          if (aiInsights && aiInsights.length > 0) {
-            setInsights(aiInsights);
-            console.log("AI insights loaded:", aiInsights);
-          }
-        })
-        .catch(err => console.error("Error loading initial AI insights:", err));
-    }
-  }).catch(error => {
-    console.error("Failed to load AI Engine service:", error);
-  });
-}, [familyId, currentWeek]);
 
   // Calculate notifications
   useEffect(() => {
@@ -160,31 +76,20 @@ useEffect(() => {
             selectedUser.roleType === task.assignedTo);
   };
 
-
-// Add this inside the component function, near the start (after useState declarations)
-useEffect(() => {
-  // Suppress Google API errors to avoid console noise
-  CalendarErrorHandler.suppressApiErrors();
-  
- 
-
-  
-// Add this useEffect after the other useEffects
-useEffect(() => {
   // Check if we should show the tutorial
-  const tutorialCompleted = localStorage.getItem('dashboardTutorialCompleted');
-  const isFirstDashboardVisit = !tutorialCompleted;
-  
-  if (isFirstDashboardVisit) {
-    // We'll show the tutorial after a small delay to ensure dashboard is fully loaded
-    const timer = setTimeout(() => {
-      setShowTutorial(true);
-    }, 1000);
+  useEffect(() => {
+    const tutorialCompleted = localStorage.getItem('dashboardTutorialCompleted');
+    const isFirstDashboardVisit = !tutorialCompleted;
     
-    return () => clearTimeout(timer);
-  }
-}, []);
-
+    if (isFirstDashboardVisit) {
+      // We'll show the tutorial after a small delay to ensure dashboard is fully loaded
+      const timer = setTimeout(() => {
+        setShowTutorial(true);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   // Consolidated family loading from all possible sources
   useEffect(() => {
@@ -291,21 +196,44 @@ useEffect(() => {
     
     loadDashboardData();
   }, [familyId, currentWeek]);
+
+  // Load AllieAIEngineService
+  useEffect(() => {
+    // Dynamically import the service to avoid circular dependencies
+    import('../../services/AllieAIEngineService').then(module => {
+      setAllieAIEngineService(module.default);
+      console.log("AllieAIEngineService loaded successfully");
+      
+      // If family data is available, try to load AI insights right away
+      if (familyId && currentWeek && module.default) {
+        module.default.generateDashboardInsights(familyId, currentWeek)
+          .then(aiInsights => {
+            if (aiInsights && aiInsights.length > 0) {
+              setInsights(aiInsights);
+              console.log("AI insights loaded:", aiInsights);
+            }
+          })
+          .catch(err => console.error("Error loading initial AI insights:", err));
+      }
+    }).catch(error => {
+      console.error("Failed to load AI Engine service:", error);
+    });
+  }, [familyId, currentWeek]);
   
   // Redirect if no user is selected after loading attempt completes
   // Redirect if no user is selected or initial survey incomplete
-useEffect(() => {
-  if (!selectedUser && !loadingFamily) {
-    navigate('/');
-    return;
-  }
-  
-  // If user exists but hasn't completed initial survey, redirect to survey
-  if (selectedUser && !loadingFamily && !selectedUser.completed) {
-    console.log("User hasn't completed initial survey, redirecting to survey");
-    navigate('/survey');
-  }
-}, [selectedUser, navigate, loadingFamily]);
+  useEffect(() => {
+    if (!selectedUser && !loadingFamily) {
+      navigate('/');
+      return;
+    }
+    
+    // If user exists but hasn't completed initial survey, redirect to survey
+    if (selectedUser && !loadingFamily && !selectedUser.completed) {
+      console.log("User hasn't completed initial survey, redirecting to survey");
+      navigate('/survey');
+    }
+  }, [selectedUser, navigate, loadingFamily]);
   
   // Handle logout/switch user
   const handleLogout = () => {
@@ -404,7 +332,7 @@ useEffect(() => {
           onStartWeeklyCheckIn={handleStartWeeklyCheckIn} 
           onOpenFamilyMeeting={handleOpenFamilyMeeting} 
         />;
-      case 'children':  // Add this case
+      case 'children':
         return <ChildrenTrackingTab />;
       case 'initial-survey':
         return <InitialSurveyTab />;
@@ -477,36 +405,24 @@ useEffect(() => {
           </div>
         </div>
       </div>
-
-      {/* Only show if calendar is not connected */}
-{(!calendarConnected && currentUser) && (
-  <div className="mb-4">
-    <GoogleCalendarConnect 
-      onSuccess={() => setCalendarConnected(true)}
-      buttonText="Connect Calendar for Task Reminders"
-    />
-  </div>
-)}
       
       {/* Navigation Tabs */}
       <div className="fixed top-24 left-0 right-0 z-10 bg-gray-50 border-b shadow-sm">
         <div className="container mx-auto flex overflow-x-auto px-4 py-2">
           <button 
-            id="tasks-tab" // Add this line
-
+            id="tasks-tab"
             className={`px-4 py-2 font-medium whitespace-nowrap font-roboto relative ${activeTab === 'tasks' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
             onClick={() => setActiveTab('tasks')}
           >
             {selectedUser ? `${selectedUser.name}'s Tasks` : 'My Tasks'}
             {notifications.tasks > 0 && (
-  <span className="absolute top-1 right-0 transform translate-x-1/2 -translate-y-1/4 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
-    {notifications.tasks}
-  </span>
-)}
+              <span className="absolute top-1 right-0 transform translate-x-1/2 -translate-y-1/4 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
+                {notifications.tasks}
+              </span>
+            )}
           </button>
           <button 
             id="dashboard-tab"
-
             className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'dashboard' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
             onClick={() => setActiveTab('dashboard')}
           >
@@ -516,45 +432,34 @@ useEffect(() => {
           {/* Relationship Tab */}
           {selectedUser && (
             <button 
-            id="relationship-tab"
-            className={`px-4 py-2 font-medium whitespace-nowrap font-roboto relative ${activeTab === 'relationship' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
-            onClick={() => setActiveTab('relationship')}
-          >
-            Relationship
-            {notifications.relationships > 0 && selectedUser.role === 'parent' && (
-              <span className="absolute top-1 right-1 transform translate-x-1/2 -translate-y-1/4 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
-                {notifications.relationships}
-              </span>
-            )}
-          </button>
+              id="relationship-tab"
+              className={`px-4 py-2 font-medium whitespace-nowrap font-roboto relative ${activeTab === 'relationship' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+              onClick={() => setActiveTab('relationship')}
+            >
+              Relationship
+              {notifications.relationships > 0 && selectedUser.role === 'parent' && (
+                <span className="absolute top-1 right-1 transform translate-x-1/2 -translate-y-1/4 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
+                  {notifications.relationships}
+                </span>
+              )}
+            </button>
           )}
           
-{/* Children Tracking Tab - ADD THIS BUTTON */}
-<button 
-      id="children-tab"
-      className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'children' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
-      onClick={() => setActiveTab('children')}
-    >
-      Children Tracking
-    </button>
-    
-    <button 
-      className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'initial-survey' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
-      onClick={() => setActiveTab('initial-survey')}
-    >
-      Initial Survey
-    </button>
-
-
+          {/* Children Tracking Tab */}
+          <button 
+            id="children-tab"
+            className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'children' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+            onClick={() => setActiveTab('children')}
+          >
+            Children Tracking
+          </button>
+          
           <button 
             className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'initial-survey' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
             onClick={() => setActiveTab('initial-survey')}
           >
             Initial Survey
           </button>
-          
-
-
 
           {/* Add completed weeks as tabs */}
           {weekTabs.map(tab => (
@@ -571,12 +476,12 @@ useEffect(() => {
       </div>
       
       {/* Main Content */}
-<div className="container mx-auto px-4 pt-24 pb-6">
-  <ErrorBoundary>
-    {/* Tab content */}
-    {renderTabContent()}
-  </ErrorBoundary>
-</div>
+      <div className="container mx-auto px-4 pt-24 pb-6">
+        <ErrorBoundary>
+          {/* Tab content */}
+          {renderTabContent()}
+        </ErrorBoundary>
+      </div>
 
       {/* Settings Modal */}
       {showSettings && (
@@ -594,14 +499,14 @@ useEffect(() => {
       )}
       
       {/* Allie Chat Widget */}
-      <div id="chat-button"> {/* Add this wrapper with ID */}
+      <div id="chat-button">
         <AllieChat />
       </div>
       
       {/* Floating Calendar Widget */}
       <FloatingCalendarWidget />
 
-      {/* Right before the final closing div tag */}
+      {/* Tutorial */}
       {showTutorial && (
         <DashboardTutorial 
           onComplete={() => setShowTutorial(false)} 

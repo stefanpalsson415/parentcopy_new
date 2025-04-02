@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Calendar, PlusCircle, ChevronDown, X } from 'lucide-react';
-import CalendarService from '../../services/CalendarService';
+import { Calendar, ChevronDown, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import CalendarService from '../../services/CalendarService';
 
 const CalendarPromptChip = ({ onClick, onSelectDate }) => {
   const { currentUser } = useAuth();

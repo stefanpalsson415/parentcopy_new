@@ -1,11 +1,8 @@
-// Create a new file: src/components/dashboard/CalendarDashboardWidget.jsx
-
 import React, { useState, useEffect } from 'react';
 import { Calendar, PlusCircle, ChevronLeft, ChevronRight, ArrowUpRight } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import CalendarService from '../../services/CalendarService';
-import CalendarIntegrationButton from '../calendar/CalendarIntegrationButton';
 
 const CalendarDashboardWidget = () => {
   const { currentUser } = useAuth();
@@ -17,21 +14,6 @@ const CalendarDashboardWidget = () => {
   
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [calendarSettings, setCalendarSettings] = useState(null);
-  const [calendarSetup, setCalendarSetup] = useState(false);
-  
-  // Load calendar settings on mount
-  useEffect(() => {
-    const loadSettings = async () => {
-      if (currentUser) {
-        const settings = await CalendarService.loadUserCalendarSettings(currentUser.uid);
-        setCalendarSettings(settings);
-        setCalendarSetup(!!settings?.defaultCalendarType);
-      }
-    };
-    
-    loadSettings();
-  }, [currentUser]);
   
   // Helper function to get days in month
   const getDaysInMonth = (year, month) => {
@@ -113,13 +95,6 @@ const CalendarDashboardWidget = () => {
     return date.toLocaleDateString('en-US', options);
   };
   
-  // Check if a task is scheduled for the selected date
-  const isTaskScheduled = (task) => {
-    // This is a simplified check - in a real app, you'd check if the task
-    // is actually scheduled on the selected date in the user's calendar
-    return false;
-  };
-  
   // Get upcoming family meetings
   const getUpcomingMeetings = () => {
     const meetings = [];
@@ -142,6 +117,57 @@ const CalendarDashboardWidget = () => {
     return meetings;
   };
   
+  // Add task to Allie calendar
+  const handleAddTaskToCalendar = async (task) => {
+    try {
+      if (!currentUser || !task) return;
+      
+      // Create event from task
+      const event = CalendarService.createEventFromTask(task);
+      
+      // Use selected date
+      if (selectedDate) {
+        const customDate = new Date(selectedDate);
+        customDate.setHours(10, 0, 0, 0); // Set to 10 AM
+        
+        event.start.dateTime = customDate.toISOString();
+        const endTime = new Date(customDate);
+        endTime.setHours(endTime.getHours() + 1);
+        event.end.dateTime = endTime.toISOString();
+      }
+      
+      // Add event to calendar
+      await CalendarService.addEvent(event, currentUser.uid);
+      
+      // Show a simple notification
+      CalendarService.showNotification("Task added to your calendar", "success");
+      
+    } catch (error) {
+      console.error("Error adding task to calendar:", error);
+      CalendarService.showNotification("Failed to add task to calendar", "error");
+    }
+  };
+  
+  // Add meeting to Allie calendar
+  const handleAddMeetingToCalendar = async (meeting) => {
+    try {
+      if (!currentUser || !meeting) return;
+      
+      // Create event from meeting
+      const event = CalendarService.createFamilyMeetingEvent(meeting.weekNumber, meeting.date);
+      
+      // Add event to calendar
+      await CalendarService.addEvent(event, currentUser.uid);
+      
+      // Show a simple notification
+      CalendarService.showNotification("Meeting added to your calendar", "success");
+      
+    } catch (error) {
+      console.error("Error adding meeting to calendar:", error);
+      CalendarService.showNotification("Failed to add meeting to calendar", "error");
+    }
+  };
+  
   return (
     <div className="bg-white rounded-lg p-4 shadow">
       <div className="flex justify-between items-center mb-4">
@@ -149,16 +175,6 @@ const CalendarDashboardWidget = () => {
           <Calendar size={20} className="mr-2" />
           Calendar
         </h3>
-        
-        {!calendarSetup && (
-          <button 
-            onClick={() => window.location.href = '/settings?tab=calendar'}
-            className="text-sm text-blue-600 flex items-center"
-          >
-            Set Up
-            <ArrowUpRight size={14} className="ml-1" />
-          </button>
-        )}
       </div>
       
       {/* Mini Calendar */}
@@ -197,23 +213,13 @@ const CalendarDashboardWidget = () => {
         <h4 className="text-sm font-medium text-gray-700">{formatDate(selectedDate)}</h4>
       </div>
       
-      {/* Calendar Integration Status */}
-      {!calendarSetup ? (
-        <div className="bg-blue-50 p-3 rounded-lg mb-4">
-          <p className="text-sm text-blue-700">
-            Connect your calendar to add tasks and meetings. 
-            <a href="/settings?tab=calendar" className="underline ml-1">Set up now</a>
-          </p>
-        </div>
-      ) : (
-        <div className="bg-green-50 p-3 rounded-lg mb-4">
-          <p className="text-sm text-green-700 flex items-center">
-            <Calendar size={14} className="mr-1" />
-            Calendar connected: {calendarSettings?.defaultCalendarType === 'google' ? 'Google Calendar' : 
-                               calendarSettings?.defaultCalendarType === 'apple' ? 'Apple Calendar' : 'ICS Download'}
-          </p>
-        </div>
-      )}
+      {/* Calendar Status */}
+      <div className="bg-green-50 p-3 rounded-lg mb-4">
+        <p className="text-sm text-green-700 flex items-center">
+          <Calendar size={14} className="mr-1" />
+          Allie Calendar is active
+        </p>
+      </div>
       
       {/* Upcoming Meetings */}
       <div className="mb-4">
@@ -236,11 +242,12 @@ const CalendarDashboardWidget = () => {
                   </p>
                 </div>
                 
-                <CalendarIntegrationButton 
-                  item={meeting} 
-                  itemType="meeting" 
-                  customDate={meeting.date}
-                />
+                <button 
+                  onClick={() => handleAddMeetingToCalendar(meeting)}
+                  className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800"
+                >
+                  Add to Calendar
+                </button>
               </div>
             ))}
           </div>
@@ -268,11 +275,12 @@ const CalendarDashboardWidget = () => {
                     <p className="text-xs text-gray-500">For: {task.assignedToName}</p>
                   </div>
                   
-                  <CalendarIntegrationButton 
-                    item={task} 
-                    itemType="task" 
-                    customDate={selectedDate}
-                  />
+                  <button 
+                    onClick={() => handleAddTaskToCalendar(task)}
+                    className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800"
+                  >
+                    Add
+                  </button>
                 </div>
               ))
           ) : (

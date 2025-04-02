@@ -1,40 +1,18 @@
-// src/components/calendar/GoogleCalendarEvents.jsx
+// src/components/calendar/AllieCalendarEvents.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import CalendarService from '../../services/CalendarService';
 
-const GoogleCalendarEvents = ({ selectedDate }) => {
+const AllieCalendarEvents = ({ selectedDate }) => {
   const { currentUser } = useAuth();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
-    // Check if user is authorized and calendar is connected
-    const checkAuthStatus = async () => {
-      if (!currentUser) return;
-      
-      try {
-        // Initialize Google Calendar API first
-        await CalendarService.initializeGoogleCalendar();
-        
-        // Check if the user is signed in
-        const isSignedIn = CalendarService.isSignedInToGoogle(currentUser.uid);
-        setAuthorized(isSignedIn);
-      } catch (err) {
-        console.warn("Error checking Google Calendar auth status:", err);
-        setAuthorized(false);
-      }
-    };
-    
-    checkAuthStatus();
-  }, [currentUser]);
-
-  useEffect(() => {
-    // Fetch events when date changes if authorized
+    // Fetch events when date changes
     const fetchEvents = async () => {
-      if (!currentUser || !authorized || !selectedDate) return;
+      if (!currentUser || !selectedDate) return;
       
       setLoading(true);
       setError(null);
@@ -47,8 +25,8 @@ const GoogleCalendarEvents = ({ selectedDate }) => {
         const endDate = new Date(selectedDate);
         endDate.setHours(23, 59, 59, 999);
         
-        // Get events for the selected date
-        const calendarEvents = await CalendarService.getEventsFromCalendar(
+        // Get events for the selected date from our Allie calendar
+        const calendarEvents = await CalendarService.getEventsForUser(
           currentUser.uid,
           startDate,
           endDate
@@ -65,32 +43,7 @@ const GoogleCalendarEvents = ({ selectedDate }) => {
     };
     
     fetchEvents();
-  }, [currentUser, selectedDate, authorized]);
-
-  // If not authorized, show connect button
-  if (!authorized) {
-    return (
-      <div className="text-center p-2">
-        <p className="text-sm text-gray-500 mb-2 font-roboto">Connect your Google Calendar to see events</p>
-        <button
-          onClick={async () => {
-            try {
-              if (!currentUser) return;
-              
-              await CalendarService.signInToGoogle(currentUser.uid);
-              setAuthorized(true);
-            } catch (err) {
-              console.error("Error connecting to Google Calendar:", err);
-              setError("Could not connect to Google Calendar");
-            }
-          }}
-          className="px-3 py-1 bg-black text-white text-sm rounded-md font-roboto"
-        >
-          Connect Calendar
-        </button>
-      </div>
-    );
-  }
+  }, [currentUser, selectedDate]);
 
   // Loading state
   if (loading) {
@@ -140,16 +93,6 @@ const GoogleCalendarEvents = ({ selectedDate }) => {
                 {new Date(event.end.dateTime || event.end.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
-            {event.htmlLink && (
-              <a
-                href={event.htmlLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 text-xs hover:underline font-roboto"
-              >
-                View
-              </a>
-            )}
           </div>
         </div>
       ))}
@@ -157,4 +100,4 @@ const GoogleCalendarEvents = ({ selectedDate }) => {
   );
 };
 
-export default GoogleCalendarEvents;
+export default AllieCalendarEvents;

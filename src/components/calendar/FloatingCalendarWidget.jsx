@@ -3,9 +3,7 @@ import { Calendar, X, MinusSquare, ChevronLeft, ChevronRight, ArrowUpRight } fro
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import CalendarService from '../../services/CalendarService';
-import CalendarIntegrationButton from './CalendarIntegrationButton';
-import GoogleCalendarEvents from './GoogleCalendarEvents';
-
+import AllieCalendarEvents from './AllieCalendarEvents';
 
 const FloatingCalendarWidget = () => {
   const { currentUser } = useAuth();
@@ -18,32 +16,6 @@ const FloatingCalendarWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [calendarSettings, setCalendarSettings] = useState(null);
-  const [calendarSetup, setCalendarSetup] = useState(false);
-  
-  // Load calendar settings on mount
-  useEffect(() => {
-    const loadSettings = async () => {
-      if (currentUser) {
-        try {
-          const settings = await CalendarService.loadUserCalendarSettings(currentUser.uid);
-          setCalendarSettings(settings || {}); // Ensure we never set null
-          setCalendarSetup(!!settings?.defaultCalendarType);
-        } catch (error) {
-          console.error("Error loading calendar settings:", error);
-          // Set default empty settings to prevent errors
-          setCalendarSettings({});
-          setCalendarSetup(false);
-        }
-      }
-    };
-    
-    loadSettings();
-  }, [currentUser]);
-  
-  const toggleWidget = () => {
-    setIsOpen(!isOpen);
-  };
   
   // Helper function to get days in month
   const getDaysInMonth = (year, month) => {
@@ -147,11 +119,76 @@ const FloatingCalendarWidget = () => {
     return meetings;
   };
   
+  // Add task to calendar
+  const handleAddTaskToCalendar = async (task) => {
+    try {
+      if (!currentUser || !task) return;
+      
+      // Create event from task
+      const event = CalendarService.createEventFromTask(task);
+      
+      // Use selected date
+      if (selectedDate) {
+        const customDate = new Date(selectedDate);
+        customDate.setHours(10, 0, 0, 0); // Set to 10 AM
+        
+        event.start.dateTime = customDate.toISOString();
+        const endTime = new Date(customDate);
+        endTime.setHours(endTime.getHours() + 1);
+        event.end.dateTime = endTime.toISOString();
+      }
+      
+      // Add event to calendar
+      await CalendarService.addEvent(event, currentUser.uid);
+      
+      // Show a simple notification
+      const notification = document.createElement('div');
+      notification.innerText = "Task added to calendar";
+      notification.style.cssText = `
+        position: fixed; bottom: 20px; right: 20px; background: #4caf50;
+        color: white; padding: 12px 20px; border-radius: 4px; z-index: 9999;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-family: Roboto, sans-serif;
+      `;
+      document.body.appendChild(notification);
+      setTimeout(() => notification.remove(), 3000);
+      
+    } catch (error) {
+      console.error("Error adding task to calendar:", error);
+    }
+  };
+  
+  // Add meeting to calendar
+  const handleAddMeetingToCalendar = async (meeting) => {
+    try {
+      if (!currentUser || !meeting) return;
+      
+      // Create event from meeting
+      const event = CalendarService.createFamilyMeetingEvent(meeting.weekNumber, meeting.date);
+      
+      // Add event to calendar
+      await CalendarService.addEvent(event, currentUser.uid);
+      
+      // Show a simple notification
+      const notification = document.createElement('div');
+      notification.innerText = "Meeting added to calendar";
+      notification.style.cssText = `
+        position: fixed; bottom: 20px; right: 20px; background: #4caf50;
+        color: white; padding: 12px 20px; border-radius: 4px; z-index: 9999;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-family: Roboto, sans-serif;
+      `;
+      document.body.appendChild(notification);
+      setTimeout(() => notification.remove(), 3000);
+      
+    } catch (error) {
+      console.error("Error adding meeting to calendar:", error);
+    }
+  };
+  
   if (!isOpen) {
     return (
       <div className="fixed bottom-4 left-4 z-40">
         <button
-          onClick={toggleWidget}
+          onClick={() => setIsOpen(true)}
           className="bg-black text-white p-3 rounded-full hover:bg-gray-800 shadow-lg"
         >
           <Calendar size={24} />
@@ -179,7 +216,7 @@ const FloatingCalendarWidget = () => {
               <MinusSquare size={18} />
             </button>
             <button 
-              onClick={toggleWidget} 
+              onClick={() => setIsOpen(false)} 
               className="p-1 hover:bg-gray-100 rounded ml-1"
             >
               <X size={18} />
@@ -220,35 +257,16 @@ const FloatingCalendarWidget = () => {
             </div>
           </div>
           
-{/* Add this section to display upcoming events from Google Calendar */}
-<div className="mt-4">
-  <h4 className="text-sm font-medium mb-2">Upcoming Google Calendar Events</h4>
-  <GoogleCalendarEvents selectedDate={selectedDate} />
-</div>
-
+          {/* Upcoming Allie Calendar Events */}
+          <div className="mt-4">
+            <h4 className="text-sm font-medium mb-2">Upcoming Calendar Events</h4>
+            <AllieCalendarEvents selectedDate={selectedDate} />
+          </div>
 
           {/* Selected Date */}
           <div className="mb-4">
             <h4 className="text-sm font-medium text-gray-700 font-roboto">{formatDate(selectedDate)}</h4>
           </div>
-          
-          {/* Calendar Integration Status */}
-          {!calendarSetup ? (
-            <div className="bg-blue-50 p-3 rounded-lg mb-4">
-              <p className="text-sm text-blue-700 font-roboto">
-                Connect your calendar to add tasks and meetings. 
-                <a href="/settings?tab=calendar" className="underline ml-1">Set up now</a>
-              </p>
-            </div>
-          ) : (
-            <div className="bg-green-50 p-3 rounded-lg mb-4">
-              <p className="text-sm text-green-700 flex items-center font-roboto">
-                <Calendar size={14} className="mr-1" />
-                Calendar connected: {calendarSettings?.defaultCalendarType === 'google' ? 'Google Calendar' : 
-                                   calendarSettings?.defaultCalendarType === 'apple' ? 'Apple Calendar' : 'ICS Download'}
-              </p>
-            </div>
-          )}
           
           {/* Upcoming Meetings */}
           <div className="mb-4">
@@ -271,11 +289,12 @@ const FloatingCalendarWidget = () => {
                       </p>
                     </div>
                     
-                    <CalendarIntegrationButton 
-                      item={meeting} 
-                      itemType="meeting" 
-                      customDate={meeting.date}
-                    />
+                    <button 
+                      onClick={() => handleAddMeetingToCalendar(meeting)}
+                      className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
+                    >
+                      Add
+                    </button>
                   </div>
                 ))}
               </div>
@@ -303,11 +322,12 @@ const FloatingCalendarWidget = () => {
                         <p className="text-xs text-gray-500 font-roboto">For: {task.assignedToName}</p>
                       </div>
                       
-                      <CalendarIntegrationButton 
-                        item={task} 
-                        itemType="task" 
-                        customDate={selectedDate}
-                      />
+                      <button 
+                        onClick={() => handleAddTaskToCalendar(task)}
+                        className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
+                      >
+                        Add
+                      </button>
                     </div>
                   ))
               ) : (
@@ -319,7 +339,7 @@ const FloatingCalendarWidget = () => {
       </div>
       
       <button
-        onClick={toggleWidget}
+        onClick={() => setIsOpen(true)}
         className="bg-black text-white p-3 rounded-full hover:bg-gray-800 shadow-lg"
       >
         <Calendar size={24} />
