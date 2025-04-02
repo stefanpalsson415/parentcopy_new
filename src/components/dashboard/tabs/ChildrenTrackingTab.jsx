@@ -4261,3 +4261,1305 @@ const ChildrenTrackingTab = () => {
                   </span>
                 ) : (
                   modalData.id ? 'Update Appointment' : 'Save Appointment'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Growth Measurement Modal */}
+      {activeModal === 'growth' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium font-roboto">
+                {modalData.id ? 'Edit Measurement' : 'Add New Measurement'}
+              </h3>
+              <button 
+                className="text-gray-400 hover:text-gray-500"
+                onClick={closeModal}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={modalData.date || ''}
+                  onChange={(e) => setModalData({...modalData, date: e.target.value})}
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Height
+                  </label>
+                  <div className="flex">
+                    <input
+                      type="text"
+                      className="w-full border rounded-l-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="e.g. 42in or 107cm"
+                      value={modalData.height || ''}
+                      onChange={(e) => setModalData({...modalData, height: e.target.value})}
+                    />
+                    <div className="bg-gray-100 p-2 rounded-r-md flex items-center">
+                      <Activity size={16} className="text-gray-500" />
+                    </div>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Weight
+                  </label>
+                  <div className="flex">
+                    <input
+                      type="text"
+                      className="w-full border rounded-l-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="e.g. 40lb or 18kg"
+                      value={modalData.weight || ''}
+                      onChange={(e) => setModalData({...modalData, weight: e.target.value})}
+                    />
+                    <div className="bg-gray-100 p-2 rounded-r-md flex items-center">
+                      <Activity size={16} className="text-gray-500" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Shoe Size
+                  </label>
+                  <div className="flex items-center">
+                    <button 
+                      className="bg-gray-100 p-2 rounded-l-md"
+                      onClick={() => {
+                        const currentSize = parseFloat(modalData.shoeSize) || 0;
+                        if (currentSize > 0) {
+                          setModalData({...modalData, shoeSize: (currentSize - 0.5).toString()});
+                        }
+                      }}
+                    >
+                      <ChevronDown size={16} className="text-gray-500" />
+                    </button>
+                    <input
+                      type="text"
+                      className="flex-1 border-t border-b p-2 text-center focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Shoe size"
+                      value={modalData.shoeSize || ''}
+                      onChange={(e) => setModalData({...modalData, shoeSize: e.target.value})}
+                    />
+                    <button 
+                      className="bg-gray-100 p-2 rounded-r-md"
+                      onClick={() => {
+                        const currentSize = parseFloat(modalData.shoeSize) || 0;
+                        setModalData({...modalData, shoeSize: (currentSize + 0.5).toString()});
+                      }}
+                    >
+                      <ChevronUp size={16} className="text-gray-500" />
+                    </button>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Clothing Size
+                  </label>
+                  <select
+                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={modalData.clothingSize || ''}
+                    onChange={(e) => setModalData({...modalData, clothingSize: e.target.value})}
+                  >
+                    <option value="">Select size</option>
+                    <option value="Newborn">Newborn</option>
+                    <option value="0-3M">0-3 Months</option>
+                    <option value="3-6M">3-6 Months</option>
+                    <option value="6-9M">6-9 Months</option>
+                    <option value="9-12M">9-12 Months</option>
+                    <option value="12-18M">12-18 Months</option>
+                    <option value="18-24M">18-24 Months</option>
+                    <option value="2T">2T</option>
+                    <option value="3T">3T</option>
+                    <option value="4T">4T</option>
+                    <option value="5T">5T</option>
+                    <option value="XS">XS (4-5)</option>
+                    <option value="S">S (6-7)</option>
+                    <option value="M">M (8-10)</option>
+                    <option value="L">L (10-12)</option>
+                    <option value="XL">XL (14-16)</option>
+                    <option value="XXL">XXL (18-20)</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Notes (optional)
+                </label>
+                <textarea
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Any additional information"
+                  rows="2"
+                  value={modalData.notes || ''}
+                  onChange={(e) => setModalData({...modalData, notes: e.target.value})}
+                ></textarea>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
+                onClick={() => handleFormSubmit('growth')}
+                disabled={loadingSection === 'growth'}
+              >
+                {loadingSection === 'growth' ? (
+                  <span className="flex items-center">
+                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Saving...
+                  </span>
+                ) : (
+                  modalData.id ? 'Update Measurement' : 'Save Measurement'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Routine Modal */}
+      {activeModal === 'routine' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium font-roboto">
+                {modalData.id ? 'Edit Routine' : 'Add New Routine'}
+              </h3>
+              <button 
+                className="text-gray-400 hover:text-gray-500"
+                onClick={closeModal}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Routine Name
+                </label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g. Morning Routine, Bedtime, etc."
+                  value={modalData.title || ''}
+                  onChange={(e) => setModalData({...modalData, title: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Days of Week
+                </label>
+                <div className="grid grid-cols-7 gap-1">
+                  {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
+                    <button
+                      key={day}
+                      className={`text-xs p-2 rounded-md ${
+                        modalData.days?.includes(day) 
+                          ? 'bg-blue-500 text-white' 
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                      onClick={() => {
+                        const currentDays = modalData.days || [];
+                        if (currentDays.includes(day)) {
+                          setModalData({
+                            ...modalData, 
+                            days: currentDays.filter(d => d !== day)
+                          });
+                        } else {
+                          setModalData({
+                            ...modalData,
+                            days: [...currentDays, day]
+                          });
+                        }
+                      }}
+                    >
+                      {day.substring(0, 3)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Start Time
+                  </label>
+                  <div className="flex">
+                    <select
+                      className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={modalData.startTime || ''}
+                      onChange={(e) => setModalData({...modalData, startTime: e.target.value})}
+                    >
+                      <option value="">Select time</option>
+                      {Array.from({ length: 24 }, (_, hour) => (
+                        <>
+                          <option key={`${hour}:00`} value={`${hour.toString().padStart(2, '0')}:00`}>
+                            {hour === 0 ? '12:00 AM' : 
+                             hour < 12 ? `${hour}:00 AM` : 
+                             hour === 12 ? '12:00 PM' : 
+                             `${hour - 12}:00 PM`}
+                          </option>
+                          <option key={`${hour}:30`} value={`${hour.toString().padStart(2, '0')}:30`}>
+                            {hour === 0 ? '12:30 AM' : 
+                             hour < 12 ? `${hour}:30 AM` : 
+                             hour === 12 ? '12:30 PM' : 
+                             `${hour - 12}:30 PM`}
+                          </option>
+                        </>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    End Time (optional)
+                  </label>
+                  <div className="flex">
+                    <select
+                      className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={modalData.endTime || ''}
+                      onChange={(e) => setModalData({...modalData, endTime: e.target.value})}
+                    >
+                      <option value="">Duration</option>
+                      <option value="30 minutes">30 minutes</option>
+                      <option value="60 minutes">1 hour</option>
+                      <option value="90 minutes">1.5 hours</option>
+                      <option value="120 minutes">2 hours</option>
+                      <option value="custom">Custom time...</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              
+              {modalData.endTime === 'custom' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Custom End Time
+                  </label>
+                  <select
+                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={modalData.customEndTime || ''}
+                    onChange={(e) => setModalData({...modalData, customEndTime: e.target.value})}
+                  >
+                    <option value="">Select end time</option>
+                    {Array.from({ length: 24 }, (_, hour) => (
+                      <>
+                        <option key={`${hour}:00`} value={`${hour.toString().padStart(2, '0')}:00`}>
+                          {hour === 0 ? '12:00 AM' : 
+                           hour < 12 ? `${hour}:00 AM` : 
+                           hour === 12 ? '12:00 PM' : 
+                           `${hour - 12}:00 PM`}
+                        </option>
+                        <option key={`${hour}:30`} value={`${hour.toString().padStart(2, '0')}:30`}>
+                          {hour === 0 ? '12:30 AM' : 
+                           hour < 12 ? `${hour}:30 AM` : 
+                           hour === 12 ? '12:30 PM' : 
+                           `${hour - 12}:30 PM`}
+                        </option>
+                      </>
+                    ))}
+                  </select>
+                </div>
+              )}
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Notes (optional)
+                </label>
+                <textarea
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Any additional information"
+                  rows="2"
+                  value={modalData.notes || ''}
+                  onChange={(e) => setModalData({...modalData, notes: e.target.value})}
+                ></textarea>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
+                onClick={() => handleFormSubmit('routine')}
+                disabled={loadingSection === 'routine'}
+              >
+                {loadingSection === 'routine' ? (
+                  <span className="flex items-center">
+                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Saving...
+                  </span>
+                ) : (
+                  modalData.id ? 'Update Routine' : 'Save Routine'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Activity Modal */}
+      {activeModal === 'activity' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium font-roboto">
+                {modalData.id ? 'Edit Activity' : 'Add New Activity'}
+              </h3>
+              <button 
+                className="text-gray-400 hover:text-gray-500"
+                onClick={closeModal}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Activity Name
+                </label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g. Soccer Practice, Piano Lessons, etc."
+                  value={modalData.title || ''}
+                  onChange={(e) => setModalData({...modalData, title: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Type
+                </label>
+                <select
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={modalData.type || ''}
+                  onChange={(e) => setModalData({...modalData, type: e.target.value})}
+                >
+                  <option value="">Select type</option>
+                  <option value="sports">Sports</option>
+                  <option value="music">Music</option>
+                  <option value="art">Art & Crafts</option>
+                  <option value="academic">Academic</option>
+                  <option value="social">Social</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Location (optional)
+                </label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g. Community Center, School, etc."
+                  value={modalData.location || ''}
+                  onChange={(e) => setModalData({...modalData, location: e.target.value})}
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={modalData.startDate || ''}
+                    onChange={(e) => setModalData({...modalData, startDate: e.target.value})}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    End Date (optional)
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={modalData.endDate || ''}
+                    onChange={(e) => setModalData({...modalData, endDate: e.target.value})}
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Repeats On (optional)
+                </label>
+                <div className="grid grid-cols-7 gap-1">
+                  {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
+                    <button
+                      key={day}
+                      className={`text-xs p-2 rounded-md ${
+                        modalData.repeatDay?.includes(day) 
+                          ? 'bg-blue-500 text-white' 
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                      onClick={() => {
+                        const currentDays = modalData.repeatDay || [];
+                        if (currentDays.includes(day)) {
+                          setModalData({
+                            ...modalData, 
+                            repeatDay: currentDays.filter(d => d !== day)
+                          });
+                        } else {
+                          setModalData({
+                            ...modalData,
+                            repeatDay: [...currentDays, day]
+                          });
+                        }
+                      }}
+                    >
+                      {day.substring(0, 3)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Time (optional)
+                </label>
+                <div className="flex">
+                  <select
+                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={modalData.time || ''}
+                    onChange={(e) => setModalData({...modalData, time: e.target.value})}
+                  >
+                    <option value="">Select time</option>
+                    {Array.from({ length: 24 }, (_, hour) => (
+                      <>
+                        <option key={`${hour}:00`} value={`${hour.toString().padStart(2, '0')}:00`}>
+                          {hour === 0 ? '12:00 AM' : 
+                           hour < 12 ? `${hour}:00 AM` : 
+                           hour === 12 ? '12:00 PM' : 
+                           `${hour - 12}:00 PM`}
+                        </option>
+                        <option key={`${hour}:30`} value={`${hour.toString().padStart(2, '0')}:30`}>
+                          {hour === 0 ? '12:30 AM' : 
+                           hour < 12 ? `${hour}:30 AM` : 
+                           hour === 12 ? '12:30 PM' : 
+                           `${hour - 12}:30 PM`}
+                        </option>
+                      </>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Notes (optional)
+                </label>
+                <textarea
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Any additional information"
+                  rows="2"
+                  value={modalData.notes || ''}
+                  onChange={(e) => setModalData({...modalData, notes: e.target.value})}
+                ></textarea>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
+                onClick={() => handleFormSubmit('activity')}
+                disabled={loadingSection === 'activity'}
+              >
+                {loadingSection === 'activity' ? (
+                  <span className="flex items-center">
+                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Saving...
+                  </span>
+                ) : (
+                  modalData.id ? 'Update Activity' : 'Save Activity'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Homework Modal */}
+      {activeModal === 'homework' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium font-roboto">
+                {modalData.id ? 'Edit Assignment' : 'Add New Assignment'}
+              </h3>
+              <button 
+                className="text-gray-400 hover:text-gray-500"
+                onClick={closeModal}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Assignment Name
+                </label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g. Math Homework, Book Report, etc."
+                  value={modalData.title || ''}
+                  onChange={(e) => setModalData({...modalData, title: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Subject
+                </label>
+                <select
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={modalData.subject || ''}
+                  onChange={(e) => setModalData({...modalData, subject: e.target.value})}
+                >
+                  <option value="">Select subject</option>
+                  <option value="Math">Math</option>
+                  <option value="Science">Science</option>
+                  <option value="English">English</option>
+                  <option value="History">History</option>
+                  <option value="Geography">Geography</option>
+                  <option value="Art">Art</option>
+                  <option value="Music">Music</option>
+                  <option value="Physical Education">Physical Education</option>
+                  <option value="Foreign Language">Foreign Language</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Due Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={modalData.dueDate || ''}
+                  onChange={(e) => setModalData({...modalData, dueDate: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Priority
+                </label>
+                <div className="flex space-x-2">
+                  <button
+                    className={`flex-1 py-2 rounded-md text-sm font-roboto ${
+                      modalData.priority === 'low' 
+                        ? 'bg-blue-100 text-blue-800 border-2 border-blue-500' 
+                        : 'bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100'
+                    }`}
+                    onClick={() => setModalData({...modalData, priority: 'low'})}
+                  >
+                    Low
+                  </button>
+                  <button
+                    className={`flex-1 py-2 rounded-md text-sm font-roboto ${
+                      modalData.priority === 'medium' 
+                        ? 'bg-yellow-100 text-yellow-800 border-2 border-yellow-500' 
+                        : 'bg-yellow-50 text-yellow-600 border border-yellow-200 hover:bg-yellow-100'
+                    }`}
+                    onClick={() => setModalData({...modalData, priority: 'medium'})}
+                  >
+                    Medium
+                  </button>
+                  <button
+                    className={`flex-1 py-2 rounded-md text-sm font-roboto ${
+                      modalData.priority === 'high' 
+                        ? 'bg-red-100 text-red-800 border-2 border-red-500' 
+                        : 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'
+                    }`}
+                    onClick={() => setModalData({...modalData, priority: 'high'})}
+                  >
+                    High
+                  </button>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Description (optional)
+                </label>
+                <textarea
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Any additional details about the assignment"
+                  rows="3"
+                  value={modalData.description || ''}
+                  onChange={(e) => setModalData({...modalData, description: e.target.value})}
+                ></textarea>
+              </div>
+              
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
+                  checked={modalData.completed || false}
+                  onChange={(e) => setModalData({...modalData, completed: e.target.checked})}
+                  id="completed-hw-checkbox"
+                />
+                <label htmlFor="completed-hw-checkbox" className="ml-2 block text-sm text-gray-900 font-roboto">
+                  Mark as completed
+                </label>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
+                onClick={() => handleFormSubmit('homework')}
+                disabled={loadingSection === 'homework'}
+              >
+                {loadingSection === 'homework' ? (
+                  <span className="flex items-center">
+                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Saving...
+                  </span>
+                ) : (
+                  modalData.id ? 'Update Assignment' : 'Save Assignment'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Emotional Check-in Modal */}
+      {activeModal === 'emotional' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium font-roboto">
+                {modalData.id ? 'Edit Emotional Check-in' : 'Add New Emotional Check-in'}
+              </h3>
+              <button 
+                className="text-gray-400 hover:text-gray-500"
+                onClick={closeModal}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={modalData.date || ''}
+                  onChange={(e) => setModalData({...modalData, date: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Mood
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {['happy', 'excited', 'calm', 'tired', 'sad', 'angry', 'worried', 'confused'].map(mood => (
+                    <button
+                      key={mood}
+                      className={`p-2 rounded-md flex flex-col items-center ${
+                        modalData.mood === mood 
+                          ? 'bg-blue-100 border-2 border-blue-500' 
+                          : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+                      }`}
+                      onClick={() => setModalData({...modalData, mood})}
+                    >
+                      <span className="text-2xl mb-1">
+                        {mood === 'happy' && '😀'}
+                        {mood === 'excited' && '🤩'}
+                        {mood === 'calm' && '😌'}
+                        {mood === 'tired' && '😴'}
+                        {mood === 'sad' && '😔'}
+                        {mood === 'angry' && '😠'}
+                        {mood === 'worried' && '😟'}
+                        {mood === 'confused' && '😕'}
+                      </span>
+                      <span className="text-xs capitalize font-roboto">{mood}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Notes (optional)
+                </label>
+                <textarea
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Any additional details about their mood or feelings"
+                  rows="3"
+                  value={modalData.notes || ''}
+                  onChange={(e) => setModalData({...modalData, notes: e.target.value})}
+                ></textarea>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
+                onClick={() => handleFormSubmit('emotional')}
+                disabled={loadingSection === 'emotional'}
+              >
+                {loadingSection === 'emotional' ? (
+                  <span className="flex items-center">
+                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Saving...
+                  </span>
+                ) : (
+                  modalData.id ? 'Update Check-in' : 'Save Check-in'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Dietary/Meal Modal */}
+      {activeModal === 'meal' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium font-roboto">
+                {modalData.id ? 'Edit Dietary Information' : 'Add Dietary Information'}
+              </h3>
+              <button 
+                className="text-gray-400 hover:text-gray-500"
+                onClick={closeModal}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Type
+                </label>
+                <div className="flex space-x-2">
+                  <button
+                    className={`flex-1 py-2 rounded-md text-sm font-roboto ${
+                      modalData.type === 'allergy' 
+                        ? 'bg-red-100 text-red-800 border-2 border-red-500' 
+                        : 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'
+                    }`}
+                    onClick={() => setModalData({...modalData, type: 'allergy'})}
+                  >
+                    Allergy
+                  </button>
+                  <button
+                    className={`flex-1 py-2 rounded-md text-sm font-roboto ${
+                      modalData.type === 'preference' 
+                        ? 'bg-blue-100 text-blue-800 border-2 border-blue-500' 
+                        : 'bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100'
+                    }`}
+                    onClick={() => setModalData({...modalData, type: 'preference'})}
+                  >
+                    Preference
+                  </button>
+                  <button
+                    className={`flex-1 py-2 rounded-md text-sm font-roboto ${
+                      modalData.type === 'restriction' 
+                        ? 'bg-yellow-100 text-yellow-800 border-2 border-yellow-500' 
+                        : 'bg-yellow-50 text-yellow-600 border border-yellow-200 hover:bg-yellow-100'
+                    }`}
+                    onClick={() => setModalData({...modalData, type: 'restriction'})}
+                  >
+                    Restriction
+                  </button>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  {modalData.type === 'allergy' ? 'Allergy Name' : 
+                   modalData.type === 'preference' ? 'Food Preference' : 
+                   modalData.type === 'restriction' ? 'Dietary Restriction' : 'Name'}
+                </label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder={
+                    modalData.type === 'allergy' ? 'e.g. Peanuts, Dairy, etc.' : 
+                    modalData.type === 'preference' ? 'e.g. Loves broccoli, Dislikes fish, etc.' : 
+                    modalData.type === 'restriction' ? 'e.g. Vegetarian, Gluten-free, etc.' : 
+                    'Enter name'
+                  }
+                  value={modalData.name || ''}
+                  onChange={(e) => setModalData({...modalData, name: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Details
+                </label>
+                <textarea
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder={
+                    modalData.type === 'allergy' ? 'Description of the allergy, reaction severity, etc.' :
+                    modalData.type === 'preference' ? 'Notes about this food preference' :
+                    modalData.type === 'restriction' ? 'Details about the dietary restriction' :
+                    'Additional details'
+                  }
+                  rows="3"
+                  value={modalData.details || ''}
+                  onChange={(e) => setModalData({...modalData, details: e.target.value})}
+                ></textarea>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
+                onClick={() => handleFormSubmit('meal')}
+                disabled={loadingSection === 'meal'}
+              >
+                {loadingSection === 'meal' ? (
+                  <span className="flex items-center">
+                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Saving...
+                  </span>
+                ) : (
+                  modalData.id ? 'Update Information' : 'Save Information'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Event Modal */}
+      {activeModal === 'event' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium font-roboto">
+                {modalData.id ? 'Edit Event' : 'Add New Event'}
+              </h3>
+              <button 
+                className="text-gray-400 hover:text-gray-500"
+                onClick={closeModal}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Event Name
+                </label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g. Birthday Party, School Play, etc."
+                  value={modalData.title || ''}
+                  onChange={(e) => setModalData({...modalData, title: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Type
+                </label>
+                <select
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={modalData.type || ''}
+                  onChange={(e) => setModalData({...modalData, type: e.target.value})}
+                >
+                  <option value="">Select type</option>
+                  <option value="birthday">Birthday</option>
+                  <option value="school">School Event</option>
+                  <option value="holiday">Holiday</option>
+                  <option value="celebration">Celebration</option>
+                  <option value="family">Family Gathering</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={modalData.date || ''}
+                    onChange={(e) => setModalData({...modalData, date: e.target.value})}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Time (optional)
+                  </label>
+                  <input
+                    type="time"
+                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={modalData.time || ''}
+                    onChange={(e) => setModalData({...modalData, time: e.target.value})}
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Location (optional)
+                </label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g. Home, School, Community Center, etc."
+                  value={modalData.location || ''}
+                  onChange={(e) => setModalData({...modalData, location: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Description (optional)
+                </label>
+                <textarea
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Any additional details about the event"
+                  rows="3"
+                  value={modalData.description || ''}
+                  onChange={(e) => setModalData({...modalData, description: e.target.value})}
+                ></textarea>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
+                onClick={() => handleFormSubmit('event')}
+                disabled={loadingSection === 'event'}
+              >
+                {loadingSection === 'event' ? (
+                  <span className="flex items-center">
+                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Saving...
+                  </span>
+                ) : (
+                  modalData.id ? 'Update Event' : 'Save Event'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Milestone Modal */}
+      {activeModal === 'milestone' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium font-roboto">
+                {modalData.id ? 'Edit Milestone' : 'Add New Milestone'}
+              </h3>
+              <button 
+                className="text-gray-400 hover:text-gray-500"
+                onClick={closeModal}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Milestone Title
+                </label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g. First Steps, Lost a Tooth, etc."
+                  value={modalData.title || ''}
+                  onChange={(e) => setModalData({...modalData, title: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Type
+                </label>
+                <select
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={modalData.type || ''}
+                  onChange={(e) => setModalData({...modalData, type: e.target.value})}
+                >
+                  <option value="">Select type</option>
+                  <option value="achievement">Achievement</option>
+                  <option value="physical">Physical Development</option>
+                  <option value="social">Social Development</option>
+                  <option value="cognitive">Cognitive Development</option>
+                  <option value="emotional">Emotional Development</option>
+                  <option value="academic">Academic Achievement</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={modalData.date || ''}
+                  onChange={(e) => setModalData({...modalData, date: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Description
+                </label>
+                <textarea
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Details about this milestone"
+                  rows="3"
+                  value={modalData.description || ''}
+                  onChange={(e) => setModalData({...modalData, description: e.target.value})}
+                ></textarea>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
+                onClick={() => handleFormSubmit('milestone')}
+                disabled={loadingSection === 'milestone'}
+              >
+                {loadingSection === 'milestone' ? (
+                  <span className="flex items-center">
+                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Saving...
+                  </span>
+                ) : (
+                  modalData.id ? 'Update Milestone' : 'Save Milestone'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Contact Modal (for friends, social tracking) */}
+      {activeModal === 'contact' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium font-roboto">
+                {modalData.id ? 'Edit Contact' : 'Add New Contact'}
+              </h3>
+              <button 
+                className="text-gray-400 hover:text-gray-500"
+                onClick={closeModal}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Name
+                </label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Child's friend's name"
+                  value={modalData.name || ''}
+                  onChange={(e) => setModalData({...modalData, name: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Relationship
+                </label>
+                <select
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={modalData.relationship || ''}
+                  onChange={(e) => setModalData({...modalData, relationship: e.target.value})}
+                >
+                  <option value="">Select relationship</option>
+                  <option value="friend">Friend</option>
+                  <option value="classmate">Classmate</option>
+                  <option value="teammate">Teammate</option>
+                  <option value="neighbor">Neighbor</option>
+                  <option value="relative">Relative</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Parent/Guardian Name
+                </label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Parent or guardian's name"
+                  value={modalData.parentName || ''}
+                  onChange={(e) => setModalData({...modalData, parentName: e.target.value})}
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Parent Phone (optional)
+                  </label>
+                  <input
+                    type="tel"
+                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Phone number"
+                    value={modalData.parentPhone || ''}
+                    onChange={(e) => setModalData({...modalData, parentPhone: e.target.value})}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Parent Email (optional)
+                  </label>
+                  <input
+                    type="email"
+                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Email address"
+                    value={modalData.parentEmail || ''}
+                    onChange={(e) => setModalData({...modalData, parentEmail: e.target.value})}
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Notes (optional)
+                </label>
+                <textarea
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Any additional information"
+                  rows="2"
+                  value={modalData.notes || ''}
+                  onChange={(e) => setModalData({...modalData, notes: e.target.value})}
+                ></textarea>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
+                onClick={() => handleFormSubmit('contact')}
+                disabled={loadingSection === 'contact'}
+              >
+                {loadingSection === 'contact' ? (
+                  <span className="flex items-center">
+                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Saving...
+                  </span>
+                ) : (
+                  modalData.id ? 'Update Contact' : 'Save Contact'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ChildrenTrackingTab;
