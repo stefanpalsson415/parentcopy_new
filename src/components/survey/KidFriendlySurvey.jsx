@@ -1,5 +1,3 @@
-// Create a new file: src/components/survey/EnhancedKidFriendlySurvey.jsx
-
 import React, { useState, useEffect, useRef } from 'react';
 import { HelpCircle, Volume2, ArrowRight, ArrowLeft, Star, Medal, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -40,12 +38,6 @@ const TaskIllustrations = {
       <circle cx="65" cy="95" r="2" fill="#4b5563" /> {/* Eye */}
       <circle cx="75" cy="95" r="2" fill="#4b5563" /> {/* Eye */}
       <path d="M65 105 Q70 110, 75 105" stroke="#4b5563" strokeWidth="1.5" fill="none" /> {/* Smile */}
-      
-      {/* Dust particles */}
-      <circle cx="110" cy="70" r="3" fill="#d1d5db" opacity="0.6" />
-      <circle cx="120" cy="85" r="2" fill="#d1d5db" opacity="0.6" />
-      <circle cx="105" cy="95" r="2.5" fill="#d1d5db" opacity="0.6" />
-      <circle cx="115" cy="65" r="2" fill="#d1d5db" opacity="0.6" />
     </svg>
   ),
   
@@ -68,8 +60,6 @@ const TaskIllustrations = {
       {/* Pot on stove */}
       <rect x="75" y="55" width="30" height="25" fill="#6b7280" rx="2" />
       <rect x="73" y="50" width="34" height="5" fill="#4b5563" rx="2" />
-      <path d="M80 55 Q90 45, 100 55" stroke="#4b5563" strokeWidth="2" fill="none" /> {/* Steam */}
-      <path d="M85 52 Q95 42, 105 52" stroke="#4b5563" strokeWidth="2" fill="none" opacity="0.6" /> {/* Steam */}
       
       {/* Person cooking */}
       <circle cx="170" cy="70" r="15" fill="#fde68a" /> {/* Head */}
@@ -127,54 +117,10 @@ const TaskIllustrations = {
       <circle cx="35" cy="65" r="2" fill="#4b5563" /> {/* Eye */}
       <circle cx="45" cy="65" r="2" fill="#4b5563" /> {/* Eye */}
       <path d="M35 75 Q40 80, 45 75" stroke="#4b5563" strokeWidth="1.5" fill="none" /> {/* Smile */}
-      
-      {/* Pencil */}
-      <rect x="195" y="40" width="5" height="30" fill="#fbbf24" transform="rotate(30, 195, 40)" />
-      <polygon points="195,38 200,43 195,48" fill="#4b5563" transform="rotate(30, 195, 40)" />
     </svg>
   ),
   
-  // Scheduling illustration
-  "scheduling": () => (
-    <svg width="240" height="180" viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg">
-      <rect width="240" height="180" fill="#f9fafb" />
-      
-      {/* Clock */}
-      <circle cx="150" cy="90" r="40" fill="white" stroke="#4b5563" strokeWidth="2" />
-      <circle cx="150" cy="90" r="3" fill="#4b5563" />
-      <line x1="150" y1="90" x2="150" y2="60" stroke="#4b5563" strokeWidth="2" strokeLinecap="round" /> {/* Hour hand */}
-      <line x1="150" y1="90" x2="170" y2="90" stroke="#4b5563" strokeWidth="1.5" strokeLinecap="round" /> {/* Minute hand */}
-      
-      {/* Clock ticks */}
-      <line x1="150" y1="50" x2="150" y2="55" stroke="#4b5563" strokeWidth="2" /> {/* 12 */}
-      <line x1="190" y1="90" x2="185" y2="90" stroke="#4b5563" strokeWidth="2" /> {/* 3 */}
-      <line x1="150" y1="130" x2="150" y2="125" stroke="#4b5563" strokeWidth="2" /> {/* 6 */}
-      <line x1="110" y1="90" x2="115" y2="90" stroke="#4b5563" strokeWidth="2" /> {/* 9 */}
-      
-      {/* Phone/device */}
-      <rect x="60" y="70" width="40" height="60" rx="5" fill="#d1d5db" />
-      <rect x="65" y="75" width="30" height="40" rx="2" fill="#bfdbfe" />
-      <circle cx="80" cy="125" r="3" fill="#9ca3af" />
-      
-      {/* Calendar lines on phone */}
-      <line x1="70" y1="85" x2="90" y2="85" stroke="#4b5563" strokeWidth="1" />
-      <line x1="70" y1="95" x2="90" y2="95" stroke="#4b5563" strokeWidth="1" />
-      <line x1="70" y1="105" x2="90" y2="105" stroke="#4b5563" strokeWidth="1" />
-      
-      {/* Person scheduling */}
-      <circle cx="40" cy="90" r="15" fill="#fde68a" /> {/* Head */}
-      <rect x="35" y="105" width="10" height="30" fill="#fde68a" rx="5" /> {/* Body */}
-      <line x1="35" y1="115" x2="20" y2="105" stroke="#fde68a" strokeWidth="5" strokeLinecap="round" /> {/* Arm */}
-      <line x1="45" y1="115" x2="65" y2="105" stroke="#fde68a" strokeWidth="5" strokeLinecap="round" /> {/* Arm holding phone */}
-      
-      {/* Face */}
-      <circle cx="35" cy="85" r="2" fill="#4b5563" /> {/* Eye */}
-      <circle cx="45" cy="85" r="2" fill="#4b5563" /> {/* Eye */}
-      <path d="M35 95 Q40 100, 45 95" stroke="#4b5563" strokeWidth="1.5" fill="none" /> {/* Smile */}
-    </svg>
-  ),
-  
-  // Homework illustration (already enhanced version)
+  // Homework illustration
   "homework": () => (
     <svg width="240" height="180" viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg">
       <rect width="240" height="180" fill="#f9fafb" />
@@ -206,8 +152,6 @@ const TaskIllustrations = {
       <circle cx="33" cy="55" r="3" fill="#4b5563" /> {/* Eye */}
       <circle cx="47" cy="55" r="3" fill="#4b5563" /> {/* Eye */}
       <path d="M33 65 Q40 70, 47 65" fill="none" stroke="#4b5563" strokeWidth="2" /> {/* Smile */}
-      <path d="M40 80 L40 110 M30 90 L40 100 M50 90 L40 100 M30 130 L40 110 M50 130 L40 110" 
-            stroke="#4b5563" strokeWidth="2" fill="none" /> {/* Stick figure body */}
     </svg>
   ),
   
@@ -243,9 +187,6 @@ const TaskIllustrations = {
       <circle cx="107" cy="98" r="2" fill="#4b5563" /> {/* Eye */}
       <circle cx="113" cy="98" r="2" fill="#4b5563" /> {/* Eye */}
       <path d="M107 103 Q110 105, 113 103" stroke="#4b5563" strokeWidth="1" fill="none" /> {/* Smile */}
-      
-      {/* Steering wheel */}
-      <circle cx="120" cy="110" r="5" fill="#6b7280" stroke="#4b5563" strokeWidth="1" />
     </svg>
   ),
   
@@ -276,61 +217,10 @@ const TaskIllustrations = {
       <line x1="106" y1="95" x2="95" y2="105" stroke="#fde68a" strokeWidth="4" strokeLinecap="round" /> {/* Arm */}
       <line x1="114" y1="95" x2="125" y2="105" stroke="#fde68a" strokeWidth="4" strokeLinecap="round" /> {/* Arm */}
       
-      {/* Child face - sad */}
+      {/* Child face */}
       <circle cx="106" cy="76" r="2" fill="#4b5563" /> {/* Eye */}
       <circle cx="114" cy="76" r="2" fill="#4b5563" /> {/* Eye */}
       <path d="M106 86 Q110 83, 114 86" stroke="#4b5563" strokeWidth="1.5" fill="none" /> {/* Sad mouth */}
-      
-      {/* Heart floating */}
-      <path d="M90 40 A10,10 0 0,1 110,40 A10,10 0 0,1 130,40 Q130,60 90,80 Q90,60 90,40" fill="#fecaca" />
-    </svg>
-  ),
-  
-  // Planning kids illustration
-  "planning_kids": () => (
-    <svg width="240" height="180" viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg">
-      <rect width="240" height="180" fill="#f9fafb" />
-      
-      {/* Calendar */}
-      <rect x="110" y="40" width="100" height="80" fill="white" stroke="#4b5563" strokeWidth="2" rx="2" />
-      <rect x="110" y="40" width="100" height="15" fill="#fca5a5" />
-      <text x="160" y="52" fontSize="10" textAnchor="middle" fill="#7f1d1d">ACTIVITIES</text>
-      
-      {/* Calendar grid */}
-      <line x1="110" y1="55" x2="210" y2="55" stroke="#4b5563" strokeWidth="1" />
-      <line x1="110" y1="75" x2="210" y2="75" stroke="#4b5563" strokeWidth="1" />
-      <line x1="110" y1="95" x2="210" y2="95" stroke="#4b5563" strokeWidth="1" />
-      
-      <line x1="135" y1="55" x2="135" y2="120" stroke="#4b5563" strokeWidth="1" />
-      <line x1="160" y1="55" x2="160" y2="120" stroke="#4b5563" strokeWidth="1" />
-      <line x1="185" y1="55" x2="185" y2="120" stroke="#4b5563" strokeWidth="1" />
-      
-      {/* Activity entries */}
-      <rect x="115" y="60" width="15" height="10" fill="#fecdd3" rx="2" />
-      <rect x="165" y="80" width="15" height="10" fill="#a7f3d0" rx="2" />
-      <rect x="140" y="100" width="15" height="10" fill="#c7d2fe" rx="2" />
-      
-      {/* Parent character */}
-      <circle cx="50" cy="70" r="15" fill="#fde68a" /> {/* Head */}
-      <rect x="45" y="85" width="10" height="35" fill="#fde68a" rx="5" /> {/* Body */}
-      <line x1="45" y1="95" x2="30" y2="85" stroke="#fde68a" strokeWidth="5" strokeLinecap="round" /> {/* Arm */}
-      <line x1="55" y1="95" x2="70" y2="80" stroke="#fde68a" strokeWidth="5" strokeLinecap="round" /> {/* Arm pointing */}
-      
-      {/* Face */}
-      <circle cx="45" cy="65" r="2" fill="#4b5563" /> {/* Eye */}
-      <circle cx="55" cy="65" r="2" fill="#4b5563" /> {/* Eye */}
-      <path d="M45 75 Q50 80, 55 75" stroke="#4b5563" strokeWidth="1.5" fill="none" /> {/* Smile */}
-      
-      {/* Children figures */}
-      <circle cx="70" cy="120" r="10" fill="#fde68a" /> {/* Child 1 head */}
-      <line x1="70" y1="130" x2="70" y2="150" stroke="#fde68a" strokeWidth="4" strokeLinecap="round" /> {/* Body */}
-      <line x1="70" y1="135" x2="60" y2="145" stroke="#fde68a" strokeWidth="3" strokeLinecap="round" /> {/* Arm */}
-      <line x1="70" y1="135" x2="80" y2="145" stroke="#fde68a" strokeWidth="3" strokeLinecap="round" /> {/* Arm */}
-      
-      <circle cx="100" cy="130" r="10" fill="#fde68a" /> {/* Child 2 head */}
-      <line x1="100" y1="140" x2="100" y2="160" stroke="#fde68a" strokeWidth="4" strokeLinecap="round" /> {/* Body */}
-      <line x1="100" y1="145" x2="90" y2="155" stroke="#fde68a" strokeWidth="3" strokeLinecap="round" /> {/* Arm */}
-      <line x1="100" y1="145" x2="110" y2="155" stroke="#fde68a" strokeWidth="3" strokeLinecap="round" /> {/* Arm */}
     </svg>
   ),
   
@@ -359,22 +249,93 @@ const TaskIllustrations = {
       <line x1="190" y1="140" x2="190" y2="155" stroke="#fde68a" strokeWidth="3" strokeLinecap="round" />
       <line x1="190" y1="145" x2="183" y2="152" stroke="#fde68a" strokeWidth="2" strokeLinecap="round" />
       <line x1="190" y1="145" x2="197" y2="152" stroke="#fde68a" strokeWidth="2" strokeLinecap="round" />
-      
-      {/* Simple sun */}
-      <circle cx="40" cy="40" r="15" fill="#fcd34d" />
-      <line x1="40" y1="15" x2="40" y2="20" stroke="#fcd34d" strokeWidth="2" />
-      <line x1="40" y1="60" x2="40" y2="65" stroke="#fcd34d" strokeWidth="2" />
-      <line x1="15" y1="40" x2="20" y2="40" stroke="#fcd34d" strokeWidth="2" />
-      <line x1="60" y1="40" x2="65" y2="40" stroke="#fcd34d" strokeWidth="2" />
-      <line x1="22" y1="22" x2="26" y2="26" stroke="#fcd34d" strokeWidth="2" />
-      <line x1="54" y1="54" x2="58" y2="58" stroke="#fcd34d" strokeWidth="2" />
-      <line x1="22" y1="58" x2="26" y2="54" stroke="#fcd34d" strokeWidth="2" />
-      <line x1="54" y1="26" x2="58" y2="22" stroke="#fcd34d" strokeWidth="2" />
     </svg>
   )
 };
 
-const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
+// Helper function to simplify questions for kids of different ages
+const simplifyQuestionForChild = (question, childAge) => {
+  // Original question text
+  const originalText = question.text;
+  let simplifiedText = originalText;
+  
+  // Get category for context
+  const category = question.category;
+  
+  // More simplification for younger children
+  if (childAge < 8) {
+    // Handle household tasks
+    if (category.includes("Household")) {
+      // Replace complex terms
+      simplifiedText = originalText
+        .replace(/responsible for/gi, "does")
+        .replace(/primarily handles/gi, "mostly does")
+        .replace(/manages/gi, "takes care of")
+        .replace(/coordinates/gi, "plans")
+        .replace(/schedule/gi, "plan")
+        .replace(/maintain/gi, "keep")
+        .replace(/monitor/gi, "check")
+        .replace(/track/gi, "remember");
+      
+      // Add "Who" if it doesn't start with it
+      if (!simplifiedText.startsWith("Who")) {
+        simplifiedText = `Who ${simplifiedText.toLowerCase()}?`;
+      }
+      
+      // Further simplify certain questions
+      if (simplifiedText.includes("financial planning")) {
+        simplifiedText = "Who deals with money stuff in your family?";
+      } else if (simplifiedText.includes("household supplies")) {
+        simplifiedText = "Who buys things your family needs at home?";
+      } else if (simplifiedText.includes("meal planning")) {
+        simplifiedText = "Who picks what food your family will eat?";
+      }
+    }
+    // Handle parental tasks
+    else if (category.includes("Parental")) {
+      simplifiedText = originalText
+        .replace(/responsible for/gi, "helps with")
+        .replace(/emotional labor/gi, "feelings")
+        .replace(/anticipates/gi, "knows")
+        .replace(/monitors/gi, "watches")
+        .replace(/developmental needs/gi, "what you need")
+        .replace(/educational/gi, "school")
+        .replace(/behavioral issues/gi, "when you're upset");
+      
+      // Add "Who" if it doesn't start with it
+      if (!simplifiedText.startsWith("Who")) {
+        simplifiedText = `Who ${simplifiedText.toLowerCase()}?`;
+      }
+      
+      // Further simplify certain questions
+      if (simplifiedText.includes("emotional support")) {
+        simplifiedText = "Who helps you when you feel sad?";
+      } else if (simplifiedText.includes("homework")) {
+        simplifiedText = "Who helps you with your homework?";
+      } else if (simplifiedText.includes("school communication")) {
+        simplifiedText = "Who talks to your teachers?";
+      }
+    }
+  } 
+  // Less simplification for older children
+  else {
+    // Still make some replacements for clarity
+    simplifiedText = originalText
+      .replace(/responsible for/gi, "takes care of")
+      .replace(/coordinates/gi, "organizes")
+      .replace(/anticipates/gi, "figures out")
+      .replace(/monitors/gi, "keeps track of");
+    
+    // Add "Who" if it doesn't start with it
+    if (!simplifiedText.startsWith("Who")) {
+      simplifiedText = `Who ${simplifiedText.toLowerCase()}?`;
+    }
+  }
+  
+  return simplifiedText;
+};
+
+const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   const navigate = useNavigate();
   const { 
     fullQuestionSet, 
@@ -396,7 +357,6 @@ const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
   
   // State
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [viewingQuestionList, setViewingQuestionList] = useState(false);
   const [selectedParent, setSelectedParent] = useState(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [userResponses, setUserResponses] = useState({});
@@ -408,13 +368,11 @@ const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
   const [showReward, setShowReward] = useState(false);
   const [totalStars, setTotalStars] = useState(0);
   const [questions, setQuestions] = useState([]);
-  const [showAnimatedProgress, setShowAnimatedProgress] = useState(false);
-  const [animation, setAnimation] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   
   // Refs
   const questionTimerRef = useRef(null);
-  const keyBlockerRef = useRef(false);
+  const keyboardInitialized = useRef(false);
 
   // Redirect if no user is selected
   useEffect(() => {
@@ -445,6 +403,43 @@ const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
       }
     };
   }, []);
+
+  // Add keyboard shortcuts
+  useEffect(() => {
+    // Function to handle key press
+    const handleKeyPress = (e) => {
+      if (isProcessing) return; // Prevent actions while processing
+      
+      // 'M' key selects Mama
+      if (e.key.toLowerCase() === 'm') {
+        handleSelectParent('Mama');
+      }
+      // 'P' key selects Papa
+      else if (e.key.toLowerCase() === 'p') {
+        handleSelectParent('Papa');
+      }
+    };
+    
+    // Set a small timeout to ensure component is fully rendered
+    const timer = setTimeout(() => {
+      // Clean up previous listeners if they exist
+      if (keyboardInitialized.current) {
+        window.removeEventListener('keydown', handleKeyPress);
+      }
+      
+      // Add new listener
+      window.addEventListener('keydown', handleKeyPress);
+      keyboardInitialized.current = true;
+    }, 200);
+    
+    // Cleanup function
+    return () => {
+      clearTimeout(timer);
+      if (keyboardInitialized.current) {
+        window.removeEventListener('keydown', handleKeyPress);
+      }
+    };
+  }, [isProcessing]);
   
   // Set up questions for kids based on survey type
   useEffect(() => {
@@ -462,10 +457,11 @@ const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
       questionSet = fullQuestionSet;
     }
     
-    let filteredList = questionSet;
-    
-    // For weekly survey, use exactly 30 questions for any child
-    if (surveyType === "weekly" && selectedUser && selectedUser.role === 'child') {
+    // Process the questions to make them age-appropriate
+    if (selectedUser && selectedUser.role === 'child') {
+      const childAge = parseInt(selectedUser.age) || 10; // Default to 10 if age is not specified
+      
+      // Get categories
       const categories = [
         "Visible Household Tasks",
         "Invisible Household Tasks",
@@ -473,58 +469,46 @@ const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
         "Invisible Parental Tasks"
       ];
       
-      const weeklyKidQuestions = [];
-      categories.forEach(category => {
-        const categoryQuestions = questionSet.filter(q => q.category === category);
-        // Pick 7-8 questions per category (~30 total)
-        const questionsForCategory = category === "Visible Household Tasks" || 
-                                   category === "Invisible Household Tasks" ? 8 : 7;
-        
-        for (let i = 0; i < questionsForCategory; i++) {
-          const index = (i < categoryQuestions.length) ? i : i % categoryQuestions.length;
-          weeklyKidQuestions.push(categoryQuestions[index]);
-        }
-      });
+      // Prepare to select 50 questions for initial survey, 30 for weekly
+      const targetQuestionCount = surveyType === "weekly" ? 30 : 50;
+      const questionsPerCategory = Math.ceil(targetQuestionCount / categories.length);
       
-      filteredList = weeklyKidQuestions;
-    } 
-    // For initial survey, use exactly 50 questions for children of any age
-    else if (selectedUser && selectedUser.role === 'child') {
-      const categories = [
-        "Visible Household Tasks",
-        "Invisible Household Tasks",
-        "Visible Parental Tasks",
-        "Invisible Parental Tasks"
-      ];
+      // Process the questions to make them age-appropriate
+      const processedQuestions = [];
       
-      // 50 questions total - get around 12-13 per category
-      const childQuestions = [];
       categories.forEach(category => {
         const categoryQuestions = questionSet.filter(q => q.category === category);
         
-        // Adjust questions per category based on age - simpler for younger kids
-        const questionsPerCategory = 13;
-        
-        // Sort by complexity if child is young (below 8)
-        if (selectedUser.age < 8) {
-          // Sort by complexity - use baseWeight as a proxy for complexity
+        // Sort questions by suitability for age - use baseWeight as a proxy for complexity
+        if (childAge < 8) {
           categoryQuestions.sort((a, b) => parseFloat(a.baseWeight || 3) - parseFloat(b.baseWeight || 3));
         }
         
-        // Select questions
+        // Take an even number of questions from each category
         for (let i = 0; i < questionsPerCategory; i++) {
           if (i < categoryQuestions.length) {
-            childQuestions.push(categoryQuestions[i]);
+            // Create a modified version with age-appropriate text
+            const originalQuestion = categoryQuestions[i];
+            const simplifiedText = simplifyQuestionForChild(originalQuestion, childAge);
+            
+            processedQuestions.push({
+              ...originalQuestion,
+              childText: simplifiedText,
+              // Keep the original text for data connection
+              text: originalQuestion.text
+            });
           }
         }
       });
       
-      // Ensure we have exactly 50 questions
-      filteredList = childQuestions.slice(0, 50);
-      console.log(`Generated ${filteredList.length} initial survey questions for child`);
+      // Ensure we have exactly the target number of questions
+      const finalQuestions = processedQuestions.slice(0, targetQuestionCount);
+      console.log(`Generated ${finalQuestions.length} age-appropriate questions for child age ${childAge}`);
+      
+      setQuestions(finalQuestions);
+    } else {
+      setQuestions(questionSet || []);
     }
-    
-    setQuestions(filteredList || []);    
   }, [fullQuestionSet, selectedUser, surveyType, currentWeek, generateWeeklyQuestions]);
   
   // FIXED: Enhanced useEffect to properly restore survey progress
@@ -614,52 +598,44 @@ const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
     // Update parent context
     updateSurveyResponse(currentQuestion.id, parent);
     
-    // Show selection animation
-    setAnimation(`selected-${parent.toLowerCase()}`);
-    
     // Store current index in a local variable to avoid closure issues
     const currentIdx = currentQuestionIndex;
     
     // Wait for a moment to show the selection
     questionTimerRef.current = setTimeout(() => {
-      // Clear animation
-      setAnimation(null);
-      
       // Then decide whether to go to next question or complete survey
-      questionTimerRef.current = setTimeout(() => {
-        if (currentIdx < questions.length - 1) {
-          // Move to next question - use exact index instead of functional update
-          const nextIndex = currentIdx + 1;
-          console.log(`Moving to question ${nextIndex + 1} (from ${currentIdx + 1})`);
-          setCurrentQuestionIndex(nextIndex);
+      if (currentIdx < questions.length - 1) {
+        // Move to next question - use exact index instead of functional update
+        const nextIndex = currentIdx + 1;
+        console.log(`Moving to question ${nextIndex + 1} (from ${currentIdx + 1})`);
+        setCurrentQuestionIndex(nextIndex);
+        
+        // Update game state based on answer - use currentIdx instead of currentQuestionIndex
+        setGameStatus(prev => ({
+          ...prev,
+          mamaPosition: parent === 'Mama' ? currentIdx + 1 : prev.mamaPosition,
+          papaPosition: parent === 'Papa' ? currentIdx + 1 : prev.papaPosition,
+          stars: (currentIdx + 1) % 20 === 0 ? prev.stars + 1 : prev.stars
+        }));
+        
+        // Show reward if appropriate
+        if ((currentIdx + 1) % 20 === 0) {
+          setShowReward(true);
+          setTotalStars(prev => prev + 1);
           
-          // Update game state based on answer - use currentIdx instead of currentQuestionIndex
-          setGameStatus(prev => ({
-            ...prev,
-            mamaPosition: parent === 'Mama' ? currentIdx + 1 : prev.mamaPosition,
-            papaPosition: parent === 'Papa' ? currentIdx + 1 : prev.papaPosition,
-            stars: (currentIdx + 1) % 20 === 0 ? prev.stars + 1 : prev.stars
-          }));
-          
-          // Show reward if appropriate
-          if ((currentIdx + 1) % 20 === 0) {
-            setShowReward(true);
-            setTotalStars(prev => prev + 1);
-            
-            // Hide reward after delay
-            setTimeout(() => {
-              setShowReward(false);
-            }, 3000);
-          }
-          
-          // Reset selection state
-          setSelectedParent(null);
-          setIsProcessing(false);
-        } else {
-          // Complete the survey
-          handleCompleteSurvey();
+          // Hide reward after delay
+          setTimeout(() => {
+            setShowReward(false);
+          }, 3000);
         }
-      }, 500);
+        
+        // Reset selection state
+        setSelectedParent(null);
+        setIsProcessing(false);
+      } else {
+        // Complete the survey
+        handleCompleteSurvey();
+      }
     }, 500);
   };
 
@@ -756,7 +732,12 @@ const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
                 navigate('/dashboard', { replace: true });
               } else {
                 console.log("Some family members still need to complete surveys, going to selection");
-                navigate('/login', { replace: true });
+                navigate('/login', { 
+                  state: { 
+                    showCompletionScreen: true 
+                  },
+                  replace: true 
+                });
               }
             } catch (navError) {
               console.error("Navigation error:", navError);
@@ -850,30 +831,22 @@ const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
       return 'emotional';
     }
     
-    // Child-specific planning
-    else if ((text.includes('plan') || text.includes('schedule') || text.includes('organize')) && 
-             (text.includes('child') || text.includes('kid') || text.includes('son') || 
-              text.includes('daughter') || text.includes('children'))) {
-      return 'planning_kids';
-    }
-    
     // Default based on category - fall back to consistent category-based illustrations
     if (category === "Visible Household Tasks") {
       return (questionHash % 2 === 0) ? 'cleaning' : 'cooking';
     } 
     else if (category === "Invisible Household Tasks") {
-      return (questionHash % 2 === 0) ? 'planning' : 'scheduling';
+      return (questionHash % 2 === 0) ? 'planning' : 'planning';
     } 
     else if (category === "Visible Parental Tasks") {
       return (questionHash % 2 === 0) ? 'homework' : 'driving';
     } 
     else if (category === "Invisible Parental Tasks") {
-      return (questionHash % 2 === 0) ? 'emotional' : 'planning_kids';
+      return (questionHash % 2 === 0) ? 'emotional' : 'planning';
     }
     
-    // If all else fails, use hash-based selection
-    const illustrations = ['cleaning', 'cooking', 'planning', 'scheduling', 'homework', 'driving', 'emotional', 'planning_kids'];
-    return illustrations[questionHash % illustrations.length];
+    // If all else fails, use default
+    return 'default';
   }
 
   // Render the appropriate illustration
@@ -1018,7 +991,7 @@ const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
               onClick={() => !isProcessing && handleSelectParent('Mama')}
               className={`w-28 h-28 sm:w-36 sm:h-36 rounded-full focus:outline-none border-4 overflow-hidden transition-all transform hover:scale-105 ${
                 selectedParent === 'Mama' 
-                  ? 'border-purple-500 scale-110 animate-pulse' 
+                  ? 'border-purple-500 scale-110' 
                   : 'border-purple-200 hover:border-purple-300'
               } ${isProcessing ? 'opacity-70 cursor-not-allowed' : ''}`}
               aria-label="Select Mama"
@@ -1031,6 +1004,7 @@ const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
               />
             </button>
             <p className="mt-2 font-medium text-black">{parents.mama.name}</p>
+            <p className="text-xs text-gray-600">(press M key)</p>
           </div>
           
           {/* Center divider */}
@@ -1047,7 +1021,7 @@ const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
               onClick={() => !isProcessing && handleSelectParent('Papa')}
               className={`w-28 h-28 sm:w-36 sm:h-36 rounded-full focus:outline-none border-4 overflow-hidden transition-all transform hover:scale-105 ${
                 selectedParent === 'Papa' 
-                  ? 'border-blue-500 scale-110 animate-pulse' 
+                  ? 'border-blue-500 scale-110' 
                   : 'border-blue-200 hover:border-blue-300'
               } ${isProcessing ? 'opacity-70 cursor-not-allowed' : ''}`}
               aria-label="Select Papa"
@@ -1060,11 +1034,12 @@ const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
               />
             </button>
             <p className="mt-2 font-medium text-black">{parents.papa.name}</p>
+            <p className="text-xs text-gray-600">(press P key)</p>
           </div>
         </div>
       </div>
       
-      {/* Game-like progress tracker MOVED TO BOTTOM */}
+      {/* Game-like progress tracker */}
       <div className="mb-6 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg mt-auto">
         <h2 className="text-lg font-semibold mb-2 text-center text-gray-800">Family Adventure Track!</h2>
         <div className="relative h-20 bg-white rounded-lg overflow-hidden border-2 border-gray-200">
@@ -1089,17 +1064,13 @@ const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
           
           {/* Progress line */}
           <div 
-            className={`absolute top-1/2 left-0 h-2 bg-gradient-to-r from-gray-400 to-black transform -translate-y-1/2 transition-all duration-500 ${
-              showAnimatedProgress ? 'animate-pulse' : ''
-            }`}
+            className="absolute top-1/2 left-0 h-2 bg-gradient-to-r from-gray-400 to-black transform -translate-y-1/2 transition-all duration-500"
             style={{ width: `${progressPercentage}%` }}
           ></div>
           
           {/* Mama character */}
           <div 
-            className={`absolute top-2 w-10 h-10 transition-all duration-500 ${
-              animation === 'selected-mama' ? 'animate-bounce' : ''
-            }`}
+            className="absolute top-2 w-10 h-10 transition-all duration-500"
             style={{ 
               left: `calc(${Math.min(gameStatus.mamaPosition, questions.length - 1) / (questions.length - 1) * 100}% - 16px)`,
               maxLeft: 'calc(100% - 32px)'
@@ -1116,9 +1087,7 @@ const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
           
           {/* Papa character */}
           <div 
-            className={`absolute bottom-2 w-10 h-10 transition-all duration-500 ${
-              animation === 'selected-papa' ? 'animate-bounce' : ''
-            }`}
+            className="absolute bottom-2 w-10 h-10 transition-all duration-500"
             style={{ 
               left: `calc(${Math.min(gameStatus.papaPosition, questions.length - 1) / (questions.length - 1) * 100}% - 16px)`,
               maxLeft: 'calc(100% - 32px)'
@@ -1190,31 +1159,10 @@ const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
           <div className="bg-white rounded-xl p-8 shadow-2xl max-w-md text-center relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
             <div className="relative">
-              {/* Stars animation */}
-              <div className="absolute inset-0 stars-animation">
-                {[...Array(20)].map((_, i) => (
-                  <div 
-                    key={i} 
-                    className="absolute animate-ping" 
-                    style={{
-                      top: `${Math.random() * 100}%`,
-                      left: `${Math.random() * 100}%`,
-                      animationDelay: `${Math.random() * 2}s`,
-                      animationDuration: `${1 + Math.random() * 2}s`
-                    }}
-                  >
-                    <Star 
-                      size={10 + Math.random() * 20} 
-                      className="text-amber-400 fill-amber-400" 
-                    />
-                  </div>
-                ))}
-              </div>
-              
               <div className="mb-4 flex justify-center">
                 <div className="relative">
                   <Medal size={60} className="text-amber-500" />
-                  <Star size={24} className="absolute -top-2 -right-2 text-amber-400 fill-amber-400 animate-pulse" />
+                  <Star size={24} className="absolute -top-2 -right-2 text-amber-400 fill-amber-400" />
                 </div>
               </div>
               
@@ -1237,7 +1185,7 @@ const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
               )}
               
               <button 
-                className="px-6 py-3 bg-black text-white rounded-full font-bold hover:bg-gray-800 transform hover:scale-105 transition-all"
+                className="px-6 py-3 bg-black text-white rounded-full font-bold hover:bg-gray-800 transform transition-all"
                 onClick={() => setShowReward(false)}
               >
                 {currentQuestionIndex < questions.length - 1 ? "Continue Adventure!" : "Finish!"}
@@ -1246,21 +1194,8 @@ const EnhancedKidFriendlySurvey = ({ surveyType = "initial" }) => {
           </div>
         </div>
       )}
-      
-      {/* Custom styles for animations */}
-      <style jsx="true">{`
-        @keyframes float {
-          0% { transform: translateY(0px); }
-          50% { transform: translateY(-10px); }
-          100% { transform: translateY(0px); }
-        }
-        
-        .stars-animation {
-          pointer-events: none;
-        }
-      `}</style>
     </div>
   );
 };
 
-export default EnhancedKidFriendlySurvey;
+export default KidFriendlySurvey;
