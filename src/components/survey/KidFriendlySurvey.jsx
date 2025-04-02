@@ -4,335 +4,137 @@ import { useNavigate } from 'react-router-dom';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useSurvey } from '../../contexts/SurveyContext';
 
-// Enhanced Task Illustrations with improved SVGs for each category
-const TaskIllustrations = {
-  // Cleaning illustration
+// Simple illustrations instead of complex SVGs - just basic elements
+const SimpleIllustrations = {
   "cleaning": () => (
-    <svg width="240" height="180" viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg">
-      <rect width="240" height="180" fill="#f9fafb" />
-      
-      {/* Room background */}
-      <rect x="40" y="50" width="160" height="100" fill="#f8fafc" stroke="#4b5563" strokeWidth="2" />
-      <rect x="40" y="130" width="160" height="20" fill="#d1d5db" /> {/* Floor */}
-      
-      {/* Window */}
-      <rect x="150" y="60" width="40" height="40" fill="#bfdbfe" stroke="#4b5563" strokeWidth="1" />
-      <line x1="150" y1="80" x2="190" y2="80" stroke="#4b5563" strokeWidth="1" />
-      <line x1="170" y1="60" x2="170" y2="100" stroke="#4b5563" strokeWidth="1" />
-      <ellipse cx="170" cy="170" rx="60" ry="10" fill="#d1d5db" opacity="0.3" /> {/* Shadow */}
-      
-      {/* Cleaning elements */}
-      <rect x="80" y="80" width="10" height="70" fill="#a78bfa" rx="2" /> {/* Broom handle */}
-      <path d="M80 80 L90 80 L100 60 L70 60 Z" fill="#c4b5fd" /> {/* Broom head */}
-      <path d="M70 60 L100 60 L100 55 L70 55 Z" fill="#a78bfa" /> {/* Broom top */}
-      
-      {/* Person cleaning */}
-      <circle cx="70" cy="100" r="15" fill="#fde68a" /> {/* Head */}
-      <rect x="65" y="115" width="10" height="30" fill="#fde68a" rx="5" /> {/* Body */}
-      <line x1="65" y1="125" x2="50" y2="115" stroke="#fde68a" strokeWidth="5" strokeLinecap="round" /> {/* Arm */}
-      <line x1="75" y1="125" x2="80" y2="100" stroke="#fde68a" strokeWidth="5" strokeLinecap="round" /> {/* Arm holding broom */}
-      <line x1="65" y1="145" x2="60" y2="165" stroke="#fde68a" strokeWidth="5" strokeLinecap="round" /> {/* Leg */}
-      <line x1="75" y1="145" x2="80" y2="165" stroke="#fde68a" strokeWidth="5" strokeLinecap="round" /> {/* Leg */}
-      
-      {/* Face */}
-      <circle cx="65" cy="95" r="2" fill="#4b5563" /> {/* Eye */}
-      <circle cx="75" cy="95" r="2" fill="#4b5563" /> {/* Eye */}
-      <path d="M65 105 Q70 110, 75 105" stroke="#4b5563" strokeWidth="1.5" fill="none" /> {/* Smile */}
-    </svg>
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center">
+        <div className="text-4xl mb-2">🧹</div>
+        <p className="text-sm">Cleaning</p>
+      </div>
+    </div>
   ),
-  
-  // Cooking illustration
   "cooking": () => (
-    <svg width="240" height="180" viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg">
-      <rect width="240" height="180" fill="#f9fafb" />
-      
-      {/* Kitchen counter */}
-      <rect x="40" y="100" width="160" height="50" fill="#d1d5db" />
-      <rect x="40" y="90" width="160" height="10" fill="#9ca3af" />
-      
-      {/* Stove */}
-      <rect x="70" y="70" width="80" height="20" fill="#4b5563" rx="2" />
-      <circle cx="90" cy="80" r="12" fill="#f87171" />
-      <circle cx="90" cy="80" r="8" fill="#ef4444" />
-      <circle cx="130" cy="80" r="12" fill="#f87171" />
-      <circle cx="130" cy="80" r="8" fill="#ef4444" />
-      
-      {/* Pot on stove */}
-      <rect x="75" y="55" width="30" height="25" fill="#6b7280" rx="2" />
-      <rect x="73" y="50" width="34" height="5" fill="#4b5563" rx="2" />
-      
-      {/* Person cooking */}
-      <circle cx="170" cy="70" r="15" fill="#fde68a" /> {/* Head */}
-      <rect x="165" y="85" width="10" height="35" fill="#fde68a" rx="5" /> {/* Body */}
-      <line x1="165" y1="95" x2="145" y2="85" stroke="#fde68a" strokeWidth="5" strokeLinecap="round" /> {/* Arm */}
-      <line x1="175" y1="95" x2="195" y2="85" stroke="#fde68a" strokeWidth="5" strokeLinecap="round" /> {/* Arm */}
-      <rect x="140" y="70" width="10" height="5" fill="#fde68a" rx="2" /> {/* Hand */}
-      
-      {/* Face */}
-      <circle cx="165" cy="65" r="2" fill="#4b5563" /> {/* Eye */}
-      <circle cx="175" cy="65" r="2" fill="#4b5563" /> {/* Eye */}
-      <path d="M165 75 Q170 80, 175 75" stroke="#4b5563" strokeWidth="1.5" fill="none" /> {/* Smile */}
-      
-      {/* Cooking utensil */}
-      <rect x="140" y="70" width="5" height="30" fill="#9ca3af" rx="1" />
-      <rect x="125" y="65" width="20" height="5" fill="#9ca3af" rx="1" />
-    </svg>
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center">
+        <div className="text-4xl mb-2">🍳</div>
+        <p className="text-sm">Cooking</p>
+      </div>
+    </div>
   ),
-  
-  // Planning illustration
   "planning": () => (
-    <svg width="240" height="180" viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg">
-      <rect width="240" height="180" fill="#f9fafb" />
-      
-      {/* Calendar/planner */}
-      <rect x="60" y="40" width="120" height="100" fill="white" stroke="#4b5563" strokeWidth="2" />
-      <rect x="60" y="40" width="120" height="20" fill="#93c5fd" />
-      <text x="120" y="55" textAnchor="middle" fill="#1e3a8a" fontSize="12" fontFamily="sans-serif">WEEKLY PLAN</text>
-      
-      {/* Calendar grid */}
-      <line x1="60" y1="60" x2="180" y2="60" stroke="#4b5563" strokeWidth="1" />
-      <line x1="60" y1="80" x2="180" y2="80" stroke="#4b5563" strokeWidth="1" />
-      <line x1="60" y1="100" x2="180" y2="100" stroke="#4b5563" strokeWidth="1" />
-      <line x1="60" y1="120" x2="180" y2="120" stroke="#4b5563" strokeWidth="1" />
-      
-      <line x1="77" y1="60" x2="77" y2="140" stroke="#4b5563" strokeWidth="1" />
-      <line x1="94" y1="60" x2="94" y2="140" stroke="#4b5563" strokeWidth="1" />
-      <line x1="111" y1="60" x2="111" y2="140" stroke="#4b5563" strokeWidth="1" />
-      <line x1="128" y1="60" x2="128" y2="140" stroke="#4b5563" strokeWidth="1" />
-      <line x1="145" y1="60" x2="145" y2="140" stroke="#4b5563" strokeWidth="1" />
-      <line x1="162" y1="60" x2="162" y2="140" stroke="#4b5563" strokeWidth="1" />
-      
-      {/* Calendar entries */}
-      <rect x="95" y="81" width="32" height="18" fill="#dbeafe" rx="2" />
-      <rect x="146" y="101" width="32" height="18" fill="#c7d2fe" rx="2" />
-      <rect x="63" y="121" width="32" height="18" fill="#fecaca" rx="2" />
-      
-      {/* Person planning */}
-      <circle cx="40" cy="70" r="15" fill="#fde68a" /> {/* Head */}
-      <rect x="35" y="85" width="10" height="30" fill="#fde68a" rx="5" /> {/* Body */}
-      <line x1="35" y1="95" x2="20" y2="105" stroke="#fde68a" strokeWidth="5" strokeLinecap="round" /> {/* Arm */}
-      <line x1="45" y1="95" x2="60" y2="70" stroke="#fde68a" strokeWidth="5" strokeLinecap="round" /> {/* Arm pointing */}
-      
-      {/* Face */}
-      <circle cx="35" cy="65" r="2" fill="#4b5563" /> {/* Eye */}
-      <circle cx="45" cy="65" r="2" fill="#4b5563" /> {/* Eye */}
-      <path d="M35 75 Q40 80, 45 75" stroke="#4b5563" strokeWidth="1.5" fill="none" /> {/* Smile */}
-    </svg>
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center">
+        <div className="text-4xl mb-2">📅</div>
+        <p className="text-sm">Planning</p>
+      </div>
+    </div>
   ),
-  
-  // Homework illustration
   "homework": () => (
-    <svg width="240" height="180" viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg">
-      <rect width="240" height="180" fill="#f9fafb" />
-      
-      {/* Background with desk */}
-      <rect x="40" y="100" width="160" height="60" fill="#8B4513" rx="5" /> {/* Desk */}
-      <rect x="45" y="105" width="150" height="50" fill="#A0522D" rx="3" /> {/* Desk top */}
-      
-      {/* Open book */}
-      <rect x="70" y="60" width="80" height="10" fill="#f8fafc" stroke="#4b5563" strokeWidth="1" transform="skewX(-10)" />
-      <rect x="70" y="70" width="80" height="50" fill="white" stroke="#4b5563" strokeWidth="1" rx="2" transform="skewX(-10)" />
-      <rect x="90" y="60" width="80" height="10" fill="#f8fafc" stroke="#4b5563" strokeWidth="1" transform="skewX(10)" />
-      <rect x="90" y="70" width="80" height="50" fill="white" stroke="#4b5563" strokeWidth="1" rx="2" transform="skewX(10)" />
-      
-      {/* Book lines */}
-      <line x1="80" y1="80" x2="140" y2="80" stroke="#9ca3af" strokeWidth="1" transform="skewX(-10)" />
-      <line x1="80" y1="90" x2="140" y2="90" stroke="#9ca3af" strokeWidth="1" transform="skewX(-10)" />
-      <line x1="80" y1="100" x2="140" y2="100" stroke="#9ca3af" strokeWidth="1" transform="skewX(-10)" />
-      <line x1="100" y1="80" x2="160" y2="80" stroke="#9ca3af" strokeWidth="1" transform="skewX(10)" />
-      <line x1="100" y1="90" x2="160" y2="90" stroke="#9ca3af" strokeWidth="1" transform="skewX(10)" />
-      <line x1="100" y1="100" x2="160" y2="100" stroke="#9ca3af" strokeWidth="1" transform="skewX(10)" />
-      
-      {/* Pencil */}
-      <rect x="160" y="70" width="30" height="5" fill="#FFD700" transform="rotate(45, 160, 70)" />
-      <polygon points="185,55 190,60 185,65" fill="#4b5563" transform="rotate(45, 160, 70)" />
-      
-      {/* Happy kid character */}
-      <circle cx="40" cy="60" r="20" fill="#fde68a" /> {/* Head */}
-      <circle cx="33" cy="55" r="3" fill="#4b5563" /> {/* Eye */}
-      <circle cx="47" cy="55" r="3" fill="#4b5563" /> {/* Eye */}
-      <path d="M33 65 Q40 70, 47 65" fill="none" stroke="#4b5563" strokeWidth="2" /> {/* Smile */}
-    </svg>
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center">
+        <div className="text-4xl mb-2">📚</div>
+        <p className="text-sm">Homework</p>
+      </div>
+    </div>
   ),
-  
-  // Driving illustration
   "driving": () => (
-    <svg width="240" height="180" viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg">
-      <rect width="240" height="180" fill="#f9fafb" />
-      
-      {/* Road */}
-      <rect x="0" y="130" width="240" height="50" fill="#4b5563" />
-      <line x1="20" y1="155" x2="60" y2="155" stroke="white" strokeWidth="4" strokeDasharray="10,10" />
-      <line x1="80" y1="155" x2="120" y2="155" stroke="white" strokeWidth="4" strokeDasharray="10,10" />
-      <line x1="140" y1="155" x2="180" y2="155" stroke="white" strokeWidth="4" strokeDasharray="10,10" />
-      <line x1="200" y1="155" x2="240" y2="155" stroke="white" strokeWidth="4" strokeDasharray="10,10" />
-      
-      {/* Car */}
-      <rect x="70" y="110" width="100" height="30" rx="10" fill="#3b82f6" />
-      <rect x="80" y="90" width="70" height="25" rx="5" fill="#60a5fa" />
-      <rect x="85" y="95" width="15" height="15" fill="#bfdbfe" /> {/* Window */}
-      <rect x="105" y="95" width="15" height="15" fill="#bfdbfe" /> {/* Window */}
-      <rect x="125" y="95" width="15" height="15" fill="#bfdbfe" /> {/* Window */}
-      <circle cx="90" cy="140" r="12" fill="#1f2937" /> {/* Wheel */}
-      <circle cx="90" cy="140" r="6" fill="#6b7280" /> {/* Wheel hub */}
-      <circle cx="150" cy="140" r="12" fill="#1f2937" /> {/* Wheel */}
-      <circle cx="150" cy="140" r="6" fill="#6b7280" /> {/* Wheel hub */}
-      
-      {/* Person driving */}
-      <circle cx="110" cy="100" r="10" fill="#fde68a" /> {/* Head */}
-      <rect x="107" y="110" width="6" height="15" fill="#fde68a" rx="3" /> {/* Body */}
-      <line x1="113" y1="115" x2="120" y2="110" stroke="#fde68a" strokeWidth="3" strokeLinecap="round" /> {/* Arm on wheel */}
-      
-      {/* Face */}
-      <circle cx="107" cy="98" r="2" fill="#4b5563" /> {/* Eye */}
-      <circle cx="113" cy="98" r="2" fill="#4b5563" /> {/* Eye */}
-      <path d="M107 103 Q110 105, 113 103" stroke="#4b5563" strokeWidth="1" fill="none" /> {/* Smile */}
-    </svg>
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center">
+        <div className="text-4xl mb-2">🚗</div>
+        <p className="text-sm">Driving</p>
+      </div>
+    </div>
   ),
-  
-  // Emotional support illustration
   "emotional": () => (
-    <svg width="240" height="180" viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg">
-      <rect width="240" height="180" fill="#f9fafb" />
-      
-      {/* Living room setting */}
-      <rect x="30" y="90" width="180" height="70" fill="#d1d5db" rx="2" /> {/* Couch */}
-      <rect x="35" y="95" width="170" height="40" fill="#9ca3af" rx="2" /> {/* Couch cushion */}
-      <rect x="35" y="95" width="170" height="5" fill="#f3f4f6" rx="1" /> {/* Couch detail */}
-      
-      {/* Parent figure */}
-      <circle cx="70" cy="70" r="15" fill="#fde68a" /> {/* Head */}
-      <rect x="65" y="85" width="10" height="30" fill="#fde68a" rx="5" /> {/* Body */}
-      <line x1="65" y1="95" x2="55" y2="115" stroke="#fde68a" strokeWidth="5" strokeLinecap="round" /> {/* Arm */}
-      <line x1="75" y1="95" x2="110" y2="100" stroke="#fde68a" strokeWidth="5" strokeLinecap="round" /> {/* Arm around child */}
-      
-      {/* Parent face */}
-      <circle cx="65" cy="65" r="2" fill="#4b5563" /> {/* Eye */}
-      <circle cx="75" cy="65" r="2" fill="#4b5563" /> {/* Eye */}
-      <path d="M65 75 Q70 80, 75 75" stroke="#4b5563" strokeWidth="1.5" fill="none" /> {/* Smile */}
-      
-      {/* Child figure */}
-      <circle cx="110" cy="80" r="12" fill="#fde68a" /> {/* Head */}
-      <rect x="106" y="92" width="8" height="20" fill="#fde68a" rx="4" /> {/* Body */}
-      <line x1="106" y1="95" x2="95" y2="105" stroke="#fde68a" strokeWidth="4" strokeLinecap="round" /> {/* Arm */}
-      <line x1="114" y1="95" x2="125" y2="105" stroke="#fde68a" strokeWidth="4" strokeLinecap="round" /> {/* Arm */}
-      
-      {/* Child face */}
-      <circle cx="106" cy="76" r="2" fill="#4b5563" /> {/* Eye */}
-      <circle cx="114" cy="76" r="2" fill="#4b5563" /> {/* Eye */}
-      <path d="M106 86 Q110 83, 114 86" stroke="#4b5563" strokeWidth="1.5" fill="none" /> {/* Sad mouth */}
-    </svg>
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center">
+        <div className="text-4xl mb-2">❤️</div>
+        <p className="text-sm">Caring</p>
+      </div>
+    </div>
   ),
-  
-  // Default illustration
   "default": () => (
-    <svg width="240" height="180" viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg">
-      <rect width="240" height="180" fill="#f9fafb" />
-      
-      {/* Simple house */}
-      <rect x="70" y="80" width="100" height="70" fill="white" stroke="#4b5563" strokeWidth="2" />
-      <polygon points="70,80 170,80 120,40" fill="#c7d2fe" stroke="#4b5563" strokeWidth="2" />
-      <rect x="110" y="110" width="20" height="40" fill="#4b5563" />
-      
-      {/* Family figures */}
-      <circle cx="60" cy="130" r="12" fill="#e9b1da" /> {/* Mama */}
-      <line x1="60" y1="142" x2="60" y2="160" stroke="#e9b1da" strokeWidth="4" strokeLinecap="round" />
-      <line x1="60" y1="148" x2="50" y2="158" stroke="#e9b1da" strokeWidth="3" strokeLinecap="round" />
-      <line x1="60" y1="148" x2="70" y2="158" stroke="#e9b1da" strokeWidth="3" strokeLinecap="round" />
-      
-      <circle cx="90" cy="130" r="12" fill="#84c4e2" /> {/* Papa */}
-      <line x1="90" y1="142" x2="90" y2="160" stroke="#84c4e2" strokeWidth="4" strokeLinecap="round" />
-      <line x1="90" y1="148" x2="80" y2="158" stroke="#84c4e2" strokeWidth="3" strokeLinecap="round" />
-      <line x1="90" y1="148" x2="100" y2="158" stroke="#84c4e2" strokeWidth="3" strokeLinecap="round" />
-      
-      <circle cx="190" cy="130" r="10" fill="#fde68a" /> {/* Child */}
-      <line x1="190" y1="140" x2="190" y2="155" stroke="#fde68a" strokeWidth="3" strokeLinecap="round" />
-      <line x1="190" y1="145" x2="183" y2="152" stroke="#fde68a" strokeWidth="2" strokeLinecap="round" />
-      <line x1="190" y1="145" x2="197" y2="152" stroke="#fde68a" strokeWidth="2" strokeLinecap="round" />
-    </svg>
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center">
+        <div className="text-4xl mb-2">👨‍👩‍👧‍👦</div>
+        <p className="text-sm">Family</p>
+      </div>
+    </div>
   )
 };
 
-// Helper function to simplify questions for kids of different ages
+// Enhanced helper function to simplify questions for kids of different ages
 const simplifyQuestionForChild = (question, childAge) => {
+  if (!question) return "Who does this in your family?";
+  
   // Original question text
   const originalText = question.text;
-  let simplifiedText = originalText;
   
   // Get category for context
-  const category = question.category;
+  const category = question.category || '';
   
-  // More simplification for younger children
+  // For very young children (ages 3-7)
   if (childAge < 8) {
-    // Handle household tasks
     if (category.includes("Household")) {
-      // Replace complex terms
-      simplifiedText = originalText
-        .replace(/responsible for/gi, "does")
-        .replace(/primarily handles/gi, "mostly does")
-        .replace(/manages/gi, "takes care of")
-        .replace(/coordinates/gi, "plans")
-        .replace(/schedule/gi, "plan")
-        .replace(/maintain/gi, "keep")
-        .replace(/monitor/gi, "check")
-        .replace(/track/gi, "remember");
-      
-      // Add "Who" if it doesn't start with it
-      if (!simplifiedText.startsWith("Who")) {
-        simplifiedText = `Who ${simplifiedText.toLowerCase()}?`;
+      if (originalText.includes("clean") || originalText.includes("dust")) {
+        return "Who cleans up the house?";
+      } else if (originalText.includes("cook") || originalText.includes("meal")) {
+        return "Who makes food for everyone?";
+      } else if (originalText.includes("shop") || originalText.includes("grocery")) {
+        return "Who buys the food at the store?";
+      } else if (originalText.includes("yard") || originalText.includes("garden")) {
+        return "Who takes care of the yard?";
+      } else if (originalText.includes("laundry") || originalText.includes("clothes")) {
+        return "Who washes the clothes?";
+      } else if (originalText.includes("plan")) {
+        return "Who decides what we're going to do?";
       }
-      
-      // Further simplify certain questions
-      if (simplifiedText.includes("financial planning")) {
-        simplifiedText = "Who deals with money stuff in your family?";
-      } else if (simplifiedText.includes("household supplies")) {
-        simplifiedText = "Who buys things your family needs at home?";
-      } else if (simplifiedText.includes("meal planning")) {
-        simplifiedText = "Who picks what food your family will eat?";
-      }
-    }
-    // Handle parental tasks
+      // Default household simplification
+      return `Who ${originalText.toLowerCase().replace("who ", "").replace("responsible for", "does")}?`;
+    } 
     else if (category.includes("Parental")) {
-      simplifiedText = originalText
-        .replace(/responsible for/gi, "helps with")
-        .replace(/emotional labor/gi, "feelings")
-        .replace(/anticipates/gi, "knows")
-        .replace(/monitors/gi, "watches")
-        .replace(/developmental needs/gi, "what you need")
-        .replace(/educational/gi, "school")
-        .replace(/behavioral issues/gi, "when you're upset");
-      
-      // Add "Who" if it doesn't start with it
-      if (!simplifiedText.startsWith("Who")) {
-        simplifiedText = `Who ${simplifiedText.toLowerCase()}?`;
+      if (originalText.includes("homework") || originalText.includes("school")) {
+        return "Who helps you with your schoolwork?";
+      } else if (originalText.includes("doctor") || originalText.includes("sick")) {
+        return "Who takes care of you when you're sick?";
+      } else if (originalText.includes("drive") || originalText.includes("car")) {
+        return "Who drives you to places?";
+      } else if (originalText.includes("emotion") || originalText.includes("feel")) {
+        return "Who helps when you feel sad?";
+      } else if (originalText.includes("bedtime")) {
+        return "Who puts you to bed at night?";
       }
-      
-      // Further simplify certain questions
-      if (simplifiedText.includes("emotional support")) {
-        simplifiedText = "Who helps you when you feel sad?";
-      } else if (simplifiedText.includes("homework")) {
-        simplifiedText = "Who helps you with your homework?";
-      } else if (simplifiedText.includes("school communication")) {
-        simplifiedText = "Who talks to your teachers?";
-      }
-    }
-  } 
-  // Less simplification for older children
-  else {
-    // Still make some replacements for clarity
-    simplifiedText = originalText
-      .replace(/responsible for/gi, "takes care of")
-      .replace(/coordinates/gi, "organizes")
-      .replace(/anticipates/gi, "figures out")
-      .replace(/monitors/gi, "keeps track of");
-    
-    // Add "Who" if it doesn't start with it
-    if (!simplifiedText.startsWith("Who")) {
-      simplifiedText = `Who ${simplifiedText.toLowerCase()}?`;
+      // Default parental simplification
+      return `Who helps you ${originalText.toLowerCase().replace("who ", "").replace("responsible for", "with")}?`;
     }
   }
+  // For older children (8-12)
+  else if (childAge < 13) {
+    if (originalText.includes("responsible for")) {
+      return originalText.replace("responsible for", "usually does");
+    }
+    if (originalText.includes("coordinates")) {
+      return originalText.replace("coordinates", "plans");
+    }
+    if (originalText.includes("anticipates")) {
+      return originalText.replace("anticipates", "knows about");
+    }
+    // Add "Who" if it doesn't start with it
+    if (!originalText.startsWith("Who")) {
+      return `Who ${originalText.toLowerCase()}?`;
+    }
+    return originalText;
+  }
+  // For teenagers (13+), keep original but simplify complex terms
+  else {
+    return originalText
+      .replace("responsible for", "takes care of")
+      .replace("emotional labor", "emotional support")
+      .replace("anticipates developmental needs", "plans ahead for what you need");
+  }
   
-  return simplifiedText;
+  return originalText; // Fallback to original text
 };
 
 const KidFriendlySurvey = ({ surveyType = "initial" }) => {
@@ -369,10 +171,12 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   const [totalStars, setTotalStars] = useState(0);
   const [questions, setQuestions] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Refs
   const questionTimerRef = useRef(null);
   const keyboardInitialized = useRef(false);
+  const autoSaveTimerRef = useRef(null);
 
   // Redirect if no user is selected
   useEffect(() => {
@@ -396,15 +200,14 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
         questionTimerRef.current = null;
       }
       
-      // For extra safety, clear all possible timeouts
-      const highestTimeoutId = setTimeout(() => {}, 0);
-      for (let i = 0; i < highestTimeoutId; i++) {
-        clearTimeout(i);
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
       }
     };
   }, []);
 
-  // Add keyboard shortcuts
+  // Add keyboard shortcuts for M and P keys
   useEffect(() => {
     // Function to handle key press
     const handleKeyPress = (e) => {
@@ -430,6 +233,8 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
       // Add new listener
       window.addEventListener('keydown', handleKeyPress);
       keyboardInitialized.current = true;
+      
+      console.log("Keyboard shortcuts initialized for kid survey");
     }, 200);
     
     // Cleanup function
@@ -441,7 +246,7 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
     };
   }, [isProcessing]);
   
-  // Set up questions for kids based on survey type
+  // Set up questions for kids based on survey type - Ensure exactly 50 questions
   useEffect(() => {
     if (!fullQuestionSet || fullQuestionSet.length === 0) return;
     
@@ -469,7 +274,7 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
         "Invisible Parental Tasks"
       ];
       
-      // Prepare to select 50 questions for initial survey, 30 for weekly
+      // Prepare to select EXACTLY 50 questions for initial survey, 30 for weekly
       const targetQuestionCount = surveyType === "weekly" ? 30 : 50;
       const questionsPerCategory = Math.ceil(targetQuestionCount / categories.length);
       
@@ -477,6 +282,7 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
       const processedQuestions = [];
       
       categories.forEach(category => {
+        // Get questions for this category
         const categoryQuestions = questionSet.filter(q => q.category === category);
         
         // Sort questions by suitability for age - use baseWeight as a proxy for complexity
@@ -501,17 +307,59 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
         }
       });
       
-      // Ensure we have exactly the target number of questions
-      const finalQuestions = processedQuestions.slice(0, targetQuestionCount);
-      console.log(`Generated ${finalQuestions.length} age-appropriate questions for child age ${childAge}`);
+      // Ensure we have EXACTLY the target number of questions
+      let finalQuestions = processedQuestions;
       
+      // If we don't have enough questions, duplicate some until we reach the target
+      if (finalQuestions.length < targetQuestionCount) {
+        // Sort by weight to duplicate the most important questions
+        const sortedByWeight = [...finalQuestions].sort((a, b) => 
+          parseFloat(b.totalWeight || 1) - parseFloat(a.totalWeight || 1)
+        );
+        
+        // Add questions until we reach the target
+        while (finalQuestions.length < targetQuestionCount) {
+          const questionToAdd = sortedByWeight[finalQuestions.length % sortedByWeight.length];
+          finalQuestions.push({
+            ...questionToAdd,
+            id: `${questionToAdd.id}-duplicate-${finalQuestions.length}`
+          });
+        }
+      }
+      // If we have too many questions, trim to the exact count
+      else if (finalQuestions.length > targetQuestionCount) {
+        finalQuestions = finalQuestions.slice(0, targetQuestionCount);
+      }
+      
+      console.log(`Generated ${finalQuestions.length} age-appropriate questions for child age ${childAge}`);
       setQuestions(finalQuestions);
     } else {
       setQuestions(questionSet || []);
     }
   }, [fullQuestionSet, selectedUser, surveyType, currentWeek, generateWeeklyQuestions]);
   
-  // FIXED: Enhanced useEffect to properly restore survey progress
+  // Set up auto-save timer
+  useEffect(() => {
+    if (selectedUser && Object.keys(userResponses).length > 0) {
+      // Clear any existing timer
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+      
+      // Set up auto-save every 30 seconds
+      autoSaveTimerRef.current = setTimeout(() => {
+        saveProgress();
+      }, 30000);
+      
+      return () => {
+        if (autoSaveTimerRef.current) {
+          clearTimeout(autoSaveTimerRef.current);
+        }
+      };
+    }
+  }, [userResponses, selectedUser]);
+  
+  // Enhanced useEffect to properly restore survey progress
   useEffect(() => {
     // Only run this if we have a user and loaded questions
     if (selectedUser && questions.length > 0 && currentSurveyResponses && Object.keys(currentSurveyResponses).length > 0) {
@@ -558,6 +406,28 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
       }
     }
   }, [selectedUser, questions, currentSurveyResponses]);
+  
+  // Save progress function (used by both auto-save and manual save)
+  const saveProgress = async () => {
+    if (!selectedUser || Object.keys(userResponses).length === 0) return;
+    
+    try {
+      console.log("Saving survey progress...");
+      await saveSurveyProgress(selectedUser.id, userResponses);
+      
+      // Store information about the paused survey in localStorage
+      localStorage.setItem('surveyInProgress', JSON.stringify({
+        userId: selectedUser.id,
+        timestamp: new Date().getTime(),
+        surveyType: surveyType,
+        lastQuestionIndex: currentQuestionIndex
+      }));
+      
+      console.log("Progress saved successfully");
+    } catch (error) {
+      console.error("Error saving progress:", error);
+    }
+  };
   
   // Handle parent selection
   const handleSelectParent = (parent) => {
@@ -653,12 +523,7 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
       console.log("Responses to save:", Object.keys(allResponses).length);
       
       // Save the current progress
-      if (surveyType === "weekly") {
-        await saveSurveyProgress(selectedUser.id, allResponses);
-      } else {
-        await saveSurveyProgress(selectedUser.id, allResponses);
-      }
-      
+      await saveSurveyProgress(selectedUser.id, allResponses);
       console.log("Progress saved successfully");
       
       // Store information about the paused survey in localStorage
@@ -689,10 +554,11 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
     }
   };
   
-  // Complete survey
+  // Complete survey - FIXED navigation after completion
   const handleCompleteSurvey = async () => {
     // Show a big celebration!
     setShowReward(true);
+    setIsSubmitting(true);
     
     try {
       console.log(`Attempting to save ${surveyType} survey data...`);
@@ -713,54 +579,35 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
         console.log("Initial survey saved successfully");
       }
       
-      // Only navigate after confirmed save - with error handling
+      // Clear the progress flag since we've completed the survey
+      localStorage.removeItem('surveyInProgress');
+      
+      // Navigate to loading screen
+      console.log("Navigating to loading screen");
+      navigate('/loading');
+      
+      // Check if all family members have completed their surveys
+      const allCompleted = familyMembers.every(member => 
+        member.completed || member.id === selectedUser.id
+      );
+      
+      // Wait briefly before navigating to the final destination
       setTimeout(() => {
-        try {
-          console.log("Navigating to loading screen");
-          navigate('/loading');
-          
-          // Check if all family members have completed their surveys
-          const allCompleted = familyMembers.every(member => 
-            member.completed || member.id === selectedUser.id
-          );
-          
-          // Navigate based on completion status after delay
-          setTimeout(() => {
-            try {
-              if (allCompleted) {
-                console.log("All family members completed surveys, going to dashboard");
-                navigate('/dashboard', { replace: true });
-              } else {
-                console.log("Some family members still need to complete surveys, going to selection");
-                navigate('/login', { 
-                  state: { 
-                    showCompletionScreen: true 
-                  },
-                  replace: true 
-                });
-              }
-            } catch (navError) {
-              console.error("Navigation error:", navError);
-              // Fallback to direct URL change if navigation fails
-              if (allCompleted) {
-                window.location.href = '/dashboard';
-              } else {
-                window.location.href = '/login';
-              }
-            }
-          }, 3000);
-        } catch (navError) {
-          console.error("Navigation error:", navError);
-          window.location.href = '/login'; // Fallback to login page
+        if (allCompleted) {
+          console.log("All family members completed surveys, going to dashboard");
+          navigate('/dashboard');
+        } else {
+          console.log("Some family members still need to complete surveys, going to family selection");
+          navigate('/login', { state: { showCompletionScreen: true } });
         }
-      }, 3000);
+      }, 2000);
     } catch (error) {
       console.error(`Error completing ${surveyType} survey:`, error);
       alert('There was an error saving your responses. Please try again.');
       
       // Don't navigate away on error
       setShowReward(false);
-      setIsProcessing(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -768,84 +615,22 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   function getIllustrationForQuestion(question) {
     if (!question) return 'default';
     
-    // This function determines which illustration to show based on keywords in the question
-    const text = question.text.toLowerCase();
-    const id = question.id || '';
+    // Simple mapping based on category instead of complex matching
     const category = question.category || '';
     
-    // Create a simple hash from the question text or ID for consistent selection
-    const hashCode = (str) => {
-      let hash = 0;
-      for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash; // Convert to 32bit integer
-      }
-      return Math.abs(hash);
-    };
-    
-    const questionHash = hashCode(text + id);
-    
-    // ENHANCED KEYWORD MATCHING - More specific to task types
-    // Cooking and food related
-    if (text.includes('cook') || text.includes('meal') || text.includes('food') || 
-        text.includes('dinner') || text.includes('breakfast') || text.includes('lunch') ||
-        text.includes('kitchen') || text.includes('recipe') || text.includes('grocery') ||
-        text.includes('shopping') || text.includes('dishes')) {
-      return 'cooking';
-    }
-    
-    // Cleaning related
-    else if (text.includes('clean') || text.includes('dust') || text.includes('vacuum') || 
-             text.includes('mop') || text.includes('sweep') || text.includes('tidy') ||
-             text.includes('wash') || text.includes('laundry') || text.includes('fold') ||
-             text.includes('clothes') || text.includes('bed') || text.includes('bathroom')) {
+    if (category === "Visible Household Tasks") {
       return 'cleaning';
-    }
-    
-    // Planning and organizing
-    else if (text.includes('plan') || text.includes('organize') || text.includes('schedule') ||
-             text.includes('arrange') || text.includes('prepare') || text.includes('manage') ||
-             text.includes('remember') || text.includes('calendar') || text.includes('list')) {
+    } 
+    else if (category === "Invisible Household Tasks") {
       return 'planning';
-    }
-    
-    // School and homework
-    else if (text.includes('homework') || text.includes('school') || text.includes('study') ||
-             text.includes('learn') || text.includes('education') || text.includes('teacher') ||
-             text.includes('class') || text.includes('assignment') || text.includes('project')) {
-      return 'homework';
-    }
-    
-    // Transportation and driving
-    else if (text.includes('drive') || text.includes('pick up') || text.includes('transport') ||
-             text.includes('car') || text.includes('vehicle') || text.includes('ride') || 
-             text.includes('activity') || text.includes('game') || text.includes('practice')) {
-      return 'driving';
-    }
-    
-    // Emotional support
-    else if (text.includes('emotional') || text.includes('support') || text.includes('feel') ||
-             text.includes('comfort') || text.includes('care') || text.includes('listen') ||
-             text.includes('talk') || text.includes('discuss') || text.includes('help')) {
+    } 
+    else if (category === "Visible Parental Tasks") {
+      return question.text.toLowerCase().includes('homework') ? 'homework' : 'driving';
+    } 
+    else if (category === "Invisible Parental Tasks") {
       return 'emotional';
     }
     
-    // Default based on category - fall back to consistent category-based illustrations
-    if (category === "Visible Household Tasks") {
-      return (questionHash % 2 === 0) ? 'cleaning' : 'cooking';
-    } 
-    else if (category === "Invisible Household Tasks") {
-      return (questionHash % 2 === 0) ? 'planning' : 'planning';
-    } 
-    else if (category === "Visible Parental Tasks") {
-      return (questionHash % 2 === 0) ? 'homework' : 'driving';
-    } 
-    else if (category === "Invisible Parental Tasks") {
-      return (questionHash % 2 === 0) ? 'emotional' : 'planning';
-    }
-    
-    // If all else fails, use default
     return 'default';
   }
 
@@ -857,7 +642,7 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
     const illustrationType = getIllustrationForQuestion(questions[currentQuestionIndex]);
     
     // Look up the component
-    const IllustrationComponent = TaskIllustrations[illustrationType] || TaskIllustrations.default;
+    const IllustrationComponent = SimpleIllustrations[illustrationType] || SimpleIllustrations.default;
     
     return <IllustrationComponent />;
   };
@@ -923,7 +708,7 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
           <button 
             onClick={() => navigate('/login')}
             className="text-xs bg-black text-white px-3 py-1.5 rounded mb-2 hover:bg-gray-800 transition font-roboto"
-            disabled={isProcessing}
+            disabled={isProcessing || isSubmitting}
           >
             Switch User
           </button>
@@ -988,14 +773,14 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
           {/* Mama */}
           <div className="flex flex-col items-center">
             <button
-              onClick={() => !isProcessing && handleSelectParent('Mama')}
+              onClick={() => !isProcessing && !isSubmitting && handleSelectParent('Mama')}
               className={`w-28 h-28 sm:w-36 sm:h-36 rounded-full focus:outline-none border-4 overflow-hidden transition-all transform hover:scale-105 ${
                 selectedParent === 'Mama' 
                   ? 'border-purple-500 scale-110' 
                   : 'border-purple-200 hover:border-purple-300'
-              } ${isProcessing ? 'opacity-70 cursor-not-allowed' : ''}`}
+              } ${(isProcessing || isSubmitting) ? 'opacity-70 cursor-not-allowed' : ''}`}
               aria-label="Select Mama"
-              disabled={isProcessing}
+              disabled={isProcessing || isSubmitting}
             >
               <img 
                 src={parents.mama.image} 
@@ -1018,14 +803,14 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
           {/* Papa */}
           <div className="flex flex-col items-center">
             <button
-              onClick={() => !isProcessing && handleSelectParent('Papa')}
+              onClick={() => !isProcessing && !isSubmitting && handleSelectParent('Papa')}
               className={`w-28 h-28 sm:w-36 sm:h-36 rounded-full focus:outline-none border-4 overflow-hidden transition-all transform hover:scale-105 ${
                 selectedParent === 'Papa' 
                   ? 'border-blue-500 scale-110' 
                   : 'border-blue-200 hover:border-blue-300'
-              } ${isProcessing ? 'opacity-70 cursor-not-allowed' : ''}`}
+              } ${(isProcessing || isSubmitting) ? 'opacity-70 cursor-not-allowed' : ''}`}
               aria-label="Select Papa"
-              disabled={isProcessing}
+              disabled={isProcessing || isSubmitting}
             >
               <img 
                 src={parents.papa.image}
@@ -1125,9 +910,9 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
       <div className="flex justify-between items-center bg-gray-50 p-4 rounded-lg">
         <button 
           onClick={handlePrevious}
-          disabled={currentQuestionIndex === 0 || isProcessing}
+          disabled={currentQuestionIndex === 0 || isProcessing || isSubmitting}
           className={`px-4 py-2 rounded-md flex items-center ${
-            currentQuestionIndex === 0 || isProcessing
+            currentQuestionIndex === 0 || isProcessing || isSubmitting
               ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
               : 'bg-white text-black hover:bg-gray-100 border border-gray-200'
           }`}
@@ -1138,8 +923,10 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
         
         <button
           onClick={handlePauseSurvey}
-          disabled={isProcessing}
-          className="px-4 py-2 rounded-md bg-white text-black hover:bg-gray-100 border border-gray-200"
+          disabled={isProcessing || isSubmitting}
+          className={`px-4 py-2 rounded-md bg-white text-black hover:bg-gray-100 border border-gray-200 ${
+            isProcessing || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
         >
           Pause Survey
         </button>

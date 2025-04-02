@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Info, HelpCircle, Scale, Brain, Heart, Clock, ArrowLeft, ArrowRight, Save, Check, X } from 'lucide-react';
+import { LogOut, Info, HelpCircle, Scale, Brain, Heart, Clock, ArrowLeft, ArrowRight, Save, Check, X, Edit } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useSurvey } from '../../contexts/SurveyContext';
 
