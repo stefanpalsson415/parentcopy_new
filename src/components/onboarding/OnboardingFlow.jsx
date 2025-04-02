@@ -2,13 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowRight, ArrowLeft, CheckCircle, Brain, 
-  Heart, BarChart, Sliders, Scale, Clock, Users, PlusCircle
+  Heart, BarChart, Sliders, Scale, Clock, Users, PlusCircle, Edit, Trash2, User
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import GoogleAuthButton from '../common/GoogleAuthButton';
 
 const OnboardingFlow = () => {
-  const { signInWithGoogle } = useAuth();
   const navigate = useNavigate();
 
   const [step, setStep] = useState(1);
@@ -40,7 +38,6 @@ const OnboardingFlow = () => {
   });
   
   const [validationErrors, setValidationErrors] = useState({});
-  const [signingInParent, setSigningInParent] = useState(null);
   const [headerTitle, setHeaderTitle] = useState("Let's get started with Allie");
 
   const totalSteps = 10;
@@ -202,16 +199,15 @@ const OnboardingFlow = () => {
             errors[`parent_${index}_name`] = 'Name is required';
           }
           
-          if (!parent.email.trim() && !parent.googleAuth) {
+          if (!parent.email.trim()) {
             errors[`parent_${index}_email`] = 'Email is required';
-          } else if (parent.email && !/\S+@\S+\.\S+/.test(parent.email)) {
+          } else if (!/\S+@\S+\.\S+/.test(parent.email)) {
             errors[`parent_${index}_email`] = 'Email is invalid';
           }
           
-          // Only validate password if not using Google Auth
-          if (!parent.googleAuth && !parent.password.trim()) {
+          if (!parent.password.trim()) {
             errors[`parent_${index}_password`] = 'Password is required';
-          } else if (!parent.googleAuth && parent.password.length < 6) {
+          } else if (parent.password.length < 6) {
             errors[`parent_${index}_password`] = 'Password must be at least 6 characters';
           }
         });
@@ -367,105 +363,15 @@ const OnboardingFlow = () => {
               <div key={index} className="mb-6 p-4 border rounded bg-white">
                 <h3 className="font-medium text-lg mb-3 font-roboto">{parent.role} Information</h3>
                 
-                {/* Google auth info banner */}
-                {parent.googleAuth && (
-                  <div className="mt-3 p-2 bg-green-50 rounded-lg border border-green-200">
-                    <p className="text-sm text-green-700 flex items-center font-roboto">
-                      <CheckCircle size={16} className="mr-1" />
-                      Google account connected: {parent.googleAuth.email}
-                    </p>
-                    <p className="text-xs text-green-600 mt-1 font-roboto">
-                      Calendar integration and simplified login are enabled
-                    </p>
-                  </div>
-                )}
-                
-                {/* Google Sign-in Button */}
-                <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <p className="text-sm text-blue-700 mb-3 font-roboto">
-                    <strong>Recommended:</strong> Sign in with Google to enable calendar integration and simplify account management.
-                  </p>
-                  
-                  <GoogleAuthButton
-  buttonText={`Sign in with Google as ${parent.role}`}
-  parentRole={parent.role}
-  onSuccess={async (user) => {
-    if (user) {
-      console.log("Successfully signed in with Google:", user.email);
-      
-      // Create a stable user ID that will match what gets created in the database
-      const stableUserId = user.uid;
-      
-      // Update the parent's information with Google data
-      const updatedParents = [...familyData.parents];
-      updatedParents[index] = {
-        ...updatedParents[index],
-        email: user.email,
-        name: updatedParents[index].name || (user.displayName || ''),
-        googleAuth: {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-          lastSignIn: new Date().toISOString()
-        }
-      };
-      
-      // Update family data with the new parent info
-      setFamilyData({...familyData, parents: updatedParents});
-      
-      // Store token with the user's UID which will be their user ID
-      try {
-        // Store with consistent key format that matches what's used elsewhere
-        localStorage.setItem(`googleToken_${stableUserId}`, JSON.stringify({
-          email: user.email,
-          uid: user.uid,
-          role: parent.role,
-          timestamp: Date.now()
-        }));
-        console.log(`Stored Google token for ${parent.role} with stable ID: ${stableUserId}`);
-        
-        // Also store role-specific token for fallback
-        localStorage.setItem(`googleToken_${parent.role.toLowerCase()}`, JSON.stringify({
-          email: user.email,
-          uid: user.uid,
-          role: parent.role,
-          timestamp: Date.now()
-        }));
-      } catch (e) {
-        console.error("Failed to store token:", e);
-      }
-    }
-  }}
-/>                </div>
-                
-                <div className="relative mb-4">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-300"></div>
-                  </div>
-                  <div className="relative flex justify-center">
-                    <span className="px-2 bg-white text-gray-500 text-sm font-roboto">or enter manually</span>
-                  </div>
-                </div>
-                
                 <div className="space-y-3">
                   <div>
                     <label className="block text-sm text-gray-700 mb-1 font-roboto">
                       Name
-                      {parent.googleAuth && !parent.name && (
-                        <span className="text-amber-600 ml-1 font-medium">
-                          ← Please add your name
-                        </span>
-                      )}
                     </label>
                     <input
                       type="text"
                       className={`w-full p-2 border rounded font-roboto ${
-                        validationErrors[`parent_${index}_name`] 
-                          ? 'border-red-500' 
-                          : parent.googleAuth && !parent.name 
-                            ? 'border-amber-500 bg-amber-50' 
-                            : ''
+                        validationErrors[`parent_${index}_name`] ? 'border-red-500' : ''
                       }`}
                       placeholder={`${parent.role}'s name`}
                       value={parent.name}
@@ -484,29 +390,25 @@ const OnboardingFlow = () => {
                       placeholder={`${parent.role}'s email`}
                       value={parent.email}
                       onChange={e => updateParent(index, 'email', e.target.value)}
-                      disabled={parent.googleAuth}
                     />
                     {validationErrors[`parent_${index}_email`] && (
                       <p className="text-red-500 text-xs mt-1 font-roboto">{validationErrors[`parent_${index}_email`]}</p>
                     )}
                   </div>
                   
-                  {/* Only show password field if not using Google Auth */}
-                  {!parent.googleAuth && (
-                    <div>
-                      <label className="block text-sm text-gray-700 mb-1 font-roboto">Password</label>
-                      <input
-                        type="password"
-                        className={`w-full p-2 border rounded font-roboto ${validationErrors[`parent_${index}_password`] ? 'border-red-500' : ''}`}
-                        placeholder="Password"
-                        value={parent.password}
-                        onChange={e => updateParent(index, 'password', e.target.value)}
-                      />
-                      {validationErrors[`parent_${index}_password`] && (
-                        <p className="text-red-500 text-xs mt-1 font-roboto">{validationErrors[`parent_${index}_password`]}</p>
-                      )}
-                    </div>
-                  )}
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1 font-roboto">Password</label>
+                    <input
+                      type="password"
+                      className={`w-full p-2 border rounded font-roboto ${validationErrors[`parent_${index}_password`] ? 'border-red-500' : ''}`}
+                      placeholder="Password"
+                      value={parent.password}
+                      onChange={e => updateParent(index, 'password', e.target.value)}
+                    />
+                    {validationErrors[`parent_${index}_password`] && (
+                      <p className="text-red-500 text-xs mt-1 font-roboto">{validationErrors[`parent_${index}_password`]}</p>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
