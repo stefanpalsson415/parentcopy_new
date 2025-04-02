@@ -4,7 +4,6 @@ import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import DatabaseService from '../../services/DatabaseService';
 import CalendarService from '../../services/CalendarService';
-import GoogleAuthManager from '../../utils/GoogleAuthManager';
 import { Calendar, Download, ChevronDown, ChevronUp, Settings, Globe, Check, Apple } from 'lucide-react';
 
 const UserSettingsScreen = ({ onClose }) => {
@@ -18,136 +17,16 @@ const UserSettingsScreen = ({ onClose }) => {
     updateFamilyPicture
   } = useFamily();
   
-  const { currentUser, linkAccountWithGoogle } = useAuth();
+  const { currentUser, logout } = useAuth();
   
   const [newFamilyName, setNewFamilyName] = useState(familyName || '');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadType, setUploadType] = useState(null); // 'profile' or 'family'
   const [uploadError, setUploadError] = useState(null);
   const [settingsTab, setSettingsTab] = useState('profile'); // 'profile', 'family', 'app', or 'calendar'
+  const [uploadForMember, setUploadForMember] = useState(null);
 
-  // Track Google auth status
-  const [googleAuthStatus, setGoogleAuthStatus] = useState({
-    isConnected: false,
-    email: null,
-    loading: true
-  });
-
-  // Add this useEffect right after the existing state declarations
-  useEffect(() => {
-    // Ensure we're showing data for the correct user
-    console.log("UserSettingsScreen selected user:", 
-      selectedUser ? 
-      {
-        id: selectedUser.id,
-        name: selectedUser.name,
-        email: selectedUser.email,
-        role: selectedUser.roleType,
-        hasGoogleAuth: !!selectedUser.googleAuth
-      } : 'none');
-    
-    if (selectedUser && currentUser) {
-      console.log("Current auth user email:", currentUser.email);
-      console.log("Selected user email:", selectedUser.email);
-      
-      // Log Google auth data if available
-      if (selectedUser.googleAuth) {
-        console.log("Google auth email:", selectedUser.googleAuth.email);
-      }
-    }
-  }, [selectedUser, currentUser]);
-
-  useEffect(() => {
-    const checkGoogleAuthStatus = async () => {
-      try {
-        if (!selectedUser) {
-          setGoogleAuthStatus({
-            isConnected: false,
-            email: null,
-            loading: false
-          });
-          return;
-        }
-        
-        console.log("Checking Google auth for selected user:", selectedUser.id);
-        
-        // Use our GoogleAuthManager to check if this specific user is authenticated
-        const isConnected = GoogleAuthManager.isUserAuthenticated(selectedUser.id);
-        
-        if (isConnected) {
-          // Get the user's token data
-          const userData = GoogleAuthManager.getUserToken(selectedUser.id);
-          
-          console.log(`User ${selectedUser.name} is connected to Google with email: ${userData.email}`);
-          
-          // Make sure the member's profile has the Google auth data
-          if (!selectedUser.googleAuth || selectedUser.googleAuth.email !== userData.email) {
-            await updateMemberProfile(selectedUser.id, {
-              googleAuth: {
-                uid: userData.uid,
-                email: userData.email,
-                displayName: userData.name,
-                photoURL: userData.photoURL,
-                lastConnected: new Date().toISOString()
-              }
-            });
-          }
-          
-          // Update the state
-          setGoogleAuthStatus({
-            isConnected: true,
-            email: userData.email,
-            loading: false
-          });
-        } else {
-          console.log(`User ${selectedUser.name} is NOT connected to Google`);
-          
-          // Clear any incorrect Google auth data in the user's profile
-          if (selectedUser.googleAuth) {
-            await updateMemberProfile(selectedUser.id, { googleAuth: null });
-          }
-          
-          setGoogleAuthStatus({
-            isConnected: false,
-            email: null,
-            loading: false
-          });
-        }
-      } catch (error) {
-        console.error("Error checking Google auth status:", error);
-        setGoogleAuthStatus({
-          isConnected: false,
-          email: null,
-          loading: false,
-          error: error.message
-        });
-      }
-    };
-    
-    if (selectedUser) {
-      checkGoogleAuthStatus();
-    }
-  }, [selectedUser, updateMemberProfile]);
-  
-  // Helper function to clear only the specific user's Google auth data without affecting others
-  const clearUserGoogleAuth = async (userId) => {
-    try {
-      console.log(`Clearing Google auth data specifically for user ${userId}`);
-      
-      // Use GoogleAuthManager to sign out this specific user
-      await GoogleAuthManager.signOutUser(userId);
-      
-      // Update the user's profile to remove Google auth data
-      await updateMemberProfile(userId, { googleAuth: null });
-      
-      return true;
-    } catch (error) {
-      console.error("Error clearing user Google auth:", error);
-      return false;
-    }
-  };
-  
-  // Handle family name update
+  // Handler for family name update
   const handleFamilyNameUpdate = async () => {
     if (newFamilyName.trim() === '') return;
     
@@ -222,10 +101,7 @@ const UserSettingsScreen = ({ onClose }) => {
   const CalendarSettingsTab = ({ userId }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [calendarSettings, setCalendarSettings] = useState(null);
-    const [googleCalendars, setGoogleCalendars] = useState([]);
-    const [isGoogleSignedIn, setIsGoogleSignedIn] = useState(false);
-    const [selectedGoogleCalendar, setSelectedGoogleCalendar] = useState('primary');
-    const [activeCalendarType, setActiveCalendarType] = useState(null);
+    const [activeCalendarType, setActiveCalendarType] = useState('allie');
     const [isSaving, setIsSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState({ type: '', message: '' });
     
@@ -241,26 +117,8 @@ const UserSettingsScreen = ({ onClose }) => {
           // Load user's calendar settings
           const settings = await CalendarService.loadUserCalendarSettings(userId);
           setCalendarSettings(settings);
-          setActiveCalendarType(settings?.defaultCalendarType || null);
+          setActiveCalendarType('allie'); // Always use Allie calendar
           
-          if (settings?.googleCalendar?.calendarId) {
-            setSelectedGoogleCalendar(settings.googleCalendar.calendarId);
-          }
-          
-          // Check if signed in to Google
-          try {
-            await CalendarService.initializeGoogleCalendar();
-            const signedIn = CalendarService.isSignedInToGoogle();
-            setIsGoogleSignedIn(signedIn);
-            
-            // If signed in, load available calendars
-            if (signedIn) {
-              const calendars = await CalendarService.listUserCalendars();
-              setGoogleCalendars(calendars);
-            }
-          } catch (googleError) {
-            console.error("Error checking Google sign-in status:", googleError);
-          }
         } catch (error) {
           console.error("Error loading calendar settings:", error);
         } finally {
@@ -270,53 +128,6 @@ const UserSettingsScreen = ({ onClose }) => {
       
       loadSettings();
     }, [userId]);
-    
-    // Handle Google sign in
-    const handleGoogleSignIn = async () => {
-      try {
-        if (!userId) {
-          throw new Error("User ID required for Google sign-in");
-        }
-        
-        // Use CalendarService with the user ID
-        await CalendarService.signInToGoogle(userId);
-        setIsGoogleSignedIn(true);
-        
-        // Load available calendars
-        const calendars = await CalendarService.listUserCalendars(userId);
-        setGoogleCalendars(calendars);
-      } catch (error) {
-        console.error("Error signing in to Google:", error);
-        alert("Failed to sign in to Google Calendar: " + (error.message || "Unknown error"));
-      }
-    };
-    
-    // Handle Google sign out
-    const handleGoogleSignOut = async () => {
-      try {
-        if (!userId) {
-          throw new Error("User ID required for Google sign-out");
-        }
-        
-        // Use CalendarService with the user ID
-        await CalendarService.signOutFromGoogle(userId);
-        setIsGoogleSignedIn(false);
-        setGoogleCalendars([]);
-      } catch (error) {
-        console.error("Error signing out from Google:", error);
-        alert("Failed to sign out from Google: " + (error.message || "Unknown error"));
-      }
-    };
-    
-    // Handle Google calendar selection
-    const handleGoogleCalendarChange = (e) => {
-      setSelectedGoogleCalendar(e.target.value);
-    };
-    
-    // Handle calendar type selection
-    const handleCalendarTypeChange = (type) => {
-      setActiveCalendarType(type);
-    };
     
     // Save calendar settings
     const saveCalendarSettings = async () => {
@@ -329,15 +140,9 @@ const UserSettingsScreen = ({ onClose }) => {
         // Prepare updated settings
         const updatedSettings = {
           ...calendarSettings,
-          defaultCalendarType: activeCalendarType,
-          googleCalendar: {
-            ...calendarSettings?.googleCalendar,
-            enabled: activeCalendarType === 'google',
-            calendarId: selectedGoogleCalendar
-          },
-          appleCalendar: {
-            ...calendarSettings?.appleCalendar,
-            enabled: activeCalendarType === 'apple'
+          defaultCalendarType: 'allie',
+          allieCalendar: {
+            enabled: true
           }
         };
         
@@ -387,360 +192,45 @@ const UserSettingsScreen = ({ onClose }) => {
             <div>
               <h4 className="font-medium text-blue-800 font-roboto">How Calendar Integration Works</h4>
               <p className="text-sm text-blue-700 mt-1 font-roboto">
-                Allie uses your Google account to sync family meetings, tasks, and events with your calendar. 
-                This keeps your family schedule in one place and sends helpful reminders.
+                Allie helps you keep track of family meetings, tasks, and events in one place
+                to better manage your family schedule and send helpful reminders.
               </p>
-              
-              {!isGoogleSignedIn && (
-                <div className="mt-3">
-                  <button
-                    onClick={handleGoogleSignIn}
-                    className="px-3 py-1.5 flex items-center justify-center bg-white rounded border border-blue-300 text-blue-700 hover:bg-blue-50 text-sm font-roboto"
-                  >
-                    <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#4285F4"/>
-                    </svg>
-                    Connect Google Calendar Now
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>
         
-        {/* Default Calendar Selection */}
+        {/* Allie Calendar Settings */}
         <div className="bg-white p-4 rounded-lg border">
-          <h4 className="font-medium mb-3">Default Calendar</h4>
-          <p className="text-sm text-gray-600 mb-4">
-            Select which calendar system you want to use by default when adding events from Allie.
-          </p>
+          <h4 className="font-medium mb-3">Allie Calendar Settings</h4>
           
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div
-              className={`p-4 border rounded-lg cursor-pointer ${
-                activeCalendarType === 'google' ? 'border-blue-500 bg-blue-50' : 'hover:border-gray-400'
-              }`}
-              onClick={() => handleCalendarTypeChange('google')}
-            >
-              <div className="flex items-center mb-2">
-                <div className={`w-4 h-4 rounded-full border ${
-                  activeCalendarType === 'google' ? 'bg-blue-500 border-blue-500' : 'border-gray-400'
-                } flex items-center justify-center mr-2`}>
-                  {activeCalendarType === 'google' && <div className="w-2 h-2 bg-white rounded-full"></div>}
-                </div>
-                <span className="font-medium">Google Calendar</span>
-              </div>
-              <div className="flex items-center justify-center h-10 mb-2">
-                <Globe size={24} className="text-gray-700" />
-              </div>
-              <p className="text-xs text-gray-500">
-                Sync with your Google Calendar account
-              </p>
-            </div>
-            
-            <div
-              className={`p-4 border rounded-lg cursor-pointer ${
-                activeCalendarType === 'apple' ? 'border-blue-500 bg-blue-50' : 'hover:border-gray-400'
-              } ${!CalendarService.appleCalendarAvailable ? 'opacity-50 cursor-not-allowed' : ''}`}
-              onClick={() => CalendarService.appleCalendarAvailable && handleCalendarTypeChange('apple')}
-            >
-              <div className="flex items-center mb-2">
-                <div className={`w-4 h-4 rounded-full border ${
-                  activeCalendarType === 'apple' ? 'bg-blue-500 border-blue-500' : 'border-gray-400'
-                } flex items-center justify-center mr-2`}>
-                  {activeCalendarType === 'apple' && <div className="w-2 h-2 bg-white rounded-full"></div>}
-                </div>
-                <span className="font-medium">Apple Calendar</span>
-              </div>
-              <div className="flex items-center justify-center h-10 mb-2">
-                <Apple size={24} className="text-gray-700" />
-              </div>
-              <p className="text-xs text-gray-500">
-                {CalendarService.appleCalendarAvailable 
-                  ? "Sync with your Apple Calendar" 
-                  : "Not available in this browser"}
-              </p>
-            </div>
-            
-            <div
-              className={`p-4 border rounded-lg cursor-pointer ${
-                activeCalendarType === 'ics' ? 'border-blue-500 bg-blue-50' : 'hover:border-gray-400'
-              }`}
-              onClick={() => handleCalendarTypeChange('ics')}
-            >
-              <div className="flex items-center mb-2">
-                <div className={`w-4 h-4 rounded-full border ${
-                  activeCalendarType === 'ics' ? 'bg-blue-500 border-blue-500' : 'border-gray-400'
-                } flex items-center justify-center mr-2`}>
-                  {activeCalendarType === 'ics' && <div className="w-2 h-2 bg-white rounded-full"></div>}
-                </div>
-                <span className="font-medium">ICS Download</span>
-              </div>
-              <div className="flex items-center justify-center h-10 mb-2">
-                <Download size={24} className="text-gray-700" />
-              </div>
-              <p className="text-xs text-gray-500">
-                Download ICS files to import into any calendar system
-              </p>
-            </div>
-          </div>
-        </div>
-        
-        {/* Google Calendar Settings */}
-        {activeCalendarType === 'google' && (
-          <div className="bg-white p-4 rounded-lg border">
-            <h4 className="font-medium mb-3">Google Calendar Settings</h4>
-            
-            {!isGoogleSignedIn ? (
-              <div className="text-center p-6">
-                <p className="text-sm text-gray-600 mb-4">
-                  Sign in to your Google account to connect your calendar.
-                </p>
-                <button
-                  onClick={handleGoogleSignIn}
-                  className="px-4 py-2 bg-white border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center mx-auto"
-                >
-                  <Globe size={16} className="mr-2" />
-                  Sign in with Google
-                </button>
-              </div>
-            ) : (
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-sm text-green-600 flex items-center">
-                    <Check size={16} className="mr-1" />
-                    Connected to Google Calendar
-                  </p>
-                  <button
-                    onClick={handleGoogleSignOut}
-                    className="text-xs text-gray-600 hover:text-gray-800"
-                  >
-                    Sign Out
-                  </button>
-                </div>
-                
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Select Calendar
-                  </label>
-                  <select
-                    value={selectedGoogleCalendar}
-                    onChange={handleGoogleCalendarChange}
-                    className="w-full p-2 border rounded"
-                  >
-                    <option value="primary">Primary Calendar</option>
-                    {googleCalendars.map(calendar => (
-                      <option key={calendar.id} value={calendar.id}>
-                        {calendar.summary}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Allie will add events to this calendar.
-                  </p>
-                </div>
-                
-                <div className="flex items-center text-sm text-gray-600 mb-2">
-                  <button
-                    onClick={() => window.open('https://calendar.google.com/', '_blank')}
-                    className="text-blue-600 hover:underline flex items-center"
-                  >
-                    <Settings size={14} className="mr-1" />
-                    Manage Google Calendar Settings
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-        
-        {/* Repair Button - ONE debug button kept */}
-        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <h4 className="font-medium mb-2">Repair Google Auth</h4>
-          <p className="text-sm text-red-700 mb-2">
-            If you're experiencing issues with Google accounts showing the wrong email or not connecting properly, 
-            you can try to repair the Google auth data.
-          </p>
-          <button
-            onClick={async () => {
-              try {
-                if (!familyId) {
-                  alert("No family ID available");
-                  return;
-                }
-                
-                if (!selectedUser || !selectedUser.id) {
-                  alert("Please select a family member first");
-                  return;
-                }
-                
-                // Instead of repairing all family members, just repair the selected user
-                const result = await CalendarService.repairUserCalendarAuth(selectedUser.id);
-                
-                if (result.success) {
-                  alert(`Successfully repaired Google Calendar auth for ${selectedUser.name}. Connected as: ${result.email}`);
-                  
-                  // Update the Google auth status
-                  setGoogleAuthStatus({
-                    isConnected: true,
-                    email: result.email,
-                    loading: false
-                  });
-                  
-                  // Refresh the UI
-                  window.location.reload();
-                } else {
-                  alert(`Failed to repair Google auth: ${result.error || "Unknown error"}`);
-                }
-              } catch (error) {
-                console.error("Error repairing Google auth:", error);
-                alert(`Error: ${error.message}`);
-              }
-            }}
-            className="px-3 py-1 bg-red-100 border border-red-300 rounded text-red-800 text-sm"
-          >
-            Repair Google Auth Data
-          </button>
-        </div>
-
-        {/* Advanced Debug */}
-        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <h4 className="font-medium mb-2">Advanced Google API Debug</h4>
-          <p className="text-sm text-blue-700 mb-2">
-            Try this if Google Calendar connection isn't working at all.
-          </p>
-          <button
-            onClick={async () => {
-              try {
-                // Manually initialize and test Google API
-                alert("Starting Google API diagnostic...");
-                
-                // Step 1: Check for the gapi object
-                if (!window.gapi) {
-                  alert("Google API not loaded. Loading it now...");
-                  // Load the script
-                  const script = document.createElement('script');
-                  script.src = 'https://apis.google.com/js/api.js';
-                  script.onload = () => alert("Google API script loaded successfully!");
-                  script.onerror = () => alert("Failed to load Google API script");
-                  document.body.appendChild(script);
-                  return;
-                }
-                
-                // Step 2: Check for auth2
-                alert("Attempting to load auth2...");
-                window.gapi.load('client:auth2', () => {
-                  alert("Auth2 loaded! Attempting to initialize...");
-                  
-                  // Step 3: Initialize client
-                  window.gapi.client.init({
-                    apiKey: 'AIzaSyALjXkZiFZ_Fy143N_dzdaUbyDCtabBr7Y',
-                    clientId: '363935868004-baf70v82iuhs34s1hi4f4tnt62hgr1qm.apps.googleusercontent.com',
-                    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
-                    scope: 'https://www.googleapis.com/auth/calendar.events',
-                  }).then(() => {
-                    alert("API initialized successfully! Attempting sign-in...");
-                    
-                    // Step 4: Try sign-in
-                    const authInstance = window.gapi.auth2.getAuthInstance();
-                    authInstance.signIn()
-                      .then(user => {
-                        alert("Sign-in successful! Email: " + user.getBasicProfile().getEmail());
-                      })
-                      .catch(err => {
-                        alert("Sign-in failed: " + err.error);
-                      });
-                  }).catch(err => {
-                    alert("API initialization failed: " + err.error);
-                  });
-                });
-              } catch (error) {
-                alert("Error in debug process: " + error.message);
-              }
-            }}
-            className="px-3 py-1 bg-blue-100 border border-blue-300 rounded text-blue-800 text-sm"
-          >
-            Manual Google API Debug
-          </button>
-        </div>
-
-        {/* Test Calendar Connection - Another debug button kept */}
-        <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <h4 className="font-medium mb-2">Test Google Calendar Connection</h4>
-          <p className="text-sm text-yellow-700 mb-2">
-            Test your Google Calendar connection to ensure it's working properly.
-          </p>
-          <button
-            onClick={async () => {
-              try {
-                // Use the current user ID
-                const userId = currentUser?.uid;
-                if (!userId) {
-                  alert("No user ID available. Please log in again.");
-                  return;
-                }
-                
-                const result = await CalendarService.debugGoogleCalendarConnection(userId);
-                console.log("Google Calendar diagnostic result:", result);
-                alert(result.success 
-                  ? `Connection successful! Found ${result.calendars?.length || 0} calendars.` 
-                  : `Connection failed: ${result.error}`);
-              } catch (error) {
-                console.error("Error running diagnostic:", error);
-                alert(`Error running diagnostic: ${error.message}`);
-              }
-            }}
-            className="px-3 py-1 bg-yellow-100 border border-yellow-300 rounded text-yellow-800 text-sm"
-          >
-            Test Google Calendar Connection
-          </button>
-        </div>
-
-        {/* Apple Calendar Settings */}
-        {activeCalendarType === 'apple' && (
-          <div className="bg-white p-4 rounded-lg border">
-            <h4 className="font-medium mb-3">Apple Calendar Settings</h4>
-            
-            {!CalendarService.appleCalendarAvailable ? (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                <p className="text-sm text-amber-700">
-                  Apple Calendar integration is only available on macOS devices using Safari or Chrome browsers.
-                </p>
-              </div>
-            ) : (
-              <div>
-                <p className="text-sm text-gray-600 mb-4">
-                  When you add events to your Apple Calendar, you'll be prompted to allow access to your calendar.
-                </p>
-                
-                <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
-                  <p>
-                    Note: Allie will download .ics files that you can open with Apple Calendar. Simply click "Add to Calendar" 
-                    when prompted.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-        
-        {/* ICS Download Settings */}
-        {activeCalendarType === 'ics' && (
-          <div className="bg-white p-4 rounded-lg border">
-            <h4 className="font-medium mb-3">ICS Download Settings</h4>
-            
+          <div>
             <p className="text-sm text-gray-600 mb-4">
-              Allie will generate .ics files for you to download. These files can be imported into any calendar 
-              application including Google Calendar, Apple Calendar, Outlook, and more.
+              Allie provides a simple calendar system to help you track important family events and tasks.
             </p>
             
-            <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
-              <p>
-                After downloading, open the .ics file with your preferred calendar application to add the event.
+            <div className="bg-green-50 p-3 rounded-lg text-sm text-green-700">
+              <p className="flex items-center">
+                <Check size={16} className="mr-2" />
+                Allie Calendar is enabled
               </p>
             </div>
           </div>
-        )}
+        </div>
+        
+        {/* ICS Download Settings */}
+        <div className="bg-white p-4 rounded-lg border">
+          <h4 className="font-medium mb-3">Calendar Download</h4>
+          
+          <p className="text-sm text-gray-600 mb-4">
+            You can download calendar files (.ics) for any event to import into your preferred calendar application.
+          </p>
+          
+          <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
+            <p>
+              After downloading, open the .ics file with your preferred calendar application to add the event.
+            </p>
+          </div>
+        </div>
         
         {/* Notification Settings */}
         <div className="bg-white p-4 rounded-lg border">
@@ -755,7 +245,7 @@ const UserSettingsScreen = ({ onClose }) => {
                 onChange={(e) => setCalendarSettings(prev => ({
                   ...prev,
                   notifications: {
-                    ...prev.notifications,
+                    ...prev?.notifications,
                     taskReminders: e.target.checked
                   }
                 }))}
@@ -771,7 +261,7 @@ const UserSettingsScreen = ({ onClose }) => {
                 onChange={(e) => setCalendarSettings(prev => ({
                   ...prev,
                   notifications: {
-                    ...prev.notifications,
+                    ...prev?.notifications,
                     meetingReminders: e.target.checked
                   }
                 }))}
@@ -787,7 +277,7 @@ const UserSettingsScreen = ({ onClose }) => {
                 onChange={(e) => setCalendarSettings(prev => ({
                   ...prev,
                   notifications: {
-                    ...prev.notifications,
+                    ...prev?.notifications,
                     reminderTime: parseInt(e.target.value)
                   }
                 }))}
@@ -949,7 +439,11 @@ const UserSettingsScreen = ({ onClose }) => {
                   </div>
                   <button
                     className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full"
-                    onClick={() => setUploadType('profile')}
+                    onClick={() => {
+                      setUploadType('profile');
+                      setUploadForMember(selectedUser);
+                      document.getElementById('image-upload').click();
+                    }}
                   >
                     <Camera size={16} />
                   </button>
@@ -987,108 +481,7 @@ const UserSettingsScreen = ({ onClose }) => {
                     value={selectedUser?.email || currentUser?.email || ''}
                     readOnly
                   />
-                  {selectedUser?.googleAuth && (
-                    <p className="text-xs text-green-600 mt-1">
-                      Google account connected: {selectedUser.googleAuth.email}
-                    </p>
-                  )}
                 </div>
-              </div>
-            </div>
-            
-            {/* Google Account Linking Section */}
-            <div className="mt-8 border-t pt-6">
-              <h4 className="font-medium mb-4">Connected Accounts</h4>
-              
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border shadow-sm mr-3">
-                      <svg className="w-6 h-6" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#4285F4"/>
-                      </svg>
-                    </div>
-                    <div>
-                      <h5 className="text-sm font-medium">Google Account</h5>
-                      <p className="text-xs text-gray-500">
-                        {googleAuthStatus.loading ? (
-                          "Checking status..."
-                        ) : googleAuthStatus.isConnected ? (
-                          `Connected as ${googleAuthStatus.email || currentUser?.email}`
-                        ) : (
-                          'Not connected'
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <button
-                    onClick={async () => {
-                      if (googleAuthStatus.isConnected) {
-                        // Already connected - ask if they want to disconnect
-                        const confirmDisconnect = window.confirm('Are you sure you want to disconnect your Google account?');
-                        if (confirmDisconnect) {
-                          try {
-                            // Clear only this specific user's Google auth data
-                            await clearUserGoogleAuth(selectedUser.id);
-                            
-                            // Update local state to reflect changes
-                            setGoogleAuthStatus({
-                              isConnected: false,
-                              email: null,
-                              loading: false
-                            });
-                            
-                            alert('Google account disconnected successfully!');
-                          } catch (error) {
-                            console.error('Error disconnecting Google account:', error);
-                            alert('Failed to disconnect Google account: ' + error.message);
-                          }
-                        }
-                      } else {
-                        // Not connected - connect now
-                        try {
-                          // Connect with Google using our centralized manager
-                          const userData = await GoogleAuthManager.authenticateUser(selectedUser.id);
-                          
-                          // Update the member profile with Google data
-                          await updateMemberProfile(selectedUser.id, {
-                            googleAuth: {
-                              uid: userData.uid,
-                              email: userData.email,
-                              displayName: userData.name,
-                              photoURL: userData.photoURL,
-                              lastConnected: new Date().toISOString()
-                            }
-                          });
-                          
-                          // Update status locally
-                          setGoogleAuthStatus({
-                            isConnected: true,
-                            email: userData.email,
-                            loading: false
-                          });
-                          
-                          alert('Google account connected successfully!');
-                        } catch (error) {
-                          console.error('Error connecting Google account:', error);
-                          alert('Failed to connect Google account: ' + (error.message || 'Unknown error'));
-                        }
-                      }
-                    }}
-                    className={`px-3 py-1.5 rounded text-sm ${
-                      selectedUser?.googleAuth 
-                        ? 'border border-gray-300 text-gray-700 hover:bg-gray-100' 
-                        : 'bg-black text-white hover:bg-gray-800'
-                    }`}
-                  >
-                    {googleAuthStatus.isConnected ? 'Disconnect' : 'Connect'}
-                  </button>
-                </div>
-                
-                <p className="text-xs text-gray-500 mt-3">
-                  Connecting your Google account enables calendar integration and simplifies sign-in.
-                </p>
               </div>
             </div>
           </div>
@@ -1130,14 +523,18 @@ const UserSettingsScreen = ({ onClose }) => {
                   <div className="relative">
                     <div className="w-24 h-24 rounded overflow-hidden border-2 border-gray-200">
                       <img 
-                        src="/favicon.ico" 
+                        src={familyPicture || "/favicon.ico"} 
                         alt="Family" 
                         className="w-full h-full object-cover"
                       />
                     </div>
                     <button
                       className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full"
-                      onClick={() => setUploadType('family')}
+                      onClick={() => {
+                        setUploadType('family');
+                        setUploadForMember({id: 'family'});
+                        document.getElementById('image-upload').click();
+                      }}
                     >
                       <Camera size={16} />
                     </button>
@@ -1258,57 +655,6 @@ const UserSettingsScreen = ({ onClose }) => {
           onChange={handleImageUpload}
           disabled={isUploading}
         />
-        
-        {/* Upload Modal */}
-        {uploadType && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-sm w-full">
-              <h3 className="text-lg font-medium mb-4">
-                {uploadType === 'profile' ? 'Update Profile Picture' : 'Update Family Picture'}
-              </h3>
-              
-              {uploadError && (
-                <div className="mb-4 p-3 bg-red-50 text-red-700 rounded border border-red-200">
-                  {uploadError}
-                </div>
-              )}
-              
-              <div className="flex items-center justify-center mb-4">
-                {isUploading ? (
-                  <div className="px-4 py-2 bg-gray-100 text-gray-700 rounded border flex items-center">
-                    <div className="w-4 h-4 border-2 border-t-transparent border-blue-600 rounded-full animate-spin mr-2"></div>
-                    <span className="text-sm">Uploading...</span>
-                  </div>
-                ) : (
-                  <label 
-                    htmlFor="image-upload" 
-                    className="flex flex-col items-center px-4 py-3 bg-blue-50 text-blue-700 rounded cursor-pointer border border-blue-300 hover:bg-blue-100"
-                  >
-                    <Upload size={20} className="mb-1" />
-                    <span className="text-sm">Select Photo</span>
-                    {uploadType === 'profile' 
-                      ? <span className="text-xs text-gray-500 mt-1">Maximum size: 5MB</span>
-                      : <span className="text-xs text-gray-500 mt-1">Maximum size: 2MB</span>
-                    }
-                  </label>
-                )}
-              </div>
-              
-              <div className="flex justify-end">
-                <button
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                  onClick={() => {
-                    setUploadType(null);
-                    setUploadError(null);
-                  }}
-                  disabled={isUploading}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
