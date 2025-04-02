@@ -2266,12 +2266,12 @@ const ChildrenTrackingTab = () => {
           </span>
         )}
       </div>
-      <button className="p-2 rounded-full hover:bg-gray-100"
-            >
+      <button className="p-2 rounded-full hover:bg-gray-100">
               {expandedSections[sectionKey] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
           </div>
-        </div>
+        
+      
       );
   
   // Render AI insights section
