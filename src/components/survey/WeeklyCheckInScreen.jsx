@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   LogOut, HelpCircle, Brain, Scale, Heart, Clock, Save,
-  ChevronDown, ChevronUp, Info, ArrowLeft, ArrowRight
+  ChevronDown, ChevronUp, Info, ArrowLeft, ArrowRight, Check, X
 } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useSurvey } from '../../contexts/SurveyContext';
@@ -29,7 +29,7 @@ const WeeklyCheckInScreen = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedParent, setSelectedParent] = useState(null);
   const [viewingQuestionList, setViewingQuestionList] = useState(false);
-  const [showWeightInfo, setShowWeightInfo] = useState(false);
+  const [showWeightInfo, setShowWeightInfo] = useState(true); // Always show weight info
   const [showExplanation, setShowExplanation] = useState(false);
   const [showWeightMetrics, setShowWeightMetrics] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -42,6 +42,7 @@ const WeeklyCheckInScreen = () => {
   const [saveErrors, setSaveErrors] = useState({});
   const [weeklyQuestions, setWeeklyQuestions] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasWeightChanges, setHasWeightChanges] = useState(false);
 
   const weekNum = currentWeek;
   
@@ -54,6 +55,7 @@ const WeeklyCheckInScreen = () => {
   // Update setCurrentQuestion function
   const setCurrentQuestion = (updatedQuestion) => {
     setLocalCurrentQuestion(updatedQuestion);
+    setHasWeightChanges(true);
   };
 
   // Ref to track if keyboard listeners are initialized
@@ -221,6 +223,39 @@ const WeeklyCheckInScreen = () => {
     }
   };
 
+  // Save weight changes
+  const handleSaveWeightChanges = () => {
+    if (hasWeightChanges) {
+      // Weight changes are already saved through the updateQuestionWeight function
+      // Just need to update UI state
+      setEditingWeight(false);
+      setHasWeightChanges(false);
+      
+      // Show a save confirmation
+      const saveNotification = document.createElement('div');
+      saveNotification.className = 'fixed top-4 right-4 bg-green-100 text-green-800 px-4 py-2 rounded shadow-md z-50 flex items-center font-roboto';
+      saveNotification.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>Weight changes saved successfully';
+      document.body.appendChild(saveNotification);
+      
+      // Remove after 3 seconds
+      setTimeout(() => {
+        if (document.body.contains(saveNotification)) {
+          document.body.removeChild(saveNotification);
+        }
+      }, 3000);
+    } else {
+      setEditingWeight(false);
+    }
+  };
+
+  // Cancel weight editing
+  const handleCancelWeightEditing = () => {
+    // Reset the current question to its original state
+    setLocalCurrentQuestion(null);
+    setEditingWeight(false);
+    setHasWeightChanges(false);
+  };
+
   // Parent profile images with fallbacks
   const parents = {
     mama: {
@@ -273,24 +308,6 @@ const WeeklyCheckInScreen = () => {
     return aiLogic;
   };
 
-  // Get weight impact color
-  const getWeightImpactColor = (weight) => {
-    const numWeight = parseFloat(weight);
-    if (numWeight >= 12) return "text-red-600 bg-red-100";
-    if (numWeight >= 9) return "text-orange-600 bg-orange-100";
-    if (numWeight >= 6) return "text-amber-600 bg-amber-100";
-    return "text-blue-600 bg-blue-100";
-  };
-  
-  // Get weight impact text
-  const getWeightImpactText = (weight) => {
-    const numWeight = parseFloat(weight);
-    if (numWeight >= 12) return "Very High";
-    if (numWeight >= 9) return "High";
-    if (numWeight >= 6) return "Medium";
-    return "Standard";
-  };
-
   // Handle parent selection
   const handleSelectParent = (parent) => {
     if (isProcessing) return; // Prevent multiple selections while processing
@@ -307,7 +324,6 @@ const WeeklyCheckInScreen = () => {
         if (currentQuestionIndex < weeklyQuestions.length - 1) {
           setCurrentQuestionIndex(prevIndex => prevIndex + 1); // Use direct value instead of functional update
           setSelectedParent(null);
-          setShowWeightInfo(false);
           setShowExplanation(false);
           setShowWeightMetrics(false);
         } else {
@@ -357,10 +373,18 @@ const WeeklyCheckInScreen = () => {
   
   // Move to previous question
   const handlePrevious = () => {
+    // If we're editing weights, prompt to save or discard changes
+    if (editingWeight && hasWeightChanges) {
+      if (window.confirm("You have unsaved weight changes. Save changes before going back?")) {
+        handleSaveWeightChanges();
+      } else {
+        handleCancelWeightEditing();
+      }
+    }
+    
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(prevIndex => prevIndex - 1);
       setSelectedParent(currentSurveyResponses[weeklyQuestions[currentQuestionIndex - 1].id] || null);
-      setShowWeightInfo(false);
       setShowExplanation(false);
       setShowWeightMetrics(false);
     }
@@ -368,10 +392,18 @@ const WeeklyCheckInScreen = () => {
   
   // Skip question
   const handleSkip = () => {
+    // If we're editing weights, prompt to save or discard changes
+    if (editingWeight && hasWeightChanges) {
+      if (window.confirm("You have unsaved weight changes. Save changes before continuing?")) {
+        handleSaveWeightChanges();
+      } else {
+        handleCancelWeightEditing();
+      }
+    }
+    
     if (currentQuestionIndex < weeklyQuestions.length - 1) {
       setCurrentQuestionIndex(prevIndex => prevIndex + 1);
       setSelectedParent(null);
-      setShowWeightInfo(false);
       setShowExplanation(false);
       setShowWeightMetrics(false);
     } else {
@@ -382,22 +414,49 @@ const WeeklyCheckInScreen = () => {
   
   // Toggle question list view
   const toggleQuestionList = () => {
+    // If we're editing weights, prompt to save or discard changes
+    if (editingWeight && hasWeightChanges) {
+      if (window.confirm("You have unsaved weight changes. Save changes before viewing question list?")) {
+        handleSaveWeightChanges();
+      } else {
+        handleCancelWeightEditing();
+      }
+    }
+    
     setViewingQuestionList(!viewingQuestionList);
   };
   
   // Jump to specific question
   const jumpToQuestion = (index) => {
+    // If we're editing weights, prompt to save or discard changes
+    if (editingWeight && hasWeightChanges) {
+      if (window.confirm("You have unsaved weight changes. Save changes before jumping to another question?")) {
+        handleSaveWeightChanges();
+      } else {
+        handleCancelWeightEditing();
+      }
+    }
+    
     setCurrentQuestionIndex(index);
     setSelectedParent(currentSurveyResponses[weeklyQuestions[index].id] || null);
     setViewingQuestionList(false);
-    setShowWeightInfo(false);
     setShowExplanation(false);
     setShowWeightMetrics(false);
   };
   
-  // Handle pause/exit
+  // Handle exit
   const handleExit = async () => {
     if (isProcessing) return;
+    
+    // If we're editing weights, prompt to save or discard changes
+    if (editingWeight && hasWeightChanges) {
+      if (window.confirm("You have unsaved weight changes. Save changes before exiting?")) {
+        handleSaveWeightChanges();
+      } else {
+        handleCancelWeightEditing();
+      }
+    }
+    
     setIsProcessing(true);
     
     try {
@@ -437,24 +496,74 @@ const WeeklyCheckInScreen = () => {
   
   // Handle logout
   const handleLogout = () => {
-    navigate('/login');
+    // Save progress before logging out
+    if (Object.keys(currentSurveyResponses).length > 0) {
+      saveSurveyProgress(selectedUser.id, currentSurveyResponses).then(() => {
+        console.log("Progress saved before logout");
+        
+        // Set a flag in localStorage to indicate survey is in progress
+        localStorage.setItem('surveyInProgress', JSON.stringify({
+          userId: selectedUser.id,
+          timestamp: new Date().getTime()
+        }));
+        
+        navigate('/login');
+      }).catch(error => {
+        console.error("Error saving progress before logout:", error);
+        navigate('/login');
+      });
+    } else {
+      navigate('/login');
+    }
   };
   
   // Calculate progress
   const progress = getSurveyProgress(weeklyQuestions.length);
   
-  // Format time for last saved indicator
+  // Get weight impact color
+  const getWeightImpactColor = (weight) => {
+    const numWeight = parseFloat(weight);
+    if (numWeight >= 12) return "text-red-600 bg-red-100";
+    if (numWeight >= 9) return "text-orange-600 bg-orange-100";
+    if (numWeight >= 6) return "text-amber-600 bg-amber-100";
+    return "text-blue-600 bg-blue-100";
+  };
+  
+  // Get weight impact text
+  const getWeightImpactText = (weight) => {
+    const numWeight = parseFloat(weight);
+    if (numWeight >= 12) return "Very High";
+    if (numWeight >= 9) return "High";
+    if (numWeight >= 6) return "Medium";
+    return "Standard";
+  };
+
+  // Get icon for weight factor
+  const getWeightFactorIcon = (factor) => {
+    switch(factor) {
+      case 'frequency':
+        return <Clock size={14} className="mr-1" />;
+      case 'invisibility':
+        return <Brain size={14} className="mr-1" />;
+      case 'emotionalLabor':
+        return <Heart size={14} className="mr-1" />;
+      default:
+        return <Scale size={14} className="mr-1" />;
+    }
+  };
+  
+  // Format time
   const formatTime = (date) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
   
-  // If no selected user, return loading
+  // If no selected user or no current question, return loading
   if (!selectedUser || !currentQuestion) {
     return <div className="flex items-center justify-center h-screen font-roboto">Loading...</div>;
   }
   
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 font-roboto">
+    <div className="min-h-screen bg-gray-50 flex flex-col font-roboto">
       {/* Header */}
       <div className="bg-black text-white p-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
@@ -600,6 +709,10 @@ const WeeklyCheckInScreen = () => {
                   >
                     <Scale size={12} className="mr-1" />
                     Impact: {getWeightImpactText(currentQuestion.totalWeight)}
+                    <div className="ml-1 bg-white bg-opacity-30 rounded-full w-4 h-4 flex items-center justify-center">
+                      <ChevronDown size={10} className={showWeightMetrics ? "hidden" : "block"} />
+                      <ChevronUp size={10} className={showWeightMetrics ? "block" : "hidden"} />
+                    </div>
                   </span>
                 )}
               </div>
@@ -824,9 +937,31 @@ const WeeklyCheckInScreen = () => {
                       <span className="font-bold">{parseFloat(currentQuestion.totalWeight).toFixed(1)}</span>
                     </div>
                   </div>
+                  
+                  {/* Edit controls */}
                   {editingWeight && (
-                    <div className="mt-2 p-2 bg-blue-50 rounded-md text-xs text-blue-700">
-                      <p>Adjusting weights will help Allie understand how you prioritize different tasks. Similar tasks will be updated with your preferences.</p>
+                    <div className="mt-4 flex flex-col space-y-2">
+                      <div className="p-2 bg-blue-50 rounded-md text-xs text-blue-700">
+                        <p>Adjusting weights will help Allie understand how you prioritize different tasks. Similar tasks will be updated with your preferences.</p>
+                      </div>
+                      
+                      <div className="flex justify-end space-x-2">
+                        <button
+                          onClick={handleCancelWeightEditing}
+                          className="px-3 py-1 bg-gray-100 text-gray-700 rounded border border-gray-300 text-sm flex items-center"
+                        >
+                          <X size={14} className="mr-1" />
+                          Cancel
+                        </button>
+                        
+                        <button
+                          onClick={handleSaveWeightChanges}
+                          className="px-3 py-1 bg-black text-white rounded text-sm flex items-center"
+                        >
+                          <Check size={14} className="mr-1" />
+                          Save Changes
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -862,15 +997,51 @@ const WeeklyCheckInScreen = () => {
                 </div>
               )}
               
-              {/* AI Insight panel */}
-              <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded">
-                <div className="flex items-start">
-                  <Brain size={16} className="text-purple-600 mr-2 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-purple-800 font-medium mb-1">AI Selection Logic:</p>
-                    <p className="text-purple-800 text-sm">
-                      {generateAIExplanation(currentQuestion)}
-                    </p>
+              {/* Always show weight info for adults */}
+              <div className="mt-3 bg-blue-50 p-3 rounded-md border border-blue-100 text-sm text-blue-800">
+                <p>{currentQuestion.weightExplanation || generateAIExplanation(currentQuestion)}</p>
+                
+                {/* Weight factors visualization */}
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className={`text-center p-1 rounded text-xs ${
+                    currentQuestion.frequency === 'daily' ? 'bg-blue-200' : 'bg-blue-100'
+                  }`}>
+                    <div className="flex items-center justify-center">
+                      {getWeightFactorIcon('frequency')}
+                      <span>{currentQuestion.frequency}</span>
+                    </div>
+                    <div className="text-blue-900 font-medium">Frequency</div>
+                  </div>
+                  
+                  <div className={`text-center p-1 rounded text-xs ${
+                    currentQuestion.invisibility === 'completely' ? 'bg-purple-200' : 'bg-purple-100'
+                  }`}>
+                    <div className="flex items-center justify-center">
+                      {getWeightFactorIcon('invisibility')}
+                      <span>{currentQuestion.invisibility}</span>
+                    </div>
+                    <div className="text-purple-900 font-medium">Visibility</div>
+                  </div>
+                  
+                  <div className={`text-center p-1 rounded text-xs ${
+                    currentQuestion.emotionalLabor === 'extreme' || currentQuestion.emotionalLabor === 'high' 
+                      ? 'bg-red-200' : 'bg-red-100'
+                  }`}>
+                    <div className="flex items-center justify-center">
+                      {getWeightFactorIcon('emotionalLabor')}
+                      <span>{currentQuestion.emotionalLabor}</span>
+                    </div>
+                    <div className="text-red-900 font-medium">Emotional Load</div>
+                  </div>
+                  
+                  <div className={`text-center p-1 rounded text-xs ${
+                    currentQuestion.childDevelopment === 'high' ? 'bg-green-200' : 'bg-green-100'
+                  }`}>
+                    <div className="flex items-center justify-center">
+                      {getWeightFactorIcon('childDevelopment')}
+                      <span>{currentQuestion.childDevelopment}</span>
+                    </div>
+                    <div className="text-green-900 font-medium">Child Impact</div>
                   </div>
                 </div>
               </div>
