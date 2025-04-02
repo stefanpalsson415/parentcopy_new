@@ -4,7 +4,7 @@ import { auth } from '../services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { db } from '../services/firebase';
 import DatabaseService from '../services/DatabaseService';
-import { doc, getDoc, query, collection, where, getDocs, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, query, collection, where, getDocs } from 'firebase/firestore';
 
 // Create the authentication context
 const AuthContext = createContext();
@@ -31,26 +31,6 @@ export function AuthProvider({ children }) {
     return DatabaseService.signIn(email, password);
   }
 
-  // Sign in with Google
-  async function signInWithGoogle() {
-    return DatabaseService.signInWithGoogle();
-  }
-
-  // Link existing account with Google
-  async function linkAccountWithGoogle() {
-    if (!currentUser) throw new Error("No user is signed in");
-    return DatabaseService.linkAccountWithGoogle(currentUser);
-  }
-
-  // Update family member with Google info
-  async function updateMemberWithGoogleAuth(familyId, memberId, userData) {
-    return DatabaseService.updateMemberWithGoogleAuth(familyId, memberId, userData);
-  }
-
-
-
-
-  
   // Added helper function to ensure families are loaded
   async function ensureFamiliesLoaded(userId) {
     try {
@@ -89,49 +69,49 @@ export function AuthProvider({ children }) {
       let data;
       
       // Check if this is a direct family ID
-if (typeof idParam === 'string' && idParam.length > 0) {
-  console.log("Attempting to load family directly");
-  
-  try {
-    // Try to load the family directly from Firestore
-    const docRef = doc(db, "families", idParam);
-    const docSnap = await getDoc(docRef);
-    
-    if (docSnap.exists()) {
-      // Load survey responses for this family
-      const surveyResponsesQuery = query(
-        collection(db, "surveyResponses"), 
-        where("familyId", "==", idParam)
-      );
-      const surveyResponsesSnapshot = await getDocs(surveyResponsesQuery);
-      
-      // Process survey responses
-      const surveyResponses = {};
-      surveyResponsesSnapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data.responses) {
-          // Merge all responses together
-          Object.assign(surveyResponses, data.responses);
+      if (typeof idParam === 'string' && idParam.length > 0) {
+        console.log("Attempting to load family directly");
+        
+        try {
+          // Try to load the family directly from Firestore
+          const docRef = doc(db, "families", idParam);
+          const docSnap = await getDoc(docRef);
+          
+          if (docSnap.exists()) {
+            // Load survey responses for this family
+            const surveyResponsesQuery = query(
+              collection(db, "surveyResponses"), 
+              where("familyId", "==", idParam)
+            );
+            const surveyResponsesSnapshot = await getDocs(surveyResponsesQuery);
+            
+            // Process survey responses
+            const surveyResponses = {};
+            surveyResponsesSnapshot.forEach((doc) => {
+              const data = doc.data();
+              if (data.responses) {
+                // Merge all responses together
+                Object.assign(surveyResponses, data.responses);
+              }
+            });
+            
+            data = { 
+              ...docSnap.data(), 
+              familyId: idParam,
+              surveyResponses: surveyResponses
+            };
+            console.log("Successfully loaded family directly:", data);
+          } else {
+            console.log("No family found with ID:", idParam);
+            // Instead of throwing an error, return null
+            return null;
+          }
+        } catch (error) {
+          console.error("Error loading family by ID:", error);
+          // Don't throw, just return null
+          return null;
         }
-      });
-      
-      data = { 
-        ...docSnap.data(), 
-        familyId: idParam,
-        surveyResponses: surveyResponses
-      };
-      console.log("Successfully loaded family directly:", data);
-    } else {
-      console.log("No family found with ID:", idParam);
-      // Instead of throwing an error, return null
-      return null;
-    }
-  } catch (error) {
-    console.error("Error loading family by ID:", error);
-    // Don't throw, just return null
-    return null;
-  }
-} else {
+      } else {
         // Assume it's a user ID
         data = await DatabaseService.loadFamilyByUserId(idParam);
         console.log("Loaded family by user ID:", data);
@@ -167,70 +147,37 @@ if (typeof idParam === 'string' && idParam.length > 0) {
     }
   }
 
-// In AuthContext.js - Add this function around line 110 (after the loadFamilyData function)
-
-async function setSelectedFamilyMember(memberId) {
-  try {
-    console.log("Explicitly setting selected family member:", memberId);
-    
-    if (!familyData || !familyData.familyMembers) {
-      console.error("No family data available to select member");
-      return false;
-    }
-    
-    // Find the member in the family data
-    const member = familyData.familyMembers.find(m => m.id === memberId);
-    if (!member) {
-      console.error("Member not found in family:", memberId);
-      return false;
-    }
-    
-    // Store the selection in localStorage
-    localStorage.setItem('selectedUserId', memberId);
-    console.log("Selected user ID stored:", memberId);
-    
-    // Return the member data
-    return member;
-  } catch (error) {
-    console.error("Error setting selected family member:", error);
-    return false;
-  }
-}
-
-
-
-  // Add this function to check if we're returning from a redirect
-  const checkAuthStateOnLoad = async () => {
+  // Set selected family member
+  async function setSelectedFamilyMember(memberId) {
     try {
-      // Check if we have a pending redirect operation
-      const user = await DatabaseService.handleGoogleRedirectResult();
-      if (user) {
-        console.log("Google sign-in completed after redirect:", user.email);
-        
-        // Load family data for this user
-        if (user.uid) {
-          await loadAllFamilies(user.uid);
-          await loadFamilyData(user.uid);
-          
-          return true;
-        }
+      console.log("Explicitly setting selected family member:", memberId);
+      
+      if (!familyData || !familyData.familyMembers) {
+        console.error("No family data available to select member");
+        return false;
       }
-      return false;
+      
+      // Find the member in the family data
+      const member = familyData.familyMembers.find(m => m.id === memberId);
+      if (!member) {
+        console.error("Member not found in family:", memberId);
+        return false;
+      }
+      
+      // Store the selection in localStorage
+      localStorage.setItem('selectedUserId', memberId);
+      console.log("Selected user ID stored:", memberId);
+      
+      // Return the member data
+      return member;
     } catch (error) {
-      console.error("Error checking auth state on load:", error);
+      console.error("Error setting selected family member:", error);
       return false;
     }
-  };
+  }
 
   useEffect(() => {
     let isMounted = true;
-    
-    // First check if we're returning from a redirect
-    checkAuthStateOnLoad().then(wasRedirect => {
-      if (wasRedirect) {
-        console.log("Processed redirect login");
-      }
-    });
     
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!isMounted) return;
@@ -270,90 +217,21 @@ async function setSelectedFamilyMember(memberId) {
     };
   }, []);
 
-  // Handle Google redirect result
-  useEffect(() => {
-    const checkRedirectResult = async () => {
-      try {
-        const user = await DatabaseService.handleGoogleRedirectResult();
-        if (user) {
-          console.log("Google sign-in redirect result:", user.email);
-          // We already have an auth state listener that will update UI
-        }
-      } catch (error) {
-        console.error("Error handling Google redirect:", error);
-      }
-    };
-    
-    checkRedirectResult();
-  }, []);
-
   // Context value
-  // Updated value object in AuthContext.js
-const value = {
-  currentUser,
-  familyData,
-  availableFamilies,
-  signup,
-  login,
-  logout,
-  signInWithGoogle,
-  handleGoogleRedirectResult: DatabaseService.handleGoogleRedirectResult,
-  linkAccountWithGoogle,
-  updateMemberWithGoogleAuth,
-  createFamily,
-  loadFamilyData,
-  loadAllFamilies,
-  ensureFamiliesLoaded,
-  setSelectedFamilyMember, // Add this new function
-  reload: () => loadFamilyData(currentUser?.uid),
-  // Add this new function
-  // Current code (around line ~400)
-linkGoogleToFamilyMember: async (familyId, memberData, googleUser) => {
-  try {
-    if (!familyId || !memberData || !googleUser) {
-      throw new Error("Missing required parameters for linking Google account");
-    }
-    console.log(`Linking Google account ${googleUser.email} to family member ${memberData.name}`);
-    
-    // Get current family data
-    const docRef = doc(db, "families", familyId);
-    const familyDoc = await getDoc(docRef);
-    
-    if (!familyDoc.exists()) {
-      throw new Error("Family not found");
-    }
-    
-    // Update the specific family member with Google auth info
-    const updatedMembers = familyDoc.data().familyMembers.map(member => {
-      if (member.id === memberData.id) {
-        return {
-          ...member,
-          googleAuth: {
-            uid: googleUser.uid,
-            email: googleUser.email,
-            displayName: googleUser.displayName,
-            photoURL: googleUser.photoURL,
-            lastSignIn: new Date().toISOString()
-          }
-        };
-      }
-      return member;
-    });
-    
-    // Save updated members back to the database
-    await updateDoc(docRef, {
-      familyMembers: updatedMembers,
-      updatedAt: serverTimestamp()
-    });
-    
-    console.log(`Successfully linked Google account to ${memberData.name}`);
-    return true;
-  } catch (error) {
-    console.error("Error linking Google account to family member:", error);
-    throw error;
-  }
-}
-};
+  const value = {
+    currentUser,
+    familyData,
+    availableFamilies,
+    signup,
+    login,
+    logout,
+    createFamily,
+    loadFamilyData,
+    loadAllFamilies,
+    ensureFamiliesLoaded,
+    setSelectedFamilyMember,
+    reload: () => loadFamilyData(currentUser?.uid)
+  };
 
   return (
     <AuthContext.Provider value={value}>

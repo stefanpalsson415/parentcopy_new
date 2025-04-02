@@ -1,10 +1,10 @@
+// src/services/DatabaseService.js
 // First import Firebase
-import { app, db, auth, storage, googleProvider } from './firebase';
+import { app, db, auth, storage } from './firebase';
 
 // Then import Firebase functions
-import { 
-  signInWithPopup, signInWithRedirect, getRedirectResult,
-  createUserWithEmailAndPassword, signInWithEmailAndPassword, linkWithPopup, signOut
+import {
+  createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut
 } from 'firebase/auth';
 
 // src/services/DatabaseService.js
@@ -15,7 +15,6 @@ import {
 } from 'firebase/firestore';
 
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-
 
 class DatabaseService {
   constructor() {
@@ -64,604 +63,106 @@ class DatabaseService {
     return this.auth.currentUser;
   }
 
-  async signInWithGoogle() {
+  // Development login function - use only for testing
+  async signInForDevelopment(email = "test@example.com") {
     try {
-      console.log("Starting Google sign-in");
+      console.log("DEVELOPMENT MODE: Creating test user");
       
-      // Don't use require within function - use the imported instances
-      // from the top of the file instead
+      // Create a mock user
+      const mockUser = {
+        uid: "test-user-" + Date.now(),
+        email: email,
+        displayName: "Test User",
+        photoURL: null
+      };
       
-      // Ensure Firebase is initialized
-      if (!this.auth) {
-        throw new Error("Firebase auth not initialized - check firebase.js");
-      }
+      // For testing only - in a real app, this would be handled by Firebase Auth
+      localStorage.setItem('devModeUser', JSON.stringify(mockUser));
       
-      // Use the imported googleProvider
-      const result = await signInWithPopup(this.auth, googleProvider);
-      console.log("Google sign-in successful:", result.user?.email);
-      
-      return result.user;
+      return mockUser;
     } catch (error) {
-      console.error("Google sign-in error details:", error);
-      
-      // More detailed error handling for different scenarios
-      if (error.code === 'auth/cancelled-popup-request') {
-        console.log("User cancelled the sign-in popup");
-      } else if (error.code === 'auth/popup-blocked') {
-        alert("The sign-in popup was blocked by your browser. Please allow popups for this site.");
-      } else if (error.code === 'auth/unauthorized-domain') {
-        console.error("The domain is not authorized for OAuth operations");
-        alert("Authentication error: This domain is not authorized for sign-in. Please use the deployed app version.");
-      } else {
-        alert("Google sign-in error: " + error.message);
-      }
-      
+      console.error("Error in development login:", error);
       throw error;
     }
   }
-  
-  // Add this new function to handle the redirect result
-  async handleGoogleRedirectResult() {
+
+  // Upload image to Firebase Storage
+  async uploadProfileImage(userId, file) {
     try {
-      const { getRedirectResult } = require('firebase/auth');
+      console.log("DatabaseService: Starting profile image upload for user ID:", userId);
       
-      // Get the result of the redirect operation
-      const result = await getRedirectResult(this.auth);
+      // Add file extension to create a better filename
+      const fileExtension = file.name.split('.').pop();
+      const fileName = `${userId}_${Date.now()}.${fileExtension}`;
       
-      if (result) {
-        // User is signed in
-        console.log("Redirect result successful:", result.user.email);
-        return result.user;
-      } else {
-        // No redirect result, user might be starting the flow
-        console.log("No redirect result yet");
-        return null;
-      }
+      // Create a unique path for the file
+      const storageRef = ref(this.storage, `profile-pictures/${fileName}`);
+      console.log("Storage reference created:", storageRef);
+      
+      // Upload the file to Firebase Storage with explicit content type
+      const metadata = {
+        contentType: file.type
+      };
+      
+      console.log("Uploading file to storage...");
+      const snapshot = await uploadBytes(storageRef, file, metadata);
+      console.log("File uploaded successfully, getting URL...");
+      
+      // Get the download URL
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      console.log("Download URL obtained:", downloadURL);
+      
+      return downloadURL;
     } catch (error) {
-      console.error("Error handling Google redirect:", error);
+      console.error("DatabaseService Error uploading image:", error);
+      console.log("Error details:", {
+        userId,
+        errorCode: error.code,
+        errorMessage: error.message,
+        errorStack: error.stack
+      });
       throw error;
     }
   }
-// Add this new function to handle the redirect result
-async handleGoogleRedirectResult() {
-  try {
-    const { auth } = require('./firebase');
-    
-    // Get the result of the redirect operation
-    const result = await getRedirectResult(auth);
-    
-    if (result) {
-      // User is signed in
-      console.log("Redirect result successful:", result.user.email);
-      return result.user;
-    } else {
-      // No redirect result, user might be starting the flow
-      console.log("No redirect result yet");
-      return null;
-    }
-  } catch (error) {
-    console.error("Error handling Google redirect:", error);
-    throw error;
-  }
-}
 
-// Link existing account with Google
-async linkAccountWithGoogle(user) {
-  try {
-    const { googleProvider } = require('./firebase');
-    const result = await linkWithPopup(user, googleProvider);
-    return result.user;
-  } catch (error) {
-    console.error("Error linking account with Google:", error);
-    throw error;
-  }
-}
-
-// Development login function - use only for testing
-async signInForDevelopment(email = "test@example.com") {
-  try {
-    console.log("DEVELOPMENT MODE: Creating test user");
-    
-    // Create a mock user
-    const mockUser = {
-      uid: "test-user-" + Date.now(),
-      email: email,
-      displayName: "Test User",
-      photoURL: null
-    };
-    
-    // For testing only - in a real app, this would be handled by Firebase Auth
-    localStorage.setItem('devModeUser', JSON.stringify(mockUser));
-    
-    return mockUser;
-  } catch (error) {
-    console.error("Error in development login:", error);
-    throw error;
-  }
-}
-
-
-// Add Google auth info to family member
-// Add Google auth info to family member
-async updateMemberWithGoogleAuth(familyId, memberId, userData) {
-  try {
-    console.log(`Updating Google auth for family ${familyId}, member ${memberId} with user data:`, 
-      { email: userData.email, uid: userData.uid });
-    
-    // Get current family data
-    const docRef = doc(this.db, "families", familyId);
-    const familyDoc = await getDoc(docRef);
-    
-    if (!familyDoc.exists()) {
-      throw new Error("Family not found");
-    }
-    
-    // Update the correct family member with Google auth info
-    const updatedMembers = familyDoc.data().familyMembers.map(member => {
-      if (member.id === memberId) {
-        console.log(`Found matching member: ${member.name}, updating Google auth information`);
-        return {
-          ...member,
-          googleAuth: {
-            uid: userData.uid,
-            email: userData.email,
-            displayName: userData.displayName || member.name,
-            photoURL: userData.photoURL || member.profilePicture,
-            lastSignIn: new Date().toISOString()
-          }
-        };
-      }
-      
-      // Important: Don't touch other members' Google auth data
-      return member;
-    });
-    
-    // Save updated members back to the database
-    await updateDoc(docRef, {
-      familyMembers: updatedMembers,
-      updatedAt: serverTimestamp()
-    });
-    
-    // Also store this Google auth information in user-specific localStorage
+  // Load all survey responses for a family
+  async loadSurveyResponses(familyId) {
     try {
-      localStorage.setItem(`googleToken_${memberId}`, JSON.stringify({
-        uid: userData.uid,
-        email: userData.email,
-        timestamp: Date.now()
-      }));
-      console.log(`Stored Google token for user ${memberId} in localStorage`);
-    } catch (e) {
-      console.warn(`Failed to store Google token in localStorage: ${e.message}`);
-    }
-    
-    console.log(`Successfully updated Google auth for member ${memberId}`);
-    return true;
-  } catch (error) {
-    console.error("Error updating member with Google auth:", error);
-    throw error;
-  }
-}
-
-// Add this diagnostic and repair function to the DatabaseService class
-async diagnoseAndFixGoogleAuth(familyId) {
-  try {
-    if (!familyId) {
-      throw new Error("Missing family ID for diagnosis");
-    }
-    
-    console.log(`Running Google auth diagnosis for family: ${familyId}`);
-    
-    // Get current family data
-    const docRef = doc(this.db, "families", familyId);
-    const familyDoc = await getDoc(docRef);
-    
-    if (!familyDoc.exists()) {
-      throw new Error("Family not found");
-    }
-    
-    const familyData = familyDoc.data();
-    const familyMembers = familyData.familyMembers || [];
-    
-    // Check each family member's Google auth status
-    const report = [];
-    let needsRepair = false;
-    
-    for (const member of familyMembers) {
-      if (member.role === 'parent') {
-        report.push(`Member: ${member.name} (${member.roleType}), Email: ${member.email}`);
-        
-        if (member.googleAuth) {
-          report.push(`  ✓ Has Google auth data: ${member.googleAuth.email}`);
-          
-          // Check if tokens exist for this user
-          const hasUserToken = localStorage.getItem(`googleToken_${member.id}`);
-          if (hasUserToken) {
-            report.push(`  ✓ Has localStorage token`);
-          } else {
-            report.push(`  ✗ Missing localStorage token - will create`);
-            
-            // Create token from member data
-            try {
-              localStorage.setItem(`googleToken_${member.id}`, JSON.stringify({
-                email: member.googleAuth.email,
-                uid: member.googleAuth.uid,
-                timestamp: Date.now()
-              }));
-              report.push(`  ✓ Created missing token`);
-            } catch (e) {
-              report.push(`  ✗ Failed to create token: ${e.message}`);
-            }
-          }
-        } else {
-          report.push(`  ✗ NO Google auth data`);
-          needsRepair = true;
-          
-          // Check if we can find a token for this user
-          const possibleTokenKeys = [
-            `googleToken_${member.id}`,
-            `googleToken_${member.roleType.toLowerCase()}`,
-            `googleToken_${member.email.replace('@', '_').replace('.', '_')}`
-          ];
-          
-          let foundToken = null;
-          for (const key of possibleTokenKeys) {
-            const token = localStorage.getItem(key);
-            if (token) {
-              try {
-                const tokenData = JSON.parse(token);
-                report.push(`  ✓ Found token with key: ${key}, email: ${tokenData.email}`);
-                foundToken = tokenData;
-                break;
-              } catch (e) {
-                report.push(`  ✗ Invalid token found with key ${key}`);
-              }
-            }
-          }
-          
-          if (foundToken) {
-            report.push(`  ➤ Will repair Google auth data for ${member.name}`);
-            
-            // Update the member with the found token data
-            const updatedMembers = familyMembers.map(m => {
-              if (m.id === member.id) {
-                return {
-                  ...m,
-                  googleAuth: {
-                    uid: foundToken.uid,
-                    email: foundToken.email,
-                    displayName: foundToken.displayName || member.name,
-                    lastSignIn: new Date().toISOString()
-                  }
-                };
-              }
-              return m;
-            });
-            
-            // Save the updated members
-            await updateDoc(docRef, {
-              familyMembers: updatedMembers,
-              updatedAt: serverTimestamp()
-            });
-            
-            report.push(`  ✓ Repaired Google auth data for ${member.name}`);
-          } else {
-            report.push(`  ✗ No token found, cannot repair automatically`);
-          }
-        }
-      }
-    }
-    
-    const reportText = report.join('\n');
-    console.log("Google auth diagnosis report:\n" + reportText);
-    
-    return {
-      report: reportText,
-      needsRepair,
-      success: true
-    };
-  } catch (error) {
-    console.error("Error diagnosing Google auth:", error);
-    return {
-      report: `Error: ${error.message}`,
-      needsRepair: false,
-      success: false
-    };
-  }
-}
-
-// Add this after the diagnoseAndFixGoogleAuth function in DatabaseService.js (around line 450-500)
-
-async repairFamilyGoogleAuth(familyId) {
-  try {
-    console.log("Starting comprehensive Google auth repair for family:", familyId);
-    
-    // Get current family data
-    const docRef = doc(this.db, "families", familyId);
-    const familyDoc = await getDoc(docRef);
-    
-    if (!familyDoc.exists()) {
-      throw new Error("Family not found");
-    }
-    
-    const familyData = familyDoc.data();
-    const familyMembers = familyData.familyMembers || [];
-    
-    // Check each localStorage token and create a mapping of tokens
-    const tokenMap = {};
-    const allKeys = Object.keys(localStorage);
-    
-    // Find all Google tokens in localStorage
-    const tokenKeys = allKeys.filter(key => 
-      key.startsWith('googleToken_') || 
-      key === 'googleAuthToken'
-    );
-    
-    console.log("Found token keys:", tokenKeys);
-    
-    // Parse all tokens and categorize by email
-    tokenKeys.forEach(key => {
-      try {
-        const tokenData = JSON.parse(localStorage.getItem(key));
-        if (tokenData && tokenData.email) {
-          tokenMap[tokenData.email] = {
-            ...tokenData,
-            key: key
-          };
-          console.log(`Token for ${tokenData.email} found with key ${key}`);
-        }
-      } catch (e) {
-        console.warn(`Failed to parse token for key ${key}:`, e);
-      }
-    });
-    
-    console.log("Token map created:", Object.keys(tokenMap));
-    
-    // Build a map of parent roles to emails from the family data
-    // This helps us determine which token belongs to which parent
-    const roleToEmailMap = {};
-    const updatedMembers = [];
-    
-    // First pass: gather role to email mappings from the family data
-    familyMembers.forEach(member => {
-      if (member.role === 'parent') {
-        roleToEmailMap[member.roleType] = member.email;
-        console.log(`Role ${member.roleType} mapped to email ${member.email}`);
-      }
-    });
-    
-    // Second pass: update Google auth data for each member
-    for (const member of familyMembers) {
-      let updatedMember = { ...member };
+      console.log("Loading all survey responses for family:", familyId);
       
-      if (member.role === 'parent') {
-        const memberEmail = member.email;
-        console.log(`Processing member ${member.name} with email ${memberEmail}`);
-        
-        // Find token by email
-        const tokenByEmail = tokenMap[memberEmail];
-        
-        if (tokenByEmail) {
-          console.log(`Found token matching member email ${memberEmail}`);
-          
-          // Update member's Google auth data
-          updatedMember.googleAuth = {
-            uid: tokenByEmail.uid,
-            email: tokenByEmail.email,
-            displayName: member.name,
-            photoURL: member.profilePicture,
-            lastSignIn: new Date().toISOString()
-          };
-          
-          // Store token specifically for this member's ID
-          try {
-            localStorage.setItem(`googleToken_${member.id}`, JSON.stringify({
-              email: tokenByEmail.email,
-              uid: tokenByEmail.uid,
-              timestamp: Date.now()
-            }));
-            console.log(`Stored token for member ID ${member.id}`);
-          } catch (e) {
-            console.warn(`Failed to store token for member ${member.id}:`, e);
-          }
-        } else {
-          console.log(`No token found for member email ${memberEmail}`);
-          
-          // Try to find token by role type (fallback)
-          const roleKey = `googleToken_${member.roleType.toLowerCase()}`;
-          const tokenByRole = Object.values(tokenMap).find(t => 
-            t.key === roleKey || 
-            (t.role && t.role.toLowerCase() === member.roleType.toLowerCase())
-          );
-          
-          if (tokenByRole) {
-            console.log(`Found token by role for ${member.roleType}: ${tokenByRole.email}`);
-            
-            // Update member's Google auth data
-            updatedMember.googleAuth = {
-              uid: tokenByRole.uid,
-              email: tokenByRole.email,
-              displayName: member.name,
-              photoURL: member.profilePicture,
-              lastSignIn: new Date().toISOString()
-            };
-            
-            // Store token specifically for this member's ID
-            try {
-              localStorage.setItem(`googleToken_${member.id}`, JSON.stringify({
-                email: tokenByRole.email,
-                uid: tokenByRole.uid,
-                timestamp: Date.now()
-              }));
-              console.log(`Stored token for member ID ${member.id} by role`);
-            } catch (e) {
-              console.warn(`Failed to store token for member ${member.id}:`, e);
-            }
-          } else {
-            // Clear any incorrect Google auth data
-            console.log(`No token found for member ${member.name}, clearing any incorrect Google auth data`);
-            updatedMember.googleAuth = null;
-          }
-        }
-      }
+      // Query all survey response documents for this family
+      const surveyResponsesQuery = query(
+        collection(this.db, "surveyResponses"), 
+        where("familyId", "==", familyId)
+      );
       
-      updatedMembers.push(updatedMember);
-    }
-    
-    // Update the family document with the corrected members
-    await updateDoc(docRef, {
-      familyMembers: updatedMembers,
-      updatedAt: serverTimestamp()
-    });
-    
-    console.log("Family members updated with corrected Google auth data:", updatedMembers.length);
-    
-    return {
-      success: true,
-      message: `Google auth data repaired for ${updatedMembers.length} family members.`
-    };
-  } catch (error) {
-    console.error("Error repairing family Google auth:", error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-}
-
-// Complete Google Auth Reset
-async resetUserGoogleAuth(familyId, userData) {
-  try {
-    if (!familyId) {
-      throw new Error("Missing family ID");
-    }
-    
-    console.log("Performing COMPLETE Google auth reset for family:", familyId);
-    console.log("User data provided:", userData);
-    
-    // Get current family data
-    const docRef = doc(this.db, "families", familyId);
-    const familyDoc = await getDoc(docRef);
-    
-    if (!familyDoc.exists()) {
-      throw new Error("Family not found");
-    }
-    
-    const familyData = familyDoc.data();
-    const familyMembers = familyData.familyMembers || [];
-    
-    // Clear ALL Google auth data from localStorage
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('googleToken_') || key === 'googleAuthToken') {
-        console.log(`Removing localStorage key: ${key}`);
-        localStorage.removeItem(key);
-      }
-    });
-    
-    // Clean all family members' Google auth data
-    const updatedMembers = familyMembers.map(member => ({
-      ...member,
-      googleAuth: null
-    }));
-    
-    // Update the family doc to clear all Google auth data
-    await updateDoc(docRef, {
-      familyMembers: updatedMembers,
-      updatedAt: serverTimestamp()
-    });
-    
-    console.log("All Google auth data has been cleared");
-    
-    return {
-      success: true,
-      message: "All Google auth data has been reset"
-    };
-  } catch (error) {
-    console.error("Error resetting Google auth:", error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-}
-
-// Upload image to Firebase Storage
-async uploadProfileImage(userId, file) {
-  try {
-    console.log("DatabaseService: Starting profile image upload for user ID:", userId);
-    
-    // Add file extension to create a better filename
-    const fileExtension = file.name.split('.').pop();
-    const fileName = `${userId}_${Date.now()}.${fileExtension}`;
-    
-    // Create a unique path for the file
-    const storageRef = ref(this.storage, `profile-pictures/${fileName}`);
-    console.log("Storage reference created:", storageRef);
-    
-    // Upload the file to Firebase Storage with explicit content type
-    const metadata = {
-      contentType: file.type
-    };
-    
-    console.log("Uploading file to storage...");
-    const snapshot = await uploadBytes(storageRef, file, metadata);
-    console.log("File uploaded successfully, getting URL...");
-    
-    // Get the download URL
-    const downloadURL = await getDownloadURL(snapshot.ref);
-    console.log("Download URL obtained:", downloadURL);
-    
-    return downloadURL;
-  } catch (error) {
-    console.error("DatabaseService Error uploading image:", error);
-    console.log("Error details:", {
-      userId,
-      errorCode: error.code,
-      errorMessage: error.message,
-      errorStack: error.stack
-    });
-    throw error;
-  }
-}
-
-// Load all survey responses for a family
-async loadSurveyResponses(familyId) {
-  try {
-    console.log("Loading all survey responses for family:", familyId);
-    
-    // Query all survey response documents for this family
-    const surveyResponsesQuery = query(
-      collection(this.db, "surveyResponses"), 
-      where("familyId", "==", familyId)
-    );
-    
-    const querySnapshot = await getDocs(surveyResponsesQuery);
-    
-    // Combine all responses
-    const allResponses = {};
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
-      if (data.responses) {
-        // Handle both simple and enriched response formats
-        if (typeof Object.values(data.responses)[0] === 'object') {
-          // Enriched format with metadata
-          Object.entries(data.responses).forEach(([key, value]) => {
-            allResponses[key] = value.answer || value;
-          });
-        } else {
-          // Simple format
-          Object.assign(allResponses, data.responses);
+      const querySnapshot = await getDocs(surveyResponsesQuery);
+      
+      // Combine all responses
+      const allResponses = {};
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.responses) {
+          // Handle both simple and enriched response formats
+          if (typeof Object.values(data.responses)[0] === 'object') {
+            // Enriched format with metadata
+            Object.entries(data.responses).forEach(([key, value]) => {
+              allResponses[key] = value.answer || value;
+            });
+          } else {
+            // Simple format
+            Object.assign(allResponses, data.responses);
+          }
         }
-      }
-    });
-    
-    console.log(`Found ${Object.keys(allResponses).length} survey responses`);
-    return allResponses;
-  } catch (error) {
-    console.error("Error loading survey responses:", error);
-    return {};
+      });
+      
+      console.log(`Found ${Object.keys(allResponses).length} survey responses`);
+      return allResponses;
+    } catch (error) {
+      console.error("Error loading survey responses:", error);
+      return {};
+    }
   }
-}
-
 
   // Upload family picture to Firebase Storage
   async uploadFamilyPicture(familyId, file) {
@@ -694,63 +195,62 @@ async loadSurveyResponses(familyId) {
   // ---- Family Data Methods ----
 
   // Save couple check-in data
-async saveCoupleCheckInData(familyId, weekNumber, data) {
-  try {
-    const docRef = doc(this.db, "coupleCheckIns", `${familyId}-week${weekNumber}`);
-    await setDoc(docRef, {
-      familyId,
-      weekNumber,
-      data,
-      completedAt: serverTimestamp()
-    });
-    
-    // Also update the family document to indicate this check-in is complete
-    const familyDocRef = doc(this.db, "families", familyId);
-    await updateDoc(familyDocRef, {
-      [`coupleCheckIns.week${weekNumber}`]: {
-        completed: true,
+  async saveCoupleCheckInData(familyId, weekNumber, data) {
+    try {
+      const docRef = doc(this.db, "coupleCheckIns", `${familyId}-week${weekNumber}`);
+      await setDoc(docRef, {
+        familyId,
+        weekNumber,
+        data,
         completedAt: serverTimestamp()
-      },
-      updatedAt: serverTimestamp()
-    });
-    
-    return true;
-  } catch (error) {
-    console.error("Error saving couple check-in data:", error);
-    throw error;
+      });
+      
+      // Also update the family document to indicate this check-in is complete
+      const familyDocRef = doc(this.db, "families", familyId);
+      await updateDoc(familyDocRef, {
+        [`coupleCheckIns.week${weekNumber}`]: {
+          completed: true,
+          completedAt: serverTimestamp()
+        },
+        updatedAt: serverTimestamp()
+      });
+      
+      return true;
+    } catch (error) {
+      console.error("Error saving couple check-in data:", error);
+      throw error;
+    }
   }
-}
 
-// Load couple check-in data for all weeks
-async loadCoupleCheckInData(familyId) {
-  try {
-    const checkInData = {};
-    
-    // Query all documents for this family
-    const q = query(
-      collection(this.db, "coupleCheckIns"), 
-      where("familyId", "==", familyId)
-    );
-    
-    const querySnapshot = await getDocs(q);
-    
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
-      // Extract week number from doc ID (format: familyId-week1)
-      const weekMatch = doc.id.match(/-week(\d+)$/);
-      if (weekMatch && weekMatch[1]) {
-        const weekNumber = parseInt(weekMatch[1]);
-        checkInData[weekNumber] = data.data;
-      }
-    });
-    
-    return checkInData;
-  } catch (error) {
-    console.error("Error loading couple check-in data:", error);
-    return {};
+  // Load couple check-in data for all weeks
+  async loadCoupleCheckInData(familyId) {
+    try {
+      const checkInData = {};
+      
+      // Query all documents for this family
+      const q = query(
+        collection(this.db, "coupleCheckIns"), 
+        where("familyId", "==", familyId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        // Extract week number from doc ID (format: familyId-week1)
+        const weekMatch = doc.id.match(/-week(\d+)$/);
+        if (weekMatch && weekMatch[1]) {
+          const weekNumber = parseInt(weekMatch[1]);
+          checkInData[weekNumber] = data.data;
+        }
+      });
+      
+      return checkInData;
+    } catch (error) {
+      console.error("Error loading couple check-in data:", error);
+      return {};
+    }
   }
-}
-  
   
   // Load family data from Firestore
   async loadFamilyData(familyId) {
@@ -852,7 +352,6 @@ async loadCoupleCheckInData(familyId) {
       throw error;
     }
   }
-
 
   // Save family data to Firestore
   async saveFamilyData(data, familyId) {
@@ -1092,7 +591,7 @@ async loadCoupleCheckInData(familyId) {
     }
   }
 
-  // NEW: Update subtask completion with timestamp
+  // Update subtask completion with timestamp
   async updateSubtaskCompletion(familyId, taskId, subtaskId, isCompleted, completedDate) {
     try {
       console.log(`Updating subtask ${subtaskId} of task ${taskId} completion to: ${isCompleted} with date: ${completedDate}`);
@@ -1163,117 +662,102 @@ async loadCoupleCheckInData(familyId) {
     }
   }
 
-// Get tasks for the current week
-async getTasksForWeek(familyId, weekNumber) {
-  try {
-    if (!familyId) throw new Error("No family ID available");
-    
-    const docRef = doc(this.db, "families", familyId);
-    const docSnap = await getDoc(docRef);
-    
-    if (docSnap.exists()) {
-      // Return the tasks array from the family document
-      return docSnap.data().tasks || [];
-    } else {
-      console.log("No family document found");
-      return [];
+  // Get tasks for the current week
+  async getTasksForWeek(familyId, weekNumber) {
+    try {
+      if (!familyId) throw new Error("No family ID available");
+      
+      const docRef = doc(this.db, "families", familyId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        // Return the tasks array from the family document
+        return docSnap.data().tasks || [];
+      } else {
+        console.log("No family document found");
+        return [];
+      }
+    } catch (error) {
+      console.error("Error loading tasks:", error);
+      throw error;
     }
-  } catch (error) {
-    console.error("Error loading tasks:", error);
-    throw error;
-  }
-}  
+  }  
 
-// Get family meeting notes
-async getFamilyMeetingNotes(familyId, weekNumber) {
-  try {
-    const docRef = doc(this.db, "familyMeetings", `${familyId}-week${weekNumber}`);
-    const docSnap = await getDoc(docRef);
-    
-    if (docSnap.exists()) {
-      return docSnap.data().notes || {};
-    } else {
-      console.log("No meeting notes found");
+  // Get family meeting notes
+  async getFamilyMeetingNotes(familyId, weekNumber) {
+    try {
+      const docRef = doc(this.db, "familyMeetings", `${familyId}-week${weekNumber}`);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return docSnap.data().notes || {};
+      } else {
+        console.log("No meeting notes found");
+        return {};
+      }
+    } catch (error) {
+      console.error("Error getting family meeting notes:", error);
       return {};
     }
-  } catch (error) {
-    console.error("Error getting family meeting notes:", error);
-    return {};
   }
-}
 
   // Create a new family
   async createFamily(familyData) {
     try {
       const { familyName, parents, children } = familyData;
       
-// Create user accounts for parents
-const parentUsers = [];
-const parentData = Array.isArray(parents) ? parents : [];
-for (const parent of parentData) {
-  // When creating Google-authenticated parents, make sure to preserve the Google auth data
-// Around line 715-720 in createFamily method
-if (parent.googleAuth) {
-  // For Google-authenticated parents, use their existing Google UID
-  parentUsers.push({
-    uid: parent.googleAuth.uid,
-    email: parent.googleAuth.email || parent.email,
-    role: parent.role,
-    googleAuth: parent.googleAuth // Make sure we're passing the full googleAuth object
-  });
-  console.log(`Using existing Google account for ${parent.role}:`, parent.googleAuth.uid);
-} else if (parent.email && parent.password) {
-  // For traditional email/password parents
-  try {
-    const user = await this.createUser(parent.email, parent.password);
-    parentUsers.push({
-      uid: user.uid,
-      email: parent.email,
-      role: parent.role
-    });
-    console.log(`Created user for ${parent.role}:`, user.uid);
-  } catch (error) {
-    console.error(`Error creating user for ${parent.role}:`, error);
-    // Continue with other parents even if one fails
-  }
-}
-}
+      // Create user accounts for parents
+      const parentUsers = [];
+      const parentData = Array.isArray(parents) ? parents : [];
+      for (const parent of parentData) {
+        if (parent.email && parent.password) {
+          try {
+            const user = await this.createUser(parent.email, parent.password);
+            parentUsers.push({
+              uid: user.uid,
+              email: parent.email,
+              role: parent.role
+            });
+            console.log(`Created user for ${parent.role}:`, user.uid);
+          } catch (error) {
+            console.error(`Error creating user for ${parent.role}:`, error);
+            // Continue with other parents even if one fails
+          }
+        }
+      }
 
-if (parentUsers.length === 0) {
-  throw new Error("No parent users could be created");
-}      
+      if (parentUsers.length === 0) {
+        throw new Error("No parent users could be created");
+      }
+        
       // Generate a simple family ID instead of using addDoc
-      // Generate a simple family ID instead of using addDoc
-const familyId = Date.now().toString(36) + Math.random().toString(36).substring(2);
-console.log("Generated familyId:", familyId);
-console.log("Parent users created:", parentUsers);
-console.log("Family data being prepared:", {
-  familyName,
-  parentData: parentData.map(p => ({...p, password: '****'})),
-  childrenData: Array.isArray(children) ? children : []
-});
-      
+      const familyId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+      console.log("Generated familyId:", familyId);
+      console.log("Parent users created:", parentUsers);
+      console.log("Family data being prepared:", {
+        familyName,
+        parentData: parentData.map(p => ({...p, password: '****'})),
+        childrenData: Array.isArray(children) ? children : []
+      });
+            
       // Create family members array
-const familyMembers = [
-  ...parentData.map((parent, index) => {
-    const userId = parentUsers[index]?.uid || `${parent.role.toLowerCase()}-${familyId}`;
-    console.log(`Creating family member for ${parent.name} with ID ${userId}`);
-    return {
-      id: userId,
-      name: parent.name,
-      role: 'parent',
-      roleType: parent.role,
-      email: parent.email,
-      completed: false,
-      completedDate: null,
-      weeklyCompleted: [],
-      profilePicture: '/api/placeholder/150/150', // Default placeholder
-      // Important: Preserve the Google auth data if it exists
-      googleAuth: parent.googleAuth || null
-    };
-  }),
-  ...(Array.isArray(children) ? children : []).map(child => {
-
+      const familyMembers = [
+        ...parentData.map((parent, index) => {
+          const userId = parentUsers[index]?.uid || `${parent.role.toLowerCase()}-${familyId}`;
+          console.log(`Creating family member for ${parent.name} with ID ${userId}`);
+          return {
+            id: userId,
+            name: parent.name,
+            role: 'parent',
+            roleType: parent.role,
+            email: parent.email,
+            completed: false,
+            completedDate: null,
+            weeklyCompleted: [],
+            profilePicture: parent.profilePicture || '/api/placeholder/150/150'
+          };
+        }),
+        ...(Array.isArray(children) ? children : []).map(child => {
           const childId = `${child.name.toLowerCase()}-${familyId}`;
           console.log(`Creating family member for child ${child.name} with ID ${childId}`);
           return {
@@ -1284,11 +768,11 @@ const familyMembers = [
             completed: false,
             completedDate: null,
             weeklyCompleted: [],
-            profilePicture: '/api/placeholder/150/150' // Default placeholder
+            profilePicture: child.profilePicture || '/api/placeholder/150/150'
           };
         })
       ];
-      
+            
       // Prepare family document data
       const familyDoc = {
         familyId,
@@ -1301,15 +785,15 @@ const familyMembers = [
         updatedAt: new Date(),
         memberIds: parentUsers.map(user => user.uid),
         surveySchedule: {}, // Initialize empty survey schedule
-        familyPicture: null // Initialize empty family picture
+        familyPicture: familyData.familyPicture || null
       };
-      
+            
       console.log("Attempting to save family document:", familyId);
-      
+            
       // Create the family document directly with a specific ID
       await setDoc(doc(this.db, "families", familyId), familyDoc);
       console.log("Family document created successfully");
-      
+            
       // Record family creation analytics
       try {
         await this.recordAnalyticsEvent(familyId, {
@@ -1324,7 +808,7 @@ const familyMembers = [
         console.error("Analytics error during family creation:", analyticsError);
         // Non-critical, don't block family creation
       }
-      
+            
       return familyDoc;
     } catch (error) {
       console.error("Error in createFamily:", error);
@@ -1367,135 +851,6 @@ const familyMembers = [
       throw error;
     }
   }
-
-// Create a new family
-async createFamily(familyData) {
-  try {
-    const { familyName, parents, children } = familyData;
-    
-    // Create user accounts for parents
-    const parentUsers = [];
-    const parentData = Array.isArray(parents) ? parents : [];
-    for (const parent of parentData) {
-      if (parent.googleAuth) {
-        // For Google-authenticated parents, use their existing Google UID
-        parentUsers.push({
-          uid: parent.googleAuth.uid,
-          email: parent.googleAuth.email || parent.email,
-          role: parent.role
-        });
-        console.log(`Using existing Google account for ${parent.role}:`, parent.googleAuth.uid);
-      } else if (parent.email && parent.password) {
-        // For traditional email/password parents
-        try {
-          const user = await this.createUser(parent.email, parent.password);
-          parentUsers.push({
-            uid: user.uid,
-            email: parent.email,
-            role: parent.role
-          });
-          console.log(`Created user for ${parent.role}:`, user.uid);
-        } catch (error) {
-          console.error(`Error creating user for ${parent.role}:`, error);
-          // Continue with other parents even if one fails
-        }
-      }
-    }
-
-    if (parentUsers.length === 0) {
-      throw new Error("No parent users could be created");
-    }      
-      // Generate a simple family ID instead of using addDoc
-      // Generate a simple family ID instead of using addDoc
-    const familyId = Date.now().toString(36) + Math.random().toString(36).substring(2);
-    console.log("Generated familyId:", familyId);
-    console.log("Parent users created:", parentUsers);
-    console.log("Family data being prepared:", {
-      familyName,
-      parentData: parentData.map(p => ({...p, password: '****'})),
-      childrenData: Array.isArray(children) ? children : []
-    });
-          
-          // Create family members array
-          const familyMembers = [
-            ...parentData.map((parent, index) => {
-              const userId = parentUsers[index]?.uid || `${parent.role.toLowerCase()}-${familyId}`;
-              console.log(`Creating family member for ${parent.name} with ID ${userId}`);
-              return {
-                id: userId,
-                name: parent.name,
-                role: 'parent',
-                roleType: parent.role,
-                email: parent.email,
-                completed: false,
-                completedDate: null,
-                weeklyCompleted: [],
-                profilePicture: '/api/placeholder/150/150', // Default placeholder
-                // Important: Preserve the Google auth data if it exists
-                googleAuth: parent.googleAuth || null
-              };
-            }),
-            ...(Array.isArray(children) ? children : []).map(child => {
-
-              const childId = `${child.name.toLowerCase()}-${familyId}`;
-              console.log(`Creating family member for child ${child.name} with ID ${childId}`);
-              return {
-                id: childId,
-                name: child.name,
-                role: 'child',
-                age: child.age,
-                completed: false,
-                completedDate: null,
-                weeklyCompleted: [],
-                profilePicture: '/api/placeholder/150/150' // Default placeholder
-              };
-            })
-          ];
-          
-          // Prepare family document data
-          const familyDoc = {
-            familyId,
-            familyName,
-            familyMembers,
-            tasks: [],
-            completedWeeks: [],
-            currentWeek: 1,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            memberIds: parentUsers.map(user => user.uid),
-            surveySchedule: {}, // Initialize empty survey schedule
-            familyPicture: null // Initialize empty family picture
-          };
-          
-          console.log("Attempting to save family document:", familyId);
-          
-          // Create the family document directly with a specific ID
-          await setDoc(doc(this.db, "families", familyId), familyDoc);
-          console.log("Family document created successfully");
-          
-          // Record family creation analytics
-          try {
-            await this.recordAnalyticsEvent(familyId, {
-              event: 'family_created',
-              familyName: familyName,
-              memberCount: familyMembers.length,
-              parentCount: parentData.length,
-              childCount: Array.isArray(children) ? children.length : 0,
-              timestamp: new Date().toISOString()
-            });
-          } catch (analyticsError) {
-            console.error("Analytics error during family creation:", analyticsError);
-            // Non-critical, don't block family creation
-          }
-          
-          return familyDoc;
-        } catch (error) {
-          console.error("Error in createFamily:", error);
-          throw error;
-        }
-      }
-
-
 
   // Store AI preferences
   async storeAIPreferences(familyId, preferences) {
@@ -1635,7 +990,7 @@ async createFamily(familyData) {
   // AI Task Intelligence Engine
   async generateAITaskRecommendations(familyId) {
     try {
-      // In a real implementation, this would analyze survey data for "hidden" workload imbalances
+      // For a real implementation, this would analyze survey data for "hidden" workload imbalances
       // and generate personalized task recommendations
       
       // For now, we'll mock the AI recommendations
