@@ -87,18 +87,31 @@ useEffect(() => {
     module.default.suppressApiErrors();
   });
   
-  // Initialize calendar early but don't block on failures
-  const initializeCalendar = async () => {
-    try {
-      await CalendarService.initializeGoogleCalendar();
-    } catch (error) {
-      console.warn("Calendar initialization failed:", error);
-      // The app will continue without calendar features
+  useEffect(() => {
+    // Only attempt to initialize if we're on a tab that needs calendar
+    if (activeTab === 'tasks' || activeTab === 'dashboard' || activeTab === 'relationship') {
+      // Delay calendar initialization to avoid blocking other components
+      const timer = setTimeout(() => {
+        const initializeCalendar = async () => {
+          try {
+            // Only try to initialize if we're not in mock mode
+            if (!CalendarService.mockMode) {
+              await CalendarService.initializeGoogleCalendar();
+              // Only suppress errors after successful initialization
+              CalendarErrorHandler.suppressApiErrors();
+            }
+          } catch (error) {
+            console.warn("Calendar initialization failed, continuing without calendar features:", error);
+            CalendarService.mockMode = true;
+          }
+        };
+        
+        initializeCalendar();
+      }, 1500);  // Delay initialization by 1.5 seconds
+      
+      return () => clearTimeout(timer);
     }
-  };
-  
-  initializeCalendar();
-}, []);
+  }, [activeTab]);
 
 
 useEffect(() => {
@@ -153,18 +166,7 @@ useEffect(() => {
   // Suppress Google API errors to avoid console noise
   CalendarErrorHandler.suppressApiErrors();
   
-  // Initialize calendar early but don't block on failures
-  const initializeCalendar = async () => {
-    try {
-      await CalendarService.initializeGoogleCalendar();
-    } catch (error) {
-      console.warn("Calendar initialization failed:", error);
-      // The app will continue without calendar features
-    }
-  };
-  
-  initializeCalendar();
-}, []);
+ 
 
   
 // Add this useEffect after the other useEffects

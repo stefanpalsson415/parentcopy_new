@@ -264,6 +264,8 @@ const LandingPage = () => {
     window.scrollTo(0, 0);
   }, []);
 
+
+  
   // Navigate through demo steps
   const nextDemoStep = () => {
     setActiveDemo(prev => (prev < demoSteps.length) ? prev + 1 : prev);

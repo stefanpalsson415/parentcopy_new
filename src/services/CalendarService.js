@@ -96,11 +96,34 @@ class CalendarService {
     }
   }
 
-  async initializeGoogleCalendar() {
-    // If already initialized, return immediately
-    if (this.googleApiLoaded) return true;
-    
-    return new Promise((resolve, reject) => {
+  // This goes at the beginning of the initializeGoogleCalendar method in CalendarService.js
+
+async initializeGoogleCalendar() {
+  // If already initialized, return immediately
+  if (this.googleApiLoaded) return true;
+  
+  // If already attempting to initialize, don't try again
+  if (this.initializationInProgress) {
+    return new Promise((resolve) => {
+      const checkInterval = setInterval(() => {
+        if (this.googleApiLoaded) {
+          clearInterval(checkInterval);
+          resolve(true);
+        }
+      }, 500);
+      
+      // Set timeout to prevent hanging
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        resolve(false);
+      }, 5000);
+    });
+  }
+  
+  this.initializationInProgress = true;
+
+  return new Promise((resolve, reject) => {
+    // Rest of the function remains the same...
       try {
         // Load the Google API script if not already loaded
         if (!window.gapi) {
