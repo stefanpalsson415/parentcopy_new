@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, X, MinusSquare, ChevronLeft, ChevronRight, ArrowUpRight, AlertCircle, Activity, BookOpen, Heart, Bell, ChevronUp, ChevronDown, Users, MapPin, Clock } from 'lucide-react';
+import { Calendar, X, MinusSquare, RefreshCw, ChevronLeft, ChevronRight, ArrowUpRight, AlertCircle, Activity, BookOpen, Heart, Bell, ChevronUp, ChevronDown, Users, MapPin, Clock } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import CalendarService from '../../services/CalendarService';
 import AllieCalendarEvents from './AllieCalendarEvents';
 import DatabaseService from '../../services/DatabaseService';
+import { db } from '../../services/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const FloatingCalendarWidget = () => {
   const { currentUser } = useAuth();
@@ -27,6 +29,7 @@ const FloatingCalendarWidget = () => {
   const [view, setView] = useState('all'); // 'all', 'tasks', 'appointments', 'activities'
   const [loading, setLoading] = useState(false);
   const [widgetHeight, setWidgetHeight] = useState(68); // Default height (in rems)
+  const [lastRefresh, setLastRefresh] = useState(Date.now());
   
   // Helper function to get days in month
   const getDaysInMonth = (year, month) => {
@@ -64,12 +67,75 @@ const FloatingCalendarWidget = () => {
            date.getFullYear() === today.getFullYear();
   };
   
-  // Load all events when the widget opens
+  // Set up automatic refresh interval
+  useEffect(() => {
+    if (isOpen) {
+      const refreshInterval = setInterval(() => {
+        setLastRefresh(Date.now()); // Trigger a refresh
+      }, 30000); // Check every 30 seconds
+      
+      return () => clearInterval(refreshInterval);
+    }
+  }, [isOpen]);
+  
+  // Load all events when the widget opens or refresh is triggered
   useEffect(() => {
     if (isOpen && familyId) {
       loadAllEvents();
     }
-  }, [isOpen, familyId, selectedDate]);
+  }, [isOpen, familyId, lastRefresh, selectedDate]);
+  
+  // Load general calendar events (from the calendar_events collection)
+  const loadGeneralCalendarEvents = async () => {
+    try {
+      if (!currentUser?.uid || !familyId) {
+        return [];
+      }
+      
+      // Get date range
+      const timeMin = new Date();
+      timeMin.setDate(timeMin.getDate() - 30); // Include events from past month
+      
+      const timeMax = new Date();
+      timeMax.setDate(timeMax.getDate() + 365); // Show events up to a year ahead
+      
+      // Query Firestore to get all calendar events for this user
+      const eventsQuery = query(
+        collection(db, "calendar_events"),
+        where("userId", "==", currentUser.uid)
+      );
+      
+      const querySnapshot = await getDocs(eventsQuery);
+      const events = [];
+      
+      querySnapshot.forEach((doc) => {
+        const eventData = doc.data();
+        
+        // Filter by date range if dates are provided
+        const startTime = new Date(eventData.start?.dateTime || eventData.start?.date || eventData.date || Date.now());
+        
+        if (startTime >= timeMin && startTime <= timeMax) {
+          events.push({
+            id: doc.id,
+            title: eventData.summary || eventData.title || 'Untitled Event',
+            date: eventData.start?.dateTime || eventData.start?.date || eventData.date,
+            dateObj: startTime,
+            time: startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+            category: 'calendar',
+            eventType: 'general',
+            location: eventData.location || '',
+            description: eventData.description || ''
+          });
+        }
+      });
+      
+      console.log(`Found ${events.length} general calendar events`);
+      return events;
+    } catch (error) {
+      console.error("Error loading general calendar events:", error);
+      return [];
+    }
+  };
   
   // Load all events from various sources
   const loadAllEvents = async () => {
@@ -85,8 +151,11 @@ const FloatingCalendarWidget = () => {
       // Get relationship events
       const relationshipEvents = await loadRelationshipEvents();
       
-      // Get task deadlines
+      // Get task events
       const taskEvents = await loadTaskEvents();
+      
+      // Get general calendar events (including those added via chat)
+      const generalEvents = await loadGeneralCalendarEvents();
       
       // Combine all events
       const combined = [
@@ -95,7 +164,8 @@ const FloatingCalendarWidget = () => {
         ...childrenData.childrenActivities || [],
         ...familyMeetings,
         ...relationshipEvents,
-        ...taskEvents
+        ...taskEvents,
+        ...generalEvents // Include chat-added events
       ];
       
       setAllEvents(combined);
@@ -375,7 +445,7 @@ const FloatingCalendarWidget = () => {
       setTimeout(() => notification.remove(), 3000);
       
       // Refresh events
-      loadAllEvents();
+      setLastRefresh(Date.now());
       
     } catch (error) {
       console.error("Error adding task to calendar:", error);
@@ -405,7 +475,7 @@ const FloatingCalendarWidget = () => {
       setTimeout(() => notification.remove(), 3000);
       
       // Refresh events
-      loadAllEvents();
+      setLastRefresh(Date.now());
       
     } catch (error) {
       console.error("Error adding meeting to calendar:", error);
@@ -583,6 +653,25 @@ const FloatingCalendarWidget = () => {
           };
           break;
           
+        case 'general':
+          // General events added through chat or other means
+          const generalDate = event.dateObj;
+          
+          calendarEvent = {
+            summary: event.title,
+            description: event.description || '',
+            location: event.location || '',
+            start: {
+              dateTime: generalDate.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            end: {
+              dateTime: new Date(generalDate.getTime() + 60*60000).toISOString(), // 1 hour duration
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            }
+          };
+          break;
+          
         default:
           // Default event
           calendarEvent = {
@@ -615,7 +704,7 @@ const FloatingCalendarWidget = () => {
         setTimeout(() => notification.remove(), 3000);
         
         // Refresh events
-        loadAllEvents();
+        setLastRefresh(Date.now());
       }
     } catch (error) {
       console.error("Error adding child event to calendar:", error);
@@ -651,6 +740,8 @@ const FloatingCalendarWidget = () => {
         return <Heart size={14} className="text-pink-500 mr-1" />;
       case 'task':
         return <Clock size={14} className="text-amber-500 mr-1" />;
+      case 'general':
+        return <Calendar size={14} className="text-blue-500 mr-1" />;
       default:
         return <Calendar size={14} className="text-gray-500 mr-1" />;
     }
@@ -842,6 +933,13 @@ const FloatingCalendarWidget = () => {
           {/* Selected Date */}
           <div className="mb-4">
             <h4 className="text-sm font-medium text-gray-700 font-roboto">{formatDate(selectedDate)}</h4>
+            <button
+              onClick={() => setLastRefresh(Date.now())}
+              className="text-xs text-blue-600 hover:underline flex items-center mt-1"
+            >
+              <RefreshCw size={12} className="mr-1" />
+              Refresh events
+            </button>
           </div>
           
           {/* Events for selected date */}
@@ -857,7 +955,7 @@ const FloatingCalendarWidget = () => {
                 {getEventsForSelectedDate()
                   .filter(event => 
                     view === 'all' || 
-                    (view === 'appointments' && event.category === 'medical') ||
+                    (view === 'appointments' && (event.category === 'medical' || event.eventType === 'appointment')) ||
                     (view === 'activities' && (event.category === 'activity' || event.eventType === 'activity')) ||
                     (view === 'tasks' && (event.category === 'task' || event.eventType === 'task' || event.eventType === 'homework')) ||
                     (view === 'meetings' && (event.category === 'meeting' || event.eventType === 'meeting'))
@@ -915,7 +1013,7 @@ const FloatingCalendarWidget = () => {
                 {allEvents
                   .filter(event => 
                     view === 'all' || 
-                    (view === 'appointments' && event.category === 'medical') ||
+                    (view === 'appointments' && (event.category === 'medical' || event.eventType === 'appointment')) ||
                     (view === 'activities' && (event.category === 'activity' || event.eventType === 'activity')) ||
                     (view === 'tasks' && (event.category === 'task' || event.eventType === 'task' || event.eventType === 'homework')) ||
                     (view === 'meetings' && (event.category === 'meeting' || event.eventType === 'meeting'))
