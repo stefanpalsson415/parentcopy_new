@@ -20,7 +20,6 @@ const UserSignupScreen = () => {
     logout, 
     loadAllFamilies,
     ensureFamiliesLoaded,
-    signInWithGoogle 
   } = useAuth();
   
   const navigate = useNavigate();
@@ -43,7 +42,6 @@ const UserSignupScreen = () => {
     children: false
   });
   const [validationErrors, setValidationErrors] = useState({});
-  const [googleAuthPrompt, setGoogleAuthPrompt] = useState(false);
   const [pendingFamilyData, setPendingFamilyData] = useState(null);
   const [error, setError] = useState(''); 
   const [showProfileUpload, setShowProfileUpload] = useState(false);
@@ -74,43 +72,6 @@ const UserSignupScreen = () => {
       });
     }
   }, [location]);
-
-  // Check if we should prompt for Google Auth
-  useEffect(() => {
-    // Check if we should prompt for Google Auth
-    if (location?.state?.useGoogleAuth && pendingFamilyData?.parents?.length > 0) {
-      // Show a dialog asking which parent should connect with Google
-      const selectParentForGoogle = async (parentIndex) => {
-        try {
-          setIsSubmitting(true);
-          const user = await signInWithGoogle();
-          
-          // Update the parent's info
-          const updatedParents = [...pendingFamilyData.parents];
-          updatedParents[parentIndex] = {
-            ...updatedParents[parentIndex],
-            googleAuth: true,
-            email: user.email || updatedParents[parentIndex].email,
-            name: updatedParents[parentIndex].name || user.displayName
-          };
-          
-          setPendingFamilyData({...pendingFamilyData, parents: updatedParents});
-          
-          // Show success message
-          alert(`Successfully connected ${updatedParents[parentIndex].role} with Google!`);
-        } catch (error) {
-          console.error("Google sign-in error:", error);
-          alert("Google sign-in failed. Please try again or use email signup.");
-        } finally {
-          setIsSubmitting(false);
-        }
-      };
-      
-      // Add a modal or option to select which parent
-      // For simplicity, we're just adding this to state for now
-      setGoogleAuthPrompt(true);
-    }
-  }, [location, pendingFamilyData]);
 
   // Handle parent input change
   const handleParentChange = (index, field, value) => {
@@ -186,13 +147,10 @@ const UserSignupScreen = () => {
         errors[`parent_${index}_email`] = 'Email is invalid';
       }
       
-      // Only validate password if not using Google Auth
-      if (!parent.googleAuth) {
-        if (!parent.password.trim()) {
-          errors[`parent_${index}_password`] = 'Password is required';
-        } else if (parent.password.length < 6) {
-          errors[`parent_${index}_password`] = 'Password must be at least 6 characters';
-        }
+      if (!parent.password.trim()) {
+        errors[`parent_${index}_password`] = 'Password is required';
+      } else if (parent.password.length < 6) {
+        errors[`parent_${index}_password`] = 'Password must be at least 6 characters';
       }
     });
     
@@ -472,94 +430,11 @@ const UserSignupScreen = () => {
                   {familyData.parents.map((parent, index) => (
                     <div key={index} className="mb-4 p-4 border rounded bg-white">
                       <h4 className="font-medium mb-3">{parent.role} Information</h4>
-
-                      {/* Google auth info banner */}
-                      {parent.googleAuth && (
-                        <div className="mt-3 p-2 bg-green-50 rounded-lg border border-green-200">
-                          <p className="text-sm text-green-700 flex items-center font-roboto">
-                            <CheckCircle size={16} className="mr-1" />
-                            Google account connected: {parent.googleAuth.email}
-                          </p>
-                          <p className="text-xs text-green-600 mt-1 font-roboto">
-                            Calendar integration and simplified login are enabled
-                          </p>
-                        </div>
-                      )}
                       
-                      <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                        <p className="text-sm text-blue-700 mb-3 font-roboto">
-                          <strong>Recommended:</strong> Sign in with Google to enable calendar integration and simplify account management.
-                        </p>
-                        <button
-                          onClick={async () => {
-                            try {
-                              const user = await signInWithGoogle();
-                              
-                              if (user) {
-                                console.log("Successfully signed in with Google:", user);
-                                
-                                // Update the parent's info
-                                const updatedParents = [...familyData.parents];
-                                updatedParents[index] = {
-                                  ...updatedParents[index],
-                                  googleAuth: {
-                                    uid: user.uid,
-                                    email: user.email,
-                                    displayName: user.displayName,
-                                    photoURL: user.photoURL
-                                  },
-                                  email: user.email,
-                                  name: updatedParents[index].name || user.displayName || ''
-                                };
-                                
-                                setFamilyData({...familyData, parents: updatedParents});
-                              }
-                            } catch (error) {
-                              console.error("Google sign-in error:", error);
-                              alert("Google sign-in failed. Please try again or use email signup.");
-                            }
-                          }}
-                          disabled={parent.googleAuth}
-                          className={`w-full flex items-center justify-center rounded-md p-2 font-roboto ${
-                            parent.googleAuth 
-                              ? 'bg-green-50 border border-green-300 text-green-700' 
-                              : 'bg-white border border-gray-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          {parent.googleAuth ? (
-                            <div className="flex items-center">
-                              <CheckCircle size={16} className="mr-2" />
-                              Connected with Google
-                            </div>
-                          ) : (
-                            <>
-                              <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#4285F4"/>
-                              </svg>
-                              Sign in with Google as {parent.role}
-                            </>
-                          )}
-                        </button>
-                      </div>
-                      
-                      <div className="relative mb-4">
-                        <div className="absolute inset-0 flex items-center">
-                          <div className="w-full border-t border-gray-300"></div>
-                        </div>
-                        <div className="relative flex justify-center">
-                          <span className="px-2 bg-white text-gray-500 text-sm">or enter manually</span>
-                        </div>
-                      </div>
-
                       <div className="space-y-3">
                         <div>
                           <label className="block text-sm text-gray-700 mb-1">
                             Name
-                            {parent.googleAuth && !parent.name && (
-                              <span className="text-amber-600 ml-1 font-medium">
-                                ← Please add your name
-                              </span>
-                            )}
                           </label>
                           <div className="flex items-center border rounded overflow-hidden">
                             <div className="bg-gray-100 p-2 flex items-center justify-center">
@@ -569,10 +444,7 @@ const UserSignupScreen = () => {
                               type="text"
                               className={`w-full p-2 focus:outline-none ${
                                 validationErrors[`parent_${index}_name`] 
-                                  ? 'border-red-500 bg-red-50' 
-                                  : parent.googleAuth && !parent.name 
-                                    ? 'border-amber-500 bg-amber-50' 
-                                    : ''
+                                  ? 'border-red-500 bg-red-50' : ''
                               }`}
                               placeholder={`${parent.role}'s name`}
                               value={parent.name}
@@ -603,27 +475,24 @@ const UserSignupScreen = () => {
                           )}
                         </div>
                         
-                        {/* Only show password field if not using Google Auth */}
-                        {!parent.googleAuth && (
-                          <div>
-                            <label className="block text-sm text-gray-700 mb-1">Password</label>
-                            <div className="flex items-center border rounded overflow-hidden">
-                              <div className="bg-gray-100 p-2 flex items-center justify-center">
-                                <Key size={18} className="text-gray-500" />
-                              </div>
-                              <input
-                                type="password"
-                                className={`w-full p-2 focus:outline-none ${validationErrors[`parent_${index}_password`] ? 'border-red-500 bg-red-50' : ''}`}
-                                placeholder="Password"
-                                value={parent.password}
-                                onChange={(e) => handleParentChange(index, 'password', e.target.value)}
-                              />
+                        <div>
+                          <label className="block text-sm text-gray-700 mb-1">Password</label>
+                          <div className="flex items-center border rounded overflow-hidden">
+                            <div className="bg-gray-100 p-2 flex items-center justify-center">
+                              <Key size={18} className="text-gray-500" />
                             </div>
-                            {validationErrors[`parent_${index}_password`] && (
-                              <p className="text-red-500 text-xs mt-1">{validationErrors[`parent_${index}_password`]}</p>
-                            )}
+                            <input
+                              type="password"
+                              className={`w-full p-2 focus:outline-none ${validationErrors[`parent_${index}_password`] ? 'border-red-500 bg-red-50' : ''}`}
+                              placeholder="Password"
+                              value={parent.password}
+                              onChange={(e) => handleParentChange(index, 'password', e.target.value)}
+                            />
                           </div>
-                        )}
+                          {validationErrors[`parent_${index}_password`] && (
+                            <p className="text-red-500 text-xs mt-1">{validationErrors[`parent_${index}_password`]}</p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -638,12 +507,6 @@ const UserSignupScreen = () => {
                       <div>
                         <p className="font-medium">{parent.name || `[${parent.role}]`}</p>
                         <p className="text-sm text-gray-500">{parent.email}</p>
-                        {parent.googleAuth && (
-                          <span className="text-xs text-green-600 flex items-center mt-1">
-                            <CheckCircle size={12} className="mr-1" />
-                            Connected with Google
-                          </span>
-                        )}
                       </div>
                     </div>
                   ))}
