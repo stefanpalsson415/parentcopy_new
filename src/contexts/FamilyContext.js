@@ -395,6 +395,7 @@ const updateRelationshipStrategy = async (strategyId, updateData) => {
 
   // Complete initial survey
  // Complete initial survey with enhanced error handling and analytics
+// Enhanced completeInitialSurvey with better error handling and logging
 const completeInitialSurvey = async (memberId, responses) => {
   try {
     console.log(`Starting initial survey completion for member ${memberId}`);
@@ -465,49 +466,49 @@ const completeInitialSurvey = async (memberId, responses) => {
       }
       
       // 4. Store initial survey data in week history
-const allComplete = updatedMembers.every(member => member.completed);
-if (allComplete) {
-  console.log("All family members have completed the survey. Updating week history...");
-  // Create initial survey snapshot using current responses
-  const initialSurveyData = {
-    responses: responses,
-    completionDate: new Date().toISOString(),
-    familyMembers: updatedMembers.map(m => ({
-      id: m.id,
-      name: m.name,
-      role: m.role,
-      completedDate: m.completedDate
-    }))
-  };
-  
-  // Update week history
-  const updatedHistory = {
-    ...weekHistory,
-    initial: initialSurveyData
-  };
-  
-  setWeekHistory(updatedHistory);
-  
-  // Generate initial tasks based on survey results
-  try {
-    console.log("Generating initial tasks based on survey responses");
-    const initialTasks = generateNewWeekTasks(1, [], responses);
-    
-    // Update tasks in state
-    setTaskRecommendations(initialTasks);
-    
-    // Save to Firebase - include tasks and week history
-    await DatabaseService.saveFamilyData({ 
-      weekHistory: updatedHistory,
-      tasks: initialTasks,
-      updatedAt: new Date().toISOString()
-    }, familyId);
-    
-    console.log(`Generated ${initialTasks.length} initial tasks based on survey data`);
-  } catch (taskError) {
-    console.error("Error generating initial tasks:", taskError);
-    // Continue with survey completion even if task generation fails
-  }
+      const allComplete = updatedMembers.every(member => member.completed);
+      if (allComplete) {
+        console.log("All family members have completed the survey. Updating week history...");
+        // Create initial survey snapshot using current responses
+        const initialSurveyData = {
+          responses: responses,
+          completionDate: new Date().toISOString(),
+          familyMembers: updatedMembers.map(m => ({
+            id: m.id,
+            name: m.name,
+            role: m.role,
+            completedDate: m.completedDate
+          }))
+        };
+        
+        // Update week history
+        const updatedHistory = {
+          ...weekHistory,
+          initial: initialSurveyData
+        };
+        
+        setWeekHistory(updatedHistory);
+        
+        // Generate initial tasks based on survey results
+        try {
+          console.log("Generating initial tasks based on survey responses");
+          const initialTasks = generateNewWeekTasks(1, [], responses);
+          
+          // Update tasks in state
+          setTaskRecommendations(initialTasks);
+          
+          // Save to Firebase - include tasks and week history
+          await DatabaseService.saveFamilyData({ 
+            weekHistory: updatedHistory,
+            tasks: initialTasks,
+            updatedAt: new Date().toISOString()
+          }, familyId);
+          
+          console.log(`Generated ${initialTasks.length} initial tasks based on survey data`);
+        } catch (taskError) {
+          console.error("Error generating initial tasks:", taskError);
+          // Continue with survey completion even if task generation fails
+        }
         
         // 5. Store AI preferences in dedicated storage
         try {

@@ -301,53 +301,79 @@ const SurveyScreen = () => {
     }
   };
   
-  // Handle completing the survey
-  const handleCompleteSurvey = async () => {
-    if (isProcessing) return; // Prevent multiple submissions
+  // Enhanced handleCompleteSurvey with better completion handling
+const handleCompleteSurvey = async () => {
+  if (isProcessing) return; // Prevent multiple submissions
+  
+  // Set a flag to show we're submitting the whole survey (not just processing a single answer)
+  setIsProcessing(true);
+  
+  try {
+    console.log("Starting survey completion process...");
     
-    setIsProcessing(true);
+    // First, save the current survey state before navigating
+    await handleManualSave();
     
-    try {
-      console.log("Saving survey responses...");
-      
-      // First save responses synchronously
-      const result = await completeInitialSurvey(selectedUser.id, currentSurveyResponses);
-      
-      if (!result) {
-        throw new Error("Survey completion failed");
-      }
-      
-      // Remove the in-progress flag
-      localStorage.removeItem('surveyInProgress');
-      
-      // Show loading screen AFTER successful save
-      navigate('/loading');
-      
-      // Check if all family members have completed the survey
-      const allCompleted = familyMembers.every(member => member.completed || member.id === selectedUser.id);
-      
-      // Use a shorter timeout and navigate based on completion status
-      setTimeout(() => {
-        if (allCompleted) {
-          console.log("All family members completed survey, navigating to dashboard");
-          navigate('/dashboard', { replace: true }); // Hard navigation to dashboard for all members
-        } else {
-          console.log("Some family members still need to complete survey, navigating to family selection");
-          navigate('/login', { 
-            state: { 
-              directAccess: true,
-              showCompletionScreen: true  // Add flag to show completion screen
-            }, 
-            replace: true 
-          }); // Go to family selection screen with completion flag
+    // Then show loading screen to provide visual feedback
+    navigate('/loading');
+    
+    // IMPORTANT: Wait a moment before completing to ensure UI update happens
+    setTimeout(async () => {
+      try {
+        console.log("Saving final survey responses...");
+        
+        // Now complete the survey with all responses
+        const result = await completeInitialSurvey(selectedUser.id, currentSurveyResponses);
+        
+        if (!result) {
+          throw new Error("Survey completion failed");
         }
-      }, 2000);
-    } catch (error) {
-      console.error('Error completing survey:', error);
-      alert('There was an error saving your survey. Please try again.');
-      setIsProcessing(false);
-    }
-  };
+        
+        // Success! Remove the in-progress flag
+        localStorage.removeItem('surveyInProgress');
+        
+        console.log("Survey completed successfully!");
+        
+        // Check if all family members have completed the survey
+        const allCompleted = familyMembers.every(member => 
+          member.completed || member.id === selectedUser.id
+        );
+        
+        console.log(`All members completed? ${allCompleted}`);
+        
+        // Wait a moment before final navigation
+        setTimeout(() => {
+          if (allCompleted) {
+            console.log("All members completed - going to dashboard");
+            navigate('/dashboard', { replace: true });
+          } else {
+            console.log("Some members still need to complete - going to wait screen");
+            navigate('/login', { 
+              state: { 
+                directAccess: true,
+                showCompletionScreen: true
+              }, 
+              replace: true 
+            });
+          }
+        }, 1500);
+      } catch (submitError) {
+        console.error("Error in delayed survey completion:", submitError);
+        // Navigate back to survey with error message
+        navigate('/survey', { 
+          state: { error: "Failed to complete survey. Please try again." }
+        });
+      }
+    }, 500);
+  } catch (error) {
+    console.error('Error initiating survey completion:', error);
+    alert('There was an error saving your survey. Please try again.');
+    setIsProcessing(false);
+    
+    // Stay on current question
+    navigate('/survey');
+  }
+};
   
   // Move to previous question
   const handlePrevious = () => {
