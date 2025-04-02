@@ -33,6 +33,9 @@ export function ChatProvider({ children }) {
   };
   
   // Send a message
+  // In src/contexts/ChatContext.js - Update the sendMessage method
+
+  // Send a message
   const sendMessage = async (text, user) => {
     if (!user || !familyId) {
       console.error("Missing user or familyId in sendMessage:", { user, familyId });
@@ -61,8 +64,12 @@ export function ChatProvider({ children }) {
       
       console.log("Getting AI response for:", { text, familyId, messagesCount: messages.length });
       
-      // Get AI response
-      const aiResponse = await ChatService.getAIResponse(text, familyId, messages);
+      // Get AI response - pass the current messages including the new one
+      const aiResponse = await ChatService.getAIResponse(
+        text, 
+        familyId, 
+        [...messages, newMessage]
+      );
       
       console.log("Received AI response:", { length: aiResponse?.length });
       

@@ -1,4 +1,7 @@
 // src/services/ClaudeService.js
+import CalendarService from './CalendarService';
+import { auth } from './firebase';
+
 class ClaudeService {
   constructor() {
     this.proxyUrl = 'http://localhost:3001/api/claude';
@@ -23,6 +26,13 @@ class ClaudeService {
       
       // Get the last user message
       const lastUserMessage = messages[messages.length - 1]?.content || "";
+      
+      // Check if this is a calendar-related request
+      const calendarEventData = this.extractCalendarRequest(lastUserMessage);
+      if (calendarEventData) {
+        // Process the calendar request and return the response
+        return this.processCalendarRequest(calendarEventData, context);
+      }
       
       // Prepare request payload for Claude API
       const payload = {
@@ -77,6 +87,228 @@ class ClaudeService {
         messages[messages.length - 1]?.content || "", 
         context
       );
+    }
+  }
+  
+  // Extract calendar event data from user message
+  extractCalendarRequest(message) {
+    // Check if this is a calendar-related request
+    const calendarKeywords = [
+      'add to calendar', 'schedule', 'appointment', 'meeting', 'event', 
+      'calendar', 'book', 'plan', 'sync', 'reminder', 'save date'
+    ];
+    
+    const isCalendarRequest = calendarKeywords.some(keyword => 
+      message.toLowerCase().includes(keyword)
+    );
+    
+    if (!isCalendarRequest) return null;
+    
+    // If it's a calendar request, try to extract details
+    const eventData = {
+      title: '',
+      date: '',
+      time: '',
+      location: '',
+      description: '',
+      childName: null
+    };
+    
+    // Simple extraction logic - in a real implementation, use NLP
+    // Extract date
+    const datePatterns = [
+      /on\s+(\w+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i,
+      /(\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?\w+(?:\s+\d{4})?)/i,
+      /(\w+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i,
+      /(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i
+    ];
+    
+    for (const pattern of datePatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        eventData.date = match[1];
+        break;
+      }
+    }
+    
+    // Extract time
+    const timePatterns = [
+      /at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i,
+      /(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i,
+      /(\d{1,2}(?::\d{2})?)\s*(?:hours|h)/i
+    ];
+    
+    for (const pattern of timePatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        eventData.time = match[1];
+        break;
+      }
+    }
+    
+    // Extract location
+    const locationPatterns = [
+      /in\s+([A-Za-z\s]+(?:,\s*[A-Za-z\s]+)?)/i,
+      /at\s+([A-Za-z\s]+(?:,\s*[A-Za-z\s]+)?)/i,
+      /location(?:\s+is)?\s+([A-Za-z\s]+(?:,\s*[A-Za-z\s]+)?)/i
+    ];
+    
+    for (const pattern of locationPatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        eventData.location = match[1];
+        break;
+      }
+    }
+    
+    // Extract title
+    const titlePatterns = [
+      /(?:add|create|schedule|book)\s+(?:a|an)\s+([a-z\s]+)(?:appointment|meeting|event)?/i,
+      /(?:add|create|schedule|book)\s+(?:a|an)\s+([a-z\s]+)(?:for|on|at)/i,
+      /(?:appointment|meeting|event)\s+(?:for|about)\s+([a-z\s]+)(?:on|at)/i
+    ];
+    
+    for (const pattern of titlePatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        eventData.title = match[1].trim();
+        break;
+      }
+    }
+    
+    // Extract child name (if present)
+    const childNamePattern = /for\s+(\w+)(?:'s|\s+on|\s+at)/i;
+    const childMatch = message.match(childNamePattern);
+    if (childMatch) {
+      eventData.childName = childMatch[1];
+    }
+    
+    // Clean up and validate extracted data
+    if (eventData.title && (eventData.date || eventData.time)) {
+      return eventData;
+    }
+    
+    return null;
+  }
+  
+  // Process calendar request and add event to calendar
+  async processCalendarRequest(eventData, context) {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        return "I need you to be logged in to add events to your calendar. Please log in and try again.";
+      }
+      
+      // Parse date and time
+      let eventDate;
+      if (eventData.date) {
+        // Try to parse date string
+        eventDate = new Date(eventData.date);
+        // If date is invalid, try a more flexible approach
+        if (isNaN(eventDate)) {
+          const dateStr = eventData.date.replace(/(st|nd|rd|th)/, '');
+          eventDate = new Date(dateStr);
+        }
+      } else {
+        // Default to tomorrow if no date provided
+        eventDate = new Date();
+        eventDate.setDate(eventDate.getDate() + 1);
+      }
+      
+      // Set time if provided
+      if (eventData.time) {
+        // Parse time string (e.g., "3:00 PM", "14:00", "2pm")
+        const timeStr = eventData.time.toLowerCase();
+        const hour12Match = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/);
+        const hour24Match = timeStr.match(/(\d{1,2})(?::(\d{2}))?/);
+        
+        if (hour12Match) {
+          // 12-hour format
+          let hours = parseInt(hour12Match[1]);
+          const minutes = hour12Match[2] ? parseInt(hour12Match[2]) : 0;
+          const ampm = hour12Match[3];
+          
+          if (ampm === 'pm' && hours < 12) hours += 12;
+          if (ampm === 'am' && hours === 12) hours = 0;
+          
+          eventDate.setHours(hours, minutes, 0, 0);
+        } else if (hour24Match) {
+          // 24-hour format
+          const hours = parseInt(hour24Match[1]);
+          const minutes = hour24Match[2] ? parseInt(hour24Match[2]) : 0;
+          
+          eventDate.setHours(hours, minutes, 0, 0);
+        } else {
+          // Default to noon
+          eventDate.setHours(12, 0, 0, 0);
+        }
+      } else {
+        // Default to noon if no time provided
+        eventDate.setHours(12, 0, 0, 0);
+      }
+      
+      // Create end time (1 hour after start)
+      const endDate = new Date(eventDate);
+      endDate.setHours(endDate.getHours() + 1);
+      
+      // Create calendar event object
+      const event = {
+        summary: eventData.title || 'New Event',
+        description: eventData.description || '',
+        location: eventData.location || '',
+        start: {
+          dateTime: eventDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: endDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        reminders: {
+          useDefault: true
+        }
+      };
+      
+      // Add event to calendar
+      const result = await CalendarService.addEvent(event, currentUser.uid);
+      
+      // Format response
+      if (result && result.success) {
+        const formattedDate = eventDate.toLocaleDateString('en-US', { 
+          weekday: 'long', 
+          month: 'long', 
+          day: 'numeric' 
+        });
+        
+        const formattedTime = eventDate.toLocaleTimeString('en-US', { 
+          hour: 'numeric', 
+          minute: '2-digit'
+        });
+        
+        let response = `I've added the following event to your family's shared calendar:\n\n`;
+        response += `Event: ${eventData.title || 'New Event'}\n`;
+        response += `Date: ${formattedDate}\n`;
+        response += `Time: ${formattedTime}\n`;
+        
+        if (eventData.location) {
+          response += `Location: ${eventData.location}\n`;
+        }
+        
+        response += `\nThis has been added to your family's shared calendar. I've marked it as an upcoming task`;
+        
+        if (eventData.childName) {
+          response += ` for ${eventData.childName}`;
+        }
+        
+        response += `. Let me know if you need anything else!`;
+        
+        return response;
+      } else {
+        return "I tried to add the event to your calendar, but encountered an issue. Please try again or add it manually through the calendar widget.";
+      }
+    } catch (error) {
+      console.error("Error processing calendar request:", error);
+      return "I wasn't able to process your calendar request due to a technical issue. You can try again or add the event directly through the calendar widget.";
     }
   }
   
@@ -286,11 +518,8 @@ class ClaudeService {
       }
     }
     
-    // Add the following childDevelopmentContent to the formatSystemPrompt method
-// in the ClaudeService class:
 
-// In the formatSystemPrompt method, add this block where knowledgeBaseContent is constructed:
-
+// Add this to the existing knowledgeBaseContent
 const childDevelopmentContent = `
 === CHILD DEVELOPMENT KNOWLEDGE BASE ===
 

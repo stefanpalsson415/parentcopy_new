@@ -84,6 +84,24 @@ const FloatingCalendarWidget = () => {
       loadAllEvents();
     }
   }, [isOpen, familyId, lastRefresh, selectedDate]);
+
+  // In src/components/calendar/FloatingCalendarWidget.jsx - Add auto-refresh listener
+
+// Inside the FloatingCalendarWidget component, after the initial useEffect hooks
+useEffect(() => {
+  // Function to reload events
+  const refreshEvents = () => {
+    setLastRefresh(Date.now());
+  };
+  
+  // Set up event listener for calendar updates
+  window.addEventListener('calendar-event-added', refreshEvents);
+  
+  // Clean up
+  return () => {
+    window.removeEventListener('calendar-event-added', refreshEvents);
+  };
+}, []);
   
   // Load general calendar events (from the calendar_events collection)
   const loadGeneralCalendarEvents = async () => {

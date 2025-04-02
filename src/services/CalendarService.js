@@ -73,38 +73,47 @@ class CalendarService {
     }
   }
 
-  // General method to add an event to user's calendar
-  async addEvent(event, userId) {
-    try {
-      if (!userId) {
-        throw new Error("User ID is required to add events");
-      }
-      
-      // Save event to Firestore
-      const eventData = {
-        ...event,
-        userId,
-        familyId: event.familyId || null,
-        createdAt: serverTimestamp()
-      };
-      
-      const eventRef = collection(db, "calendar_events");
-      const docRef = await addDoc(eventRef, eventData);
-      
-      // Show success notification
-      this.showNotification(`Event "${event.summary}" added to your calendar`, "success");
-      
-      return {
-        success: true,
-        eventId: docRef.id,
-        isMock: false
-      };
-    } catch (error) {
-      console.error("Error adding event to calendar:", error);
-      this.showNotification("Failed to add event to calendar", "error");
-      throw error;
+  // In src/services/CalendarService.js - Update the addEvent method to dispatch an event
+
+async addEvent(event, userId) {
+  try {
+    if (!userId) {
+      throw new Error("User ID is required to add events");
     }
+    
+    // Save event to Firestore
+    const eventData = {
+      ...event,
+      userId,
+      familyId: event.familyId || null,
+      createdAt: serverTimestamp()
+    };
+    
+    const eventRef = collection(db, "calendar_events");
+    const docRef = await addDoc(eventRef, eventData);
+    
+    // Dispatch an event to notify components of the new calendar event
+    if (typeof window !== 'undefined') {
+      const updateEvent = new CustomEvent('calendar-event-added', {
+        detail: { eventId: docRef.id }
+      });
+      window.dispatchEvent(updateEvent);
+    }
+    
+    // Show success notification
+    this.showNotification(`Event "${event.summary}" added to your calendar`, "success");
+    
+    return {
+      success: true,
+      eventId: docRef.id,
+      isMock: false
+    };
+  } catch (error) {
+    console.error("Error adding event to calendar:", error);
+    this.showNotification("Failed to add event to calendar", "error");
+    throw error;
   }
+}
 
   // Get events for a user
   async getEventsForUser(userId, timeMin, timeMax) {

@@ -3,6 +3,8 @@ import { MessageSquare, X, MinusSquare, Send, Info, Calendar, PlusCircle, Mic, U
 import { useFamily } from '../../contexts/FamilyContext';
 import { useChat } from '../../contexts/ChatContext';
 import ChatMessage from './ChatMessage';
+import CalendarPromptChip from './CalendarPromptChip';
+
 
 const AllieChat = () => {
   const { selectedUser, familyMembers } = useFamily();
@@ -286,6 +288,30 @@ const AllieChat = () => {
                 </div>
                 
                 {/* Add suggestion chips */}
+                <div className="flex justify-center space-x-2 mt-6">
+  <button 
+    className="flex items-center px-3 py-2 bg-black hover:bg-gray-800 text-white rounded-full text-sm font-roboto shadow transition-all duration-150 transform hover:scale-105"
+    onClick={() => sendMessage("How do I add tasks to my calendar?", selectedUser)}
+  >
+    <Calendar size={14} className="mr-1" />
+    <span>Calendar tips</span>
+  </button>
+  
+  <CalendarPromptChip
+    onClick={() => {}}
+    onSelectDate={(date) => {
+      sendMessage(`Add an event to my calendar on ${date.toLocaleDateString()} at ${date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`, selectedUser);
+    }}
+  />
+  
+  <button 
+    className="flex items-center px-3 py-2 bg-black hover:bg-gray-800 text-white rounded-full text-sm font-roboto shadow transition-all duration-150 transform hover:scale-105"
+    onClick={() => sendMessage("Tell me about my children's schedules", selectedUser)}
+  >
+    <User size={14} className="mr-1" />
+    <span>Kids dashboard</span>
+  </button>
+</div>
                 <div className="flex justify-center space-x-2 mt-6">
                   <button 
                     className="flex items-center px-3 py-2 bg-black hover:bg-gray-800 text-white rounded-full text-sm font-roboto shadow transition-all duration-150 transform hover:scale-105"
