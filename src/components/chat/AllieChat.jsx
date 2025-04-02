@@ -15,7 +15,7 @@ const AllieChat = () => {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
-  const [chatHeight, setChatHeight] = useState(96); // Default height (in rems)
+  const [chatHeight, setChatHeight] = useState(68); // Default height (in rems)
   const messagesEndRef = useRef(null);
   const recognition = useRef(null);
   const fileInputRef = useRef(null);

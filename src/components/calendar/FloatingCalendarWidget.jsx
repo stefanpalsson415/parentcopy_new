@@ -26,7 +26,7 @@ const FloatingCalendarWidget = () => {
   const [allEvents, setAllEvents] = useState([]);
   const [view, setView] = useState('all'); // 'all', 'tasks', 'appointments', 'activities'
   const [loading, setLoading] = useState(false);
-  const [widgetHeight, setWidgetHeight] = useState(96); // Default height (in rems)
+  const [widgetHeight, setWidgetHeight] = useState(68); // Default height (in rems)
   
   // Helper function to get days in month
   const getDaysInMonth = (year, month) => {
