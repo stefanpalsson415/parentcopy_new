@@ -1,10 +1,7 @@
-// src/utils/CalendarErrorHandler.js - FULL REPLACEMENT
+// src/utils/CalendarErrorHandler.js
 class CalendarErrorHandler {
   constructor() {
     this.suppressedErrors = [
-      'idpiframe_initialization_failed',
-      'Failed to execute \'postMessage\'',
-      'gapi.auth2',
       'Token refresh failed',
       'Could not extract valid JSON from response',
       'Could not extract valid JSON',
@@ -14,16 +11,16 @@ class CalendarErrorHandler {
     this.isSuppressing = false;
   }
 
-  // Suppress specific Google API errors to avoid console noise
+  // Suppress specific API errors to avoid console noise
   suppressApiErrors() {
     if (this.isSuppressing) return; // Already suppressing
     
     this.originalConsoleError = console.error;
     this.isSuppressing = true;
     
-    // Override console.error to filter out specific Google-related errors
+    // Override console.error to filter out specific errors
     console.error = (...args) => {
-      // Check if this is a Google API error we want to suppress
+      // Check if this is an error we want to suppress
       const errorString = typeof args[0] === 'string' ? args.join(' ') : '';
       const shouldSuppress = this.suppressedErrors.some(errText => 
         errorString.includes(errText)
