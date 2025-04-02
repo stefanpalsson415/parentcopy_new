@@ -12,6 +12,7 @@ const UserSettingsScreen = ({ onClose }) => {
     familyMembers, 
     familyName,
     familyId,
+    familyPicture,
     updateMemberProfile, 
     updateFamilyName,
     updateFamilyPicture

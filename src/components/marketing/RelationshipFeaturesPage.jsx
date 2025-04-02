@@ -18,61 +18,66 @@ const RelationshipFeaturesPage = () => {
   return (
     <div className="min-h-screen bg-white font-['Roboto']">
       {/* Header/Nav */}
-      <header className="px-6 py-4 border-b bg-white sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto flex justify-between items-center">
-          <h1 className="text-3xl font-light cursor-pointer" onClick={() => navigate('/')}>Allie</h1>
-          <nav className="hidden md:flex space-x-8">
-            <button 
-              onClick={() => navigate('/how-it-works')}
-              className="text-gray-800 hover:text-gray-600"
-            >
-              How It Works
-            </button>
-            <button
-              onClick={() => navigate('/about-us')}
-              className="text-gray-800 hover:text-gray-600"
-            >
-              About Us
-            </button>
-            <button 
-              onClick={() => navigate('/relationship-features')}
-              className="text-black font-medium border-b-2 border-black"
-            >
-              Relationship Features
-            </button>
-            <button 
-              onClick={() => navigate('/blog')}
-              className="text-gray-800 hover:text-gray-600"
-            >
-              Blog
-            </button>
-            
-            {currentUser ? (
-              <button 
-                onClick={() => navigate('/login', { state: { directAccess: true, fromLanding: true } })}
-                className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
-              >
-                Jump Back In
-              </button>
-            ) : (
-              <>
-                <button 
-                  onClick={() => navigate('/login')}
-                  className="px-4 py-2 border border-gray-800 rounded hover:bg-gray-100"
-                >
-                  Log In
-                </button>
-                <button 
-                  onClick={() => navigate('/onboarding')}
-                  className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
-                >
-                  Sign Up
-                </button>
-              </>
-            )}
-          </nav>
-        </div>
-      </header>
+<header className="px-6 py-4 border-b bg-white sticky top-0 z-50">
+  <div className="max-w-6xl mx-auto flex justify-between items-center">
+    <h1 className="text-3xl font-light cursor-pointer" onClick={() => navigate('/')}>Allie</h1>
+    <nav className="hidden md:flex space-x-8">
+      <button 
+        onClick={() => navigate('/how-it-works')}
+        className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+      >
+        How It Works
+      </button>
+      <button
+        onClick={() => navigate('/about-us')}
+        className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+      >
+        About Us
+      </button>
+      <button 
+        onClick={() => navigate('/relationship-features')}
+        className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+      >
+        Relationship Features
+      </button>
+      <button 
+        onClick={() => navigate('/ai-assistant')}
+        className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+      >
+        AI Assistant
+      </button>
+      <button 
+        onClick={() => navigate('/blog')}
+        className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+      >
+        Blog
+      </button>
+      {currentUser ? (
+        <button 
+          onClick={() => navigate('/login', { state: { directAccess: true, fromLanding: true } })}
+          className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
+        >
+          Jump Back In
+        </button>
+      ) : (
+        <>
+          <button 
+            onClick={() => navigate('/login')}
+            className="px-4 py-2 border border-gray-800 rounded hover:bg-gray-100"
+          >
+            Log In
+          </button>
+          <button 
+            onClick={() => navigate('/onboarding')}
+            className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
+          >
+            Sign Up
+          </button>
+        </>
+      )}
+    </nav>
+  </div>
+</header>
       
       {/* Hero Section */}
       <section className="py-20 bg-black text-white">
@@ -760,58 +765,47 @@ const RelationshipFeaturesPage = () => {
       </section>
       
       {/* Footer */}
-      <footer className="px-6 py-12 bg-white border-t">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div>
-              <h2 className="text-2xl font-light mb-4">Allie</h2>
-              <p className="text-gray-600">Balancing family responsibilities together</p>
-            </div>
-            
-            <div>
-              <h3 className="text-gray-800 font-medium mb-4">Product</h3>
-              <ul className="space-y-2">
-                <li>
-                  <button onClick={() => navigate('/how-it-works')} className="text-gray-600 hover:text-gray-900">How It Works</button>
-                </li>
-                <li>
-                  <button onClick={() => navigate('/relationship-features')} className="text-gray-600 hover:text-gray-900">Relationship Features</button>
-                </li>
-                <li>
-                  <button onClick={() => navigate('/ai-assistant')} className="text-gray-600 hover:text-gray-900">AI Assistant</button>
-                </li>
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="text-gray-800 font-medium mb-4">Company</h3>
-              <ul className="space-y-2">
-                <li>
-                  <button onClick={() => navigate('/about-us')} className="text-gray-600 hover:text-gray-900">About Us</button>
-                </li>
-                <li>
-                  <button onClick={() => navigate('/blog')} className="text-gray-600 hover:text-gray-900">Blog</button>
-                </li>
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="text-gray-800 font-medium mb-4">Support</h3>
-              <ul className="space-y-2">
-                <li>
-                  <button onClick={() => navigate('/faq')} className="text-gray-600 hover:text-gray-900">FAQ</button>
-                </li>
-                <li>
-                  <button onClick={() => navigate('/contact')} className="text-gray-600 hover:text-gray-900">Contact Us</button>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div className="mt-8 pt-8 border-t text-center text-gray-500 text-sm">
-            <p>© 2025 Allie. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      // Updated footer for AboutUsPage.jsx
+<footer className="px-6 py-12 bg-white border-t">
+  <div className="max-w-6xl mx-auto">
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+      <div>
+        <h2 className="text-2xl font-light mb-4">Allie</h2>
+        <p className="text-gray-600 font-light">Balancing family responsibilities together</p>
+      </div>
+      
+      <div>
+        <h3 className="text-gray-800 font-medium mb-4">Product</h3>
+        <ul className="space-y-2">
+          <li>
+            <button onClick={() => navigate('/how-it-works')} className="text-gray-600 hover:text-gray-900 font-light">How It Works</button>
+          </li>
+          <li>
+            <button onClick={() => navigate('/relationship-features')} className="text-gray-600 hover:text-gray-900 font-light">Relationship Features</button>
+          </li>
+          <li>
+            <button onClick={() => navigate('/ai-assistant')} className="text-gray-600 hover:text-gray-900 font-light">AI Assistant</button>
+          </li>
+        </ul>
+      </div>
+      
+      <div>
+        <h3 className="text-gray-800 font-medium mb-4">Company</h3>
+        <ul className="space-y-2">
+          <li>
+            <button onClick={() => navigate('/about-us')} className="text-gray-600 hover:text-gray-900 font-light">About Us</button>
+          </li>
+          <li>
+            <button onClick={() => navigate('/blog')} className="text-gray-600 hover:text-gray-900 font-light">Blog</button>
+          </li>
+        </ul>
+      </div>
+    </div>
+    <div className="mt-8 pt-8 border-t text-center text-gray-500 text-sm">
+      <p>© 2025 Allie. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
     </div>
   );
 };
