@@ -1,5 +1,5 @@
 // src/services/ChatService.js
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import ClaudeService from './ClaudeService';
 import { knowledgeBase } from '../data/AllieKnowledgeBase';
 import { collection, query, where, orderBy, getDocs, addDoc, serverTimestamp, doc, getDoc, limit } from 'firebase/firestore';
@@ -157,6 +157,70 @@ To create a specific event, you can tell me what event you want to add and when.
     }
   }
   
+// ChatService.js - Add this improved method after the existing handleCalendarRequest method
+processCalendarRequest = async (eventData, context) => {
+  try {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      return "I need you to be logged in to add events to your calendar. Please log in and try again.";
+    }
+    
+    // Parse date and time
+    let eventDate = new Date();
+    if (eventData.date) {
+      try {
+        eventDate = new Date(eventData.date);
+        // If date is invalid, try a more flexible approach
+        if (isNaN(eventDate.getTime())) {
+          const dateStr = eventData.date.replace(/(st|nd|rd|th)/, '');
+          eventDate = new Date(dateStr);
+        }
+      } catch (e) {
+        console.log("Error parsing date, using today:", e);
+        eventDate = new Date();
+      }
+    }
+    
+    // Default to tomorrow if no date provided or parsing failed
+    if (isNaN(eventDate.getTime())) {
+      eventDate = new Date();
+      eventDate.setDate(eventDate.getDate() + 1);
+    }
+    
+    // Create calendar event object
+    const event = {
+      summary: eventData.title || 'New Event',
+      description: eventData.description || '',
+      location: eventData.location || '',
+      start: {
+        dateTime: eventDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: new Date(eventDate.getTime() + 60*60000).toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      reminders: {
+        useDefault: true
+      }
+    };
+    
+    // Add event to calendar
+    const result = await CalendarService.addEvent(event, currentUser.uid);
+    
+    if (result && result.success) {
+      return `I've added "${event.summary}" to your calendar for ${eventDate.toLocaleDateString()}. You can see this and other events in the calendar widget.`;
+    } else {
+      return "I tried to add the event to your calendar, but encountered an issue. Please try again or add it manually through the calendar widget.";
+    }
+  } catch (error) {
+    console.error("Error processing calendar request:", error);
+    return "I wasn't able to process your calendar request due to a technical issue. You can try again or add the event directly through the calendar widget.";
+  }
+}
+
+
+
   // New helper method to extract event details from text
   extractEventDetails(text) {
     // Simple regex-based extraction of event details

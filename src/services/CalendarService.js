@@ -75,6 +75,7 @@ class CalendarService {
 
   // In src/services/CalendarService.js - Update the addEvent method to dispatch an event
 
+// CalendarService.js - Replace the addEvent method with this corrected version
 async addEvent(event, userId) {
   try {
     if (!userId) {
@@ -101,7 +102,7 @@ async addEvent(event, userId) {
     }
     
     // Show success notification
-    this.showNotification(`Event "${event.summary}" added to your calendar`, "success");
+    this.showNotification(`Event "${event.summary || event.title || 'New event'}" added to your calendar`, "success");
     
     return {
       success: true,
@@ -111,7 +112,7 @@ async addEvent(event, userId) {
   } catch (error) {
     console.error("Error adding event to calendar:", error);
     this.showNotification("Failed to add event to calendar", "error");
-    throw error;
+    return { success: false, error: error.message || "Unknown error" };
   }
 }
 
