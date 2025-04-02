@@ -5,8 +5,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import CalendarService from '../../services/CalendarService';
 import AllieCalendarEvents from './AllieCalendarEvents';
 import DatabaseService from '../../services/DatabaseService';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const FloatingCalendarWidget = () => {
   const { currentUser } = useAuth();
@@ -85,23 +85,21 @@ const FloatingCalendarWidget = () => {
     }
   }, [isOpen, familyId, lastRefresh, selectedDate]);
 
-  // In src/components/calendar/FloatingCalendarWidget.jsx - Add auto-refresh listener
-
-// Inside the FloatingCalendarWidget component, after the initial useEffect hooks
-useEffect(() => {
-  // Function to reload events
-  const refreshEvents = () => {
-    setLastRefresh(Date.now());
-  };
-  
-  // Set up event listener for calendar updates
-  window.addEventListener('calendar-event-added', refreshEvents);
-  
-  // Clean up
-  return () => {
-    window.removeEventListener('calendar-event-added', refreshEvents);
-  };
-}, []);
+  // Inside the FloatingCalendarWidget component, after the initial useEffect hooks
+  useEffect(() => {
+    // Function to reload events
+    const refreshEvents = () => {
+      setLastRefresh(Date.now());
+    };
+    
+    // Set up event listener for calendar updates
+    window.addEventListener('calendar-event-added', refreshEvents);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('calendar-event-added', refreshEvents);
+    };
+  }, []);
   
   // Load general calendar events (from the calendar_events collection)
   const loadGeneralCalendarEvents = async () => {
@@ -197,12 +195,17 @@ useEffect(() => {
   // Load children's events from Firebase
   const loadChildrenEvents = async () => {
     try {
-      // Get children data from Firebase
-      const docRef = await DatabaseService.db.collection("families").doc(familyId).get();
+      if (!familyId) {
+        return { childrenEvents: [], childrenAppointments: [], childrenActivities: [] };
+      }
+      
+      // Get children data from Firebase using Firestore v9 syntax
+      const docRef = doc(db, "families", familyId);
+      const docSnapshot = await getDoc(docRef);
       const childrenData = { childrenEvents: [], childrenAppointments: [], childrenActivities: [] };
       
-      if (docRef.exists && docRef.data().childrenData) {
-        const data = docRef.data().childrenData;
+      if (docSnapshot.exists() && docSnapshot.data().childrenData) {
+        const data = docSnapshot.data().childrenData;
         
         // Process appointments
         const appointments = [];
@@ -331,10 +334,12 @@ useEffect(() => {
         });
       }
       
-      // Get relationship strategies data
-      const stratDocRef = await DatabaseService.db.collection("relationshipStrategies").doc(familyId).get();
-      if (stratDocRef.exists) {
-        const strategies = stratDocRef.data().strategies || [];
+      // Get relationship strategies data using Firestore v9 syntax
+      const stratDocRef = doc(db, "relationshipStrategies", familyId);
+      const stratDocSnapshot = await getDoc(stratDocRef);
+      
+      if (stratDocSnapshot.exists()) {
+        const strategies = stratDocSnapshot.data().strategies || [];
         
         strategies.forEach(strategy => {
           if (strategy.scheduledDate && new Date(strategy.scheduledDate) >= today) {
@@ -452,21 +457,14 @@ useEffect(() => {
       await CalendarService.addEvent(event, currentUser.uid);
       
       // Show a simple notification
-      const notification = document.createElement('div');
-      notification.innerText = "Task added to calendar";
-      notification.style.cssText = `
-        position: fixed; bottom: 20px; right: 20px; background: #4caf50;
-        color: white; padding: 12px 20px; border-radius: 4px; z-index: 9999;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-family: Roboto, sans-serif;
-      `;
-      document.body.appendChild(notification);
-      setTimeout(() => notification.remove(), 3000);
+      CalendarService.showNotification("Task added to calendar", "success");
       
       // Refresh events
       setLastRefresh(Date.now());
       
     } catch (error) {
       console.error("Error adding task to calendar:", error);
+      CalendarService.showNotification("Failed to add task to calendar", "error");
     }
   };
   
@@ -482,21 +480,14 @@ useEffect(() => {
       await CalendarService.addEvent(event, currentUser.uid);
       
       // Show a simple notification
-      const notification = document.createElement('div');
-      notification.innerText = "Meeting added to calendar";
-      notification.style.cssText = `
-        position: fixed; bottom: 20px; right: 20px; background: #4caf50;
-        color: white; padding: 12px 20px; border-radius: 4px; z-index: 9999;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-family: Roboto, sans-serif;
-      `;
-      document.body.appendChild(notification);
-      setTimeout(() => notification.remove(), 3000);
+      CalendarService.showNotification("Meeting added to calendar", "success");
       
       // Refresh events
       setLastRefresh(Date.now());
       
     } catch (error) {
       console.error("Error adding meeting to calendar:", error);
+      CalendarService.showNotification("Failed to add meeting to calendar", "error");
     }
   };
   
@@ -710,22 +701,15 @@ useEffect(() => {
       if (calendarEvent) {
         await CalendarService.addEvent(calendarEvent, currentUser.uid);
         
-        // Show a simple notification
-        const notification = document.createElement('div');
-        notification.innerText = `${event.childName ? `${event.childName}'s ` : ''}${event.title || 'event'} added to calendar`;
-        notification.style.cssText = `
-          position: fixed; bottom: 20px; right: 20px; background: #4caf50;
-          color: white; padding: 12px 20px; border-radius: 4px; z-index: 9999;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-family: Roboto, sans-serif;
-        `;
-        document.body.appendChild(notification);
-        setTimeout(() => notification.remove(), 3000);
+        // Show notification
+        CalendarService.showNotification(`${event.childName ? `${event.childName}'s ` : ''}${event.title || 'event'} added to calendar`, "success");
         
         // Refresh events
         setLastRefresh(Date.now());
       }
     } catch (error) {
       console.error("Error adding child event to calendar:", error);
+      CalendarService.showNotification("Failed to add event to calendar", "error");
     }
   };
   
