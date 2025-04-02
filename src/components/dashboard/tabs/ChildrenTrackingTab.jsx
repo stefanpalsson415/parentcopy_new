@@ -2266,4 +2266,1998 @@ const ChildrenTrackingTab = () => {
           </span>
         )}
       </div>
-      <button className="p-2 rounded-full hover:bg-gray
+      <button className="p-2 rounded-full hover:bg-gray-100"
+            >
+              {expandedSections[sectionKey] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+          </div>
+        </div>
+      );
+  
+  // Render AI insights section
+  const renderAiInsights = () => {
+    const childrenWithInsights = aiInsights.filter(insight => 
+      !activeChild || insight.childId === activeChild
+    );
+    
+    return (
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold mb-4 font-roboto">Allie AI Insights</h3>
+        
+        {childrenWithInsights.length > 0 ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {childrenWithInsights.map((insight, index) => (
+              <div 
+                key={index} 
+                className={`p-4 rounded-lg border-l-4 ${
+                  insight.priority === 'high' 
+                    ? 'border-red-500 bg-red-50' 
+                    : insight.priority === 'medium'
+                      ? 'border-yellow-500 bg-yellow-50'
+                      : 'border-blue-500 bg-blue-50'
+                }`}
+              >
+                <div className="flex items-start">
+                  {insight.type === 'recommendation' ? (
+                    <Info size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
+                  ) : insight.type === 'medical' ? (
+                    <AlertCircle size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
+                  ) : insight.type === 'growth' ? (
+                    <Activity size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
+                  ) : insight.type === 'homework' ? (
+                    <BookOpen size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
+                  ) : insight.type === 'emotional' ? (
+                    <Heart size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
+                  ) : (
+                    <Info size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
+                  )}
+                  <div>
+                    <h4 className="font-medium mb-1 font-roboto">{insight.title}</h4>
+                    <p className="text-sm font-roboto">{insight.content}</p>
+                    {insight.actionable && (
+                      <div className="mt-2 text-sm text-blue-600 font-roboto">
+                        <button className="hover:underline">
+                          {insight.actionable}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white p-4 rounded-lg shadow-sm text-center">
+            <p className="text-gray-500 font-roboto">
+              Allie is learning about your family. As you add more data, insights will appear here to help you stay on top of your children's needs.
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  };
+  
+  // Render routines section
+  const renderRoutinesSection = () => {
+    if (!expandedSections.routines) {
+      return null;
+    }
+    
+    const children = familyMembers.filter(member => member.role === 'child');
+    
+    if (children.length === 0) {
+      return (
+        <div className="text-center p-4 bg-gray-50 rounded-lg">
+          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
+        </div>
+      );
+    }
+    
+    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
+    
+    return (
+      <div className="space-y-6 p-4 bg-white rounded-lg">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium font-roboto">Daily Routines & Activities</h3>
+          <div className="flex space-x-2">
+            <button
+              className="p-2 rounded-md hover:bg-gray-100"
+              onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
+              title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
+            >
+              {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
+            </button>
+            <button 
+              className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
+              onClick={() => {
+                if (activeChild) {
+                  openModal('routine', {
+                    title: '',
+                    days: [],
+                    startTime: '08:00',
+                    endTime: '',
+                    notes: '',
+                    childId: activeChild
+                  });
+                } else {
+                  setAllieMessage({
+                    type: 'warning',
+                    text: 'Please select a child first before adding a routine.'
+                  });
+                }
+              }}
+            >
+              <Plus size={20} />
+            </button>
+          </div>
+        </div>
+        
+        <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
+          {filteredChildren.map(child => (
+            <div key={child.id} className={`bg-white rounded-lg shadow ${viewMode === 'card' ? 'p-4' : 'p-4'}`}>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center">
+                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
+                    <img 
+                      src={child.profilePicture || '/api/placeholder/40/40'} 
+                      alt={child.name} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div>
+                    <h4 className="font-medium font-roboto text-lg">{child.name}'s Schedule</h4>
+                    <p className="text-sm text-gray-500 font-roboto">
+                      {childrenData[child.id]?.routines?.length || 0} routines, {childrenData[child.id]?.activities?.length || 0} activities
+                    </p>
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <button 
+                    className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
+                    onClick={() => openModal('routine', {
+                      title: '',
+                      days: [],
+                      startTime: '08:00',
+                      endTime: '',
+                      notes: '',
+                      childId: child.id
+                    })}
+                  >
+                    <Clock size={14} className="mr-1" />
+                    Add Routine
+                  </button>
+                  <button 
+                    className="px-3 py-1 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 font-roboto flex items-center"
+                    onClick={() => openModal('activity', {
+                      title: '',
+                      type: 'sports',
+                      location: '',
+                      startDate: new Date().toISOString().split('T')[0],
+                      endDate: '',
+                      repeatDay: [],
+                      time: '',
+                      notes: '',
+                      childId: child.id
+                    })}
+                  >
+                    <Activity size={14} className="mr-1" />
+                    Add Activity
+                  </button>
+                </div>
+              </div>
+              
+              {/* Weekly schedule visualization */}
+              <div className="mb-6 bg-gray-50 p-4 rounded-lg">
+                <h5 className="font-medium text-sm font-roboto mb-3">Weekly Schedule</h5>
+                
+                <div className="overflow-x-auto">
+                  <div className="min-w-max">
+                    {/* Days of Week Headers */}
+                    <div className="flex">
+                      <div className="w-16"></div> {/* Time column */}
+                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                        <div key={day} className="flex-1 text-center py-1 font-medium text-sm font-roboto">
+                          {day.substring(0, 3)}
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Time slots from 6AM to 9PM */}
+                    {Array.from({ length: 16 }, (_, i) => i + 6).map(hour => (
+                      <div key={hour} className="flex border-t">
+                        <div className="w-16 text-xs text-gray-500 pt-1 pr-2 text-right font-roboto">
+                          {hour === 12 ? '12 PM' : hour < 12 ? `${hour} AM` : `${hour - 12} PM`}
+                        </div>
+                        
+                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => {
+                          // Find routines for this day and time
+                          const routines = childrenData[child.id]?.routines?.filter(r => {
+                            if (!r.days.includes(day)) return false;
+                            
+                            const startHour = parseInt(r.startTime.split(':')[0]);
+                            const endHour = r.endTime ? parseInt(r.endTime.split(':')[0]) : startHour + 1;
+                            
+                            return startHour <= hour && endHour > hour;
+                          }) || [];
+                          
+                          // Find activities for this day and time
+                          const activities = childrenData[child.id]?.activities?.filter(a => {
+                            if (!a.repeatDay?.includes(day)) return false;
+                            
+                            const startHour = a.time ? parseInt(a.time.split(':')[0]) : 15; // Default to 3 PM
+                            return startHour === hour;
+                          }) || [];
+                          
+                          const items = [...routines, ...activities];
+                          
+                          return (
+                            <div key={day} className="flex-1 h-10 border-l relative">
+                              {items.map((item, index) => (
+                                <div 
+                                  key={index}
+                                  className={`absolute left-0 right-0 mx-1 p-1 text-xs rounded truncate ${
+                                    'routine' in item ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                                  }`}
+                                  style={{ top: `${index * 20}%` }}
+                                >
+                                  {item.title}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Routines */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <h5 className="font-medium text-sm font-roboto">Daily Routines</h5>
+                    <button className="text-xs text-blue-600 hover:underline font-roboto">View all</button>
+                  </div>
+                  
+                  {childrenData[child.id]?.routines?.length > 0 ? (
+                    <div className="space-y-2">
+                      {childrenData[child.id].routines
+                        .slice(0, 3)
+                        .map(routine => (
+                          <div key={routine.id} className="border rounded-lg p-3 hover:bg-gray-50">
+                            <div className="flex justify-between">
+                              <div>
+                                <h5 className="font-medium font-roboto">{routine.title}</h5>
+                                <p className="text-sm text-gray-600 font-roboto">
+                                  {routine.days.join(', ')} at {routine.startTime}
+                                  {routine.endTime && ` - ${routine.endTime}`}
+                                </p>
+                              </div>
+                              <div className="flex space-x-2">
+                                <button 
+                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                  onClick={() => openModal('routine', {...routine, childId: child.id})}
+                                >
+                                  <Edit size={16} />
+                                </button>
+                                <button 
+                                  className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                  onClick={() => handleRemoveItem('routine', child.id, routine.id)}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500 font-roboto">No routines added yet</p>
+                      <button 
+                        className="mt-2 px-3 py-1 bg-blue-500 text-white rounded-md text-sm font-roboto"
+                        onClick={() => openModal('routine', {
+                          title: '',
+                          days: [],
+                          startTime: '08:00',
+                          endTime: '',
+                          notes: '',
+                          childId: child.id
+                        })}
+                      >
+                        Add First Routine
+                      </button>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Activities */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <h5 className="font-medium text-sm font-roboto">Activities & Classes</h5>
+                    <button className="text-xs text-blue-600 hover:underline font-roboto">View all</button>
+                  </div>
+                  
+                  {childrenData[child.id]?.activities?.length > 0 ? (
+                    <div className="space-y-2">
+                      {childrenData[child.id].activities
+                        .slice(0, 3)
+                        .map(activity => (
+                          <div key={activity.id} className="border rounded-lg p-3 hover:bg-gray-50">
+                            <div className="flex justify-between">
+                              <div>
+                                <h5 className="font-medium font-roboto">{activity.title}</h5>
+                                <p className="text-sm text-gray-600 font-roboto">
+                                  {activity.type.charAt(0).toUpperCase() + activity.type.slice(1)}
+                                  {activity.location && ` at ${activity.location}`}
+                                  {activity.time && ` - ${activity.time}`}
+                                </p>
+                                {activity.repeatDay && activity.repeatDay.length > 0 && (
+                                  <p className="text-xs text-gray-500 font-roboto">
+                                    {activity.repeatDay.join(', ')}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex space-x-2">
+                                <button 
+                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                  onClick={() => openModal('activity', {...activity, childId: child.id})}
+                                >
+                                  <Edit size={16} />
+                                </button>
+                                <button 
+                                  className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                  onClick={() => handleRemoveItem('activity', child.id, activity.id)}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500 font-roboto">No activities added yet</p>
+                      <button 
+                        className="mt-2 px-3 py-1 bg-blue-500 text-white rounded-md text-sm font-roboto"
+                        onClick={() => openModal('activity', {
+                          title: '',
+                          type: 'sports',
+                          location: '',
+                          startDate: new Date().toISOString().split('T')[0],
+                          endDate: '',
+                          repeatDay: [],
+                          time: '',
+                          notes: '',
+                          childId: child.id
+                        })}
+                      >
+                        Add First Activity
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Social Contacts */}
+              <div className="mt-4">
+                <div className="flex justify-between items-center mb-2">
+                  <h5 className="font-medium text-sm font-roboto">Friends & Social Contacts</h5>
+                  <button 
+                    className="text-xs text-blue-600 hover:underline font-roboto flex items-center"
+                    onClick={() => openModal('contact', {
+                      name: '',
+                      relationship: 'friend',
+                      parentName: '',
+                      parentPhone: '',
+                      parentEmail: '',
+                      notes: '',
+                      childId: child.id
+                    })}
+                  >
+                    <PlusCircle size={12} className="mr-1" />
+                    Add Contact
+                  </button>
+                </div>
+                
+                {/* Sample contacts UI (would be populated from actual data) */}
+                <div className="text-center p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-500 font-roboto">No contacts added yet</p>
+                  <p className="text-xs text-gray-500 mt-1 font-roboto">
+                    Keep track of your child's friends and their parents' contact information
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  
+  // Render homework section
+  const renderHomeworkSection = () => {
+    if (!expandedSections.homework) {
+      return null;
+    }
+    
+    const children = familyMembers.filter(member => member.role === 'child');
+    
+    if (children.length === 0) {
+      return (
+        <div className="text-center p-4 bg-gray-50 rounded-lg">
+          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
+        </div>
+      );
+    }
+    
+    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
+    
+    return (
+      <div className="space-y-6 p-4 bg-white rounded-lg">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium font-roboto">Homework & Academic Tracking</h3>
+          <div className="flex space-x-2">
+            <button
+              className="p-2 rounded-md hover:bg-gray-100"
+              onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
+              title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
+            >
+              {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
+            </button>
+            <button 
+              className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
+              onClick={() => {
+                if (activeChild) {
+                  openModal('homework', {
+                    title: '',
+                    subject: '',
+                    dueDate: new Date().toISOString().split('T')[0],
+                    description: '',
+                    priority: 'medium',
+                    completed: false,
+                    childId: activeChild
+                  });
+                } else {
+                  setAllieMessage({
+                    type: 'warning',
+                    text: 'Please select a child first before adding homework.'
+                  });
+                }
+              }}
+            >
+              <Plus size={20} />
+            </button>
+          </div>
+        </div>
+        
+        <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
+          {filteredChildren.map(child => (
+            <div key={child.id} className={`bg-white rounded-lg shadow ${viewMode === 'card' ? 'p-4' : 'p-4'}`}>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center">
+                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
+                    <img 
+                      src={child.profilePicture || '/api/placeholder/40/40'} 
+                      alt={child.name} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div>
+                    <h4 className="font-medium font-roboto text-lg">{child.name}'s Academics</h4>
+                    <p className="text-sm text-gray-500 font-roboto">
+                      {childrenData[child.id]?.homework?.filter(h => !h.completed).length || 0} pending assignments
+                    </p>
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <button 
+                    className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
+                    onClick={() => openModal('homework', {
+                      title: '',
+                      subject: '',
+                      dueDate: new Date().toISOString().split('T')[0],
+                      description: '',
+                      priority: 'medium',
+                      completed: false,
+                      childId: child.id
+                    })}
+                  >
+                    <BookOpen size={14} className="mr-1" />
+                    Add Assignment
+                  </button>
+                </div>
+              </div>
+              
+              {/* Homework dashboard */}
+              <div className="space-y-4">
+                {/* Upcoming assignments */}
+                <div>
+                  <h5 className="font-medium text-sm font-roboto mb-2">Upcoming Assignments</h5>
+                  
+                  {childrenData[child.id]?.homework?.filter(h => !h.completed && new Date(h.dueDate) >= new Date()).length > 0 ? (
+                    <div className="space-y-2">
+                      {childrenData[child.id].homework
+                        .filter(h => !h.completed && new Date(h.dueDate) >= new Date())
+                        .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+                        .map(assignment => (
+                          <div key={assignment.id} className="border rounded-lg p-3 hover:bg-gray-50">
+                            <div className="flex justify-between">
+                              <div>
+                                <div className="flex items-center">
+                                  <h5 className="font-medium font-roboto">{assignment.title}</h5>
+                                  <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
+                                    assignment.priority === 'high' 
+                                      ? 'bg-red-100 text-red-800' 
+                                      : assignment.priority === 'medium'
+                                        ? 'bg-yellow-100 text-yellow-800'
+                                        : 'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {assignment.priority}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-600 font-roboto">
+                                  {assignment.subject} - Due: {formatDate(assignment.dueDate)}
+                                </p>
+                              </div>
+                              <div className="flex space-x-2">
+                                <button 
+                                  className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                  onClick={() => {
+                                    const updatedAssignment = {...assignment, completed: true};
+                                    handleHomeworkFormSubmit(updatedAssignment);
+                                  }}
+                                >
+                                  <CheckCircle size={16} />
+                                </button>
+                                <button 
+                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                  onClick={() => openModal('homework', {...assignment, childId: child.id})}
+                                >
+                                  <Edit size={16} />
+                                </button>
+                                <button 
+                                  className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                  onClick={() => handleRemoveItem('homework', child.id, assignment.id)}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
+                            {assignment.description && (
+                              <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
+                                {assignment.description}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500 font-roboto">No upcoming assignments</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Completed assignments */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <h5 className="font-medium text-sm font-roboto">Completed Assignments</h5>
+                    <button className="text-xs text-blue-600 hover:underline font-roboto">View all</button>
+                  </div>
+                  
+                  {childrenData[child.id]?.homework?.filter(h => h.completed).length > 0 ? (
+                    <div className="space-y-2">
+                      {childrenData[child.id].homework
+                        .filter(h => h.completed)
+                        .sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate))
+                        .slice(0, 3)
+                        .map(assignment => (
+                          <div key={assignment.id} className="border rounded-lg p-3 bg-gray-50">
+                            <div className="flex justify-between">
+                              <div>
+                                <h5 className="font-medium font-roboto">{assignment.title}</h5>
+                                <p className="text-sm text-gray-600 font-roboto">
+                                  {assignment.subject} - Due: {formatDate(assignment.dueDate)}
+                                </p>
+                                <div className="mt-1 flex items-center text-sm text-green-600 font-roboto">
+                                  <CheckCircle size={14} className="mr-1" />
+                                  Completed
+                                </div>
+                              </div>
+                              <div>
+                                <button 
+                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                  onClick={() => openModal('homework', {...assignment, childId: child.id})}
+                                >
+                                  <Edit size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500 font-roboto">No completed assignments</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  
+  // Render emotional well-being section
+  const renderEmotionalSection = () => {
+    if (!expandedSections.emotional) {
+      return null;
+    }
+    
+    const children = familyMembers.filter(member => member.role === 'child');
+    
+    if (children.length === 0) {
+      return (
+        <div className="text-center p-4 bg-gray-50 rounded-lg">
+          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
+        </div>
+      );
+    }
+    
+    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
+    
+    // Emoji mapping for moods
+    const moodEmojis = {
+      'happy': '😀',
+      'excited': '🤩',
+      'calm': '😌',
+      'tired': '😴',
+      'sad': '😔',
+      'angry': '😠',
+      'worried': '😟',
+      'confused': '😕'
+    };
+    
+    return (
+      <div className="space-y-6 p-4 bg-white rounded-lg">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium font-roboto">Emotional Well-being Tracking</h3>
+          <div className="flex space-x-2">
+            <button
+              className="p-2 rounded-md hover:bg-gray-100"
+              onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
+              title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
+            >
+              {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
+            </button>
+            <button 
+              className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
+              onClick={() => {
+                if (activeChild) {
+                  openModal('emotional', {
+                    date: new Date().toISOString().split('T')[0],
+                    mood: '',
+                    notes: '',
+                    childId: activeChild
+                  });
+                } else {
+                  setAllieMessage({
+                    type: 'warning',
+                    text: 'Please select a child first before adding an emotional check-in.'
+                  });
+                }
+              }}
+            >
+              <Plus size={20} />
+            </button>
+          </div>
+        </div>
+        
+        <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
+          {filteredChildren.map(child => (
+            <div key={child.id} className={`bg-white rounded-lg shadow ${viewMode === 'card' ? 'p-4' : 'p-4'}`}>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center">
+                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
+                    <img 
+                      src={child.profilePicture || '/api/placeholder/40/40'} 
+                      alt={child.name} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div>
+                    <h4 className="font-medium font-roboto text-lg">{child.name}'s Emotional Well-being</h4>
+                    <p className="text-sm text-gray-500 font-roboto">
+                      {childrenData[child.id]?.emotionalChecks?.length > 0 
+                        ? `Last check-in: ${formatDate(childrenData[child.id].emotionalChecks.sort((a, b) => 
+                            new Date(b.date) - new Date(a.date))[0].date)}`
+                        : 'No check-ins yet'}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <button 
+                    className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
+                    onClick={() => openModal('emotional', {
+                      date: new Date().toISOString().split('T')[0],
+                      mood: '',
+                      notes: '',
+                      childId: child.id
+                    })}
+                  >
+                    <Heart size={14} className="mr-1" />
+                    Add Check-in
+                  </button>
+                </div>
+              </div>
+              
+              {/* Mood tracking visualization */}
+              <div className="mb-6 bg-gray-50 p-4 rounded-lg">
+                <h5 className="font-medium text-sm font-roboto mb-3">Mood Tracking</h5>
+                
+                {childrenData[child.id]?.emotionalChecks?.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Mood line chart (simplified version) */}
+                    <div className="h-24 relative border-b border-l">
+                      <div className="absolute bottom-0 left-0 right-0 flex items-end justify-between px-2">
+                        {childrenData[child.id].emotionalChecks
+                          .slice(-7) // Last 7 check-ins
+                          .sort((a, b) => new Date(a.date) - new Date(b.date))
+                          .map((check, index) => {
+                            // Map moods to heights (happy = high, sad = low, etc.)
+                            const moodHeights = {
+                              'happy': 90,
+                              'excited': 100,
+                              'calm': 70,
+                              'tired': 50,
+                              'confused': 40,
+                              'worried': 30,
+                              'sad': 20,
+                              'angry': 10
+                            };
+                            
+                            const height = moodHeights[check.mood] || 50;
+                            
+                            return (
+                              <div key={check.id} className="flex flex-col items-center">
+                                <div className="text-2xl">{moodEmojis[check.mood] || '😐'}</div>
+                                <div 
+                                  className="w-1 bg-blue-500 rounded-t mb-1"
+                                  style={{ height: `${height}%` }}
+                                />
+                                <div className="mt-1 text-xs text-gray-500 -rotate-45 origin-top-left">
+                                  {new Date(check.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                    
+                    {/* Most frequent mood summary */}
+                    {(() => {
+                      // Count mood frequencies
+                      const moodCounts = {};
+                      childrenData[child.id].emotionalChecks.forEach(check => {
+                        moodCounts[check.mood] = (moodCounts[check.mood] || 0) + 1;
+                      });
+                      
+                      // Get most frequent mood
+                      const mostFrequentMood = Object.entries(moodCounts)
+                        .sort((a, b) => b[1] - a[1])[0];
+                      
+                      if (mostFrequentMood) {
+                        return (
+                          <div className="text-center text-sm font-roboto">
+                            <p>Most frequent mood: <span className="font-medium">{mostFrequentMood[0]}</span> {moodEmojis[mostFrequentMood[0]] || ''}</p>
+                            <p className="text-xs text-gray-500">
+                              {mostFrequentMood[1]} out of {childrenData[child.id].emotionalChecks.length} check-ins
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <p className="text-sm text-gray-500 font-roboto">
+                      Add emotional check-ins to start tracking your child's well-being
+                    </p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Latest check-ins */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <h5 className="font-medium text-sm font-roboto">Recent Check-ins</h5>
+                  <button className="text-xs text-blue-600 hover:underline font-roboto">View all</button>
+                </div>
+                
+                {childrenData[child.id]?.emotionalChecks?.length > 0 ? (
+                  <div className="space-y-2">
+                    {childrenData[child.id].emotionalChecks
+                      .sort((a, b) => new Date(b.date) - new Date(a.date))
+                      .slice(0, 3)
+                      .map(check => (
+                        <div key={check.id} className="border rounded-lg p-3 hover:bg-gray-50">
+                          <div className="flex justify-between">
+                            <div>
+                              <div className="flex items-center">
+                                <span className="text-2xl mr-2">{moodEmojis[check.mood] || '😐'}</span>
+                                <div>
+                                  <h5 className="font-medium font-roboto">{check.mood.charAt(0).toUpperCase() + check.mood.slice(1)}</h5>
+                                  <p className="text-sm text-gray-600 font-roboto">
+                                    {formatDate(check.date)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex space-x-2">
+                              <button 
+                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                onClick={() => openModal('emotional', {...check, childId: child.id})}
+                              >
+                                <Edit size={16} />
+                              </button>
+                              <button 
+                                className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                onClick={() => handleRemoveItem('emotional', child.id, check.id)}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                          {check.notes && (
+                            <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
+                              {check.notes}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-500 font-roboto">No emotional check-ins recorded yet</p>
+                    <button 
+                      className="mt-2 px-3 py-1 bg-blue-500 text-white rounded-md text-sm font-roboto"
+                      onClick={() => openModal('emotional', {
+                        date: new Date().toISOString().split('T')[0],
+                        mood: '',
+                        notes: '',
+                        childId: child.id
+                      })}
+                    >
+                      Add First Check-in
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  
+  // Render meals section
+  const renderMealsSection = () => {
+    if (!expandedSections.meals) {
+      return null;
+    }
+    
+    const children = familyMembers.filter(member => member.role === 'child');
+    
+    if (children.length === 0) {
+      return (
+        <div className="text-center p-4 bg-gray-50 rounded-lg">
+          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
+        </div>
+      );
+    }
+    
+    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
+    
+    return (
+      <div className="space-y-6 p-4 bg-white rounded-lg">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium font-roboto">Meal Planning & Dietary Needs</h3>
+          <div className="flex space-x-2">
+            <button
+              className="p-2 rounded-md hover:bg-gray-100"
+              onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
+              title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
+            >
+              {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
+            </button>
+            <button 
+              className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
+              onClick={() => {
+                if (activeChild) {
+                  openModal('meal', {
+                    type: 'preference',
+                    name: '',
+                    details: '',
+                    childId: activeChild
+                  });
+                } else {
+                  setAllieMessage({
+                    type: 'warning',
+                    text: 'Please select a child first before adding dietary information.'
+                  });
+                }
+              }}
+            >
+              <Plus size={20} />
+            </button>
+          </div>
+        </div>
+        
+        <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
+          {filteredChildren.map(child => (
+            <div key={child.id} className={`bg-white rounded-lg shadow ${viewMode === 'card' ? 'p-4' : 'p-4'}`}>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center">
+                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
+                    <img 
+                      src={child.profilePicture || '/api/placeholder/40/40'} 
+                      alt={child.name} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div>
+                    <h4 className="font-medium font-roboto text-lg">{child.name}'s Dietary Information</h4>
+                    <p className="text-sm text-gray-500 font-roboto">
+                      {childrenData[child.id]?.meals?.allergies?.length || 0} allergies, 
+                      {childrenData[child.id]?.meals?.preferences?.length || 0} preferences,
+                      {childrenData[child.id]?.meals?.restrictions?.length || 0} restrictions
+                    </p>
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <button 
+                    className="px-3 py-1 bg-red-500 text-white rounded-md text-sm hover:bg-red-600 font-roboto flex items-center"
+                    onClick={() => openModal('meal', {
+                      type: 'allergy',
+                      name: '',
+                      details: '',
+                      childId: child.id
+                    })}
+                  >
+                    <AlertCircle size={14} className="mr-1" />
+                    Add Allergy
+                  </button>
+                  <button 
+                    className="px-3 py-1 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 font-roboto flex items-center"
+                    onClick={() => openModal('meal', {
+                      type: 'preference',
+                      name: '',
+                      details: '',
+                      childId: child.id
+                    })}
+                  >
+                    <ThumbsUp size={14} className="mr-1" />
+                    Add Preference
+                  </button>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Allergies */}
+                <div>
+                  <h5 className="font-medium text-sm font-roboto mb-2 flex items-center">
+                    <AlertCircle size={14} className="text-red-500 mr-1" />
+                    Allergies & Intolerances
+                  </h5>
+                  
+                  {childrenData[child.id]?.meals?.allergies?.length > 0 ? (
+                    <div className="space-y-2">
+                      {childrenData[child.id].meals.allergies.map(allergy => (
+                        <div key={allergy.id} className="border border-red-200 rounded-lg p-3 bg-red-50">
+                          <div className="flex justify-between">
+                            <div>
+                              <h5 className="font-medium font-roboto">{allergy.name}</h5>
+                              {allergy.details && (
+                                <p className="text-sm text-gray-700 font-roboto">
+                                  {allergy.details}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex space-x-2">
+                              <button 
+                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                onClick={() => openModal('meal', {...allergy, childId: child.id})}
+                              >
+                                <Edit size={16} />
+                              </button>
+                              <button 
+                                className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                onClick={() => handleRemoveItem('meal', child.id, allergy.id, 'allergies')}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500 font-roboto">No allergies recorded</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Preferences */}
+                <div>
+                  <h5 className="font-medium text-sm font-roboto mb-2 flex items-center">
+                    <ThumbsUp size={14} className="text-blue-500 mr-1" />
+                    Food Preferences
+                  </h5>
+                  
+                  {childrenData[child.id]?.meals?.preferences?.length > 0 ? (
+                    <div className="space-y-2">
+                      {childrenData[child.id].meals.preferences.map(preference => (
+                        <div key={preference.id} className="border border-blue-200 rounded-lg p-3 bg-blue-50">
+                          <div className="flex justify-between">
+                            <div>
+                              <h5 className="font-medium font-roboto">{preference.name}</h5>
+                              {preference.details && (
+                                <p className="text-sm text-gray-700 font-roboto">
+                                  {preference.details}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex space-x-2">
+                              <button 
+                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                onClick={() => openModal('meal', {...preference, childId: child.id})}
+                              >
+                                <Edit size={16} />
+                              </button>
+                              <button 
+                                className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                onClick={() => handleRemoveItem('meal', child.id, preference.id, 'preferences')}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500 font-roboto">No preferences recorded</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Dietary Restrictions */}
+                <div className="md:col-span-2">
+                  <h5 className="font-medium text-sm font-roboto mb-2 flex items-center">
+                    <Ban size={14} className="text-yellow-500 mr-1" />
+                    Dietary Restrictions
+                  </h5>
+                  
+                  {childrenData[child.id]?.meals?.restrictions?.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {childrenData[child.id].meals.restrictions.map(restriction => (
+                        <div key={restriction.id} className="border border-yellow-200 rounded-lg p-3 bg-yellow-50">
+                          <div className="flex justify-between">
+                            <div>
+                              <h5 className="font-medium font-roboto">{restriction.name}</h5>
+                              {restriction.details && (
+                                <p className="text-sm text-gray-700 font-roboto">
+                                  {restriction.details}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex space-x-2">
+                              <button 
+                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                onClick={() => openModal('meal', {...restriction, childId: child.id})}
+                              >
+                                <Edit size={16} />
+                              </button>
+                              <button 
+                                className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                onClick={() => handleRemoveItem('meal', child.id, restriction.id, 'restrictions')}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500 font-roboto">No dietary restrictions recorded</p>
+                      <button 
+                        className="mt-2 px-3 py-1 bg-yellow-500 text-white rounded-md text-sm font-roboto"
+                        onClick={() => openModal('meal', {
+                          type: 'restriction',
+                          name: '',
+                          details: '',
+                          childId: child.id
+                        })}
+                      >
+                        Add Restriction
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  
+  // Render events section
+  const renderEventsSection = () => {
+    if (!expandedSections.events) {
+      return null;
+    }
+    
+    const children = familyMembers.filter(member => member.role === 'child');
+    
+    if (children.length === 0) {
+      return (
+        <div className="text-center p-4 bg-gray-50 rounded-lg">
+          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
+        </div>
+      );
+    }
+    
+    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
+    
+    return (
+      <div className="space-y-6 p-4 bg-white rounded-lg">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium font-roboto">Events & Special Occasions</h3>
+          <div className="flex space-x-2">
+            <button
+              className="p-2 rounded-md hover:bg-gray-100"
+              onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
+              title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
+            >
+              {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
+            </button>
+            <button 
+              className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
+              onClick={() => {
+                if (activeChild) {
+                  openModal('event', {
+                    title: '',
+                    type: 'birthday',
+                    date: new Date().toISOString().split('T')[0],
+                    time: '',
+                    location: '',
+                    description: '',
+                    childId: activeChild
+                  });
+                } else {
+                  setAllieMessage({
+                    type: 'warning',
+                    text: 'Please select a child first before adding an event.'
+                  });
+                }
+              }}
+            >
+              <Plus size={20} />
+            </button>
+          </div>
+        </div>
+        
+        <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
+          {filteredChildren.map(child => (
+            <div key={child.id} className={`bg-white rounded-lg shadow ${viewMode === 'card' ? 'p-4' : 'p-4'}`}>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center">
+                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
+                    <img 
+                      src={child.profilePicture || '/api/placeholder/40/40'} 
+                      alt={child.name} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div>
+                    <h4 className="font-medium font-roboto text-lg">{child.name}'s Events</h4>
+                    <p className="text-sm text-gray-500 font-roboto">
+                      {childrenData[child.id]?.events?.length || 0} events recorded
+                    </p>
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <button 
+                    className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
+                    onClick={() => openModal('event', {
+                      title: '',
+                      type: 'birthday',
+                      date: new Date().toISOString().split('T')[0],
+                      time: '',
+                      location: '',
+                      description: '',
+                      childId: child.id
+                    })}
+                  >
+                    <Calendar size={14} className="mr-1" />
+                    Add Event
+                  </button>
+                </div>
+              </div>
+              
+              {/* Upcoming events */}
+              <div className="mb-4">
+                <h5 className="font-medium text-sm font-roboto mb-2">Upcoming Events</h5>
+                
+                {childrenData[child.id]?.events?.filter(e => new Date(e.date) >= new Date()).length > 0 ? (
+                  <div className="space-y-2">
+                    {childrenData[child.id].events
+                      .filter(e => new Date(e.date) >= new Date())
+                      .sort((a, b) => new Date(a.date) - new Date(b.date))
+                      .slice(0, 3)
+                      .map(event => (
+                        <div key={event.id} className="border rounded-lg p-3 hover:bg-gray-50">
+                          <div className="flex justify-between">
+                            <div>
+                              <h5 className="font-medium font-roboto">{event.title}</h5>
+                              <p className="text-sm text-gray-600 font-roboto">
+                                {formatDate(event.date)} {event.time && `at ${event.time}`}
+                                {event.location && ` - ${event.location}`}
+                              </p>
+                              <div className="mt-1 text-xs rounded-full px-2 py-0.5 bg-blue-100 text-blue-800 inline-block">
+                                {event.type}
+                              </div>
+                            </div>
+                            <div className="flex space-x-2">
+                              <button 
+                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                onClick={() => openModal('event', {...event, childId: child.id})}
+                              >
+                                <Edit size={16} />
+                              </button>
+                              <button 
+                                className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                onClick={() => handleRemoveItem('event', child.id, event.id)}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                          {event.description && (
+                            <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
+                              {event.description}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-500 font-roboto">No upcoming events</p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Past events */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <h5 className="font-medium text-sm font-roboto">Past Events</h5>
+                  <button className="text-xs text-blue-600 hover:underline font-roboto">View all</button>
+                </div>
+                
+                {childrenData[child.id]?.events?.filter(e => new Date(e.date) < new Date()).length > 0 ? (
+                  <div className="space-y-2">
+                    {childrenData[child.id].events
+                      .filter(e => new Date(e.date) < new Date())
+                      .sort((a, b) => new Date(b.date) - new Date(a.date))
+                      .slice(0, 2)
+                      .map(event => (
+                        <div key={event.id} className="border rounded-lg p-3 bg-gray-50">
+                          <div className="flex justify-between">
+                            <div>
+                              <h5 className="font-medium font-roboto">{event.title}</h5>
+                              <p className="text-sm text-gray-600 font-roboto">
+                                {formatDate(event.date)} {event.time && `at ${event.time}`}
+                                {event.location && ` - ${event.location}`}
+                              </p>
+                              <div className="mt-1 text-xs rounded-full px-2 py-0.5 bg-gray-100 text-gray-800 inline-block">
+                                {event.type}
+                              </div>
+                            </div>
+                            <div>
+                              <button 
+                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                onClick={() => openModal('event', {...event, childId: child.id})}
+                              >
+                                <Edit size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-500 font-roboto">No past events</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  
+  // Render milestones section
+  const renderMilestonesSection = () => {
+    if (!expandedSections.milestones) {
+      return null;
+    }
+    
+    const children = familyMembers.filter(member => member.role === 'child');
+    
+    if (children.length === 0) {
+      return (
+        <div className="text-center p-4 bg-gray-50 rounded-lg">
+          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
+        </div>
+      );
+    }
+    
+    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
+    
+    return (
+      <div className="space-y-6 p-4 bg-white rounded-lg">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium font-roboto">Milestones & Celebrations</h3>
+          <div className="flex space-x-2">
+            <button
+              className="p-2 rounded-md hover:bg-gray-100"
+              onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
+              title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
+            >
+              {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
+            </button>
+            <button 
+              className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
+              onClick={() => {
+                if (activeChild) {
+                  openModal('milestone', {
+                    title: '',
+                    type: 'achievement',
+                    date: new Date().toISOString().split('T')[0],
+                    description: '',
+                    childId: activeChild
+                  });
+                } else {
+                  setAllieMessage({
+                    type: 'warning',
+                    text: 'Please select a child first before adding a milestone.'
+                  });
+                }
+              }}
+            >
+              <Plus size={20} />
+            </button>
+          </div>
+        </div>
+        
+        <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
+          {filteredChildren.map(child => (
+            <div key={child.id} className={`bg-white rounded-lg shadow ${viewMode === 'card' ? 'p-4' : 'p-4'}`}>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center">
+                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
+                    <img 
+                      src={child.profilePicture || '/api/placeholder/40/40'} 
+                      alt={child.name} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div>
+                    <h4 className="font-medium font-roboto text-lg">{child.name}'s Milestones</h4>
+                    <p className="text-sm text-gray-500 font-roboto">
+                      {childrenData[child.id]?.milestones?.length || 0} milestones recorded
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <button 
+                    className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
+                    onClick={() => openModal('milestone', {
+                      title: '',
+                      type: 'achievement',
+                      date: new Date().toISOString().split('T')[0],
+                      description: '',
+                      childId: child.id
+                    })}
+                  >
+                    <Award size={14} className="mr-1" />
+                    Add Milestone
+                  </button>
+                </div>
+              </div>
+              
+              {/* Milestone timeline */}
+              <div className="mb-6 bg-gray-50 p-4 rounded-lg">
+                <h5 className="font-medium text-sm font-roboto mb-3">Milestone Timeline</h5>
+                
+                {childrenData[child.id]?.milestones?.length > 0 ? (
+                  <div className="relative">
+                    {childrenData[child.id].milestones
+                      .sort((a, b) => new Date(a.date) - new Date(b.date))
+                      .map((milestone, index) => (
+                        <div key={milestone.id} className="mb-4 flex">
+                          <div className="relative">
+                            <div className="h-full w-0.5 bg-gray-300 absolute left-4"></div>
+                            <div className="h-8 w-8 rounded-full bg-blue-500 text-white flex items-center justify-center relative z-10">
+                              <Award size={14} />
+                            </div>
+                          </div>
+                          <div className="ml-4 flex-1">
+                            <div className="bg-white p-3 rounded-lg border shadow-sm">
+                              <div className="flex justify-between">
+                                <div>
+                                  <h5 className="font-medium font-roboto">{milestone.title}</h5>
+                                  <p className="text-sm text-gray-600 font-roboto">
+                                    {formatDate(milestone.date)}
+                                  </p>
+                                </div>
+                                <div className="flex space-x-2">
+                                  <button 
+                                    className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                    onClick={() => openModal('milestone', {...milestone, childId: child.id})}
+                                  >
+                                    <Edit size={16} />
+                                  </button>
+                                  <button 
+                                    className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                    onClick={() => handleRemoveItem('milestone', child.id, milestone.id)}
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                              </div>
+                              {milestone.description && (
+                                <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
+                                  {milestone.description}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <p className="text-sm text-gray-500 font-roboto">
+                      Record important moments and achievements in your child's life
+                    </p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Age-appropriate milestones */}
+              {child.age && (
+                <div className="mb-4 bg-blue-50 p-3 rounded-lg">
+                  <h5 className="font-medium text-sm font-roboto mb-1 flex items-center">
+                    <Info size={14} className="text-blue-500 mr-1" />
+                    Typical Milestones for {child.age} years old
+                  </h5>
+                  <ul className="text-sm font-roboto space-y-1">
+                    {child.age < 1 && (
+                      <>
+                        <li>• First smile</li>
+                        <li>• Rolling over</li>
+                        <li>• Sitting up</li>
+                        <li>• First words</li>
+                        <li>• Crawling</li>
+                      </>
+                    )}
+                    {child.age >= 1 && child.age < 3 && (
+                      <>
+                        <li>• Walking</li>
+                        <li>• Building vocabulary</li>
+                        <li>• Following simple instructions</li>
+                        <li>• Self-feeding</li>
+                        <li>• Toilet training</li>
+                      </>
+                    )}
+                    {child.age >= 3 && child.age < 6 && (
+                      <>
+                        <li>• Drawing and coloring</li>
+                        <li>• Riding a tricycle</li>
+                        <li>• Speaking in sentences</li>
+                        <li>• Counting to 10</li>
+                        <li>• Learning letters</li>
+                      </>
+                    )}
+                    {child.age >= 6 && child.age < 12 && (
+                      <>
+                        <li>• Learning to read</li>
+                        <li>• Riding a bicycle</li>
+                        <li>• Swimming</li>
+                        <li>• Team sports participation</li>
+                        <li>• Musical instrument</li>
+                      </>
+                    )}
+                    {child.age >= 12 && (
+                      <>
+                        <li>• Growing independence</li>
+                        <li>• Developing personal interests</li>
+                        <li>• Academic achievements</li>
+                        <li>• Social relationship milestones</li>
+                        <li>• Preparation for future education</li>
+                      </>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  
+  // Main render function
+  return (
+    <div className="relative">
+      {/* Loading overlay */}
+      {loading && (
+        <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-t-transparent border-blue-600 rounded-full animate-spin mx-auto"></div>
+            <p className="mt-2 text-blue-600 font-medium font-roboto">Loading children data...</p>
+          </div>
+        </div>
+      )}
+      
+      {/* Error message */}
+      {tabError && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+          <span className="block sm:inline font-roboto">{tabError}</span>
+          <button 
+            className="absolute top-0 bottom-0 right-0 px-4 py-3" 
+            onClick={() => setTabError(null)}
+          >
+            <span className="sr-only">Close</span>
+            <X size={18} />
+          </button>
+        </div>
+      )}
+      
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold font-roboto">Children Tracking Dashboard</h2>
+        <p className="text-gray-600 font-roboto mt-1">
+          Keep track of all aspects of your children's lives in one place
+        </p>
+      </div>
+      
+      {/* Voice entry mode */}
+      {newVoiceEntry && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-lg w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium font-roboto">Voice Entry</h3>
+              <button 
+                className="text-gray-400 hover:text-gray-500"
+                onClick={() => {
+                  setNewVoiceEntry(false);
+                  setIsRecording(false);
+                  setRecordingText('');
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="text-center mb-4">
+              {isRecording ? (
+                <div className="mx-auto w-20 h-20 rounded-full bg-red-500 flex items-center justify-center animate-pulse">
+                  <Mic size={32} className="text-white" />
+                </div>
+              ) : (
+                <div className="mx-auto w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center">
+                  <Mic size={32} className="text-gray-500" />
+                </div>
+              )}
+            </div>
+            
+            <div className="mb-4">
+              <div className="border rounded-lg p-3 h-32 overflow-y-auto bg-gray-50">
+                {recordingText || (
+                  <p className="text-gray-400 text-center italic font-roboto">
+                    {isRecording 
+                      ? "Listening..." 
+                      : "Press the microphone button and speak to add information"}
+                  </p>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex justify-between">
+              <button 
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
+                onClick={() => {
+                  setNewVoiceEntry(false);
+                  setIsRecording(false);
+                  setRecordingText('');
+                }}
+              >
+                Cancel
+              </button>
+              
+              <div className="space-x-2">
+                {isRecording ? (
+                  <button 
+                    className="px-4 py-2 bg-red-500 text-white rounded-md font-roboto hover:bg-red-600"
+                    onClick={() => setIsRecording(false)}
+                  >
+                    Stop
+                  </button>
+                ) : (
+                  <>
+                    <button 
+                      className="px-4 py-2 bg-blue-500 text-white rounded-md font-roboto hover:bg-blue-600"
+                      onClick={handleVoiceInput}
+                    >
+                      Record
+                    </button>
+                    
+                    {recordingText && (
+                      <button 
+                        className="px-4 py-2 bg-green-500 text-white rounded-md font-roboto hover:bg-green-600"
+                        onClick={() => processVoiceCommand(recordingText)}
+                      >
+                        Process
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Children selector tabs */}
+      <div className="mb-6 bg-white p-4 rounded-lg shadow">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium font-roboto">Filter by Child</h3>
+          <div className="flex space-x-3">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search..."
+                className="w-48 border rounded-full pl-10 pr-4 py-2 text-sm"
+                value={searchQuery}
+                onChange={handleSearch}
+                ref={searchInputRef}
+              />
+              <Search size={18} className="text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+            </div>
+            
+            <button 
+              className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
+              onClick={handleVoiceInput}
+              ref={microphoneRef}
+            >
+              <Mic size={18} />
+            </button>
+            
+            <button
+              className="p-2 rounded-md hover:bg-gray-100"
+              onClick={toggleViewMode}
+              title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
+            >
+              {viewMode === 'card' ? <List size={18} /> : <Grid size={18} />}
+            </button>
+            
+            <button
+              className="p-2 rounded-md hover:bg-gray-100"
+              onClick={() => setActiveChild(null)}
+              title="Show all children"
+            >
+              <Users size={18} />
+            </button>
+          </div>
+        </div>
+        
+        <div className="flex flex-wrap gap-3">
+          {familyMembers.filter(member => member.role === 'child').map(child => (
+            <div 
+              key={child.id}
+              className={`border rounded-lg p-2 cursor-pointer hover:border-black transition-colors ${
+                activeChild === child.id ? 'border-black bg-gray-50' : 'border-gray-200'
+              }`}
+              onClick={() => setActiveChild(child.id === activeChild ? null : child.id)}
+            >
+              <div className="flex items-center">
+                <div className="w-10 h-10 rounded-full overflow-hidden mr-2">
+                  <img 
+                    src={child.profilePicture || '/api/placeholder/40/40'} 
+                    alt={child.name} 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div>
+                  <p className="font-medium font-roboto">{child.name}</p>
+                  <p className="text-xs text-gray-500 font-roboto">
+                    {child.age ? `${child.age} years old` : 'Age not set'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      {/* AI Insights Section */}
+      {renderAiInsights()}
+      
+      {/* Main Sections */}
+      <div className="space-y-6">
+        {/* Medical Section */}
+        <div>
+          {renderSectionHeader(
+            'Medical Appointments & Health Records', 
+            'medical', 
+            <AlertCircle size={20} className="text-red-500" />,
+            notifications.medical
+          )}
+          {expandedSections.medical && renderMedicalSection()}
+        </div>
+        
+        {/* Growth & Development Section */}
+        <div>
+          {renderSectionHeader(
+            'Growth & Development Tracking', 
+            'growth', 
+            <Activity size={20} className="text-blue-500" />,
+            notifications.growth
+          )}
+          {expandedSections.growth && renderGrowthSection()}
+        </div>
+        
+        {/* Routines & Activities Section */}
+        <div>
+          {renderSectionHeader(
+            'Daily Routines & Activities', 
+            'routines', 
+            <Clock size={20} className="text-purple-500" />,
+            notifications.routines
+          )}
+          {renderRoutinesSection()}
+        </div>
+        
+        {/* Homework & Academic Section */}
+        <div>
+          {renderSectionHeader(
+            'Homework & Academic Tracking', 
+            'homework', 
+            <BookOpen size={20} className="text-green-500" />,
+            notifications.homework
+          )}
+          {renderHomeworkSection()}
+        </div>
+        
+        {/* Emotional Well-being Section */}
+        <div>
+          {renderSectionHeader(
+            'Emotional Well-being Tracking', 
+            'emotional', 
+            <Heart size={20} className="text-pink-500" />,
+            notifications.emotional
+          )}
+          {renderEmotionalSection()}
+        </div>
+        
+        {/* Meals & Dietary Section */}
+        <div>
+          {renderSectionHeader(
+            'Meal Planning & Dietary Needs', 
+            'meals', 
+            <Utensils size={20} className="text-yellow-500" />,
+            notifications.meals
+          )}
+          {renderMealsSection()}
+        </div>
+        
+        {/* Events & Special Occasions Section */}
+        <div>
+          {renderSectionHeader(
+            'Events & Special Occasions', 
+            'events', 
+            <Calendar size={20} className="text-indigo-500" />,
+            notifications.events
+          )}
+          {renderEventsSection()}
+        </div>
+        
+        {/* Milestones & Celebrations Section */}
+        <div>
+          {renderSectionHeader(
+            'Milestones & Celebrations', 
+            'milestones', 
+            <Award size={20} className="text-amber-500" />,
+            notifications.milestones
+          )}
+          {renderMilestonesSection()}
+        </div>
+      </div>
+      
+      {/* Footer Help Section */}
+      <div className="mt-8 bg-gray-50 p-4 rounded-lg border border-gray-200">
+        <div className="flex items-start">
+          <HelpCircle size={24} className="text-blue-500 mr-3 flex-shrink-0" />
+          <div>
+            <h3 className="font-medium font-roboto">Need help with Children Tracking?</h3>
+            <p className="text-sm text-gray-600 font-roboto mt-1">
+              Just ask Allie in the chat! Try saying "Allie, add a doctor's appointment for Emma next Tuesday" 
+              or "When was Jack's last growth measurement?"
+            </p>
+          </div>
+        </div>
+      </div>
+      
+      {/* Allie Message */}
+      {allieMessage && (
+        <div className={`fixed bottom-20 right-4 max-w-xs p-4 rounded-lg shadow-lg z-50 ${
+          allieMessage.type === 'success' ? 'bg-green-50 border-l-4 border-green-500' :
+          allieMessage.type === 'warning' ? 'bg-yellow-50 border-l-4 border-yellow-500' :
+          allieMessage.type === 'error' ? 'bg-red-50 border-l-4 border-red-500' :
+          'bg-blue-50 border-l-4 border-blue-500'
+        }`}>
+          <div className="flex">
+            <div className={`flex-shrink-0 mr-2 ${
+              allieMessage.type === 'success' ? 'text-green-500' :
+              allieMessage.type === 'warning' ? 'text-yellow-500' :
+              allieMessage.type === 'error' ? 'text-red-500' :
+              'text-blue-500'
+            }`}>
+              {allieMessage.type === 'success' && <CheckCircle size={16} />}
+              {allieMessage.type === 'warning' && <AlertCircle size={16} />}
+              {allieMessage.type === 'error' && <X size={16} />}
+              {allieMessage.type === 'info' && <Info size={16} />}
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-roboto">{allieMessage.text}</p>
+            </div>
+            <button 
+              className="ml-2 text-gray-400 hover:text-gray-600"
+              onClick={() => setAllieMessage(null)}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Modals for editing/adding data */}
+      {activeModal === 'appointment' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium font-roboto">
+                {modalData.id ? 'Edit Appointment' : 'Add New Appointment'}
+              </h3>
+              <button 
+                className="text-gray-400 hover:text-gray-500"
+                onClick={closeModal}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Appointment Type
+                </label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g. Checkup, Dentist, Vaccination"
+                  value={modalData.title || ''}
+                  onChange={(e) => setModalData({...modalData, title: e.target.value})}
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={modalData.date || ''}
+                    onChange={(e) => setModalData({...modalData, date: e.target.value})}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Time (optional)
+                  </label>
+                  <input
+                    type="time"
+                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={modalData.time || ''}
+                    onChange={(e) => setModalData({...modalData, time: e.target.value})}
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Doctor/Provider (optional)
+                </label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g. Dr. Smith"
+                  value={modalData.doctor || ''}
+                  onChange={(e) => setModalData({...modalData, doctor: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Notes (optional)
+                </label>
+                <textarea
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Any additional information"
+                  rows="3"
+                  value={modalData.notes || ''}
+                  onChange={(e) => setModalData({...modalData, notes: e.target.value})}
+                ></textarea>
+              </div>
+              
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
+                  checked={modalData.completed || false}
+                  onChange={(e) => setModalData({...modalData, completed: e.target.checked})}
+                  id="completed-checkbox"
+                />
+                <label htmlFor="completed-checkbox" className="ml-2 block text-sm text-gray-900 font-roboto">
+                  Mark as completed
+                </label>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
+                onClick={() => handleFormSubmit('appointment')}
+                disabled={loadingSection === 'appointment'}
+              >
+                {loadingSection === 'appointment' ? (
+                  <span className="flex items-center">
+                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Saving...
+                  </span>
+                ) : (
+                  modalData.id ? 'Update Appointment' : 'Save Appointment'
