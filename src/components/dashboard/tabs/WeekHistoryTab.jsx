@@ -203,7 +203,7 @@ const WeekHistoryTab = ({ weekNumber }) => {
   };
   
   // Get balance data by category
-  onst getCategoryBalance = () => {
+  const getCategoryBalance = () => {
     const categories = [
       "Visible Household Tasks",
       "Invisible Household Tasks",
