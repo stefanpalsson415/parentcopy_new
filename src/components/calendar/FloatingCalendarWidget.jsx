@@ -3,7 +3,7 @@ import {
   Calendar, X, MinusSquare, RefreshCw, ChevronLeft, ChevronRight, 
   ArrowUpRight, AlertCircle, Activity, BookOpen, Heart, Bell, 
   ChevronUp, ChevronDown, Users, MapPin, Clock, Info, User, Check,
-  Edit, Trash2, Link, ExternalLink
+  Edit, Trash2, Link, ExternalLink, Filter
 } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -13,6 +13,7 @@ import DatabaseService from '../../services/DatabaseService';
 import { collection, query, where, getDocs, doc, getDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { useNavigate } from 'react-router-dom';
+import CalendarErrorHandler from '../../utils/CalendarErrorHandler';
 
 const FloatingCalendarWidget = () => {
   const navigate = useNavigate();
@@ -35,8 +36,8 @@ const FloatingCalendarWidget = () => {
   const [allEvents, setAllEvents] = useState([]);
   const [view, setView] = useState('all'); // 'all', 'tasks', 'appointments', 'activities'
   const [loading, setLoading] = useState(false);
-  const [widgetHeight, setWidgetHeight] = useState(40); // Default height (in rem) - reduced per request
-  const [widgetWidth, setWidgetWidth] = useState(64); // Default width in rem - reduced per request
+  const [widgetHeight, setWidgetHeight] = useState(40);
+  const [widgetWidth, setWidgetWidth] = useState(64);
   const [lastRefresh, setLastRefresh] = useState(Date.now());
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showEventDetails, setShowEventDetails] = useState(false);
@@ -47,6 +48,9 @@ const FloatingCalendarWidget = () => {
   const [isDragging, setIsDragging] = useState(null); // 'width', 'height', or 'both'
   const [startDragPos, setStartDragPos] = useState({ x: 0, y: 0 });
   const [startDimensions, setStartDimensions] = useState({ width: 0, height: 0 });
+  const [selectedMember, setSelectedMember] = useState('all'); // New state for member filtering
+  const [pendingAction, setPendingAction] = useState(null); // Track pending delete/update operations
+  
   const widgetRef = useRef(null);
   const dragHandleRef = useRef(null);
 
@@ -79,6 +83,17 @@ const FloatingCalendarWidget = () => {
       console.error("Error building event cache:", error);
     }
   };
+  
+  // Enhanced initialization to handle calendar-related errors cleanly
+  useEffect(() => {
+    // Start error suppression for non-critical calendar errors
+    CalendarErrorHandler.suppressApiErrors();
+    
+    // Clean up on unmount
+    return () => {
+      CalendarErrorHandler.restoreConsoleError();
+    };
+  }, []);
   
   // Helper function to check if an event already exists
   const eventExists = (event) => {
@@ -213,10 +228,14 @@ const FloatingCalendarWidget = () => {
     // Try to create a unique identifier based on event properties
     let key = '';
     
-    if (event.title) key += event.title;
-    if (event.dateObj) key += '-' + event.dateObj.toISOString().split('T')[0];
-    if (event.childName) key += '-' + event.childName;
-    if (event.id) key += '-' + event.id;
+    if (event.id) key += event.id; // Use ID first if available
+    else {
+      if (event.title) key += event.title;
+      if (event.dateObj) key += '-' + event.dateObj.toISOString().split('T')[0];
+      if (event.childName) key += '-' + event.childName;
+      // If ID was missing but we have firestoreId, add it
+      if (event.firestoreId) key += '-' + event.firestoreId;
+    }
     
     return key.toLowerCase().replace(/\s+/g, '-');
   };
@@ -257,13 +276,14 @@ const FloatingCalendarWidget = () => {
             date: eventData.start?.dateTime || eventData.start?.date || eventData.date,
             dateObj: startTime,
             time: startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-            category: 'calendar',
-            eventType: 'general',
+            category: eventData.category || 'calendar',
+            eventType: eventData.eventType || 'general',
             location: eventData.location || '',
             description: eventData.description || '',
             attendees: eventData.attendees || [],
             firestoreId: doc.id, // Store Firestore document ID for deletion/updates
-            dateEndObj: eventData.end?.dateTime ? new Date(eventData.end.dateTime) : null
+            dateEndObj: eventData.end?.dateTime ? new Date(eventData.end.dateTime) : null,
+            linkedEntity: eventData.linkedEntity || null
           });
         }
       });
@@ -317,7 +337,23 @@ const FloatingCalendarWidget = () => {
         ...generalEvents // Include chat-added events
       ];
       
-      setAllEvents(combined);
+      // Clean up events - ensure no duplicates by checking for similar events
+      const cleanedEvents = [];
+      const eventSignatures = new Set();
+      
+      combined.forEach(event => {
+        // Create signature based on title and date
+        const dateStr = event.dateObj ? event.dateObj.toISOString().split('T')[0] : '';
+        const signature = `${event.title}-${dateStr}`;
+        
+        // Only add if we haven't seen this signature before
+        if (!eventSignatures.has(signature)) {
+          eventSignatures.add(signature);
+          cleanedEvents.push(event);
+        }
+      });
+      
+      setAllEvents(cleanedEvents);
       setLoading(false);
     } catch (error) {
       console.error("Error loading events:", error);
@@ -472,7 +508,7 @@ const FloatingCalendarWidget = () => {
             if (checkInDate >= today) {
               events.push({
                 id: `couple-checkin-${weekNum}`,
-                title: `Couple Check-in (Week ${weekNum})`,
+                title: `Couple Check-in (Cycle ${weekNum})`, // Changed "Week" to "Cycle"
                 date: data.scheduledDate,
                 dateObj: checkInDate,
                 category: 'relationship',
@@ -546,14 +582,14 @@ const FloatingCalendarWidget = () => {
             
             events.push({
               id: `family-meeting-${currentWeek}`,
-              title: `Week ${currentWeek} Family Meeting`,
+              title: `Cycle ${currentWeek} Family Meeting`, // Changed "Week" to "Cycle"
               date: meetingDate.toISOString(),
               dateObj: meetingDate,
               category: 'meeting',
               eventType: 'meeting',
               weekNumber: currentWeek,
               linkedEntity: {
-                type: 'task',
+                type: 'meeting',
                 id: task.id
               }
             });
@@ -619,7 +655,7 @@ const FloatingCalendarWidget = () => {
       
       meetings.push({
         id: `meeting-${currentWeek}`,
-        title: `Week ${currentWeek} Family Meeting`,
+        title: `Cycle ${currentWeek} Family Meeting`, // Changed "Week" to "Cycle"
         date: meetingDate.toISOString(),
         dateObj: meetingDate,
         category: 'meeting',
@@ -661,35 +697,42 @@ const FloatingCalendarWidget = () => {
         event.end.dateTime = endTime.toISOString();
       }
       
+      // Add task's linkedEntity information to preserve the connection
+      event.linkedEntity = {
+        type: 'task',
+        id: task.id
+      };
+      
       // Add event to calendar
-      await CalendarService.addEvent(event, currentUser.uid);
+      const result = await CalendarService.addEvent(event, currentUser.uid);
       
-      // Mark as added in our tracking
-      setAddedEvents(prev => ({
-        ...prev,
-        [getEventKey(task)]: true
-      }));
-      
-      // Show "Added" message temporarily, then replace with edit icons
-      setShowAddedMessage(prev => ({
-        ...prev,
-        [getEventKey(task)]: true
-      }));
-      
-      setTimeout(() => {
+      if (result.success) {
+        // Mark as added in our tracking
+        setAddedEvents(prev => ({
+          ...prev,
+          [getEventKey(task)]: true
+        }));
+        
+        // Show "Added" message temporarily, then replace with edit icons
         setShowAddedMessage(prev => ({
           ...prev,
-          [getEventKey(task)]: false
+          [getEventKey(task)]: true
         }));
-      }, 3000);
-      
-      // Show a simple notification
-      CalendarService.showNotification("Task added to calendar", "success");
-      
-      // Refresh events and event cache
-      await buildEventCache();
-      setLastRefresh(Date.now());
-      
+        
+        setTimeout(() => {
+          setShowAddedMessage(prev => ({
+            ...prev,
+            [getEventKey(task)]: false
+          }));
+        }, 3000);
+        
+        // Show a simple notification
+        CalendarService.showNotification("Task added to calendar", "success");
+        
+        // Refresh events and event cache
+        await buildEventCache();
+        setLastRefresh(Date.now());
+      }
     } catch (error) {
       console.error("Error adding task to calendar:", error);
       CalendarService.showNotification("Failed to add task to calendar", "error");
@@ -711,35 +754,45 @@ const FloatingCalendarWidget = () => {
       // Create event from meeting
       const event = CalendarService.createFamilyMeetingEvent(meeting.weekNumber, meeting.dateObj);
       
+      // Rename from "Week" to "Cycle" in the title
+      event.summary = event.summary.replace("Week", "Cycle");
+      
+      // Add meeting's linkedEntity information to preserve the connection
+      event.linkedEntity = meeting.linkedEntity || {
+        type: 'meeting',
+        id: meeting.weekNumber
+      };
+      
       // Add event to calendar
-      await CalendarService.addEvent(event, currentUser.uid);
+      const result = await CalendarService.addEvent(event, currentUser.uid);
       
-      // Mark as added in our tracking
-      setAddedEvents(prev => ({
-        ...prev,
-        [getEventKey(meeting)]: true
-      }));
-      
-      // Show "Added" message temporarily, then replace with edit icons
-      setShowAddedMessage(prev => ({
-        ...prev,
-        [getEventKey(meeting)]: true
-      }));
-      
-      setTimeout(() => {
+      if (result.success) {
+        // Mark as added in our tracking
+        setAddedEvents(prev => ({
+          ...prev,
+          [getEventKey(meeting)]: true
+        }));
+        
+        // Show "Added" message temporarily, then replace with edit icons
         setShowAddedMessage(prev => ({
           ...prev,
-          [getEventKey(meeting)]: false
+          [getEventKey(meeting)]: true
         }));
-      }, 3000);
-      
-      // Show a simple notification
-      CalendarService.showNotification("Meeting added to calendar", "success");
-      
-      // Refresh events and event cache
-      await buildEventCache();
-      setLastRefresh(Date.now());
-      
+        
+        setTimeout(() => {
+          setShowAddedMessage(prev => ({
+            ...prev,
+            [getEventKey(meeting)]: false
+          }));
+        }, 3000);
+        
+        // Show a simple notification
+        CalendarService.showNotification("Meeting added to calendar", "success");
+        
+        // Refresh events and event cache
+        await buildEventCache();
+        setLastRefresh(Date.now());
+      }
     } catch (error) {
       console.error("Error adding meeting to calendar:", error);
       CalendarService.showNotification("Failed to add meeting to calendar", "error");
@@ -786,7 +839,8 @@ const FloatingCalendarWidget = () => {
                 { method: 'popup', minutes: 60 } // 1 hour before
               ]
             },
-            location: event.location || "TBD"
+            location: event.location || "TBD",
+            linkedEntity: event.linkedEntity
           };
           break;
           
@@ -835,7 +889,8 @@ const FloatingCalendarWidget = () => {
                 { method: 'popup', minutes: 60 }, // 1 hour before
                 { method: 'popup', minutes: 10 } // 10 minutes before
               ]
-            }
+            },
+            linkedEntity: event.linkedEntity
           };
           
           // Add recurrence if applicable
@@ -890,7 +945,8 @@ const FloatingCalendarWidget = () => {
                 { method: 'popup', minutes: 24 * 60 }, // 1 day before
                 { method: 'popup', minutes: 60 } // 1 hour before
               ]
-            }
+            },
+            linkedEntity: event.linkedEntity
           };
           
           // If it's a birthday, make it recurring annually
@@ -922,7 +978,8 @@ const FloatingCalendarWidget = () => {
                 { method: 'popup', minutes: 24 * 60 }, // 1 day before
                 { method: 'popup', minutes: 120 } // 2 hours before
               ]
-            }
+            },
+            linkedEntity: event.linkedEntity
           };
           break;
           
@@ -941,7 +998,8 @@ const FloatingCalendarWidget = () => {
             end: {
               dateTime: new Date(generalDate.getTime() + 60*60000).toISOString(), // 1 hour duration
               timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-            }
+            },
+            linkedEntity: event.linkedEntity
           };
           break;
           
@@ -958,39 +1016,42 @@ const FloatingCalendarWidget = () => {
             end: {
               dateTime: new Date(event.dateObj.getTime() + 60*60000).toISOString(), // 1 hour duration
               timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-            }
+            },
+            linkedEntity: event.linkedEntity
           };
       }
       
       // Add event to calendar
       if (calendarEvent) {
-        await CalendarService.addEvent(calendarEvent, currentUser.uid);
+        const result = await CalendarService.addEvent(calendarEvent, currentUser.uid);
         
-        // Mark as added in our tracking
-        setAddedEvents(prev => ({
-          ...prev,
-          [getEventKey(event)]: true
-        }));
-        
-        // Show "Added" message temporarily, then replace with edit icons
-        setShowAddedMessage(prev => ({
-          ...prev,
-          [getEventKey(event)]: true
-        }));
-        
-        setTimeout(() => {
+        if (result.success) {
+          // Mark as added in our tracking
+          setAddedEvents(prev => ({
+            ...prev,
+            [getEventKey(event)]: true
+          }));
+          
+          // Show "Added" message temporarily, then replace with edit icons
           setShowAddedMessage(prev => ({
             ...prev,
-            [getEventKey(event)]: false
+            [getEventKey(event)]: true
           }));
-        }, 3000);
-        
-        // Show notification
-        CalendarService.showNotification(`${event.childName ? `${event.childName}'s ` : ''}${event.title || 'event'} added to calendar`, "success");
-        
-        // Refresh events and event cache
-        await buildEventCache();
-        setLastRefresh(Date.now());
+          
+          setTimeout(() => {
+            setShowAddedMessage(prev => ({
+              ...prev,
+              [getEventKey(event)]: false
+            }));
+          }, 3000);
+          
+          // Show notification
+          CalendarService.showNotification(`${event.childName ? `${event.childName}'s ` : ''}${event.title || 'event'} added to calendar`, "success");
+          
+          // Refresh events and event cache
+          await buildEventCache();
+          setLastRefresh(Date.now());
+        }
       }
     } catch (error) {
       console.error("Error adding child event to calendar:", error);
@@ -998,15 +1059,42 @@ const FloatingCalendarWidget = () => {
     }
   };
   
-  // Get events for the selected date
+  // Get events for the selected date based on member filter
   const getEventsForSelectedDate = () => {
     if (!selectedDate) return [];
     
     return allEvents.filter(event => {
+      // Check date match
       const eventDate = event.dateObj;
-      return eventDate.getDate() === selectedDate.getDate() &&
-             eventDate.getMonth() === selectedDate.getMonth() &&
-             eventDate.getFullYear() === selectedDate.getFullYear();
+      const dateMatch = eventDate.getDate() === selectedDate.getDate() &&
+                          eventDate.getMonth() === selectedDate.getMonth() &&
+                          eventDate.getFullYear() === selectedDate.getFullYear();
+      
+      // Check member filter
+      if (selectedMember !== 'all') {
+        // For child events
+        if (event.childName && selectedMember !== event.childId && selectedMember !== event.childName) {
+          return false;
+        }
+        
+        // For parent-assigned tasks
+        if (event.assignedTo && selectedMember !== event.assignedTo && 
+            event.assignedToName && selectedMember !== event.assignedToName) {
+          return false;
+        }
+        
+        // For family events, check attendees
+        const attendees = getEventAttendees(event);
+        const hasSelectedMember = attendees.some(
+          attendee => attendee.id === selectedMember || attendee.name === selectedMember
+        );
+        
+        if (!hasSelectedMember && !event.childName && !event.assignedTo) {
+          return false;
+        }
+      }
+      
+      return dateMatch;
     });
   };
   
@@ -1090,7 +1178,7 @@ const FloatingCalendarWidget = () => {
     return attendees;
   };
   
-  // Function to navigate to linked entity
+  // Function to navigate to linked entity - Enhanced to properly handle family meetings
   const navigateToLinkedEntity = (event) => {
     if (!event.linkedEntity) return;
     
@@ -1108,8 +1196,21 @@ const FloatingCalendarWidget = () => {
         break;
       case 'meeting':
         // Open the family meeting dialog if available
-        if (typeof window !== 'undefined' && window.openFamilyMeeting) {
-          window.openFamilyMeeting();
+        if (typeof window !== 'undefined') {
+          // Method 1: Check if the global openFamilyMeeting function exists
+          if (window.openFamilyMeeting) {
+            window.openFamilyMeeting();
+          } 
+          // Method 2: Dispatch a custom event that the dashboard will listen for
+          else {
+            const meetingEvent = new CustomEvent('open-family-meeting', { 
+              detail: { weekNumber: id } 
+            });
+            window.dispatchEvent(meetingEvent);
+            
+            // As fallback, also navigate to tasks tab where the meeting button is available
+            navigate('/dashboard?tab=tasks');
+          }
         } else {
           navigate('/dashboard?tab=tasks');
         }
@@ -1122,11 +1223,14 @@ const FloatingCalendarWidget = () => {
     setShowEventDetails(false);
   };
   
-  // Delete event from calendar
+  // Delete event from calendar - Enhanced with error handling
   const deleteEvent = async (event) => {
     try {
+      setPendingAction('delete');
+      
       if (!event || !event.firestoreId) {
-        CalendarService.showNotification("Cannot delete this event", "error");
+        CalendarService.showNotification("Cannot delete this event - no valid ID found", "error");
+        setPendingAction(null);
         return;
       }
       
@@ -1141,6 +1245,11 @@ const FloatingCalendarWidget = () => {
         return newState;
       });
       
+      // Remove from all events array
+      setAllEvents(prev => prev.filter(e => 
+        e.firestoreId !== event.firestoreId
+      ));
+      
       // Close the details modal
       setShowEventDetails(false);
       
@@ -1151,34 +1260,75 @@ const FloatingCalendarWidget = () => {
       setLastRefresh(Date.now());
       await buildEventCache();
       
+      setPendingAction(null);
     } catch (error) {
       console.error("Error deleting event:", error);
-      CalendarService.showNotification("Failed to delete event", "error");
+      CalendarService.showNotification("Failed to delete event: " + error.message, "error");
+      setPendingAction(null);
     }
   };
   
-  // Update event
+  // Update event - Enhanced with error handling
   const updateEvent = async () => {
     try {
+      setPendingAction('update');
+      
       if (!editedEvent || !editedEvent.firestoreId) {
-        CalendarService.showNotification("Cannot update this event", "error");
+        CalendarService.showNotification("Cannot update this event - no valid ID found", "error");
+        setPendingAction(null);
         return;
       }
+      
+      // Preserve linkedEntity when updating
+      const linkedEntity = editedEvent.linkedEntity || selectedEvent?.linkedEntity;
       
       // Create updated event object
       const updatedEvent = {
         summary: editedEvent.title,
         description: editedEvent.description || '',
-        location: editedEvent.location || 'TBD'
+        location: editedEvent.location || 'TBD',
+        linkedEntity
       };
+      
+      // Update date/time if changed
+      if (editedEvent.dateObj) {
+        updatedEvent.start = {
+          dateTime: editedEvent.dateObj.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        };
+        
+        // Calculate end time (preserve duration if available)
+        const duration = editedEvent.dateEndObj && selectedEvent.dateObj 
+          ? editedEvent.dateEndObj.getTime() - selectedEvent.dateObj.getTime()
+          : 60 * 60 * 1000; // Default 1 hour
+        
+        const endDate = new Date(editedEvent.dateObj.getTime() + duration);
+        
+        updatedEvent.end = {
+          dateTime: endDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        };
+      }
       
       // Update in Firestore
       const docRef = doc(db, "calendar_events", editedEvent.firestoreId);
       await updateDoc(docRef, updatedEvent);
       
-      // Close edit mode
+      // Update local state
+      setAllEvents(prev => 
+        prev.map(event => 
+          event.firestoreId === editedEvent.firestoreId 
+            ? { ...event, ...editedEvent } 
+            : event
+        )
+      );
+      
+      // Close edit mode and update selected event
       setIsEditingEvent(false);
-      setSelectedEvent(editedEvent);
+      setSelectedEvent({
+        ...selectedEvent,
+        ...editedEvent
+      });
       
       // Show notification
       CalendarService.showNotification("Event updated successfully", "success");
@@ -1186,9 +1336,11 @@ const FloatingCalendarWidget = () => {
       // Refresh events
       setLastRefresh(Date.now());
       
+      setPendingAction(null);
     } catch (error) {
       console.error("Error updating event:", error);
-      CalendarService.showNotification("Failed to update event", "error");
+      CalendarService.showNotification("Failed to update event: " + error.message, "error");
+      setPendingAction(null);
     }
   };
   
@@ -1215,12 +1367,32 @@ const FloatingCalendarWidget = () => {
                             date.getMonth() === selectedDate.getMonth() && 
                             date.getFullYear() === selectedDate.getFullYear();
       
-      // Check if this date has any events
+      // Check if this date has any events with member filter
       const hasEvents = allEvents.some(event => {
         const eventDate = event.dateObj;
-        return eventDate.getDate() === date.getDate() &&
-               eventDate.getMonth() === date.getMonth() &&
-               eventDate.getFullYear() === date.getFullYear();
+        const dateMatch = eventDate.getDate() === date.getDate() &&
+                         eventDate.getMonth() === date.getMonth() &&
+                         eventDate.getFullYear() === date.getFullYear();
+        
+        // Apply member filter if set
+        if (selectedMember !== 'all') {
+          // For child events
+          if (event.childName && selectedMember !== event.childId && selectedMember !== event.childName) {
+            return false;
+          }
+          // For tasks
+          if (event.assignedTo && selectedMember !== event.assignedTo && 
+              event.assignedToName && selectedMember !== event.assignedToName) {
+            return false;
+          }
+          // For other events, check attendees
+          const attendees = getEventAttendees(event);
+          if (!attendees.some(a => a.id === selectedMember || a.name === selectedMember)) {
+            return false;
+          }
+        }
+        
+        return dateMatch;
       });
       
       days.push(
@@ -1239,6 +1411,56 @@ const FloatingCalendarWidget = () => {
     }
     
     return [...blanks, ...days];
+  };
+  
+  // Render family member filter chips
+  const renderMemberFilterChips = () => {
+    return (
+      <div className="flex flex-wrap gap-1 mb-2 mt-2">
+        <button 
+          className={`text-xs px-2 py-1 rounded-full ${selectedMember === 'all' ? 'bg-black text-white' : 'bg-gray-100'}`}
+          onClick={() => setSelectedMember('all')}
+        >
+          All Members
+        </button>
+        
+        {/* Parents */}
+        {familyMembers.filter(m => m.role === 'parent').map(member => (
+          <button 
+            key={member.id}
+            className={`text-xs px-2 py-1 rounded-full flex items-center ${selectedMember === member.id || selectedMember === member.name ? 'bg-black text-white' : 'bg-gray-100'}`}
+            onClick={() => setSelectedMember(member.id)}
+          >
+            <div className="w-4 h-4 rounded-full overflow-hidden mr-1">
+              <img 
+                src={member.profilePicture || `/api/placeholder/24/24`}
+                alt={member.name}
+                className="w-full h-full object-cover"
+              />
+            </div>
+            {member.name}
+          </button>
+        ))}
+        
+        {/* Children */}
+        {familyMembers.filter(m => m.role === 'child').map(member => (
+          <button 
+            key={member.id}
+            className={`text-xs px-2 py-1 rounded-full flex items-center ${selectedMember === member.id || selectedMember === member.name ? 'bg-black text-white' : 'bg-gray-100'}`}
+            onClick={() => setSelectedMember(member.id)}
+          >
+            <div className="w-4 h-4 rounded-full overflow-hidden mr-1">
+              <img 
+                src={member.profilePicture || `/api/placeholder/24/24`}
+                alt={member.name}
+                className="w-full h-full object-cover"
+              />
+            </div>
+            {member.name}
+          </button>
+        ))}
+      </div>
+    );
   };
   
   if (!isOpen) {
@@ -1318,38 +1540,60 @@ const FloatingCalendarWidget = () => {
             </div>
           </div>
           
-          {/* View filters */}
-          <div className="flex flex-wrap gap-1 mb-2">
-            <button 
-              className={`text-xs px-2 py-1 rounded-full ${view === 'all' ? 'bg-black text-white' : 'bg-gray-100'}`}
-              onClick={() => setView('all')}
-            >
-              All
-            </button>
-            <button 
-              className={`text-xs px-2 py-1 rounded-full ${view === 'tasks' ? 'bg-black text-white' : 'bg-gray-100'}`}
-              onClick={() => setView('tasks')}
-            >
-              Tasks
-            </button>
-            <button 
-              className={`text-xs px-2 py-1 rounded-full ${view === 'appointments' ? 'bg-black text-white' : 'bg-gray-100'}`}
-              onClick={() => setView('appointments')}
-            >
-              Medical
-            </button>
-            <button 
-              className={`text-xs px-2 py-1 rounded-full ${view === 'activities' ? 'bg-black text-white' : 'bg-gray-100'}`}
-              onClick={() => setView('activities')}
-            >
-              Activities
-            </button>
-            <button 
-              className={`text-xs px-2 py-1 rounded-full ${view === 'meetings' ? 'bg-black text-white' : 'bg-gray-100'}`}
-              onClick={() => setView('meetings')}
-            >
-              Meetings
-            </button>
+          {/* Filter section - combined event type and family member filters */}
+          <div className="mb-2">
+            <div className="flex justify-between items-center mb-1">
+              <h5 className="text-sm font-medium font-roboto flex items-center">
+                <Filter size={14} className="mr-1" />
+                Filters
+              </h5>
+              <button 
+                onClick={() => {
+                  setView('all');
+                  setSelectedMember('all');
+                }}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                Reset all
+              </button>
+            </div>
+            
+            {/* Event type filters */}
+            <div className="flex flex-wrap gap-1 mb-2">
+              <button 
+                className={`text-xs px-2 py-1 rounded-full ${view === 'all' ? 'bg-black text-white' : 'bg-gray-100'}`}
+                onClick={() => setView('all')}
+              >
+                All Types
+              </button>
+              <button 
+                className={`text-xs px-2 py-1 rounded-full ${view === 'tasks' ? 'bg-black text-white' : 'bg-gray-100'}`}
+                onClick={() => setView('tasks')}
+              >
+                Tasks
+              </button>
+              <button 
+                className={`text-xs px-2 py-1 rounded-full ${view === 'appointments' ? 'bg-black text-white' : 'bg-gray-100'}`}
+                onClick={() => setView('appointments')}
+              >
+                Medical
+              </button>
+              <button 
+                className={`text-xs px-2 py-1 rounded-full ${view === 'activities' ? 'bg-black text-white' : 'bg-gray-100'}`}
+                onClick={() => setView('activities')}
+              >
+                Activities
+              </button>
+              <button 
+                className={`text-xs px-2 py-1 rounded-full ${view === 'meetings' ? 'bg-black text-white' : 'bg-gray-100'}`}
+                onClick={() => setView('meetings')}
+              >
+                Meetings
+              </button>
+            </div>
+            
+            {/* Family member filters */}
+            {renderMemberFilterChips()}
           </div>
           
           {/* Selected Date */}
@@ -1505,6 +1749,27 @@ const FloatingCalendarWidget = () => {
             {allEvents.length > 0 ? (
               <div className="space-y-2">
                 {allEvents
+                  // Apply member filter
+                  .filter(event => {
+                    if (selectedMember === 'all') return true;
+                    
+                    // For child events
+                    if (event.childName && 
+                        (selectedMember === event.childId || selectedMember === event.childName)) {
+                      return true;
+                    }
+                    
+                    // For tasks
+                    if ((event.assignedTo && selectedMember === event.assignedTo) || 
+                        (event.assignedToName && selectedMember === event.assignedToName)) {
+                      return true;
+                    }
+                    
+                    // For other events, check attendees
+                    const attendees = getEventAttendees(event);
+                    return attendees.some(a => a.id === selectedMember || a.name === selectedMember);
+                  })
+                  // Apply event type filter
                   .filter(event => 
                     view === 'all' || 
                     (view === 'appointments' && (event.category === 'medical' || event.eventType === 'appointment')) ||
@@ -1643,6 +1908,11 @@ const FloatingCalendarWidget = () => {
                 {taskRecommendations && taskRecommendations.length > 0 ? (
                   taskRecommendations
                     .filter(task => !task.completed)
+                    // Apply member filter for tasks
+                    .filter(task => {
+                      if (selectedMember === 'all') return true;
+                      return selectedMember === task.assignedTo || selectedMember === task.assignedToName;
+                    })
                     .slice(0, 3)
                     .map(task => {
                       const taskKey = getEventKey(task);
@@ -1936,104 +2206,4 @@ const FloatingCalendarWidget = () => {
                         className="border p-1 rounded text-sm w-full min-h-[80px]"
                         placeholder="Add a description"
                         value={editedEvent?.description || ''}
-                        onChange={(e) => setEditedEvent({...editedEvent, description: e.target.value})}
-                      ></textarea>
-                    ) : (
-                      <p className="text-sm text-gray-600 font-roboto whitespace-pre-wrap">
-                        {selectedEvent.description || "No description"}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Link to task/relationship if available */}
-                {selectedEvent.linkedEntity && (
-                  <div className="flex items-start">
-                    <Link size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium text-sm font-roboto">Linked to</p>
-                      <button
-                        onClick={() => navigateToLinkedEntity(selectedEvent)}
-                        className="text-sm text-blue-600 hover:underline flex items-center font-roboto"
-                      >
-                        {selectedEvent.linkedEntity.type === 'task' && "View in Tasks Tab"}
-                        {selectedEvent.linkedEntity.type === 'relationship' && "View in Relationship Tab"}
-                        {selectedEvent.linkedEntity.type === 'child' && "View in Children Tracking"}
-                        {selectedEvent.linkedEntity.type === 'meeting' && "Open Family Meeting"}
-                        <ExternalLink size={14} className="ml-1" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Action buttons */}
-                <div className="flex justify-between mt-6">
-                  {isEditingEvent ? (
-                    <>
-                      <button
-                        onClick={() => {
-                          setIsEditingEvent(false);
-                          setEditedEvent(null);
-                        }}
-                        className="px-4 py-2 border border-gray-300 rounded text-sm font-roboto"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={updateEvent}
-                        className="px-4 py-2 bg-black text-white rounded text-sm font-roboto"
-                      >
-                        Save Changes
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => {
-                          const confirmation = window.confirm("Are you sure you want to delete this event?");
-if (confirmation) {
-  deleteEvent(selectedEvent);
-}
-                        }}
-                        className="px-4 py-2 border border-red-300 text-red-600 rounded text-sm font-roboto flex items-center"
-                        disabled={!selectedEvent.firestoreId}
-                      >
-                        <Trash2 size={14} className="mr-1" />
-                        Delete
-                      </button>
-                      <div>
-                        {selectedEvent.linkedEntity && (
-                          <button
-                            onClick={() => navigateToLinkedEntity(selectedEvent)}
-                            className="px-4 py-2 bg-blue-500 text-white rounded text-sm font-roboto flex items-center mr-2"
-                          >
-                            <ExternalLink size={14} className="mr-1" />
-                            View Details
-                          </button>
-                        )}
-                        {selectedEvent.firestoreId && (
-                          <button
-                            onClick={() => {
-                              setIsEditingEvent(true);
-                              setEditedEvent({...selectedEvent});
-                            }}
-                            className="px-4 py-2 bg-black text-white rounded text-sm font-roboto flex items-center"
-                          >
-                            <Edit size={14} className="mr-1" />
-                            Edit
-                          </button>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default FloatingCalendarWidget;
+                        onChange={(e) => setEdit
