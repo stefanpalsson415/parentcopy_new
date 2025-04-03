@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Clock, ChevronDown, ChevronUp, MessageCircle, Calendar, CheckCircle, Star, Smile, Sparkles, Brain, Lightbulb } from 'lucide-react';
+import { Heart, Clock, ChevronDown, ChevronUp, MessageCircle, Calendar, CheckCircle, Star, Smile, Sparkles, Brain, Lightbulb, AlertCircle } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import AllieAIEngineService from '../../services/AllieAIEngineService';
 import CalendarService from '../../services/CalendarService';
+import { doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../services/firebase';
 
 // Confetti effect for celebration
 const Celebration = () => {
@@ -92,6 +94,9 @@ const RelationshipMeetingScreen = ({ onClose }) => {
     updateRelationshipStrategy
   } = useFamily();
   
+  // For terminology consistency, use cycle instead of week
+  const currentCycle = currentWeek;
+  
   // State variables
   const [loading, setLoading] = useState(true);
   const [meetingStep, setMeetingStep] = useState('intro'); // intro, discussion, reflection, action, completion
@@ -110,10 +115,12 @@ const RelationshipMeetingScreen = ({ onClose }) => {
   const [topicResponses, setTopicResponses] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   
   // New state variables for AI agenda and calendar
   const [aiAgenda, setAiAgenda] = useState(null);
   const [isAddingToCalendar, setIsAddingToCalendar] = useState(false);
+  const [calendarEvent, setCalendarEvent] = useState(null);
   
   // Toggle section expansion
   const toggleSection = (sectionId) => {
@@ -127,8 +134,8 @@ const RelationshipMeetingScreen = ({ onClose }) => {
       
       try {
         // Get couple check-in data for context
-        const checkInData = await getCoupleCheckInData(currentWeek);
-        setCoupleData(checkInData);
+        const checkInData = await getCoupleCheckInData(currentCycle);
+        setCoupleData(checkInData || {});
         
         // Get relationship strategies
         const strategiesData = await getRelationshipStrategies();
@@ -144,54 +151,49 @@ const RelationshipMeetingScreen = ({ onClose }) => {
           initialResponses[topic.id] = '';
         });
         setTopicResponses(initialResponses);
+        
+        // Load AI agenda
+        try {
+          console.log("Loading AI relationship meeting agenda...");
+          const meetingAgenda = await AllieAIEngineService.generateRelationshipInsights(
+            familyId,
+            currentCycle,
+            [],
+            strategiesData || [],
+            checkInData || {}
+          );
+          setAiAgenda(meetingAgenda);
+          console.log("AI relationship agenda loaded:", meetingAgenda);
+        } catch (aiError) {
+          console.error("Error loading relationship meeting agenda:", aiError);
+          // Non-blocking error, continue with meeting setup
+        }
       } catch (error) {
         console.error("Error loading relationship meeting data:", error);
+        setErrorMessage("Could not load meeting data. Please try again.");
       } finally {
         setLoading(false);
       }
     };
     
     loadMeetingData();
-  }, [currentWeek, familyId, getCoupleCheckInData, getRelationshipStrategies]);
-
-  // Load AI agenda
-  useEffect(() => {
-    const loadAIAgenda = async () => {
-      if (!familyId || !currentWeek) return;
-      
-      try {
-        console.log("Loading AI relationship meeting agenda...");
-        const meetingAgenda = await AllieAIEngineService.generateRelationshipInsights(
-          familyId,
-          currentWeek,
-          [],
-          [],
-          {}
-        );
-        setAiAgenda(meetingAgenda);
-        console.log("AI relationship agenda loaded:", meetingAgenda);
-      } catch (error) {
-        console.error("Error loading relationship meeting agenda:", error);
-      }
-    };
-    
-    loadAIAgenda();
-  }, [familyId, currentWeek]);
+  }, [currentCycle, familyId, getCoupleCheckInData, getRelationshipStrategies]);
   
   // Add meeting to calendar
   const addMeetingToCalendar = async () => {
     try {
       setIsAddingToCalendar(true);
+      setErrorMessage('');
       
       // Create a meeting date (default to weekend evening)
       const meetingDate = new Date();
-      // Find the next Saturday
+      // Find next Saturday
       meetingDate.setDate(meetingDate.getDate() + (6 - meetingDate.getDay() + 7) % 7);
       meetingDate.setHours(20, 0, 0, 0); // 8 PM
       
       // Create meeting event
       const event = {
-        summary: `Week ${currentWeek} Relationship Meeting`,
+        summary: `Cycle ${currentCycle} Relationship Meeting`,
         description: 'Time to connect and strengthen your relationship with guided discussion topics.',
         start: {
           dateTime: meetingDate.toISOString(),
@@ -208,15 +210,64 @@ const RelationshipMeetingScreen = ({ onClose }) => {
       const result = await CalendarService.addEvent(event);
       
       if (result.success) {
+        // Save the event details for later reference
+        setCalendarEvent({
+          date: meetingDate,
+          id: result.id
+        });
+        
         alert("Relationship meeting added to your calendar!");
       } else {
-        alert("Couldn't add to calendar. Please try again.");
+        console.error("Calendar add failed:", result);
+        setErrorMessage("Couldn't add to calendar. Please try again.");
       }
     } catch (error) {
       console.error("Error adding meeting to calendar:", error);
-      alert("There was an error adding the meeting to your calendar.");
+      setErrorMessage("There was an error adding the meeting to your calendar.");
     } finally {
       setIsAddingToCalendar(false);
+    }
+  };
+  
+  // Direct Firestore saving as a backup method
+  const saveDirectToFirestore = async (meetingData) => {
+    if (!familyId || !currentCycle) {
+      throw new Error("Missing familyId or currentCycle");
+    }
+    
+    try {
+      // Document reference for the couple check-in
+      const docRef = doc(db, "coupleCheckIns", `${familyId}-cycle${currentCycle}`);
+      
+      // Prepare the data to save
+      const dataToSave = {
+        familyId,
+        cycleNumber: currentCycle,
+        data: {
+          ...coupleData,
+          meeting: meetingData
+        },
+        completedAt: serverTimestamp()
+      };
+      
+      // Save to Firestore
+      await setDoc(docRef, dataToSave);
+      
+      // Also update the family document to mark this cycle's meeting as complete
+      const familyDocRef = doc(db, "families", familyId);
+      await updateDoc(familyDocRef, {
+        [`coupleCheckIns.cycle${currentCycle}`]: {
+          completed: true,
+          completedAt: serverTimestamp()
+        },
+        updatedAt: serverTimestamp()
+      });
+      
+      console.log("Successfully saved meeting data directly to Firestore");
+      return true;
+    } catch (error) {
+      console.error("Direct Firestore save error:", error);
+      throw error;
     }
   };
   
@@ -234,7 +285,7 @@ const RelationshipMeetingScreen = ({ onClose }) => {
           title: 'Relationship Satisfaction',
           description: `Based on your check-in, your current satisfaction level is ${coupleData.satisfaction}/5.`,
           questions: [
-            'What moments brought you joy in your relationship this week?',
+            'What moments brought you joy in your relationship this cycle?',
             'What would help increase your satisfaction level?',
             'What small gestures have meant the most to you?'
           ]
@@ -249,7 +300,7 @@ const RelationshipMeetingScreen = ({ onClose }) => {
           title: 'Communication Quality',
           description: `Your communication quality was rated ${coupleData.communication}/5 in your latest check-in.`,
           questions: [
-            'When did you feel most heard this week?',
+            'When did you feel most heard this cycle?',
             'What communication challenges have you experienced?',
             'How can you improve the way you express needs and concerns?'
           ]
@@ -404,6 +455,7 @@ const RelationshipMeetingScreen = ({ onClose }) => {
   // Handle meeting completion
   const handleCompleteMeeting = async () => {
     setIsSubmitting(true);
+    setErrorMessage('');
     
     try {
       // Prepare meeting data
@@ -411,25 +463,70 @@ const RelationshipMeetingScreen = ({ onClose }) => {
         completedAt: new Date().toISOString(),
         notes: meetingNotes,
         topicResponses,
-        selectedStrategies
+        selectedStrategies,
+        calendarEvent
       };
       
-      // Save meeting data
-      await saveCoupleCheckInData(currentWeek, {
-        ...coupleData, // Preserve existing check-in data
-        meeting: meetingData // Add meeting data
-      });
+      console.log("Attempting to save meeting data for cycle:", currentCycle);
+      console.log("Meeting data:", meetingData);
+      
+      // Try the primary save method first
+      try {
+        await saveCoupleCheckInData(familyId, currentCycle, {
+          ...coupleData, // Preserve existing check-in data
+          meeting: meetingData // Add meeting data
+        });
+        
+        console.log("Successfully saved meeting data via saveCoupleCheckInData");
+      } catch (primaryError) {
+        console.error("Primary save method failed:", primaryError);
+        console.log("Attempting direct Firestore save as fallback...");
+        
+        // Fallback to direct Firestore save
+        await saveDirectToFirestore(meetingData);
+      }
       
       // Update strategy implementation levels
-      for (const strategyId of selectedStrategies) {
+      const strategyUpdatePromises = selectedStrategies.map(strategyId => {
         const strategy = strategies.find(s => s.id === strategyId);
         if (strategy) {
           // Increase implementation by 10% (up to 100%)
           const newImplementation = Math.min(100, (strategy.implementation || 0) + 10);
-          await updateRelationshipStrategy(strategyId, {
+          return updateRelationshipStrategy(strategyId, {
             implementation: newImplementation,
             lastActivity: new Date().toISOString()
           });
+        }
+        return Promise.resolve(); // No-op for strategies not found
+      });
+      
+      // Wait for all strategy updates to complete
+      await Promise.all(strategyUpdatePromises);
+      console.log("Successfully updated strategy implementation levels");
+      
+      // Record meeting completion in calendar if not already added
+      if (!calendarEvent) {
+        try {
+          // Create a calendar event for the completed meeting
+          const meetingCompletedEvent = {
+            summary: `Completed Cycle ${currentCycle} Relationship Meeting`,
+            description: 'Completed a relationship meeting with discussion and planning.',
+            start: {
+              dateTime: new Date().toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            end: {
+              dateTime: new Date(new Date().getTime() + 30*60000).toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            colorId: '10' // Green for completed
+          };
+          
+          await CalendarService.addEvent(meetingCompletedEvent);
+          console.log("Added completion event to calendar");
+        } catch (calendarError) {
+          console.error("Failed to add calendar entry, but meeting was saved:", calendarError);
+          // Non-blocking error, continue with completion
         }
       }
       
@@ -440,7 +537,10 @@ const RelationshipMeetingScreen = ({ onClose }) => {
       setMeetingStep('completion');
     } catch (error) {
       console.error("Error completing relationship meeting:", error);
-      alert("There was an error saving your meeting data. Please try again.");
+      setErrorMessage(
+        "There was an error saving your meeting data. Please try again. " +
+        "Error details: " + (error.message || "Unknown error")
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -480,7 +580,7 @@ const RelationshipMeetingScreen = ({ onClose }) => {
         {/* Header */}
         <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
           <div>
-            <h2 className="text-xl font-bold font-roboto">Week {currentWeek} Relationship Meeting</h2>
+            <h2 className="text-xl font-bold font-roboto">Cycle {currentCycle} Relationship Meeting</h2>
             <div className="flex items-center text-gray-600 text-sm font-roboto">
               <Clock size={16} className="mr-1" />
               <span>15-20 minutes</span>
@@ -497,6 +597,14 @@ const RelationshipMeetingScreen = ({ onClose }) => {
             </svg>
           </button>
         </div>
+        
+        {/* Error message if present */}
+        {errorMessage && (
+          <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-start">
+            <AlertCircle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
+            <span className="font-roboto">{errorMessage}</span>
+          </div>
+        )}
         
         {/* Meeting content - Introduction step */}
         {meetingStep === 'intro' && (
@@ -551,7 +659,7 @@ const RelationshipMeetingScreen = ({ onClose }) => {
                     <span className="font-medium">Reflection & Planning (5 min)</span>
                     <p className="text-gray-600">
                       Identify key relationship strengths and challenges.
-                      Select specific strategies to implement this week.
+                      Select specific strategies to implement this cycle.
                     </p>
                   </div>
                 </li>
@@ -707,7 +815,7 @@ const RelationshipMeetingScreen = ({ onClose }) => {
               <h3 className="font-medium mb-2">Reflection & Planning</h3>
               <p className="text-sm">
                 Reflect on your discussion and identify key relationship strengths and challenges.
-                This will help you focus your efforts in the coming week.
+                This will help you focus your efforts in the coming cycle.
               </p>
             </div>
             
@@ -740,7 +848,7 @@ const RelationshipMeetingScreen = ({ onClose }) => {
             {/* Strategy selection */}
             <div className="border rounded-lg p-4">
               <h3 className="font-medium mb-3 font-roboto">Select Strategies to Focus On</h3>
-              <p className="text-sm mb-3 font-roboto">Choose 1-3 strategies to implement this week:</p>
+              <p className="text-sm mb-3 font-roboto">Choose 1-3 strategies to implement this cycle:</p>
               
               <div className="space-y-2">
                 {strategies.map(strategy => (
@@ -806,18 +914,18 @@ const RelationshipMeetingScreen = ({ onClose }) => {
               <h3 className="font-medium mb-2">Commitment & Action Plan</h3>
               <p className="text-sm">
                 Document specific actions you'll take to strengthen your relationship
-                and balance family workload in the coming week.
+                and balance family workload in the coming cycle.
               </p>
             </div>
             
             {/* Specific action items */}
             <div className="border rounded-lg p-4">
               <h3 className="font-medium mb-2 font-roboto">Action Items</h3>
-              <p className="text-sm mb-3 font-roboto">What specific actions will you both take this week?</p>
+              <p className="text-sm mb-3 font-roboto">What specific actions will you both take this cycle?</p>
               <textarea
                 className="w-full border rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-roboto"
                 rows="4"
-                placeholder="List specific, achievable actions you'll take this week..."
+                placeholder="List specific, achievable actions you'll take this cycle..."
                 value={meetingNotes.actionItems}
                 onChange={(e) => handleNoteChange('actionItems', e.target.value)}
               ></textarea>
