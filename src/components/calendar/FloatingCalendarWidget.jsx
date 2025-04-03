@@ -1,14 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, X, MinusSquare, RefreshCw, ChevronLeft, ChevronRight, ArrowUpRight, AlertCircle, Activity, BookOpen, Heart, Bell, ChevronUp, ChevronDown, Users, MapPin, Clock, Info, User, Check } from 'lucide-react';
+import { 
+  Calendar, X, MinusSquare, RefreshCw, ChevronLeft, ChevronRight, 
+  ArrowUpRight, AlertCircle, Activity, BookOpen, Heart, Bell, 
+  ChevronUp, ChevronDown, Users, MapPin, Clock, Info, User, Check,
+  Edit, Trash2, Link, ExternalLink
+} from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import CalendarService from '../../services/CalendarService';
 import AllieCalendarEvents from './AllieCalendarEvents';
 import DatabaseService from '../../services/DatabaseService';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
+import { useNavigate } from 'react-router-dom';
 
 const FloatingCalendarWidget = () => {
+  const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { 
     taskRecommendations, 
@@ -28,12 +35,63 @@ const FloatingCalendarWidget = () => {
   const [allEvents, setAllEvents] = useState([]);
   const [view, setView] = useState('all'); // 'all', 'tasks', 'appointments', 'activities'
   const [loading, setLoading] = useState(false);
-  const [widgetHeight, setWidgetHeight] = useState(68); // Default height (in rems)
-  const [widgetWidth, setWidgetWidth] = useState(80); // Default width in rem
+  const [widgetHeight, setWidgetHeight] = useState(40); // Default height (in rem) - reduced per request
+  const [widgetWidth, setWidgetWidth] = useState(64); // Default width in rem - reduced per request
   const [lastRefresh, setLastRefresh] = useState(Date.now());
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showEventDetails, setShowEventDetails] = useState(false);
+  const [isEditingEvent, setIsEditingEvent] = useState(false);
+  const [editedEvent, setEditedEvent] = useState(null);
   const [addedEvents, setAddedEvents] = useState({});
+  const [showAddedMessage, setShowAddedMessage] = useState({});
+  const [isDragging, setIsDragging] = useState(null); // 'width', 'height', or 'both'
+  const [startDragPos, setStartDragPos] = useState({ x: 0, y: 0 });
+  const [startDimensions, setStartDimensions] = useState({ width: 0, height: 0 });
+  const widgetRef = useRef(null);
+  const dragHandleRef = useRef(null);
+
+  // Add event cache to prevent duplicate event creation
+  const [eventCache, setEventCache] = useState(new Set());
+  
+  // Function to fetch all event IDs and cache them to prevent duplicates
+  const buildEventCache = async () => {
+    try {
+      if (!currentUser?.uid || !familyId) return;
+      
+      const eventsQuery = query(
+        collection(db, "calendar_events"),
+        where("userId", "==", currentUser.uid)
+      );
+      
+      const querySnapshot = await getDocs(eventsQuery);
+      const eventSignatures = new Set();
+      
+      querySnapshot.forEach((doc) => {
+        const eventData = doc.data();
+        // Create a unique signature for each event
+        const signature = `${eventData.summary || eventData.title || ''}-${eventData.start?.dateTime || eventData.start?.date || ''}-${eventData.location || ''}`;
+        eventSignatures.add(signature);
+      });
+      
+      setEventCache(eventSignatures);
+      console.log(`Cached ${eventSignatures.size} event signatures to prevent duplicates`);
+    } catch (error) {
+      console.error("Error building event cache:", error);
+    }
+  };
+  
+  // Helper function to check if an event already exists
+  const eventExists = (event) => {
+    const signature = `${event.title || event.summary || ''}-${event.date || event.dateObj?.toISOString() || ''}-${event.location || ''}`;
+    return eventCache.has(signature);
+  };
+
+  // Use effect for initializing event cache
+  useEffect(() => {
+    if (isOpen && currentUser?.uid) {
+      buildEventCache();
+    }
+  }, [isOpen, currentUser]);
   
   // Helper function to get days in month
   const getDaysInMonth = (year, month) => {
@@ -105,6 +163,49 @@ const FloatingCalendarWidget = () => {
     };
   }, []);
   
+  // Drag to resize functionality
+  useEffect(() => {
+    if (!isDragging || !widgetRef.current) return;
+
+    const handleMouseMove = (e) => {
+      e.preventDefault();
+      
+      const deltaX = e.clientX - startDragPos.x;
+      const deltaY = e.clientY - startDragPos.y;
+      
+      // Calculate new dimensions based on drag direction
+      if (isDragging === 'width' || isDragging === 'both') {
+        const newWidth = Math.max(40, startDimensions.width + deltaX / 16); // Convert pixels to rem
+        setWidgetWidth(newWidth);
+      }
+      
+      if (isDragging === 'height' || isDragging === 'both') {
+        const newHeight = Math.max(30, startDimensions.height + deltaY / 16); // Convert pixels to rem
+        setWidgetHeight(newHeight);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, startDragPos, startDimensions]);
+
+  // Start drag operation
+  const startDrag = (e, direction) => {
+    e.preventDefault();
+    setIsDragging(direction);
+    setStartDragPos({ x: e.clientX, y: e.clientY });
+    setStartDimensions({ width: widgetWidth, height: widgetHeight });
+  };
+  
   // Helper to generate a unique key for an event
   const getEventKey = (event) => {
     if (!event) return null;
@@ -159,7 +260,10 @@ const FloatingCalendarWidget = () => {
             category: 'calendar',
             eventType: 'general',
             location: eventData.location || '',
-            description: eventData.description || ''
+            description: eventData.description || '',
+            attendees: eventData.attendees || [],
+            firestoreId: doc.id, // Store Firestore document ID for deletion/updates
+            dateEndObj: eventData.end?.dateTime ? new Date(eventData.end.dateTime) : null
           });
         }
       });
@@ -255,7 +359,11 @@ const FloatingCalendarWidget = () => {
                   childName,
                   eventType: 'appointment',
                   category: 'medical',
-                  dateObj: new Date(appointment.date)
+                  dateObj: new Date(appointment.date),
+                  linkedEntity: {
+                    type: 'child',
+                    id: childId
+                  }
                 };
                 appointments.push(event);
                 events.push(event);
@@ -273,7 +381,11 @@ const FloatingCalendarWidget = () => {
                   childName,
                   eventType: 'activity',
                   category: 'activity',
-                  dateObj: new Date(activity.startDate)
+                  dateObj: new Date(activity.startDate),
+                  linkedEntity: {
+                    type: 'child',
+                    id: childId
+                  }
                 };
                 activities.push(event);
                 events.push(event);
@@ -291,7 +403,11 @@ const FloatingCalendarWidget = () => {
                   childName,
                   eventType: 'event',
                   category: 'event',
-                  dateObj: new Date(event.date)
+                  dateObj: new Date(event.date),
+                  linkedEntity: {
+                    type: 'child',
+                    id: childId
+                  }
                 };
                 events.push(calEvent);
               }
@@ -309,7 +425,11 @@ const FloatingCalendarWidget = () => {
                   childName,
                   eventType: 'homework',
                   category: 'homework',
-                  dateObj: new Date(homework.dueDate)
+                  dateObj: new Date(homework.dueDate),
+                  linkedEntity: {
+                    type: 'child',
+                    id: childId
+                  }
                 };
                 events.push(event);
               }
@@ -356,7 +476,11 @@ const FloatingCalendarWidget = () => {
                 date: data.scheduledDate,
                 dateObj: checkInDate,
                 category: 'relationship',
-                eventType: 'relationship'
+                eventType: 'relationship',
+                linkedEntity: {
+                  type: 'relationship',
+                  id: weekNum
+                }
               });
             }
           }
@@ -378,7 +502,11 @@ const FloatingCalendarWidget = () => {
               date: strategy.scheduledDate,
               dateObj: new Date(strategy.scheduledDate),
               category: 'relationship',
-              eventType: 'strategy'
+              eventType: 'strategy',
+              linkedEntity: {
+                type: 'relationship',
+                id: strategy.id
+              }
             });
           }
         });
@@ -399,6 +527,39 @@ const FloatingCalendarWidget = () => {
       // Get tasks with deadlines
       if (taskRecommendations && taskRecommendations.length > 0) {
         taskRecommendations.forEach(task => {
+          // Add the current week family meeting based on the task tab data
+          if (task.title && task.title.toLowerCase().includes('family meeting') && 
+              !task.completed && !events.some(e => e.title && e.title.includes('Family Meeting'))) {
+            
+            // Set meeting date to the next Sunday or use task due date if available
+            let meetingDate;
+            if (task.dueDate) {
+              meetingDate = new Date(task.dueDate);
+            } else {
+              meetingDate = new Date();
+              // If today is Sunday, set to today, otherwise set to next Sunday
+              if (meetingDate.getDay() !== 0) {
+                meetingDate.setDate(meetingDate.getDate() + (7 - meetingDate.getDay())); // Next Sunday
+              }
+              meetingDate.setHours(19, 0, 0, 0); // 7:00 PM
+            }
+            
+            events.push({
+              id: `family-meeting-${currentWeek}`,
+              title: `Week ${currentWeek} Family Meeting`,
+              date: meetingDate.toISOString(),
+              dateObj: meetingDate,
+              category: 'meeting',
+              eventType: 'meeting',
+              weekNumber: currentWeek,
+              linkedEntity: {
+                type: 'task',
+                id: task.id
+              }
+            });
+          }
+          
+          // Regular task due dates
           if (task.dueDate && !task.completed && new Date(task.dueDate) >= today) {
             events.push({
               id: `task-${task.id}`,
@@ -408,7 +569,11 @@ const FloatingCalendarWidget = () => {
               category: 'task',
               eventType: 'task',
               assignedTo: task.assignedTo,
-              assignedToName: task.assignedToName
+              assignedToName: task.assignedToName,
+              linkedEntity: {
+                type: 'task',
+                id: task.id
+              }
             });
           }
         });
@@ -446,7 +611,10 @@ const FloatingCalendarWidget = () => {
     // Get family meeting for the current week if not completed
     if (weekStatus && weekStatus[currentWeek] && !weekStatus[currentWeek].completed) {
       const meetingDate = new Date();
-      meetingDate.setDate(meetingDate.getDate() + (7 - meetingDate.getDay())); // Next Sunday
+      // If today is Sunday, set to today, otherwise set to next Sunday
+      if (meetingDate.getDay() !== 0) {
+        meetingDate.setDate(meetingDate.getDate() + (7 - meetingDate.getDay())); // Next Sunday
+      }
       meetingDate.setHours(19, 0, 0, 0); // 7:00 PM
       
       meetings.push({
@@ -456,7 +624,11 @@ const FloatingCalendarWidget = () => {
         dateObj: meetingDate,
         category: 'meeting',
         eventType: 'meeting',
-        weekNumber: currentWeek
+        weekNumber: currentWeek,
+        linkedEntity: {
+          type: 'meeting',
+          id: currentWeek
+        }
       });
     }
     
@@ -467,6 +639,13 @@ const FloatingCalendarWidget = () => {
   const handleAddTaskToCalendar = async (task) => {
     try {
       if (!currentUser || !task) return;
+      
+      // Prevent duplicate event creation by checking the event cache
+      if (eventExists(task)) {
+        console.log("Event already exists in calendar, preventing duplicate");
+        CalendarService.showNotification("Event already exists in your calendar", "info");
+        return;
+      }
       
       // Create event from task
       const event = CalendarService.createEventFromTask(task);
@@ -491,10 +670,24 @@ const FloatingCalendarWidget = () => {
         [getEventKey(task)]: true
       }));
       
+      // Show "Added" message temporarily, then replace with edit icons
+      setShowAddedMessage(prev => ({
+        ...prev,
+        [getEventKey(task)]: true
+      }));
+      
+      setTimeout(() => {
+        setShowAddedMessage(prev => ({
+          ...prev,
+          [getEventKey(task)]: false
+        }));
+      }, 3000);
+      
       // Show a simple notification
       CalendarService.showNotification("Task added to calendar", "success");
       
-      // Refresh events
+      // Refresh events and event cache
+      await buildEventCache();
       setLastRefresh(Date.now());
       
     } catch (error) {
@@ -508,6 +701,13 @@ const FloatingCalendarWidget = () => {
     try {
       if (!currentUser || !meeting) return;
       
+      // Prevent duplicate event creation by checking the event cache
+      if (eventExists(meeting)) {
+        console.log("Event already exists in calendar, preventing duplicate");
+        CalendarService.showNotification("Event already exists in your calendar", "info");
+        return;
+      }
+      
       // Create event from meeting
       const event = CalendarService.createFamilyMeetingEvent(meeting.weekNumber, meeting.dateObj);
       
@@ -520,10 +720,24 @@ const FloatingCalendarWidget = () => {
         [getEventKey(meeting)]: true
       }));
       
+      // Show "Added" message temporarily, then replace with edit icons
+      setShowAddedMessage(prev => ({
+        ...prev,
+        [getEventKey(meeting)]: true
+      }));
+      
+      setTimeout(() => {
+        setShowAddedMessage(prev => ({
+          ...prev,
+          [getEventKey(meeting)]: false
+        }));
+      }, 3000);
+      
       // Show a simple notification
       CalendarService.showNotification("Meeting added to calendar", "success");
       
-      // Refresh events
+      // Refresh events and event cache
+      await buildEventCache();
       setLastRefresh(Date.now());
       
     } catch (error) {
@@ -536,6 +750,13 @@ const FloatingCalendarWidget = () => {
   const handleAddChildEventToCalendar = async (event) => {
     try {
       if (!currentUser || !event) return;
+      
+      // Prevent duplicate event creation by checking the event cache
+      if (eventExists(event)) {
+        console.log("Event already exists in calendar, preventing duplicate");
+        CalendarService.showNotification("Event already exists in your calendar", "info");
+        return;
+      }
       
       let calendarEvent;
       
@@ -564,7 +785,8 @@ const FloatingCalendarWidget = () => {
                 { method: 'popup', minutes: 24 * 60 }, // 1 day before
                 { method: 'popup', minutes: 60 } // 1 hour before
               ]
-            }
+            },
+            location: event.location || "TBD"
           };
           break;
           
@@ -598,7 +820,7 @@ const FloatingCalendarWidget = () => {
           calendarEvent = {
             summary: `${event.childName}'s ${event.title}`,
             description: event.notes || `${event.type?.charAt(0).toUpperCase() + event.type?.slice(1) || 'Activity'}: ${event.title}`,
-            location: event.location || '',
+            location: event.location || "TBD",
             start: {
               dateTime: startDate.toISOString(),
               timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -653,7 +875,7 @@ const FloatingCalendarWidget = () => {
           calendarEvent = {
             summary: `${event.childName}'s ${event.title}`,
             description: event.description || `${event.type?.charAt(0).toUpperCase() + event.type?.slice(1) || 'Event'}: ${event.title}`,
-            location: event.location || '',
+            location: event.location || "TBD",
             start: {
               dateTime: eventDate.toISOString(),
               timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -685,6 +907,7 @@ const FloatingCalendarWidget = () => {
           calendarEvent = {
             summary: `${event.childName}'s ${event.subject} Homework Due`,
             description: event.description || `${event.title} - ${event.subject} assignment due`,
+            location: "School",
             start: {
               dateTime: dueDate.toISOString(),
               timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -710,7 +933,7 @@ const FloatingCalendarWidget = () => {
           calendarEvent = {
             summary: event.title,
             description: event.description || '',
-            location: event.location || '',
+            location: event.location || "TBD",
             start: {
               dateTime: generalDate.toISOString(),
               timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -727,6 +950,7 @@ const FloatingCalendarWidget = () => {
           calendarEvent = {
             summary: event.title,
             description: event.description || event.notes || '',
+            location: event.location || "TBD",
             start: {
               dateTime: event.dateObj.toISOString(),
               timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -748,10 +972,24 @@ const FloatingCalendarWidget = () => {
           [getEventKey(event)]: true
         }));
         
+        // Show "Added" message temporarily, then replace with edit icons
+        setShowAddedMessage(prev => ({
+          ...prev,
+          [getEventKey(event)]: true
+        }));
+        
+        setTimeout(() => {
+          setShowAddedMessage(prev => ({
+            ...prev,
+            [getEventKey(event)]: false
+          }));
+        }, 3000);
+        
         // Show notification
         CalendarService.showNotification(`${event.childName ? `${event.childName}'s ` : ''}${event.title || 'event'} added to calendar`, "success");
         
-        // Refresh events
+        // Refresh events and event cache
+        await buildEventCache();
         setLastRefresh(Date.now());
       }
     } catch (error) {
@@ -796,14 +1034,162 @@ const FloatingCalendarWidget = () => {
     }
   };
   
-  // Increase widget height
-  const increaseHeight = () => {
-    setWidgetHeight(prev => Math.min(prev + 10, 140)); // Max height 140rem
+  // Get the attendees avatars for an event
+  const getEventAttendees = (event) => {
+    let attendees = [];
+    
+    // For child events
+    if (event.childName) {
+      const child = familyMembers.find(m => m.name === event.childName);
+      if (child) {
+        attendees.push({
+          id: child.id,
+          name: child.name,
+          profilePicture: child.profilePicture
+        });
+      }
+    }
+    
+    // For tasks
+    if (event.assignedToName) {
+      const member = familyMembers.find(m => m.name === event.assignedToName || m.roleType === event.assignedTo);
+      if (member) {
+        attendees.push({
+          id: member.id,
+          name: member.name,
+          profilePicture: member.profilePicture
+        });
+      }
+    }
+    
+    // For family meetings, include all family members
+    if (event.eventType === 'meeting' && event.title && event.title.includes('Family Meeting')) {
+      attendees = familyMembers.map(member => ({
+        id: member.id,
+        name: member.name,
+        profilePicture: member.profilePicture
+      }));
+    }
+    
+    // For couple check-ins and relationship events, include parents
+    if (event.category === 'relationship') {
+      attendees = familyMembers
+        .filter(member => member.role === 'parent')
+        .map(member => ({
+          id: member.id,
+          name: member.name,
+          profilePicture: member.profilePicture
+        }));
+    }
+    
+    // If we have explicit attendees from the event data, use those
+    if (event.attendees && event.attendees.length > 0) {
+      return event.attendees;
+    }
+    
+    return attendees;
   };
-
-  // Decrease widget height
-  const decreaseHeight = () => {
-    setWidgetHeight(prev => Math.max(prev - 10, 56)); // Min height 56rem
+  
+  // Function to navigate to linked entity
+  const navigateToLinkedEntity = (event) => {
+    if (!event.linkedEntity) return;
+    
+    const { type, id } = event.linkedEntity;
+    
+    switch(type) {
+      case 'task':
+        navigate('/dashboard?tab=tasks');
+        break;
+      case 'relationship':
+        navigate('/dashboard?tab=relationship');
+        break;
+      case 'child':
+        navigate('/dashboard?tab=children');
+        break;
+      case 'meeting':
+        // Open the family meeting dialog if available
+        if (typeof window !== 'undefined' && window.openFamilyMeeting) {
+          window.openFamilyMeeting();
+        } else {
+          navigate('/dashboard?tab=tasks');
+        }
+        break;
+      default:
+        // Do nothing
+    }
+    
+    // Close the details modal
+    setShowEventDetails(false);
+  };
+  
+  // Delete event from calendar
+  const deleteEvent = async (event) => {
+    try {
+      if (!event || !event.firestoreId) {
+        CalendarService.showNotification("Cannot delete this event", "error");
+        return;
+      }
+      
+      // Delete from Firestore
+      const docRef = doc(db, "calendar_events", event.firestoreId);
+      await deleteDoc(docRef);
+      
+      // Update local state
+      setAddedEvents(prev => {
+        const newState = {...prev};
+        delete newState[getEventKey(event)];
+        return newState;
+      });
+      
+      // Close the details modal
+      setShowEventDetails(false);
+      
+      // Show notification
+      CalendarService.showNotification("Event deleted successfully", "success");
+      
+      // Refresh events
+      setLastRefresh(Date.now());
+      await buildEventCache();
+      
+    } catch (error) {
+      console.error("Error deleting event:", error);
+      CalendarService.showNotification("Failed to delete event", "error");
+    }
+  };
+  
+  // Update event
+  const updateEvent = async () => {
+    try {
+      if (!editedEvent || !editedEvent.firestoreId) {
+        CalendarService.showNotification("Cannot update this event", "error");
+        return;
+      }
+      
+      // Create updated event object
+      const updatedEvent = {
+        summary: editedEvent.title,
+        description: editedEvent.description || '',
+        location: editedEvent.location || 'TBD'
+      };
+      
+      // Update in Firestore
+      const docRef = doc(db, "calendar_events", editedEvent.firestoreId);
+      await updateDoc(docRef, updatedEvent);
+      
+      // Close edit mode
+      setIsEditingEvent(false);
+      setSelectedEvent(editedEvent);
+      
+      // Show notification
+      CalendarService.showNotification("Event updated successfully", "success");
+      
+      // Refresh events
+      setLastRefresh(Date.now());
+      
+    } catch (error) {
+      console.error("Error updating event:", error);
+      CalendarService.showNotification("Failed to update event", "error");
+    }
   };
   
   // Render the calendar days
@@ -871,7 +1257,8 @@ const FloatingCalendarWidget = () => {
   return (
     <div className="fixed bottom-4 left-4 z-40">
       <div 
-        className="bg-white border border-black shadow-lg rounded-lg flex flex-col"
+        ref={widgetRef}
+        className="bg-white border border-black shadow-lg rounded-lg flex flex-col relative"
         style={{ height: `${widgetHeight}rem`, width: `${widgetWidth}rem` }}
       >
         {/* Header */}
@@ -883,37 +1270,6 @@ const FloatingCalendarWidget = () => {
             <span className="font-medium font-roboto">Family Calendar</span>
           </div>
           <div className="flex">
-            {/* Width controls */}
-            <button 
-              onClick={() => setWidgetWidth(prev => Math.max(prev - 10, 80))} 
-              className="p-1 hover:bg-gray-100 rounded"
-              title="Decrease width"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <button 
-              onClick={() => setWidgetWidth(prev => Math.min(prev + 10, 140))} 
-              className="p-1 hover:bg-gray-100 rounded"
-              title="Increase width"
-            >
-              <ChevronRight size={18} />
-            </button>
-            
-            {/* Height controls */}
-            <button 
-              onClick={decreaseHeight} 
-              className="p-1 hover:bg-gray-100 rounded"
-              title="Decrease widget height"
-            >
-              <ChevronDown size={18} />
-            </button>
-            <button 
-              onClick={increaseHeight} 
-              className="p-1 hover:bg-gray-100 rounded"
-              title="Increase widget height"
-            >
-              <ChevronUp size={18} />
-            </button>
             <button 
               onClick={() => setIsOpen(false)} 
               className="p-1 hover:bg-gray-100 rounded"
@@ -1033,50 +1389,105 @@ const FloatingCalendarWidget = () => {
                       onClick={() => {
                         setSelectedEvent(event);
                         setShowEventDetails(true);
+                        setIsEditingEvent(false);
+                        setEditedEvent(null);
                       }}
                     >
                       <div className="flex justify-between">
-                        <div>
+                        <div className="flex-1">
                           <div className="flex items-center">
                             {getEventIcon(event)}
                             <p className="text-sm font-medium font-roboto">{event.title}</p>
                           </div>
-                          <p className="text-xs text-gray-500 font-roboto">
-                            {event.childName && `For: ${event.childName}`}
-                            {event.childName && event.time && ` at ${event.time}`}
-                            {event.childName && event.location && ` - ${event.location}`}
-                            {event.assignedToName && `Assigned to: ${event.assignedToName}`}
-                            {!event.childName && !event.assignedToName && event.time && `At ${event.time}`}
-                          </p>
+                          <div className="flex justify-between items-center">
+                            <p className="text-xs text-gray-500 font-roboto">
+                              {event.time || event.dateObj?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                              {event.location && ` - ${event.location}`}
+                            </p>
+                            
+                            {/* Attendee avatars */}
+                            <div className="flex -space-x-2 ml-2">
+                              {getEventAttendees(event).slice(0, 3).map((attendee, i) => (
+                                <div key={i} className="w-6 h-6 rounded-full overflow-hidden border border-white">
+                                  <img 
+                                    src={attendee.profilePicture || `/api/placeholder/24/24`} 
+                                    alt={attendee.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                              ))}
+                              {getEventAttendees(event).length > 3 && (
+                                <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center border border-white text-xs">
+                                  +{getEventAttendees(event).length - 3}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        {/* Only show Add button if event is not already added */}
-                        {!addedEvents[getEventKey(event)] && (
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation(); // Prevent opening details modal
-                              if (event.eventType === 'appointment' || event.eventType === 'activity' || 
-                                  event.eventType === 'event' || event.eventType === 'homework') {
-                                handleAddChildEventToCalendar(event);
-                              } else if (event.eventType === 'meeting') {
-                                handleAddMeetingToCalendar(event);
-                              } else if (event.eventType === 'task') {
-                                handleAddTaskToCalendar(event);
-                              } else {
-                                // Default handling
-                                handleAddChildEventToCalendar(event);
-                              }
-                            }}
-                            className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
-                          >
-                            Add
-                          </button>
-                        )}
-                        {addedEvents[getEventKey(event)] && (
-                          <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded font-roboto flex items-center">
-                            <Check size={12} className="mr-1" />
-                            Added
-                          </span>
-                        )}
+                        
+                        {/* Action buttons */}
+                        <div className="ml-2 flex items-center">
+                          {!addedEvents[getEventKey(event)] && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation(); // Prevent opening details modal
+                                if (event.eventType === 'appointment' || event.eventType === 'activity' || 
+                                    event.eventType === 'event' || event.eventType === 'homework') {
+                                  handleAddChildEventToCalendar(event);
+                                } else if (event.eventType === 'meeting') {
+                                  handleAddMeetingToCalendar(event);
+                                } else if (event.eventType === 'task') {
+                                  handleAddTaskToCalendar(event);
+                                } else {
+                                  handleAddChildEventToCalendar(event);
+                                }
+                              }}
+                              className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
+                            >
+                              Add
+                            </button>
+                          )}
+                          
+                          {addedEvents[getEventKey(event)] && showAddedMessage[getEventKey(event)] && (
+                            <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded font-roboto flex items-center">
+                              <Check size={12} className="mr-1" />
+                              Added
+                            </span>
+                          )}
+                          
+                          {addedEvents[getEventKey(event)] && !showAddedMessage[getEventKey(event)] && (
+                            <div className="flex space-x-1">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation(); // Prevent opening details modal
+                                  setSelectedEvent(event);
+                                  setShowEventDetails(true);
+                                  setIsEditingEvent(true);
+                                  setEditedEvent({...event});
+                                }}
+                                className="p-1 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100"
+                                title="Edit event"
+                              >
+                                <Edit size={14} />
+                              </button>
+                              
+                              {event.firestoreId && (
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // Prevent opening details modal
+                                    if (confirm("Are you sure you want to delete this event?")) {
+                                      deleteEvent(event);
+                                    }
+                                  }}
+                                  className="p-1 text-gray-500 hover:text-red-500 rounded-full hover:bg-gray-100"
+                                  title="Delete event"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1110,47 +1521,105 @@ const FloatingCalendarWidget = () => {
                       onClick={() => {
                         setSelectedEvent(event);
                         setShowEventDetails(true);
+                        setIsEditingEvent(false);
+                        setEditedEvent(null);
                       }}
                     >
-                      <div className="flex justify-between items-center">
-                        <div>
+                      <div className="flex justify-between">
+                        <div className="flex-1">
                           <div className="flex items-center">
                             {getEventIcon(event)}
                             <p className="text-sm font-medium font-roboto">{event.title}</p>
                           </div>
-                          <p className="text-xs text-gray-500 font-roboto">
-                            {formatDate(event.date || event.startDate || event.dueDate)}
-                            {event.time && ` at ${event.time}`}
-                          </p>
+                          <div className="flex justify-between items-center">
+                            <p className="text-xs text-gray-500 font-roboto">
+                              {formatDate(event.date || event.startDate || event.dueDate)}
+                              {event.time && ` at ${event.time}`}
+                            </p>
+                            
+                            {/* Attendee avatars */}
+                            <div className="flex -space-x-2 ml-2">
+                              {getEventAttendees(event).slice(0, 3).map((attendee, i) => (
+                                <div key={i} className="w-6 h-6 rounded-full overflow-hidden border border-white">
+                                  <img 
+                                    src={attendee.profilePicture || `/api/placeholder/24/24`} 
+                                    alt={attendee.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                              ))}
+                              {getEventAttendees(event).length > 3 && (
+                                <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center border border-white text-xs">
+                                  +{getEventAttendees(event).length - 3}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        {/* Only show Add button if event is not already added */}
-                        {!addedEvents[getEventKey(event)] && (
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation(); // Prevent opening details modal
-                              if (event.eventType === 'appointment' || event.eventType === 'activity' || 
-                                  event.eventType === 'event' || event.eventType === 'homework') {
-                                handleAddChildEventToCalendar(event);
-                              } else if (event.eventType === 'meeting') {
-                                handleAddMeetingToCalendar(event);
-                              } else if (event.eventType === 'task') {
-                                handleAddTaskToCalendar(event);
-                              } else {
-                                // Default handling
-                                handleAddChildEventToCalendar(event);
-                              }
-                            }}
-                            className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
-                          >
-                            Add
-                          </button>
-                        )}
-                        {addedEvents[getEventKey(event)] && (
-                          <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded font-roboto flex items-center">
-                            <Check size={12} className="mr-1" />
-                            Added
-                          </span>
-                        )}
+                        
+                        {/* Action buttons */}
+                        <div className="ml-2 flex items-center">
+                          {!addedEvents[getEventKey(event)] && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation(); // Prevent opening details modal
+                                if (event.eventType === 'appointment' || event.eventType === 'activity' || 
+                                    event.eventType === 'event' || event.eventType === 'homework') {
+                                  handleAddChildEventToCalendar(event);
+                                } else if (event.eventType === 'meeting') {
+                                  handleAddMeetingToCalendar(event);
+                                } else if (event.eventType === 'task') {
+                                  handleAddTaskToCalendar(event);
+                                } else {
+                                  handleAddChildEventToCalendar(event);
+                                }
+                              }}
+                              className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
+                            >
+                              Add
+                            </button>
+                          )}
+                          
+                          {addedEvents[getEventKey(event)] && showAddedMessage[getEventKey(event)] && (
+                            <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded font-roboto flex items-center">
+                              <Check size={12} className="mr-1" />
+                              Added
+                            </span>
+                          )}
+                          
+                          {addedEvents[getEventKey(event)] && !showAddedMessage[getEventKey(event)] && (
+                            <div className="flex space-x-1">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation(); // Prevent opening details modal
+                                  setSelectedEvent(event);
+                                  setShowEventDetails(true);
+                                  setIsEditingEvent(true);
+                                  setEditedEvent({...event});
+                                }}
+                                className="p-1 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100"
+                                title="Edit event"
+                              >
+                                <Edit size={14} />
+                              </button>
+                              
+                              {event.firestoreId && (
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // Prevent opening details modal
+                                    if (confirm("Are you sure you want to delete this event?")) {
+                                      deleteEvent(event);
+                                    }
+                                  }}
+                                  className="p-1 text-gray-500 hover:text-red-500 rounded-full hover:bg-gray-100"
+                                  title="Delete event"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1178,25 +1647,110 @@ const FloatingCalendarWidget = () => {
                     .map(task => {
                       const taskKey = getEventKey(task);
                       return (
-                        <div key={task.id} className="p-2 border rounded-lg flex justify-between items-center">
+                        <div 
+                          key={task.id} 
+                          className="p-2 border rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-50"
+                          onClick={() => {
+                            // Create a calendar event view of this task for details
+                            const taskEvent = {
+                              id: `task-${task.id}`,
+                              title: task.title,
+                              description: task.description,
+                              assignedTo: task.assignedTo,
+                              assignedToName: task.assignedToName,
+                              dateObj: new Date(selectedDate),
+                              category: 'task',
+                              eventType: 'task',
+                              linkedEntity: {
+                                type: 'task',
+                                id: task.id
+                              }
+                            };
+                            setSelectedEvent(taskEvent);
+                            setShowEventDetails(true);
+                            setIsEditingEvent(false);
+                            setEditedEvent(null);
+                          }}
+                        >
                           <div className="flex-1 pr-2">
                             <p className="text-sm font-medium truncate font-roboto">{task.title}</p>
-                            <p className="text-xs text-gray-500 font-roboto">For: {task.assignedToName}</p>
+                            <div className="flex justify-between items-center">
+                              <p className="text-xs text-gray-500 font-roboto">For: {task.assignedToName}</p>
+                              
+                              {/* Assignee avatar */}
+                              <div className="flex -space-x-2 ml-2">
+                                {familyMembers
+                                  .filter(m => m.name === task.assignedToName || m.roleType === task.assignedTo)
+                                  .map((member, i) => (
+                                    <div key={i} className="w-6 h-6 rounded-full overflow-hidden border border-white">
+                                      <img 
+                                        src={member.profilePicture || `/api/placeholder/24/24`} 
+                                        alt={member.name}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
                           </div>
                           
                           {!addedEvents[taskKey] && (
                             <button 
-                              onClick={() => handleAddTaskToCalendar(task)}
+                              onClick={(e) => {
+                                e.stopPropagation(); // Prevent details modal
+                                handleAddTaskToCalendar(task);
+                              }}
                               className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
                             >
                               Add
                             </button>
                           )}
-                          {addedEvents[taskKey] && (
+                          {addedEvents[taskKey] && showAddedMessage[taskKey] && (
                             <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded font-roboto flex items-center">
                               <Check size={12} className="mr-1" />
                               Added
                             </span>
+                          )}
+                          {addedEvents[taskKey] && !showAddedMessage[taskKey] && (
+                            <div className="flex space-x-1">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation(); // Prevent opening details modal
+                                  const taskEvent = {
+                                    id: `task-${task.id}`,
+                                    title: task.title,
+                                    description: task.description,
+                                    assignedTo: task.assignedTo,
+                                    assignedToName: task.assignedToName,
+                                    dateObj: new Date(selectedDate),
+                                    category: 'task',
+                                    eventType: 'task',
+                                    linkedEntity: {
+                                      type: 'task',
+                                      id: task.id
+                                    }
+                                  };
+                                  setSelectedEvent(taskEvent);
+                                  setShowEventDetails(true);
+                                  setIsEditingEvent(true);
+                                  setEditedEvent({...taskEvent});
+                                }}
+                                className="p-1 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100"
+                                title="Edit task"
+                              >
+                                <Edit size={14} />
+                              </button>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation(); // Prevent opening details modal
+                                  navigate('/dashboard?tab=tasks');
+                                }}
+                                className="p-1 text-gray-500 hover:text-blue-500 rounded-full hover:bg-gray-100"
+                                title="Go to task"
+                              >
+                                <ExternalLink size={14} />
+                              </button>
+                            </div>
                           )}
                         </div>
                       );
@@ -1209,6 +1763,35 @@ const FloatingCalendarWidget = () => {
               </div>
             </div>
           )}
+        </div>
+        
+        {/* Resize handles */}
+        <div 
+          className="absolute bottom-0 right-0 w-4 h-4 bg-gray-200 rounded-bl-lg cursor-nwse-resize flex items-center justify-center"
+          onMouseDown={(e) => startDrag(e, 'both')}
+          ref={dragHandleRef}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10">
+            <path d="M9 1L1 9M6 1L1 6M9 4L4 9" stroke="currentColor" strokeWidth="1.5" />
+          </svg>
+        </div>
+        
+        <div 
+          className="absolute bottom-0 right-1/2 w-16 h-3 bg-gray-200 rounded-t-lg cursor-ns-resize transform translate-x-1/2"
+          onMouseDown={(e) => startDrag(e, 'height')}
+        >
+          <div className="flex justify-center items-center h-full">
+            <div className="w-4 h-1 bg-gray-400 rounded"></div>
+          </div>
+        </div>
+        
+        <div 
+          className="absolute right-0 top-1/2 h-16 w-3 bg-gray-200 rounded-l-lg cursor-ew-resize transform -translate-y-1/2"
+          onMouseDown={(e) => startDrag(e, 'width')}
+        >
+          <div className="flex justify-center items-center h-full">
+            <div className="h-4 w-1 bg-gray-400 rounded"></div>
+          </div>
         </div>
       </div>
       
@@ -1224,9 +1807,22 @@ const FloatingCalendarWidget = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-4 border-b flex justify-between items-center">
-              <h3 className="text-lg font-semibold font-roboto">{selectedEvent.title}</h3>
+              {isEditingEvent ? (
+                <input
+                  type="text"
+                  className="text-lg font-semibold font-roboto border p-1 rounded w-full"
+                  value={editedEvent?.title || ''}
+                  onChange={(e) => setEditedEvent({...editedEvent, title: e.target.value})}
+                />
+              ) : (
+                <h3 className="text-lg font-semibold font-roboto">{selectedEvent.title}</h3>
+              )}
               <button
-                onClick={() => setShowEventDetails(false)}
+                onClick={() => {
+                  setShowEventDetails(false);
+                  setIsEditingEvent(false);
+                  setEditedEvent(null);
+                }}
                 className="p-1 hover:bg-gray-100 rounded"
               >
                 <X size={18} />
@@ -1239,30 +1835,72 @@ const FloatingCalendarWidget = () => {
                   <Clock size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
                   <div>
                     <p className="font-medium text-sm font-roboto">Date & Time</p>
-                    <p className="text-sm text-gray-600 font-roboto">
-                      {selectedEvent.dateObj?.toLocaleDateString('en-US', { 
-                        weekday: 'long', 
-                        month: 'long', 
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
-                    </p>
-                    <p className="text-sm text-gray-600 font-roboto">
-                      {selectedEvent.time || selectedEvent.dateObj?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                    </p>
+                    {isEditingEvent ? (
+                      <div className="space-y-2">
+                        <input
+                          type="date"
+                          className="border p-1 rounded text-sm w-full"
+                          value={editedEvent?.dateObj ? editedEvent.dateObj.toISOString().split('T')[0] : ''}
+                          onChange={(e) => {
+                            const newDate = new Date(e.target.value);
+                            // Preserve time from old date
+                            if (editedEvent.dateObj) {
+                              newDate.setHours(editedEvent.dateObj.getHours(), editedEvent.dateObj.getMinutes());
+                            }
+                            setEditedEvent({...editedEvent, dateObj: newDate});
+                          }}
+                        />
+                        <input
+                          type="time"
+                          className="border p-1 rounded text-sm w-full"
+                          value={editedEvent?.dateObj ? 
+                            `${String(editedEvent.dateObj.getHours()).padStart(2, '0')}:${String(editedEvent.dateObj.getMinutes()).padStart(2, '0')}` : 
+                            ''}
+                          onChange={(e) => {
+                            const [hours, minutes] = e.target.value.split(':').map(Number);
+                            const newDate = new Date(editedEvent.dateObj);
+                            newDate.setHours(hours, minutes);
+                            setEditedEvent({...editedEvent, dateObj: newDate});
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm text-gray-600 font-roboto">
+                          {selectedEvent.dateObj?.toLocaleDateString('en-US', { 
+                            weekday: 'long', 
+                            month: 'long', 
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </p>
+                        <p className="text-sm text-gray-600 font-roboto">
+                          {selectedEvent.time || selectedEvent.dateObj?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          {selectedEvent.dateEndObj && ` - ${selectedEvent.dateEndObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}
+                        </p>
+                      </>
+                    )}
                   </div>
                 </div>
                 
                 {/* Location */}
-                {selectedEvent.location && (
-                  <div className="flex items-start">
-                    <MapPin size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium text-sm font-roboto">Location</p>
-                      <p className="text-sm text-gray-600 font-roboto">{selectedEvent.location}</p>
-                    </div>
+                <div className="flex items-start">
+                  <MapPin size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-sm font-roboto">Location</p>
+                    {isEditingEvent ? (
+                      <input
+                        type="text"
+                        className="border p-1 rounded text-sm w-full"
+                        placeholder="TBD"
+                        value={editedEvent?.location || ''}
+                        onChange={(e) => setEditedEvent({...editedEvent, location: e.target.value})}
+                      />
+                    ) : (
+                      <p className="text-sm text-gray-600 font-roboto">{selectedEvent.location || "TBD"}</p>
+                    )}
                   </div>
-                )}
+                </div>
                 
                 {/* Person */}
                 {(selectedEvent.childName || selectedEvent.assignedToName) && (
@@ -1270,25 +1908,124 @@ const FloatingCalendarWidget = () => {
                     <User size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
                     <div>
                       <p className="font-medium text-sm font-roboto">For</p>
-                      <p className="text-sm text-gray-600 font-roboto">
-                        {selectedEvent.childName || selectedEvent.assignedToName}
-                      </p>
+                      <div className="flex items-center">
+                        {getEventAttendees(selectedEvent).map((attendee, i) => (
+                          <div key={i} className="flex items-center mr-3">
+                            <div className="w-6 h-6 rounded-full overflow-hidden mr-1">
+                              <img 
+                                src={attendee.profilePicture || `/api/placeholder/24/24`} 
+                                alt={attendee.name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <span className="text-sm text-gray-600 font-roboto">{attendee.name}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
                 
                 {/* Description */}
-                {selectedEvent.description && (
-                  <div className="flex items-start">
-                    <Info size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium text-sm font-roboto">Description</p>
+                <div className="flex items-start">
+                  <Info size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-sm font-roboto">Description</p>
+                    {isEditingEvent ? (
+                      <textarea
+                        className="border p-1 rounded text-sm w-full min-h-[80px]"
+                        placeholder="Add a description"
+                        value={editedEvent?.description || ''}
+                        onChange={(e) => setEditedEvent({...editedEvent, description: e.target.value})}
+                      ></textarea>
+                    ) : (
                       <p className="text-sm text-gray-600 font-roboto whitespace-pre-wrap">
-                        {selectedEvent.description}
+                        {selectedEvent.description || "No description"}
                       </p>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Link to task/relationship if available */}
+                {selectedEvent.linkedEntity && (
+                  <div className="flex items-start">
+                    <Link size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium text-sm font-roboto">Linked to</p>
+                      <button
+                        onClick={() => navigateToLinkedEntity(selectedEvent)}
+                        className="text-sm text-blue-600 hover:underline flex items-center font-roboto"
+                      >
+                        {selectedEvent.linkedEntity.type === 'task' && "View in Tasks Tab"}
+                        {selectedEvent.linkedEntity.type === 'relationship' && "View in Relationship Tab"}
+                        {selectedEvent.linkedEntity.type === 'child' && "View in Children Tracking"}
+                        {selectedEvent.linkedEntity.type === 'meeting' && "Open Family Meeting"}
+                        <ExternalLink size={14} className="ml-1" />
+                      </button>
                     </div>
                   </div>
                 )}
+                
+                {/* Action buttons */}
+                <div className="flex justify-between mt-6">
+                  {isEditingEvent ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          setIsEditingEvent(false);
+                          setEditedEvent(null);
+                        }}
+                        className="px-4 py-2 border border-gray-300 rounded text-sm font-roboto"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={updateEvent}
+                        className="px-4 py-2 bg-black text-white rounded text-sm font-roboto"
+                      >
+                        Save Changes
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          if (selectedEvent.firestoreId && confirm("Are you sure you want to delete this event?")) {
+                            deleteEvent(selectedEvent);
+                          }
+                        }}
+                        className="px-4 py-2 border border-red-300 text-red-600 rounded text-sm font-roboto flex items-center"
+                        disabled={!selectedEvent.firestoreId}
+                      >
+                        <Trash2 size={14} className="mr-1" />
+                        Delete
+                      </button>
+                      <div>
+                        {selectedEvent.linkedEntity && (
+                          <button
+                            onClick={() => navigateToLinkedEntity(selectedEvent)}
+                            className="px-4 py-2 bg-blue-500 text-white rounded text-sm font-roboto flex items-center mr-2"
+                          >
+                            <ExternalLink size={14} className="mr-1" />
+                            View Details
+                          </button>
+                        )}
+                        {selectedEvent.firestoreId && (
+                          <button
+                            onClick={() => {
+                              setIsEditingEvent(true);
+                              setEditedEvent({...selectedEvent});
+                            }}
+                            className="px-4 py-2 bg-black text-white rounded text-sm font-roboto flex items-center"
+                          >
+                            <Edit size={14} className="mr-1" />
+                            Edit
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
