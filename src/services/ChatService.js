@@ -65,6 +65,7 @@ class ChatService {
   // In src/services/ChatService.js - Replace the handleCalendarRequest method with this improved version
 
 // Enhanced helper function to handle calendar-related requests
+// Enhanced helper function to handle calendar-related requests
 async handleCalendarRequest(text, familyContext, userId) {
   // Check if this is a calendar-related request with stronger matching
   const calendarKeywords = ['calendar', 'add', 'schedule', 'book', 'appointment', 'meeting', 'event', 'date', 'sync', 'remind'];
@@ -175,7 +176,57 @@ extractLocation(text) {
   }
   return null;
 }
+
+
+// Add these helper methods after handleCalendarRequest
+extractTitle(text) {
+  const titleMatches = text.match(/(?:add|schedule|book|create)\s+(?:a|an)?\s+([^"]+?)(?:\s+on|\s+at|\s+for|\s+to calendar|$)/i);
+  return titleMatches ? titleMatches[1].trim() : null;
+}
+
+extractDate(text) {
+  const datePatterns = [
+    /(?:on|for)\s+(\w+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i,
+    /(\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?\w+(?:\s+\d{4})?)/i,
+    /(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i,
+    /(?:this|next)\s+(\w+day)/i
+  ];
   
+  for (const pattern of datePatterns) {
+    const match = text.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+extractTime(text) {
+  const timePatterns = [
+    /at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i,
+    /(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i
+  ];
+  
+  for (const pattern of timePatterns) {
+    const match = text.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+extractLocation(text) {
+  const locationPatterns = [
+    /(?:at|in)\s+([A-Za-z\s]+(?:,\s*[A-Za-z\s]+)?)\s+(?:on|at|from)/i,
+    /location\s+(?:is|at|in)\s+([A-Za-z\s]+)/i
+  ];
+  
+  for (const pattern of locationPatterns) {
+    const match = text.match(pattern);
+    if (match) return match[1].trim();
+  }
+  return null;
+}
+  
+// Add this method to ChatService.js after handleCalendarRequest and the extraction methods
+
 // Add this method to ChatService.js after handleCalendarRequest and the extraction methods
 
 processCalendarRequest = async (eventData, context) => {
@@ -189,15 +240,52 @@ processCalendarRequest = async (eventData, context) => {
     let eventDate = new Date();
     if (eventData.date) {
       try {
-        eventDate = new Date(eventData.date);
-        // If date is invalid, try a more flexible approach
-        if (isNaN(eventDate.getTime())) {
-          const dateStr = eventData.date.replace(/(st|nd|rd|th)/, '');
-          eventDate = new Date(dateStr);
+        // Handle relative dates
+        const lowerDate = eventData.date.toLowerCase();
+        
+        if (lowerDate.includes('next')) {
+          // Handle "next [day]" format
+          const days = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+          for (let i = 0; i < days.length; i++) {
+            if (lowerDate.includes(days[i])) {
+              const today = new Date();
+              const dayOfWeek = i;
+              const daysUntil = (dayOfWeek + 7 - today.getDay()) % 7 || 7; // Ensure we get next week
+              eventDate = new Date();
+              eventDate.setDate(today.getDate() + daysUntil);
+              break;
+            }
+          }
+        } else if (lowerDate.includes('tomorrow')) {
+          eventDate = new Date();
+          eventDate.setDate(eventDate.getDate() + 1);
+        } else if (lowerDate.includes('today')) {
+          eventDate = new Date();
+        } else {
+          // Try standard date parsing
+          eventDate = new Date(eventData.date);
+          
+          // If date is invalid, try a more flexible approach
+          if (isNaN(eventDate.getTime())) {
+            const dateStr = eventData.date.replace(/(st|nd|rd|th)/, '');
+            eventDate = new Date(dateStr);
+          }
+          
+          // Ensure the date is in the future
+          if (eventDate < new Date()) {
+            const currentYear = new Date().getFullYear();
+            eventDate.setFullYear(currentYear);
+            
+            // If still in the past, add a year
+            if (eventDate < new Date()) {
+              eventDate.setFullYear(currentYear + 1);
+            }
+          }
         }
       } catch (e) {
         console.log("Error parsing date, using today:", e);
         eventDate = new Date();
+        eventDate.setDate(eventDate.getDate() + 1); // Default to tomorrow
       }
     }
     
@@ -248,7 +336,7 @@ processCalendarRequest = async (eventData, context) => {
     const result = await CalendarService.addEvent(event, currentUser.uid);
     
     if (result && result.success) {
-      return `I've added "${event.summary}" to your calendar for ${eventDate.toLocaleDateString()}. You can see this and other events in the calendar widget.`;
+      return `I've added "${event.summary}" to your calendar for ${eventDate.toLocaleDateString()} at ${eventDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}. You can see this and other events in the calendar widget.`;
     } else {
       return "I tried to add the event to your calendar, but encountered an issue. Please try again or add it manually through the calendar widget.";
     }

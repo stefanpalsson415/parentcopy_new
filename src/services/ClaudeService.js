@@ -91,36 +91,116 @@ class ClaudeService {
   }
   
   // Extract calendar event data from user message
-  extractCalendarRequest(message) {
-    // Check if this is a calendar-related request
-    const calendarKeywords = [
-      'add to calendar', 'schedule', 'appointment', 'meeting', 'event', 
-      'calendar', 'book', 'plan', 'sync', 'reminder', 'save date'
-    ];
-    
-    const isCalendarRequest = calendarKeywords.some(keyword => 
-      message.toLowerCase().includes(keyword)
-    );
-    
-    if (!isCalendarRequest) return null;
-    
-    // If it's a calendar request, try to extract details
-    const eventData = {
-      title: '',
-      date: '',
-      time: '',
-      location: '',
-      description: '',
-      childName: null
-    };
-    
-    // Simple extraction logic - in a real implementation, use NLP
-    // Extract date
+  // Extract calendar event data from user message
+extractCalendarRequest(message) {
+  // Check if this is a calendar-related request
+  const calendarKeywords = [
+    'add to calendar', 'schedule', 'appointment', 'meeting', 'event', 
+    'calendar', 'book', 'plan', 'sync', 'reminder', 'save date', 'date'
+  ];
+  
+  const isCalendarRequest = calendarKeywords.some(keyword => 
+    message.toLowerCase().includes(keyword)
+  );
+  
+  if (!isCalendarRequest) return null;
+  
+  // If it's a calendar request, try to extract details
+  const eventData = {
+    title: '',
+    date: '',
+    time: '',
+    location: '',
+    description: '',
+    childName: null
+  };
+  
+  // Extract title - check for date/dinner context first
+  if (message.toLowerCase().includes('date') && 
+      !message.toLowerCase().includes('date for') && 
+      !message.toLowerCase().includes('date with')) {
+    eventData.title = 'Dinner Date';
+  }
+  
+  // Extract title from common patterns
+  const titlePatterns = [
+    /(?:add|create|schedule|book)\s+(?:a|an)\s+([a-z\s]+)(?:\s+with|\s+for|\s+on|\s+at)/i,
+    /(?:add|create|schedule|book)\s+(?:a|an)\s+([a-z\s]+)/i,
+  ];
+  
+  for (const pattern of titlePatterns) {
+    const match = message.match(pattern);
+    if (match) {
+      eventData.title = match[1].trim();
+      // If we found "date" as the title
+      if (eventData.title.toLowerCase() === 'date') {
+        eventData.title = 'Dinner Date';
+      }
+      break;
+    }
+  }
+  
+  // If no title found but message mentions date night, dinner, etc.
+  if (!eventData.title && (
+    message.toLowerCase().includes('dinner') || 
+    message.toLowerCase().includes('date night') ||
+    message.toLowerCase().includes('date with')
+  )) {
+    eventData.title = 'Dinner Date';
+  }
+  
+  // Extract relative date keywords (today, tomorrow, next week, this weekend)
+  if (message.toLowerCase().includes('tomorrow')) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    eventData.date = tomorrow.toISOString().split('T')[0];
+  } else if (message.toLowerCase().includes('today')) {
+    const today = new Date();
+    eventData.date = today.toISOString().split('T')[0];
+  } else if (message.toLowerCase().includes('next week')) {
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    eventData.date = nextWeek.toISOString().split('T')[0];
+  } else if (message.toLowerCase().includes('this weekend')) {
+    const thisWeekend = new Date();
+    // Find next Saturday
+    const daysToSaturday = 6 - thisWeekend.getDay();
+    thisWeekend.setDate(thisWeekend.getDate() + daysToSaturday);
+    eventData.date = thisWeekend.toISOString().split('T')[0];
+  }
+  
+  // Extract specific days of week (next Monday, Tuesday, etc.)
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  for (let i = 0; i < dayNames.length; i++) {
+    const dayName = dayNames[i];
+    if (message.toLowerCase().includes(`next ${dayName}`)) {
+      const date = new Date();
+      const currentDay = date.getDay();
+      let daysToAdd = i - currentDay;
+      if (daysToAdd <= 0) daysToAdd += 7;
+      date.setDate(date.getDate() + daysToAdd);
+      eventData.date = date.toISOString().split('T')[0];
+      break;
+    } else if (message.toLowerCase().includes(dayName) && 
+               (message.toLowerCase().includes('this') || 
+                !message.toLowerCase().includes('next'))) {
+      // "This Thursday" or just "Thursday"
+      const date = new Date();
+      const currentDay = date.getDay();
+      let daysToAdd = i - currentDay;
+      if (daysToAdd < 0) daysToAdd += 7;
+      date.setDate(date.getDate() + daysToAdd);
+      eventData.date = date.toISOString().split('T')[0];
+      break;
+    }
+  }
+  
+  // Extract specific dates (April 15, 4/15, etc.)
+  if (!eventData.date) {
     const datePatterns = [
-      /on\s+(\w+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i,
-      /(\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?\w+(?:\s+\d{4})?)/i,
-      /(\w+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i,
-      /(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i
+      /(?:on|for)\s+(\w+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i,
+      /(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i,
+      /(\w+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i
     ];
     
     for (const pattern of datePatterns) {
@@ -130,66 +210,192 @@ class ClaudeService {
         break;
       }
     }
-    
-    // Extract time
-    const timePatterns = [
-      /at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i,
-      /(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i,
-      /(\d{1,2}(?::\d{2})?)\s*(?:hours|h)/i
-    ];
-    
-    for (const pattern of timePatterns) {
-      const match = message.match(pattern);
-      if (match) {
-        eventData.time = match[1];
-        break;
-      }
-    }
-    
-    // Extract location
-    const locationPatterns = [
-      /in\s+([A-Za-z\s]+(?:,\s*[A-Za-z\s]+)?)/i,
-      /at\s+([A-Za-z\s]+(?:,\s*[A-Za-z\s]+)?)/i,
-      /location(?:\s+is)?\s+([A-Za-z\s]+(?:,\s*[A-Za-z\s]+)?)/i
-    ];
-    
-    for (const pattern of locationPatterns) {
-      const match = message.match(pattern);
-      if (match) {
-        eventData.location = match[1];
-        break;
-      }
-    }
-    
-    // Extract title
-    const titlePatterns = [
-      /(?:add|create|schedule|book)\s+(?:a|an)\s+([a-z\s]+)(?:appointment|meeting|event)?/i,
-      /(?:add|create|schedule|book)\s+(?:a|an)\s+([a-z\s]+)(?:for|on|at)/i,
-      /(?:appointment|meeting|event)\s+(?:for|about)\s+([a-z\s]+)(?:on|at)/i
-    ];
-    
-    for (const pattern of titlePatterns) {
-      const match = message.match(pattern);
-      if (match) {
-        eventData.title = match[1].trim();
-        break;
-      }
-    }
-    
-    // Extract child name (if present)
-    const childNamePattern = /for\s+(\w+)(?:'s|\s+on|\s+at)/i;
-    const childMatch = message.match(childNamePattern);
-    if (childMatch) {
-      eventData.childName = childMatch[1];
-    }
-    
-    // Clean up and validate extracted data
-    if (eventData.title && (eventData.date || eventData.time)) {
-      return eventData;
-    }
-    
-    return null;
   }
+  
+  // Extract time
+  const timePatterns = [
+    /at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i,
+    /(\d{1,2}(?::\d{2})?\s*(?:am|pm))\s+(?:on|next)/i,
+    /(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i
+  ];
+  
+  for (const pattern of timePatterns) {
+    const match = message.match(pattern);
+    if (match) {
+      eventData.time = match[1];
+      break;
+    }
+  }
+  
+  // Extract location keywords (at Restaurant, in Central Park)
+  const locationPatterns = [
+    /at\s+([A-Za-z\s]+(?:restaurant|cafe|park|theater|cinema|mall|store))(?:\s+on|\s+at|\s+for)/i,
+    /in\s+([A-Za-z\s]+(?:park|mall|area|district|neighborhood))(?:\s+on|\s+at|\s+for)/i
+  ];
+  
+  for (const pattern of locationPatterns) {
+    const match = message.match(pattern);
+    if (match) {
+      eventData.location = match[1];
+      break;
+    }
+  }
+  
+  // Extract food keywords for restaurant inference
+  const foodKeywords = ['dinner', 'lunch', 'breakfast', 'brunch', 'chinese', 'italian', 'mexican', 'indian', 'sushi', 'thai', 'food'];
+  for (const food of foodKeywords) {
+    if (message.toLowerCase().includes(food)) {
+      if (!eventData.location) eventData.location = 'Restaurant';
+      if (!eventData.title) eventData.title = `${food.charAt(0).toUpperCase() + food.slice(1)} Date`;
+      break;
+    }
+  }
+  
+  // Extract participants (who is involved)
+  const personPatterns = [
+    /with\s+(\w+)(?:\s+and\s+(\w+))?/i,
+    /for\s+(\w+)(?:\s+and\s+(\w+))?/i,
+    /(\w+)\s+and\s+(\w+)/i
+  ];
+  
+  for (const pattern of personPatterns) {
+    const match = message.match(pattern);
+    if (match) {
+      // Ignore common words that might match this pattern
+      const commonWords = ['me', 'myself', 'you', 'my', 'the', 'our', 'us', 'this', 'that', 'these', 'those'];
+      if (match[1] && !commonWords.includes(match[1].toLowerCase())) {
+        eventData.childName = match[1];
+      }
+      break;
+    }
+  }
+  
+  // Process the extracted data to create a valid event
+  if (eventData.title || eventData.date || eventData.time) {
+    // Default title if none provided
+    if (!eventData.title) {
+      eventData.title = 'New Event';
+    }
+    
+    // Convert relative date to actual date object
+    let startDate;
+    
+    if (eventData.date) {
+      try {
+        // Try to parse the date string
+        startDate = new Date(eventData.date);
+        
+        // If date is invalid, try a more flexible approach
+        if (isNaN(startDate.getTime())) {
+          // Try to parse with Date.parse
+          const timestamp = Date.parse(eventData.date);
+          if (!isNaN(timestamp)) {
+            startDate = new Date(timestamp);
+          } else {
+            // If still invalid, default to tomorrow
+            startDate = new Date();
+            startDate.setDate(startDate.getDate() + 1);
+          }
+        }
+        
+        // Ensure the date is in the future
+        const now = new Date();
+        if (startDate < now && startDate.getDate() === now.getDate()) {
+          // Same day but earlier time, keep the date
+        } else if (startDate < now) {
+          // If date is in the past, adjust to next occurrence
+          const currentYear = now.getFullYear();
+          startDate.setFullYear(currentYear);
+          
+          // If still in the past, add a year
+          if (startDate < now) {
+            startDate.setFullYear(currentYear + 1);
+          }
+        }
+      } catch (e) {
+        console.error("Error parsing date:", e);
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() + 1); // Default to tomorrow
+      }
+    } else {
+      // No date provided, default to tomorrow
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() + 1);
+    }
+    
+    // Set time if provided
+    if (eventData.time) {
+      const timeMatch = eventData.time.match(/(\d{1,2})(?::(\d{1,2}))?\s*(am|pm)?/i);
+      if (timeMatch) {
+        let hour = parseInt(timeMatch[1]);
+        const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+        const period = timeMatch[3]?.toLowerCase();
+        
+        // Default to PM for dinner events if not specified
+        const isPM = period === 'pm' || 
+                   (!period && (hour < 8 || hour === 12) && 
+                    (eventData.title.toLowerCase().includes('dinner') || 
+                     eventData.title.toLowerCase().includes('lunch')));
+        
+        // Adjust for AM/PM
+        if (isPM && hour < 12) {
+          hour += 12;
+        } else if (period === 'am' && hour === 12) {
+          hour = 0;
+        }
+        
+        startDate.setHours(hour, minute, 0, 0);
+      } else {
+        // Default to 7 PM for dinner events, 12 PM for lunch, 8 AM for breakfast
+        if (eventData.title.toLowerCase().includes('dinner') || 
+            eventData.title.toLowerCase().includes('date')) {
+          startDate.setHours(19, 0, 0, 0);
+        } else if (eventData.title.toLowerCase().includes('lunch')) {
+          startDate.setHours(12, 0, 0, 0);
+        } else if (eventData.title.toLowerCase().includes('breakfast')) {
+          startDate.setHours(8, 0, 0, 0);
+        } else {
+          startDate.setHours(9, 0, 0, 0); // Default to 9 AM
+        }
+      }
+    } else {
+      // Default times based on event type
+      if (eventData.title.toLowerCase().includes('dinner') || 
+          eventData.title.toLowerCase().includes('date')) {
+        startDate.setHours(19, 0, 0, 0); // 7 PM for dinner events
+      } else if (eventData.title.toLowerCase().includes('lunch')) {
+        startDate.setHours(12, 0, 0, 0);
+      } else if (eventData.title.toLowerCase().includes('breakfast')) {
+        startDate.setHours(8, 0, 0, 0);
+      } else {
+        startDate.setHours(9, 0, 0, 0); // Default to 9 AM
+      }
+    }
+    
+    // Create end time (default 1.5 hours after start for meals, 1 hour for other events)
+    const endDate = new Date(startDate);
+    if (eventData.title.toLowerCase().includes('dinner') || 
+        eventData.title.toLowerCase().includes('lunch') ||
+        eventData.title.toLowerCase().includes('breakfast') ||
+        eventData.title.toLowerCase().includes('date')) {
+      endDate.setMinutes(endDate.getMinutes() + 90); // 1.5 hours for meals
+    } else {
+      endDate.setHours(endDate.getHours() + 1); // 1 hour default
+    }
+    
+    return {
+      type: eventData.title.toLowerCase().includes('date') ? 'date' : 'event',
+      title: eventData.title,
+      person: eventData.childName,
+      startDate,
+      endDate,
+      location: eventData.location || (eventData.title.toLowerCase().includes('dinner') ? 'Restaurant' : ''),
+      description: `Added from Allie chat: ${message}`
+    };
+  }
+  
+  return null;
+}
   
   // Process calendar request and add event to calendar
   async processCalendarRequest(eventData, context) {
@@ -440,10 +646,10 @@ Allie supports calendar integration with:
 3. ICS downloads - works with any calendar system
 
 IMPORTANT: You HAVE a calendar system in this app. When users ask about adding something to their calendar, you should:
-1. Extract the event details (title, date, time, location)
-2. Offer to add it to their calendar
-3. Confirm when it's been added successfully
-4. NEVER say you don't have a calendar system or don't know the date
+    1. Extract the event details (title, date, time, location)
+    2. Offer to add it to their calendar
+    3. Confirm when it's been added successfully
+    4. NEVER say you don't have a calendar system or don't know the date
 
 When asked about dates or calendar requests, remember you ARE able to handle calendar functionality through the app's built-in calendar service.
     
