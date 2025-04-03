@@ -76,6 +76,9 @@ class CalendarService {
   // In src/services/CalendarService.js - Update the addEvent method to dispatch an event
 
 // CalendarService.js - Replace the addEvent method with this corrected version
+// In src/services/CalendarService.js - Update the addEvent method to dispatch an event
+
+// Replace the addEvent method with this corrected version
 async addEvent(event, userId) {
   try {
     if (!userId) {

@@ -62,102 +62,122 @@ class ChatService {
   // In src/services/ChatService.js - Update the handleCalendarRequest method
 
   // Enhanced helper function to handle calendar-related requests
-  async handleCalendarRequest(text, familyContext, userId) {
-    // Check if this is a calendar-related request
-    const isCalendarRequest = text.toLowerCase().includes('calendar') &&
-      (text.toLowerCase().includes('add') || 
-       text.toLowerCase().includes('schedule') || 
-       text.toLowerCase().includes('book') ||
-       text.toLowerCase().includes('appointment') ||
-       text.toLowerCase().includes('create event') ||
-       text.toLowerCase().includes('sync'));
+  // In src/services/ChatService.js - Replace the handleCalendarRequest method with this improved version
+
+// Enhanced helper function to handle calendar-related requests
+async handleCalendarRequest(text, familyContext, userId) {
+  // Check if this is a calendar-related request with stronger matching
+  const calendarKeywords = ['calendar', 'add', 'schedule', 'book', 'appointment', 'meeting', 'event', 'date', 'sync', 'remind'];
+  const isCalendarRequest = calendarKeywords.some(keyword => 
+    text.toLowerCase().includes(keyword)
+  );
        
-    if (!isCalendarRequest) return null;
-    
-    // If we don't have a user ID, we can't create calendar events
-    if (!userId) {
-      return "I'd like to add this to your calendar, but I need you to be logged in first.";
-    }
-    
-    try {
-      // Extract potential event details from the request
-      const eventDetails = this.extractEventDetails(text);
-      
-      if (eventDetails) {
-        // Create the event
-        console.log("Creating calendar event:", eventDetails);
-        
-        // Format the event for CalendarService
-        const event = {
-          summary: eventDetails.title,
-          description: eventDetails.description || '',
-          location: eventDetails.location || '',
-          start: {
-            dateTime: eventDetails.startDate.toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          end: {
-            dateTime: eventDetails.endDate.toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          }
-        };
-        
-        // Add the event to the calendar
-        const result = await CalendarService.addEvent(event, userId);
-        
-        if (result.success) {
-          return `I've added "${eventDetails.title}" to your calendar for ${eventDetails.startDate.toLocaleDateString()} at ${eventDetails.startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.`;
-        } else {
-          return "I tried to add that to your calendar, but there was an issue. Please try again or add it manually through the calendar widget.";
-        }
-      }
-      
-      // If we couldn't extract event details but it's a calendar request,
-      // return a helpful message about general calendar functionality
-      const tasks = familyContext.tasks || [];
-      const pendingTasks = tasks.filter(t => !t.completed).slice(0, 3);
-      
-      // Get family meetings
-      const familyMeetings = [];
-      if (familyContext.currentWeek) {
-        const meetingDate = new Date();
-        meetingDate.setDate(meetingDate.getDate() + (7 - meetingDate.getDay())); // Next Sunday
-        meetingDate.setHours(19, 0, 0, 0); // 7:00 PM
-        
-        familyMeetings.push({
-          id: `meeting-${familyContext.currentWeek}`,
-          title: `Week ${familyContext.currentWeek} Family Meeting`,
-          date: meetingDate.toLocaleDateString('en-US', { 
-            weekday: 'long', 
-            month: 'long', 
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit'
-          })
-        });
-      }
-      
-      // Create a helpful response about calendar integration
-      return `I'd be happy to help with your calendar! You can add tasks and meetings to your calendar in a few ways:
-
-1. **For tasks**: Click the "Add to Calendar" button on any task card in the Tasks tab
-2. **For family meetings**: Go to the Calendar widget and click "Add to Calendar" next to the upcoming meeting
-3. **For relationship events**: In the Relationship tab, you can schedule date nights and add them directly to your calendar
-
-${pendingTasks.length > 0 ? `**Here are your current tasks that could be added to your calendar:**
-${pendingTasks.map(task => `- ${task.title} (assigned to ${task.assignedToName})`).join('\n')}` : ''}
-
-${familyMeetings.length > 0 ? `**Upcoming family meeting:**
-- ${familyMeetings[0].title} (${familyMeetings[0].date})` : ''}
-
-To create a specific event, you can tell me what event you want to add and when. For example, "Add a haircut appointment for Tegner on April 5th at 2pm in Stockholm."`;
-    } catch (error) {
-      console.error("Error handling calendar request:", error);
-      return "I had trouble processing your calendar request. Please try again with more specific details.";
-    }
+  if (!isCalendarRequest) return null;
+  
+  // If we don't have a user ID, we can't create calendar events
+  if (!userId) {
+    return "I'd like to add this to your calendar, but I need you to be logged in first.";
   }
   
-// ChatService.js - Add this improved method after the existing handleCalendarRequest method
+  try {
+    // Extract potential event details from the request with improved extraction
+    const eventDetails = this.extractEventDetails(text);
+    
+    if (eventDetails) {
+      // Create the event
+      console.log("Creating calendar event:", eventDetails);
+      
+      // Format the event for CalendarService
+      const event = {
+        summary: eventDetails.title,
+        description: eventDetails.description || '',
+        location: eventDetails.location || '',
+        start: {
+          dateTime: eventDetails.startDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: eventDetails.endDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        }
+      };
+      
+      // Add the event to the calendar
+      const result = await CalendarService.addEvent(event, userId);
+      
+      if (result.success) {
+        return `I've added "${eventDetails.title}" to your calendar for ${eventDetails.startDate.toLocaleDateString()} at ${eventDetails.startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.`;
+      } else {
+        return "I tried to add that to your calendar, but there was an issue. Please try again or add it manually through the calendar widget.";
+      }
+    }
+    
+    // If we couldn't extract all details, use the processCalendarRequest method
+    // with whatever partial information we have
+    const partialDetails = {
+      title: this.extractTitle(text) || "New Event",
+      date: this.extractDate(text),
+      time: this.extractTime(text),
+      location: this.extractLocation(text),
+      description: text
+    };
+    
+    return this.processCalendarRequest(partialDetails, familyContext);
+  } catch (error) {
+    console.error("Error handling calendar request:", error);
+    return "I had trouble processing your calendar request. Please try again with more specific details like 'Add a meeting on April 9th at 2pm'.";
+  }
+}
+
+// Add these helper methods after handleCalendarRequest
+extractTitle(text) {
+  const titleMatches = text.match(/(?:add|schedule|book|create)\s+(?:a|an)?\s+([^"]+?)(?:\s+on|\s+at|\s+for|\s+to calendar|$)/i);
+  return titleMatches ? titleMatches[1].trim() : null;
+}
+
+extractDate(text) {
+  const datePatterns = [
+    /(?:on|for)\s+(\w+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i,
+    /(\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?\w+(?:\s+\d{4})?)/i,
+    /(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i,
+    /(?:this|next)\s+(\w+day)/i
+  ];
+  
+  for (const pattern of datePatterns) {
+    const match = text.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+extractTime(text) {
+  const timePatterns = [
+    /at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i,
+    /(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i
+  ];
+  
+  for (const pattern of timePatterns) {
+    const match = text.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+extractLocation(text) {
+  const locationPatterns = [
+    /(?:at|in)\s+([A-Za-z\s]+(?:,\s*[A-Za-z\s]+)?)\s+(?:on|at|from)/i,
+    /location\s+(?:is|at|in)\s+([A-Za-z\s]+)/i
+  ];
+  
+  for (const pattern of locationPatterns) {
+    const match = text.match(pattern);
+    if (match) return match[1].trim();
+  }
+  return null;
+}
+  
+// Add this method to ChatService.js after handleCalendarRequest and the extraction methods
+
 processCalendarRequest = async (eventData, context) => {
   try {
     const currentUser = auth.currentUser;
@@ -185,6 +205,25 @@ processCalendarRequest = async (eventData, context) => {
     if (isNaN(eventDate.getTime())) {
       eventDate = new Date();
       eventDate.setDate(eventDate.getDate() + 1);
+    }
+    
+    // Try to parse time if provided
+    if (eventData.time) {
+      const timeMatch = eventData.time.match(/(\d{1,2})(?::(\d{1,2}))?\s*(am|pm)?/i);
+      if (timeMatch) {
+        let hour = parseInt(timeMatch[1]);
+        const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+        const period = timeMatch[3]?.toLowerCase();
+        
+        // Adjust for AM/PM
+        if (period === 'pm' && hour < 12) {
+          hour += 12;
+        } else if (period === 'am' && hour === 12) {
+          hour = 0;
+        }
+        
+        eventDate.setHours(hour, minute, 0, 0);
+      }
     }
     
     // Create calendar event object
@@ -421,10 +460,10 @@ async getAIResponse(text, familyId, previousMessages) {
     
     // Check for calendar-related requests - PASS USERID HERE
     const calendarResponse = await this.handleCalendarRequest(text, familyData, userId);
-    if (calendarResponse) {
-      console.log("Handling calendar-related request");
-      return calendarResponse;
-    }
+if (calendarResponse) {
+  console.log("Handling calendar-related request");
+  return calendarResponse;
+}
       
     // Add knowledge base to context
     familyData.knowledgeBase = knowledgeBase;

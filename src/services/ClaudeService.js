@@ -5,7 +5,7 @@ import { auth } from './firebase';
 class ClaudeService {
   constructor() {
     this.proxyUrl = 'http://localhost:3001/api/claude';
-    this.model = 'claude-3-haiku-20240307'; // Using a more cost-effective model
+    this.model = 'claude-3-sonnet-20240229'; // Using a more cost-effective model
     this.mockMode = false; // Explicitly disable mock mode
     
     console.log("Claude service initialized to use local proxy server");
@@ -422,33 +422,20 @@ class ClaudeService {
       - Task Weighting: ${kb.whitepapers.methodology?.taskWeighting || ''}
       - Improvement Framework: ${kb.whitepapers.methodology?.improvementFramework || ''}
 
-      Calendar Integration Knowledge:
-    Allie supports calendar integration with:
-    1. Google Calendar - requires sign-in through settings
-    2. Apple Calendar - available on macOS devices 
-    3. ICS downloads - works with any calendar system
-    
-    Users can add tasks to their calendar by:
-    - Clicking the "Add to Calendar" button on any task
-    - Asking you to add a specific task to their calendar
-    - Setting up automatic calendar sync in Settings > Calendar
-    
-    When users ask about adding something to their calendar, explain the options
-    and direct them to Settings > Calendar if needed for setup.
-      
-      Calendar Integration Knowledge:
-      Allie supports calendar integration with:
-      1. Google Calendar - requires sign-in through settings
-      2. Apple Calendar - available on macOS devices 
-      3. ICS downloads - works with any calendar system
-      
-      Users can add tasks to their calendar by:
-      - Clicking the "Add to Calendar" button on any task
-      - Asking you to add a specific task to their calendar
-      - Setting up automatic calendar sync in Settings > Calendar
-      
-      When users ask about adding something to their calendar, explain the options
-      and direct them to Settings > Calendar if needed for setup.
+     Calendar Integration Knowledge:
+Allie supports calendar integration with:
+1. Google Calendar - requires sign-in through settings
+2. Apple Calendar - available on macOS devices 
+3. ICS downloads - works with any calendar system
+
+IMPORTANT: You HAVE a calendar system in this app. When users ask about adding something to their calendar, you should:
+1. Extract the event details (title, date, time, location)
+2. Offer to add it to their calendar
+3. Confirm when it's been added successfully
+4. NEVER say you don't have a calendar system or don't know the date
+
+When asked about dates or calendar requests, remember you ARE able to handle calendar functionality through the app's built-in calendar service.
+
       
       PARENTING STRATEGIES:
       1. Positive Reinforcement: ${kb.whitepapers.parentingStrategies?.positiveReinforcement?.summary || ''}
