@@ -12,14 +12,14 @@ export function useSurvey() {
 
 // Provider component
 export function SurveyProvider({ children }) {
-  // Generate full set of 100 questions (25 per category) with weight attributes
+  // Generate full set of questions (all possible questions) with weight attributes
   const generateFullQuestionSet = () => {
     const categories = [
       "Visible Household Tasks",
       "Invisible Household Tasks",
       "Visible Parental Tasks",
       "Invisible Parental Tasks",
-      "Relationship Health" // Add this new category
+      "Relationship Health" // For relationship-specific questions
     ];
       
     const questions = [];
@@ -161,7 +161,7 @@ export function SurveyProvider({ children }) {
       ]
     };
     
-    // Add category balance questions - new in updated version
+    // Add category balance questions
     const balanceQuestions = {
       "Visible Household Tasks": [
         "Who takes responsibility for ensuring household cleanliness overall?",
@@ -231,7 +231,6 @@ export function SurveyProvider({ children }) {
         childDevelopment: "high",
         relationshipImpact: "extreme"
       },
-      // Add this new section
       "Relationship Health": {
         baseWeight: 4,
         frequency: "daily",
@@ -352,7 +351,7 @@ export function SurveyProvider({ children }) {
         explanation += "How this task is distributed teaches children important lessons about gender roles. ";
       }
       
-      // Relationship impact - new
+      // Relationship impact
       if (weightData.relationshipImpact === "extreme") {
         explanation += "Imbalance in this task can significantly impact relationship satisfaction.";
       } else if (weightData.relationshipImpact === "high") {
@@ -364,7 +363,7 @@ export function SurveyProvider({ children }) {
       
     let questionId = 1;
     categories.forEach(category => {
-      // Add the 25 main questions for this category
+      // Add the main questions for this category
       questionTexts[category].forEach(text => {
         // Generate AI-based weights for this specific question
         const weightData = generateQuestionWeights(text, category);
@@ -392,12 +391,12 @@ export function SurveyProvider({ children }) {
           emotionalLabor: weightData.emotionalLabor,
           researchImpact: weightData.researchImpact,
           childDevelopment: weightData.childDevelopment,
-          relationshipImpact: weightData.relationshipImpact // New attribute
+          relationshipImpact: weightData.relationshipImpact
         });
         questionId++;
       });
       
-      // Add the 5 balance questions for this category
+      // Add the balance questions for this category
       if (balanceQuestions[category]) {
         balanceQuestions[category].forEach(text => {
           // Balance questions have higher weights for relationship impact
@@ -442,267 +441,502 @@ export function SurveyProvider({ children }) {
     return questions;
   };
 
-  // Generate weekly check-in questions with fixed counts (40 for parents, 30 for children)
-  // Replace the entire function with:
-const generateWeeklyQuestions = (weekNumber, isChild = false) => {
-  // Set standard question count for all family members
-  const maxTotalQuestions = 20;
-  
-  // Get categories
-  const categories = [
-    "Visible Household Tasks",
-    "Invisible Household Tasks",
-    "Visible Parental Tasks",
-    "Invisible Parental Tasks"
-  ];
-  
-  // Helper to analyze imbalances by category based on previous responses
-  const analyzeImbalancesByCategory = () => {
-    // Prepare category imbalance tracking
-    const imbalanceData = {};
-    categories.forEach(category => {
-      imbalanceData[category] = { 
-        mama: 0, 
-        papa: 0, 
-        total: 0, 
-        imbalance: 0 
-      };
-    });
+  // NEW FUNCTION: Personalized selection of initial survey questions based on family data
+  const selectPersonalizedInitialQuestions = (fullQuestionSet, familyData, targetCount = 72) => {
+    // If no family data is provided, return a balanced default set
+    if (!familyData) {
+      return selectDefaultInitialQuestions(fullQuestionSet, targetCount);
+    }
     
-    // Count responses by category
-    Object.entries(surveyResponses || {}).forEach(([key, value]) => {
-      // Skip non-response entries
-      if (value !== "Mama" && value !== "Papa") return;
-      
-      // Find the question category
-      const questionId = key.split('-').pop();
-      const question = fullQuestionSet.find(q => q.id === questionId);
-      
-      if (question && question.category) {
-        imbalanceData[question.category].total++;
+    const categories = [
+      "Visible Household Tasks",
+      "Invisible Household Tasks",
+      "Visible Parental Tasks",
+      "Invisible Parental Tasks"
+    ];
+    
+    // Questions per category (evenly distributed)
+    const questionsPerCategory = Math.floor(targetCount / categories.length);
+    
+    // Create an array to hold our selected questions
+    const selectedQuestions = [];
+    
+    // Process family data for personalization
+    const { 
+      children = [],
+      communication = {},
+      priorities = {},
+      aiPreferences = {}
+    } = familyData;
+    
+    // 1. First, handle family priorities from highest to lowest
+    const priorityOrder = [
+      priorities.highestPriority,
+      priorities.secondaryPriority,
+      priorities.tertiaryPriority
+    ].filter(Boolean); // Remove any undefined values
+    
+    // Map non-specified categories
+    const remainingCategories = categories.filter(cat => !priorityOrder.includes(cat));
+    
+    // Complete priority order with remaining categories
+    const fullPriorityOrder = [...priorityOrder, ...remainingCategories];
+    
+    // 2. Create relevance scores for each question based on family data
+    const scoredQuestions = fullQuestionSet
+      .filter(q => categories.includes(q.category)) // Filter out relationship questions
+      .map(question => {
+        let relevanceScore = 0;
         
-        if (value === "Mama") {
-          imbalanceData[question.category].mama++;
-        } else {
-          imbalanceData[question.category].papa++;
+        // Priority-based scoring
+        const categoryIndex = fullPriorityOrder.indexOf(question.category);
+        if (categoryIndex === 0) relevanceScore += 15; // Highest priority
+        else if (categoryIndex === 1) relevanceScore += 10; // Secondary priority
+        else if (categoryIndex === 2) relevanceScore += 5; // Tertiary priority
+        
+        // Child-related scoring
+        if (children && children.length > 0) {
+          // More points for child-development questions if there are children
+          if (question.childDevelopment === "high") {
+            relevanceScore += 5 * Math.min(children.length, 3); // More children = more relevant
+          }
+          
+          // If question text mentions children
+          if (question.text.toLowerCase().includes("child") || 
+              question.text.toLowerCase().includes("kid") ||
+              question.text.toLowerCase().includes("school")) {
+            relevanceScore += 3;
+          }
+          
+          // Age-specific relevance
+          const hasYoungChildren = children.some(child => child.age && parseInt(child.age) < 6);
+          const hasSchoolChildren = children.some(child => child.age && parseInt(child.age) >= 6 && parseInt(child.age) <= 18);
+          
+          if (hasYoungChildren && (
+              question.text.toLowerCase().includes("bath") ||
+              question.text.toLowerCase().includes("bedtime") ||
+              question.text.toLowerCase().includes("daycare"))) {
+            relevanceScore += 8;
+          }
+          
+          if (hasSchoolChildren && (
+              question.text.toLowerCase().includes("homework") ||
+              question.text.toLowerCase().includes("school") ||
+              question.text.toLowerCase().includes("teacher"))) {
+            relevanceScore += 8;
+          }
+        }
+        
+        // Communication style scoring
+        if (communication.style) {
+          // For families with reserved/avoidant communication, emphasize invisible tasks
+          if ((communication.style === "reserved" || communication.style === "avoidant") &&
+              (question.invisibility === "completely" || question.invisibility === "mostly")) {
+            relevanceScore += 6;
+          }
+          
+          // For families with open communication, prioritize balance questions
+          if (communication.style === "open" && question.isBalanceQuestion) {
+            relevanceScore += 6;
+          }
+        }
+        
+        // Challenge areas scoring
+        if (communication.challengeAreas && communication.challengeAreas.length > 0) {
+          // Map challenge areas to keywords
+          const challengeKeywords = {
+            'Household tasks': ['clean', 'chore', 'cook', 'laundry', 'dishes'],
+            'Parenting approaches': ['parent', 'discipline', 'child', 'kid', 'school'],
+            'Time management': ['schedule', 'time', 'plan', 'calendar', 'appointment'],
+            'Emotional support': ['emotion', 'support', 'feel', 'stress', 'talk'],
+            'Financial decisions': ['money', 'bill', 'finance', 'budget', 'spend'],
+            'Personal boundaries': ['boundary', 'personal', 'privacy', 'space', 'time']
+          };
+          
+          // Add points for questions matching challenge areas
+          communication.challengeAreas.forEach(area => {
+            const keywords = challengeKeywords[area] || [];
+            keywords.forEach(keyword => {
+              if (question.text.toLowerCase().includes(keyword)) {
+                relevanceScore += 5;
+              }
+            });
+          });
+        }
+        
+        // Return the question with its relevance score
+        return {
+          ...question,
+          relevanceScore
+        };
+      });
+    
+    // 3. Select questions for each category, prioritizing high relevance scores
+    categories.forEach(category => {
+      // Get questions for this category
+      const categoryQuestions = scoredQuestions.filter(q => q.category === category);
+      
+      // Sort by relevance score (highest first)
+      const sortedQuestions = [...categoryQuestions].sort((a, b) => b.relevanceScore - a.relevanceScore);
+      
+      // Take top questions for this category
+      const topQuestions = sortedQuestions.slice(0, questionsPerCategory);
+      
+      // Add to selected questions
+      selectedQuestions.push(...topQuestions);
+    });
+    
+    // If we couldn't get enough questions in some categories, fill with others
+    if (selectedQuestions.length < targetCount) {
+      // Get all questions not already selected
+      const remainingQuestions = scoredQuestions.filter(q => 
+        !selectedQuestions.some(selected => selected.id === q.id)
+      );
+      
+      // Sort by relevance score
+      const sortedRemaining = [...remainingQuestions].sort((a, b) => b.relevanceScore - a.relevanceScore);
+      
+      // Add enough to reach target count
+      selectedQuestions.push(...sortedRemaining.slice(0, targetCount - selectedQuestions.length));
+    }
+    
+    // Sort the final selection by category and ID for a logical order
+    return selectedQuestions.sort((a, b) => {
+      // First sort by category
+      if (a.category !== b.category) {
+        return categories.indexOf(a.category) - categories.indexOf(b.category);
+      }
+      // Then by ID
+      return parseInt(a.id.replace('q', '')) - parseInt(b.id.replace('q', ''));
+    });
+  };
+
+  // Default selection of initial survey questions without family data
+  const selectDefaultInitialQuestions = (fullQuestionSet, targetCount = 72) => {
+    const categories = [
+      "Visible Household Tasks",
+      "Invisible Household Tasks",
+      "Visible Parental Tasks",
+      "Invisible Parental Tasks"
+    ];
+    
+    // Questions per category (evenly distributed)
+    const questionsPerCategory = Math.floor(targetCount / categories.length);
+    
+    const selectedQuestions = [];
+    
+    categories.forEach(category => {
+      // Get all questions for this category
+      const categoryQuestions = fullQuestionSet.filter(q => q.category === category);
+      
+      // Sort by total weight (highest impact first)
+      const sortedQuestions = [...categoryQuestions].sort((a, b) => 
+        parseFloat(b.totalWeight) - parseFloat(a.totalWeight)
+      );
+      
+      // Take top questions for this category
+      const topQuestions = sortedQuestions.slice(0, questionsPerCategory);
+      
+      // Add to selected questions
+      selectedQuestions.push(...topQuestions);
+    });
+    
+    return selectedQuestions;
+  };
+
+  // Generate weekly check-in questions - IMPROVED ADAPTIVE ALGORITHM
+  const generateWeeklyQuestions = (weekNumber, isChild = false, familyData = null, previousResponses = {}, taskCompletionData = []) => {
+    // Set standard question count for all family members
+    const targetQuestionCount = 20;
+    
+    // Get categories
+    const categories = [
+      "Visible Household Tasks",
+      "Invisible Household Tasks",
+      "Visible Parental Tasks",
+      "Invisible Parental Tasks"
+    ];
+    
+    // Helper to analyze imbalances by category based on previous responses
+    const analyzeImbalancesByCategory = () => {
+      // Prepare category imbalance tracking
+      const imbalanceData = {};
+      categories.forEach(category => {
+        imbalanceData[category] = { 
+          mama: 0, 
+          papa: 0, 
+          total: 0, 
+          imbalance: 0 
+        };
+      });
+      
+      // Count responses by category
+      Object.entries(previousResponses || {}).forEach(([key, value]) => {
+        // Skip non-response entries
+        if (value !== "Mama" && value !== "Papa") return;
+        
+        // Find the question category
+        const questionId = key.split('-').pop();
+        const question = fullQuestionSet.find(q => q.id === questionId);
+        
+        if (question && question.category) {
+          imbalanceData[question.category].total++;
+          
+          if (value === "Mama") {
+            imbalanceData[question.category].mama++;
+          } else {
+            imbalanceData[question.category].papa++;
+          }
+        }
+      });
+      
+      // Calculate imbalance percentages
+      categories.forEach(category => {
+        const data = imbalanceData[category];
+        if (data.total > 0) {
+          const mamaPercent = (data.mama / data.total) * 100;
+          const papaPercent = (data.papa / data.total) * 100;
+          data.imbalance = Math.abs(mamaPercent - papaPercent);
+          data.dominantParent = mamaPercent > papaPercent ? "Mama" : "Papa";
+          data.mamaPercent = mamaPercent;
+          data.papaPercent = papaPercent;
+        }
+      });
+      
+      // Sort categories by imbalance (highest first)
+      return Object.entries(imbalanceData)
+        .sort((a, b) => b[1].imbalance - a[1].imbalance)
+        .map(([category, data]) => ({ category, ...data }));
+    };
+    
+    // Helper to identify tasks with best completion and impact
+    const analyzeTaskEffectiveness = (taskData = []) => {
+      // Group tasks by category
+      const tasksByCategory = {};
+      categories.forEach(category => {
+        tasksByCategory[category] = { completed: 0, total: 0, effectiveness: 0 };
+      });
+      
+      // Count completed tasks per category
+      taskData.forEach(task => {
+        if (!task.category || !categories.includes(task.category)) return;
+        
+        tasksByCategory[task.category].total++;
+        if (task.completed) {
+          tasksByCategory[task.category].completed++;
+        }
+      });
+      
+      // Calculate effectiveness scores
+      categories.forEach(category => {
+        const data = tasksByCategory[category];
+        if (data.total > 0) {
+          data.effectiveness = data.completed / data.total;
+        }
+      });
+      
+      // Sort by effectiveness (highest first)
+      return Object.entries(tasksByCategory)
+        .sort((a, b) => b[1].effectiveness - a[1].effectiveness)
+        .map(([category, data]) => ({ category, ...data }));
+    };
+    
+    // Helper to identify balanced categories (low imbalance)
+    const identifyBalancedCategories = () => {
+      const imbalances = analyzeImbalancesByCategory();
+      // Consider categories with less than 20% imbalance as "balanced"
+      return imbalances.filter(data => data.imbalance < 20);
+    };
+    
+    // Helper to find questions not previously asked
+    const getNewQuestions = (questionSet) => {
+      // Get all question IDs that have been answered
+      const answeredQuestionIds = Object.keys(previousResponses || {})
+        .map(key => key.split('-').pop())
+        .filter(id => id.startsWith('q'));
+      
+      // Find questions that haven't been asked yet
+      return questionSet.filter(q => !answeredQuestionIds.includes(q.id));
+    };
+    
+    // Helper to get questions from a specific category, prioritizing by weight
+    const getQuestionsFromCategory = (category, count, excludeIds = []) => {
+      // Get all questions for this category that haven't been excluded
+      const categoryQuestions = fullQuestionSet.filter(q => 
+        q.category === category && !excludeIds.includes(q.id)
+      );
+      
+      // Sort by total weight (highest impact first)
+      const sortedQuestions = [...categoryQuestions].sort((a, b) => 
+        parseFloat(b.totalWeight) - parseFloat(a.totalWeight)
+      );
+      
+      // Take top questions, or as many as available
+      return sortedQuestions.slice(0, count);
+    };
+    
+    // Get imbalance analysis
+    const imbalancedCategories = analyzeImbalancesByCategory();
+    
+    // Get task effectiveness data
+    const effectiveCategories = analyzeTaskEffectiveness(taskCompletionData);
+    
+    // Get balanced categories (to check for backsliding)
+    const balancedCategories = identifyBalancedCategories();
+    
+    // Create our question distribution plan - ADAPTIVE ALGORITHM
+    let questionAllocation = {};
+    
+    // 1. PRIORITIZE HIGHEST IMBALANCE
+    // Allocate more questions to categories with greatest imbalance
+    if (imbalancedCategories.length > 0) {
+      // Calculate how many questions to allocate based on imbalance severity
+      let totalImbalance = imbalancedCategories.reduce((sum, cat) => sum + cat.imbalance, 0);
+      
+      imbalancedCategories.forEach(catData => {
+        // Calculate proportion of total imbalance
+        const proportion = totalImbalance > 0 ? catData.imbalance / totalImbalance : 0.25;
+        
+        // Allocate questions based on proportion (minimum 2 if any imbalance exists)
+        const allocation = Math.max(2, Math.round(proportion * 10));
+        
+        questionAllocation[catData.category] = allocation;
+      });
+    }
+    
+    // 2. MAINTAIN SURVEILLANCE ON BALANCED AREAS
+    // Allocate some questions to previously balanced categories to detect backsliding
+    balancedCategories.forEach(catData => {
+      // If already allocated, don't duplicate
+      if (questionAllocation[catData.category]) return;
+      
+      // Allocate a small number of questions to monitor
+      questionAllocation[catData.category] = 2;
+    });
+    
+    // 3. ADD QUESTIONS ABOUT IMPROVEMENT AREAS
+    // Include questions from categories showing promising progress
+    effectiveCategories.slice(0, 2).forEach(catData => {
+      // If already allocated, add some more
+      if (questionAllocation[catData.category]) {
+        questionAllocation[catData.category] += 1;
+      } else {
+        questionAllocation[catData.category] = 2;
+      }
+    });
+    
+    // 4. ENSURE ALL CATEGORIES HAVE SOME REPRESENTATION
+    categories.forEach(category => {
+      if (!questionAllocation[category]) {
+        questionAllocation[category] = 1;
+      }
+    });
+    
+    // 5. ADJUST TO MATCH TARGET COUNT
+    // Check total allocated
+    const totalAllocated = Object.values(questionAllocation).reduce((sum, count) => sum + count, 0);
+    
+    // Adjust if necessary
+    if (totalAllocated > targetQuestionCount) {
+      // Need to reduce - start with most balanced categories
+      const adjustOrder = [...categories].sort((a, b) => {
+        const aImbalance = imbalancedCategories.find(c => c.category === a)?.imbalance || 0;
+        const bImbalance = imbalancedCategories.find(c => c.category === b)?.imbalance || 0;
+        return aImbalance - bImbalance; // Sort by imbalance (ascending)
+      });
+      
+      let excess = totalAllocated - targetQuestionCount;
+      let index = 0;
+      
+      while (excess > 0 && index < adjustOrder.length) {
+        const category = adjustOrder[index];
+        if (questionAllocation[category] > 1) {
+          questionAllocation[category]--;
+          excess--;
+        }
+        index = (index + 1) % adjustOrder.length; // Loop through categories as needed
+      }
+    } else if (totalAllocated < targetQuestionCount) {
+      // Need to increase - prioritize most imbalanced categories
+      const adjustOrder = [...categories].sort((a, b) => {
+        const aImbalance = imbalancedCategories.find(c => c.category === a)?.imbalance || 0;
+        const bImbalance = imbalancedCategories.find(c => c.category === b)?.imbalance || 0;
+        return bImbalance - aImbalance; // Sort by imbalance (descending)
+      });
+      
+      let deficit = targetQuestionCount - totalAllocated;
+      let index = 0;
+      
+      while (deficit > 0 && index < adjustOrder.length) {
+        const category = adjustOrder[index];
+        questionAllocation[category]++;
+        deficit--;
+        index = (index + 1) % adjustOrder.length; // Loop through categories as needed
+      }
+    }
+    
+    // 6. SELECT ACTUAL QUESTIONS BASED ON ALLOCATION
+    const selectedQuestions = [];
+    const selectedIds = [];
+    
+    // For each category, select the appropriate number of questions
+    Object.entries(questionAllocation).forEach(([category, count]) => {
+      // Get top questions for this category
+      const categoryQuestions = getQuestionsFromCategory(category, count, selectedIds);
+      
+      // Add to our selections
+      selectedQuestions.push(...categoryQuestions);
+      selectedIds.push(...categoryQuestions.map(q => q.id));
+    });
+    
+    // 7. ENHANCE WITH EXPLANATIONS BASED ON FAMILY CONTEXT
+    const finalQuestions = selectedQuestions.map(question => {
+      // Find this category's imbalance data
+      const categoryImbalance = imbalancedCategories.find(c => c.category === question.category);
+      
+      // Create a customized weekly explanation
+      let weeklyExplanation = "";
+      
+      if (categoryImbalance && categoryImbalance.imbalance > 30) {
+        // High imbalance explanation
+        weeklyExplanation = `This question is from an area with a significant imbalance (${categoryImbalance.imbalance.toFixed(0)}% difference). ${categoryImbalance.dominantParent} is currently handling ${categoryImbalance.dominantParent === 'Mama' ? categoryImbalance.mamaPercent.toFixed(0) : categoryImbalance.papaPercent.toFixed(0)}% of these tasks.`;
+      } else if (categoryImbalance && categoryImbalance.imbalance > 15) {
+        // Moderate imbalance explanation
+        weeklyExplanation = `This question helps track progress in an area with a ${categoryImbalance.imbalance.toFixed(0)}% workload imbalance. Regular check-ins help measure improvement over time.`;
+      } else if (balancedCategories.some(c => c.category === question.category)) {
+        // Balanced category explanation
+        weeklyExplanation = `This question is from a relatively balanced category. We include it to help ensure you maintain the good balance you've achieved here.`;
+      } else {
+        // Default explanation
+        weeklyExplanation = `This question helps us track changes in your family's distribution of responsibilities over time.`;
+      }
+      
+      // Format based on child's age if applicable
+      if (isChild) {
+        // Get the user's age if available
+        let childAge = 10; // Default if not available
+        if (familyData && familyData.children) {
+          // Find the selected user's age
+          // (In a real implementation, we'd match this to the specific child)
+          childAge = familyData.children[0]?.age ? parseInt(familyData.children[0].age) : 10;
+        }
+        
+        // Add age-appropriate context
+        if (childAge < 8) {
+          weeklyExplanation = "This question helps us understand who does what in your family.";
+        } else if (childAge < 13) {
+          weeklyExplanation = "Your answers help your family share responsibilities more fairly.";
         }
       }
-    });
-    
-    // Calculate imbalance percentages
-    categories.forEach(category => {
-      const data = imbalanceData[category];
-      if (data.total > 0) {
-        const mamaPercent = (data.mama / data.total) * 100;
-        const papaPercent = (data.papa / data.total) * 100;
-        data.imbalance = Math.abs(mamaPercent - papaPercent);
-        data.dominantParent = mamaPercent > papaPercent ? "Mama" : "Papa";
-      }
-    });
-    
-    // Sort categories by imbalance (highest first)
-    return Object.entries(imbalanceData)
-      .sort((a, b) => b[1].imbalance - a[1].imbalance)
-      .map(([category, data]) => ({ category, ...data }));
-  };
-  
-  // Helper to identify improving categories based on task completion
-  const identifyImprovingCategories = () => {
-    // Get tasks that have been completed
-    const completedTasks = currentSurveyResponses.taskCompletions || [];
-    
-    // Group by category
-    const categoryProgress = {};
-    categories.forEach(category => {
-      categoryProgress[category] = {
-        taskCount: 0,
-        completedCount: 0,
-        completionRate: 0
+      
+      return {
+        ...question,
+        weeklyExplanation
       };
     });
     
-    // Count completed tasks per category
-    completedTasks.forEach(task => {
-      if (task.category && categories.includes(task.category)) {
-        categoryProgress[task.category].taskCount++;
-        if (task.completed) {
-          categoryProgress[task.category].completedCount++;
-        }
-      }
-    });
-    
-    // Calculate completion rates
-    categories.forEach(category => {
-      const data = categoryProgress[category];
-      if (data.taskCount > 0) {
-        data.completionRate = (data.completedCount / data.taskCount) * 100;
-      }
-    });
-    
-    // Sort by completion rate (highest first)
-    return Object.entries(categoryProgress)
-      .sort((a, b) => b[1].completionRate - a[1].completionRate)
-      .map(([category, data]) => ({ category, ...data }));
+    return finalQuestions;
   };
-  
-  // Helper to identify balanced categories (low imbalance)
-  const identifyBalancedCategories = () => {
-    const imbalances = analyzeImbalancesByCategory();
-    // Consider categories with less than 20% imbalance as "balanced"
-    return imbalances.filter(data => data.imbalance < 20);
-  };
-  
-  // Helper to find questions not previously asked
-  const getNewQuestions = () => {
-    // Get all question IDs that have been answered
-    const answeredQuestionIds = Object.keys(surveyResponses || {})
-      .map(key => key.split('-').pop())
-      .filter(id => id.startsWith('q'));
-    
-    // Find questions that haven't been asked yet
-    return fullQuestionSet.filter(q => !answeredQuestionIds.includes(q.id));
-  };
-  
-  // Get imbalance analysis
-  const imbalancedCategories = analyzeImbalancesByCategory();
-  const improvingCategories = identifyImprovingCategories();
-  const balancedCategories = identifyBalancedCategories();
-  const newQuestionPool = getNewQuestions();
-  
-  // Create weekly question set based on our strategy
-  const weeklyQuestions = [];
-  
-  // 1. Add questions from highest imbalance categories (8 questions)
-  imbalancedCategories.slice(0, 2).forEach(categoryData => {
-    const category = categoryData.category;
-    // Get questions for this category
-    const categoryQuestions = fullQuestionSet.filter(q => q.category === category);
-    
-    // Sort by total weight for maximum impact
-    const sortedQuestions = [...categoryQuestions].sort((a, b) => 
-      parseFloat(b.totalWeight || 0) - parseFloat(a.totalWeight || 0)
-    );
-    
-    // Take top 4 questions from each high-imbalance category
-    const topQuestions = sortedQuestions.slice(0, 4);
-    weeklyQuestions.push(...topQuestions);
-  });
-  
-  // 2. Add questions from improving categories (4 questions)
-  if (improvingCategories.length > 0) {
-    const category = improvingCategories[0].category;
-    const categoryQuestions = fullQuestionSet.filter(q => q.category === category);
-    
-    // Take 4 random questions from this category
-    const randomQuestions = categoryQuestions
-      .sort(() => 0.5 - Math.random())
-      .slice(0, 4);
-    
-    weeklyQuestions.push(...randomQuestions);
-  }
-  
-  // 3. Add questions from balanced categories (4 questions)
-  if (balancedCategories.length > 0) {
-    // Get questions from each balanced category
-    const questionsByCategory = {};
-    balancedCategories.forEach(categoryData => {
-      const category = categoryData.category;
-      questionsByCategory[category] = fullQuestionSet.filter(q => q.category === category);
-    });
-    
-    // Distribute 4 questions evenly across balanced categories
-    const stabilityQuestions = [];
-    let categoryIndex = 0;
-    while (stabilityQuestions.length < 4 && balancedCategories.length > 0) {
-      const category = balancedCategories[categoryIndex % balancedCategories.length].category;
-      const availableQuestions = questionsByCategory[category];
-      
-      if (availableQuestions.length > 0) {
-        // Take a random question
-        const randomIndex = Math.floor(Math.random() * availableQuestions.length);
-        stabilityQuestions.push(availableQuestions[randomIndex]);
-        // Remove the question so we don't pick it again
-        availableQuestions.splice(randomIndex, 1);
-      }
-      
-      categoryIndex++;
-    }
-    
-    weeklyQuestions.push(...stabilityQuestions);
-  }
-  
-  // 4. Add new questions not previously asked (4 questions)
-  if (newQuestionPool.length > 0) {
-    // Distribute across categories for variety
-    const newQuestions = [];
-    
-    // Group by category
-    const newByCategory = {};
-    categories.forEach(category => {
-      newByCategory[category] = newQuestionPool.filter(q => q.category === category);
-    });
-    
-    // Take one from each category if possible
-    categories.forEach(category => {
-      if (newByCategory[category].length > 0 && newQuestions.length < 4) {
-        const randomIndex = Math.floor(Math.random() * newByCategory[category].length);
-        newQuestions.push(newByCategory[category][randomIndex]);
-      }
-    });
-    
-    // Fill remaining slots with random new questions
-    const remainingNeeded = 4 - newQuestions.length;
-    if (remainingNeeded > 0 && newQuestionPool.length > newQuestions.length) {
-      const remainingQuestions = newQuestionPool.filter(q => !newQuestions.includes(q));
-      
-      const additionalQuestions = remainingQuestions
-        .sort(() => 0.5 - Math.random())
-        .slice(0, remainingNeeded);
-      
-      newQuestions.push(...additionalQuestions);
-    }
-    
-    weeklyQuestions.push(...newQuestions);
-  }
-  
-  // If we don't have enough questions yet, fill with random questions
-  if (weeklyQuestions.length < maxTotalQuestions) {
-    const remainingNeeded = maxTotalQuestions - weeklyQuestions.length;
-    
-    // Get all questions not already selected
-    const remainingQuestions = fullQuestionSet.filter(q => !weeklyQuestions.includes(q));
-    
-    // Take random remaining questions
-    const additionalQuestions = remainingQuestions
-      .sort(() => 0.5 - Math.random())
-      .slice(0, remainingNeeded);
-    
-    weeklyQuestions.push(...additionalQuestions);
-  }
-  
-  // Cap at max questions and add explanations
-  const finalQuestions = weeklyQuestions.slice(0, maxTotalQuestions).map(question => {
-    // Add weekly explanation based on question category and family context
-    let weeklyExplanation = "";
-    
-    if (imbalancedCategories.some(c => c.category === question.category && c.imbalance > 30)) {
-      weeklyExplanation = `This question is from a highly imbalanced category (${question.category}) where there's a ${Math.round(imbalancedCategories.find(c => c.category === question.category).imbalance)}% difference between parents. Tracking this regularly helps measure progress.`;
-    } else if (balancedCategories.some(c => c.category === question.category)) {
-      weeklyExplanation = `This question is from a relatively balanced category. We include it to ensure you maintain the good balance you've already achieved here.`;
-    } else if (newQuestionPool.includes(question)) {
-      weeklyExplanation = `This is a new question we haven't asked before, to help us discover other potential areas for improvement.`;
-    } else {
-      weeklyExplanation = `This question helps us track changes in your family's distribution of responsibilities over time.`;
-    }
-    
-    return {
-      ...question,
-      weeklyExplanation
-    };
-  });
-  
-  return finalQuestions;
-};
   
   // Initial questions
   const fullQuestionSet = generateFullQuestionSet();
@@ -710,8 +944,10 @@ const generateWeeklyQuestions = (weekNumber, isChild = false) => {
   // State for temporary survey progress
   const [currentSurveyResponsesState, setCurrentSurveyResponsesState] = useState({});
   const [completedQuestions, setCompletedQuestions] = useState([]);
-  // NEW: Add state for user-modified weights
+  // Track user-modified weights
   const [userModifiedWeights, setUserModifiedWeights] = useState({});
+  // Store the family data for personalization
+  const [familyDataState, setFamilyDataState] = useState(null);
 
   // Add or update a survey response
   const updateSurveyResponse = (questionId, answer) => {
@@ -747,7 +983,17 @@ const generateWeeklyQuestions = (weekNumber, isChild = false) => {
     setCompletedQuestions(questionIds);
   };
   
-  // NEW: Update weight attributes for a question
+  // Set family data for personalization
+  const setFamilyData = (data) => {
+    setFamilyDataState(data);
+  };
+  
+  // Get personalized initial survey questions
+  const getPersonalizedInitialQuestions = () => {
+    return selectPersonalizedInitialQuestions(fullQuestionSet, familyDataState, 72);
+  };
+  
+  // Update weight attributes for a question
   const updateQuestionWeight = (questionId, attributeName, newValue) => {
     // Find the question in the fullQuestionSet
     const questionIndex = fullQuestionSet.findIndex(q => q.id === questionId);
@@ -767,7 +1013,9 @@ const generateWeeklyQuestions = (weekNumber, isChild = false) => {
         highestPriority: "Invisible Parental Tasks",
         secondaryPriority: "Visible Parental Tasks",
         tertiaryPriority: "Invisible Household Tasks"
-      });      updatedQuestionSet[questionIndex].totalWeight = updatedWeight.toFixed(2);
+      });
+      
+      updatedQuestionSet[questionIndex].totalWeight = updatedWeight.toFixed(2);
       
       // Store the modified weight in user preferences
       setUserModifiedWeights(prev => ({
@@ -810,7 +1058,9 @@ const generateWeeklyQuestions = (weekNumber, isChild = false) => {
             highestPriority: "Invisible Parental Tasks",
             secondaryPriority: "Visible Parental Tasks",
             tertiaryPriority: "Invisible Household Tasks"
-          });          updatedQuestionSet[idx].totalWeight = similarQuestionWeight.toFixed(2);
+          });
+          
+          updatedQuestionSet[idx].totalWeight = similarQuestionWeight.toFixed(2);
           
           // Store this modification too
           setUserModifiedWeights(prev => ({
@@ -877,10 +1127,9 @@ const generateWeeklyQuestions = (weekNumber, isChild = false) => {
 
   // Context value
   const value = {
-    // Filter out relationship questions and cap at 100 for regular survey
+    // Filter out relationship questions for regular survey
     fullQuestionSet: fullQuestionSet
-      .filter(q => q.category !== "Relationship Health")
-      .slice(0, 100),
+      .filter(q => q.category !== "Relationship Health"),
     generateWeeklyQuestions,
     currentSurveyResponses: currentSurveyResponsesState,
     completedQuestions,
@@ -893,8 +1142,10 @@ const generateWeeklyQuestions = (weekNumber, isChild = false) => {
     // NEW: Add the user-modified weights state and update function
     userModifiedWeights,
     updateQuestionWeight,
-    // ... other getter functions
-    // New getter functions
+    // NEW: Add family data and personalization functions
+    setFamilyData,
+    getPersonalizedInitialQuestions,
+    // Getter functions
     getQuestionsByCategory,
     getHighImpactQuestions,
     getRelationshipImpactQuestions,
