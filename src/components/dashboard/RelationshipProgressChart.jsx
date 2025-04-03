@@ -13,6 +13,7 @@ const RelationshipProgressChart = () => {
   const [historicalData, setHistoricalData] = useState([]);
   const [chartType, setChartType] = useState('implementation');
   const [loading, setLoading] = useState(true);
+  const [hasEnoughData, setHasEnoughData] = useState(false);
   
   useEffect(() => {
     const loadData = async () => {
@@ -35,38 +36,41 @@ const RelationshipProgressChart = () => {
         });
         
         // Add data for each completed week
-        [...completedWeeks].sort((a, b) => a - b).forEach(week => {
-          const weekData = getWeekHistoryData(week);
-          if (weekData) {
-            // Try to get relationship data from week history
-            let satisfaction = 3.0; // Default
-            let strategiesCount = 0;
-            let avgImpl = 0;
-            
-            // Try to extract from different data structures
-            if (weekData.relationshipData) {
-              satisfaction = weekData.relationshipData.satisfaction || satisfaction;
-              strategiesCount = weekData.relationshipData.implementedStrategies?.length || 0;
-              avgImpl = weekData.relationshipData.avgImplementation || 0;
-            } else if (weekData.coupleCheckIn) {
-              satisfaction = weekData.coupleCheckIn.satisfaction || satisfaction;
+        if (completedWeeks && completedWeeks.length > 0) {
+          [...completedWeeks].sort((a, b) => a - b).forEach(week => {
+            const weekData = getWeekHistoryData(week);
+            if (weekData) {
+              // Try to get relationship data from week history
+              let satisfaction = 3.0; // Default
+              let strategiesCount = 0;
+              let avgImpl = 0;
+              
+              // Try to extract from different data structures
+              if (weekData.relationshipData) {
+                satisfaction = weekData.relationshipData.satisfaction || satisfaction;
+                strategiesCount = weekData.relationshipData.implementedStrategies?.length || 0;
+                avgImpl = weekData.relationshipData.avgImplementation || 0;
+              } else if (weekData.coupleCheckIn) {
+                satisfaction = weekData.coupleCheckIn.satisfaction || satisfaction;
+              }
+              
+              // Calculate implementation increase over time (simplified model)
+              const baseImpl = history[history.length - 1].avgImplementation;
+              avgImpl = avgImpl || Math.min(100, baseImpl + (10 * Math.random() + 5));
+              
+              // Add to history
+              history.push({
+                week: `Week ${week}`,
+                avgImplementation: avgImpl,
+                totalStrategies: strategiesCount || Math.floor(avgImpl / 20), // Approximate if missing
+                satisfaction: satisfaction
+              });
             }
-            
-            // Calculate implementation increase over time (simplified model)
-            const baseImpl = history[history.length - 1].avgImplementation;
-            avgImpl = avgImpl || Math.min(100, baseImpl + (10 * Math.random() + 5));
-            
-            // Add to history
-            history.push({
-              week: `Week ${week}`,
-              avgImplementation: avgImpl,
-              totalStrategies: strategiesCount || Math.floor(avgImpl / 20), // Approximate if missing
-              satisfaction: satisfaction
-            });
-          }
-        });
+          });
+        }
         
         setHistoricalData(history);
+        setHasEnoughData(history.length > 1 && completedWeeks && completedWeeks.length > 0);
       } catch (error) {
         console.error("Error loading relationship progress data:", error);
       } finally {
@@ -85,7 +89,7 @@ const RelationshipProgressChart = () => {
           <p className="font-medium text-sm font-roboto">{label}</p>
           {payload.map((entry, index) => (
             <p key={index} style={{ color: entry.color }} className="text-sm font-roboto">
-              {`${entry.name}: ${entry.value.toFixed(1)}${entry.unit || ''}`}
+              {`${entry.name}: ${entry.value?.toFixed(1) || 'N/A'}${entry.unit || ''}`}
             </p>
           ))}
         </div>
@@ -102,7 +106,7 @@ const RelationshipProgressChart = () => {
     );
   }
   
-  if (historicalData.length < 2) {
+  if (!hasEnoughData) {
     return (
       <div className="bg-white rounded-lg shadow p-6">
         <div className="text-center">
@@ -111,6 +115,12 @@ const RelationshipProgressChart = () => {
           <p className="text-gray-600 mb-6 font-roboto">
             Complete more check-ins to see your relationship progress over time
           </p>
+          <div className="p-6 bg-gray-50 rounded-lg inline-block">
+            <p className="text-sm text-gray-600 font-roboto">
+              This chart will show how your relationship strategies implementation affects your satisfaction.
+              Complete weekly check-ins to build your progress data.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -138,7 +148,13 @@ const RelationshipProgressChart = () => {
   return (
     <div className="bg-white rounded-lg shadow">
       <div className="p-6">
-        <h3 className="text-lg font-bold mb-4 font-roboto">Relationship Progress Tracking</h3>
+        <h3 className="text-lg font-bold mb-2 font-roboto flex items-center">
+          <CheckCircle size={20} className="mr-2 text-green-600" />
+          Relationship Progress Tracking
+        </h3>
+        <p className="text-sm text-gray-600 mb-4 font-roboto">
+          Track how your relationship strategies implementation affects overall satisfaction
+        </p>
         
         {/* Chart Type Selector */}
         <div className="flex mb-4">
@@ -179,6 +195,7 @@ const RelationshipProgressChart = () => {
                   dataKey="avgImplementation" 
                   stroke="#FF6B6B" 
                   name="Average Implementation (%)" 
+                  connectNulls={true}
                 />
                 <Line 
                   yAxisId="right" 
@@ -186,6 +203,7 @@ const RelationshipProgressChart = () => {
                   dataKey="totalStrategies" 
                   stroke="#4ECDC4" 
                   name="Strategies Implemented" 
+                  connectNulls={true}
                 />
               </LineChart>
             ) : chartType === 'satisfaction' ? (
@@ -200,6 +218,7 @@ const RelationshipProgressChart = () => {
                   dataKey="satisfaction" 
                   stroke="#FF6B6B" 
                   name="Relationship Satisfaction (1-5)" 
+                  connectNulls={true}
                 />
               </LineChart>
             ) : (
@@ -213,7 +232,11 @@ const RelationshipProgressChart = () => {
                   fill="#8884d8"
                   dataKey="value"
                   nameKey="name"
-                  label={({ name, percent }) => `${name.split(' ')[0]}: ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }) => {
+                    // Handle undefined percent and round to nearest integer
+                    const value = percent ? Math.round(percent * 100) : 0;
+                    return `${name?.split(' ')[0] || 'N/A'}: ${value}%`;
+                  }}
                 >
                   {strategyDistribution.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -237,7 +260,7 @@ const RelationshipProgressChart = () => {
               </span>
             </div>
             <p className="text-xs text-gray-600 font-roboto">
-              You've made {implementationChange > 0 ? 'progress' : 'changes'} in implementing the 10 key relationship strategies
+              You've made {implementationChange > 0 ? 'progress' : 'changes'} in implementing key relationship strategies
             </p>
           </div>
           
@@ -269,32 +292,34 @@ const RelationshipProgressChart = () => {
         </div>
         
         {/* Top Strategies */}
-        <div className="mb-4">
-          <h4 className="font-medium mb-3 font-roboto">Top Implemented Strategies</h4>
-          <div className="space-y-2">
-            {topStrategies.map((strategy, index) => (
-              <div key={index} className="flex items-center">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center bg-blue-100 text-blue-600 mr-3">
-                  {index === 0 ? <Heart size={16} /> : 
-                   index === 1 ? <CheckCircle size={16} /> : 
-                   <Clock size={16} />}
-                </div>
-                <div className="flex-1">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="font-medium text-sm font-roboto">{strategy.name}</span>
-                    <span className="text-xs font-roboto">{strategy.implementation}%</span>
+        {topStrategies.length > 0 && (
+          <div className="mb-4">
+            <h4 className="font-medium mb-3 font-roboto">Top Implemented Strategies</h4>
+            <div className="space-y-2">
+              {topStrategies.map((strategy, index) => (
+                <div key={index} className="flex items-center">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center bg-blue-100 text-blue-600 mr-3">
+                    {index === 0 ? <Heart size={16} /> : 
+                    index === 1 ? <CheckCircle size={16} /> : 
+                    <Clock size={16} />}
                   </div>
-                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-blue-500" 
-                      style={{ width: `${strategy.implementation}%` }} 
-                    />
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-medium text-sm font-roboto">{strategy.name || 'Unnamed Strategy'}</span>
+                      <span className="text-xs font-roboto">{strategy.implementation || 0}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-500" 
+                        style={{ width: `${strategy.implementation || 0}%` }} 
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
         
         {/* Insight */}
         <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">

@@ -10,17 +10,40 @@ const CoupleRelationshipChart = () => {
   const [insights, setInsights] = useState([]);
   const [loading, setLoading] = useState(true);
   const [chartType, setChartType] = useState('main'); // 'main', 'correlation', 'satisfaction'
-  // Add this after other useState declarations
-const [predictionData, setPredictionData] = useState([]);
-const [showPrediction, setShowPrediction] = useState(false);
+  const [predictionData, setPredictionData] = useState([]);
+  const [showPrediction, setShowPrediction] = useState(false);
+  const [hasEnoughData, setHasEnoughData] = useState(false);
 
   useEffect(() => {
     // Get trend data from context
     const data = getRelationshipTrendData();
-    setTrendData(data);
+    
+    // Check if we have enough meaningful data
+    const hasData = data && data.length >= 2 && 
+      data.some(point => typeof point.satisfaction === 'number');
+    
+    setHasEnoughData(hasData);
+    
+    // Clean and validate data - ensure numeric values
+    const cleanedData = data.map(point => ({
+      week: point.week,
+      satisfaction: typeof point.satisfaction === 'number' ? point.satisfaction : null,
+      communication: typeof point.communication === 'number' ? point.communication : null,
+      workloadBalance: typeof point.workloadBalance === 'number' ? point.workloadBalance : null
+    }));
+    
+    // Use default values for null or undefined properties
+    const processedData = cleanedData.map(point => ({
+      week: point.week,
+      satisfaction: point.satisfaction !== null ? point.satisfaction : 3.0,
+      communication: point.communication !== null ? point.communication : 3.0,
+      workloadBalance: point.workloadBalance !== null ? point.workloadBalance : 50.0
+    }));
+    
+    setTrendData(processedData);
     
     // Generate correlation data
-    const correlation = data.map(point => ({
+    const correlation = processedData.map(point => ({
       week: point.week,
       correlation: calculateCorrelation(point.workloadBalance, point.satisfaction),
       workloadBalance: point.workloadBalance,
@@ -29,11 +52,11 @@ const [showPrediction, setShowPrediction] = useState(false);
     setCorrelationData(correlation);
     
     // Generate insights based on data
-    setInsights(generateInsights(data, relationshipStrategies));
+    setInsights(generateInsights(processedData, relationshipStrategies));
     
-// Generate prediction data
-const predictions = generateSatisfactionPrediction(data, relationshipStrategies);
-setPredictionData(predictions);
+    // Generate prediction data
+    const predictions = generateSatisfactionPrediction(processedData, relationshipStrategies);
+    setPredictionData(predictions);
 
     setLoading(false);
   }, [getRelationshipTrendData, relationshipStrategies]);
@@ -41,6 +64,9 @@ setPredictionData(predictions);
   // Helper function to calculate correlation
   const calculateCorrelation = (balance, satisfaction) => {
     // Simplified correlation metric
+    if (typeof balance !== 'number' || typeof satisfaction !== 'number') {
+      return 0;
+    }
     return (balance / 100) * satisfaction;
   };
   
@@ -66,14 +92,14 @@ setPredictionData(predictions);
       insights.push({
         type: 'progress',
         title: 'Relationship Satisfaction Improving',
-        description: `Your relationship satisfaction has increased from ${previous.satisfaction} to ${latest.satisfaction} as workload balance improves.`,
+        description: `Your relationship satisfaction has increased from ${previous.satisfaction.toFixed(1)} to ${latest.satisfaction.toFixed(1)} as workload balance improves.`,
         icon: <TrendingUp size={20} className="text-green-600" />
       });
     } else if (latest.satisfaction < previous.satisfaction) {
       insights.push({
         type: 'warning',
         title: 'Relationship Satisfaction Decreasing',
-        description: `Despite efforts, satisfaction has decreased from ${previous.satisfaction} to ${latest.satisfaction}. Consider focusing more on emotional connection.`,
+        description: `Despite efforts, satisfaction has decreased from ${previous.satisfaction.toFixed(1)} to ${latest.satisfaction.toFixed(1)}. Consider focusing more on emotional connection.`,
         icon: <AlertCircle size={20} className="text-amber-600" />
       });
     }
@@ -121,43 +147,43 @@ setPredictionData(predictions);
     return insights;
   };
   
-// Add this after the generateInsights function
-const generateSatisfactionPrediction = (data, strategies) => {
-  if (!data || data.length < 2 || !strategies || strategies.length === 0) {
-    return null;
-  }
-  
-  // Get current satisfaction and implementation rates
-  const latest = data[data.length - 1];
-  const implementedStrategies = strategies.filter(s => s.implementation > 0);
-  const avgImplementation = implementedStrategies.length > 0 
-    ? implementedStrategies.reduce((sum, s) => sum + s.implementation, 0) / implementedStrategies.length 
-    : 0;
-  
-  // Calculate predicted improvement based on strategy implementation
-  // This is a simplified model - in real app would be more sophisticated
-  const baseImprovement = 0.02; // Base weekly improvement
-  const strategyEffect = avgImplementation / 100 * 0.08; // Effect of strategies
-  const predictedImprovement = baseImprovement + strategyEffect;
-  
-  // Generate prediction for next 8 weeks
-  const predictions = [];
-  let currentSatisfaction = latest.satisfaction;
-  
-  for (let week = 1; week <= 8; week++) {
-    // Apply diminishing returns as satisfaction approaches 5
-    const weeklyImprovement = predictedImprovement * (5 - currentSatisfaction) / 2;
-    currentSatisfaction = Math.min(5, currentSatisfaction + weeklyImprovement);
+  // Generate prediction data
+  const generateSatisfactionPrediction = (data, strategies) => {
+    if (!data || data.length < 2 || !strategies || strategies.length === 0) {
+      return null;
+    }
     
-    predictions.push({
-      week: `Week ${data.length + week}`,
-      satisfaction: parseFloat(currentSatisfaction.toFixed(2)),
-      predicted: true
-    });
-  }
-  
-  return predictions;
-};
+    // Get current satisfaction and implementation rates
+    const latest = data[data.length - 1];
+    const implementedStrategies = strategies.filter(s => s.implementation > 0);
+    const avgImplementation = implementedStrategies.length > 0 
+      ? implementedStrategies.reduce((sum, s) => sum + s.implementation, 0) / implementedStrategies.length 
+      : 0;
+    
+    // Calculate predicted improvement based on strategy implementation
+    // This is a simplified model - in real app would be more sophisticated
+    const baseImprovement = 0.02; // Base weekly improvement
+    const strategyEffect = avgImplementation / 100 * 0.08; // Effect of strategies
+    const predictedImprovement = baseImprovement + strategyEffect;
+    
+    // Generate prediction for next 8 weeks
+    const predictions = [];
+    let currentSatisfaction = latest.satisfaction;
+    
+    for (let week = 1; week <= 8; week++) {
+      // Apply diminishing returns as satisfaction approaches 5
+      const weeklyImprovement = predictedImprovement * (5 - currentSatisfaction) / 2;
+      currentSatisfaction = Math.min(5, currentSatisfaction + weeklyImprovement);
+      
+      predictions.push({
+        week: `Week ${data.length + week}`,
+        satisfaction: parseFloat(currentSatisfaction.toFixed(2)),
+        predicted: true
+      });
+    }
+    
+    return predictions;
+  };
 
   // Custom tooltip for charts
   const CustomTooltip = ({ active, payload, label }) => {
@@ -167,7 +193,7 @@ const generateSatisfactionPrediction = (data, strategies) => {
           <p className="font-medium text-sm font-roboto">{label}</p>
           {payload.map((entry, index) => (
             <p key={index} style={{ color: entry.color }} className="text-sm font-roboto">
-              {entry.name}: {entry.value.toFixed(1)}
+              {entry.name}: {entry.value?.toFixed(1) || 'N/A'}
             </p>
           ))}
         </div>
@@ -176,15 +202,8 @@ const generateSatisfactionPrediction = (data, strategies) => {
     return null;
   };
   
-  if (loading) {
-    return (
-      <div className="bg-white rounded-lg shadow p-6 flex justify-center items-center h-64">
-        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
-      </div>
-    );
-  }
-  
-  if (trendData.length < 2) {
+  // Empty state when no data
+  if (!hasEnoughData && !loading) {
     return (
       <div className="bg-white rounded-lg shadow p-6">
         <div className="text-center">
@@ -204,40 +223,54 @@ const generateSatisfactionPrediction = (data, strategies) => {
     );
   }
   
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow p-6 flex justify-center items-center h-64">
+        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+      </div>
+    );
+  }
+  
   return (
     <div className="bg-white rounded-lg shadow">
       <div className="p-6">
-        <h3 className="text-lg font-bold mb-4 font-roboto">Relationship & Workload Balance</h3>
+        <h3 className="text-lg font-bold mb-2 font-roboto flex items-center">
+          <Heart size={20} className="mr-2 text-pink-600" />
+          Relationship & Workload Balance
+        </h3>
+        <p className="text-sm text-gray-600 mb-4 font-roboto">
+          Track how workload balance affects your relationship satisfaction over time
+        </p>
         
-        {/* Chart Type Selector - REPLACE the existing selector */}
-<div className="flex mb-4">
-  <button 
-    className={`px-4 py-2 font-roboto ${chartType === 'main' ? 'border-b-2 border-black font-medium' : 'text-gray-500'}`} 
-    onClick={() => setChartType('main')}
-  >
-    Combined View
-  </button>
-  <button 
-    className={`px-4 py-2 font-roboto ${chartType === 'satisfaction' ? 'border-b-2 border-black font-medium' : 'text-gray-500'}`} 
-    onClick={() => setChartType('satisfaction')}
-  >
-    Satisfaction Trend
-  </button>
-  <button 
-    className={`px-4 py-2 font-roboto ${chartType === 'correlation' ? 'border-b-2 border-black font-medium' : 'text-gray-500'}`} 
-    onClick={() => setChartType('correlation')}
-  >
-    Correlation
-  </button>
-  <button 
-    className={`px-4 py-2 font-roboto ${chartType === 'prediction' ? 'border-b-2 border-black font-medium' : 'text-gray-500'}`} 
-    onClick={() => setChartType('prediction')}
-  >
-    Prediction
-  </button>
-</div>
+        {/* Chart Type Selector */}
+        <div className="flex mb-4">
+          <button 
+            className={`px-4 py-2 font-roboto ${chartType === 'main' ? 'border-b-2 border-black font-medium' : 'text-gray-500'}`} 
+            onClick={() => setChartType('main')}
+          >
+            Combined View
+          </button>
+          <button 
+            className={`px-4 py-2 font-roboto ${chartType === 'satisfaction' ? 'border-b-2 border-black font-medium' : 'text-gray-500'}`} 
+            onClick={() => setChartType('satisfaction')}
+          >
+            Satisfaction Trend
+          </button>
+          <button 
+            className={`px-4 py-2 font-roboto ${chartType === 'correlation' ? 'border-b-2 border-black font-medium' : 'text-gray-500'}`} 
+            onClick={() => setChartType('correlation')}
+          >
+            Correlation
+          </button>
+          <button 
+            className={`px-4 py-2 font-roboto ${chartType === 'prediction' ? 'border-b-2 border-black font-medium' : 'text-gray-500'}`} 
+            onClick={() => setChartType('prediction')}
+          >
+            Prediction
+          </button>
+        </div>
         
-        {/* Main Chart */}
+        {/* Charts Section */}
         <div className="h-64 w-full mb-6">
           <ResponsiveContainer width="100%" height="100%">
             {chartType === 'main' ? (
@@ -254,6 +287,7 @@ const generateSatisfactionPrediction = (data, strategies) => {
                   dataKey="satisfaction" 
                   stroke="#FF6B6B" 
                   name="Relationship Satisfaction (1-5)" 
+                  connectNulls={true}
                 />
                 <Line 
                   yAxisId="left" 
@@ -261,6 +295,7 @@ const generateSatisfactionPrediction = (data, strategies) => {
                   dataKey="communication" 
                   stroke="#4ECDC4" 
                   name="Communication Quality (1-5)" 
+                  connectNulls={true}
                 />
                 <Line 
                   yAxisId="right" 
@@ -268,31 +303,33 @@ const generateSatisfactionPrediction = (data, strategies) => {
                   dataKey="workloadBalance" 
                   stroke="#1A535C" 
                   name="Workload Balance (0-100)" 
+                  connectNulls={true}
                 />
               </LineChart>
-              // Add this as a new option in the chartType conditional, after the other chart options
-) : chartType === 'prediction' ? (
-  <LineChart data={[...trendData, ...(predictionData || [])]}>
-    <CartesianGrid strokeDasharray="3 3" />
-    <XAxis dataKey="week" />
-    <YAxis domain={[0, 5]} />
-    <Tooltip content={<CustomTooltip />} />
-    <Legend />
-    <Line 
-      type="monotone" 
-      dataKey="satisfaction" 
-      stroke="#FF6B6B" 
-      name="Relationship Satisfaction (1-5)"
-      strokeWidth={2}
-      dot={(props) => {
-        const { cx, cy, payload } = props;
-        if (payload.predicted) {
-          return <circle cx={cx} cy={cy} r={4} fill="white" stroke="#FF6B6B" strokeWidth={2} />;
-        }
-        return <circle cx={cx} cy={cy} r={4} fill="#FF6B6B" />;
-      }}
-    />
-  </LineChart>
+            ) : chartType === 'prediction' ? (
+              <LineChart data={[...trendData, ...(predictionData || [])]}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="week" />
+                <YAxis domain={[0, 5]} />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend />
+                <Line 
+                  type="monotone" 
+                  dataKey="satisfaction" 
+                  stroke="#FF6B6B" 
+                  name="Relationship Satisfaction (1-5)"
+                  strokeWidth={2}
+                  connectNulls={true}
+                  dot={(props) => {
+                    const { cx, cy, payload } = props;
+                    if (!cx || !cy) return null;
+                    if (payload.predicted) {
+                      return <circle cx={cx} cy={cy} r={4} fill="white" stroke="#FF6B6B" strokeWidth={2} />;
+                    }
+                    return <circle cx={cx} cy={cy} r={4} fill="#FF6B6B" />;
+                  }}
+                />
+              </LineChart>
             ) : chartType === 'satisfaction' ? (
               <AreaChart data={trendData}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -307,6 +344,7 @@ const generateSatisfactionPrediction = (data, strategies) => {
                   fill="#FF6B6B" 
                   fillOpacity={0.3}
                   name="Relationship Satisfaction (1-5)" 
+                  connectNulls={true}
                 />
               </AreaChart>
             ) : (
@@ -321,6 +359,7 @@ const generateSatisfactionPrediction = (data, strategies) => {
                   dataKey="correlation" 
                   stroke="#8884d8" 
                   name="Balance-Satisfaction Correlation" 
+                  connectNulls={true}
                 />
               </LineChart>
             )}
@@ -354,34 +393,34 @@ const generateSatisfactionPrediction = (data, strategies) => {
           ))}
         </div>
         
-{/* Add this after the key insights section */}
-{predictionData && predictionData.length > 0 && chartType === 'prediction' && (
-  <div className="mt-4 p-4 border rounded-lg bg-gradient-to-r from-purple-50 to-blue-50">
-    <h4 className="font-medium mb-2 font-roboto">Satisfaction Prediction Model</h4>
-    <p className="text-sm text-gray-600 font-roboto">
-      Based on your current strategy implementation and progress, here's how your relationship satisfaction may evolve:
-    </p>
-    <div className="mt-3 space-y-2">
-      <div className="flex justify-between items-center">
-        <span className="text-sm font-roboto">Current satisfaction:</span>
-        <span className="font-medium text-sm font-roboto">{trendData[trendData.length-1]?.satisfaction.toFixed(1)}/5</span>
-      </div>
-      <div className="flex justify-between items-center">
-        <span className="text-sm font-roboto">Predicted in 4 weeks:</span>
-        <span className="font-medium text-sm font-roboto">{predictionData[3]?.satisfaction.toFixed(1)}/5</span>
-      </div>
-      <div className="flex justify-between items-center">
-        <span className="text-sm font-roboto">Predicted in 8 weeks:</span>
-        <span className="font-medium text-sm font-roboto">{predictionData[7]?.satisfaction.toFixed(1)}/5</span>
-      </div>
-    </div>
-    <div className="mt-3 p-3 bg-white rounded border border-blue-100">
-      <p className="text-xs text-blue-700 font-roboto">
-        <strong>Success tips:</strong> Increasing your implementation of the "Daily Check-ins" and "Gratitude & Affirmation" strategies could boost your satisfaction more quickly.
-      </p>
-    </div>
-  </div>
-)}
+        {/* Prediction Section */}
+        {predictionData && predictionData.length > 0 && chartType === 'prediction' && (
+          <div className="mt-4 p-4 border rounded-lg bg-gradient-to-r from-purple-50 to-blue-50">
+            <h4 className="font-medium mb-2 font-roboto">Satisfaction Prediction Model</h4>
+            <p className="text-sm text-gray-600 font-roboto">
+              Based on your current strategy implementation and progress, here's how your relationship satisfaction may evolve:
+            </p>
+            <div className="mt-3 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-roboto">Current satisfaction:</span>
+                <span className="font-medium text-sm font-roboto">{trendData[trendData.length-1]?.satisfaction.toFixed(1)}/5</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-roboto">Predicted in 4 weeks:</span>
+                <span className="font-medium text-sm font-roboto">{predictionData[3]?.satisfaction.toFixed(1)}/5</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-roboto">Predicted in 8 weeks:</span>
+                <span className="font-medium text-sm font-roboto">{predictionData[7]?.satisfaction.toFixed(1)}/5</span>
+              </div>
+            </div>
+            <div className="mt-3 p-3 bg-white rounded border border-blue-100">
+              <p className="text-xs text-blue-700 font-roboto">
+                <strong>Success tips:</strong> Regular check-ins and expressing appreciation for your partner could boost your satisfaction more quickly.
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="mt-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
           <h4 className="font-medium mb-2 font-roboto">Why This Matters</h4>
