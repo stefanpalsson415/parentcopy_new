@@ -1475,7 +1475,7 @@ const FloatingCalendarWidget = () => {
                                 <button 
                                   onClick={(e) => {
                                     e.stopPropagation(); // Prevent opening details modal
-                                    if (confirm("Are you sure you want to delete this event?")) {
+                                    if (window.confirm("Are you sure you want to delete this event?")) {
                                       deleteEvent(event);
                                     }
                                   }}
@@ -1607,7 +1607,7 @@ const FloatingCalendarWidget = () => {
                                 <button 
                                   onClick={(e) => {
                                     e.stopPropagation(); // Prevent opening details modal
-                                    if (confirm("Are you sure you want to delete this event?")) {
+                                    if (window.confirm("Are you sure you want to delete this event?")) {
                                       deleteEvent(event);
                                     }
                                   }}
@@ -1990,9 +1990,10 @@ const FloatingCalendarWidget = () => {
                     <>
                       <button
                         onClick={() => {
-                          if (selectedEvent.firestoreId && confirm("Are you sure you want to delete this event?")) {
-                            deleteEvent(selectedEvent);
-                          }
+                          const confirmation = window.confirm("Are you sure you want to delete this event?");
+if (confirmation) {
+  deleteEvent(selectedEvent);
+}
                         }}
                         className="px-4 py-2 border border-red-300 text-red-600 rounded text-sm font-roboto flex items-center"
                         disabled={!selectedEvent.firestoreId}
