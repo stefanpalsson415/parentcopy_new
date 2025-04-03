@@ -394,35 +394,46 @@ class ClaudeService {
   }
   
   // Format system prompt with family context
-  formatSystemPrompt(familyContext) {
-    // Log the context data for debugging
-    console.log("Formatting system prompt with context:", Object.keys(familyContext));
-    
-    // Get knowledge base if available
-    const kb = familyContext.knowledgeBase || {};
-    
-    // Create knowledge base section
-    let knowledgeBaseContent = '';
-    if (kb.whitepapers) {
-      knowledgeBaseContent = `
-      === ALLIE KNOWLEDGE BASE ===
-      
-      TASK CATEGORIES:
-      - Visible Household: ${kb.whitepapers.taskCategories?.visibleHousehold || ''}
-      - Invisible Household: ${kb.whitepapers.taskCategories?.invisibleHousehold || ''}
-      - Visible Parental: ${kb.whitepapers.taskCategories?.visibleParental || ''}
-      - Invisible Parental: ${kb.whitepapers.taskCategories?.invisibleParental || ''}
-      
-      RESEARCH FINDINGS:
-      - Mental Load: ${kb.whitepapers.research?.mentalLoad || ''}
-      - Relationship Impact: ${kb.whitepapers.research?.relationshipImpact || ''}
-      - Child Development: ${kb.whitepapers.research?.childDevelopment || ''}
-      
-      METHODOLOGY:
-      - Task Weighting: ${kb.whitepapers.methodology?.taskWeighting || ''}
-      - Improvement Framework: ${kb.whitepapers.methodology?.improvementFramework || ''}
+ // Update to formatSystemPrompt method in ClaudeService.js
 
-     Calendar Integration Knowledge:
+formatSystemPrompt(familyContext) {
+  // Log the context data for debugging
+  console.log("Formatting system prompt with context:", Object.keys(familyContext));
+  
+  // Get knowledge base if available
+  const kb = familyContext.knowledgeBase || {};
+  
+  // Current date and time information for Claude
+  const currentDate = new Date();
+  const formattedDate = currentDate.toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    month: 'long', 
+    day: 'numeric',
+    year: 'numeric'
+  });
+  
+  // Create knowledge base section
+  let knowledgeBaseContent = '';
+  if (kb.whitepapers) {
+    knowledgeBaseContent = `
+    === ALLIE KNOWLEDGE BASE ===
+    
+    TASK CATEGORIES:
+    - Visible Household: ${kb.whitepapers.taskCategories?.visibleHousehold || ''}
+    - Invisible Household: ${kb.whitepapers.taskCategories?.invisibleHousehold || ''}
+    - Visible Parental: ${kb.whitepapers.taskCategories?.visibleParental || ''}
+    - Invisible Parental: ${kb.whitepapers.taskCategories?.invisibleParental || ''}
+    
+    RESEARCH FINDINGS:
+    - Mental Load: ${kb.whitepapers.research?.mentalLoad || ''}
+    - Relationship Impact: ${kb.whitepapers.research?.relationshipImpact || ''}
+    - Child Development: ${kb.whitepapers.research?.childDevelopment || ''}
+    
+    METHODOLOGY:
+    - Task Weighting: ${kb.whitepapers.methodology?.taskWeighting || ''}
+    - Improvement Framework: ${kb.whitepapers.methodology?.improvementFramework || ''}
+
+    Calendar Integration Knowledge:
 Allie supports calendar integration with:
 1. Google Calendar - requires sign-in through settings
 2. Apple Calendar - available on macOS devices 
@@ -435,76 +446,75 @@ IMPORTANT: You HAVE a calendar system in this app. When users ask about adding s
 4. NEVER say you don't have a calendar system or don't know the date
 
 When asked about dates or calendar requests, remember you ARE able to handle calendar functionality through the app's built-in calendar service.
-
-      
-      PARENTING STRATEGIES:
-      1. Positive Reinforcement: ${kb.whitepapers.parentingStrategies?.positiveReinforcement?.summary || ''}
-         Research shows: ${kb.whitepapers.parentingStrategies?.positiveReinforcement?.research || ''}
-      
-      2. Responsibility Development: ${kb.whitepapers.parentingStrategies?.responsibilityDevelopment?.summary || ''}
-         Research shows: ${kb.whitepapers.parentingStrategies?.responsibilityDevelopment?.research || ''}
-      
-      3. Emotional Support: ${kb.whitepapers.parentingStrategies?.emotionalSupport?.summary || ''}
-         Research shows: ${kb.whitepapers.parentingStrategies?.emotionalSupport?.research || ''}
-      
-      4. Integrated Approach: ${kb.whitepapers.parentingStrategies?.integratedApproach?.summary || ''}
-         Research shows: ${kb.whitepapers.parentingStrategies?.integratedApproach?.research || ''}
-      `;
-    }
     
-    // Create FAQ section if available
-    let faqContent = '';
-    if (kb.faqs) {
-      faqContent = '\n=== FREQUENTLY ASKED QUESTIONS ===\n';
-      Object.entries(kb.faqs).forEach(([question, answer]) => {
-        faqContent += `Q: ${question}\nA: ${answer}\n\n`;
+    PARENTING STRATEGIES:
+    1. Positive Reinforcement: ${kb.whitepapers.parentingStrategies?.positiveReinforcement?.summary || ''}
+       Research shows: ${kb.whitepapers.parentingStrategies?.positiveReinforcement?.research || ''}
+    
+    2. Responsibility Development: ${kb.whitepapers.parentingStrategies?.responsibilityDevelopment?.summary || ''}
+       Research shows: ${kb.whitepapers.parentingStrategies?.responsibilityDevelopment?.research || ''}
+    
+    3. Emotional Support: ${kb.whitepapers.parentingStrategies?.emotionalSupport?.summary || ''}
+       Research shows: ${kb.whitepapers.parentingStrategies?.emotionalSupport?.research || ''}
+    
+    4. Integrated Approach: ${kb.whitepapers.parentingStrategies?.integratedApproach?.summary || ''}
+       Research shows: ${kb.whitepapers.parentingStrategies?.integratedApproach?.research || ''}
+    `;
+  }
+  
+  // Create FAQ section if available
+  let faqContent = '';
+  if (kb.faqs) {
+    faqContent = '\n=== FREQUENTLY ASKED QUESTIONS ===\n';
+    Object.entries(kb.faqs).forEach(([question, answer]) => {
+      faqContent += `Q: ${question}\nA: ${answer}\n\n`;
+    });
+  }
+  
+  // Add marketing statements if available
+  let marketingContent = '';
+  if (kb.marketing) {
+    marketingContent = '\n=== KEY BENEFITS ===\n';
+    if (kb.marketing.valueProps) {
+      kb.marketing.valueProps.forEach(prop => {
+        marketingContent += `- ${prop}\n`;
       });
     }
+  }
+  
+  // Create relationship strategies section
+  let relationshipContent = '';
+  if (familyContext.relationshipData) {
+    relationshipContent = `
+    === RELATIONSHIP STRATEGIES ===
     
-    // Add marketing statements if available
-    let marketingContent = '';
-    if (kb.marketing) {
-      marketingContent = '\n=== KEY BENEFITS ===\n';
-      if (kb.marketing.valueProps) {
-        kb.marketing.valueProps.forEach(prop => {
-          marketingContent += `- ${prop}\n`;
-        });
-      }
+    These 10 key relationship strategies strengthen the parental bond:
+    1. Brief Daily Check-ins: 5-10 minutes of connection each day
+    2. Divide and Conquer Tasks: Clear role assignment for responsibilities
+    3. Regular Date Nights: Dedicated couple time at least monthly
+    4. Practice Gratitude & Affirmation: Regular appreciation expressions
+    5. Create a Unified Family Calendar: Shared scheduling system
+    6. Collaborative Problem-Solving: Structured approach to challenges
+    7. Prioritize Self-Care: Ensuring "me time" for each parent
+    8. Consider Couples Workshops: Professional guidance when needed
+    9. Celebrate Milestones Together: Acknowledging achievements
+    10. Shared Future Planning: Joint vision for family direction
+    
+    Current Implementation Status:
+    - Average implementation: ${familyContext.relationshipData.avgImplementation?.toFixed(0) || 0}%
+    - Most implemented strategy: ${familyContext.relationshipData.topStrategy || 'None'}
+    - Number of well-implemented strategies: ${familyContext.relationshipData.implementedStrategies?.length || 0}
+    `;
+    
+    if (familyContext.coupleData && familyContext.coupleData.satisfaction) {
+      relationshipContent += `
+    Latest Couple Data:
+    - Satisfaction level: ${familyContext.coupleData.satisfaction}/5
+    - Communication quality: ${familyContext.coupleData.communication}/5
+    `;
     }
-    
-    // Create relationship strategies section
-    let relationshipContent = '';
-    if (familyContext.relationshipData) {
-      relationshipContent = `
-      === RELATIONSHIP STRATEGIES ===
-      
-      These 10 key relationship strategies strengthen the parental bond:
-      1. Brief Daily Check-ins: 5-10 minutes of connection each day
-      2. Divide and Conquer Tasks: Clear role assignment for responsibilities
-      3. Regular Date Nights: Dedicated couple time at least monthly
-      4. Practice Gratitude & Affirmation: Regular appreciation expressions
-      5. Create a Unified Family Calendar: Shared scheduling system
-      6. Collaborative Problem-Solving: Structured approach to challenges
-      7. Prioritize Self-Care: Ensuring "me time" for each parent
-      8. Consider Couples Workshops: Professional guidance when needed
-      9. Celebrate Milestones Together: Acknowledging achievements
-      10. Shared Future Planning: Joint vision for family direction
-      
-      Current Implementation Status:
-      - Average implementation: ${familyContext.relationshipData.avgImplementation?.toFixed(0) || 0}%
-      - Most implemented strategy: ${familyContext.relationshipData.topStrategy || 'None'}
-      - Number of well-implemented strategies: ${familyContext.relationshipData.implementedStrategies?.length || 0}
-      `;
-      
-      if (familyContext.coupleData && familyContext.coupleData.satisfaction) {
-        relationshipContent += `
-      Latest Couple Data:
-      - Satisfaction level: ${familyContext.coupleData.satisfaction}/5
-      - Communication quality: ${familyContext.coupleData.communication}/5
-      `;
-      }
-    }
-    
+  }
+  
 
 // Add this to the existing knowledgeBaseContent
 const childDevelopmentContent = `
@@ -666,94 +676,97 @@ CHILDREN'S CLOTHING STORAGE TIPS:
 
 // Add this to the existing knowledgeBaseContent
 knowledgeBaseContent += childDevelopmentContent;
-    
+  
 
-    // Create a context-rich system prompt
-    return `You are Allie, an AI assistant specialized in family workload balance. 
-    Your purpose is to help families distribute responsibilities more equitably and improve their dynamics.
-    
-    Family Information:
-    Family Name: ${familyContext.familyName || 'Unknown'}
-    Number of Adults: ${familyContext.adults || 2}
-    Number of Children: ${familyContext.children?.length || 0}
-    Current Week: ${familyContext.currentWeek || 1}
-    Family ID: ${familyContext.familyId || 'Unknown'}
-    
-    ${familyContext.familyMembers ? `
-    Family Members:
-    ${familyContext.familyMembers.map(m => `- ${m.name}: ${m.role} (${m.roleType || 'Child'})`).join('\n')}
-    ` : ''}
-    
-    ${familyContext.surveyData ? `
-    Survey Data:
-    Total Questions: ${familyContext.surveyData.totalQuestions || 0}
-    Mama Percentage: ${familyContext.surveyData.mamaPercentage?.toFixed(1) || 50}%
-    Papa Percentage: ${(100 - (familyContext.surveyData.mamaPercentage || 50)).toFixed(1)}%
-    
-    Category Breakdown:
-    ${Object.entries(familyContext.surveyData.categories || {}).map(([category, data]) => 
-      `- ${category}: Mama ${data.mamaPercent?.toFixed(1) || 0}%, Papa ${data.papaPercent?.toFixed(1) || 0}%`
-    ).join('\n')}
-    ` : ''}
-    
-    ${familyContext.tasks && familyContext.tasks.length > 0 ? `
-    Current Tasks:
-    ${familyContext.tasks.map(task => 
-      `- "${task.title}" assigned to ${task.assignedTo} (${task.completed ? 'Completed' : 'Pending'}): ${task.description}`
-    ).join('\n')}
-    ` : ''}
-    
-    ${familyContext.impactInsights && familyContext.impactInsights.length > 0 ? `
-    Family Insights:
-    ${familyContext.impactInsights.map(insight => 
-      `- ${insight.type || 'Insight'} for ${insight.category || 'Family'}: ${insight.message}`
-    ).join('\n')}
-    ` : ''}
-    
-    ${familyContext.balanceScores ? `
-    Current Balance Scores:
-    - Overall Balance: Mama ${familyContext.balanceScores.overallBalance?.mama?.toFixed(1) || 50}%, Papa ${familyContext.balanceScores.overallBalance?.papa?.toFixed(1) || 50}%
-    ${Object.entries(familyContext.balanceScores.categoryBalance || {}).map(([category, scores]) => 
-      `- ${category}: Mama ${scores.mama?.toFixed(1) || 0}%, Papa ${scores.papa?.toFixed(1) || 0}%, Imbalance: ${scores.imbalance?.toFixed(1) || 0}%`
-    ).join('\n')}
-    ` : ''}
-    
-    ${knowledgeBaseContent}
-    
-    ${relationshipContent}
-    
-    ${marketingContent}
-    
-    ${faqContent}
-    
-    ${familyContext.surveyData && familyContext.surveyData.responses ? `
-    IMPORTANT: You have access to detailed survey responses for this family. When asked about specific tasks or categories, reference this data to provide personalized insights rather than general information.
-    ` : ''}
-    
-    You can help with:
-    1. Explaining how to use the Allie app
-    2. Providing insights about family survey results
-    3. Offering research-backed parenting advice
-    4. Suggesting ways to improve family balance
-    5. Answering questions about the app's mission and methodology
-    6. Giving relationship advice based on the 10 strategies
-    7. Connecting workload balance to relationship health
-    8. Adding tasks and meetings to calendars
-    9. Managing calendar integrations
-    10. Analyzing their specific survey data and tasks
-    
-    Always be supportive, practical, and focused on improving family dynamics through better balance.
-    Remember that all data is confidential to this family.
-    
-    In your responses:
-    - Be concise but friendly
-    - Provide practical, actionable advice whenever possible
-    - Focus on equity and balance rather than "traditional" gender roles
-    - Remember that "balance" doesn't always mean a perfect 50/50 split
-    - Encourage communication between family members
-    - When mentioning research or scientific findings, refer to the studies in the knowledge base
-    - Suggest appropriate relationship strategies when workload issues arise`;
-  }
+  // Create a context-rich system prompt
+  return `You are Allie, an AI assistant specialized in family workload balance. 
+  Your purpose is to help families distribute responsibilities more equitably and improve their dynamics.
+  
+  Today's date is ${formattedDate}.
+  Current time: ${currentDate.toLocaleTimeString()}.
+  
+  Family Information:
+  Family Name: ${familyContext.familyName || 'Unknown'}
+  Number of Adults: ${familyContext.adults || 2}
+  Number of Children: ${familyContext.children?.length || 0}
+  Current Week: ${familyContext.currentWeek || 1}
+  Family ID: ${familyContext.familyId || 'Unknown'}
+  
+  ${familyContext.familyMembers ? `
+  Family Members:
+  ${familyContext.familyMembers.map(m => `- ${m.name}: ${m.role} (${m.roleType || 'Child'})`).join('\n')}
+  ` : ''}
+  
+  ${familyContext.surveyData ? `
+  Survey Data:
+  Total Questions: ${familyContext.surveyData.totalQuestions || 0}
+  Mama Percentage: ${familyContext.surveyData.mamaPercentage?.toFixed(1) || 50}%
+  Papa Percentage: ${(100 - (familyContext.surveyData.mamaPercentage || 50)).toFixed(1)}%
+  
+  Category Breakdown:
+  ${Object.entries(familyContext.surveyData.categories || {}).map(([category, data]) => 
+    `- ${category}: Mama ${data.mamaPercent?.toFixed(1) || 0}%, Papa ${data.papaPercent?.toFixed(1) || 0}%`
+  ).join('\n')}
+  ` : ''}
+  
+  ${familyContext.tasks && familyContext.tasks.length > 0 ? `
+  Current Tasks:
+  ${familyContext.tasks.map(task => 
+    `- "${task.title}" assigned to ${task.assignedTo} (${task.completed ? 'Completed' : 'Pending'}): ${task.description}`
+  ).join('\n')}
+  ` : ''}
+  
+  ${familyContext.impactInsights && familyContext.impactInsights.length > 0 ? `
+  Family Insights:
+  ${familyContext.impactInsights.map(insight => 
+    `- ${insight.type || 'Insight'} for ${insight.category || 'Family'}: ${insight.message}`
+  ).join('\n')}
+  ` : ''}
+  
+  ${familyContext.balanceScores ? `
+  Current Balance Scores:
+  - Overall Balance: Mama ${familyContext.balanceScores.overallBalance?.mama?.toFixed(1) || 50}%, Papa ${familyContext.balanceScores.overallBalance?.papa?.toFixed(1) || 50}%
+  ${Object.entries(familyContext.balanceScores.categoryBalance || {}).map(([category, scores]) => 
+    `- ${category}: Mama ${scores.mama?.toFixed(1) || 0}%, Papa ${scores.papa?.toFixed(1) || 0}%, Imbalance: ${scores.imbalance?.toFixed(1) || 0}%`
+  ).join('\n')}
+  ` : ''}
+  
+  ${knowledgeBaseContent}
+  
+  ${relationshipContent}
+  
+  ${marketingContent}
+  
+  ${faqContent}
+  
+  ${familyContext.surveyData && familyContext.surveyData.responses ? `
+  IMPORTANT: You have access to detailed survey responses for this family. When asked about specific tasks or categories, reference this data to provide personalized insights rather than general information.
+  ` : ''}
+  
+  You can help with:
+  1. Explaining how to use the Allie app
+  2. Providing insights about family survey results
+  3. Offering research-backed parenting advice
+  4. Suggesting ways to improve family balance
+  5. Answering questions about the app's mission and methodology
+  6. Giving relationship advice based on the 10 strategies
+  7. Connecting workload balance to relationship health
+  8. Adding tasks and meetings to calendars
+  9. Managing calendar integrations
+  10. Analyzing their specific survey data and tasks
+  
+  Always be supportive, practical, and focused on improving family dynamics through better balance.
+  Remember that all data is confidential to this family.
+  
+  In your responses:
+  - Be concise but friendly
+  - Provide practical, actionable advice whenever possible
+  - Focus on equity and balance rather than "traditional" gender roles
+  - Remember that "balance" doesn't always mean a perfect 50/50 split
+  - Encourage communication between family members
+  - When mentioning research or scientific findings, refer to the studies in the knowledge base
+  - Suggest appropriate relationship strategies when workload issues arise`;
+}
 }
 
 export default new ClaudeService();

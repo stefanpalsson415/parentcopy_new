@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, X, MinusSquare, RefreshCw, ChevronLeft, ChevronRight, ArrowUpRight, AlertCircle, Activity, BookOpen, Heart, Bell, ChevronUp, ChevronDown, Users, MapPin, Clock } from 'lucide-react';
+import { Calendar, X, MinusSquare, RefreshCw, ChevronLeft, ChevronRight, ArrowUpRight, AlertCircle, Activity, BookOpen, Heart, Bell, ChevronUp, ChevronDown, Users, MapPin, Clock, Info, User, Check } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import CalendarService from '../../services/CalendarService';
@@ -29,7 +29,11 @@ const FloatingCalendarWidget = () => {
   const [view, setView] = useState('all'); // 'all', 'tasks', 'appointments', 'activities'
   const [loading, setLoading] = useState(false);
   const [widgetHeight, setWidgetHeight] = useState(68); // Default height (in rems)
+  const [widgetWidth, setWidgetWidth] = useState(80); // Default width in rem
   const [lastRefresh, setLastRefresh] = useState(Date.now());
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [showEventDetails, setShowEventDetails] = useState(false);
+  const [addedEvents, setAddedEvents] = useState({});
   
   // Helper function to get days in month
   const getDaysInMonth = (year, month) => {
@@ -100,6 +104,21 @@ const FloatingCalendarWidget = () => {
       window.removeEventListener('calendar-event-added', refreshEvents);
     };
   }, []);
+  
+  // Helper to generate a unique key for an event
+  const getEventKey = (event) => {
+    if (!event) return null;
+    
+    // Try to create a unique identifier based on event properties
+    let key = '';
+    
+    if (event.title) key += event.title;
+    if (event.dateObj) key += '-' + event.dateObj.toISOString().split('T')[0];
+    if (event.childName) key += '-' + event.childName;
+    if (event.id) key += '-' + event.id;
+    
+    return key.toLowerCase().replace(/\s+/g, '-');
+  };
   
   // Load general calendar events (from the calendar_events collection)
   const loadGeneralCalendarEvents = async () => {
@@ -172,6 +191,16 @@ const FloatingCalendarWidget = () => {
       
       // Get general calendar events (including those added via chat)
       const generalEvents = await loadGeneralCalendarEvents();
+      
+      // Track already added events
+      const addedEventsMap = {};
+      generalEvents.forEach(event => {
+        const eventKey = getEventKey(event);
+        if (eventKey) {
+          addedEventsMap[eventKey] = true;
+        }
+      });
+      setAddedEvents(addedEventsMap);
       
       // Combine all events
       const combined = [
@@ -456,6 +485,12 @@ const FloatingCalendarWidget = () => {
       // Add event to calendar
       await CalendarService.addEvent(event, currentUser.uid);
       
+      // Mark as added in our tracking
+      setAddedEvents(prev => ({
+        ...prev,
+        [getEventKey(task)]: true
+      }));
+      
       // Show a simple notification
       CalendarService.showNotification("Task added to calendar", "success");
       
@@ -478,6 +513,12 @@ const FloatingCalendarWidget = () => {
       
       // Add event to calendar
       await CalendarService.addEvent(event, currentUser.uid);
+      
+      // Mark as added in our tracking
+      setAddedEvents(prev => ({
+        ...prev,
+        [getEventKey(meeting)]: true
+      }));
       
       // Show a simple notification
       CalendarService.showNotification("Meeting added to calendar", "success");
@@ -701,6 +742,12 @@ const FloatingCalendarWidget = () => {
       if (calendarEvent) {
         await CalendarService.addEvent(calendarEvent, currentUser.uid);
         
+        // Mark as added in our tracking
+        setAddedEvents(prev => ({
+          ...prev,
+          [getEventKey(event)]: true
+        }));
+        
         // Show notification
         CalendarService.showNotification(`${event.childName ? `${event.childName}'s ` : ''}${event.title || 'event'} added to calendar`, "success");
         
@@ -824,8 +871,8 @@ const FloatingCalendarWidget = () => {
   return (
     <div className="fixed bottom-4 left-4 z-40">
       <div 
-        className="bg-white border border-black shadow-lg rounded-lg w-80 flex flex-col"
-        style={{ height: `${widgetHeight}rem` }}
+        className="bg-white border border-black shadow-lg rounded-lg flex flex-col"
+        style={{ height: `${widgetHeight}rem`, width: `${widgetWidth}rem` }}
       >
         {/* Header */}
         <div className="flex justify-between items-center border-b p-3">
@@ -836,6 +883,23 @@ const FloatingCalendarWidget = () => {
             <span className="font-medium font-roboto">Family Calendar</span>
           </div>
           <div className="flex">
+            {/* Width controls */}
+            <button 
+              onClick={() => setWidgetWidth(prev => Math.max(prev - 10, 80))} 
+              className="p-1 hover:bg-gray-100 rounded"
+              title="Decrease width"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button 
+              onClick={() => setWidgetWidth(prev => Math.min(prev + 10, 140))} 
+              className="p-1 hover:bg-gray-100 rounded"
+              title="Increase width"
+            >
+              <ChevronRight size={18} />
+            </button>
+            
+            {/* Height controls */}
             <button 
               onClick={decreaseHeight} 
               className="p-1 hover:bg-gray-100 rounded"
@@ -963,7 +1027,14 @@ const FloatingCalendarWidget = () => {
                     (view === 'meetings' && (event.category === 'meeting' || event.eventType === 'meeting'))
                   )
                   .map((event, index) => (
-                    <div key={index} className="border rounded-lg p-2 hover:bg-gray-50">
+                    <div 
+                      key={index} 
+                      className="border rounded-lg p-2 hover:bg-gray-50 cursor-pointer"
+                      onClick={() => {
+                        setSelectedEvent(event);
+                        setShowEventDetails(true);
+                      }}
+                    >
                       <div className="flex justify-between">
                         <div>
                           <div className="flex items-center">
@@ -978,24 +1049,34 @@ const FloatingCalendarWidget = () => {
                             {!event.childName && !event.assignedToName && event.time && `At ${event.time}`}
                           </p>
                         </div>
-                        <button 
-                          onClick={() => {
-                            if (event.eventType === 'appointment' || event.eventType === 'activity' || 
-                                event.eventType === 'event' || event.eventType === 'homework') {
-                              handleAddChildEventToCalendar(event);
-                            } else if (event.eventType === 'meeting') {
-                              handleAddMeetingToCalendar(event);
-                            } else if (event.eventType === 'task') {
-                              handleAddTaskToCalendar(event);
-                            } else {
-                              // Default handling
-                              handleAddChildEventToCalendar(event);
-                            }
-                          }}
-                          className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
-                        >
-                          Add
-                        </button>
+                        {/* Only show Add button if event is not already added */}
+                        {!addedEvents[getEventKey(event)] && (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent opening details modal
+                              if (event.eventType === 'appointment' || event.eventType === 'activity' || 
+                                  event.eventType === 'event' || event.eventType === 'homework') {
+                                handleAddChildEventToCalendar(event);
+                              } else if (event.eventType === 'meeting') {
+                                handleAddMeetingToCalendar(event);
+                              } else if (event.eventType === 'task') {
+                                handleAddTaskToCalendar(event);
+                              } else {
+                                // Default handling
+                                handleAddChildEventToCalendar(event);
+                              }
+                            }}
+                            className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
+                          >
+                            Add
+                          </button>
+                        )}
+                        {addedEvents[getEventKey(event)] && (
+                          <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded font-roboto flex items-center">
+                            <Check size={12} className="mr-1" />
+                            Added
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1023,35 +1104,54 @@ const FloatingCalendarWidget = () => {
                   .sort((a, b) => a.dateObj - b.dateObj)
                   .slice(0, 5)
                   .map((event, index) => (
-                    <div key={index} className="border rounded-lg p-2 flex justify-between items-center">
-                      <div>
-                        <div className="flex items-center">
-                          {getEventIcon(event)}
-                          <p className="text-sm font-medium font-roboto">{event.title}</p>
+                    <div 
+                      key={index} 
+                      className="border rounded-lg p-2 cursor-pointer hover:bg-gray-50"
+                      onClick={() => {
+                        setSelectedEvent(event);
+                        setShowEventDetails(true);
+                      }}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="flex items-center">
+                            {getEventIcon(event)}
+                            <p className="text-sm font-medium font-roboto">{event.title}</p>
+                          </div>
+                          <p className="text-xs text-gray-500 font-roboto">
+                            {formatDate(event.date || event.startDate || event.dueDate)}
+                            {event.time && ` at ${event.time}`}
+                          </p>
                         </div>
-                        <p className="text-xs text-gray-500 font-roboto">
-                          {formatDate(event.date || event.startDate || event.dueDate)}
-                          {event.time && ` at ${event.time}`}
-                        </p>
+                        {/* Only show Add button if event is not already added */}
+                        {!addedEvents[getEventKey(event)] && (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent opening details modal
+                              if (event.eventType === 'appointment' || event.eventType === 'activity' || 
+                                  event.eventType === 'event' || event.eventType === 'homework') {
+                                handleAddChildEventToCalendar(event);
+                              } else if (event.eventType === 'meeting') {
+                                handleAddMeetingToCalendar(event);
+                              } else if (event.eventType === 'task') {
+                                handleAddTaskToCalendar(event);
+                              } else {
+                                // Default handling
+                                handleAddChildEventToCalendar(event);
+                              }
+                            }}
+                            className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
+                          >
+                            Add
+                          </button>
+                        )}
+                        {addedEvents[getEventKey(event)] && (
+                          <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded font-roboto flex items-center">
+                            <Check size={12} className="mr-1" />
+                            Added
+                          </span>
+                        )}
                       </div>
-                      <button 
-                        onClick={() => {
-                          if (event.eventType === 'appointment' || event.eventType === 'activity' || 
-                              event.eventType === 'event' || event.eventType === 'homework') {
-                            handleAddChildEventToCalendar(event);
-                          } else if (event.eventType === 'meeting') {
-                            handleAddMeetingToCalendar(event);
-                          } else if (event.eventType === 'task') {
-                            handleAddTaskToCalendar(event);
-                          } else {
-                            // Default handling
-                            handleAddChildEventToCalendar(event);
-                          }
-                        }}
-                        className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
-                      >
-                        Add
-                      </button>
                     </div>
                   ))}
               </div>
@@ -1075,21 +1175,32 @@ const FloatingCalendarWidget = () => {
                   taskRecommendations
                     .filter(task => !task.completed)
                     .slice(0, 3)
-                    .map(task => (
-                      <div key={task.id} className="p-2 border rounded-lg flex justify-between items-center">
-                        <div className="flex-1 pr-2">
-                          <p className="text-sm font-medium truncate font-roboto">{task.title}</p>
-                          <p className="text-xs text-gray-500 font-roboto">For: {task.assignedToName}</p>
+                    .map(task => {
+                      const taskKey = getEventKey(task);
+                      return (
+                        <div key={task.id} className="p-2 border rounded-lg flex justify-between items-center">
+                          <div className="flex-1 pr-2">
+                            <p className="text-sm font-medium truncate font-roboto">{task.title}</p>
+                            <p className="text-xs text-gray-500 font-roboto">For: {task.assignedToName}</p>
+                          </div>
+                          
+                          {!addedEvents[taskKey] && (
+                            <button 
+                              onClick={() => handleAddTaskToCalendar(task)}
+                              className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
+                            >
+                              Add
+                            </button>
+                          )}
+                          {addedEvents[taskKey] && (
+                            <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded font-roboto flex items-center">
+                              <Check size={12} className="mr-1" />
+                              Added
+                            </span>
+                          )}
                         </div>
-                        
-                        <button 
-                          onClick={() => handleAddTaskToCalendar(task)}
-                          className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
-                        >
-                          Add
-                        </button>
-                      </div>
-                    ))
+                      );
+                    })
                 ) : (
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
                     <p className="text-sm text-gray-500 font-roboto">No active tasks available.</p>
@@ -1107,6 +1218,82 @@ const FloatingCalendarWidget = () => {
       >
         <Calendar size={24} />
       </button>
+
+      {/* Event Details Modal */}
+      {showEventDetails && selectedEvent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-4 border-b flex justify-between items-center">
+              <h3 className="text-lg font-semibold font-roboto">{selectedEvent.title}</h3>
+              <button
+                onClick={() => setShowEventDetails(false)}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-4">
+              <div className="space-y-4">
+                {/* Date and Time */}
+                <div className="flex items-start">
+                  <Clock size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-sm font-roboto">Date & Time</p>
+                    <p className="text-sm text-gray-600 font-roboto">
+                      {selectedEvent.dateObj?.toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        month: 'long', 
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}
+                    </p>
+                    <p className="text-sm text-gray-600 font-roboto">
+                      {selectedEvent.time || selectedEvent.dateObj?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Location */}
+                {selectedEvent.location && (
+                  <div className="flex items-start">
+                    <MapPin size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium text-sm font-roboto">Location</p>
+                      <p className="text-sm text-gray-600 font-roboto">{selectedEvent.location}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Person */}
+                {(selectedEvent.childName || selectedEvent.assignedToName) && (
+                  <div className="flex items-start">
+                    <User size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium text-sm font-roboto">For</p>
+                      <p className="text-sm text-gray-600 font-roboto">
+                        {selectedEvent.childName || selectedEvent.assignedToName}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Description */}
+                {selectedEvent.description && (
+                  <div className="flex items-start">
+                    <Info size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium text-sm font-roboto">Description</p>
+                      <p className="text-sm text-gray-600 font-roboto whitespace-pre-wrap">
+                        {selectedEvent.description}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
