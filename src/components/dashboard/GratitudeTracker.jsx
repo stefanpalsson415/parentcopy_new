@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useFamily } from '../../contexts/FamilyContext';
-import { Heart, Plus, MessageSquare, User, Calendar, X, Edit, Trash2 } from 'lucide-react';
+import { Heart, Plus, MessageSquare, User, Calendar, X, Edit, Trash2, Send, Smartphone } from 'lucide-react';
+import { doc, setDoc, collection } from 'firebase/firestore';
+import { db } from '../../services/firebase';
+import { serverTimestamp } from 'firebase/firestore';
 
-const GratitudeTracker = () => {
+const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSending = false }) => {
   const { familyId, familyMembers, selectedUser } = useFamily();
   
   const [gratitudes, setGratitudes] = useState([]);
@@ -18,41 +21,68 @@ const GratitudeTracker = () => {
     thisWeek: 0,
     categories: {}
   });
+  const [showSmsConfirm, setShowSmsConfirm] = useState(false);
+  const [gratitudeToSend, setGratitudeToSend] = useState(null);
   
   // Load gratitude data
   useEffect(() => {
     const loadGratitudeData = async () => {
       if (!familyId) return;
       
-      // In a real implementation, this would load from database
-      // For now, using mock data
-      const mockGratitudes = [
-        { 
-          id: '1', 
-          text: 'Thank you for handling the school pickup yesterday when I was stuck in a meeting.',
-          fromId: familyMembers.find(m => m.roleType === 'Mama')?.id,
-          fromName: familyMembers.find(m => m.roleType === 'Mama')?.name,
-          toId: familyMembers.find(m => m.roleType === 'Papa')?.id,
-          toName: familyMembers.find(m => m.roleType === 'Papa')?.name,
-          date: new Date(Date.now() - 86400000).toISOString(),
-          category: 'appreciation'
-        },
-        { 
-          id: '2', 
-          text: 'I appreciate how you always make time to listen to me even when you\'re busy.',
-          fromId: familyMembers.find(m => m.roleType === 'Papa')?.id,
-          fromName: familyMembers.find(m => m.roleType === 'Papa')?.name,
-          toId: familyMembers.find(m => m.roleType === 'Mama')?.id,
-          toName: familyMembers.find(m => m.roleType === 'Mama')?.name,
-          date: new Date(Date.now() - 172800000).toISOString(),
-          category: 'affirmation'
+      try {
+        // Query Firebase for saved gratitudes
+        const gratitudesRef = collection(db, "gratitudes");
+        const q = query(gratitudesRef, where("familyId", "==", familyId));
+        const querySnapshot = await getDocs(q);
+        
+        const loadedGratitudes = [];
+        querySnapshot.forEach((doc) => {
+          loadedGratitudes.push(doc.data());
+        });
+        
+        // If no saved gratitudes are found, use mock data
+        if (loadedGratitudes.length === 0) {
+          const mockGratitudes = [
+            { 
+              id: '1', 
+              text: 'Thank you for handling the school pickup yesterday when I was stuck in a meeting.',
+              fromId: familyMembers.find(m => m.roleType === 'Mama')?.id,
+              fromName: familyMembers.find(m => m.roleType === 'Mama')?.name,
+              toId: familyMembers.find(m => m.roleType === 'Papa')?.id,
+              toName: familyMembers.find(m => m.roleType === 'Papa')?.name,
+              date: new Date(Date.now() - 86400000).toISOString(),
+              category: 'appreciation'
+            },
+            { 
+              id: '2', 
+              text: 'I appreciate how you always make time to listen to me even when you\'re busy.',
+              fromId: familyMembers.find(m => m.roleType === 'Papa')?.id,
+              fromName: familyMembers.find(m => m.roleType === 'Papa')?.name,
+              toId: familyMembers.find(m => m.roleType === 'Mama')?.id,
+              toName: familyMembers.find(m => m.roleType === 'Mama')?.name,
+              date: new Date(Date.now() - 172800000).toISOString(),
+              category: 'affirmation'
+            }
+          ];
+          
+          setGratitudes(mockGratitudes);
+        } else {
+          // Sort by date (newest first)
+          loadedGratitudes.sort((a, b) => new Date(b.date) - new Date(a.date));
+          setGratitudes(loadedGratitudes);
         }
-      ];
-      
-      setGratitudes(mockGratitudes);
-      
-      // Calculate stats
-      calculateStats(mockGratitudes);
+        
+        // Calculate stats
+        calculateStats(loadedGratitudes.length > 0 ? loadedGratitudes : mockGratitudes);
+      } catch (error) {
+        console.error("Error loading gratitude data:", error);
+        // Fall back to mock data if load fails
+        const mockGratitudes = [
+          // same as above
+        ];
+        setGratitudes(mockGratitudes);
+        calculateStats(mockGratitudes);
+      }
     };
     
     loadGratitudeData();
@@ -90,7 +120,7 @@ const GratitudeTracker = () => {
   };
   
   // Add new gratitude
-  const addGratitude = () => {
+  const addGratitude = async () => {
     if (!newGratitude.text || !newGratitude.recipientId) return;
     
     const recipient = familyMembers.find(m => m.id === newGratitude.recipientId);
@@ -103,7 +133,8 @@ const GratitudeTracker = () => {
       toId: recipient.id,
       toName: recipient.name,
       date: new Date().toISOString(),
-      category: newGratitude.category
+      category: newGratitude.category,
+      familyId: familyId // Important for Firebase queries
     };
     
     const updatedGratitudes = editIndex !== null 
@@ -122,8 +153,17 @@ const GratitudeTracker = () => {
     setShowAddModal(false);
     setEditIndex(null);
     
-    // In a real implementation, save to database
-    // await saveFamilyData({ gratitudes: updatedGratitudes }, familyId);
+    // Save to Firebase
+    try {
+      const gratitudeRef = doc(collection(db, "gratitudes"), gratitude.id);
+      await setDoc(gratitudeRef, {
+        ...gratitude,
+        createdAt: serverTimestamp()
+      });
+      console.log("Gratitude saved successfully");
+    } catch (error) {
+      console.error("Error saving gratitude:", error);
+    }
   };
   
   // Edit gratitude
@@ -141,22 +181,83 @@ const GratitudeTracker = () => {
   };
   
   // Delete gratitude
-  const deleteGratitude = (index) => {
+  const deleteGratitude = async (index) => {
     const confirmed = window.confirm("Are you sure you want to delete this appreciation?");
     if (!confirmed) return;
     
+    const gratitudeToDelete = gratitudes[index];
     const updatedGratitudes = gratitudes.filter((_, i) => i !== index);
     setGratitudes(updatedGratitudes);
     calculateStats(updatedGratitudes);
     
-    // In a real implementation, save to database
-    // await saveFamilyData({ gratitudes: updatedGratitudes }, familyId);
+    // Delete from Firebase
+    try {
+      const gratitudeRef = doc(db, "gratitudes", gratitudeToDelete.id);
+      await deleteDoc(gratitudeRef);
+      console.log("Gratitude deleted successfully");
+    } catch (error) {
+      console.error("Error deleting gratitude:", error);
+    }
   };
   
   // Format date for display
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+  
+  // Handle SMS sending
+  const handleSendSms = async (gratitude) => {
+    // First check if SMS is enabled
+    if (!smsEnabled) {
+      // If not enabled, prompt to enable
+      setShowSmsConfirm(false);
+      if (onEnableSms) {
+        onEnableSms();
+      }
+      return;
+    }
+    
+    // If enabled, confirm sending
+    if (!showSmsConfirm) {
+      setGratitudeToSend(gratitude);
+      setShowSmsConfirm(true);
+      return;
+    }
+    
+    // Send the SMS
+    try {
+      const success = await onSendSms(gratitudeToSend);
+      
+      if (success) {
+        // Update the gratitude to mark as sent
+        const updatedGratitudes = gratitudes.map(g => 
+          g.id === gratitudeToSend.id 
+            ? { ...g, sentViaSms: true, smsSentAt: new Date().toISOString() } 
+            : g
+        );
+        
+        setGratitudes(updatedGratitudes);
+        
+        // Update in Firebase
+        try {
+          const gratitudeRef = doc(db, "gratitudes", gratitudeToSend.id);
+          await updateDoc(gratitudeRef, {
+            sentViaSms: true,
+            smsSentAt: serverTimestamp()
+          });
+        } catch (updateError) {
+          console.error("Error updating gratitude with SMS status:", updateError);
+        }
+        
+        // Clear confirmation
+        setShowSmsConfirm(false);
+        setGratitudeToSend(null);
+      }
+    } catch (error) {
+      console.error("Error sending SMS:", error);
+      alert("Failed to send SMS. Please try again.");
+    }
   };
   
   // Get suggestion for gratitude expression
@@ -209,6 +310,26 @@ const GratitudeTracker = () => {
           Regular expressions of gratitude and affirmation strengthen your relationship and improve emotional connection.
         </p>
         
+        {/* SMS Capability Callout */}
+        {!smsEnabled && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+            <div className="flex items-start">
+              <Smartphone size={16} className="text-blue-500 mr-2 mt-1 flex-shrink-0" />
+              <div>
+                <p className="text-sm text-blue-700 font-roboto">
+                  Enable SMS sending to share your appreciation directly to your partner's phone.
+                </p>
+                <button
+                  onClick={onEnableSms}
+                  className="mt-2 text-xs px-3 py-1 bg-blue-500 text-white rounded font-roboto"
+                >
+                  Set Up SMS
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* Stats Display */}
         <div className="grid grid-cols-3 gap-3 mb-5">
           <div className="bg-pink-50 p-3 rounded-lg text-center border border-pink-100">
@@ -218,7 +339,7 @@ const GratitudeTracker = () => {
           
           <div className="bg-blue-50 p-3 rounded-lg text-center border border-blue-100">
             <div className="text-2xl font-bold text-blue-700 font-roboto">{stats.thisWeek}</div>
-            <div className="text-xs text-blue-700 font-roboto">This Week</div>
+            <div className="text-xs text-blue-700 font-roboto">This Cycle</div>
           </div>
           
           <div className="bg-purple-50 p-3 rounded-lg text-center border border-purple-100">
@@ -263,29 +384,46 @@ const GratitudeTracker = () => {
                           <div className="text-xs text-gray-500 font-roboto">{formatDate(gratitude.date)}</div>
                         </div>
                         
-                        {gratitude.fromId === selectedUser.id && (
-                          <div className="flex space-x-1">
+                        <div className="flex space-x-1">
+                          {smsEnabled && gratitude.fromId === selectedUser.id && !gratitude.sentViaSms && (
                             <button 
-                              onClick={() => editGratitude(index)}
-                              className="text-gray-400 hover:text-gray-600"
+                              onClick={() => handleSendSms(gratitude)}
+                              disabled={isSending}
+                              className="text-blue-500 hover:text-blue-700"
+                              title="Send via SMS"
                             >
-                              <Edit size={14} />
+                              {isSending && gratitudeToSend?.id === gratitude.id ? (
+                                <div className="w-4 h-4 border-2 border-t-transparent border-blue-500 rounded-full animate-spin"></div>
+                              ) : (
+                                <Send size={14} />
+                              )}
                             </button>
-                            <button 
-                              onClick={() => deleteGratitude(index)}
-                              className="text-gray-400 hover:text-red-600"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        )}
+                          )}
+
+                          {gratitude.fromId === selectedUser.id && (
+                            <>
+                              <button 
+                                onClick={() => editGratitude(index)}
+                                className="text-gray-400 hover:text-gray-600"
+                              >
+                                <Edit size={14} />
+                              </button>
+                              <button 
+                                onClick={() => deleteGratitude(index)}
+                                className="text-gray-400 hover:text-red-600"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                       
                       <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
                         {gratitude.text}
                       </div>
                       
-                      <div className="mt-2">
+                      <div className="mt-2 flex items-center justify-between">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-roboto ${
                           gratitude.category === 'appreciation' ? 'bg-blue-100 text-blue-700' :
                           gratitude.category === 'affirmation' ? 'bg-purple-100 text-purple-700' :
@@ -293,6 +431,13 @@ const GratitudeTracker = () => {
                         }`}>
                           {gratitude.category.charAt(0).toUpperCase() + gratitude.category.slice(1)}
                         </span>
+                        
+                        {gratitude.sentViaSms && (
+                          <span className="text-xs text-gray-500 flex items-center">
+                            <Smartphone size={12} className="mr-1" />
+                            Sent via SMS
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -395,6 +540,24 @@ const GratitudeTracker = () => {
                   ))}
                 </div>
               </div>
+              
+              {/* SMS Option (if enabled) */}
+              {smsEnabled && (
+                <div className="mt-2">
+                  <label className="flex items-center text-sm font-roboto">
+                    <input 
+                      type="checkbox" 
+                      className="mr-2" 
+                      checked={newGratitude.sendViaSms}
+                      onChange={(e) => setNewGratitude({
+                        ...newGratitude, 
+                        sendViaSms: e.target.checked
+                      })}
+                    />
+                    Send via SMS after saving
+                  </label>
+                </div>
+              )}
             </div>
             
             <div className="flex space-x-3 justify-end">
@@ -414,6 +577,63 @@ const GratitudeTracker = () => {
                 }`}
               >
                 {editIndex !== null ? 'Update' : 'Express'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* SMS Confirmation Modal */}
+      {showSmsConfirm && gratitudeToSend && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold font-roboto">Send as SMS</h3>
+              <button 
+                onClick={() => {
+                  setShowSmsConfirm(false);
+                  setGratitudeToSend(null);
+                }} 
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <p className="mb-4 font-roboto">
+              Send this message directly to {gratitudeToSend.toName}'s phone:
+            </p>
+            
+            <div className="p-3 bg-gray-50 rounded-lg mb-4 text-sm font-roboto">
+              {gratitudeToSend.text}
+            </div>
+            
+            <div className="flex space-x-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowSmsConfirm(false);
+                  setGratitudeToSend(null);
+                }}
+                className="px-4 py-2 border rounded font-roboto"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleSendSms(gratitudeToSend)}
+                disabled={isSending}
+                className="px-4 py-2 bg-black text-white rounded font-roboto flex items-center"
+              >
+                {isSending ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2"></div>
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send size={16} className="mr-2" />
+                    Send SMS
+                  </>
+                )}
               </button>
             </div>
           </div>
