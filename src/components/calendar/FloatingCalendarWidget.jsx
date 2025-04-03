@@ -2206,4 +2206,109 @@ const FloatingCalendarWidget = () => {
                         className="border p-1 rounded text-sm w-full min-h-[80px]"
                         placeholder="Add a description"
                         value={editedEvent?.description || ''}
-                        onChange={(e) => setEdit
+                          onChange={(e) => setEditedEvent({...editedEvent, description: e.target.value})}
+                      />
+                    ) : (
+                      <p className="text-sm text-gray-600 font-roboto whitespace-pre-line">
+                        {selectedEvent.description || selectedEvent.notes || "No description provided"}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Linked Entity */}
+                {selectedEvent.linkedEntity && (
+                  <div className="flex items-start">
+                    <Link size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium text-sm font-roboto">Linked to</p>
+                      <button 
+                        onClick={() => navigateToLinkedEntity(selectedEvent)}
+                        className="text-sm text-blue-600 hover:underline font-roboto flex items-center"
+                      >
+                        {selectedEvent.linkedEntity.type === 'meeting' ? 'Open Family Meeting' :
+                         selectedEvent.linkedEntity.type === 'task' ? 'View Task Details' :
+                         selectedEvent.linkedEntity.type === 'relationship' ? 'View Relationship Section' :
+                         selectedEvent.linkedEntity.type === 'child' ? 'View Child Profile' :
+                         'View Details'}
+                        <ArrowUpRight size={14} className="ml-1" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="p-4 border-t flex justify-between">
+              {isEditingEvent ? (
+                <>
+                  <button
+                    onClick={() => {
+                      setIsEditingEvent(false);
+                      setEditedEvent(null);
+                    }}
+                    className="px-4 py-2 border rounded hover:bg-gray-50 font-roboto"
+                    disabled={pendingAction === 'update'}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={updateEvent}
+                    className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 font-roboto flex items-center"
+                    disabled={pendingAction === 'update'}
+                  >
+                    {pendingAction === 'update' ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2"></div>
+                        Updating...
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
+                  </button>
+                </>
+              ) : (
+                <>
+                  {selectedEvent.firestoreId && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm("Are you sure you want to delete this event?")) {
+                          deleteEvent(selectedEvent);
+                        }
+                      }}
+                      className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-50 font-roboto flex items-center"
+                      disabled={pendingAction === 'delete'}
+                    >
+                      {pendingAction === 'delete' ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-t-transparent border-red-500 rounded-full animate-spin mr-2"></div>
+                          Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 size={16} className="mr-2" />
+                          Delete
+                        </>
+                      )}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setIsEditingEvent(true);
+                      setEditedEvent({...selectedEvent});
+                    }}
+                    className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 font-roboto flex items-center"
+                  >
+                    <Edit size={16} className="mr-2" />
+                    Edit
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default FloatingCalendarWidget;

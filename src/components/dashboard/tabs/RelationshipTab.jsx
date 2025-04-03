@@ -2,8 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Users, Heart, Calendar, ChevronDown, ChevronUp, Clock, 
   MessageCircle, Brain, Info, CheckCircle, Lightbulb, Target,
-  AlertCircle, Bell, PhoneOutgoing, Book, Star, Smartphone,
-  ArrowRight, RefreshCw, Award, Clipboard, Edit, Save, X
+  AlertCircle, Bell, Award, Clipboard, X, RefreshCw, ArrowRight
 } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -15,7 +14,6 @@ import SelfCarePlanner from '../SelfCarePlanner';
 import CoupleRelationshipChart from '../CoupleRelationshipChart';
 import RelationshipProgressChart from '../RelationshipProgressChart';
 import AIRelationshipInsights from '../AIRelationshipInsights';
-import StrategicActionsTracker from '../StrategicActionsTracker';
 import AllieAIEngineService from '../../../services/AllieAIEngineService';
 import { db } from '../../../services/firebase';
 import { doc, setDoc, getDoc, serverTimestamp, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
@@ -32,8 +30,120 @@ const formatDate = (dateString) => {
   });
 };
 
+// Cycle Status Component
+const CycleStatusTracker = ({ 
+  cycle, 
+  cycleData, 
+  questionnaireCompleted, 
+  onStartQuestionnaire, 
+  onStartMeeting 
+}) => {
+  return (
+    <div className="bg-white rounded-lg shadow p-6 mb-6">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-bold font-roboto">Cycle {cycle} Status</h3>
+        <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-roboto">
+          Current Cycle
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className={`border rounded-lg p-4 text-center ${questionnaireCompleted ? 'bg-green-50 border-green-200' : 'bg-gray-50'}`}>
+          <div className="mb-2">
+            {questionnaireCompleted ? (
+              <CheckCircle className="mx-auto text-green-600" size={24} />
+            ) : (
+              <Clipboard className="mx-auto text-gray-400" size={24} />
+            )}
+          </div>
+          <h4 className="text-sm font-medium font-roboto mb-1">Assessment</h4>
+          <p className="text-xs text-gray-600 font-roboto">
+            {questionnaireCompleted ? 'Completed' : 'Not started'}
+          </p>
+          {!questionnaireCompleted && (
+            <button 
+              onClick={onStartQuestionnaire}
+              className="mt-2 px-3 py-1 bg-black text-white text-xs rounded-full font-roboto"
+            >
+              Start
+            </button>
+          )}
+        </div>
+        
+        <div className={`border rounded-lg p-4 text-center ${cycleData?.meeting ? 'bg-green-50 border-green-200' : 'bg-gray-50'}`}>
+          <div className="mb-2">
+            {cycleData?.meeting ? (
+              <CheckCircle className="mx-auto text-green-600" size={24} />
+            ) : (
+              <Users className="mx-auto text-gray-400" size={24} />
+            )}
+          </div>
+          <h4 className="text-sm font-medium font-roboto mb-1">Couple Meeting</h4>
+          <p className="text-xs text-gray-600 font-roboto">
+            {cycleData?.meeting ? 'Completed' : questionnaireCompleted ? 'Ready to start' : 'Complete assessment first'}
+          </p>
+          {questionnaireCompleted && !cycleData?.meeting && (
+            <button 
+              onClick={onStartMeeting}
+              className="mt-2 px-3 py-1 bg-black text-white text-xs rounded-full font-roboto"
+            >
+              Start
+            </button>
+          )}
+        </div>
+        
+        <div className={`border rounded-lg p-4 text-center ${cycleData?.metrics ? 'bg-green-50 border-green-200' : 'bg-gray-50'}`}>
+          <div className="mb-2">
+            {cycleData?.metrics ? (
+              <CheckCircle className="mx-auto text-green-600" size={24} />
+            ) : (
+              <Target className="mx-auto text-gray-400" size={24} />
+            )}
+          </div>
+          <h4 className="text-sm font-medium font-roboto mb-1">Results</h4>
+          <p className="text-xs text-gray-600 font-roboto">
+            {cycleData?.metrics ? 'Available' : 'Complete assessment first'}
+          </p>
+          {cycleData?.metrics && (
+            <button 
+              onClick={() => {
+                // Scroll to charts section
+                document.getElementById('relationship-charts')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="mt-2 px-3 py-1 bg-black text-white text-xs rounded-full font-roboto"
+            >
+              View
+            </button>
+          )}
+        </div>
+      </div>
+      
+      {cycleData?.metrics && (
+        <div className="grid grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-pink-700">{cycleData.metrics.satisfaction?.toFixed(1) || "3.0"}</div>
+            <div className="text-xs text-gray-600">Satisfaction</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-blue-700">{cycleData.metrics.communication?.toFixed(1) || "3.0"}</div>
+            <div className="text-xs text-gray-600">Communication</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-purple-700">{cycleData.metrics.connection?.toFixed(1) || "3.0"}</div>
+            <div className="text-xs text-gray-600">Connection</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-green-700">{cycleData.metrics.workload?.toFixed(1) || "3.0"}</div>
+            <div className="text-xs text-gray-600">Workload Balance</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Relationship Health Questionnaire Component
-const RelationshipHealthQuestionnaire = ({ questions, onSubmit, cycle, previousData }) => {
+const RelationshipHealthQuestionnaire = ({ questions, onSubmit, cycle, previousData, onCancel }) => {
   const [responses, setResponses] = useState({});
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -87,7 +197,7 @@ const RelationshipHealthQuestionnaire = ({ questions, onSubmit, cycle, previousD
       questions: category.questions
     }));
 
-  // Handle response change
+  // Handle response change (always using 1-5 scale)
   const handleResponseChange = (questionId, value) => {
     setResponses(prev => ({
       ...prev,
@@ -189,17 +299,21 @@ const RelationshipHealthQuestionnaire = ({ questions, onSubmit, cycle, previousD
         )}
         
         <div className="flex justify-between mt-6">
-          <button
-            onClick={handlePrevious}
-            disabled={step === 0}
-            className={`px-4 py-2 rounded font-roboto ${
-              step === 0 
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
-            }`}
-          >
-            Previous
-          </button>
+          {step === 0 ? (
+            <button
+              onClick={onCancel}
+              className="px-4 py-2 border border-gray-300 rounded font-roboto"
+            >
+              Cancel
+            </button>
+          ) : (
+            <button
+              onClick={handlePrevious}
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded font-roboto"
+            >
+              Previous
+            </button>
+          )}
           
           <button
             onClick={handleNext}
@@ -255,128 +369,19 @@ const RelationshipHealthQuestionnaire = ({ questions, onSubmit, cycle, previousD
   );
 };
 
-// Phone Number Collection Component
-const PhoneNumberSetup = ({ phoneNumbers, onSave, onCancel }) => {
-  const [numbers, setNumbers] = useState(phoneNumbers || { mama: '', papa: '' });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-
-  // Handle phone number change
-  const handleChange = (role, value) => {
-    setNumbers(prev => ({
-      ...prev,
-      [role]: value
-    }));
-  };
-
-  // Handle save
-  const handleSave = async () => {
-    try {
-      setSaving(true);
-      setError(null);
-      
-      // Basic validation
-      if (!numbers.mama && !numbers.papa) {
-        setError("Please enter at least one phone number");
-        return;
-      }
-      
-      // Format validation - simple check for now
-      const phoneRegex = /^\+?[0-9\s()-]{10,15}$/;
-      if (numbers.mama && !phoneRegex.test(numbers.mama.trim())) {
-        setError("Please enter a valid phone number for Mama");
-        return;
-      }
-      
-      if (numbers.papa && !phoneRegex.test(numbers.papa.trim())) {
-        setError("Please enter a valid phone number for Papa");
-        return;
-      }
-      
-      await onSave(numbers);
-      
-    } catch (err) {
-      console.error("Error saving phone numbers:", err);
-      setError(err.message || "Failed to save phone numbers");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex items-start mb-6">
-        <PhoneOutgoing size={24} className="text-blue-600 mr-3 flex-shrink-0" />
-        <div>
-          <h4 className="font-bold mb-2 font-roboto">Phone Number Setup</h4>
-          <p className="text-sm text-gray-600 font-roboto">
-            Add your phone numbers to enable sending gratitude messages via SMS.
-            This is optional but enhances the experience.
-          </p>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-        <div>
-          <label className="block text-sm font-medium mb-1 font-roboto">Mama's Phone</label>
-          <input
-            type="tel"
-            className="w-full p-2 border rounded font-roboto"
-            placeholder="+1 (555) 123-4567"
-            value={numbers.mama}
-            onChange={(e) => handleChange('mama', e.target.value)}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1 font-roboto">Papa's Phone</label>
-          <input
-            type="tel"
-            className="w-full p-2 border rounded font-roboto"
-            placeholder="+1 (555) 123-4567"
-            value={numbers.papa}
-            onChange={(e) => handleChange('papa', e.target.value)}
-          />
-        </div>
-      </div>
-      
-      {error && (
-        <div className="p-3 mb-4 bg-red-50 text-red-700 rounded border border-red-200 text-sm font-roboto">
-          {error}
-        </div>
-      )}
-      
-      <div className="flex justify-between">
-        <button
-          onClick={onCancel}
-          className="px-4 py-2 border border-gray-300 rounded font-roboto"
-        >
-          Cancel
-        </button>
-        
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 font-roboto flex items-center"
-        >
-          {saving ? (
-            <>
-              <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2"></div>
-              Saving...
-            </>
-          ) : (
-            <>
-              <Smartphone size={16} className="mr-2" />
-              Enable SMS
-            </>
-          )}
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// Relationship Cycle History Component
+// Cycle History Component
 const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
+  // Get color for metric value
+  const getMetricColor = (value) => {
+    if (!value) return 'text-gray-500';
+    if (value >= 4.5) return 'text-green-700';
+    if (value >= 4) return 'text-green-600';
+    if (value >= 3.5) return 'text-blue-600';
+    if (value >= 3) return 'text-yellow-600';
+    if (value >= 2) return 'text-orange-600';
+    return 'text-red-600';
+  };
+
   // Helper to render metric indicator
   const renderMetricIndicator = (value, prevValue) => {
     if (!prevValue) return null;
@@ -393,10 +398,15 @@ const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
-      <h4 className="font-medium mb-6 font-roboto flex items-center">
-        <Bell size={20} className="mr-2" />
-        Relationship Cycle History
-      </h4>
+      <div className="flex justify-between items-center mb-4">
+        <h4 className="font-medium font-roboto flex items-center">
+          <Bell size={20} className="mr-2 text-indigo-600" />
+          <span>Relationship Cycle History</span>
+        </h4>
+        <p className="text-sm text-gray-500 font-roboto">
+          View past cycles to track your progress over time
+        </p>
+      </div>
       
       {history.length === 0 ? (
         <div className="text-center p-6 bg-gray-50 rounded-lg">
@@ -404,7 +414,7 @@ const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
         </div>
       ) : (
         <div className="space-y-6">
-          {history.map((cycle, index) => {
+          {history.slice(0, 3).map((cycle, index) => {
             const prevCycle = index < history.length - 1 ? history[index + 1] : null;
             
             return (
@@ -421,7 +431,9 @@ const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
                   <div className="grid grid-cols-4 gap-2 mb-3">
                     <div className="text-center">
                       <div className="flex items-center justify-center">
-                        <div className="text-lg font-bold text-pink-700">{cycle.data.metrics.satisfaction?.toFixed(1) || "N/A"}</div>
+                        <div className={`text-lg font-bold ${getMetricColor(cycle.data.metrics.satisfaction)}`}>
+                          {cycle.data.metrics.satisfaction?.toFixed(1) || "3.0"}
+                        </div>
                         {prevCycle && prevCycle.data?.metrics && (
                           <div className="ml-1">
                             {renderMetricIndicator(
@@ -435,7 +447,9 @@ const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
                     </div>
                     <div className="text-center">
                       <div className="flex items-center justify-center">
-                        <div className="text-lg font-bold text-blue-700">{cycle.data.metrics.communication?.toFixed(1) || "N/A"}</div>
+                        <div className={`text-lg font-bold ${getMetricColor(cycle.data.metrics.communication)}`}>
+                          {cycle.data.metrics.communication?.toFixed(1) || "3.0"}
+                        </div>
                         {prevCycle && prevCycle.data?.metrics && (
                           <div className="ml-1">
                             {renderMetricIndicator(
@@ -449,7 +463,9 @@ const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
                     </div>
                     <div className="text-center">
                       <div className="flex items-center justify-center">
-                        <div className="text-lg font-bold text-purple-700">{cycle.data.metrics.connection?.toFixed(1) || "N/A"}</div>
+                        <div className={`text-lg font-bold ${getMetricColor(cycle.data.metrics.connection)}`}>
+                          {cycle.data.metrics.connection?.toFixed(1) || "3.0"}
+                        </div>
                         {prevCycle && prevCycle.data?.metrics && (
                           <div className="ml-1">
                             {renderMetricIndicator(
@@ -463,7 +479,9 @@ const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
                     </div>
                     <div className="text-center">
                       <div className="flex items-center justify-center">
-                        <div className="text-lg font-bold text-green-700">{cycle.data.metrics.workload?.toFixed(1) || "N/A"}</div>
+                        <div className={`text-lg font-bold ${getMetricColor(cycle.data.metrics.workload)}`}>
+                          {cycle.data.metrics.workload?.toFixed(1) || "3.0"}
+                        </div>
                         {prevCycle && prevCycle.data?.metrics && (
                           <div className="ml-1">
                             {renderMetricIndicator(
@@ -502,6 +520,14 @@ const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
               </div>
             );
           })}
+          
+          {history.length > 3 && (
+            <div className="text-center">
+              <button className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm font-roboto">
+                Show More History
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -562,128 +588,118 @@ const TemplateCard = ({ id, title, description, steps, onClose, onNavigate }) =>
   );
 };
 
-// Notes Display with Editing
-const RelationshipNotesEditor = ({ notes, onSave }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedNotes, setEditedNotes] = useState(notes || {});
-  const [saving, setSaving] = useState(false);
-
-  // Updated notes when props change
-  useEffect(() => {
-    setEditedNotes(notes || {});
-  }, [notes]);
-
-  // Handle save
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await onSave(editedNotes);
-      setIsEditing(false);
-    } catch (error) {
-      console.error("Error saving notes:", error);
-      // Handle error
-    } finally {
-      setSaving(false);
-    }
-  };
-
+// Cycle Details Modal Component
+const CycleDetailsModal = ({ cycle, onClose }) => {
+  if (!cycle) return null;
+  
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h4 className="font-medium font-roboto">Relationship Notes</h4>
-        
-        {!isEditing ? (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-4 border-b flex justify-between items-center">
+          <h3 className="text-lg font-bold font-roboto">Cycle {cycle.cycle} Details</h3>
           <button
-            onClick={() => setIsEditing(true)}
-            className="px-3 py-1 text-sm flex items-center bg-gray-100 hover:bg-gray-200 rounded font-roboto"
+            onClick={onClose}
+            className="p-1 hover:bg-gray-100 rounded"
           >
-            <Edit size={14} className="mr-1" />
-            Edit Notes
+            <X size={20} />
           </button>
-        ) : (
-          <div className="flex space-x-2">
-            <button
-              onClick={() => setIsEditing(false)}
-              className="px-3 py-1 text-sm border rounded font-roboto"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-3 py-1 text-sm bg-black text-white rounded font-roboto flex items-center"
-            >
-              {saving ? (
-                <div className="w-3 h-3 border-2 border-t-transparent border-white rounded-full animate-spin mr-1"></div>
-              ) : (
-                <Save size={14} className="mr-1" />
+        </div>
+        
+        <div className="p-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium font-roboto">Completed on {formatDate(cycle.date)}</h4>
+            
+            <div className="flex space-x-2">
+              {cycle.data?.metrics && (
+                <span className="inline-flex items-center bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-roboto">
+                  <Award size={12} className="mr-1" />
+                  {cycle.data.metrics.overall?.toFixed(1) || "3.0"}/5 Overall
+                </span>
               )}
-              Save
-            </button>
+            </div>
           </div>
-        )}
+          
+          {cycle.data?.metrics && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-lg">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-pink-700">{cycle.data.metrics.satisfaction?.toFixed(1) || "3.0"}</div>
+                <div className="text-sm text-gray-600">Satisfaction</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-700">{cycle.data.metrics.communication?.toFixed(1) || "3.0"}</div>
+                <div className="text-sm text-gray-600">Communication</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-700">{cycle.data.metrics.connection?.toFixed(1) || "3.0"}</div>
+                <div className="text-sm text-gray-600">Connection</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-700">{cycle.data.metrics.workload?.toFixed(1) || "3.0"}</div>
+                <div className="text-sm text-gray-600">Workload</div>
+              </div>
+            </div>
+          )}
+          
+          {/* Meeting Notes */}
+          {cycle.data?.meeting && (
+            <div>
+              <h4 className="font-medium mb-2 font-roboto">Meeting Notes</h4>
+              
+              {cycle.data.meeting.topicResponses && Object.keys(cycle.data.meeting.topicResponses).length > 0 ? (
+                <div className="space-y-3">
+                  {Object.entries(cycle.data.meeting.topicResponses).map(([topic, response], index) => (
+                    <div key={index} className="p-3 border rounded-lg">
+                      <h5 className="text-sm font-medium mb-1 font-roboto">{topic}</h5>
+                      <p className="text-sm text-gray-600 font-roboto whitespace-pre-wrap">{response}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-500 font-roboto">No detailed meeting notes available.</p>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Questionnaire Responses */}
+          {cycle.data?.questionnaireResponses && Object.keys(cycle.data.questionnaireResponses).length > 0 && (
+            <div>
+              <h4 className="font-medium mb-2 font-roboto">Questionnaire Responses</h4>
+              
+              <div className="space-y-3">
+                {Object.entries(cycle.data.questionnaireResponses)
+                  .slice(0, 5) // Show only the first 5 for brevity
+                  .map(([questionId, response], index) => (
+                    <div key={index} className="p-3 border rounded-lg">
+                      <div className="flex items-center">
+                        <div className="flex-1">
+                          <h5 className="text-sm font-medium font-roboto">Question {index + 1}</h5>
+                        </div>
+                        <div className="ml-2">
+                          <div className="flex items-center bg-blue-100 px-2 py-1 rounded-full">
+                            <span className="text-sm font-medium">{response}/5</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                
+                {Object.keys(cycle.data.questionnaireResponses).length > 5 && (
+                  <p className="text-sm text-center text-gray-500 font-roboto">
+                    + {Object.keys(cycle.data.questionnaireResponses).length - 5} more responses
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-      
-      {isEditing ? (
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1 font-roboto">Strengths</label>
-            <textarea
-              value={editedNotes.strengths || ''}
-              onChange={(e) => setEditedNotes({...editedNotes, strengths: e.target.value})}
-              className="w-full p-2 border rounded min-h-[100px] font-roboto"
-              placeholder="Note your relationship strengths..."
-            ></textarea>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium mb-1 font-roboto">Areas to Improve</label>
-            <textarea
-              value={editedNotes.improvements || ''}
-              onChange={(e) => setEditedNotes({...editedNotes, improvements: e.target.value})}
-              className="w-full p-2 border rounded min-h-[100px] font-roboto"
-              placeholder="Note areas you'd like to improve..."
-            ></textarea>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium mb-1 font-roboto">Goals</label>
-            <textarea
-              value={editedNotes.goals || ''}
-              onChange={(e) => setEditedNotes({...editedNotes, goals: e.target.value})}
-              className="w-full p-2 border rounded min-h-[100px] font-roboto"
-              placeholder="Note your relationship goals..."
-            ></textarea>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div>
-            <h5 className="text-sm font-medium mb-1 font-roboto">Strengths</h5>
-            <div className="p-3 bg-gray-50 rounded min-h-[60px] text-sm font-roboto">
-              {editedNotes.strengths || "No strengths noted yet."}
-            </div>
-          </div>
-          
-          <div>
-            <h5 className="text-sm font-medium mb-1 font-roboto">Areas to Improve</h5>
-            <div className="p-3 bg-gray-50 rounded min-h-[60px] text-sm font-roboto">
-              {editedNotes.improvements || "No improvement areas noted yet."}
-            </div>
-          </div>
-          
-          <div>
-            <h5 className="text-sm font-medium mb-1 font-roboto">Goals</h5>
-            <div className="p-3 bg-gray-50 rounded min-h-[60px] text-sm font-roboto">
-              {editedNotes.goals || "No goals noted yet."}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
+// Main RelationshipTab Component
 const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
   const { 
     selectedUser, 
@@ -709,25 +725,15 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
   // State variables
   const [expandedSections, setExpandedSections] = useState({
     insights: true,
-    questionnaire: true,
     tools: true,
-    quality: true,
-    tracking: true,
-    strategies: true,
-    resources: true,
+    charts: true,
     history: true,
-    notes: true
+    resources: true
   });
   
   const [relationshipQuestions, setRelationshipQuestions] = useState([]);
-  const [needsQuestionnaire, setNeedsQuestionnaire] = useState(false);
+  const [showQuestionnaire, setShowQuestionnaire] = useState(false);
   const [questionnaireCompleted, setQuestionnaireCompleted] = useState(false);
-  const [smsEnabled, setSmsEnabled] = useState(false);
-  const [showSmsSetup, setShowSmsSetup] = useState(false);
-  const [phoneNumbers, setPhoneNumbers] = useState({
-    mama: '',
-    papa: ''
-  });
   const [insights, setInsights] = useState([]);
   const [cycleData, setCycleData] = useState(null);
   const [cycleHistory, setCycleHistory] = useState([]);
@@ -735,14 +741,10 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
   const [templateToShow, setTemplateToShow] = useState(null);
   const [hasError, setHasError] = useState(null);
   const [selectedHistoryCycle, setSelectedHistoryCycle] = useState(null);
-  const [relationshipNotes, setRelationshipNotes] = useState({});
-  const [isSmsSending, setIsSmsSending] = useState(false);
   
   // Refs for scrolling
   const toolsRef = useRef(null);
-  const qualityRef = useRef(null);
-  const gratitudeRef = useRef(null);
-  const checkInRef = useRef(null);
+  const chartsRef = useRef(null);
   
   // Load relationship data
   useEffect(() => {
@@ -764,7 +766,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
         
         // Check if couple needs to complete questionnaire
         const needsToComplete = !coupleData || !coupleData.questionnaireCompleted;
-        setNeedsQuestionnaire(needsToComplete);
+        setShowQuestionnaire(needsToComplete);
         setQuestionnaireCompleted(!needsToComplete);
         
         // Load previous cycle history
@@ -788,12 +790,6 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
         } catch (insightError) {
           console.error("Error loading relationship insights:", insightError);
         }
-        
-        // Load phone numbers for SMS
-        await loadPhoneNumbers();
-        
-        // Load relationship notes
-        await loadRelationshipNotes();
         
         setIsLoadingData(false);
       } catch (error) {
@@ -860,102 +856,6 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
     }
   };
   
-  // Load phone numbers for SMS feature
-  const loadPhoneNumbers = async () => {
-    try {
-      if (!familyId) return;
-      
-      // Try to get parent phone numbers from user profiles
-      const mamaParent = familyMembers.find(m => m.roleType === 'Mama');
-      const papaParent = familyMembers.find(m => m.roleType === 'Papa');
-      
-      // Check if phone numbers already exist in context
-      const phonesExist = mamaParent?.phoneNumber && papaParent?.phoneNumber;
-      
-      if (phonesExist) {
-        setPhoneNumbers({
-          mama: mamaParent.phoneNumber,
-          papa: papaParent.phoneNumber
-        });
-        setSmsEnabled(true);
-      } else {
-        // Try to get from Firebase
-        const docRef = doc(db, "familyProfiles", familyId);
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists() && docSnap.data().phoneNumbers) {
-          const phones = docSnap.data().phoneNumbers;
-          setPhoneNumbers(phones);
-          setSmsEnabled(Object.values(phones).some(p => p));
-        }
-      }
-    } catch (error) {
-      console.error("Error loading phone numbers:", error);
-    }
-  };
-  
-  // Load relationship notes
-  const loadRelationshipNotes = async () => {
-    try {
-      if (!familyId) return;
-      
-      const docRef = doc(db, "relationshipNotes", familyId);
-      const docSnap = await getDoc(docRef);
-      
-      if (docSnap.exists()) {
-        setRelationshipNotes(docSnap.data());
-      }
-    } catch (error) {
-      console.error("Error loading relationship notes:", error);
-    }
-  };
-  
-  // Save relationship notes
-  const saveRelationshipNotes = async (notes) => {
-    try {
-      if (!familyId) throw new Error("No family ID available");
-      
-      // Save to Firestore
-      const docRef = doc(db, "relationshipNotes", familyId);
-      await setDoc(docRef, {
-        ...notes,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-      
-      // Update local state
-      setRelationshipNotes(notes);
-      
-      return true;
-    } catch (error) {
-      console.error("Error saving relationship notes:", error);
-      throw error;
-    }
-  };
-  
-  // Save phone numbers for SMS
-  const savePhoneNumbers = async (phoneData) => {
-    try {
-      if (!familyId) return false;
-      
-      setPhoneNumbers(phoneData);
-      
-      // Save to Firebase
-      const docRef = doc(db, "familyProfiles", familyId);
-      await setDoc(docRef, {
-        phoneNumbers: phoneData,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-      
-      setSmsEnabled(Object.values(phoneData).some(p => p));
-      setShowSmsSetup(false);
-      
-      return true;
-    } catch (error) {
-      console.error("Error saving phone numbers:", error);
-      return false;
-    }
-  };
-  
   // Toggle section expansion
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
@@ -999,7 +899,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
       // Update local state
       setCycleData(updatedData);
       setQuestionnaireCompleted(true);
-      setNeedsQuestionnaire(false);
+      setShowQuestionnaire(false);
       
       // Add to calendar
       addQuestionnaireToCalendar();
@@ -1029,18 +929,33 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
     
     // Calculate averages for each dimension
     Object.entries(dimensions).forEach(([dimension, keys]) => {
-      const values = keys
-        .map(key => {
-          const matchingQuestion = Object.entries(responses).find(([qId, _]) => 
-            qId.toLowerCase().includes(key)
-          );
-          return matchingQuestion ? parseInt(matchingQuestion[1]) : null;
-        })
-        .filter(val => val !== null);
+      const values = [];
       
+      // First try to find exact match questions
+      Object.entries(responses).forEach(([questionId, value]) => {
+        // Convert value to number if it's not already
+        const numValue = typeof value === 'number' ? value : parseInt(value);
+        
+        if (!isNaN(numValue)) {
+          // Check if question contains any of the keywords
+          const matchesKeyword = keys.some(key => 
+            questionId.toLowerCase().includes(key) || 
+            relationshipQuestions.find(q => q.id === questionId)?.text.toLowerCase().includes(key)
+          );
+          
+          if (matchesKeyword) {
+            values.push(numValue);
+          }
+        }
+      });
+      
+      // If we have values, calculate average
       if (values.length > 0) {
         const average = values.reduce((sum, val) => sum + val, 0) / values.length;
         metrics[dimension] = Math.min(5, Math.max(1, average)); // Ensure 1-5 range
+      } else {
+        // Default value if no matched questions
+        metrics[dimension] = 3.0;
       }
     });
     
@@ -1048,7 +963,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
     const allScores = Object.values(metrics);
     metrics.overall = allScores.length > 0 
       ? allScores.reduce((sum, val) => sum + val, 0) / allScores.length
-      : 3; // Default to middle if no data
+      : 3.0; // Default to middle if no data
     
     return metrics;
   };
@@ -1080,48 +995,6 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
     }
   };
   
-  // Send gratitude via SMS
-  const sendGratitudeSms = async (gratitude) => {
-    try {
-      if (!smsEnabled) return false;
-      setIsSmsSending(true);
-      
-      // Get recipient phone number
-      const recipientRole = gratitude.toId === familyMembers.find(m => m.roleType === 'Mama')?.id ? 'mama' : 'papa';
-      const senderRole = gratitude.fromId === familyMembers.find(m => m.roleType === 'Mama')?.id ? 'mama' : 'papa';
-      
-      const recipientPhone = phoneNumbers[recipientRole];
-      if (!recipientPhone) {
-        setIsSmsSending(false);
-        return false;
-      }
-      
-      // Create message text
-      const message = `💌 From ${gratitude.fromName}: ${gratitude.text}`;
-      
-      // In a real implementation, this would call a serverless function to send SMS
-      // For now, simulating a successful API call with a timeout
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Log the SMS sending attempt
-      const smsLogRef = doc(collection(db, "smsLogs"));
-      await setDoc(smsLogRef, {
-        from: gratitude.fromName,
-        to: gratitude.toName,
-        message: gratitude.text,
-        timestamp: serverTimestamp(),
-        familyId
-      });
-      
-      setIsSmsSending(false);
-      return true;
-    } catch (error) {
-      console.error("Error sending SMS:", error);
-      setIsSmsSending(false);
-      return false;
-    }
-  };
-  
   // Show action template based on insight recommendation
   const showActionTemplate = (templateId) => {
     setTemplateToShow(templateId);
@@ -1132,46 +1005,44 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
     setTemplateToShow(null);
     
     // Scroll to the appropriate section
-    let ref;
-    switch (toolId) {
-      case 'daily-checkin':
-        ref = checkInRef;
-        setExpandedSections(prev => ({...prev, tools: true}));
-        break;
-      case 'gratitude-practice':
-        ref = gratitudeRef;
-        setExpandedSections(prev => ({...prev, tools: true}));
-        break;
-      case 'date-night':
-        ref = qualityRef;
-        setExpandedSections(prev => ({...prev, quality: true}));
-        break;
-      default:
-        ref = toolsRef;
-        setExpandedSections(prev => ({...prev, tools: true}));
-    }
-    
-    if (ref && ref.current) {
-      ref.current.scrollIntoView({ behavior: 'smooth' });
+    if (toolId === 'daily-checkin' || toolId === 'gratitude-practice') {
+      setExpandedSections(prev => ({...prev, tools: true}));
+      setTimeout(() => {
+        toolsRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    } else {
+      setExpandedSections(prev => ({...prev, charts: true}));
+      setTimeout(() => {
+        chartsRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
     }
   };
   
   // Handle switching to a history cycle
   const handleSelectHistoryCycle = (cycleNum) => {
-    setSelectedHistoryCycle(cycleNum);
+    // Find the cycle data
+    const cycleData = cycleHistory.find(c => c.cycle === cycleNum);
+    if (cycleData) {
+      setSelectedHistoryCycle(cycleData);
+    }
   };
   
   // Render section header with expand/collapse functionality
-  const renderSectionHeader = (title, sectionKey, borderColor = "border-pink-500", icon = <Heart size={20} className="mr-2" />, notificationCount = 0) => (
+  const renderSectionHeader = (title, sectionKey, description, borderColor = "border-pink-500", icon = <Heart size={20} className="mr-2" />, notificationCount = 0) => (
     <div className={`border-l-4 ${borderColor} p-4 flex justify-between items-center cursor-pointer bg-white rounded-lg shadow-sm mb-2`} 
          onClick={() => toggleSection(sectionKey)}>
-      <div className="flex items-center">
-        {icon}
-        <h4 className="font-medium text-lg font-roboto">{title}</h4>
-        {notificationCount > 0 && (
-          <span className="ml-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full font-roboto">
-            {notificationCount}
-          </span>
+      <div className="flex-1">
+        <div className="flex items-center">
+          {icon}
+          <h4 className="font-medium text-lg font-roboto">{title}</h4>
+          {notificationCount > 0 && (
+            <span className="ml-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full font-roboto">
+              {notificationCount}
+            </span>
+          )}
+        </div>
+        {description && (
+          <p className="text-sm text-gray-600 mt-1 font-roboto ml-7">{description}</p>
         )}
       </div>
       <button className="p-2 rounded-full hover:bg-gray-100">
@@ -1312,135 +1183,32 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
           </div>
         </div>
 
-        {/* Relationship Meeting Card */}
-        <div className="bg-gradient-to-r from-pink-50 to-red-50 rounded-lg p-4">
-          <div className="flex items-start">
-            <div className="flex-shrink-0 mr-4">
-              <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center">
-                <Users size={20} className="text-pink-600" />
-              </div>
-            </div>
-            
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold font-roboto">Couple Relationship Meeting</h3>
-              <p className="text-sm text-gray-600 mt-1 font-roboto">
-                Spend 15-20 minutes with your partner discussing your relationship for Cycle {currentCycle}
-              </p>
-              
-              <div className="mt-3">
-                <div className="text-sm text-gray-600 flex items-center mb-3">
-                  <Clock size={14} className="mr-1 text-gray-500" />
-                  <span className="font-roboto">Recommended: 15-20 minutes</span>
-                </div>
-                
-                <button
-                  onClick={handleOpenRelationshipMeeting}
-                  className="px-4 py-2 rounded-md flex items-center font-roboto bg-pink-100 text-pink-800 hover:bg-pink-200"
-                >
-                  <MessageCircle size={16} className="mr-2" />
-                  Start Relationship Meeting
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Cycle Status Tracker */}
+        <CycleStatusTracker 
+          cycle={currentCycle}
+          cycleData={cycleData}
+          questionnaireCompleted={questionnaireCompleted}
+          onStartQuestionnaire={() => setShowQuestionnaire(true)}
+          onStartMeeting={handleOpenRelationshipMeeting}
+        />
       </div>
 
-      {/* Relationship Notes Section */}
-      {renderSectionHeader(
-        "Relationship Notes",
-        "notes",
-        "border-blue-500",
-        <Clipboard size={20} className="mr-2 text-blue-600" />
-      )}
-      {expandedSections.notes && (
-        <RelationshipNotesEditor 
-          notes={relationshipNotes}
-          onSave={saveRelationshipNotes}
+      {/* Relationship Health Questionnaire - Only show when needed */}
+      {showQuestionnaire && (
+        <RelationshipHealthQuestionnaire 
+          questions={relationshipQuestions}
+          onSubmit={handleQuestionnaireSubmit}
+          cycle={currentCycle}
+          previousData={cycleData}
+          onCancel={() => setShowQuestionnaire(false)}
         />
-      )}
-
-      {/* Relationship Health Questionnaire Section */}
-      {renderSectionHeader(
-        "Relationship Health Questionnaire", 
-        "questionnaire", 
-        "border-purple-500", 
-        <Book size={20} className="mr-2 text-purple-600" />, 
-        needsQuestionnaire ? 1 : 0
-      )}
-      {expandedSections.questionnaire && (
-        <div className="space-y-4">
-          {needsQuestionnaire ? (
-            <RelationshipHealthQuestionnaire 
-              questions={relationshipQuestions}
-              onSubmit={handleQuestionnaireSubmit}
-              cycle={currentCycle}
-              previousData={cycleData}
-            />
-          ) : (
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center text-green-600 mb-4">
-                <CheckCircle className="mr-2" size={24} />
-                <h3 className="text-lg font-bold font-roboto">Questionnaire Completed</h3>
-              </div>
-              <p className="text-gray-600 mb-4 font-roboto">
-                You've completed the relationship health questionnaire for Cycle {currentCycle}.
-                The results are reflected in your relationship charts below.
-              </p>
-              
-              {cycleData?.metrics && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                  <div className="bg-pink-50 p-3 rounded-lg border border-pink-100 text-center">
-                    <div className="text-2xl font-bold text-pink-700">{cycleData.metrics.satisfaction?.toFixed(1) || "N/A"}</div>
-                    <div className="text-sm text-pink-700">Satisfaction</div>
-                  </div>
-                  <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-center">
-                    <div className="text-2xl font-bold text-blue-700">{cycleData.metrics.communication?.toFixed(1) || "N/A"}</div>
-                    <div className="text-sm text-blue-700">Communication</div>
-                  </div>
-                  <div className="bg-purple-50 p-3 rounded-lg border border-purple-100 text-center">
-                    <div className="text-2xl font-bold text-purple-700">{cycleData.metrics.connection?.toFixed(1) || "N/A"}</div>
-                    <div className="text-sm text-purple-700">Connection</div>
-                  </div>
-                  <div className="bg-green-50 p-3 rounded-lg border border-green-100 text-center">
-                    <div className="text-2xl font-bold text-green-700">{cycleData.metrics.workload?.toFixed(1) || "N/A"}</div>
-                    <div className="text-sm text-green-700">Workload Balance</div>
-                  </div>
-                </div>
-              )}
-              
-              <div className="flex space-x-4">
-                <button 
-                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded font-roboto text-sm"
-                  onClick={() => setNeedsQuestionnaire(true)}
-                >
-                  Take Again
-                </button>
-                
-                <button 
-                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded font-roboto text-sm flex items-center"
-                  onClick={() => {
-                    // Scroll to charts
-                    const chartsSection = document.getElementById('relationship-charts');
-                    if (chartsSection) {
-                      chartsSection.scrollIntoView({ behavior: 'smooth' });
-                      setExpandedSections(prev => ({...prev, tracking: true}));
-                    }
-                  }}
-                >
-                  <Target size={16} className="mr-1" />
-                  View Charts
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
       )}
 
       {/* AI Insights Section */}
       {renderSectionHeader(
         "AI Relationship Insights", 
         "insights", 
+        "Personalized recommendations based on your relationship data",
         "border-purple-500", 
         <Brain size={20} className="mr-2 text-purple-600" />
       )}
@@ -1486,94 +1254,51 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
               </div>
             </div>
           )}
-          
-          <div id="relationship-charts">
-            <CoupleRelationshipChart />
-          </div>
         </div>
       )}
 
-      {/* Daily Connection Tools Section */}
+      {/* Relationship Charts Section */}
       {renderSectionHeader(
-        "Daily Connection Tools", 
-        "tools", 
-        "border-blue-500", 
-        <Clock size={20} className="mr-2 text-blue-600" />
-      )}
-      {expandedSections.tools && (
-        <div id="daily-connection-tools" ref={toolsRef} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div ref={checkInRef}>
-            <DailyCheckInTool />
-          </div>
-          
-          <div id="gratitude-tracker" ref={gratitudeRef}>
-            <GratitudeTracker 
-              smsEnabled={smsEnabled} 
-              onSendSms={sendGratitudeSms}
-              isSending={isSmsSending}
-              onEnableSms={() => setShowSmsSetup(true)}
-            />
-          </div>
-          
-          {/* SMS Setup Modal */}
-          {showSmsSetup && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="max-w-md w-full m-4">
-                <PhoneNumberSetup 
-                  phoneNumbers={phoneNumbers}
-                  onSave={savePhoneNumbers}
-                  onCancel={() => setShowSmsSetup(false)}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Quality Time Section */}
-      {renderSectionHeader(
-        "Quality Time Planning", 
-        "quality", 
-        "border-pink-500", 
-        <Calendar size={20} className="mr-2 text-pink-600" />
-      )}
-      {expandedSections.quality && (
-        <div ref={qualityRef} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <DateNightPlanner />
-          <SelfCarePlanner />
-        </div>
-      )}
-
-      {/* Progress Tracking Section */}
-      {renderSectionHeader(
-        "Progress Tracking", 
-        "tracking", 
+        "Relationship Charts", 
+        "charts", 
+        "Track your relationship progress over time",
         "border-green-500", 
         <Target size={20} className="mr-2 text-green-600" />
       )}
-      {expandedSections.tracking && (
-        <div className="space-y-6">
+      {expandedSections.charts && (
+        <div id="relationship-charts" ref={chartsRef} className="space-y-6">
+          <CoupleRelationshipChart />
           <RelationshipProgressChart />
         </div>
       )}
 
-      {/* Strategy Section */}
+      {/* Relationship Tools Section */}
       {renderSectionHeader(
-        "Strategic Actions", 
-        "strategies", 
-        "border-yellow-500", 
-        <Lightbulb size={20} className="mr-2 text-yellow-600" />
+        "Relationship Tools", 
+        "tools", 
+        "Tools to strengthen your connection daily",
+        "border-blue-500", 
+        <Clock size={20} className="mr-2 text-blue-600" />
       )}
-      {expandedSections.strategies && (
-        <div className="space-y-4">
-          <StrategicActionsTracker />
+      {expandedSections.tools && (
+        <div id="relationship-tools" ref={toolsRef} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <DailyCheckInTool />
+            <GratitudeTracker />
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <DateNightPlanner />
+            <SelfCarePlanner />
+          </div>
         </div>
       )}
 
-      {/* History Section */}
+      {/* Relationship History Section */}
       {renderSectionHeader(
         "Relationship History", 
         "history", 
+        "View your past relationship cycles and progress",
         "border-indigo-500", 
         <Bell size={20} className="mr-2 text-indigo-600" />
       )}
@@ -1588,13 +1313,12 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
       {renderSectionHeader(
         "Relationship Resources", 
         "resources", 
+        "Research-backed information to strengthen your relationship",
         "border-gray-500", 
         <Info size={20} className="mr-2 text-gray-600" />
       )}
       {expandedSections.resources && (
         <div className="bg-white rounded-lg shadow p-6">
-          <h4 className="font-medium mb-4 font-roboto">Research-Backed Resources</h4>
-          
           <div className="space-y-4">
             <div className="border rounded-lg p-4">
               <h5 className="font-medium mb-2 font-roboto flex items-center">
@@ -1604,7 +1328,6 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
               <p className="text-sm text-gray-600 font-roboto">
                 Studies show that couples who share household and parenting responsibilities more equitably report 37% higher relationship satisfaction and are 45% more likely to describe their relationship as "thriving."
               </p>
-              <a href="#" className="text-blue-600 text-sm mt-2 inline-block font-roboto">Read the research →</a>
             </div>
             
             <div className="border rounded-lg p-4">
@@ -1615,31 +1338,26 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
               <p className="text-sm text-gray-600 font-roboto">
                 Children in homes with strong parental bonds show better emotional regulation, higher academic achievement, and fewer behavioral problems regardless of family structure.
               </p>
-              <a href="#" className="text-blue-600 text-sm mt-2 inline-block font-roboto">Read the research →</a>
             </div>
             
             <div className="border rounded-lg p-4">
               <h5 className="font-medium mb-2 font-roboto flex items-center">
                 <CheckCircle size={16} className="mr-2 text-green-600" />
-                The Ten Essential Habits of Balanced Families
+                Building Connection During Busy Family Life
               </h5>
               <p className="text-sm text-gray-600 font-roboto">
-                Based on a study of over 1,000 families, researchers identified ten key habits that help parents maintain both strong relationships and balanced family workloads.
+                Daily micro-connections of just 5-10 minutes have been shown to maintain relationship satisfaction even during highly stressful family periods. Quality matters more than quantity.
               </p>
-              <a href="#" className="text-blue-600 text-sm mt-2 inline-block font-roboto">Read the guide →</a>
             </div>
             
             {/* Recommended Books */}
             <div className="mt-6">
-              <h4 className="font-medium mb-3 font-roboto flex items-center">
-                <Book size={18} className="mr-2" />
-                Recommended Books
-              </h4>
+              <h4 className="font-medium mb-3 font-roboto">Recommended Books</h4>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="border rounded-lg p-4">
                   <div className="flex items-start">
-                    <Star size={16} className="text-yellow-500 mr-2 mt-1" />
+                    <Lightbulb size={16} className="text-yellow-500 mr-2 mt-1" />
                     <div>
                       <h5 className="font-medium text-sm font-roboto">The 5 Love Languages</h5>
                       <p className="text-xs text-gray-600 font-roboto">Gary Chapman</p>
@@ -1649,7 +1367,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
                 
                 <div className="border rounded-lg p-4">
                   <div className="flex items-start">
-                    <Star size={16} className="text-yellow-500 mr-2 mt-1" />
+                    <Lightbulb size={16} className="text-yellow-500 mr-2 mt-1" />
                     <div>
                       <h5 className="font-medium text-sm font-roboto">Fair Play</h5>
                       <p className="text-xs text-gray-600 font-roboto">Eve Rodsky</p>
@@ -1659,7 +1377,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
                 
                 <div className="border rounded-lg p-4">
                   <div className="flex items-start">
-                    <Star size={16} className="text-yellow-500 mr-2 mt-1" />
+                    <Lightbulb size={16} className="text-yellow-500 mr-2 mt-1" />
                     <div>
                       <h5 className="font-medium text-sm font-roboto">And Baby Makes Three</h5>
                       <p className="text-xs text-gray-600 font-roboto">John & Julie Gottman</p>
@@ -1673,112 +1391,11 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
       )}
 
       {/* Selected Cycle View Modal */}
-      {selectedHistoryCycle !== null && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-4 border-b flex justify-between items-center">
-              <h3 className="text-lg font-bold font-roboto">Cycle {selectedHistoryCycle} Details</h3>
-              <button
-                onClick={() => setSelectedHistoryCycle(null)}
-                className="p-1 hover:bg-gray-100 rounded"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="p-6 space-y-6">
-              {/* Find the selected cycle data */}
-              {(() => {
-                const cycleData = cycleHistory.find(c => c.cycle === selectedHistoryCycle);
-                if (!cycleData) {
-                  return (
-                    <div className="text-center p-6 bg-gray-50 rounded-lg">
-                      <p className="text-gray-500 font-roboto">No data available for Cycle {selectedHistoryCycle}.</p>
-                    </div>
-                  );
-                }
-                
-                return (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium font-roboto">Completed on {formatDate(cycleData.date)}</h4>
-                      
-                      <div className="flex space-x-2">
-                        {cycleData.data?.metrics && (
-                          <span className="inline-flex items-center bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-roboto">
-                            <Award size={12} className="mr-1" />
-                            {cycleData.data.metrics.overall?.toFixed(1) || "N/A"}/5 Overall
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {cycleData.data?.metrics && (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-lg">
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-pink-700">{cycleData.data.metrics.satisfaction?.toFixed(1) || "N/A"}</div>
-                          <div className="text-sm text-gray-600">Satisfaction</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-blue-700">{cycleData.data.metrics.communication?.toFixed(1) || "N/A"}</div>
-                          <div className="text-sm text-gray-600">Communication</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-purple-700">{cycleData.data.metrics.connection?.toFixed(1) || "N/A"}</div>
-                          <div className="text-sm text-gray-600">Connection</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-green-700">{cycleData.data.metrics.workload?.toFixed(1) || "N/A"}</div>
-                          <div className="text-sm text-gray-600">Workload</div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Meeting Notes */}
-                    {cycleData.data?.meeting && (
-                      <div>
-                        <h4 className="font-medium mb-2 font-roboto">Meeting Notes</h4>
-                        
-                        {cycleData.data.meeting.topicResponses && Object.keys(cycleData.data.meeting.topicResponses).length > 0 ? (
-                          <div className="space-y-3">
-                            {Object.entries(cycleData.data.meeting.topicResponses).map(([topic, response], index) => (
-                              <div key={index} className="p-3 border rounded-lg">
-                                <h5 className="text-sm font-medium mb-1 font-roboto">{topic}</h5>
-                                <p className="text-sm text-gray-600 font-roboto whitespace-pre-wrap">{response}</p>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="p-4 bg-gray-50 rounded-lg">
-                            <p className="text-sm text-gray-500 font-roboto">No detailed meeting notes available.</p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    
-                    {/* Selected Strategies */}
-                    {cycleData.data?.meeting?.selectedStrategies && cycleData.data.meeting.selectedStrategies.length > 0 && (
-                      <div>
-                        <h4 className="font-medium mb-2 font-roboto">Selected Strategies</h4>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {cycleData.data.meeting.selectedStrategies.map((strategy, index) => (
-                            <div key={index} className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                              <div className="flex items-center">
-                                <Lightbulb size={16} className="text-yellow-600 mr-2" />
-                                <p className="text-sm font-medium font-roboto">{strategy}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
+      {selectedHistoryCycle && (
+        <CycleDetailsModal 
+          cycle={selectedHistoryCycle} 
+          onClose={() => setSelectedHistoryCycle(null)} 
+        />
       )}
     </div>
   );
