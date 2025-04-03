@@ -155,14 +155,31 @@ const InitialSurveyTab = () => {
     const questionId = fullQuestionSet[currentQuestionIndex]?.id;
     if (!questionId) return {};
     
+    // Get the question index (numeric part after 'q')
+    const qNumMatch = questionId.match(/q(\d+)/);
+    const qNum = qNumMatch ? parseInt(qNumMatch[1]) : 0;
+    
     // In a real implementation, this would fetch actual responses from the surveyResponses data
-    // For now, we'll generate some sample responses
     const responses = {};
     
     familyMembers.forEach(member => {
-      // Use actual responses if available, otherwise generate sample ones
-      const memberResponse = surveyResponses[`${member.id}-${questionId}`];
-      responses[member.id] = memberResponse || (Math.random() > 0.5 ? 'Mama' : 'Papa');
+      // Determine if this question was applicable to this member type
+      const isApplicable = member.role === 'child' 
+        // For children, only show responses for questions that were in their reduced set (first 72)
+        ? qNum <= 72 
+        // For adults, show all questions
+        : true;
+      
+      if (isApplicable) {
+        // Look for actual response from survey data
+        const memberResponse = surveyResponses[`${member.id}-${questionId}`];
+        if (memberResponse) {
+          responses[member.id] = memberResponse;
+        } else {
+          // Only for demo/sample data - in production we'd just show nothing
+          responses[member.id] = Math.random() > 0.5 ? 'Mama' : 'Papa';
+        }
+      }
     });
     
     return responses;

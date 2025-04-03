@@ -274,8 +274,8 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
         "Invisible Parental Tasks"
       ];
       
-      // Prepare to select EXACTLY 50 questions for initial survey, 30 for weekly
-      const targetQuestionCount = surveyType === "weekly" ? 30 : 50;
+      const targetQuestionCount = surveyType === "weekly" ? 20 : 72;
+
       const questionsPerCategory = Math.ceil(targetQuestionCount / categories.length);
       
       // Process the questions to make them age-appropriate

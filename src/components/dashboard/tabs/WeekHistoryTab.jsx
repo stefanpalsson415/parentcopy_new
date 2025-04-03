@@ -95,17 +95,43 @@ const WeekHistoryTab = ({ weekNumber }) => {
     if (!surveyResponses) return {};
     
     const weekResponsesObj = {};
+    const memberRoleMap = {};
     
-    // Debug: Log all keys
-    console.log("All survey response keys:", Object.keys(surveyResponses));
+    // Create a map of member IDs to roles for filtering
+    familyMembers.forEach(member => {
+      memberRoleMap[member.id] = member.role;
+    });
     
     // Try all possible formats for week keys with expanded patterns
     Object.entries(surveyResponses).forEach(([key, value]) => {
+      // Extract member ID if present in the key (format: memberId-questionId)
+      const keyParts = key.split('-');
+      const memberId = keyParts.length > 1 ? keyParts[0] : null;
+      const memberRole = memberId ? memberRoleMap[memberId] : null;
+      
+      // Extract question ID
+      let questionId;
+      if (key.includes('q')) {
+        const qMatch = key.match(/q(\d+)/);
+        questionId = qMatch ? `q${qMatch[1]}` : null;
+      }
+      
+      // Skip if we couldn't extract a question ID
+      if (!questionId) return;
+      
+      // Get the question number to check if applicable for children
+      const qNumMatch = questionId.match(/q(\d+)/);
+      const qNum = qNumMatch ? parseInt(qNumMatch[1]) : 0;
+      
+      // For children, only include questions in their reduced set (first 72)
+      const isApplicableForRole = memberRole === 'child' ? qNum <= 72 : true;
+      
+      // Skip if not applicable for this member's role
+      if (!isApplicableForRole) return;
+      
       // For initial survey data in weekly tabs, include if this is week 1
       if (weekNumber === 1 && !key.includes('week') && !key.includes('weekly') && key.includes('q')) {
-        const questionId = key;
-        weekResponsesObj[questionId] = value;
-        console.log(`Added initial survey data for Cycle 1:`, key, value);
+        weekResponsesObj[`${memberId}-${questionId}`] = value;
       }
       
       // Check for week-specific formats
@@ -123,26 +149,10 @@ const WeekHistoryTab = ({ weekNumber }) => {
         ))
       ) {
         // For keys with format week-1-q1, extract just the q1 part
-        const parts = key.split(/[-_]/);
-        const questionId = parts.find(part => part.startsWith('q')) || key;
-        
-        weekResponsesObj[questionId] = value;
-        console.log(`Found cycle ${weekNumber} response:`, key, value, questionId);
+        weekResponsesObj[`${memberId}-${questionId}`] = value;
       }
     });
     
-    // If we're looking at cycle 1 and we still don't have data, try to use initial survey data
-    if (weekNumber === 1 && Object.keys(weekResponsesObj).length === 0) {
-      // Get all keys that look like question IDs (q1, q2, etc.)
-      Object.entries(surveyResponses).forEach(([key, value]) => {
-        if (key.match(/^q\d+$/) || (key.includes('q') && !key.includes('week'))) {
-          weekResponsesObj[key] = value;
-          console.log(`Added fallback initial survey data for question:`, key, value);
-        }
-      });
-    }
-    
-    console.log(`Survey responses for Cycle ${weekNumber}:`, weekResponsesObj);
     return weekResponsesObj;
   };
   
@@ -193,7 +203,7 @@ const WeekHistoryTab = ({ weekNumber }) => {
   };
   
   // Get balance data by category
-  const getCategoryBalance = () => {
+  onst getCategoryBalance = () => {
     const categories = [
       "Visible Household Tasks",
       "Invisible Household Tasks",
@@ -203,37 +213,93 @@ const WeekHistoryTab = ({ weekNumber }) => {
     
     const balanceData = [];
     
+    // Get responses by role type
+    const responsesByRole = {
+      parent: {},
+      child: {}
+    };
+    
+    // Organize responses by role
+    Object.entries(weekSurveyResponses).forEach(([key, value]) => {
+      // Format should be memberId-questionId
+      const [memberId, questionId] = key.split('-');
+      
+      // Find the member's role
+      const member = familyMembers.find(m => m.id === memberId);
+      if (!member) return;
+      
+      // Add to the appropriate role group
+      const roleType = member.role === 'child' ? 'child' : 'parent';
+      responsesByRole[roleType][questionId] = value;
+    });
+    
+    // Process each category with normalization
     categories.forEach(category => {
       // Get questions for this category
       const categoryQuestions = getQuestionsByCategory(category);
       
-      // Count Mama and Papa responses
-      let mamaCount = 0;
-      let papaCount = 0;
-      let totalCount = 0;
+      // Count by role
+      const roleCounts = {
+        parent: { mama: 0, papa: 0, total: 0 },
+        child: { mama: 0, papa: 0, total: 0 }
+      };
       
-      categoryQuestions.forEach(question => {
-        const response = weekSurveyResponses[question.id];
-        
-        if (response) {
-          totalCount++;
+      // Count responses by role
+      Object.entries(responsesByRole).forEach(([role, responses]) => {
+        categoryQuestions.forEach(question => {
+          const response = responses[question.id];
           
-          if (response === 'Mama') {
-            mamaCount++;
-          } else if (response === 'Papa') {
-            papaCount++;
+          if (response) {
+            roleCounts[role].total++;
+            
+            if (response === 'Mama') {
+              roleCounts[role].mama++;
+            } else if (response === 'Papa') {
+              roleCounts[role].papa++;
+            }
           }
-        }
+        });
       });
       
-      // Calculate percentages
-      const mamaPercent = totalCount > 0 ? Math.round((mamaCount / totalCount) * 100) : 0;
-      const papaPercent = totalCount > 0 ? Math.round((papaCount / totalCount) * 100) : 0;
+      // Calculate percentages with normalized view
+      const normalizedCounts = { mama: 0, papa: 0, total: 0 };
+      
+      // Weight parent and child perspectives equally if we have both
+      if (roleCounts.parent.total > 0 && roleCounts.child.total > 0) {
+        // Parent percentage
+        const parentMamaPercent = roleCounts.parent.total > 0 
+          ? (roleCounts.parent.mama / roleCounts.parent.total) * 100 
+          : 0;
+        
+        // Child percentage
+        const childMamaPercent = roleCounts.child.total > 0 
+          ? (roleCounts.child.mama / roleCounts.child.total) * 100 
+          : 0;
+        
+        // Average the perspectives with equal weight
+        normalizedCounts.mama = Math.round((parentMamaPercent + childMamaPercent) / 2);
+        normalizedCounts.papa = 100 - normalizedCounts.mama;
+        normalizedCounts.total = roleCounts.parent.total + roleCounts.child.total;
+      } 
+      // Otherwise use what we have
+      else if (roleCounts.parent.total > 0) {
+        normalizedCounts.mama = Math.round((roleCounts.parent.mama / roleCounts.parent.total) * 100);
+        normalizedCounts.papa = 100 - normalizedCounts.mama;
+        normalizedCounts.total = roleCounts.parent.total;
+      }
+      else if (roleCounts.child.total > 0) {
+        normalizedCounts.mama = Math.round((roleCounts.child.mama / roleCounts.child.total) * 100);
+        normalizedCounts.papa = 100 - normalizedCounts.mama;
+        normalizedCounts.total = roleCounts.child.total;
+      }
       
       balanceData.push({
         category: category,
-        mama: mamaPercent,
-        papa: papaPercent
+        mama: normalizedCounts.mama,
+        papa: normalizedCounts.papa,
+        questionCount: normalizedCounts.total, // Include count for transparency
+        parentCount: roleCounts.parent.total,
+        childCount: roleCounts.child.total
       });
     });
     
@@ -413,31 +479,48 @@ const WeekHistoryTab = ({ weekNumber }) => {
             </div>
               
             <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart outerRadius="80%" data={getRadarData(radarFilter)}>
-                  <PolarGrid />
-                  <PolarAngleAxis dataKey="category" />
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} />
-                    
-                  <Radar
-                    name="Mama's Tasks"
-                    dataKey="mama"
-                    stroke="#8884d8"
-                    fill="#8884d8"
-                    fillOpacity={0.5}
-                  />
-                    
-                  <Radar
-                    name="Papa's Tasks"
-                    dataKey="papa"
-                    stroke="#82ca9d"
-                    fill="#82ca9d"
-                    fillOpacity={0.5}
-                  />
-                    
-                  <Legend />
-                </RadarChart>
-              </ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%">
+  <RadarChart outerRadius="80%" data={getRadarData(radarFilter)}>
+    <PolarGrid />
+    <PolarAngleAxis dataKey="category" />
+    <PolarRadiusAxis angle={30} domain={[0, 100]} />
+      
+    <Radar
+      name="Mama's Tasks"
+      dataKey="mama"
+      stroke="#8884d8"
+      fill="#8884d8"
+      fillOpacity={0.5}
+    />
+      
+    <Radar
+      name="Papa's Tasks"
+      dataKey="papa"
+      stroke="#82ca9d"
+      fill="#82ca9d"
+      fillOpacity={0.5}
+    />
+      
+    <Legend />
+  </RadarChart>
+</ResponsiveContainer>
+<div className="mt-2 grid grid-cols-2 gap-2">
+  {getRadarData(radarFilter).map((category, index) => (
+    <div key={index} className="text-xs text-gray-500 flex justify-between items-center bg-gray-50 p-1 rounded">
+      <span>{category.category.split(' ').pop()}</span>
+      <div className="flex items-center">
+        <span className="bg-blue-50 text-blue-700 px-1 rounded">
+          {category.questionCount || 0} Qs
+        </span>
+        {category.parentCount > 0 && category.childCount > 0 && (
+          <span className="ml-1 text-gray-400">
+            ({category.parentCount}P/{category.childCount}C)
+          </span>
+        )}
+      </div>
+    </div>
+  ))}
+</div>
             </div>
               
             <div className="mt-4 text-sm text-center text-gray-500 font-roboto">
