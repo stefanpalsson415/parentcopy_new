@@ -1,20 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Calendar, ChevronDown, ChevronUp, Clock, Heart, AlertCircle, BookOpen, 
-  Activity, Users, Cake, Star, Clipboard, Utensils, Gift, PlusCircle, 
-  Edit, Trash2, CheckCircle, Camera, MessageCircle, BarChart2, Filter, 
-  Info, Brain, AlarmClock, School, Music, User, Smile, Frown, Apple, 
-  FileText, Award, MapPin, Bell, Sun, Moon, Ban, Palette, ThumbsUp, 
-  Coffee, Upload, Search, Plus, X, Mail, ArrowUp, ArrowDown, Mic, 
-  Smartphone, RefreshCw, Zap, MessageSquare, Check, Settings, Layers,
-  List, Grid, HelpCircle
+  Calendar, ChevronDown, ChevronUp, Clock, Heart, AlertCircle, 
+  Activity, Users, Star, Clipboard, Camera, Plus, Edit, Trash2, 
+  CheckCircle, Info, Brain, Smile, Frown, Apple, Upload, 
+  Search, X, RefreshCw, Settings, List, Grid, HelpCircle,
+  FileText, Download, Save, Paperclip, User, PlusCircle, Mic
 } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { useAuth } from '../../../contexts/AuthContext';
-import { db } from '../../../services/firebase';
-import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
+import { db, storage } from '../../../services/firebase';
+import { 
+  doc, getDoc, updateDoc, setDoc, collection, 
+  query, where, getDocs, serverTimestamp, addDoc 
+} from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import DatabaseService from '../../../services/DatabaseService';
-import AllieAIEngineService from '../../../services/AllieAIEngineService';
 import CalendarService from '../../../services/CalendarService';
 
 const ChildrenTrackingTab = () => {
@@ -35,7 +35,7 @@ const ChildrenTrackingTab = () => {
   const [aiInsights, setAiInsights] = useState([]);
   const [activeChild, setActiveChild] = useState(null);
   const [tabError, setTabError] = useState(null);
-  const [viewMode, setViewMode] = useState('card'); // 'card' or 'list'
+  const [viewMode, setViewMode] = useState('card');
   const [searchQuery, setSearchQuery] = useState('');
   const [allieMessage, setAllieMessage] = useState(null);
   const [newVoiceEntry, setNewVoiceEntry] = useState(false);
@@ -44,35 +44,61 @@ const ChildrenTrackingTab = () => {
   const [expandedSections, setExpandedSections] = useState({
     medical: true,
     growth: true,
-    routines: false,
-    homework: false,
-    activities: false,
-    emotional: false,
-    meals: false,
-    events: false,
-    milestones: false
+    routines: false
   });
+
+  // Healthcare provider management 
+  const [healthcareProviders, setHealthcareProviders] = useState([]);
+  const [loadingProviders, setLoadingProviders] = useState(false);
 
   // Modal states
   const [activeModal, setActiveModal] = useState(null);
   const [modalData, setModalData] = useState({});
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [documents, setDocuments] = useState([]);
   
   // Refs
   const searchInputRef = useRef(null);
   const microphoneRef = useRef(null);
+  const fileInputRef = useRef(null);
   
   // Notification badge counts
   const [notifications, setNotifications] = useState({
     medical: 0,
     growth: 0,
-    routines: 0,
-    homework: 0,
-    activities: 0,
-    emotional: 0,
-    meals: 0,
-    events: 0,
-    milestones: 0
+    routines: 0
   });
+
+  // Load healthcare providers
+  useEffect(() => {
+    const loadHealthcareProviders = async () => {
+      try {
+        if (!familyId) return;
+        
+        setLoadingProviders(true);
+        const providersRef = collection(db, "healthcareProviders");
+        const q = query(providersRef, where("familyId", "==", familyId));
+        const querySnapshot = await getDocs(q);
+        
+        const providers = [];
+        querySnapshot.forEach((doc) => {
+          providers.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        });
+        
+        setHealthcareProviders(providers);
+        setLoadingProviders(false);
+      } catch (error) {
+        console.error("Error loading healthcare providers:", error);
+        setLoadingProviders(false);
+      }
+    };
+    
+    loadHealthcareProviders();
+  }, [familyId]);
 
   // Mock recognizeSpeech function - in a real implementation, this would use the Web Speech API
   const recognizeSpeech = () => {
@@ -130,9 +156,6 @@ const ChildrenTrackingTab = () => {
 
   // Process voice commands
   const processVoiceCommand = (text) => {
-    // Simple example - in a real implementation, this would use natural language processing
-    // and connect to Claude or another NLP service
-    
     // Create a friendly confirmation and show it in the UI
     setAllieMessage({
       type: 'success',
@@ -150,11 +173,8 @@ const ChildrenTrackingTab = () => {
       else if (lowerText.includes('growth') || lowerText.includes('weight') || lowerText.includes('height')) {
         handleVoiceGrowthEntry(text);
       }
-      else if (lowerText.includes('homework') || lowerText.includes('assignment')) {
-        handleVoiceHomework(text);
-      }
-      else if (lowerText.includes('activity') || lowerText.includes('class')) {
-        handleVoiceActivity(text);
+      else if (lowerText.includes('routine') || lowerText.includes('schedule')) {
+        handleVoiceRoutine(text);
       }
       else {
         // Default response if we can't categorize
@@ -200,7 +220,8 @@ const ChildrenTrackingTab = () => {
       doctor: '',
       notes: `Voice entry: "${text}"`,
       childId: childId,
-      completed: false
+      completed: false,
+      documents: []
     });
 
     setAllieMessage({
@@ -253,9 +274,9 @@ const ChildrenTrackingTab = () => {
     });
   };
 
-  // Handle voice homework commands
-  const handleVoiceHomework = (text) => {
-    // Extract child, subject, due date, etc.
+  // Handle voice routine commands
+  const handleVoiceRoutine = (text) => {
+    // Extract child
     const childMatches = familyMembers
       .filter(m => m.role === 'child')
       .filter(child => text.toLowerCase().includes(child.name.toLowerCase()));
@@ -265,85 +286,29 @@ const ChildrenTrackingTab = () => {
     if (!childId) {
       setAllieMessage({
         type: 'warning',
-        text: "I didn't catch which child this homework is for. Please try again or select a child first."
+        text: "I didn't catch which child this routine is for. Please try again or select a child first."
       });
       return;
     }
 
-    // Mock subject extraction
-    let subject = 'General';
-    if (text.toLowerCase().includes('math')) subject = 'Math';
-    else if (text.toLowerCase().includes('science')) subject = 'Science';
-    else if (text.toLowerCase().includes('english') || text.toLowerCase().includes('reading')) subject = 'English';
+    // Simple extraction for routine type
+    let routineTitle = 'Daily Routine';
+    if (text.toLowerCase().includes('morning')) routineTitle = 'Morning Routine';
+    else if (text.toLowerCase().includes('bedtime') || text.toLowerCase().includes('night')) routineTitle = 'Bedtime Routine';
+    else if (text.toLowerCase().includes('school')) routineTitle = 'School Routine';
     
-    // Default due date (one week)
-    const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + 7);
-    
-    openModal('homework', {
-      title: `Homework Assignment`,
-      subject: subject,
-      dueDate: dueDate.toISOString().split('T')[0],
-      description: `Voice entry: "${text}"`,
-      priority: 'medium',
-      completed: false,
-      childId: childId
-    });
-
-    setAllieMessage({
-      type: 'success',
-      text: `I've started creating a ${subject} homework entry. Please review and add any missing details.`
-    });
-  };
-
-  // Handle voice activity commands
-  const handleVoiceActivity = (text) => {
-    const childMatches = familyMembers
-      .filter(m => m.role === 'child')
-      .filter(child => text.toLowerCase().includes(child.name.toLowerCase()));
-    
-    const childId = childMatches.length > 0 ? childMatches[0].id : activeChild;
-    
-    if (!childId) {
-      setAllieMessage({
-        type: 'warning',
-        text: "I didn't catch which child this activity is for. Please try again or select a child first."
-      });
-      return;
-    }
-
-    // Mock activity type extraction
-    let activityType = 'other';
-    if (text.toLowerCase().includes('soccer') || text.toLowerCase().includes('basketball') || 
-        text.toLowerCase().includes('swimming')) {
-      activityType = 'sports';
-    } else if (text.toLowerCase().includes('art') || text.toLowerCase().includes('craft') || 
-               text.toLowerCase().includes('drawing')) {
-      activityType = 'art';
-    } else if (text.toLowerCase().includes('music') || text.toLowerCase().includes('piano') || 
-               text.toLowerCase().includes('guitar')) {
-      activityType = 'music';
-    }
-    
-    // Default start date (next week)
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() + 7);
-    
-    openModal('activity', {
-      title: `New Activity`,
-      type: activityType,
-      location: '',
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: '',
-      repeatDay: [],
-      time: '',
+    openModal('routine', {
+      title: routineTitle,
+      days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+      startTime: '08:00',
+      endTime: '',
       notes: `Voice entry: "${text}"`,
       childId: childId
     });
 
     setAllieMessage({
       type: 'success',
-      text: `I've started creating a ${activityType} activity. Please review and add any missing details.`
+      text: `I've started creating a ${routineTitle.toLowerCase()}. Please review and add any missing details.`
     });
   };
 
@@ -351,12 +316,18 @@ const ChildrenTrackingTab = () => {
   const openModal = (modalType, data) => {
     setActiveModal(modalType);
     setModalData(data);
+    
+    // If opening an appointment modal, load associated documents
+    if (modalType === 'appointment' && data.id) {
+      loadAppointmentDocuments(data.childId, data.id);
+    }
   };
 
   // Close modal
   const closeModal = () => {
     setActiveModal(null);
     setModalData({});
+    setDocuments([]);
   };
 
   // Toggle section expansion
@@ -413,7 +384,196 @@ const ChildrenTrackingTab = () => {
     return child && child.profilePicture ? child.profilePicture : '/api/placeholder/48/48';
   };
   
-  // ---- API Integration Functions ----
+  // Load documents associated with an appointment
+  const loadAppointmentDocuments = async (childId, appointmentId) => {
+    try {
+      if (!familyId || !childId || !appointmentId) return;
+      
+      // Query documents for this appointment
+      const documentsRef = collection(db, "appointmentDocuments");
+      const q = query(
+        documentsRef, 
+        where("familyId", "==", familyId),
+        where("childId", "==", childId),
+        where("appointmentId", "==", appointmentId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const docs = [];
+      
+      querySnapshot.forEach((doc) => {
+        docs.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      
+      setDocuments(docs);
+    } catch (error) {
+      console.error("Error loading appointment documents:", error);
+      setAllieMessage({
+        type: 'error',
+        text: 'Error loading documents. Please try again.'
+      });
+    }
+  };
+  
+  // Handle file upload for appointment documents
+  const handleFileUpload = async (event) => {
+    try {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const { childId, id: appointmentId } = modalData;
+      if (!familyId || !childId || !appointmentId) {
+        setAllieMessage({
+          type: 'error',
+          text: 'Missing information for document upload. Please try again.'
+        });
+        return;
+      }
+      
+      setUploadingDocument(true);
+      setUploadProgress(0);
+      
+      // Create a reference to the file in Firebase Storage
+      const fileRef = ref(storage, `appointment-documents/${familyId}/${childId}/${appointmentId}/${file.name}`);
+      
+      // Upload the file
+      const uploadTask = uploadBytes(fileRef, file);
+      
+      // Wait for upload to complete
+      await uploadTask;
+      
+      // Get download URL
+      const downloadURL = await getDownloadURL(fileRef);
+      
+      // Create document record in Firestore
+      const docData = {
+        familyId,
+        childId,
+        appointmentId,
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        fileUrl: downloadURL,
+        uploadedAt: serverTimestamp(),
+        uploadedBy: currentUser.uid
+      };
+      
+      await addDoc(collection(db, "appointmentDocuments"), docData);
+      
+      // Update local documents state
+      setDocuments(prev => [...prev, {
+        id: Date.now().toString(), // Temporary ID until we reload
+        ...docData
+      }]);
+      
+      setUploadingDocument(false);
+      setUploadProgress(100);
+      
+      setAllieMessage({
+        type: 'success',
+        text: 'Document uploaded successfully!'
+      });
+      
+      // Clear file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } catch (error) {
+      console.error("Error uploading document:", error);
+      setUploadingDocument(false);
+      setUploadProgress(0);
+      
+      setAllieMessage({
+        type: 'error',
+        text: 'Error uploading document. Please try again.'
+      });
+    }
+  };
+  
+  // Create or update healthcare provider
+  const handleProviderSubmit = async (providerData) => {
+    try {
+      if (!familyId) throw new Error("No family ID available");
+      
+      setLoadingSection("provider");
+      
+      const { id, name, specialty, phone, email, address, notes } = providerData;
+      
+      // Format provider data
+      const provider = {
+        name,
+        specialty,
+        phone: phone || "",
+        email: email || "",
+        address: address || "",
+        notes: notes || "",
+        familyId,
+        updatedAt: serverTimestamp()
+      };
+      
+      let providerId;
+      
+      if (id) {
+        // Update existing provider
+        const providerRef = doc(db, "healthcareProviders", id);
+        await updateDoc(providerRef, provider);
+        providerId = id;
+      } else {
+        // Create new provider
+        const providerRef = collection(db, "healthcareProviders");
+        const docRef = await addDoc(providerRef, {
+          ...provider,
+          createdAt: serverTimestamp()
+        });
+        providerId = docRef.id;
+      }
+      
+      // Refresh providers list
+      const updatedProviders = [...healthcareProviders];
+      
+      if (id) {
+        // Update existing provider in the list
+        const index = updatedProviders.findIndex(p => p.id === id);
+        if (index !== -1) {
+          updatedProviders[index] = {
+            ...updatedProviders[index],
+            ...provider,
+            id
+          };
+        }
+      } else {
+        // Add new provider to the list
+        updatedProviders.push({
+          ...provider,
+          id: providerId
+        });
+      }
+      
+      setHealthcareProviders(updatedProviders);
+      setLoadingSection(null);
+      closeModal();
+      
+      setAllieMessage({
+        type: 'success',
+        text: `Healthcare provider ${id ? 'updated' : 'created'} successfully!`
+      });
+      
+      return providerId;
+    } catch (error) {
+      console.error("Error saving healthcare provider:", error);
+      setLoadingSection(null);
+      
+      setAllieMessage({
+        type: 'error',
+        text: `Error ${modalData.id ? 'updating' : 'creating'} healthcare provider: ${error.message}`
+      });
+      
+      return null;
+    }
+  };
   
   // Fetch children's data on component mount
   useEffect(() => {
@@ -443,16 +603,7 @@ const ChildrenTrackingTab = () => {
                   medicalAppointments: [],
                   growthData: [],
                   routines: [],
-                  homework: [],
-                  activities: [],
-                  emotionalChecks: [],
-                  meals: {
-                    allergies: [],
-                    preferences: [],
-                    restrictions: []
-                  },
-                  events: [],
-                  milestones: []
+                  clothesHandMeDowns: []
                 };
               });
             
@@ -466,7 +617,7 @@ const ChildrenTrackingTab = () => {
             setChildrenData(familyData.childrenData);
           }
           
-          // Generate AI insights based on the children data
+          // Generate AI insights based on the children data (would involve AllieAIEngineService in a real implementation)
           if (familyData.childrenData) {
             generateAiInsights(familyData.childrenData);
           }
@@ -502,13 +653,7 @@ const ChildrenTrackingTab = () => {
     const counts = {
       medical: 0,
       growth: 0,
-      routines: 0,
-      homework: 0,
-      activities: 0,
-      emotional: 0,
-      meals: 0,
-      events: 0,
-      milestones: 0
+      routines: 0
     };
     
     // Process for each child
@@ -536,54 +681,16 @@ const ChildrenTrackingTab = () => {
         // No growth data at all
         counts.growth += 1;
       }
-      
-      // Homework due in the next week
-      if (childData.homework) {
-        counts.homework += childData.homework.filter(hw => {
-          const dueDate = new Date(hw.dueDate);
-          return !hw.completed && dueDate >= today && dueDate <= oneWeekFromNow;
-        }).length;
-      }
-      
-      // Activities starting in the next week
-      if (childData.activities) {
-        counts.activities += childData.activities.filter(act => {
-          const startDate = new Date(act.startDate);
-          return startDate >= today && startDate <= oneWeekFromNow;
-        }).length;
-      }
-      
-      // Emotional checks - notify if no check-in in the last week
-      if (childData.emotionalChecks && childData.emotionalChecks.length > 0) {
-        const lastCheckDate = new Date(Math.max(...childData.emotionalChecks.map(c => new Date(c.date))));
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(today.getDate() - 7);
-        
-        if (lastCheckDate < oneWeekAgo) {
-          counts.emotional += 1;
-        }
-      } else {
-        // No emotional checks at all
-        counts.emotional += 1;
-      }
-      
-      // Events in the next week
-      if (childData.events) {
-        counts.events += childData.events.filter(evt => {
-          const eventDate = new Date(evt.date);
-          return eventDate >= today && eventDate <= oneWeekFromNow;
-        }).length;
-      }
     });
     
     setNotifications(counts);
   };
   
-  // Generate AI insights for children data
-  const generateAiInsights = async (data) => {
+  // Generate AI insights for children data (simplified version)
+  const generateAiInsights = (data) => {
     try {
       // For a real implementation, we would call AllieAIEngineService
-      // For now, create some dynamic insights based on the data
+      // For this simplified version, create some dynamic insights based on the data
       const insights = [];
       
       // Process data for each child
@@ -698,99 +805,24 @@ const ChildrenTrackingTab = () => {
             childId: childId
           });
         }
-        
-        // Homework insights
-        if (childData.homework && childData.homework.length > 0) {
-          // Check for overdue homework
-          const overdueHomework = childData.homework.filter(hw => 
-            !hw.completed && new Date(hw.dueDate) < new Date()
-          );
-          
-          if (overdueHomework.length > 0) {
-            insights.push({
-              type: "homework",
-              title: "Overdue Homework",
-              content: `${childName} has ${overdueHomework.length} overdue ${overdueHomework.length === 1 ? 'assignment' : 'assignments'} that ${overdueHomework.length === 1 ? 'needs' : 'need'} attention.`,
-              priority: "high",
-              childId: childId
-            });
-          }
-          
-          // Check for upcoming homework
-          const upcomingHomework = childData.homework.filter(hw => {
-            const dueDate = new Date(hw.dueDate);
+
+        // Hand-me-down insights
+        if (childData.clothesHandMeDowns && childData.clothesHandMeDowns.length > 0) {
+          const readyItems = childData.clothesHandMeDowns.filter(item => {
+            const readyDate = new Date(item.readyDate);
             const today = new Date();
-            const twoDaysFromNow = new Date();
-            twoDaysFromNow.setDate(today.getDate() + 2);
-            
-            return !hw.completed && dueDate >= today && dueDate <= twoDaysFromNow;
+            return !item.used && readyDate <= today;
           });
           
-          if (upcomingHomework.length > 0) {
+          if (readyItems.length > 0) {
             insights.push({
-              type: "homework",
-              title: "Upcoming Assignments",
-              content: `${childName} has ${upcomingHomework.length} ${upcomingHomework.length === 1 ? 'assignment' : 'assignments'} due in the next two days.`,
-              priority: "medium",
+              type: "clothes",
+              title: "Hand-Me-Downs Ready",
+              content: `${childName} has ${readyItems.length} saved clothing ${readyItems.length === 1 ? 'item' : 'items'} ready to be used.`,
+              priority: "low",
               childId: childId
             });
           }
-        }
-        
-        // Emotional well-being insights
-        if (childData.emotionalChecks && childData.emotionalChecks.length > 0) {
-          // Check if there's a recent emotional check
-          const latestCheck = childData.emotionalChecks.sort((a, b) => 
-            new Date(b.date) - new Date(a.date)
-          )[0];
-          
-          const oneWeekAgo = new Date();
-          oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-          
-          if (new Date(latestCheck.date) < oneWeekAgo) {
-            insights.push({
-              type: "emotional",
-              title: "Emotional Check-in Reminder",
-              content: `It's been over a week since you checked in on ${childName}'s emotional well-being. Consider having a check-in conversation.`,
-              priority: "medium",
-              childId: childId
-            });
-          }
-          
-          // Check for mood patterns
-          if (childData.emotionalChecks.length >= 3) {
-            const recentChecks = childData.emotionalChecks
-              .sort((a, b) => new Date(b.date) - new Date(a.date))
-              .slice(0, 3);
-            
-            const moodCounts = {};
-            recentChecks.forEach(check => {
-              moodCounts[check.mood] = (moodCounts[check.mood] || 0) + 1;
-            });
-            
-            const dominantMood = Object.entries(moodCounts)
-              .sort((a, b) => b[1] - a[1])
-              [0];
-            
-            if (dominantMood[1] >= 2 && ['sad', 'angry', 'worried'].includes(dominantMood[0])) {
-              insights.push({
-                type: "emotional",
-                title: "Emotional Pattern Detected",
-                content: `${childName} has reported feeling ${dominantMood[0]} in ${dominantMood[1]} of the last 3 check-ins. You might want to have a conversation about what's causing these feelings.`,
-                priority: "high",
-                childId: childId
-              });
-            }
-          }
-        } else if (childAge && childAge > 3) {
-          // No emotional checks recorded for a child old enough to express emotions
-          insights.push({
-            type: "recommendation",
-            title: "Emotional Well-being Tracking",
-            content: `You haven't recorded any emotional check-ins for ${childName}. Regular check-ins can help you stay connected with their feelings and needs.`,
-            priority: "medium",
-            childId: childId
-          });
         }
       });
       
@@ -870,23 +902,8 @@ const ChildrenTrackingTab = () => {
         case 'routine':
           await handleRoutineFormSubmit(formData);
           break;
-        case 'homework':
-          await handleHomeworkFormSubmit(formData);
-          break;
-        case 'activity':
-          await handleActivityFormSubmit(formData);
-          break;
-        case 'emotional':
-          await handleEmotionalFormSubmit(formData);
-          break;
-        case 'meal':
-          await handleMealFormSubmit(formData);
-          break;
-        case 'event':
-          await handleEventFormSubmit(formData);
-          break;
-        case 'milestone':
-          await handleMilestoneFormSubmit(formData);
+        case 'handmedown':
+          await handleHandMeDownFormSubmit(formData);
           break;
         default:
           throw new Error(`Unknown form type: ${formType}`);
@@ -917,11 +934,19 @@ const ChildrenTrackingTab = () => {
   
   // Handle appointment form submission
   const handleAppointmentFormSubmit = async (formData) => {
-    const { childId, id } = formData;
+    const { childId, id, providerId } = formData;
     
     // Validate required fields
-    if (!formData.title || !formData.date) {
-      throw new Error("Please fill in title and date");
+    if (!formData.title) {
+      throw new Error("Please enter an appointment title");
+    }
+    
+    if (!formData.date) {
+      throw new Error("Please select an appointment date");
+    }
+    
+    if (!formData.time) {
+      throw new Error("Please select an appointment time");
     }
     
     // Format appointment data
@@ -930,6 +955,22 @@ const ChildrenTrackingTab = () => {
       id: id || Date.now().toString(),
       createdAt: new Date().toISOString()
     };
+    
+    // If providerId is provided, get the provider data
+    if (providerId) {
+      const provider = healthcareProviders.find(p => p.id === providerId);
+      if (provider) {
+        appointmentData.doctor = provider.name;
+        appointmentData.providerDetails = {
+          id: provider.id,
+          name: provider.name,
+          specialty: provider.specialty,
+          phone: provider.phone,
+          email: provider.email,
+          address: provider.address
+        };
+      }
+    }
     
     // Update local state
     const updatedData = {...childrenData};
@@ -965,20 +1006,25 @@ const ChildrenTrackingTab = () => {
     const appointmentDate = new Date(formData.date);
     if (appointmentDate > new Date() && !formData.completed) {
       try {
+        // Parse time strings
+        const [hours, minutes] = formData.time.split(':');
+        appointmentDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+        
+        // End time is 30 minutes after start
+        const endDate = new Date(appointmentDate);
+        endDate.setMinutes(endDate.getMinutes() + 30);
+        
         // Create calendar event
         const calendarEvent = {
           summary: `${getChildName(childId)}'s ${formData.title}`,
           description: formData.notes || `Medical appointment: ${formData.title}`,
+          location: formData.providerDetails?.address || '',
           start: {
-            dateTime: formData.time 
-              ? `${formData.date}T${formData.time}:00` 
-              : `${formData.date}T09:00:00`,
+            dateTime: appointmentDate.toISOString(),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
           },
           end: {
-            dateTime: formData.time 
-              ? `${formData.date}T${formData.time.split(':')[0]}:${parseInt(formData.time.split(':')[1]) + 30}:00` 
-              : `${formData.date}T10:00:00`,
+            dateTime: endDate.toISOString(),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
           },
           reminders: {
@@ -1010,6 +1056,19 @@ const ChildrenTrackingTab = () => {
     // Validate - at least one measurement
     if (!formData.height && !formData.weight && !formData.shoeSize && !formData.clothingSize) {
       throw new Error("Please fill in at least one measurement");
+    }
+    
+    // Validate number formats
+    if (formData.height && !/^\d+(\.\d+)?\s*(cm|in|inches|feet|ft)$/i.test(formData.height)) {
+      throw new Error("Height must be a number with units (e.g., '42 in' or '107 cm')");
+    }
+    
+    if (formData.weight && !/^\d+(\.\d+)?\s*(kg|kilos|lb|pounds)$/i.test(formData.weight)) {
+      throw new Error("Weight must be a number with units (e.g., '40 lb' or '18 kg')");
+    }
+    
+    if (formData.shoeSize && isNaN(parseFloat(formData.shoeSize))) {
+      throw new Error("Shoe size must be a number");
     }
     
     // Format growth data
@@ -1164,20 +1223,21 @@ const ChildrenTrackingTab = () => {
     
     return true;
   };
-  
-  // Handle homework form submission
-  const handleHomeworkFormSubmit = async (formData) => {
+
+  // Handle hand-me-down form submission
+  const handleHandMeDownFormSubmit = async (formData) => {
     const { childId, id } = formData;
     
     // Validate required fields
-    if (!formData.title || !formData.subject || !formData.dueDate) {
-      throw new Error("Please fill in title, subject, and due date");
+    if (!formData.name || !formData.description || !formData.readyDate) {
+      throw new Error("Please fill in name, description, and ready date");
     }
     
-    // Format homework data
-    const homeworkData = {
+    // Format hand-me-down data
+    const handMeDownData = {
       ...formData,
       id: id || Date.now().toString(),
+      used: formData.used || false,
       createdAt: new Date().toISOString()
     };
     
@@ -1185,21 +1245,21 @@ const ChildrenTrackingTab = () => {
     const updatedData = {...childrenData};
     
     if (id) {
-      // Update existing homework
-      const homeworkIndex = updatedData[childId].homework.findIndex(
+      // Update existing hand-me-down
+      const handMeDownIndex = updatedData[childId].clothesHandMeDowns.findIndex(
         h => h.id === id
       );
       
-      if (homeworkIndex !== -1) {
-        updatedData[childId].homework[homeworkIndex] = homeworkData;
+      if (handMeDownIndex !== -1) {
+        updatedData[childId].clothesHandMeDowns[handMeDownIndex] = handMeDownData;
       }
     } else {
-      // Add new homework
-      if (!updatedData[childId].homework) {
-        updatedData[childId].homework = [];
+      // Add new hand-me-down
+      if (!updatedData[childId].clothesHandMeDowns) {
+        updatedData[childId].clothesHandMeDowns = [];
       }
       
-      updatedData[childId].homework.push(homeworkData);
+      updatedData[childId].clothesHandMeDowns.push(handMeDownData);
     }
     
     // Update state and save to Firebase
@@ -1208,411 +1268,34 @@ const ChildrenTrackingTab = () => {
     // Save to Firebase
     const docRef = doc(db, "families", familyId);
     await updateDoc(docRef, {
-      [`childrenData.${childId}.homework`]: updatedData[childId].homework
+      [`childrenData.${childId}.clothesHandMeDowns`]: updatedData[childId].clothesHandMeDowns
     });
     
-    // Add homework due date to calendar
-    try {
-      const dueDate = new Date(formData.dueDate);
-      dueDate.setHours(17, 0, 0, 0); // Default to 5:00 PM
-      
-      const calendarEvent = {
-        summary: `${getChildName(childId)}'s ${formData.subject} Homework Due`,
-        description: formData.description || `${formData.title} - ${formData.subject} assignment due`,
-        start: {
-          dateTime: dueDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        end: {
-          dateTime: new Date(dueDate.getTime() + 30*60000).toISOString(), // 30 minutes
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        reminders: {
-          useDefault: false,
-          overrides: [
-            { method: 'popup', minutes: 24 * 60 }, // 1 day before
-            { method: 'popup', minutes: 120 } // 2 hours before
-          ]
-        }
-      };
-      
-      // Add to calendar
-      if (CalendarService) {
-        await CalendarService.addEvent(calendarEvent, currentUser?.uid);
-      }
-    } catch (calendarError) {
-      console.error("Error adding homework to calendar:", calendarError);
-      // Don't block the save if calendar fails
-    }
-    
-    return true;
-  };
-  
-  // Handle activity form submission
-  const handleActivityFormSubmit = async (formData) => {
-    const { childId, id } = formData;
-    
-    // Validate required fields
-    if (!formData.title || !formData.type || !formData.startDate) {
-      throw new Error("Please fill in title, type, and start date");
-    }
-    
-    // Format activity data
-    const activityData = {
-      ...formData,
-      id: id || Date.now().toString(),
-      createdAt: new Date().toISOString()
-    };
-    
-    // Update local state
-    const updatedData = {...childrenData};
-    
-    if (id) {
-      // Update existing activity
-      const activityIndex = updatedData[childId].activities.findIndex(
-        a => a.id === id
-      );
-      
-      if (activityIndex !== -1) {
-        updatedData[childId].activities[activityIndex] = activityData;
-      }
-    } else {
-      // Add new activity
-      if (!updatedData[childId].activities) {
-        updatedData[childId].activities = [];
-      }
-      
-      updatedData[childId].activities.push(activityData);
-    }
-    
-    // Update state and save to Firebase
-    setChildrenData(updatedData);
-    
-    // Save to Firebase
-    const docRef = doc(db, "families", familyId);
-    await updateDoc(docRef, {
-      [`childrenData.${childId}.activities`]: updatedData[childId].activities
-    });
-    
-    // Add to calendar
-    try {
-      const startDate = new Date(formData.startDate);
-      
-      // Set time if provided
-      if (formData.time) {
-        const [hours, minutes] = formData.time.split(':');
-        startDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-      } else {
-        startDate.setHours(15, 0, 0, 0); // Default to 3:00 PM
-      }
-      
-      // End date is either the provided end date or 1 hour after start
-      const endDate = formData.endDate 
-        ? new Date(formData.endDate) 
-        : new Date(startDate.getTime() + 60*60000); // 1 hour
-      
-      // If end date is provided but no end time, use the same time as start
-      if (formData.endDate && !formData.endTime) {
-        endDate.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
-      }
-      
-      // Add 1 hour to end time if same as start time
-      if (endDate.getTime() === startDate.getTime()) {
-        endDate.setTime(endDate.getTime() + 60*60000);
-      }
-      
-      // Create calendar event
-      const calendarEvent = {
-        summary: `${getChildName(childId)}'s ${formData.title}`,
-        description: formData.notes || `${formData.type.charAt(0).toUpperCase() + formData.type.slice(1)} activity: ${formData.title}`,
-        location: formData.location || '',
-        start: {
-          dateTime: startDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        end: {
-          dateTime: endDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        reminders: {
-          useDefault: false,
-          overrides: [
-            { method: 'popup', minutes: 60 }, // 1 hour before
-            { method: 'popup', minutes: 10 } // 10 minutes before
-          ]
-        }
-      };
-      
-      // Add recurrence if applicable
-      if (formData.repeatDay && formData.repeatDay.length > 0) {
-        const dayMap = {
-          'Sunday': 'SU', 'Monday': 'MO', 'Tuesday': 'TU', 'Wednesday': 'WE',
-          'Thursday': 'TH', 'Friday': 'FR', 'Saturday': 'SA'
-        };
+    // If there's an image, upload it
+    if (formData.imageFile) {
+      try {
+        const fileRef = ref(storage, `hand-me-downs/${familyId}/${childId}/${handMeDownData.id}`);
+        await uploadBytes(fileRef, formData.imageFile);
+        const downloadURL = await getDownloadURL(fileRef);
         
-        const byday = formData.repeatDay.map(day => dayMap[day]).join(',');
-        calendarEvent.recurrence = [`RRULE:FREQ=WEEKLY;BYDAY=${byday}`];
-      }
-      
-      // Add to calendar
-      if (CalendarService) {
-        await CalendarService.addEvent(calendarEvent, currentUser?.uid);
-      }
-    } catch (calendarError) {
-      console.error("Error adding activity to calendar:", calendarError);
-      // Don't block the save if calendar fails
-    }
-    
-    return true;
-  };
-  
-  // Handle emotional check form submission
-  const handleEmotionalFormSubmit = async (formData) => {
-    const { childId, id } = formData;
-    
-    // Validate required fields
-    if (!formData.date || !formData.mood) {
-      throw new Error("Please fill in date and mood");
-    }
-    
-    // Format emotional check data
-    const emotionalCheckData = {
-      ...formData,
-      id: id || Date.now().toString(),
-      createdAt: new Date().toISOString()
-    };
-    
-    // Update local state
-    const updatedData = {...childrenData};
-    
-    if (id) {
-      // Update existing emotional check
-      const checkIndex = updatedData[childId].emotionalChecks.findIndex(
-        check => check.id === id
-      );
-      
-      if (checkIndex !== -1) {
-        updatedData[childId].emotionalChecks[checkIndex] = emotionalCheckData;
-      }
-    } else {
-      // Add new emotional check
-      if (!updatedData[childId].emotionalChecks) {
-        updatedData[childId].emotionalChecks = [];
-      }
-      
-      updatedData[childId].emotionalChecks.push(emotionalCheckData);
-    }
-    
-    // Update state and save to Firebase
-    setChildrenData(updatedData);
-    
-    // Save to Firebase
-    const docRef = doc(db, "families", familyId);
-    await updateDoc(docRef, {
-      [`childrenData.${childId}.emotionalChecks`]: updatedData[childId].emotionalChecks
-    });
-    
-    return true;
-  };
-  
-  // Handle meal form submission
-  const handleMealFormSubmit = async (formData) => {
-    const { childId } = formData;
-    
-    // Validate required fields
-    if (!formData.name) {
-      throw new Error("Please fill in the name field");
-    }
-    
-    // Format meal data
-    const mealData = {
-      ...formData,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString()
-    };
-    
-    // Update local state
-    const updatedData = {...childrenData};
-    
-    if (!updatedData[childId].meals) {
-      updatedData[childId].meals = {
-        allergies: [],
-        preferences: [],
-        restrictions: []
-      };
-    }
-    
-    // Add to appropriate category
-    const category = formData.type === 'allergy' ? 'allergies' : 
-                     formData.type === 'restriction' ? 'restrictions' : 
-                     'preferences';
-    
-    updatedData[childId].meals[category].push(mealData);
-    
-    // Update state and save to Firebase
-    setChildrenData(updatedData);
-    
-    // Save to Firebase
-    const docRef = doc(db, "families", familyId);
-    await updateDoc(docRef, {
-      [`childrenData.${childId}.meals.${category}`]: updatedData[childId].meals[category]
-    });
-    
-    return true;
-  };
-  
-  // Handle event form submission
-  const handleEventFormSubmit = async (formData) => {
-    const { childId, id } = formData;
-    
-    // Validate required fields
-    if (!formData.title || !formData.date) {
-      throw new Error("Please fill in title and date");
-    }
-    
-    // Format event data
-    const eventData = {
-      ...formData,
-      id: id || Date.now().toString(),
-      createdAt: new Date().toISOString()
-    };
-    
-    // Update local state
-    const updatedData = {...childrenData};
-    
-    if (id) {
-      // Update existing event
-      const eventIndex = updatedData[childId].events.findIndex(
-        e => e.id === id
-      );
-      
-      if (eventIndex !== -1) {
-        updatedData[childId].events[eventIndex] = eventData;
-      }
-    } else {
-      // Add new event
-      if (!updatedData[childId].events) {
-        updatedData[childId].events = [];
-      }
-      
-      updatedData[childId].events.push(eventData);
-    }
-    
-    // Update state and save to Firebase
-    setChildrenData(updatedData);
-    
-    // Save to Firebase
-    const docRef = doc(db, "families", familyId);
-    await updateDoc(docRef, {
-      [`childrenData.${childId}.events`]: updatedData[childId].events
-    });
-    
-    // Add to calendar
-    try {
-      const eventDate = new Date(formData.date);
-      
-      // Set time if provided
-      if (formData.time) {
-        const [hours, minutes] = formData.time.split(':');
-        eventDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-      } else {
-        // Default times based on event type
-        if (formData.type === 'birthday') {
-          eventDate.setHours(14, 0, 0, 0); // 2:00 PM
-        } else if (formData.type === 'school') {
-          eventDate.setHours(9, 0, 0, 0); // 9:00 AM
-        } else {
-          eventDate.setHours(12, 0, 0, 0); // 12:00 PM
+        // Update the item with the image URL
+        const index = updatedData[childId].clothesHandMeDowns.findIndex(h => h.id === handMeDownData.id);
+        if (index !== -1) {
+          updatedData[childId].clothesHandMeDowns[index].imageUrl = downloadURL;
+          
+          // Save to Firebase again with the image URL
+          await updateDoc(docRef, {
+            [`childrenData.${childId}.clothesHandMeDowns`]: updatedData[childId].clothesHandMeDowns
+          });
+          
+          // Update state
+          setChildrenData(updatedData);
         }
+      } catch (uploadError) {
+        console.error("Error uploading hand-me-down image:", uploadError);
+        // Don't block the save if image upload fails
       }
-      
-      // End time is 2 hours after start
-      const endDate = new Date(eventDate.getTime() + 2*60*60000);
-      
-      // Create calendar event
-      const calendarEvent = {
-        summary: `${getChildName(childId)}'s ${formData.title}`,
-        description: formData.description || `${formData.type.charAt(0).toUpperCase() + formData.type.slice(1)} event: ${formData.title}`,
-        location: formData.location || '',
-        start: {
-          dateTime: eventDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        end: {
-          dateTime: endDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        reminders: {
-          useDefault: false,
-          overrides: [
-            { method: 'popup', minutes: 24 * 60 }, // 1 day before
-            { method: 'popup', minutes: 60 } // 1 hour before
-          ]
-        }
-      };
-      
-      // If it's a birthday, make it recurring annually
-      if (formData.type === 'birthday') {
-        calendarEvent.recurrence = ['RRULE:FREQ=YEARLY'];
-      }
-      
-      // Add to calendar
-      if (CalendarService) {
-        await CalendarService.addEvent(calendarEvent, currentUser?.uid);
-      }
-    } catch (calendarError) {
-      console.error("Error adding event to calendar:", calendarError);
-      // Don't block the save if calendar fails
     }
-    
-    return true;
-  };
-  
-  // Handle milestone form submission
-  const handleMilestoneFormSubmit = async (formData) => {
-    const { childId, id } = formData;
-    
-    // Validate required fields
-    if (!formData.title || !formData.date) {
-      throw new Error("Please fill in title and date");
-    }
-    
-    // Format milestone data
-    const milestoneData = {
-      ...formData,
-      id: id || Date.now().toString(),
-      createdAt: new Date().toISOString()
-    };
-    
-    // Update local state
-    const updatedData = {...childrenData};
-    
-    if (id) {
-      // Update existing milestone
-      const milestoneIndex = updatedData[childId].milestones.findIndex(
-        m => m.id === id
-      );
-      
-      if (milestoneIndex !== -1) {
-        updatedData[childId].milestones[milestoneIndex] = milestoneData;
-      }
-    } else {
-      // Add new milestone
-      if (!updatedData[childId].milestones) {
-        updatedData[childId].milestones = [];
-      }
-      
-      updatedData[childId].milestones.push(milestoneData);
-    }
-    
-    // Update state and save to Firebase
-    setChildrenData(updatedData);
-    
-    // Save to Firebase
-    const docRef = doc(db, "families", familyId);
-    await updateDoc(docRef, {
-      [`childrenData.${childId}.milestones`]: updatedData[childId].milestones
-    });
     
     return true;
   };
@@ -1648,40 +1331,8 @@ const ChildrenTrackingTab = () => {
           updatedData[childId][path] = updatedItems;
           break;
         
-        case 'homework':
-          path = `homework`;
-          updatedItems = updatedData[childId][path].filter(item => item.id !== itemId);
-          updatedData[childId][path] = updatedItems;
-          break;
-        
-        case 'activity':
-          path = `activities`;
-          updatedItems = updatedData[childId][path].filter(item => item.id !== itemId);
-          updatedData[childId][path] = updatedItems;
-          break;
-        
-        case 'emotional':
-          path = `emotionalChecks`;
-          updatedItems = updatedData[childId][path].filter(item => item.id !== itemId);
-          updatedData[childId][path] = updatedItems;
-          break;
-        
-        case 'meal':
-          // For meals, we need the category (allergies, preferences, restrictions)
-          const category = itemType.category || 'preferences';
-          path = `meals.${category}`;
-          updatedItems = updatedData[childId].meals[category].filter(item => item.id !== itemId);
-          updatedData[childId].meals[category] = updatedItems;
-          break;
-        
-        case 'event':
-          path = `events`;
-          updatedItems = updatedData[childId][path].filter(item => item.id !== itemId);
-          updatedData[childId][path] = updatedItems;
-          break;
-        
-        case 'milestone':
-          path = `milestones`;
+        case 'handmedown':
+          path = `clothesHandMeDowns`;
           updatedItems = updatedData[childId][path].filter(item => item.id !== itemId);
           updatedData[childId][path] = updatedItems;
           break;
@@ -1693,17 +1344,39 @@ const ChildrenTrackingTab = () => {
       // Update state and save to Firebase
       setChildrenData(updatedData);
       
-      // Save to Firebase - handle special case for meals
+      // Save to Firebase
       const docRef = doc(db, "families", familyId);
-      if (itemType === 'meal') {
-        const category = itemType.category || 'preferences';
-        await updateDoc(docRef, {
-          [`childrenData.${childId}.meals.${category}`]: updatedData[childId].meals[category]
-        });
-      } else {
-        await updateDoc(docRef, {
-          [`childrenData.${childId}.${path}`]: updatedData[childId][path]
-        });
+      await updateDoc(docRef, {
+        [`childrenData.${childId}.${path}`]: updatedData[childId][path]
+      });
+      
+      // If it's an appointment, delete any associated documents
+      if (itemType === 'appointment') {
+        try {
+          // Query documents for this appointment
+          const documentsRef = collection(db, "appointmentDocuments");
+          const q = query(
+            documentsRef, 
+            where("familyId", "==", familyId),
+            where("childId", "==", childId),
+            where("appointmentId", "==", itemId)
+          );
+          
+          const querySnapshot = await getDocs(q);
+          
+          // Delete each document
+          const deletePromises = [];
+          querySnapshot.forEach((doc) => {
+            deletePromises.push(
+              updateDoc(doc.ref, { deleted: true, deletedAt: serverTimestamp() })
+            );
+          });
+          
+          await Promise.all(deletePromises);
+        } catch (docError) {
+          console.error("Error deleting appointment documents:", docError);
+          // Don't block the main delete operation
+        }
       }
       
       // Success message
@@ -1717,6 +1390,73 @@ const ChildrenTrackingTab = () => {
       setAllieMessage({
         type: 'error',
         text: `Failed to remove item: ${error.message}`
+      });
+    }
+  };
+  
+  // Delete document from an appointment
+  const handleRemoveDocument = async (documentId) => {
+    try {
+      if (!documentId) return;
+      
+      // Mark document as deleted in Firestore (soft delete)
+      const docRef = doc(db, "appointmentDocuments", documentId);
+      await updateDoc(docRef, {
+        deleted: true,
+        deletedAt: serverTimestamp()
+      });
+      
+      // Update local state
+      setDocuments(docs => docs.filter(d => d.id !== documentId));
+      
+      setAllieMessage({
+        type: 'success',
+        text: 'Document removed successfully!'
+      });
+    } catch (error) {
+      console.error("Error removing document:", error);
+      setAllieMessage({
+        type: 'error',
+        text: 'Error removing document. Please try again.'
+      });
+    }
+  };
+  
+  // Mark hand-me-down as used
+  const markHandMeDownAsUsed = async (childId, itemId) => {
+    try {
+      if (!familyId) throw new Error("No family ID available");
+      
+      // Create a deep copy of the childrenData
+      const updatedData = JSON.parse(JSON.stringify(childrenData));
+      
+      // Find the item
+      const index = updatedData[childId].clothesHandMeDowns.findIndex(item => item.id === itemId);
+      
+      if (index !== -1) {
+        // Mark as used
+        updatedData[childId].clothesHandMeDowns[index].used = true;
+        updatedData[childId].clothesHandMeDowns[index].usedDate = new Date().toISOString();
+        
+        // Update state and save to Firebase
+        setChildrenData(updatedData);
+        
+        // Save to Firebase
+        const docRef = doc(db, "families", familyId);
+        await updateDoc(docRef, {
+          [`childrenData.${childId}.clothesHandMeDowns`]: updatedData[childId].clothesHandMeDowns
+        });
+        
+        setAllieMessage({
+          type: 'success',
+          text: 'Item marked as used!'
+        });
+      }
+    } catch (error) {
+      console.error("Error marking hand-me-down as used:", error);
+      setAllieMessage({
+        type: 'error',
+        text: 'Error updating item. Please try again.'
       });
     }
   };
@@ -1754,11 +1494,12 @@ const ChildrenTrackingTab = () => {
                   openModal('appointment', {
                     title: '',
                     date: new Date().toISOString().split('T')[0],
-                    time: '',
+                    time: '09:00',
                     doctor: '',
                     notes: '',
                     childId: activeChild,
-                    completed: false
+                    completed: false,
+                    documents: []
                   });
                 } else {
                   setAllieMessage({
@@ -1792,17 +1533,25 @@ const ChildrenTrackingTab = () => {
                     </p>
                   </div>
                 </div>
-                <div>
+                <div className="flex space-x-2">
+                  <button
+                    className="px-3 py-1 border border-black text-black rounded-md text-sm hover:bg-gray-50 font-roboto flex items-center"
+                    onClick={() => openModal('provider', { familyId })}
+                  >
+                    <User size={14} className="mr-1" />
+                    Manage Providers
+                  </button>
                   <button 
                     className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
                     onClick={() => openModal('appointment', {
                       title: '',
                       date: new Date().toISOString().split('T')[0],
-                      time: '',
+                      time: '09:00',
                       doctor: '',
                       notes: '',
                       childId: child.id,
-                      completed: false
+                      completed: false,
+                      documents: []
                     })}
                   >
                     <PlusCircle size={14} className="mr-1" />
@@ -1876,10 +1625,13 @@ const ChildrenTrackingTab = () => {
                           <div>
                             <h5 className="font-medium font-roboto text-md">{appointment.title}</h5>
                             <p className="text-sm text-gray-600 font-roboto">
-                              {formatDate(appointment.date)} {appointment.time && `at ${appointment.time}`}
+                              {formatDate(appointment.date)} at {appointment.time}
                             </p>
                             {appointment.doctor && (
                               <p className="text-sm text-gray-600 font-roboto">Doctor: {appointment.doctor}</p>
+                            )}
+                            {appointment.providerDetails && appointment.providerDetails.address && (
+                              <p className="text-sm text-gray-600 font-roboto truncate">{appointment.providerDetails.address}</p>
                             )}
                           </div>
                           <div className="flex space-x-2">
@@ -1925,7 +1677,7 @@ const ChildrenTrackingTab = () => {
                           <div>
                             <h5 className="font-medium font-roboto">{appointment.title}</h5>
                             <p className="text-sm text-gray-600 font-roboto">
-                              {formatDate(appointment.date)} {appointment.time && `at ${appointment.time}`}
+                              {formatDate(appointment.date)} at {appointment.time}
                             </p>
                             {appointment.doctor && (
                               <p className="text-sm text-gray-600 font-roboto">Doctor: {appointment.doctor}</p>
@@ -2031,7 +1783,7 @@ const ChildrenTrackingTab = () => {
                     </p>
                   </div>
                 </div>
-                <div>
+                <div className="flex space-x-2">
                   <button 
                     className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
                     onClick={() => openModal('growth', {
@@ -2045,6 +1797,20 @@ const ChildrenTrackingTab = () => {
                   >
                     <PlusCircle size={14} className="mr-1" />
                     Add Measurement
+                  </button>
+                  <button 
+                    className="px-3 py-1 border border-black text-black rounded-md text-sm hover:bg-gray-50 font-roboto flex items-center"
+                    onClick={() => openModal('handmedown', {
+                      name: '',
+                      description: '',
+                      size: '',
+                      readyDate: new Date().toISOString().split('T')[0],
+                      childId: child.id,
+                      used: false
+                    })}
+                  >
+                    <Clipboard size={14} className="mr-1" />
+                    Add Hand-Me-Downs
                   </button>
                 </div>
               </div>
@@ -2145,6 +1911,12 @@ const ChildrenTrackingTab = () => {
                               >
                                 <Edit size={16} />
                               </button>
+                              <button 
+                                className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                onClick={() => handleRemoveItem('growth', child.id, latestGrowth.id)}
+                              >
+                                <Trash2 size={16} />
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -2209,6 +1981,9 @@ const ChildrenTrackingTab = () => {
                             <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Clothing
                             </th>
+                            <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
@@ -2232,6 +2007,22 @@ const ChildrenTrackingTab = () => {
                                 <td className="px-4 py-2 whitespace-nowrap text-sm font-roboto">
                                   {entry.clothingSize || '-'}
                                 </td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm font-roboto">
+                                  <div className="flex space-x-2">
+                                    <button 
+                                      className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                      onClick={() => openModal('growth', {...entry, childId: child.id})}
+                                    >
+                                      <Edit size={14} />
+                                    </button>
+                                    <button 
+                                      className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                      onClick={() => handleRemoveItem('growth', child.id, entry.id)}
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                </td>
                               </tr>
                             ))}
                         </tbody>
@@ -2244,95 +2035,106 @@ const ChildrenTrackingTab = () => {
                   </div>
                 )}
               </div>
+              
+              {/* Hand-me-downs section */}
+              <div className="mt-6">
+                <div className="flex justify-between items-center mb-2">
+                  <h5 className="font-medium text-sm font-roboto">Saved Clothes & Hand-Me-Downs</h5>
+                  <button
+                    className="text-xs text-blue-600 hover:underline font-roboto"
+                    onClick={() => openModal('handmedown', {
+                      name: '',
+                      description: '',
+                      size: '',
+                      readyDate: new Date().toISOString().split('T')[0],
+                      childId: child.id,
+                      used: false
+                    })}
+                  >
+                    Add Item
+                  </button>
+                </div>
+                
+                {childrenData[child.id]?.clothesHandMeDowns?.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                    {childrenData[child.id].clothesHandMeDowns
+                      .filter(item => !item.used)
+                      .sort((a, b) => new Date(a.readyDate) - new Date(b.readyDate))
+                      .slice(0, 4)
+                      .map(item => (
+                        <div key={item.id} className="border rounded-lg p-3 hover:bg-gray-50">
+                          <div className="flex justify-between">
+                            <div>
+                              <h6 className="font-medium text-sm font-roboto">{item.name}</h6>
+                              <p className="text-xs text-gray-600 font-roboto">
+                                Size: {item.size || 'Not specified'}
+                              </p>
+                              <p className="text-xs text-gray-600 font-roboto">
+                                Ready: {formatDate(item.readyDate)}
+                              </p>
+                            </div>
+                            <div className="flex space-x-2">
+                              <button 
+                                className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                onClick={() => markHandMeDownAsUsed(child.id, item.id)}
+                                title="Mark as used"
+                              >
+                                <CheckCircle size={16} />
+                              </button>
+                              <button 
+                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                onClick={() => openModal('handmedown', {...item, childId: child.id})}
+                              >
+                                <Edit size={16} />
+                              </button>
+                              <button 
+                                className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                onClick={() => handleRemoveItem('handmedown', child.id, item.id)}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                          {item.description && (
+                            <p className="text-xs mt-1 text-gray-600 font-roboto">{item.description}</p>
+                          )}
+                          {item.imageUrl && (
+                            <div className="mt-2">
+                              <img 
+                                src={item.imageUrl} 
+                                alt={item.name} 
+                                className="h-20 w-auto object-cover rounded"
+                              />
+                            </div>
+                          )}
+                          {new Date(item.readyDate) <= new Date() && (
+                            <div className="mt-1 flex items-center">
+                              <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full font-roboto">
+                                Ready to use
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-500 font-roboto">No saved clothes items</p>
+                  </div>
+                )}
+                
+                {childrenData[child.id]?.clothesHandMeDowns?.filter(item => item.used)?.length > 0 && (
+                  <div className="mt-3">
+                    <h6 className="text-xs font-medium text-gray-500 font-roboto mb-1">Past Items</h6>
+                    <div className="text-xs text-gray-500 font-roboto">
+                      {childrenData[child.id].clothesHandMeDowns.filter(item => item.used).length} items have been used
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>
-      </div>
-    );
-  };
-  
-  // Render section header with expand/collapse functionality
-  const renderSectionHeader = (title, sectionKey, icon, notificationCount = 0) => (
-    <div 
-      className="border-l-4 border-black p-4 flex justify-between items-center cursor-pointer bg-white rounded-lg shadow-sm mb-2" 
-      onClick={() => toggleSection(sectionKey)}
-    >
-      <div className="flex items-center">
-        {icon}
-        <h4 className="font-medium text-lg font-roboto ml-2">{title}</h4>
-        {notificationCount > 0 && (
-          <span className="ml-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full font-roboto">
-            {notificationCount}
-          </span>
-        )}
-      </div>
-      <button className="p-2 rounded-full hover:bg-gray-100">
-              {expandedSections[sectionKey] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
-          </div>
-        
-      
-      );
-  
-  // Render AI insights section
-  const renderAiInsights = () => {
-    const childrenWithInsights = aiInsights.filter(insight => 
-      !activeChild || insight.childId === activeChild
-    );
-    
-    return (
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-4 font-roboto">Allie AI Insights</h3>
-        
-        {childrenWithInsights.length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {childrenWithInsights.map((insight, index) => (
-              <div 
-                key={index} 
-                className={`p-4 rounded-lg border-l-4 ${
-                  insight.priority === 'high' 
-                    ? 'border-red-500 bg-red-50' 
-                    : insight.priority === 'medium'
-                      ? 'border-yellow-500 bg-yellow-50'
-                      : 'border-blue-500 bg-blue-50'
-                }`}
-              >
-                <div className="flex items-start">
-                  {insight.type === 'recommendation' ? (
-                    <Info size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
-                  ) : insight.type === 'medical' ? (
-                    <AlertCircle size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
-                  ) : insight.type === 'growth' ? (
-                    <Activity size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
-                  ) : insight.type === 'homework' ? (
-                    <BookOpen size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
-                  ) : insight.type === 'emotional' ? (
-                    <Heart size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
-                  ) : (
-                    <Info size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
-                  )}
-                  <div>
-                    <h4 className="font-medium mb-1 font-roboto">{insight.title}</h4>
-                    <p className="text-sm font-roboto">{insight.content}</p>
-                    {insight.actionable && (
-                      <div className="mt-2 text-sm text-blue-600 font-roboto">
-                        <button className="hover:underline">
-                          {insight.actionable}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white p-4 rounded-lg shadow-sm text-center">
-            <p className="text-gray-500 font-roboto">
-              Allie is learning about your family. As you add more data, insights will appear here to help you stay on top of your children's needs.
-            </p>
-          </div>
-        )}
       </div>
     );
   };
@@ -2407,11 +2209,11 @@ const ChildrenTrackingTab = () => {
                   <div>
                     <h4 className="font-medium font-roboto text-lg">{child.name}'s Schedule</h4>
                     <p className="text-sm text-gray-500 font-roboto">
-                      {childrenData[child.id]?.routines?.length || 0} routines, {childrenData[child.id]?.activities?.length || 0} activities
+                      {childrenData[child.id]?.routines?.length || 0} routines
                     </p>
                   </div>
                 </div>
-                <div className="flex space-x-2">
+                <div>
                   <button 
                     className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
                     onClick={() => openModal('routine', {
@@ -2425,23 +2227,6 @@ const ChildrenTrackingTab = () => {
                   >
                     <Clock size={14} className="mr-1" />
                     Add Routine
-                  </button>
-                  <button 
-                    className="px-3 py-1 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 font-roboto flex items-center"
-                    onClick={() => openModal('activity', {
-                      title: '',
-                      type: 'sports',
-                      location: '',
-                      startDate: new Date().toISOString().split('T')[0],
-                      endDate: '',
-                      repeatDay: [],
-                      time: '',
-                      notes: '',
-                      childId: child.id
-                    })}
-                  >
-                    <Activity size={14} className="mr-1" />
-                    Add Activity
                   </button>
                 </div>
               </div>
@@ -2480,27 +2265,15 @@ const ChildrenTrackingTab = () => {
                             return startHour <= hour && endHour > hour;
                           }) || [];
                           
-                          // Find activities for this day and time
-                          const activities = childrenData[child.id]?.activities?.filter(a => {
-                            if (!a.repeatDay?.includes(day)) return false;
-                            
-                            const startHour = a.time ? parseInt(a.time.split(':')[0]) : 15; // Default to 3 PM
-                            return startHour === hour;
-                          }) || [];
-                          
-                          const items = [...routines, ...activities];
-                          
                           return (
                             <div key={day} className="flex-1 h-10 border-l relative">
-                              {items.map((item, index) => (
+                              {routines.map((routine, index) => (
                                 <div 
                                   key={index}
-                                  className={`absolute left-0 right-0 mx-1 p-1 text-xs rounded truncate ${
-                                    'routine' in item ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                                  }`}
+                                  className="absolute left-0 right-0 mx-1 p-1 text-xs rounded truncate bg-blue-100 text-blue-800"
                                   style={{ top: `${index * 20}%` }}
                                 >
-                                  {item.title}
+                                  {routine.title}
                                 </div>
                               ))}
                             </div>
@@ -2512,611 +2285,44 @@ const ChildrenTrackingTab = () => {
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Routines */}
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <h5 className="font-medium text-sm font-roboto">Daily Routines</h5>
-                    <button className="text-xs text-blue-600 hover:underline font-roboto">View all</button>
-                  </div>
-                  
-                  {childrenData[child.id]?.routines?.length > 0 ? (
-                    <div className="space-y-2">
-                      {childrenData[child.id].routines
-                        .slice(0, 3)
-                        .map(routine => (
-                          <div key={routine.id} className="border rounded-lg p-3 hover:bg-gray-50">
-                            <div className="flex justify-between">
-                              <div>
-                                <h5 className="font-medium font-roboto">{routine.title}</h5>
-                                <p className="text-sm text-gray-600 font-roboto">
-                                  {routine.days.join(', ')} at {routine.startTime}
-                                  {routine.endTime && ` - ${routine.endTime}`}
-                                </p>
-                              </div>
-                              <div className="flex space-x-2">
-                                <button 
-                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                  onClick={() => openModal('routine', {...routine, childId: child.id})}
-                                >
-                                  <Edit size={16} />
-                                </button>
-                                <button 
-                                  className="p-1 text-red-600 hover:bg-red-50 rounded"
-                                  onClick={() => handleRemoveItem('routine', child.id, routine.id)}
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  ) : (
-                    <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <p className="text-sm text-gray-500 font-roboto">No routines added yet</p>
-                      <button 
-                        className="mt-2 px-3 py-1 bg-blue-500 text-white rounded-md text-sm font-roboto"
-                        onClick={() => openModal('routine', {
-                          title: '',
-                          days: [],
-                          startTime: '08:00',
-                          endTime: '',
-                          notes: '',
-                          childId: child.id
-                        })}
-                      >
-                        Add First Routine
-                      </button>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Activities */}
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <h5 className="font-medium text-sm font-roboto">Activities & Classes</h5>
-                    <button className="text-xs text-blue-600 hover:underline font-roboto">View all</button>
-                  </div>
-                  
-                  {childrenData[child.id]?.activities?.length > 0 ? (
-                    <div className="space-y-2">
-                      {childrenData[child.id].activities
-                        .slice(0, 3)
-                        .map(activity => (
-                          <div key={activity.id} className="border rounded-lg p-3 hover:bg-gray-50">
-                            <div className="flex justify-between">
-                              <div>
-                                <h5 className="font-medium font-roboto">{activity.title}</h5>
-                                <p className="text-sm text-gray-600 font-roboto">
-                                  {activity.type.charAt(0).toUpperCase() + activity.type.slice(1)}
-                                  {activity.location && ` at ${activity.location}`}
-                                  {activity.time && ` - ${activity.time}`}
-                                </p>
-                                {activity.repeatDay && activity.repeatDay.length > 0 && (
-                                  <p className="text-xs text-gray-500 font-roboto">
-                                    {activity.repeatDay.join(', ')}
-                                  </p>
-                                )}
-                              </div>
-                              <div className="flex space-x-2">
-                                <button 
-                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                  onClick={() => openModal('activity', {...activity, childId: child.id})}
-                                >
-                                  <Edit size={16} />
-                                </button>
-                                <button 
-                                  className="p-1 text-red-600 hover:bg-red-50 rounded"
-                                  onClick={() => handleRemoveItem('activity', child.id, activity.id)}
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  ) : (
-                    <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <p className="text-sm text-gray-500 font-roboto">No activities added yet</p>
-                      <button 
-                        className="mt-2 px-3 py-1 bg-blue-500 text-white rounded-md text-sm font-roboto"
-                        onClick={() => openModal('activity', {
-                          title: '',
-                          type: 'sports',
-                          location: '',
-                          startDate: new Date().toISOString().split('T')[0],
-                          endDate: '',
-                          repeatDay: [],
-                          time: '',
-                          notes: '',
-                          childId: child.id
-                        })}
-                      >
-                        Add First Activity
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* Social Contacts */}
-              <div className="mt-4">
-                <div className="flex justify-between items-center mb-2">
-                  <h5 className="font-medium text-sm font-roboto">Friends & Social Contacts</h5>
-                  <button 
-                    className="text-xs text-blue-600 hover:underline font-roboto flex items-center"
-                    onClick={() => openModal('contact', {
-                      name: '',
-                      relationship: 'friend',
-                      parentName: '',
-                      parentPhone: '',
-                      parentEmail: '',
-                      notes: '',
-                      childId: child.id
-                    })}
-                  >
-                    <PlusCircle size={12} className="mr-1" />
-                    Add Contact
-                  </button>
-                </div>
-                
-                {/* Sample contacts UI (would be populated from actual data) */}
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-500 font-roboto">No contacts added yet</p>
-                  <p className="text-xs text-gray-500 mt-1 font-roboto">
-                    Keep track of your child's friends and their parents' contact information
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-  
-  // Render homework section
-  const renderHomeworkSection = () => {
-    if (!expandedSections.homework) {
-      return null;
-    }
-    
-    const children = familyMembers.filter(member => member.role === 'child');
-    
-    if (children.length === 0) {
-      return (
-        <div className="text-center p-4 bg-gray-50 rounded-lg">
-          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
-        </div>
-      );
-    }
-    
-    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
-    
-    return (
-      <div className="space-y-6 p-4 bg-white rounded-lg">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium font-roboto">Homework & Academic Tracking</h3>
-          <div className="flex space-x-2">
-            <button
-              className="p-2 rounded-md hover:bg-gray-100"
-              onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
-              title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
-            >
-              {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
-            </button>
-            <button 
-              className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
-              onClick={() => {
-                if (activeChild) {
-                  openModal('homework', {
-                    title: '',
-                    subject: '',
-                    dueDate: new Date().toISOString().split('T')[0],
-                    description: '',
-                    priority: 'medium',
-                    completed: false,
-                    childId: activeChild
-                  });
-                } else {
-                  setAllieMessage({
-                    type: 'warning',
-                    text: 'Please select a child first before adding homework.'
-                  });
-                }
-              }}
-            >
-              <Plus size={20} />
-            </button>
-          </div>
-        </div>
-        
-        <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
-          {filteredChildren.map(child => (
-            <div key={child.id} className={`bg-white rounded-lg shadow ${viewMode === 'card' ? 'p-4' : 'p-4'}`}>
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
-                    <img 
-                      src={child.profilePicture || '/api/placeholder/40/40'} 
-                      alt={child.name} 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div>
-                    <h4 className="font-medium font-roboto text-lg">{child.name}'s Academics</h4>
-                    <p className="text-sm text-gray-500 font-roboto">
-                      {childrenData[child.id]?.homework?.filter(h => !h.completed).length || 0} pending assignments
-                    </p>
-                  </div>
-                </div>
-                <div className="flex space-x-2">
-                  <button 
-                    className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
-                    onClick={() => openModal('homework', {
-                      title: '',
-                      subject: '',
-                      dueDate: new Date().toISOString().split('T')[0],
-                      description: '',
-                      priority: 'medium',
-                      completed: false,
-                      childId: child.id
-                    })}
-                  >
-                    <BookOpen size={14} className="mr-1" />
-                    Add Assignment
-                  </button>
-                </div>
-              </div>
-              
-              {/* Homework dashboard */}
-              <div className="space-y-4">
-                {/* Upcoming assignments */}
-                <div>
-                  <h5 className="font-medium text-sm font-roboto mb-2">Upcoming Assignments</h5>
-                  
-                  {childrenData[child.id]?.homework?.filter(h => !h.completed && new Date(h.dueDate) >= new Date()).length > 0 ? (
-                    <div className="space-y-2">
-                      {childrenData[child.id].homework
-                        .filter(h => !h.completed && new Date(h.dueDate) >= new Date())
-                        .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-                        .map(assignment => (
-                          <div key={assignment.id} className="border rounded-lg p-3 hover:bg-gray-50">
-                            <div className="flex justify-between">
-                              <div>
-                                <div className="flex items-center">
-                                  <h5 className="font-medium font-roboto">{assignment.title}</h5>
-                                  <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
-                                    assignment.priority === 'high' 
-                                      ? 'bg-red-100 text-red-800' 
-                                      : assignment.priority === 'medium'
-                                        ? 'bg-yellow-100 text-yellow-800'
-                                        : 'bg-blue-100 text-blue-800'
-                                  }`}>
-                                    {assignment.priority}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-gray-600 font-roboto">
-                                  {assignment.subject} - Due: {formatDate(assignment.dueDate)}
-                                </p>
-                              </div>
-                              <div className="flex space-x-2">
-                                <button 
-                                  className="p-1 text-green-600 hover:bg-green-50 rounded"
-                                  onClick={() => {
-                                    const updatedAssignment = {...assignment, completed: true};
-                                    handleHomeworkFormSubmit(updatedAssignment);
-                                  }}
-                                >
-                                  <CheckCircle size={16} />
-                                </button>
-                                <button 
-                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                  onClick={() => openModal('homework', {...assignment, childId: child.id})}
-                                >
-                                  <Edit size={16} />
-                                </button>
-                                <button 
-                                  className="p-1 text-red-600 hover:bg-red-50 rounded"
-                                  onClick={() => handleRemoveItem('homework', child.id, assignment.id)}
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
-                            </div>
-                            {assignment.description && (
-                              <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
-                                {assignment.description}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                    </div>
-                  ) : (
-                    <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <p className="text-sm text-gray-500 font-roboto">No upcoming assignments</p>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Completed assignments */}
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <h5 className="font-medium text-sm font-roboto">Completed Assignments</h5>
-                    <button className="text-xs text-blue-600 hover:underline font-roboto">View all</button>
-                  </div>
-                  
-                  {childrenData[child.id]?.homework?.filter(h => h.completed).length > 0 ? (
-                    <div className="space-y-2">
-                      {childrenData[child.id].homework
-                        .filter(h => h.completed)
-                        .sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate))
-                        .slice(0, 3)
-                        .map(assignment => (
-                          <div key={assignment.id} className="border rounded-lg p-3 bg-gray-50">
-                            <div className="flex justify-between">
-                              <div>
-                                <h5 className="font-medium font-roboto">{assignment.title}</h5>
-                                <p className="text-sm text-gray-600 font-roboto">
-                                  {assignment.subject} - Due: {formatDate(assignment.dueDate)}
-                                </p>
-                                <div className="mt-1 flex items-center text-sm text-green-600 font-roboto">
-                                  <CheckCircle size={14} className="mr-1" />
-                                  Completed
-                                </div>
-                              </div>
-                              <div>
-                                <button 
-                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                  onClick={() => openModal('homework', {...assignment, childId: child.id})}
-                                >
-                                  <Edit size={16} />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  ) : (
-                    <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <p className="text-sm text-gray-500 font-roboto">No completed assignments</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-  
-  // Render emotional well-being section
-  const renderEmotionalSection = () => {
-    if (!expandedSections.emotional) {
-      return null;
-    }
-    
-    const children = familyMembers.filter(member => member.role === 'child');
-    
-    if (children.length === 0) {
-      return (
-        <div className="text-center p-4 bg-gray-50 rounded-lg">
-          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
-        </div>
-      );
-    }
-    
-    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
-    
-    // Emoji mapping for moods
-    const moodEmojis = {
-      'happy': '😀',
-      'excited': '🤩',
-      'calm': '😌',
-      'tired': '😴',
-      'sad': '😔',
-      'angry': '😠',
-      'worried': '😟',
-      'confused': '😕'
-    };
-    
-    return (
-      <div className="space-y-6 p-4 bg-white rounded-lg">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium font-roboto">Emotional Well-being Tracking</h3>
-          <div className="flex space-x-2">
-            <button
-              className="p-2 rounded-md hover:bg-gray-100"
-              onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
-              title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
-            >
-              {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
-            </button>
-            <button 
-              className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
-              onClick={() => {
-                if (activeChild) {
-                  openModal('emotional', {
-                    date: new Date().toISOString().split('T')[0],
-                    mood: '',
-                    notes: '',
-                    childId: activeChild
-                  });
-                } else {
-                  setAllieMessage({
-                    type: 'warning',
-                    text: 'Please select a child first before adding an emotional check-in.'
-                  });
-                }
-              }}
-            >
-              <Plus size={20} />
-            </button>
-          </div>
-        </div>
-        
-        <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
-          {filteredChildren.map(child => (
-            <div key={child.id} className={`bg-white rounded-lg shadow ${viewMode === 'card' ? 'p-4' : 'p-4'}`}>
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
-                    <img 
-                      src={child.profilePicture || '/api/placeholder/40/40'} 
-                      alt={child.name} 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div>
-                    <h4 className="font-medium font-roboto text-lg">{child.name}'s Emotional Well-being</h4>
-                    <p className="text-sm text-gray-500 font-roboto">
-                      {childrenData[child.id]?.emotionalChecks?.length > 0 
-                        ? `Last check-in: ${formatDate(childrenData[child.id].emotionalChecks.sort((a, b) => 
-                            new Date(b.date) - new Date(a.date))[0].date)}`
-                        : 'No check-ins yet'}
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  <button 
-                    className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
-                    onClick={() => openModal('emotional', {
-                      date: new Date().toISOString().split('T')[0],
-                      mood: '',
-                      notes: '',
-                      childId: child.id
-                    })}
-                  >
-                    <Heart size={14} className="mr-1" />
-                    Add Check-in
-                  </button>
-                </div>
-              </div>
-              
-              {/* Mood tracking visualization */}
-              <div className="mb-6 bg-gray-50 p-4 rounded-lg">
-                <h5 className="font-medium text-sm font-roboto mb-3">Mood Tracking</h5>
-                
-                {childrenData[child.id]?.emotionalChecks?.length > 0 ? (
-                  <div className="space-y-4">
-                    {/* Mood line chart (simplified version) */}
-                    <div className="h-24 relative border-b border-l">
-                      <div className="absolute bottom-0 left-0 right-0 flex items-end justify-between px-2">
-                        {childrenData[child.id].emotionalChecks
-                          .slice(-7) // Last 7 check-ins
-                          .sort((a, b) => new Date(a.date) - new Date(b.date))
-                          .map((check, index) => {
-                            // Map moods to heights (happy = high, sad = low, etc.)
-                            const moodHeights = {
-                              'happy': 90,
-                              'excited': 100,
-                              'calm': 70,
-                              'tired': 50,
-                              'confused': 40,
-                              'worried': 30,
-                              'sad': 20,
-                              'angry': 10
-                            };
-                            
-                            const height = moodHeights[check.mood] || 50;
-                            
-                            return (
-                              <div key={check.id} className="flex flex-col items-center">
-                                <div className="text-2xl">{moodEmojis[check.mood] || '😐'}</div>
-                                <div 
-                                  className="w-1 bg-blue-500 rounded-t mb-1"
-                                  style={{ height: `${height}%` }}
-                                />
-                                <div className="mt-1 text-xs text-gray-500 -rotate-45 origin-top-left">
-                                  {new Date(check.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </div>
-                    </div>
-                    
-                    {/* Most frequent mood summary */}
-                    {(() => {
-                      // Count mood frequencies
-                      const moodCounts = {};
-                      childrenData[child.id].emotionalChecks.forEach(check => {
-                        moodCounts[check.mood] = (moodCounts[check.mood] || 0) + 1;
-                      });
-                      
-                      // Get most frequent mood
-                      const mostFrequentMood = Object.entries(moodCounts)
-                        .sort((a, b) => b[1] - a[1])[0];
-                      
-                      if (mostFrequentMood) {
-                        return (
-                          <div className="text-center text-sm font-roboto">
-                            <p>Most frequent mood: <span className="font-medium">{mostFrequentMood[0]}</span> {moodEmojis[mostFrequentMood[0]] || ''}</p>
-                            <p className="text-xs text-gray-500">
-                              {mostFrequentMood[1]} out of {childrenData[child.id].emotionalChecks.length} check-ins
-                            </p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </div>
-                ) : (
-                  <div className="text-center py-6">
-                    <p className="text-sm text-gray-500 font-roboto">
-                      Add emotional check-ins to start tracking your child's well-being
-                    </p>
-                  </div>
-                )}
-              </div>
-              
-              {/* Latest check-ins */}
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <h5 className="font-medium text-sm font-roboto">Recent Check-ins</h5>
+                  <h5 className="font-medium text-sm font-roboto">Daily Routines</h5>
                   <button className="text-xs text-blue-600 hover:underline font-roboto">View all</button>
                 </div>
                 
-                {childrenData[child.id]?.emotionalChecks?.length > 0 ? (
+                {childrenData[child.id]?.routines?.length > 0 ? (
                   <div className="space-y-2">
-                    {childrenData[child.id].emotionalChecks
-                      .sort((a, b) => new Date(b.date) - new Date(a.date))
-                      .slice(0, 3)
-                      .map(check => (
-                        <div key={check.id} className="border rounded-lg p-3 hover:bg-gray-50">
+                    {childrenData[child.id].routines
+                      .slice(0, 4)
+                      .map(routine => (
+                        <div key={routine.id} className="border rounded-lg p-3 hover:bg-gray-50">
                           <div className="flex justify-between">
                             <div>
-                              <div className="flex items-center">
-                                <span className="text-2xl mr-2">{moodEmojis[check.mood] || '😐'}</span>
-                                <div>
-                                  <h5 className="font-medium font-roboto">{check.mood.charAt(0).toUpperCase() + check.mood.slice(1)}</h5>
-                                  <p className="text-sm text-gray-600 font-roboto">
-                                    {formatDate(check.date)}
-                                  </p>
-                                </div>
-                              </div>
+                              <h5 className="font-medium font-roboto">{routine.title}</h5>
+                              <p className="text-sm text-gray-600 font-roboto">
+                                {routine.days.join(', ')} at {routine.startTime}
+                                {routine.endTime && ` - ${routine.endTime}`}
+                              </p>
                             </div>
                             <div className="flex space-x-2">
                               <button 
                                 className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                onClick={() => openModal('emotional', {...check, childId: child.id})}
+                                onClick={() => openModal('routine', {...routine, childId: child.id})}
                               >
                                 <Edit size={16} />
                               </button>
                               <button 
                                 className="p-1 text-red-600 hover:bg-red-50 rounded"
-                                onClick={() => handleRemoveItem('emotional', child.id, check.id)}
+                                onClick={() => handleRemoveItem('routine', child.id, routine.id)}
                               >
                                 <Trash2 size={16} />
                               </button>
                             </div>
                           </div>
-                          {check.notes && (
+                          {routine.notes && (
                             <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
-                              {check.notes}
+                              <p>{routine.notes}</p>
                             </div>
                           )}
                         </div>
@@ -3124,17 +2330,19 @@ const ChildrenTrackingTab = () => {
                   </div>
                 ) : (
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-500 font-roboto">No emotional check-ins recorded yet</p>
+                    <p className="text-sm text-gray-500 font-roboto">No routines added yet</p>
                     <button 
                       className="mt-2 px-3 py-1 bg-blue-500 text-white rounded-md text-sm font-roboto"
-                      onClick={() => openModal('emotional', {
-                        date: new Date().toISOString().split('T')[0],
-                        mood: '',
+                      onClick={() => openModal('routine', {
+                        title: '',
+                        days: [],
+                        startTime: '08:00',
+                        endTime: '',
                         notes: '',
                         childId: child.id
                       })}
                     >
-                      Add First Check-in
+                      Add First Routine
                     </button>
                   </div>
                 )}
@@ -3146,668 +2354,84 @@ const ChildrenTrackingTab = () => {
     );
   };
   
-  // Render meals section
-  const renderMealsSection = () => {
-    if (!expandedSections.meals) {
-      return null;
-    }
-    
-    const children = familyMembers.filter(member => member.role === 'child');
-    
-    if (children.length === 0) {
-      return (
-        <div className="text-center p-4 bg-gray-50 rounded-lg">
-          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
-        </div>
-      );
-    }
-    
-    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
-    
-    return (
-      <div className="space-y-6 p-4 bg-white rounded-lg">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium font-roboto">Meal Planning & Dietary Needs</h3>
-          <div className="flex space-x-2">
-            <button
-              className="p-2 rounded-md hover:bg-gray-100"
-              onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
-              title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
-            >
-              {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
-            </button>
-            <button 
-              className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
-              onClick={() => {
-                if (activeChild) {
-                  openModal('meal', {
-                    type: 'preference',
-                    name: '',
-                    details: '',
-                    childId: activeChild
-                  });
-                } else {
-                  setAllieMessage({
-                    type: 'warning',
-                    text: 'Please select a child first before adding dietary information.'
-                  });
-                }
-              }}
-            >
-              <Plus size={20} />
-            </button>
-          </div>
-        </div>
-        
-        <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
-          {filteredChildren.map(child => (
-            <div key={child.id} className={`bg-white rounded-lg shadow ${viewMode === 'card' ? 'p-4' : 'p-4'}`}>
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
-                    <img 
-                      src={child.profilePicture || '/api/placeholder/40/40'} 
-                      alt={child.name} 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div>
-                    <h4 className="font-medium font-roboto text-lg">{child.name}'s Dietary Information</h4>
-                    <p className="text-sm text-gray-500 font-roboto">
-                      {childrenData[child.id]?.meals?.allergies?.length || 0} allergies, 
-                      {childrenData[child.id]?.meals?.preferences?.length || 0} preferences,
-                      {childrenData[child.id]?.meals?.restrictions?.length || 0} restrictions
-                    </p>
-                  </div>
-                </div>
-                <div className="flex space-x-2">
-                  <button 
-                    className="px-3 py-1 bg-red-500 text-white rounded-md text-sm hover:bg-red-600 font-roboto flex items-center"
-                    onClick={() => openModal('meal', {
-                      type: 'allergy',
-                      name: '',
-                      details: '',
-                      childId: child.id
-                    })}
-                  >
-                    <AlertCircle size={14} className="mr-1" />
-                    Add Allergy
-                  </button>
-                  <button 
-                    className="px-3 py-1 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 font-roboto flex items-center"
-                    onClick={() => openModal('meal', {
-                      type: 'preference',
-                      name: '',
-                      details: '',
-                      childId: child.id
-                    })}
-                  >
-                    <ThumbsUp size={14} className="mr-1" />
-                    Add Preference
-                  </button>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Allergies */}
-                <div>
-                  <h5 className="font-medium text-sm font-roboto mb-2 flex items-center">
-                    <AlertCircle size={14} className="text-red-500 mr-1" />
-                    Allergies & Intolerances
-                  </h5>
-                  
-                  {childrenData[child.id]?.meals?.allergies?.length > 0 ? (
-                    <div className="space-y-2">
-                      {childrenData[child.id].meals.allergies.map(allergy => (
-                        <div key={allergy.id} className="border border-red-200 rounded-lg p-3 bg-red-50">
-                          <div className="flex justify-between">
-                            <div>
-                              <h5 className="font-medium font-roboto">{allergy.name}</h5>
-                              {allergy.details && (
-                                <p className="text-sm text-gray-700 font-roboto">
-                                  {allergy.details}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex space-x-2">
-                              <button 
-                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                onClick={() => openModal('meal', {...allergy, childId: child.id})}
-                              >
-                                <Edit size={16} />
-                              </button>
-                              <button 
-                                className="p-1 text-red-600 hover:bg-red-50 rounded"
-                                onClick={() => handleRemoveItem('meal', child.id, allergy.id, 'allergies')}
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <p className="text-sm text-gray-500 font-roboto">No allergies recorded</p>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Preferences */}
-                <div>
-                  <h5 className="font-medium text-sm font-roboto mb-2 flex items-center">
-                    <ThumbsUp size={14} className="text-blue-500 mr-1" />
-                    Food Preferences
-                  </h5>
-                  
-                  {childrenData[child.id]?.meals?.preferences?.length > 0 ? (
-                    <div className="space-y-2">
-                      {childrenData[child.id].meals.preferences.map(preference => (
-                        <div key={preference.id} className="border border-blue-200 rounded-lg p-3 bg-blue-50">
-                          <div className="flex justify-between">
-                            <div>
-                              <h5 className="font-medium font-roboto">{preference.name}</h5>
-                              {preference.details && (
-                                <p className="text-sm text-gray-700 font-roboto">
-                                  {preference.details}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex space-x-2">
-                              <button 
-                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                onClick={() => openModal('meal', {...preference, childId: child.id})}
-                              >
-                                <Edit size={16} />
-                              </button>
-                              <button 
-                                className="p-1 text-red-600 hover:bg-red-50 rounded"
-                                onClick={() => handleRemoveItem('meal', child.id, preference.id, 'preferences')}
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <p className="text-sm text-gray-500 font-roboto">No preferences recorded</p>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Dietary Restrictions */}
-                <div className="md:col-span-2">
-                  <h5 className="font-medium text-sm font-roboto mb-2 flex items-center">
-                    <Ban size={14} className="text-yellow-500 mr-1" />
-                    Dietary Restrictions
-                  </h5>
-                  
-                  {childrenData[child.id]?.meals?.restrictions?.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {childrenData[child.id].meals.restrictions.map(restriction => (
-                        <div key={restriction.id} className="border border-yellow-200 rounded-lg p-3 bg-yellow-50">
-                          <div className="flex justify-between">
-                            <div>
-                              <h5 className="font-medium font-roboto">{restriction.name}</h5>
-                              {restriction.details && (
-                                <p className="text-sm text-gray-700 font-roboto">
-                                  {restriction.details}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex space-x-2">
-                              <button 
-                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                onClick={() => openModal('meal', {...restriction, childId: child.id})}
-                              >
-                                <Edit size={16} />
-                              </button>
-                              <button 
-                                className="p-1 text-red-600 hover:bg-red-50 rounded"
-                                onClick={() => handleRemoveItem('meal', child.id, restriction.id, 'restrictions')}
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <p className="text-sm text-gray-500 font-roboto">No dietary restrictions recorded</p>
-                      <button 
-                        className="mt-2 px-3 py-1 bg-yellow-500 text-white rounded-md text-sm font-roboto"
-                        onClick={() => openModal('meal', {
-                          type: 'restriction',
-                          name: '',
-                          details: '',
-                          childId: child.id
-                        })}
-                      >
-                        Add Restriction
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+  // Render section header with expand/collapse functionality
+  const renderSectionHeader = (title, sectionKey, icon, notificationCount = 0) => (
+    <div 
+      className="border-l-4 border-black p-4 flex justify-between items-center cursor-pointer bg-white rounded-lg shadow-sm mb-2" 
+      onClick={() => toggleSection(sectionKey)}
+    >
+      <div className="flex items-center">
+        {icon}
+        <h4 className="font-medium text-lg font-roboto ml-2">{title}</h4>
+        {notificationCount > 0 && (
+          <span className="ml-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full font-roboto">
+            {notificationCount}
+          </span>
+        )}
       </div>
-    );
-  };
+      <button className="p-2 rounded-full hover:bg-gray-100">
+        {expandedSections[sectionKey] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+      </button>
+    </div>
+  );
   
-  // Render events section
-  const renderEventsSection = () => {
-    if (!expandedSections.events) {
-      return null;
-    }
-    
-    const children = familyMembers.filter(member => member.role === 'child');
-    
-    if (children.length === 0) {
-      return (
-        <div className="text-center p-4 bg-gray-50 rounded-lg">
-          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
-        </div>
-      );
-    }
-    
-    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
+  // Render AI insights section
+  const renderAiInsights = () => {
+    const childrenWithInsights = aiInsights.filter(insight => 
+      !activeChild || insight.childId === activeChild
+    );
     
     return (
-      <div className="space-y-6 p-4 bg-white rounded-lg">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium font-roboto">Events & Special Occasions</h3>
-          <div className="flex space-x-2">
-            <button
-              className="p-2 rounded-md hover:bg-gray-100"
-              onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
-              title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
-            >
-              {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
-            </button>
-            <button 
-              className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
-              onClick={() => {
-                if (activeChild) {
-                  openModal('event', {
-                    title: '',
-                    type: 'birthday',
-                    date: new Date().toISOString().split('T')[0],
-                    time: '',
-                    location: '',
-                    description: '',
-                    childId: activeChild
-                  });
-                } else {
-                  setAllieMessage({
-                    type: 'warning',
-                    text: 'Please select a child first before adding an event.'
-                  });
-                }
-              }}
-            >
-              <Plus size={20} />
-            </button>
-          </div>
-        </div>
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold mb-4 font-roboto">Allie AI Insights</h3>
         
-        <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
-          {filteredChildren.map(child => (
-            <div key={child.id} className={`bg-white rounded-lg shadow ${viewMode === 'card' ? 'p-4' : 'p-4'}`}>
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
-                    <img 
-                      src={child.profilePicture || '/api/placeholder/40/40'} 
-                      alt={child.name} 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
+        {childrenWithInsights.length > 0 ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {childrenWithInsights.map((insight, index) => (
+              <div 
+                key={index} 
+                className={`p-4 rounded-lg border-l-4 ${
+                  insight.priority === 'high' 
+                    ? 'border-red-500 bg-red-50' 
+                    : insight.priority === 'medium'
+                      ? 'border-yellow-500 bg-yellow-50'
+                      : 'border-blue-500 bg-blue-50'
+                }`}
+              >
+                <div className="flex items-start">
+                  {insight.type === 'recommendation' ? (
+                    <Info size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
+                  ) : insight.type === 'medical' ? (
+                    <AlertCircle size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
+                  ) : insight.type === 'growth' ? (
+                    <Activity size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
+                  ) : insight.type === 'clothes' ? (
+                    <Clipboard size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
+                  ) : (
+                    <Info size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
+                  )}
                   <div>
-                    <h4 className="font-medium font-roboto text-lg">{child.name}'s Events</h4>
-                    <p className="text-sm text-gray-500 font-roboto">
-                      {childrenData[child.id]?.events?.length || 0} events recorded
-                    </p>
+                    <h4 className="font-medium mb-1 font-roboto">{insight.title}</h4>
+                    <p className="text-sm font-roboto">{insight.content}</p>
+                    {insight.actionable && (
+                      <div className="mt-2 text-sm text-blue-600 font-roboto">
+                        <button className="hover:underline">
+                          {insight.actionable}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="flex space-x-2">
-                  <button 
-                    className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
-                    onClick={() => openModal('event', {
-                      title: '',
-                      type: 'birthday',
-                      date: new Date().toISOString().split('T')[0],
-                      time: '',
-                      location: '',
-                      description: '',
-                      childId: child.id
-                    })}
-                  >
-                    <Calendar size={14} className="mr-1" />
-                    Add Event
-                  </button>
-                </div>
               </div>
-              
-              {/* Upcoming events */}
-              <div className="mb-4">
-                <h5 className="font-medium text-sm font-roboto mb-2">Upcoming Events</h5>
-                
-                {childrenData[child.id]?.events?.filter(e => new Date(e.date) >= new Date()).length > 0 ? (
-                  <div className="space-y-2">
-                    {childrenData[child.id].events
-                      .filter(e => new Date(e.date) >= new Date())
-                      .sort((a, b) => new Date(a.date) - new Date(b.date))
-                      .slice(0, 3)
-                      .map(event => (
-                        <div key={event.id} className="border rounded-lg p-3 hover:bg-gray-50">
-                          <div className="flex justify-between">
-                            <div>
-                              <h5 className="font-medium font-roboto">{event.title}</h5>
-                              <p className="text-sm text-gray-600 font-roboto">
-                                {formatDate(event.date)} {event.time && `at ${event.time}`}
-                                {event.location && ` - ${event.location}`}
-                              </p>
-                              <div className="mt-1 text-xs rounded-full px-2 py-0.5 bg-blue-100 text-blue-800 inline-block">
-                                {event.type}
-                              </div>
-                            </div>
-                            <div className="flex space-x-2">
-                              <button 
-                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                onClick={() => openModal('event', {...event, childId: child.id})}
-                              >
-                                <Edit size={16} />
-                              </button>
-                              <button 
-                                className="p-1 text-red-600 hover:bg-red-50 rounded"
-                                onClick={() => handleRemoveItem('event', child.id, event.id)}
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          </div>
-                          {event.description && (
-                            <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
-                              {event.description}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                  </div>
-                ) : (
-                  <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-500 font-roboto">No upcoming events</p>
-                  </div>
-                )}
-              </div>
-              
-              {/* Past events */}
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <h5 className="font-medium text-sm font-roboto">Past Events</h5>
-                  <button className="text-xs text-blue-600 hover:underline font-roboto">View all</button>
-                </div>
-                
-                {childrenData[child.id]?.events?.filter(e => new Date(e.date) < new Date()).length > 0 ? (
-                  <div className="space-y-2">
-                    {childrenData[child.id].events
-                      .filter(e => new Date(e.date) < new Date())
-                      .sort((a, b) => new Date(b.date) - new Date(a.date))
-                      .slice(0, 2)
-                      .map(event => (
-                        <div key={event.id} className="border rounded-lg p-3 bg-gray-50">
-                          <div className="flex justify-between">
-                            <div>
-                              <h5 className="font-medium font-roboto">{event.title}</h5>
-                              <p className="text-sm text-gray-600 font-roboto">
-                                {formatDate(event.date)} {event.time && `at ${event.time}`}
-                                {event.location && ` - ${event.location}`}
-                              </p>
-                              <div className="mt-1 text-xs rounded-full px-2 py-0.5 bg-gray-100 text-gray-800 inline-block">
-                                {event.type}
-                              </div>
-                            </div>
-                            <div>
-                              <button 
-                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                onClick={() => openModal('event', {...event, childId: child.id})}
-                              >
-                                <Edit size={16} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                ) : (
-                  <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-500 font-roboto">No past events</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-  
-  // Render milestones section
-  const renderMilestonesSection = () => {
-    if (!expandedSections.milestones) {
-      return null;
-    }
-    
-    const children = familyMembers.filter(member => member.role === 'child');
-    
-    if (children.length === 0) {
-      return (
-        <div className="text-center p-4 bg-gray-50 rounded-lg">
-          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
-        </div>
-      );
-    }
-    
-    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
-    
-    return (
-      <div className="space-y-6 p-4 bg-white rounded-lg">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium font-roboto">Milestones & Celebrations</h3>
-          <div className="flex space-x-2">
-            <button
-              className="p-2 rounded-md hover:bg-gray-100"
-              onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
-              title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
-            >
-              {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
-            </button>
-            <button 
-              className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
-              onClick={() => {
-                if (activeChild) {
-                  openModal('milestone', {
-                    title: '',
-                    type: 'achievement',
-                    date: new Date().toISOString().split('T')[0],
-                    description: '',
-                    childId: activeChild
-                  });
-                } else {
-                  setAllieMessage({
-                    type: 'warning',
-                    text: 'Please select a child first before adding a milestone.'
-                  });
-                }
-              }}
-            >
-              <Plus size={20} />
-            </button>
+            ))}
           </div>
-        </div>
-        
-        <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
-          {filteredChildren.map(child => (
-            <div key={child.id} className={`bg-white rounded-lg shadow ${viewMode === 'card' ? 'p-4' : 'p-4'}`}>
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
-                    <img 
-                      src={child.profilePicture || '/api/placeholder/40/40'} 
-                      alt={child.name} 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div>
-                    <h4 className="font-medium font-roboto text-lg">{child.name}'s Milestones</h4>
-                    <p className="text-sm text-gray-500 font-roboto">
-                      {childrenData[child.id]?.milestones?.length || 0} milestones recorded
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  <button 
-                    className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
-                    onClick={() => openModal('milestone', {
-                      title: '',
-                      type: 'achievement',
-                      date: new Date().toISOString().split('T')[0],
-                      description: '',
-                      childId: child.id
-                    })}
-                  >
-                    <Award size={14} className="mr-1" />
-                    Add Milestone
-                  </button>
-                </div>
-              </div>
-              
-              {/* Milestone timeline */}
-              <div className="mb-6 bg-gray-50 p-4 rounded-lg">
-                <h5 className="font-medium text-sm font-roboto mb-3">Milestone Timeline</h5>
-                
-                {childrenData[child.id]?.milestones?.length > 0 ? (
-                  <div className="relative">
-                    {childrenData[child.id].milestones
-                      .sort((a, b) => new Date(a.date) - new Date(b.date))
-                      .map((milestone, index) => (
-                        <div key={milestone.id} className="mb-4 flex">
-                          <div className="relative">
-                            <div className="h-full w-0.5 bg-gray-300 absolute left-4"></div>
-                            <div className="h-8 w-8 rounded-full bg-blue-500 text-white flex items-center justify-center relative z-10">
-                              <Award size={14} />
-                            </div>
-                          </div>
-                          <div className="ml-4 flex-1">
-                            <div className="bg-white p-3 rounded-lg border shadow-sm">
-                              <div className="flex justify-between">
-                                <div>
-                                  <h5 className="font-medium font-roboto">{milestone.title}</h5>
-                                  <p className="text-sm text-gray-600 font-roboto">
-                                    {formatDate(milestone.date)}
-                                  </p>
-                                </div>
-                                <div className="flex space-x-2">
-                                  <button 
-                                    className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                    onClick={() => openModal('milestone', {...milestone, childId: child.id})}
-                                  >
-                                    <Edit size={16} />
-                                  </button>
-                                  <button 
-                                    className="p-1 text-red-600 hover:bg-red-50 rounded"
-                                    onClick={() => handleRemoveItem('milestone', child.id, milestone.id)}
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
-                                </div>
-                              </div>
-                              {milestone.description && (
-                                <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
-                                  {milestone.description}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-6">
-                    <p className="text-sm text-gray-500 font-roboto">
-                      Record important moments and achievements in your child's life
-                    </p>
-                  </div>
-                )}
-              </div>
-              
-              {/* Age-appropriate milestones */}
-              {child.age && (
-                <div className="mb-4 bg-blue-50 p-3 rounded-lg">
-                  <h5 className="font-medium text-sm font-roboto mb-1 flex items-center">
-                    <Info size={14} className="text-blue-500 mr-1" />
-                    Typical Milestones for {child.age} years old
-                  </h5>
-                  <ul className="text-sm font-roboto space-y-1">
-                    {child.age < 1 && (
-                      <>
-                        <li>• First smile</li>
-                        <li>• Rolling over</li>
-                        <li>• Sitting up</li>
-                        <li>• First words</li>
-                        <li>• Crawling</li>
-                      </>
-                    )}
-                    {child.age >= 1 && child.age < 3 && (
-                      <>
-                        <li>• Walking</li>
-                        <li>• Building vocabulary</li>
-                        <li>• Following simple instructions</li>
-                        <li>• Self-feeding</li>
-                        <li>• Toilet training</li>
-                      </>
-                    )}
-                    {child.age >= 3 && child.age < 6 && (
-                      <>
-                        <li>• Drawing and coloring</li>
-                        <li>• Riding a tricycle</li>
-                        <li>• Speaking in sentences</li>
-                        <li>• Counting to 10</li>
-                        <li>• Learning letters</li>
-                      </>
-                    )}
-                    {child.age >= 6 && child.age < 12 && (
-                      <>
-                        <li>• Learning to read</li>
-                        <li>• Riding a bicycle</li>
-                        <li>• Swimming</li>
-                        <li>• Team sports participation</li>
-                        <li>• Musical instrument</li>
-                      </>
-                    )}
-                    {child.age >= 12 && (
-                      <>
-                        <li>• Growing independence</li>
-                        <li>• Developing personal interests</li>
-                        <li>• Academic achievements</li>
-                        <li>• Social relationship milestones</li>
-                        <li>• Preparation for future education</li>
-                      </>
-                    )}
-                  </ul>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+        ) : (
+          <div className="bg-white p-4 rounded-lg shadow-sm text-center">
+            <p className="text-gray-500 font-roboto">
+              Allie is learning about your family. As you add more data, insights will appear here to help you stay on top of your children's needs.
+            </p>
+          </div>
+        )}
       </div>
     );
   };
@@ -3842,7 +2466,7 @@ const ChildrenTrackingTab = () => {
       <div className="mb-6">
         <h2 className="text-2xl font-bold font-roboto">Children Tracking Dashboard</h2>
         <p className="text-gray-600 font-roboto mt-1">
-          Keep track of all aspects of your children's lives in one place
+          Keep track of medical appointments, growth, and daily routines for your children
         </p>
       </div>
       
@@ -4042,61 +2666,6 @@ const ChildrenTrackingTab = () => {
           )}
           {renderRoutinesSection()}
         </div>
-        
-        {/* Homework & Academic Section */}
-        <div>
-          {renderSectionHeader(
-            'Homework & Academic Tracking', 
-            'homework', 
-            <BookOpen size={20} className="text-green-500" />,
-            notifications.homework
-          )}
-          {renderHomeworkSection()}
-        </div>
-        
-        {/* Emotional Well-being Section */}
-        <div>
-          {renderSectionHeader(
-            'Emotional Well-being Tracking', 
-            'emotional', 
-            <Heart size={20} className="text-pink-500" />,
-            notifications.emotional
-          )}
-          {renderEmotionalSection()}
-        </div>
-        
-        {/* Meals & Dietary Section */}
-        <div>
-          {renderSectionHeader(
-            'Meal Planning & Dietary Needs', 
-            'meals', 
-            <Utensils size={20} className="text-yellow-500" />,
-            notifications.meals
-          )}
-          {renderMealsSection()}
-        </div>
-        
-        {/* Events & Special Occasions Section */}
-        <div>
-          {renderSectionHeader(
-            'Events & Special Occasions', 
-            'events', 
-            <Calendar size={20} className="text-indigo-500" />,
-            notifications.events
-          )}
-          {renderEventsSection()}
-        </div>
-        
-        {/* Milestones & Celebrations Section */}
-        <div>
-          {renderSectionHeader(
-            'Milestones & Celebrations', 
-            'milestones', 
-            <Award size={20} className="text-amber-500" />,
-            notifications.milestones
-          )}
-          {renderMilestonesSection()}
-        </div>
       </div>
       
       {/* Footer Help Section */}
@@ -4146,10 +2715,12 @@ const ChildrenTrackingTab = () => {
         </div>
       )}
       
-      {/* Modals for editing/adding data */}
+      {/* MODALS */}
+      
+      {/* Appointment Modal */}
       {activeModal === 'appointment' && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
+          <div className="bg-white rounded-lg max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium font-roboto">
                 {modalData.id ? 'Edit Appointment' : 'Add New Appointment'}
@@ -4162,83 +2733,244 @@ const ChildrenTrackingTab = () => {
               </button>
             </div>
             
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Appointment Type
-                </label>
-                <input
-                  type="text"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. Checkup, Dentist, Vaccination"
-                  value={modalData.title || ''}
-                  onChange={(e) => setModalData({...modalData, title: e.target.value})}
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    Date
+                    Appointment Type <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="date"
+                    type="text"
                     className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                    value={modalData.date || ''}
-                    onChange={(e) => setModalData({...modalData, date: e.target.value})}
+                    placeholder="e.g. Checkup, Dentist, Vaccination"
+                    value={modalData.title || ''}
+                    onChange={(e) => setModalData({...modalData, title: e.target.value})}
+                    required
                   />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                      Date <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={modalData.date || ''}
+                      onChange={(e) => setModalData({...modalData, date: e.target.value})}
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                      Time <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="time"
+                      className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={modalData.time || ''}
+                      onChange={(e) => setModalData({...modalData, time: e.target.value})}
+                      required
+                    />
+                  </div>
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    Time (optional)
+                    Healthcare Provider
                   </label>
-                  <input
-                    type="time"
+                  <div className="flex items-center space-x-2">
+                    <select
+                      className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={modalData.providerId || ''}
+                      onChange={(e) => {
+                        const providerId = e.target.value;
+                        if (providerId) {
+                          const provider = healthcareProviders.find(p => p.id === providerId);
+                          setModalData({
+                            ...modalData, 
+                            providerId,
+                            doctor: provider ? provider.name : '',
+                            providerDetails: provider ? {
+                              id: provider.id,
+                              name: provider.name,
+                              specialty: provider.specialty,
+                              phone: provider.phone,
+                              email: provider.email,
+                              address: provider.address
+                            } : undefined
+                          });
+                        } else {
+                          setModalData({
+                            ...modalData, 
+                            providerId: '',
+                            doctor: '',
+                            providerDetails: undefined
+                          });
+                        }
+                      }}
+                    >
+                      <option value="">Select provider</option>
+                      {healthcareProviders.map(provider => (
+                        <option key={provider.id} value={provider.id}>
+                          {provider.name} ({provider.specialty})
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className="p-2 rounded-md bg-black text-white hover:bg-gray-800 shrink-0"
+                      onClick={() => openModal('provider', {})}
+                      title="Add new provider"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                </div>
+                
+                {!modalData.providerId && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                      Doctor/Provider Name (optional)
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="e.g. Dr. Smith"
+                      value={modalData.doctor || ''}
+                      onChange={(e) => setModalData({...modalData, doctor: e.target.value})}
+                    />
+                  </div>
+                )}
+                
+                {modalData.providerDetails && (
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <h4 className="text-sm font-medium font-roboto mb-2">Provider Details</h4>
+                    <div className="text-sm space-y-1 font-roboto">
+                      <p>
+                        <span className="font-medium">Specialty:</span> {modalData.providerDetails.specialty || 'Not specified'}
+                      </p>
+                      {modalData.providerDetails.phone && (
+                        <p>
+                          <span className="font-medium">Phone:</span> {modalData.providerDetails.phone}
+                        </p>
+                      )}
+                      {modalData.providerDetails.email && (
+                        <p>
+                          <span className="font-medium">Email:</span> {modalData.providerDetails.email}
+                        </p>
+                      )}
+                      {modalData.providerDetails.address && (
+                        <p>
+                          <span className="font-medium">Address:</span> {modalData.providerDetails.address}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Notes (optional)
+                  </label>
+                  <textarea
                     className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                    value={modalData.time || ''}
-                    onChange={(e) => setModalData({...modalData, time: e.target.value})}
+                    placeholder="Any additional information"
+                    rows="3"
+                    value={modalData.notes || ''}
+                    onChange={(e) => setModalData({...modalData, notes: e.target.value})}
+                  ></textarea>
+                </div>
+                
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
+                    checked={modalData.completed || false}
+                    onChange={(e) => setModalData({...modalData, completed: e.target.checked})}
+                    id="completed-checkbox"
                   />
+                  <label htmlFor="completed-checkbox" className="ml-2 block text-sm text-gray-900 font-roboto">
+                    Mark as completed
+                  </label>
                 </div>
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Doctor/Provider (optional)
-                </label>
-                <input
-                  type="text"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. Dr. Smith"
-                  value={modalData.doctor || ''}
-                  onChange={(e) => setModalData({...modalData, doctor: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Notes (optional)
-                </label>
-                <textarea
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Any additional information"
-                  rows="3"
-                  value={modalData.notes || ''}
-                  onChange={(e) => setModalData({...modalData, notes: e.target.value})}
-                ></textarea>
-              </div>
-              
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
-                  checked={modalData.completed || false}
-                  onChange={(e) => setModalData({...modalData, completed: e.target.checked})}
-                  id="completed-checkbox"
-                />
-                <label htmlFor="completed-checkbox" className="ml-2 block text-sm text-gray-900 font-roboto">
-                  Mark as completed
-                </label>
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-md font-medium mb-2 font-roboto flex items-center">
+                    <Paperclip size={16} className="mr-1" />
+                    Appointment Documents
+                  </h4>
+                  
+                  <div className="border rounded-lg p-3 bg-gray-50">
+                    <input
+                      type="file"
+                      className="hidden"
+                      ref={fileInputRef}
+                      onChange={handleFileUpload}
+                    />
+                    <button
+                      className="w-full p-4 border border-dashed rounded-md flex flex-col items-center justify-center hover:bg-gray-100"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingDocument}
+                    >
+                      {uploadingDocument ? (
+                        <>
+                          <RefreshCw size={24} className="text-blue-500 mb-2 animate-spin" />
+                          <p className="text-sm text-gray-600 font-roboto">Uploading... {uploadProgress}%</p>
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={24} className="text-gray-400 mb-2" />
+                          <p className="text-sm text-gray-600 font-roboto">Click to upload documents or photos</p>
+                          <p className="text-xs text-gray-500 font-roboto">PDF, JPG, PNG files accepted</p>
+                        </>
+                      )}
+                    </button>
+                    
+                    {documents.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <h5 className="text-sm font-medium font-roboto">Uploaded Documents</h5>
+                        
+                        {documents.map((doc) => (
+                          <div key={doc.id} className="flex items-center justify-between p-2 border rounded-md bg-white">
+                            <div className="flex items-center overflow-hidden">
+                              <FileText size={16} className="text-blue-500 mr-2 flex-shrink-0" />
+                              <span className="text-sm font-roboto truncate">{doc.fileName}</span>
+                            </div>
+                            <div className="flex space-x-2 flex-shrink-0">
+                              <a 
+                                href={doc.fileUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                title="Download"
+                              >
+                                <Download size={14} />
+                              </a>
+                              <button 
+                                className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                onClick={() => handleRemoveDocument(doc.id)}
+                                title="Delete"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="p-3 border rounded-lg bg-blue-50 mt-4">
+                  <h4 className="text-sm font-medium mb-2 font-roboto">Add to Calendar</h4>
+                  <p className="text-sm text-gray-600 font-roboto">
+                    This appointment will be automatically added to your family calendar when saved.
+                  </p>
+                </div>
               </div>
             </div>
             
@@ -4309,11 +3041,14 @@ const ChildrenTrackingTab = () => {
                       placeholder="e.g. 42in or 107cm"
                       value={modalData.height || ''}
                       onChange={(e) => setModalData({...modalData, height: e.target.value})}
+                      pattern="^\d+(\.\d+)?\s*(cm|in|inches|feet|ft)$"
+                      title="Enter a number followed by a unit (e.g., 42in or 107cm)"
                     />
                     <div className="bg-gray-100 p-2 rounded-r-md flex items-center">
                       <Activity size={16} className="text-gray-500" />
                     </div>
                   </div>
+                  <p className="text-xs text-gray-500 mt-1">Format: 42in or 107cm</p>
                 </div>
                 
                 <div>
@@ -4327,11 +3062,14 @@ const ChildrenTrackingTab = () => {
                       placeholder="e.g. 40lb or 18kg"
                       value={modalData.weight || ''}
                       onChange={(e) => setModalData({...modalData, weight: e.target.value})}
+                      pattern="^\d+(\.\d+)?\s*(kg|kilos|lb|pounds)$"
+                      title="Enter a number followed by a unit (e.g., 40lb or 18kg)"
                     />
                     <div className="bg-gray-100 p-2 rounded-r-md flex items-center">
                       <Activity size={16} className="text-gray-500" />
                     </div>
                   </div>
+                  <p className="text-xs text-gray-500 mt-1">Format: 40lb or 18kg</p>
                 </div>
               </div>
               
@@ -4357,7 +3095,11 @@ const ChildrenTrackingTab = () => {
                       className="flex-1 border-t border-b p-2 text-center focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Shoe size"
                       value={modalData.shoeSize || ''}
-                      onChange={(e) => setModalData({...modalData, shoeSize: e.target.value})}
+                      onChange={(e) => {
+                        // Only allow numbers and decimal points
+                        const value = e.target.value.replace(/[^\d.]/g, '');
+                        setModalData({...modalData, shoeSize: value});
+                      }}
                     />
                     <button 
                       className="bg-gray-100 p-2 rounded-r-md"
@@ -4461,7 +3203,7 @@ const ChildrenTrackingTab = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Routine Name
+                  Routine Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -4469,12 +3211,13 @@ const ChildrenTrackingTab = () => {
                   placeholder="e.g. Morning Routine, Bedtime, etc."
                   value={modalData.title || ''}
                   onChange={(e) => setModalData({...modalData, title: e.target.value})}
+                  required
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Days of Week
+                  Days of Week <span className="text-red-500">*</span>
                 </label>
                 <div className="grid grid-cols-7 gap-1">
                   {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
@@ -4509,13 +3252,14 @@ const ChildrenTrackingTab = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    Start Time
+                    Start Time <span className="text-red-500">*</span>
                   </label>
                   <div className="flex">
                     <select
                       className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
                       value={modalData.startTime || ''}
                       onChange={(e) => setModalData({...modalData, startTime: e.target.value})}
+                      required
                     >
                       <option value="">Select time</option>
                       {Array.from({ length: 24 }, (_, hour) => (
@@ -4630,13 +3374,13 @@ const ChildrenTrackingTab = () => {
         </div>
       )}
       
-      {/* Activity Modal */}
-      {activeModal === 'activity' && (
+      {/* Healthcare Provider Modal */}
+      {activeModal === 'provider' && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium font-roboto">
-                {modalData.id ? 'Edit Activity' : 'Add New Activity'}
+                {modalData.id ? 'Edit Healthcare Provider' : 'Add New Healthcare Provider'}
               </h3>
               <button 
                 className="text-gray-400 hover:text-gray-500"
@@ -4649,138 +3393,69 @@ const ChildrenTrackingTab = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Activity Name
+                  Provider Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. Soccer Practice, Piano Lessons, etc."
-                  value={modalData.title || ''}
-                  onChange={(e) => setModalData({...modalData, title: e.target.value})}
+                  placeholder="e.g. Dr. Smith"
+                  value={modalData.name || ''}
+                  onChange={(e) => setModalData({...modalData, name: e.target.value})}
+                  required
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Type
-                </label>
-                <select
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={modalData.type || ''}
-                  onChange={(e) => setModalData({...modalData, type: e.target.value})}
-                >
-                  <option value="">Select type</option>
-                  <option value="sports">Sports</option>
-                  <option value="music">Music</option>
-                  <option value="art">Art & Crafts</option>
-                  <option value="academic">Academic</option>
-                  <option value="social">Social</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Location (optional)
+                  Specialty <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. Community Center, School, etc."
-                  value={modalData.location || ''}
-                  onChange={(e) => setModalData({...modalData, location: e.target.value})}
+                  placeholder="e.g. Pediatrician, Dentist, etc."
+                  value={modalData.specialty || ''}
+                  onChange={(e) => setModalData({...modalData, specialty: e.target.value})}
+                  required
                 />
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    Start Date
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                    value={modalData.startDate || ''}
-                    onChange={(e) => setModalData({...modalData, startDate: e.target.value})}
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    End Date (optional)
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                    value={modalData.endDate || ''}
-                    onChange={(e) => setModalData({...modalData, endDate: e.target.value})}
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                  Phone (optional)
+                </label>
+                <input
+                  type="tel"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g. (555) 123-4567"
+                  value={modalData.phone || ''}
+                  onChange={(e) => setModalData({...modalData, phone: e.target.value})}
+                />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Repeats On (optional)
+                  Email (optional)
                 </label>
-                <div className="grid grid-cols-7 gap-1">
-                  {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
-                    <button
-                      key={day}
-                      className={`text-xs p-2 rounded-md ${
-                        modalData.repeatDay?.includes(day) 
-                          ? 'bg-blue-500 text-white' 
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                      onClick={() => {
-                        const currentDays = modalData.repeatDay || [];
-                        if (currentDays.includes(day)) {
-                          setModalData({
-                            ...modalData, 
-                            repeatDay: currentDays.filter(d => d !== day)
-                          });
-                        } else {
-                          setModalData({
-                            ...modalData,
-                            repeatDay: [...currentDays, day]
-                          });
-                        }
-                      }}
-                    >
-                      {day.substring(0, 3)}
-                    </button>
-                  ))}
-                </div>
+                <input
+                  type="email"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g. provider@example.com"
+                  value={modalData.email || ''}
+                  onChange={(e) => setModalData({...modalData, email: e.target.value})}
+                />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Time (optional)
+                  Address (optional)
                 </label>
-                <div className="flex">
-                  <select
-                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                    value={modalData.time || ''}
-                    onChange={(e) => setModalData({...modalData, time: e.target.value})}
-                  >
-                    <option value="">Select time</option>
-                    {Array.from({ length: 24 }, (_, hour) => (
-                      <>
-                        <option key={`${hour}:00`} value={`${hour.toString().padStart(2, '0')}:00`}>
-                          {hour === 0 ? '12:00 AM' : 
-                           hour < 12 ? `${hour}:00 AM` : 
-                           hour === 12 ? '12:00 PM' : 
-                           `${hour - 12}:00 PM`}
-                        </option>
-                        <option key={`${hour}:30`} value={`${hour.toString().padStart(2, '0')}:30`}>
-                          {hour === 0 ? '12:30 AM' : 
-                           hour < 12 ? `${hour}:30 AM` : 
-                           hour === 12 ? '12:30 PM' : 
-                           `${hour - 12}:30 PM`}
-                        </option>
-                      </>
-                    ))}
-                  </select>
-                </div>
+                <input
+                  type="text"
+                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g. 123 Main St, City, State"
+                  value={modalData.address || ''}
+                  onChange={(e) => setModalData({...modalData, address: e.target.value})}
+                />
               </div>
               
               <div>
@@ -4806,16 +3481,16 @@ const ChildrenTrackingTab = () => {
               </button>
               <button
                 className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
-                onClick={() => handleFormSubmit('activity')}
-                disabled={loadingSection === 'activity'}
+                onClick={() => handleProviderSubmit(modalData)}
+                disabled={loadingSection === 'provider'}
               >
-                {loadingSection === 'activity' ? (
+                {loadingSection === 'provider' ? (
                   <span className="flex items-center">
                     <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     Saving...
                   </span>
                 ) : (
-                  modalData.id ? 'Update Activity' : 'Save Activity'
+                  modalData.id ? 'Update Provider' : 'Save Provider'
                 )}
               </button>
             </div>
@@ -4823,13 +3498,13 @@ const ChildrenTrackingTab = () => {
         </div>
       )}
       
-      {/* Homework Modal */}
-      {activeModal === 'homework' && (
+      {/* Hand-me-down Modal */}
+      {activeModal === 'handmedown' && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium font-roboto">
-                {modalData.id ? 'Edit Assignment' : 'Add New Assignment'}
+                {modalData.id ? 'Edit Hand-Me-Down' : 'Add New Hand-Me-Down'}
               </h3>
               <button 
                 className="text-gray-400 hover:text-gray-500"
@@ -4842,695 +3517,125 @@ const ChildrenTrackingTab = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Assignment Name
+                  Item Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. Math Homework, Book Report, etc."
-                  value={modalData.title || ''}
-                  onChange={(e) => setModalData({...modalData, title: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Subject
-                </label>
-                <select
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={modalData.subject || ''}
-                  onChange={(e) => setModalData({...modalData, subject: e.target.value})}
-                >
-                  <option value="">Select subject</option>
-                  <option value="Math">Math</option>
-                  <option value="Science">Science</option>
-                  <option value="English">English</option>
-                  <option value="History">History</option>
-                  <option value="Geography">Geography</option>
-                  <option value="Art">Art</option>
-                  <option value="Music">Music</option>
-                  <option value="Physical Education">Physical Education</option>
-                  <option value="Foreign Language">Foreign Language</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Due Date
-                </label>
-                <input
-                  type="date"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={modalData.dueDate || ''}
-                  onChange={(e) => setModalData({...modalData, dueDate: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Priority
-                </label>
-                <div className="flex space-x-2">
-                  <button
-                    className={`flex-1 py-2 rounded-md text-sm font-roboto ${
-                      modalData.priority === 'low' 
-                        ? 'bg-blue-100 text-blue-800 border-2 border-blue-500' 
-                        : 'bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100'
-                    }`}
-                    onClick={() => setModalData({...modalData, priority: 'low'})}
-                  >
-                    Low
-                  </button>
-                  <button
-                    className={`flex-1 py-2 rounded-md text-sm font-roboto ${
-                      modalData.priority === 'medium' 
-                        ? 'bg-yellow-100 text-yellow-800 border-2 border-yellow-500' 
-                        : 'bg-yellow-50 text-yellow-600 border border-yellow-200 hover:bg-yellow-100'
-                    }`}
-                    onClick={() => setModalData({...modalData, priority: 'medium'})}
-                  >
-                    Medium
-                  </button>
-                  <button
-                    className={`flex-1 py-2 rounded-md text-sm font-roboto ${
-                      modalData.priority === 'high' 
-                        ? 'bg-red-100 text-red-800 border-2 border-red-500' 
-                        : 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'
-                    }`}
-                    onClick={() => setModalData({...modalData, priority: 'high'})}
-                  >
-                    High
-                  </button>
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Description (optional)
-                </label>
-                <textarea
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Any additional details about the assignment"
-                  rows="3"
-                  value={modalData.description || ''}
-                  onChange={(e) => setModalData({...modalData, description: e.target.value})}
-                ></textarea>
-              </div>
-              
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
-                  checked={modalData.completed || false}
-                  onChange={(e) => setModalData({...modalData, completed: e.target.checked})}
-                  id="completed-hw-checkbox"
-                />
-                <label htmlFor="completed-hw-checkbox" className="ml-2 block text-sm text-gray-900 font-roboto">
-                  Mark as completed
-                </label>
-              </div>
-            </div>
-            
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
-                onClick={closeModal}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
-                onClick={() => handleFormSubmit('homework')}
-                disabled={loadingSection === 'homework'}
-              >
-                {loadingSection === 'homework' ? (
-                  <span className="flex items-center">
-                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Saving...
-                  </span>
-                ) : (
-                  modalData.id ? 'Update Assignment' : 'Save Assignment'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Emotional Check-in Modal */}
-      {activeModal === 'emotional' && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium font-roboto">
-                {modalData.id ? 'Edit Emotional Check-in' : 'Add New Emotional Check-in'}
-              </h3>
-              <button 
-                className="text-gray-400 hover:text-gray-500"
-                onClick={closeModal}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Date
-                </label>
-                <input
-                  type="date"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={modalData.date || ''}
-                  onChange={(e) => setModalData({...modalData, date: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Mood
-                </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {['happy', 'excited', 'calm', 'tired', 'sad', 'angry', 'worried', 'confused'].map(mood => (
-                    <button
-                      key={mood}
-                      className={`p-2 rounded-md flex flex-col items-center ${
-                        modalData.mood === mood 
-                          ? 'bg-blue-100 border-2 border-blue-500' 
-                          : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
-                      }`}
-                      onClick={() => setModalData({...modalData, mood})}
-                    >
-                      <span className="text-2xl mb-1">
-                        {mood === 'happy' && '😀'}
-                        {mood === 'excited' && '🤩'}
-                        {mood === 'calm' && '😌'}
-                        {mood === 'tired' && '😴'}
-                        {mood === 'sad' && '😔'}
-                        {mood === 'angry' && '😠'}
-                        {mood === 'worried' && '😟'}
-                        {mood === 'confused' && '😕'}
-                      </span>
-                      <span className="text-xs capitalize font-roboto">{mood}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Notes (optional)
-                </label>
-                <textarea
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Any additional details about their mood or feelings"
-                  rows="3"
-                  value={modalData.notes || ''}
-                  onChange={(e) => setModalData({...modalData, notes: e.target.value})}
-                ></textarea>
-              </div>
-            </div>
-            
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
-                onClick={closeModal}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
-                onClick={() => handleFormSubmit('emotional')}
-                disabled={loadingSection === 'emotional'}
-              >
-                {loadingSection === 'emotional' ? (
-                  <span className="flex items-center">
-                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Saving...
-                  </span>
-                ) : (
-                  modalData.id ? 'Update Check-in' : 'Save Check-in'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Dietary/Meal Modal */}
-      {activeModal === 'meal' && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium font-roboto">
-                {modalData.id ? 'Edit Dietary Information' : 'Add Dietary Information'}
-              </h3>
-              <button 
-                className="text-gray-400 hover:text-gray-500"
-                onClick={closeModal}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Type
-                </label>
-                <div className="flex space-x-2">
-                  <button
-                    className={`flex-1 py-2 rounded-md text-sm font-roboto ${
-                      modalData.type === 'allergy' 
-                        ? 'bg-red-100 text-red-800 border-2 border-red-500' 
-                        : 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'
-                    }`}
-                    onClick={() => setModalData({...modalData, type: 'allergy'})}
-                  >
-                    Allergy
-                  </button>
-                  <button
-                    className={`flex-1 py-2 rounded-md text-sm font-roboto ${
-                      modalData.type === 'preference' 
-                        ? 'bg-blue-100 text-blue-800 border-2 border-blue-500' 
-                        : 'bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100'
-                    }`}
-                    onClick={() => setModalData({...modalData, type: 'preference'})}
-                  >
-                    Preference
-                  </button>
-                  <button
-                    className={`flex-1 py-2 rounded-md text-sm font-roboto ${
-                      modalData.type === 'restriction' 
-                        ? 'bg-yellow-100 text-yellow-800 border-2 border-yellow-500' 
-                        : 'bg-yellow-50 text-yellow-600 border border-yellow-200 hover:bg-yellow-100'
-                    }`}
-                    onClick={() => setModalData({...modalData, type: 'restriction'})}
-                  >
-                    Restriction
-                  </button>
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  {modalData.type === 'allergy' ? 'Allergy Name' : 
-                   modalData.type === 'preference' ? 'Food Preference' : 
-                   modalData.type === 'restriction' ? 'Dietary Restriction' : 'Name'}
-                </label>
-                <input
-                  type="text"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder={
-                    modalData.type === 'allergy' ? 'e.g. Peanuts, Dairy, etc.' : 
-                    modalData.type === 'preference' ? 'e.g. Loves broccoli, Dislikes fish, etc.' : 
-                    modalData.type === 'restriction' ? 'e.g. Vegetarian, Gluten-free, etc.' : 
-                    'Enter name'
-                  }
+                  placeholder="e.g. Winter Jacket, Soccer Cleats, etc."
                   value={modalData.name || ''}
                   onChange={(e) => setModalData({...modalData, name: e.target.value})}
+                  required
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Details
+                  Description <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder={
-                    modalData.type === 'allergy' ? 'Description of the allergy, reaction severity, etc.' :
-                    modalData.type === 'preference' ? 'Notes about this food preference' :
-                    modalData.type === 'restriction' ? 'Details about the dietary restriction' :
-                    'Additional details'
-                  }
-                  rows="3"
-                  value={modalData.details || ''}
-                  onChange={(e) => setModalData({...modalData, details: e.target.value})}
+                  placeholder="Describe the item (color, condition, etc.)"
+                  rows="2"
+                  value={modalData.description || ''}
+                  onChange={(e) => setModalData({...modalData, description: e.target.value})}
+                  required
                 ></textarea>
               </div>
-            </div>
-            
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
-                onClick={closeModal}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
-                onClick={() => handleFormSubmit('meal')}
-                disabled={loadingSection === 'meal'}
-              >
-                {loadingSection === 'meal' ? (
-                  <span className="flex items-center">
-                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Saving...
-                  </span>
-                ) : (
-                  modalData.id ? 'Update Information' : 'Save Information'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Event Modal */}
-      {activeModal === 'event' && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium font-roboto">
-                {modalData.id ? 'Edit Event' : 'Add New Event'}
-              </h3>
-              <button 
-                className="text-gray-400 hover:text-gray-500"
-                onClick={closeModal}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Event Name
+                  Size
                 </label>
                 <input
                   type="text"
                   className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. Birthday Party, School Play, etc."
-                  value={modalData.title || ''}
-                  onChange={(e) => setModalData({...modalData, title: e.target.value})}
+                  placeholder="e.g. 5T, Youth M, etc."
+                  value={modalData.size || ''}
+                  onChange={(e) => setModalData({...modalData, size: e.target.value})}
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Type
+                  Ready Date <span className="text-red-500">*</span>
                 </label>
-                <select
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={modalData.type || ''}
-                  onChange={(e) => setModalData({...modalData, type: e.target.value})}
-                >
-                  <option value="">Select type</option>
-                  <option value="birthday">Birthday</option>
-                  <option value="school">School Event</option>
-                  <option value="holiday">Holiday</option>
-                  <option value="celebration">Celebration</option>
-                  <option value="family">Family Gathering</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    Date
-                  </label>
+                <div className="flex items-center">
                   <input
                     type="date"
                     className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                    value={modalData.date || ''}
-                    onChange={(e) => setModalData({...modalData, date: e.target.value})}
+                    value={modalData.readyDate || ''}
+                    onChange={(e) => setModalData({...modalData, readyDate: e.target.value})}
+                    required
                   />
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    Time (optional)
-                  </label>
-                  <input
-                    type="time"
-                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                    value={modalData.time || ''}
-                    onChange={(e) => setModalData({...modalData, time: e.target.value})}
-                  />
-                </div>
+                <p className="text-xs text-gray-500 mt-1">When will this item be ready for use?</p>
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Location (optional)
+                  Photo (optional)
                 </label>
-                <input
-                  type="text"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. Home, School, Community Center, etc."
-                  value={modalData.location || ''}
-                  onChange={(e) => setModalData({...modalData, location: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Description (optional)
-                </label>
-                <textarea
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Any additional details about the event"
-                  rows="3"
-                  value={modalData.description || ''}
-                  onChange={(e) => setModalData({...modalData, description: e.target.value})}
-                ></textarea>
-              </div>
-            </div>
-            
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
-                onClick={closeModal}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
-                onClick={() => handleFormSubmit('event')}
-                disabled={loadingSection === 'event'}
-              >
-                {loadingSection === 'event' ? (
-                  <span className="flex items-center">
-                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Saving...
-                  </span>
-                ) : (
-                  modalData.id ? 'Update Event' : 'Save Event'
+                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                  <div className="space-y-1 text-center">
+                    <Camera size={24} className="mx-auto text-gray-400" />
+                    <div className="flex text-sm text-gray-600">
+                      <label
+                        htmlFor="file-upload"
+                        className="relative cursor-pointer rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none"
+                      >
+                        <span>Upload a file</span>
+                        <input
+                          id="file-upload"
+                          name="file-upload"
+                          type="file"
+                          className="sr-only"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setModalData({...modalData, imageFile: file});
+                            }
+                          }}
+                        />
+                      </label>
+                      <p className="pl-1">or drag and drop</p>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      PNG, JPG, GIF up to 10MB
+                    </p>
+                  </div>
+                </div>
+                {modalData.imageFile && (
+                  <p className="mt-2 text-xs text-gray-600 font-roboto">
+                    Selected file: {modalData.imageFile.name}
+                  </p>
                 )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Milestone Modal */}
-      {activeModal === 'milestone' && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium font-roboto">
-                {modalData.id ? 'Edit Milestone' : 'Add New Milestone'}
-              </h3>
-              <button 
-                className="text-gray-400 hover:text-gray-500"
-                onClick={closeModal}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Milestone Title
-                </label>
-                <input
-                  type="text"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. First Steps, Lost a Tooth, etc."
-                  value={modalData.title || ''}
-                  onChange={(e) => setModalData({...modalData, title: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Type
-                </label>
-                <select
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={modalData.type || ''}
-                  onChange={(e) => setModalData({...modalData, type: e.target.value})}
-                >
-                  <option value="">Select type</option>
-                  <option value="achievement">Achievement</option>
-                  <option value="physical">Physical Development</option>
-                  <option value="social">Social Development</option>
-                  <option value="cognitive">Cognitive Development</option>
-                  <option value="emotional">Emotional Development</option>
-                  <option value="academic">Academic Achievement</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Date
-                </label>
-                <input
-                  type="date"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={modalData.date || ''}
-                  onChange={(e) => setModalData({...modalData, date: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Description
-                </label>
-                <textarea
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Details about this milestone"
-                  rows="3"
-                  value={modalData.description || ''}
-                  onChange={(e) => setModalData({...modalData, description: e.target.value})}
-                ></textarea>
-              </div>
-            </div>
-            
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
-                onClick={closeModal}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
-                onClick={() => handleFormSubmit('milestone')}
-                disabled={loadingSection === 'milestone'}
-              >
-                {loadingSection === 'milestone' ? (
-                  <span className="flex items-center">
-                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Saving...
-                  </span>
-                ) : (
-                  modalData.id ? 'Update Milestone' : 'Save Milestone'
+                {modalData.imageUrl && !modalData.imageFile && (
+                  <div className="mt-2">
+                    <img 
+                      src={modalData.imageUrl}
+                      alt="Saved"
+                      className="h-20 w-auto object-cover rounded"
+                    />
+                  </div>
                 )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Contact Modal (for friends, social tracking) */}
-      {activeModal === 'contact' && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium font-roboto">
-                {modalData.id ? 'Edit Contact' : 'Add New Contact'}
-              </h3>
-              <button 
-                className="text-gray-400 hover:text-gray-500"
-                onClick={closeModal}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Name
-                </label>
-                <input
-                  type="text"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Child's friend's name"
-                  value={modalData.name || ''}
-                  onChange={(e) => setModalData({...modalData, name: e.target.value})}
-                />
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Relationship
-                </label>
-                <select
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={modalData.relationship || ''}
-                  onChange={(e) => setModalData({...modalData, relationship: e.target.value})}
-                >
-                  <option value="">Select relationship</option>
-                  <option value="friend">Friend</option>
-                  <option value="classmate">Classmate</option>
-                  <option value="teammate">Teammate</option>
-                  <option value="neighbor">Neighbor</option>
-                  <option value="relative">Relative</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Parent/Guardian Name
-                </label>
-                <input
-                  type="text"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Parent or guardian's name"
-                  value={modalData.parentName || ''}
-                  onChange={(e) => setModalData({...modalData, parentName: e.target.value})}
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    Parent Phone (optional)
-                  </label>
+              {modalData.id && (
+                <div className="flex items-center">
                   <input
-                    type="tel"
-                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Phone number"
-                    value={modalData.parentPhone || ''}
-                    onChange={(e) => setModalData({...modalData, parentPhone: e.target.value})}
+                    type="checkbox"
+                    className="h-4 w-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
+                    checked={modalData.used || false}
+                    onChange={(e) => setModalData({...modalData, used: e.target.checked})}
+                    id="used-checkbox"
                   />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    Parent Email (optional)
+                  <label htmlFor="used-checkbox" className="ml-2 block text-sm text-gray-900 font-roboto">
+                    Mark as used
                   </label>
-                  <input
-                    type="email"
-                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Email address"
-                    value={modalData.parentEmail || ''}
-                    onChange={(e) => setModalData({...modalData, parentEmail: e.target.value})}
-                  />
                 </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Notes (optional)
-                </label>
-                <textarea
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Any additional information"
-                  rows="2"
-                  value={modalData.notes || ''}
-                  onChange={(e) => setModalData({...modalData, notes: e.target.value})}
-                ></textarea>
-              </div>
+              )}
             </div>
             
             <div className="mt-6 flex justify-end space-x-3">
@@ -5542,16 +3647,16 @@ const ChildrenTrackingTab = () => {
               </button>
               <button
                 className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
-                onClick={() => handleFormSubmit('contact')}
-                disabled={loadingSection === 'contact'}
+                onClick={() => handleFormSubmit('handmedown')}
+                disabled={loadingSection === 'handmedown'}
               >
-                {loadingSection === 'contact' ? (
+                {loadingSection === 'handmedown' ? (
                   <span className="flex items-center">
                     <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     Saving...
                   </span>
                 ) : (
-                  modalData.id ? 'Update Contact' : 'Save Contact'
+                  modalData.id ? 'Update Item' : 'Save Item'
                 )}
               </button>
             </div>
