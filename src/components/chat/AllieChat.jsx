@@ -120,6 +120,48 @@ const AllieChat = () => {
     reader.readAsDataURL(file);
   };
 
+
+// Add this function in src/components/chat/AllieChat.jsx before the return statement
+
+// New function to add
+const handleRelationshipEvent = async (eventData) => {
+  try {
+    // Create a relationship event
+    const event = {
+      summary: `Relationship: ${eventData.type || 'Check-in'}`,
+      description: eventData.description || 'Time to connect with your partner',
+      start: {
+        dateTime: eventData.date ? new Date(eventData.date).toISOString() : new Date().toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: eventData.endDate ? new Date(eventData.endDate).toISOString() 
+                 : new Date(new Date().getTime() + 30*60000).toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      category: 'relationship',
+      colorId: '6' // Pink
+    };
+    
+    // Import CalendarService dynamically to avoid circular dependencies
+    const CalendarService = (await import('../../services/CalendarService')).default;
+    
+    // Add to calendar
+    const result = await CalendarService.addEvent(event, selectedUser.id);
+    
+    if (result.success) {
+      sendMessage(`✓ Added "${event.summary}" to your calendar for ${new Date(event.start.dateTime).toLocaleString()}`, selectedUser);
+    } else {
+      sendMessage("I tried to add that to your calendar, but there was an issue. Please try again.", selectedUser);
+    }
+  } catch (error) {
+    console.error("Error handling relationship event:", error);
+    sendMessage("I had trouble processing your calendar request. Please try again with more specific details.", selectedUser);
+  }
+};
+
+
+
   // Process uploaded image
   const processImage = async (file) => {
     setIsProcessingImage(true);

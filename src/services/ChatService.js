@@ -519,20 +519,72 @@ async getAIResponse(text, familyId, previousMessages) {
       
     // Get family data from Firestore for context
     let familyData = {};
+try {
+  console.log("Getting family context for:", familyId);
+  familyData = await this.getFamilyContext(familyId);
+  console.log("Got family context with keys:", Object.keys(familyData));
+  
+  // Enhanced relationship context for chat
+  if (text.toLowerCase().includes('relationship') || 
+      text.toLowerCase().includes('couple') || 
+      text.toLowerCase().includes('partner') ||
+      text.toLowerCase().includes('marriage') ||
+      text.toLowerCase().includes('spouse') ||
+      text.toLowerCase().includes('wife') ||
+      text.toLowerCase().includes('husband')) {
+    
+    console.log("Detected relationship question, enriching context");
+    
+    // Get complete relationship data
     try {
-      console.log("Getting family context for:", familyId);
-      familyData = await this.getFamilyContext(familyId);
-      console.log("Got family context with keys:", Object.keys(familyData));
-    } catch (contextError) {
-      console.error("Error getting family context:", contextError);
-      return "I'm having trouble accessing your family data right now. Please try again in a moment.";
-    }
+      // Load relationship surveys for additional context
+      const relSurveyQuery = query(
+        collection(db, "surveyResponses"),
+        where("familyId", "==", familyId),
+        where("surveyType", "==", "relationship")
+      );
       
-    // Check if we actually got meaningful family data
-    if (!familyData || Object.keys(familyData).length < 3) {
-      console.warn("Insufficient family data for personalized response");
-      return "I couldn't retrieve your complete family data. Please try refreshing the page or logging in again.";
+      const relSurveyDocs = await getDocs(relSurveyQuery);
+      const relationshipResponses = {};
+      
+      relSurveyDocs.forEach(doc => {
+        const data = doc.data();
+        if (data.responses) {
+          Object.assign(relationshipResponses, data.responses);
+        }
+      });
+      
+      // Add relationship survey data to context
+      if (Object.keys(relationshipResponses).length > 0) {
+        familyData.relationshipSurvey = relationshipResponses;
+      }
+      
+      // Get couple check-in data for latest cycle
+      const checkInRef = doc(db, "coupleCheckIns", `${familyId}-week${familyData.currentWeek || 1}`);
+      const checkInDoc = await getDoc(checkInRef);
+      
+      if (checkInDoc.exists()) {
+        familyData.currentCoupleData = checkInDoc.data();
+      }
+      
+      console.log("Enhanced relationship context added with keys:", 
+                  Object.keys(familyData.relationshipSurvey || {}), 
+                  "and couple data:", !!familyData.currentCoupleData);
+    } catch (relError) {
+      console.error("Error enriching relationship context:", relError);
+      // Non-blocking error, continue with basic context
     }
+  }
+} catch (contextError) {
+  console.error("Error getting family context:", contextError);
+  return "I'm having trouble accessing your family data right now. Please try again in a moment.";
+}
+
+// Check if we actually got meaningful family data
+if (!familyData || Object.keys(familyData).length < 3) {
+  console.warn("Insufficient family data for personalized response");
+  return "I couldn't retrieve your complete family data. Please try refreshing the page or logging in again.";
+}
     
     // Get the current user's ID
     let userId = null;

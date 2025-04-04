@@ -87,9 +87,37 @@ async addEvent(event, userId) {
       throw new Error("User ID is required to add events");
     }
     
+    // Ensure event has required fields
+    if (!event.summary && !event.title) {
+      event.summary = "Untitled Event";
+    }
+    
+    // Standardize event format
+    const standardizedEvent = {
+      ...event,
+      summary: event.summary || event.title,
+      description: event.description || '',
+      // Ensure start and end dates are properly formatted
+      start: event.start || {
+        dateTime: new Date().toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: event.end || {
+        dateTime: new Date(new Date().getTime() + 60*60000).toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+    };
+    
+    // Add relationship category tag if applicable
+    if (event.summary?.toLowerCase().includes('relationship') || 
+        event.summary?.toLowerCase().includes('couple') ||
+        event.category === 'relationship') {
+      standardizedEvent.category = 'relationship';
+    }
+    
     // Save event to Firestore
     const eventData = {
-      ...event,
+      ...standardizedEvent,
       userId,
       familyId: event.familyId || null,
       createdAt: serverTimestamp()
@@ -101,13 +129,13 @@ async addEvent(event, userId) {
     // Dispatch an event to notify components of the new calendar event
     if (typeof window !== 'undefined') {
       const updateEvent = new CustomEvent('calendar-event-added', {
-        detail: { eventId: docRef.id }
+        detail: { eventId: docRef.id, category: standardizedEvent.category }
       });
       window.dispatchEvent(updateEvent);
     }
     
     // Show success notification
-    this.showNotification(`Event "${event.summary || event.title || 'New event'}" added to your calendar`, "success");
+    this.showNotification(`Event "${standardizedEvent.summary}" added to your calendar`, "success");
     
     return {
       success: true,

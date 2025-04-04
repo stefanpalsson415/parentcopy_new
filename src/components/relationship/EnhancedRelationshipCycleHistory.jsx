@@ -1,10 +1,9 @@
-// src/components/relationship/EnhancedRelationshipCycleHistory.jsx
 import React, { useState, useEffect } from 'react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { Bell, ChevronLeft, ChevronRight, Calendar, CheckCircle, 
-         Clipboard, Award, Lightbulb, Heart, Users, ArrowRight, X, 
-         ChevronDown, ChevronUp, Download, Star, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, CheckCircle, 
+         Clipboard, Award, Heart, Users, ArrowRight, X, 
+         ChevronDown, ChevronUp, Clock } from 'lucide-react';
 import { doc, collection, query, where, getDocs, getDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 
@@ -13,8 +12,8 @@ const formatDate = (dateString) => {
   if (!dateString) return 'Not scheduled';
   const date = new Date(dateString);
   return date.toLocaleDateString('en-US', { 
-    weekday: 'long',
-    month: 'long', 
+    weekday: 'short',
+    month: 'short', 
     day: 'numeric'
   });
 };
@@ -32,7 +31,6 @@ const EnhancedRelationshipCycleHistory = ({ onSelectCycle, compact = false }) =>
   const [expandedSections, setExpandedSections] = useState({
     meeting: true,
     questionnaire: true,
-    metrics: true
   });
   
   const itemsPerPage = compact ? 3 : 5;
@@ -63,8 +61,8 @@ const EnhancedRelationshipCycleHistory = ({ onSelectCycle, compact = false }) =>
             
             cycleHistory.push({
               cycle: cycleNum,
-              date: data.completedAt || data.createdAt || new Date().toISOString(),
-              data: data,
+              date: data.completedAt?.toDate?.() || data.createdAt?.toDate?.() || new Date().toISOString(),
+              data: data.data || data,
               source: 'coupleCheckIns'
             });
           }
@@ -128,7 +126,7 @@ const EnhancedRelationshipCycleHistory = ({ onSelectCycle, compact = false }) =>
 
   // Get color for metric value
   const getMetricColor = (value) => {
-    if (!value) return 'text-gray-500';
+    if (!value || isNaN(value)) return 'text-gray-500';
     if (value >= 4.5) return 'text-green-700';
     if (value >= 4) return 'text-green-600';
     if (value >= 3.5) return 'text-blue-600';
@@ -139,7 +137,7 @@ const EnhancedRelationshipCycleHistory = ({ onSelectCycle, compact = false }) =>
 
   // Helper to render metric indicator
   const renderMetricIndicator = (value, prevValue) => {
-    if (!prevValue) return null;
+    if (!value || !prevValue || isNaN(value) || isNaN(prevValue)) return null;
     
     const change = value - prevValue;
     const isImproved = change > 0;
@@ -195,205 +193,168 @@ const EnhancedRelationshipCycleHistory = ({ onSelectCycle, compact = false }) =>
               <h4 className="font-medium font-roboto">Completed on {formatDate(cycleData.date)}</h4>
               
               <div className="flex space-x-2">
-                {cycleData.data?.metrics && (
+                {(cycleData.data?.metrics || cycleData.data?.satisfaction) && (
                   <span className="inline-flex items-center bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-roboto">
                     <Award size={12} className="mr-1" />
-                    {cycleData.data.metrics.overall?.toFixed(1) || "N/A"}/5 Overall
+                    {cycleData.data.metrics?.overall?.toFixed(1) || 
+                     cycleData.data.satisfaction?.toFixed(1) || "3.0"}/5
                   </span>
                 )}
-                
-                <button
-                  onClick={() => {
-                    // Generate and download a PDF report (mock)
-                    alert("Download feature will be implemented in a future update");
-                  }}
-                  className="inline-flex items-center bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs px-2 py-1 rounded-full font-roboto"
-                >
-                  <Download size={12} className="mr-1" />
-                  Export
-                </button>
               </div>
             </div>
             
             {/* Metrics Section */}
-            <div>
-              <div 
-                className="flex justify-between items-center cursor-pointer"
-                onClick={() => toggleSection('metrics')}
-              >
-                <h4 className="font-medium mb-2 font-roboto flex items-center">
-                  <Award size={16} className="mr-2 text-yellow-600" />
-                  Relationship Metrics
-                </h4>
-                <button className="p-1 hover:bg-gray-100 rounded">
-                  {expandedSections.metrics ? 
-                    <ChevronUp size={18} className="text-gray-400" /> : 
-                    <ChevronDown size={18} className="text-gray-400" />
-                  }
-                </button>
-              </div>
-              
-              {expandedSections.metrics && cycleData.data?.metrics && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-lg">
-                  <div className="text-center">
-                    <div className={`text-2xl font-bold ${getMetricColor(cycleData.data.metrics.satisfaction)}`}>
-                      {cycleData.data.metrics.satisfaction?.toFixed(1) || "N/A"}
-                    </div>
-                    <div className="text-sm text-gray-600">Satisfaction</div>
+            {(cycleData.data?.metrics || cycleData.data?.satisfaction) && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-lg">
+                <div className="text-center">
+                  <div className={`text-2xl font-bold ${getMetricColor(
+                    cycleData.data.metrics?.satisfaction || 
+                    cycleData.data.satisfaction || 3.0
+                  )}`}>
+                    {(cycleData.data.metrics?.satisfaction || 
+                      cycleData.data.satisfaction || 3.0).toFixed(1)}
                   </div>
-                  <div className="text-center">
-                    <div className={`text-2xl font-bold ${getMetricColor(cycleData.data.metrics.communication)}`}>
-                      {cycleData.data.metrics.communication?.toFixed(1) || "N/A"}
-                    </div>
-                    <div className="text-sm text-gray-600">Communication</div>
-                  </div>
-                  <div className="text-center">
-                    <div className={`text-2xl font-bold ${getMetricColor(cycleData.data.metrics.connection)}`}>
-                      {cycleData.data.metrics.connection?.toFixed(1) || "N/A"}
-                    </div>
-                    <div className="text-sm text-gray-600">Connection</div>
-                  </div>
-                  <div className="text-center">
-                    <div className={`text-2xl font-bold ${getMetricColor(cycleData.data.metrics.workload)}`}>
-                      {cycleData.data.metrics.workload?.toFixed(1) || "N/A"}
-                    </div>
-                    <div className="text-sm text-gray-600">Workload</div>
-                  </div>
+                  <div className="text-sm text-gray-600">Satisfaction</div>
                 </div>
-              )}
-            </div>
-            
-            {/* Questionnaire Responses */}
-            <div>
-              <div 
-                className="flex justify-between items-center cursor-pointer"
-                onClick={() => toggleSection('questionnaire')}
-              >
-                <h4 className="font-medium mb-2 font-roboto flex items-center">
-                  <Clipboard size={16} className="mr-2 text-blue-600" />
-                  Questionnaire Responses
-                </h4>
-                <button className="p-1 hover:bg-gray-100 rounded">
-                  {expandedSections.questionnaire ? 
-                    <ChevronUp size={18} className="text-gray-400" /> : 
-                    <ChevronDown size={18} className="text-gray-400" />
-                  }
-                </button>
-              </div>
-              
-              {expandedSections.questionnaire && (
-                <div>
-                  {cycleData.data?.questionnaireResponses ? (
-                    <div className="space-y-3">
-                      {Object.entries(cycleData.data.questionnaireResponses).map(([questionId, response]) => {
-                        // Extract question text from questionId if possible
-                        let questionText = "Question";
-                        
-                        if (questionId.includes('satisfaction')) {
-                          questionText = "Relationship Satisfaction";
-                        } else if (questionId.includes('communication')) {
-                          questionText = "Communication Quality";
-                        } else if (questionId.includes('connection')) {
-                          questionText = "Emotional Connection";
-                        } else if (questionId.includes('workload')) {
-                          questionText = "Workload Balance";
-                        }
-                        
-                        return (
-                          <div key={questionId} className="p-3 border rounded-lg">
-                            <h5 className="text-sm font-medium mb-1 font-roboto">{questionText}</h5>
-                            <div className="flex items-center">
-                              <div className="flex-1 bg-gray-100 h-2 rounded-full">
-                                <div 
-                                  className="bg-blue-500 h-2 rounded-full" 
-                                  style={{ width: `${(parseInt(response) / 5) * 100}%` }}
-                                ></div>
-                              </div>
-                              <span className="ml-2 text-sm font-medium">{response}/5</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      <p className="text-sm text-gray-500 font-roboto">No questionnaire responses available.</p>
-                    </div>
-                  )}
+                <div className="text-center">
+                  <div className={`text-2xl font-bold ${getMetricColor(
+                    cycleData.data.metrics?.communication || 
+                    cycleData.data.communication || 3.0
+                  )}`}>
+                    {(cycleData.data.metrics?.communication || 
+                      cycleData.data.communication || 3.0).toFixed(1)}
+                  </div>
+                  <div className="text-sm text-gray-600">Communication</div>
                 </div>
-              )}
-            </div>
+                <div className="text-center">
+                  <div className={`text-2xl font-bold ${getMetricColor(
+                    cycleData.data.metrics?.connection || 
+                    cycleData.data.connection || 3.0
+                  )}`}>
+                    {(cycleData.data.metrics?.connection || 
+                      cycleData.data.connection || 3.0).toFixed(1)}
+                  </div>
+                  <div className="text-sm text-gray-600">Connection</div>
+                </div>
+                <div className="text-center">
+                  <div className={`text-2xl font-bold ${getMetricColor(
+                    cycleData.data.metrics?.workload || 
+                    cycleData.data.workload || 3.0
+                  )}`}>
+                    {(cycleData.data.metrics?.workload || 
+                      cycleData.data.workload || 3.0).toFixed(1)}
+                  </div>
+                  <div className="text-sm text-gray-600">Workload</div>
+                </div>
+              </div>
+            )}
             
             {/* Meeting Notes */}
-            <div>
-              <div 
-                className="flex justify-between items-center cursor-pointer"
-                onClick={() => toggleSection('meeting')}
-              >
-                <h4 className="font-medium mb-2 font-roboto flex items-center">
-                  <Users size={16} className="mr-2 text-purple-600" />
-                  Meeting Notes
-                </h4>
-                <button className="p-1 hover:bg-gray-100 rounded">
-                  {expandedSections.meeting ? 
-                    <ChevronUp size={18} className="text-gray-400" /> : 
-                    <ChevronDown size={18} className="text-gray-400" />
-                  }
-                </button>
-              </div>
-              
-              {expandedSections.meeting && (
-                <div>
-                  {cycleData.data?.meeting ? (
-                    <div className="space-y-4">
-                      {/* Topic Responses */}
-                      {cycleData.data.meeting.topicResponses && Object.keys(cycleData.data.meeting.topicResponses).length > 0 && (
-                        <div className="space-y-3">
-                          {Object.entries(cycleData.data.meeting.topicResponses).map(([topic, response], index) => (
-                            <div key={index} className="p-3 border rounded-lg">
-                              <h5 className="text-sm font-medium mb-1 font-roboto">{topic}</h5>
-                              <p className="text-sm text-gray-600 font-roboto whitespace-pre-wrap">{response}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {/* Selected Strategies */}
-                      {cycleData.data.meeting.selectedStrategies && cycleData.data.meeting.selectedStrategies.length > 0 && (
-                        <div>
-                          <h5 className="text-sm font-medium mb-2 font-roboto">Selected Strategies</h5>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {cycleData.data.meeting.selectedStrategies.map((strategy, index) => (
-                              <div key={index} className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                <div className="flex items-center">
-                                  <Lightbulb size={16} className="text-yellow-600 mr-2" />
-                                  <p className="text-sm font-medium font-roboto">{strategy}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* General Notes */}
-                      {cycleData.data.meeting.notes && (
-                        <div>
-                          <h5 className="text-sm font-medium mb-2 font-roboto">General Notes</h5>
-                          <div className="p-3 bg-gray-50 rounded-lg">
-                            <p className="text-sm font-roboto whitespace-pre-wrap">{cycleData.data.meeting.notes}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      <p className="text-sm text-gray-500 font-roboto">No meeting notes available.</p>
-                    </div>
-                  )}
+            {cycleData.data?.meeting && (
+              <div>
+                <div 
+                  className="flex justify-between items-center cursor-pointer"
+                  onClick={() => toggleSection('meeting')}
+                >
+                  <h4 className="font-medium mb-2 font-roboto flex items-center">
+                    <Users size={16} className="mr-2 text-purple-600" />
+                    Meeting Notes
+                  </h4>
+                  <button className="p-1 hover:bg-gray-100 rounded">
+                    {expandedSections.meeting ? 
+                      <ChevronUp size={18} className="text-gray-400" /> : 
+                      <ChevronDown size={18} className="text-gray-400" />
+                    }
+                  </button>
                 </div>
-              )}
-            </div>
+                
+                {expandedSections.meeting && (
+                  <div>
+                    {cycleData.data.meeting.topicResponses && Object.keys(cycleData.data.meeting.topicResponses).length > 0 ? (
+                      <div className="space-y-3">
+                        {Object.entries(cycleData.data.meeting.topicResponses).map(([topic, response], index) => (
+                          <div key={index} className="p-3 border rounded-lg">
+                            <h5 className="text-sm font-medium mb-1 font-roboto">{topic}</h5>
+                            <p className="text-sm text-gray-600 font-roboto whitespace-pre-wrap">{response}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-gray-50 rounded-lg">
+                        <p className="text-sm text-gray-500 font-roboto">No detailed meeting notes available.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Questionnaire Responses */}
+            {cycleData.data?.questionnaireResponses && Object.keys(cycleData.data.questionnaireResponses).length > 0 && (
+              <div>
+                <div 
+                  className="flex justify-between items-center cursor-pointer"
+                  onClick={() => toggleSection('questionnaire')}
+                >
+                  <h4 className="font-medium mb-2 font-roboto flex items-center">
+                    <Clipboard size={16} className="mr-2 text-blue-600" />
+                    Questionnaire Responses
+                  </h4>
+                  <button className="p-1 hover:bg-gray-100 rounded">
+                    {expandedSections.questionnaire ? 
+                      <ChevronUp size={18} className="text-gray-400" /> : 
+                      <ChevronDown size={18} className="text-gray-400" />
+                    }
+                  </button>
+                </div>
+                
+                {expandedSections.questionnaire && (
+                  <div>
+                    <div className="space-y-3">
+                      {Object.entries(cycleData.data.questionnaireResponses)
+                        .slice(0, 5) // Show only the first 5 for brevity
+                        .map(([questionId, response], index) => {
+                          // Handle either numeric or string responses
+                          const isNumeric = !isNaN(parseFloat(response)) && isFinite(response);
+                          
+                          return (
+                            <div key={index} className="p-3 border rounded-lg">
+                              <div className="flex items-center">
+                                <div className="flex-1">
+                                  <h5 className="text-sm font-medium font-roboto">
+                                    {questionId.includes('satisfaction') ? 'Relationship Satisfaction' :
+                                    questionId.includes('communication') ? 'Communication Quality' :
+                                    questionId.includes('connection') ? 'Emotional Connection' :
+                                    questionId.includes('workload') ? 'Workload Balance' :
+                                    `Question ${index + 1}`}
+                                  </h5>
+                                </div>
+                                {isNumeric ? (
+                                  <div className="ml-2">
+                                    <div className="flex items-center bg-blue-100 px-2 py-1 rounded-full">
+                                      <span className="text-sm font-medium">{parseFloat(response).toFixed(1)}/5</span>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="ml-2 text-sm text-gray-600 font-roboto">
+                                    {response.substring(0, 20)}{response.length > 20 ? '...' : ''}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      
+                      {Object.keys(cycleData.data.questionnaireResponses).length > 5 && (
+                        <p className="text-sm text-center text-gray-500 font-roboto">
+                          + {Object.keys(cycleData.data.questionnaireResponses).length - 5} more responses
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -445,7 +406,7 @@ const EnhancedRelationshipCycleHistory = ({ onSelectCycle, compact = false }) =>
     <div className="bg-white rounded-lg shadow p-6">
       <div className="flex justify-between items-center mb-6">
         <h4 className="font-medium font-roboto flex items-center">
-          <Bell size={20} className="mr-2 text-indigo-600" />
+          <Calendar size={20} className="mr-2 text-indigo-600" />
           Relationship Cycle History
         </h4>
         
@@ -474,9 +435,37 @@ const EnhancedRelationshipCycleHistory = ({ onSelectCycle, compact = false }) =>
         )}
       </div>
       
-      <div className="space-y-6">
+      <p className="text-sm text-gray-600 mb-4 font-roboto">
+        View your past relationship cycles to track how your relationship has evolved over time
+      </p>
+      
+      <div className="space-y-4">
         {paginatedHistory.map((cycle, index) => {
           const prevCycle = index < paginatedHistory.length - 1 ? paginatedHistory[index + 1] : null;
+          
+          // Get metrics data from various possible locations in the data structure
+          const metrics = {
+            satisfaction: cycle.data?.metrics?.satisfaction || 
+                          cycle.data?.satisfaction || 3.0,
+            communication: cycle.data?.metrics?.communication || 
+                           cycle.data?.communication || 3.0,
+            connection: cycle.data?.metrics?.connection || 
+                        cycle.data?.connection || 3.0,
+            workload: cycle.data?.metrics?.workload || 
+                      cycle.data?.workload || 3.0
+          };
+          
+          // Previous metrics for comparison
+          const prevMetrics = prevCycle ? {
+            satisfaction: prevCycle.data?.metrics?.satisfaction || 
+                          prevCycle.data?.satisfaction || 3.0,
+            communication: prevCycle.data?.metrics?.communication || 
+                           prevCycle.data?.communication || 3.0,
+            connection: prevCycle.data?.metrics?.connection || 
+                        prevCycle.data?.connection || 3.0,
+            workload: prevCycle.data?.metrics?.workload || 
+                      prevCycle.data?.workload || 3.0
+          } : null;
           
           return (
             <div key={cycle.cycle} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors cursor-pointer" 
@@ -488,85 +477,85 @@ const EnhancedRelationshipCycleHistory = ({ onSelectCycle, compact = false }) =>
                 </span>
               </div>
               
-              {cycle.data?.metrics && (
-                <div className="grid grid-cols-4 gap-2 mb-3">
-                  <div className="text-center">
-                    <div className="flex items-center justify-center">
-                      <div className={`text-lg font-bold ${getMetricColor(cycle.data.metrics.satisfaction)}`}>
-                        {cycle.data.metrics.satisfaction?.toFixed(1) || "N/A"}
-                      </div>
-                      {prevCycle && prevCycle.data?.metrics && (
-                        <div className="ml-1">
-                          {renderMetricIndicator(
-                            cycle.data.metrics.satisfaction, 
-                            prevCycle.data.metrics.satisfaction
-                          )}
-                        </div>
-                      )}
+              <div className="grid grid-cols-4 gap-2 mb-3">
+                <div className="text-center">
+                  <div className="flex items-center justify-center">
+                    <div className={`text-lg font-bold ${getMetricColor(metrics.satisfaction)}`}>
+                      {metrics.satisfaction.toFixed(1)}
                     </div>
-                    <div className="text-xs text-gray-600">Satisfaction</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center">
-                      <div className={`text-lg font-bold ${getMetricColor(cycle.data.metrics.communication)}`}>
-                        {cycle.data.metrics.communication?.toFixed(1) || "N/A"}
+                    {prevMetrics && (
+                      <div className="ml-1">
+                        {renderMetricIndicator(
+                          metrics.satisfaction, 
+                          prevMetrics.satisfaction
+                        )}
                       </div>
-                      {prevCycle && prevCycle.data?.metrics && (
-                        <div className="ml-1">
-                          {renderMetricIndicator(
-                            cycle.data.metrics.communication, 
-                            prevCycle.data.metrics.communication
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-xs text-gray-600">Communication</div>
+                    )}
                   </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center">
-                      <div className={`text-lg font-bold ${getMetricColor(cycle.data.metrics.connection)}`}>
-                        {cycle.data.metrics.connection?.toFixed(1) || "N/A"}
-                      </div>
-                      {prevCycle && prevCycle.data?.metrics && (
-                        <div className="ml-1">
-                          {renderMetricIndicator(
-                            cycle.data.metrics.connection, 
-                            prevCycle.data.metrics.connection
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-xs text-gray-600">Connection</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center">
-                      <div className={`text-lg font-bold ${getMetricColor(cycle.data.metrics.workload)}`}>
-                        {cycle.data.metrics.workload?.toFixed(1) || "N/A"}
-                      </div>
-                      {prevCycle && prevCycle.data?.metrics && (
-                        <div className="ml-1">
-                          {renderMetricIndicator(
-                            cycle.data.metrics.workload, 
-                            prevCycle.data.metrics.workload
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-xs text-gray-600">Workload</div>
-                  </div>
+                  <div className="text-xs text-gray-600">Satisfaction</div>
                 </div>
-              )}
+                <div className="text-center">
+                  <div className="flex items-center justify-center">
+                    <div className={`text-lg font-bold ${getMetricColor(metrics.communication)}`}>
+                      {metrics.communication.toFixed(1)}
+                    </div>
+                    {prevMetrics && (
+                      <div className="ml-1">
+                        {renderMetricIndicator(
+                          metrics.communication, 
+                          prevMetrics.communication
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-600">Communication</div>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center justify-center">
+                    <div className={`text-lg font-bold ${getMetricColor(metrics.connection)}`}>
+                      {metrics.connection.toFixed(1)}
+                    </div>
+                    {prevMetrics && (
+                      <div className="ml-1">
+                        {renderMetricIndicator(
+                          metrics.connection, 
+                          prevMetrics.connection
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-600">Connection</div>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center justify-center">
+                    <div className={`text-lg font-bold ${getMetricColor(metrics.workload)}`}>
+                      {metrics.workload.toFixed(1)}
+                    </div>
+                    {prevMetrics && (
+                      <div className="ml-1">
+                        {renderMetricIndicator(
+                          metrics.workload, 
+                          prevMetrics.workload
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-600">Workload</div>
+                </div>
+              </div>
               
               <div className="flex items-center justify-between">
                 <div>
-                  {cycle.data?.meeting?.completedAt && (
+                  {(cycle.data?.meeting || cycle.data?.meeting?.completedAt) && (
                     <span className="inline-flex items-center text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-roboto mr-2">
                       <CheckCircle size={12} className="mr-1" />
                       Meeting Completed
                     </span>
                   )}
                   
-                  {cycle.data?.questionnaireCompleted && (
+                  {(cycle.data?.questionnaireCompleted || 
+                    cycle.data?.questionnaireResponses && 
+                    Object.keys(cycle.data.questionnaireResponses).length > 0) && (
                     <span className="inline-flex items-center text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-roboto">
                       <Clipboard size={12} className="mr-1" />
                       Questionnaire Completed
