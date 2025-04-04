@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useFamily } from '../../contexts/FamilyContext';
-import { Clock, CheckCircle, Calendar, MessageCircle, Bell, X } from 'lucide-react';
+import { Clock, CheckCircle, Calendar, MessageCircle, Bell, X, Smile, AlertCircle } from 'lucide-react';
+import CalendarService from '../../services/CalendarService';
 
 const DailyCheckInTool = () => {
   const { familyId, saveFamilyData } = useFamily();
@@ -10,21 +11,28 @@ const DailyCheckInTool = () => {
   const [remindersEnabled, setRemindersEnabled] = useState(false);
   const [showTopicModal, setShowTopicModal] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState(null);
+  const [isAddingToCalendar, setIsAddingToCalendar] = useState(false);
+  const [calendarError, setCalendarError] = useState(null);
+  const [calendarSuccess, setCalendarSuccess] = useState(false);
   
   // Load check-in data
   useEffect(() => {
     const loadCheckInData = async () => {
       if (!familyId) return;
       
-      // In a real implementation, this would load from database
-      // For now, using mock data
-      const mockHistory = [
-        { date: new Date(Date.now() - 86400000).toISOString(), completed: true, topic: 'Highlights of the day' },
-        { date: new Date(Date.now() - 172800000).toISOString(), completed: true, topic: 'Upcoming week plans' },
-        { date: new Date(Date.now() - 259200000).toISOString(), completed: false }
-      ];
-      
-      setCheckInHistory(mockHistory);
+      try {
+        // In a real implementation, this would load from database
+        // For now, using mock data
+        const mockHistory = [
+          { date: new Date(Date.now() - 86400000).toISOString(), completed: true, topic: 'Highlights of the day' },
+          { date: new Date(Date.now() - 172800000).toISOString(), completed: true, topic: 'Upcoming week plans' },
+          { date: new Date(Date.now() - 259200000).toISOString(), completed: false }
+        ];
+        
+        setCheckInHistory(mockHistory);
+      } catch (error) {
+        console.error("Error loading check-in data:", error);
+      }
     };
     
     loadCheckInData();
@@ -35,6 +43,10 @@ const DailyCheckInTool = () => {
     try {
       // In a real implementation, save to database
       console.log("Saving reminder settings:", { reminderTime, remindersEnabled });
+      
+      // Show success indicator briefly
+      setCalendarSuccess(true);
+      setTimeout(() => setCalendarSuccess(false), 3000);
       
       // Simulate successful save
       return true;
@@ -69,8 +81,60 @@ const DailyCheckInTool = () => {
     setCheckInHistory([newCheckIn, ...checkInHistory]);
     setShowTopicModal(false);
     
+    // Show success message
+    setCalendarSuccess(true);
+    setTimeout(() => setCalendarSuccess(false), 3000);
+    
     // In a real implementation, save to database
     // await saveFamilyData({ dailyCheckIns: [...checkInHistory, newCheckIn] }, familyId);
+  };
+  
+  // Add check-in to calendar
+  const addToCalendar = async () => {
+    try {
+      setIsAddingToCalendar(true);
+      setCalendarError(null);
+      
+      // Create date object for today at the specified time
+      const today = new Date();
+      const [hours, minutes] = reminderTime.split(':').map(Number);
+      today.setHours(hours, minutes, 0, 0);
+      
+      // Create end time (15 minutes after start)
+      const endTime = new Date(today);
+      endTime.setMinutes(endTime.getMinutes() + 15);
+      
+      // Create the calendar event
+      const event = {
+        summary: 'Daily Couple Check-in',
+        description: 'Take 5-10 minutes to connect with your partner',
+        start: {
+          dateTime: today.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: endTime.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        recurrence: ['RRULE:FREQ=DAILY']
+      };
+      
+      // Use CalendarService directly
+      const result = await CalendarService.addEvent(event);
+      
+      if (result.success) {
+        setCalendarSuccess(true);
+        setTimeout(() => setCalendarSuccess(false), 3000);
+      } else {
+        throw new Error("Failed to add to calendar");
+      }
+    } catch (error) {
+      console.error('Error adding to calendar:', error);
+      setCalendarError('Failed to add to calendar. Please try again.');
+      setTimeout(() => setCalendarError(null), 5000);
+    } finally {
+      setIsAddingToCalendar(false);
+    }
   };
   
   // Get suggested topics
@@ -155,6 +219,26 @@ const DailyCheckInTool = () => {
           Set aside 5-10 minutes each day to connect with your partner. Research shows daily check-ins strengthen your relationship.
         </p>
         
+        {/* Success Message */}
+        {calendarSuccess && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start">
+            <CheckCircle size={16} className="text-green-600 mr-2 mt-1 flex-shrink-0" />
+            <p className="text-sm text-green-800 font-roboto">
+              Success! Your action has been completed.
+            </p>
+          </div>
+        )}
+        
+        {/* Error Message */}
+        {calendarError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start">
+            <AlertCircle size={16} className="text-red-600 mr-2 mt-1 flex-shrink-0" />
+            <p className="text-sm text-red-800 font-roboto">
+              {calendarError}
+            </p>
+          </div>
+        )}
+        
         {/* Streak and Status */}
         <div className={`p-4 rounded-lg mb-5 ${checkedInToday() ? 'bg-green-50 border border-green-200' : 'bg-blue-50 border border-blue-200'}`}>
           <div className="flex items-center justify-between">
@@ -191,7 +275,7 @@ const DailyCheckInTool = () => {
               Reminder Settings
             </h4>
             
-            <div className="flex items-center">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm mr-3 font-roboto">Remind us at:</span>
               <input 
                 type="time" 
@@ -200,48 +284,29 @@ const DailyCheckInTool = () => {
                 className="border rounded px-2 py-1 text-sm font-roboto"
               />
               <button 
-  onClick={saveReminderSettings}
-  className="ml-3 px-3 py-1 bg-black text-white text-sm rounded font-roboto"
->
-  Save
-</button>
-<button 
-  onClick={() => {
-    import('../../services/CalendarService').then(module => {
-      const CalendarService = module.default;
-      
-      // Create daily recurring event
-      const today = new Date();
-      today.setHours(parseInt(reminderTime.split(':')[0]), parseInt(reminderTime.split(':')[1]), 0);
-      
-      const event = {
-        summary: 'Daily Couple Check-in',
-        description: 'Take 5-10 minutes to connect with your partner',
-        start: {
-          dateTime: today.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        end: {
-          dateTime: new Date(today.getTime() + 15*60000).toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        recurrence: ['RRULE:FREQ=DAILY']
-      };
-      
-      CalendarService.addEvent(event).then(result => {
-        if (result.success) {
-          alert('Daily check-in reminders added to your calendar!');
-        }
-      }).catch(error => {
-        console.error('Error adding to calendar:', error);
-      });
-    });
-  }}
-  className="ml-2 px-3 py-1 border border-black text-sm rounded font-roboto flex items-center"
->
-  <Calendar size={14} className="mr-1" />
-  Add to Calendar
-</button>
+                onClick={saveReminderSettings}
+                className="px-3 py-1 bg-black text-white text-sm rounded font-roboto"
+              >
+                Save
+              </button>
+              
+              <button 
+                onClick={addToCalendar}
+                disabled={isAddingToCalendar}
+                className="px-3 py-1 border border-black text-sm rounded font-roboto flex items-center"
+              >
+                {isAddingToCalendar ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-t-transparent border-black rounded-full animate-spin mr-1"></div>
+                    Adding...
+                  </>
+                ) : (
+                  <>
+                    <Calendar size={14} className="mr-1" />
+                    Add to Calendar
+                  </>
+                )}
+              </button>
             </div>
           </div>
         )}
@@ -308,8 +373,15 @@ const DailyCheckInTool = () => {
                   }`}
                   onClick={() => setSelectedTopic(topic.id)}
                 >
-                  <h4 className="font-medium font-roboto">{topic.title}</h4>
-                  <p className="text-sm text-gray-600 font-roboto">{topic.description}</p>
+                  <div className="flex items-start">
+                    {selectedTopic === topic.id && (
+                      <CheckCircle size={16} className="text-blue-500 mr-2 mt-1 flex-shrink-0" />
+                    )}
+                    <div className={selectedTopic === topic.id ? "ml-0" : "ml-6"}>
+                      <h4 className="font-medium font-roboto">{topic.title}</h4>
+                      <p className="text-sm text-gray-600 font-roboto">{topic.description}</p>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -329,12 +401,13 @@ const DailyCheckInTool = () => {
                   }
                 }}
                 disabled={!selectedTopic}
-                className={`px-4 py-2 rounded font-roboto ${
+                className={`px-4 py-2 rounded font-roboto flex items-center ${
                   selectedTopic 
                     ? 'bg-black text-white' 
                     : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                 }`}
               >
+                {selectedTopic ? <Smile size={16} className="mr-2" /> : null}
                 Log Check-in
               </button>
             </div>
