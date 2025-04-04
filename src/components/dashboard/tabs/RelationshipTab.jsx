@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Users, Heart, Calendar, ChevronDown, ChevronUp, Clock, 
   MessageCircle, Brain, Info, CheckCircle, Lightbulb, Target,
-  AlertCircle, Bell, Award, Clipboard, X, RefreshCw, ArrowRight
+  AlertCircle, Bell, Award, X, RefreshCw, ArrowRight,
+  Shield, Save, Plus, Star
 } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -14,12 +15,15 @@ import SelfCarePlanner from '../SelfCarePlanner';
 import CoupleRelationshipChart from '../CoupleRelationshipChart';
 import RelationshipProgressChart from '../RelationshipProgressChart';
 import AIRelationshipInsights from '../AIRelationshipInsights';
-import AllieAIEngineService from '../../../services/AllieAIEngineService';
 import { db } from '../../../services/firebase';
-import { doc, setDoc, getDoc, serverTimestamp, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { 
+  doc, setDoc, getDoc, serverTimestamp, 
+  updateDoc, collection, query, where, getDocs,
+  arrayUnion, Timestamp
+} from 'firebase/firestore';
 import CalendarService from '../../../services/CalendarService';
 
-// Helper to format date
+// Helper to format date consistently throughout the component
 const formatDate = (dateString) => {
   if (!dateString) return 'Not scheduled';
   const date = new Date(dateString);
@@ -30,111 +34,154 @@ const formatDate = (dateString) => {
   });
 };
 
-// Cycle Status Component
-const CycleStatusTracker = ({ 
-  cycle, 
-  cycleData, 
-  questionnaireCompleted, 
-  onStartQuestionnaire, 
-  onStartMeeting 
-}) => {
+/**
+ * Component to track and manage relationship cycles
+ */
+const CycleManager = ({ cycle, cycleData, onStartQuestionnaire, onStartMeeting }) => {
+  const [cycleProgress, setCycleProgress] = useState({
+    questionnaire: false,
+    meeting: false,
+    results: false
+  });
+
+  useEffect(() => {
+    // Update progress state based on cycleData
+    setCycleProgress({
+      questionnaire: cycleData?.questionnaireCompleted || false,
+      meeting: !!cycleData?.meeting,
+      results: !!cycleData?.metrics
+    });
+  }, [cycleData]);
+
   return (
     <div className="bg-white rounded-lg shadow p-6 mb-6">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-bold font-roboto">Cycle {cycle} Status</h3>
-        <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-roboto">
+        <div>
+          <h3 className="text-lg font-bold font-roboto">Relationship Cycle {cycle}</h3>
+          <p className="text-sm text-gray-600 font-roboto mt-1">
+            Complete check-ins, meetings, and activities to strengthen your relationship
+          </p>
+        </div>
+        <div className="bg-black text-white px-4 py-1 rounded-full text-sm font-roboto">
           Current Cycle
         </div>
       </div>
       
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className={`border rounded-lg p-4 text-center ${questionnaireCompleted ? 'bg-green-50 border-green-200' : 'bg-gray-50'}`}>
-          <div className="mb-2">
-            {questionnaireCompleted ? (
-              <CheckCircle className="mx-auto text-green-600" size={24} />
-            ) : (
-              <Clipboard className="mx-auto text-gray-400" size={24} />
-            )}
+      <div className="relative mt-8 mb-6">
+        {/* Cycle Progress Bar */}
+        <div className="h-2 bg-gray-200 rounded-full w-full mb-8 relative">
+          {/* Progress Indicators */}
+          <div className={`absolute left-0 h-2 rounded-full transition-all duration-500 ${
+            cycleProgress.questionnaire && cycleProgress.meeting && cycleProgress.results 
+              ? 'w-full bg-green-500'
+              : cycleProgress.questionnaire && cycleProgress.meeting
+                ? 'w-2/3 bg-blue-500'
+                : cycleProgress.questionnaire
+                  ? 'w-1/3 bg-blue-300'
+                  : 'w-0'
+          }`}></div>
+          
+          {/* Step Markers */}
+          <div className="absolute top-0 left-0 transform -translate-y-1/2 w-full">
+            <div className="flex justify-between">
+              <div className="relative">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  cycleProgress.questionnaire ? 'bg-green-500 text-white' : 'bg-gray-300'
+                }`}>
+                  {cycleProgress.questionnaire ? <CheckCircle size={16} /> : '1'}
+                </div>
+                <div className="text-xs mt-1 text-center font-roboto w-20 -ml-6">Assessment</div>
+              </div>
+              
+              <div className="relative">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  cycleProgress.meeting ? 'bg-green-500 text-white' : 'bg-gray-300'
+                }`}>
+                  {cycleProgress.meeting ? <CheckCircle size={16} /> : '2'}
+                </div>
+                <div className="text-xs mt-1 text-center font-roboto w-20 -ml-6">Couple Meeting</div>
+              </div>
+              
+              <div className="relative">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  cycleProgress.results ? 'bg-green-500 text-white' : 'bg-gray-300'
+                }`}>
+                  {cycleProgress.results ? <CheckCircle size={16} /> : '3'}
+                </div>
+                <div className="text-xs mt-1 text-center font-roboto w-20 -ml-6">Results</div>
+              </div>
+            </div>
           </div>
-          <h4 className="text-sm font-medium font-roboto mb-1">Assessment</h4>
-          <p className="text-xs text-gray-600 font-roboto">
-            {questionnaireCompleted ? 'Completed' : 'Not started'}
-          </p>
-          {!questionnaireCompleted && (
-            <button 
-              onClick={onStartQuestionnaire}
-              className="mt-2 px-3 py-1 bg-black text-white text-xs rounded-full font-roboto"
-            >
-              Start
-            </button>
-          )}
         </div>
-        
-        <div className={`border rounded-lg p-4 text-center ${cycleData?.meeting ? 'bg-green-50 border-green-200' : 'bg-gray-50'}`}>
-          <div className="mb-2">
-            {cycleData?.meeting ? (
-              <CheckCircle className="mx-auto text-green-600" size={24} />
-            ) : (
-              <Users className="mx-auto text-gray-400" size={24} />
-            )}
-          </div>
-          <h4 className="text-sm font-medium font-roboto mb-1">Couple Meeting</h4>
-          <p className="text-xs text-gray-600 font-roboto">
-            {cycleData?.meeting ? 'Completed' : questionnaireCompleted ? 'Ready to start' : 'Complete assessment first'}
-          </p>
-          {questionnaireCompleted && !cycleData?.meeting && (
+      
+        {/* Action Buttons */}
+        <div className="flex justify-center mt-6 space-x-4">
+          <button 
+            className={`px-4 py-2 rounded font-roboto flex items-center ${
+              cycleProgress.questionnaire 
+                ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                : 'bg-black text-white hover:bg-gray-800'
+            }`}
+            onClick={onStartQuestionnaire}
+            disabled={cycleProgress.questionnaire}
+          >
+            {cycleProgress.questionnaire 
+              ? <CheckCircle size={16} className="mr-2" /> 
+              : <Shield size={16} className="mr-2" />
+            }
+            {cycleProgress.questionnaire ? 'Assessment Completed' : 'Start Assessment'}
+          </button>
+          
+          <button 
+            className={`px-4 py-2 rounded font-roboto flex items-center ${
+              !cycleProgress.questionnaire 
+                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                : cycleProgress.meeting
+                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                  : 'bg-black text-white hover:bg-gray-800'
+            }`}
+            onClick={onStartMeeting}
+            disabled={!cycleProgress.questionnaire || cycleProgress.meeting}
+          >
+            {cycleProgress.meeting 
+              ? <CheckCircle size={16} className="mr-2" /> 
+              : <Users size={16} className="mr-2" />
+            }
+            {cycleProgress.meeting ? 'Meeting Completed' : 'Start Meeting'}
+          </button>
+          
+          {cycleProgress.results && (
             <button 
-              onClick={onStartMeeting}
-              className="mt-2 px-3 py-1 bg-black text-white text-xs rounded-full font-roboto"
-            >
-              Start
-            </button>
-          )}
-        </div>
-        
-        <div className={`border rounded-lg p-4 text-center ${cycleData?.metrics ? 'bg-green-50 border-green-200' : 'bg-gray-50'}`}>
-          <div className="mb-2">
-            {cycleData?.metrics ? (
-              <CheckCircle className="mx-auto text-green-600" size={24} />
-            ) : (
-              <Target className="mx-auto text-gray-400" size={24} />
-            )}
-          </div>
-          <h4 className="text-sm font-medium font-roboto mb-1">Results</h4>
-          <p className="text-xs text-gray-600 font-roboto">
-            {cycleData?.metrics ? 'Available' : 'Complete assessment first'}
-          </p>
-          {cycleData?.metrics && (
-            <button 
+              className="px-4 py-2 bg-black text-white rounded font-roboto flex items-center hover:bg-gray-800"
               onClick={() => {
-                // Scroll to charts section
                 document.getElementById('relationship-charts')?.scrollIntoView({ behavior: 'smooth' });
               }}
-              className="mt-2 px-3 py-1 bg-black text-white text-xs rounded-full font-roboto"
             >
-              View
+              <Target size={16} className="mr-2" />
+              View Results
             </button>
           )}
         </div>
       </div>
       
-      {cycleData?.metrics && (
-        <div className="grid grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
+      {/* Metrics Display (only shown when results are available) */}
+      {cycleProgress.results && cycleData?.metrics && (
+        <div className="grid grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg mt-4">
           <div className="text-center">
-            <div className="text-2xl font-bold text-pink-700">{cycleData.metrics.satisfaction?.toFixed(1) || "3.0"}</div>
-            <div className="text-xs text-gray-600">Satisfaction</div>
+            <div className="text-2xl font-bold text-pink-500">{cycleData.metrics.satisfaction?.toFixed(1) || "3.0"}</div>
+            <div className="text-xs text-gray-600 font-roboto">Satisfaction</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-blue-700">{cycleData.metrics.communication?.toFixed(1) || "3.0"}</div>
-            <div className="text-xs text-gray-600">Communication</div>
+            <div className="text-2xl font-bold text-blue-500">{cycleData.metrics.communication?.toFixed(1) || "3.0"}</div>
+            <div className="text-xs text-gray-600 font-roboto">Communication</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-purple-700">{cycleData.metrics.connection?.toFixed(1) || "3.0"}</div>
-            <div className="text-xs text-gray-600">Connection</div>
+            <div className="text-2xl font-bold text-purple-500">{cycleData.metrics.connection?.toFixed(1) || "3.0"}</div>
+            <div className="text-xs text-gray-600 font-roboto">Connection</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-green-700">{cycleData.metrics.workload?.toFixed(1) || "3.0"}</div>
-            <div className="text-xs text-gray-600">Workload Balance</div>
+            <div className="text-2xl font-bold text-green-500">{cycleData.metrics.workload?.toFixed(1) || "3.0"}</div>
+            <div className="text-xs text-gray-600 font-roboto">Workload Balance</div>
           </div>
         </div>
       )}
@@ -142,98 +189,131 @@ const CycleStatusTracker = ({
   );
 };
 
-// Relationship Health Questionnaire Component
-const RelationshipHealthQuestionnaire = ({ questions, onSubmit, cycle, previousData, onCancel }) => {
+/**
+ * Enhanced questionnaire component that supports different question types
+ */
+const RelationshipQuestionnaire = ({ questions, onSubmit, cycle, previousData, onCancel }) => {
   const [responses, setResponses] = useState({});
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  // Initialize with previous data if available
+  
+  // Group questions by category first
+  const categorizedQuestions = questions.reduce((acc, question) => {
+    // Determine question type based on content
+    let questionType = 'scale';
+    let category = 'general';
+    
+    // Detect question type
+    if (question.text.toLowerCase().includes('which') || 
+        question.text.toLowerCase().includes('select') ||
+        question.text.toLowerCase().includes('choose') ||
+        question.text.toLowerCase().includes('area')) {
+      questionType = 'select';
+    } else if (question.text.toLowerCase().includes('describe') || 
+              question.text.toLowerCase().includes('explain') ||
+              question.text.toLowerCase().includes('share') ||
+              question.text.toLowerCase().includes('thoughts')) {
+      questionType = 'text';
+    }
+    
+    // Set question category
+    if (question.category) {
+      category = question.category;
+    } else if (question.text.toLowerCase().includes('satisfaction') || 
+              question.text.toLowerCase().includes('happy')) {
+      category = 'satisfaction';
+    } else if (question.text.toLowerCase().includes('communication') || 
+              question.text.toLowerCase().includes('listen')) {
+      category = 'communication';
+    } else if (question.text.toLowerCase().includes('connect') || 
+              question.text.toLowerCase().includes('intimacy')) {
+      category = 'connection';
+    } else if (question.text.toLowerCase().includes('workload') || 
+              question.text.toLowerCase().includes('balance')) {
+      category = 'workload';
+    }
+    
+    // Add question type to the question object
+    const enhancedQuestion = {
+      ...question,
+      type: questionType,
+      category: category
+    };
+    
+    // Add to the appropriate category
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    
+    acc[category].push(enhancedQuestion);
+    return acc;
+  }, {});
+  
+  // Create steps from categories
+  const steps = Object.entries(categorizedQuestions).map(([category, questions]) => ({
+    category,
+    title: getCategoryTitle(category),
+    questions
+  }));
+  
+  // Load previous responses if available
   useEffect(() => {
     if (previousData?.questionnaireResponses) {
       setResponses(previousData.questionnaireResponses);
     }
   }, [previousData]);
-
-  // Group questions by category
-  const categories = {
-    "satisfaction": { title: "Relationship Satisfaction", questions: [] },
-    "communication": { title: "Communication", questions: [] },
-    "connection": { title: "Connection Quality", questions: [] },
-    "workload": { title: "Workload Balance", questions: [] }
-  };
-
-  // Assign questions to categories
-  questions.forEach(question => {
-    if (question.text.toLowerCase().includes("satisfaction") || 
-        question.text.toLowerCase().includes("happy") || 
-        question.text.toLowerCase().includes("fulfillment")) {
-      categories.satisfaction.questions.push(question);
-    } else if (question.text.toLowerCase().includes("communication") || 
-              question.text.toLowerCase().includes("listen") || 
-              question.text.toLowerCase().includes("understand")) {
-      categories.communication.questions.push(question);
-    } else if (question.text.toLowerCase().includes("connect") || 
-              question.text.toLowerCase().includes("intimacy") || 
-              question.text.toLowerCase().includes("quality time")) {
-      categories.connection.questions.push(question);
-    } else if (question.text.toLowerCase().includes("workload") || 
-              question.text.toLowerCase().includes("balance") || 
-              question.text.toLowerCase().includes("share")) {
-      categories.workload.questions.push(question);
-    } else {
-      // Default to satisfaction if no category matches
-      categories.satisfaction.questions.push(question);
-    }
-  });
-
-  // Create steps from categories
-  const steps = Object.entries(categories)
-    .filter(([_, category]) => category.questions.length > 0)
-    .map(([key, category]) => ({
-      key,
-      title: category.title,
-      questions: category.questions
-    }));
-
-  // Handle response change (always using 1-5 scale)
-  const handleResponseChange = (questionId, value) => {
+  
+  // Helper to get human-readable category title
+  function getCategoryTitle(category) {
+    const titles = {
+      'satisfaction': 'Relationship Satisfaction',
+      'communication': 'Communication Quality',
+      'connection': 'Emotional Connection',
+      'workload': 'Workload Balance',
+      'general': 'Relationship Assessment'
+    };
+    
+    return titles[category] || 'Relationship Assessment';
+  }
+  
+  // Handle different types of responses
+  const handleResponseChange = (questionId, value, type = 'scale') => {
     setResponses(prev => ({
       ...prev,
       [questionId]: value
     }));
   };
-
-  // Handle submission
+  
+  // Check if current step is complete
+  const isCurrentStepComplete = () => {
+    if (steps.length === 0 || step >= steps.length) return false;
+    
+    const currentQuestions = steps[step].questions;
+    return currentQuestions.every(q => responses[q.id] !== undefined);
+  };
+  
+  // Handle form submission
   const handleSubmit = async () => {
     try {
       setLoading(true);
       setError(null);
       
       const result = await onSubmit(responses);
-      if (result) {
-        // Successfully saved
-        return true;
-      } else {
-        throw new Error("Failed to save questionnaire");
-      }
+      
+      setLoading(false);
+      return result;
     } catch (err) {
       console.error("Error submitting questionnaire:", err);
       setError(err.message || "Failed to save questionnaire");
-      return false;
-    } finally {
       setLoading(false);
+      return false;
     }
   };
-
+  
   // Navigate to next step
-  const handleNext = () => {
-    // Check if all questions in current step are answered
-    const currentQuestions = steps[step].questions;
-    const allAnswered = currentQuestions.every(q => responses[q.id] !== undefined);
-    
-    if (!allAnswered) {
+  const handleNext = async () => {
+    if (!isCurrentStepComplete()) {
       setError("Please answer all questions before continuing");
       return;
     }
@@ -244,17 +324,124 @@ const RelationshipHealthQuestionnaire = ({ questions, onSubmit, cycle, previousD
       setStep(step + 1);
     } else {
       // Last step, submit
-      handleSubmit();
+      await handleSubmit();
     }
   };
-
+  
   // Navigate to previous step
   const handlePrevious = () => {
     if (step > 0) {
       setStep(step - 1);
     }
   };
-
+  
+  // Render a scale question (1-5)
+  const renderScaleQuestion = (question) => (
+    <div key={question.id} className="border rounded-lg p-4 bg-white shadow-sm">
+      <p className="mb-3 font-roboto">{question.text}</p>
+      
+      <div className="flex items-center justify-between bg-gray-50 p-3 rounded">
+        <span className="text-sm text-gray-500 font-roboto">Low</span>
+        <div className="flex space-x-4">
+          {[1, 2, 3, 4, 5].map(value => (
+            <button
+              key={value}
+              className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                responses[question.id] === value 
+                  ? 'bg-black text-white' 
+                  : 'bg-white border hover:bg-gray-100'
+              }`}
+              onClick={() => handleResponseChange(question.id, value)}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
+        <span className="text-sm text-gray-500 font-roboto">High</span>
+      </div>
+    </div>
+  );
+  
+  // Render a text input question
+  const renderTextQuestion = (question) => (
+    <div key={question.id} className="border rounded-lg p-4 bg-white shadow-sm">
+      <p className="mb-3 font-roboto">{question.text}</p>
+      
+      <textarea
+        className="w-full p-3 border rounded min-h-[100px] font-roboto"
+        placeholder="Share your thoughts here..."
+        value={responses[question.id] || ''}
+        onChange={(e) => handleResponseChange(question.id, e.target.value, 'text')}
+      ></textarea>
+    </div>
+  );
+  
+  // Render a selection question
+  const renderSelectQuestion = (question) => {
+    // Generate options based on question type
+    const options = getOptionsForQuestion(question);
+    
+    return (
+      <div key={question.id} className="border rounded-lg p-4 bg-white shadow-sm">
+        <p className="mb-3 font-roboto">{question.text}</p>
+        
+        <div className="space-y-2">
+          {options.map(option => (
+            <div 
+              key={option}
+              className={`p-3 border rounded cursor-pointer ${
+                responses[question.id] === option
+                  ? 'border-black bg-gray-50'
+                  : 'hover:bg-gray-50'
+              }`}
+              onClick={() => handleResponseChange(question.id, option, 'select')}
+            >
+              <div className="flex items-center">
+                <div className={`w-4 h-4 rounded-full border ${
+                  responses[question.id] === option
+                    ? 'border-black bg-black'
+                    : 'border-gray-400'
+                }`}></div>
+                <span className="ml-2 font-roboto">{option}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  
+  // Generate options based on the question content
+  function getOptionsForQuestion(question) {
+    if (question.text.toLowerCase().includes('area')) {
+      return [
+        'Communication',
+        'Emotional Intimacy',
+        'Quality Time',
+        'Workload Balance',
+        'Appreciation & Recognition',
+        'Future Planning'
+      ];
+    } else if (question.text.toLowerCase().includes('frequency')) {
+      return [
+        'Daily',
+        'Several times a week',
+        'Weekly',
+        'Every few weeks',
+        'Monthly or less'
+      ];
+    } else {
+      // Default options
+      return [
+        'Strongly Agree',
+        'Agree',
+        'Neutral',
+        'Disagree',
+        'Strongly Disagree'
+      ];
+    }
+  }
+  
   // Render the current step
   const renderCurrentStep = () => {
     if (steps.length === 0) return null;
@@ -266,30 +453,15 @@ const RelationshipHealthQuestionnaire = ({ questions, onSubmit, cycle, previousD
         <h4 className="font-medium text-lg mb-4 font-roboto">{currentStep.title}</h4>
         
         <div className="space-y-6">
-          {currentStep.questions.map(question => (
-            <div key={question.id} className="border rounded-lg p-4">
-              <p className="mb-3 font-roboto">{question.text}</p>
-              
-              <div className="flex items-center justify-between bg-gray-50 p-3 rounded">
-                <span className="text-sm text-gray-500 font-roboto">Low</span>
-                <div className="flex space-x-4">
-                  {[1, 2, 3, 4, 5].map(value => (
-                    <button
-                      key={value}
-                      className={`w-10 h-10 rounded-full flex items-center justify-center 
-                                ${responses[question.id] === value 
-                                  ? 'bg-black text-white' 
-                                  : 'bg-white border hover:bg-gray-100'}`}
-                      onClick={() => handleResponseChange(question.id, value)}
-                    >
-                      {value}
-                    </button>
-                  ))}
-                </div>
-                <span className="text-sm text-gray-500 font-roboto">High</span>
-              </div>
-            </div>
-          ))}
+          {currentStep.questions.map(question => {
+            if (question.type === 'text') {
+              return renderTextQuestion(question);
+            } else if (question.type === 'select') {
+              return renderSelectQuestion(question);
+            } else {
+              return renderScaleQuestion(question);
+            }
+          })}
         </div>
         
         {error && (
@@ -317,8 +489,12 @@ const RelationshipHealthQuestionnaire = ({ questions, onSubmit, cycle, previousD
           
           <button
             onClick={handleNext}
-            disabled={loading}
-            className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 font-roboto flex items-center"
+            disabled={loading || !isCurrentStepComplete()}
+            className={`px-4 py-2 rounded font-roboto flex items-center ${
+              loading || !isCurrentStepComplete()
+                ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                : 'bg-black text-white hover:bg-gray-800'
+            }`}
           >
             {loading ? (
               <>
@@ -335,13 +511,28 @@ const RelationshipHealthQuestionnaire = ({ questions, onSubmit, cycle, previousD
       </div>
     );
   };
+  
+  // If no questions provided, show placeholder
+  if (!questions || questions.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="text-center p-6">
+          <AlertCircle size={40} className="mx-auto text-amber-500 mb-4" />
+          <h3 className="text-xl font-bold mb-2 font-roboto">No Questions Available</h3>
+          <p className="text-gray-600 font-roboto">
+            No relationship assessment questions are available at this time.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
       <div className="mb-6">
         <h3 className="text-xl font-bold mb-2 font-roboto">Relationship Health Assessment</h3>
         <p className="text-gray-600 font-roboto">
-          This questionnaire helps track your relationship health for Cycle {cycle}. 
+          This assessment helps track your relationship health for Cycle {cycle}. 
           Your responses are confidential and will help provide personalized insights.
         </p>
       </div>
@@ -369,28 +560,30 @@ const RelationshipHealthQuestionnaire = ({ questions, onSubmit, cycle, previousD
   );
 };
 
-// Cycle History Component
+/**
+ * Component to display relationship cycle history
+ */
 const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
   // Get color for metric value
   const getMetricColor = (value) => {
     if (!value) return 'text-gray-500';
-    if (value >= 4.5) return 'text-green-700';
-    if (value >= 4) return 'text-green-600';
-    if (value >= 3.5) return 'text-blue-600';
-    if (value >= 3) return 'text-yellow-600';
-    if (value >= 2) return 'text-orange-600';
-    return 'text-red-600';
+    if (value >= 4.5) return 'text-green-600';
+    if (value >= 4) return 'text-green-500';
+    if (value >= 3.5) return 'text-blue-500';
+    if (value >= 3) return 'text-yellow-500';
+    if (value >= 2) return 'text-orange-500';
+    return 'text-red-500';
   };
 
-  // Helper to render metric indicator
-  const renderMetricIndicator = (value, prevValue) => {
+  // Helper to render trend indicator
+  const renderTrendIndicator = (value, prevValue) => {
     if (!prevValue) return null;
     
     const change = value - prevValue;
     const isImproved = change > 0;
     
     return (
-      <span className={`text-xs ${isImproved ? 'text-green-600' : 'text-red-600'}`}>
+      <span className={`text-xs ${isImproved ? 'text-green-500' : 'text-red-500'}`}>
         {isImproved ? '↑' : '↓'} {Math.abs(change).toFixed(1)}
       </span>
     );
@@ -400,12 +593,9 @@ const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
     <div className="bg-white rounded-lg shadow p-6">
       <div className="flex justify-between items-center mb-4">
         <h4 className="font-medium font-roboto flex items-center">
-          <Bell size={20} className="mr-2 text-indigo-600" />
+          <Calendar size={20} className="mr-2 text-gray-600" />
           <span>Relationship Cycle History</span>
         </h4>
-        <p className="text-sm text-gray-500 font-roboto">
-          View past cycles to track your progress over time
-        </p>
       </div>
       
       {history.length === 0 ? (
@@ -413,7 +603,7 @@ const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
           <p className="text-gray-500 font-roboto">No relationship history yet. Complete your first cycle to start tracking progress.</p>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {history.slice(0, 3).map((cycle, index) => {
             const prevCycle = index < history.length - 1 ? history[index + 1] : null;
             
@@ -436,14 +626,14 @@ const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
                         </div>
                         {prevCycle && prevCycle.data?.metrics && (
                           <div className="ml-1">
-                            {renderMetricIndicator(
+                            {renderTrendIndicator(
                               cycle.data.metrics.satisfaction, 
                               prevCycle.data.metrics.satisfaction
                             )}
                           </div>
                         )}
                       </div>
-                      <div className="text-xs text-gray-600">Satisfaction</div>
+                      <div className="text-xs text-gray-600 font-roboto">Satisfaction</div>
                     </div>
                     <div className="text-center">
                       <div className="flex items-center justify-center">
@@ -452,14 +642,14 @@ const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
                         </div>
                         {prevCycle && prevCycle.data?.metrics && (
                           <div className="ml-1">
-                            {renderMetricIndicator(
+                            {renderTrendIndicator(
                               cycle.data.metrics.communication, 
                               prevCycle.data.metrics.communication
                             )}
                           </div>
                         )}
                       </div>
-                      <div className="text-xs text-gray-600">Communication</div>
+                      <div className="text-xs text-gray-600 font-roboto">Communication</div>
                     </div>
                     <div className="text-center">
                       <div className="flex items-center justify-center">
@@ -468,14 +658,14 @@ const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
                         </div>
                         {prevCycle && prevCycle.data?.metrics && (
                           <div className="ml-1">
-                            {renderMetricIndicator(
+                            {renderTrendIndicator(
                               cycle.data.metrics.connection, 
                               prevCycle.data.metrics.connection
                             )}
                           </div>
                         )}
                       </div>
-                      <div className="text-xs text-gray-600">Connection</div>
+                      <div className="text-xs text-gray-600 font-roboto">Connection</div>
                     </div>
                     <div className="text-center">
                       <div className="flex items-center justify-center">
@@ -484,22 +674,22 @@ const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
                         </div>
                         {prevCycle && prevCycle.data?.metrics && (
                           <div className="ml-1">
-                            {renderMetricIndicator(
+                            {renderTrendIndicator(
                               cycle.data.metrics.workload, 
                               prevCycle.data.metrics.workload
                             )}
                           </div>
                         )}
                       </div>
-                      <div className="text-xs text-gray-600">Workload</div>
+                      <div className="text-xs text-gray-600 font-roboto">Workload</div>
                     </div>
                   </div>
                 )}
                 
                 <div className="flex items-center justify-between">
-                  <div>
+                  <div className="flex flex-wrap gap-2">
                     {cycle.data?.meeting?.completedAt && (
-                      <span className="inline-flex items-center text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-roboto mr-2">
+                      <span className="inline-flex items-center text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-roboto">
                         <CheckCircle size={12} className="mr-1" />
                         Meeting Completed
                       </span>
@@ -507,14 +697,14 @@ const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
                     
                     {cycle.data?.questionnaireCompleted && (
                       <span className="inline-flex items-center text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-roboto">
-                        <Clipboard size={12} className="mr-1" />
-                        Questionnaire Completed
+                        <CheckCircle size={12} className="mr-1" />
+                        Assessment Completed
                       </span>
                     )}
                   </div>
                   
-                  <button className="text-blue-600 text-sm flex items-center hover:underline font-roboto">
-                    View Details <ArrowRight size={14} className="ml-1" />
+                  <button className="text-blue-500 text-sm flex items-center hover:underline font-roboto">
+                    Details <ArrowRight size={14} className="ml-1" />
                   </button>
                 </div>
               </div>
@@ -534,61 +724,69 @@ const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
   );
 };
 
-// Template Card Component
-const TemplateCard = ({ id, title, description, steps, onClose, onNavigate }) => {
+/**
+ * Modal to display relationship templates
+ */
+const TemplateModal = ({ id, title, description, steps, onClose, onNavigate }) => {
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex justify-between items-start mb-4">
-        <h3 className="text-xl font-bold font-roboto">{title}</h3>
-        <button
-          onClick={onClose}
-          className="p-1 hover:bg-gray-100 rounded"
-        >
-          <X size={20} />
-        </button>
-      </div>
-      
-      <p className="text-gray-600 mb-6 font-roboto">{description}</p>
-      
-      {steps && (
-        <div className="mb-6">
-          <h4 className="font-medium mb-3 font-roboto">Steps:</h4>
-          <ol className="list-decimal pl-5 space-y-3">
-            {steps.map((step, index) => (
-              <li key={index} className="font-roboto">
-                {typeof step === 'string' ? (
-                  step
-                ) : (
-                  <>
-                    <span className="font-medium">{step.title}</span>: {step.description}
-                  </>
-                )}
-              </li>
-            ))}
-          </ol>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-lg max-w-md w-full m-4">
+        <div className="p-6">
+          <div className="flex justify-between items-start mb-4">
+            <h3 className="text-xl font-bold font-roboto">{title}</h3>
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-gray-100 rounded"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          
+          <p className="text-gray-600 mb-6 font-roboto">{description}</p>
+          
+          {steps && (
+            <div className="mb-6">
+              <h4 className="font-medium mb-3 font-roboto">Steps:</h4>
+              <ol className="list-decimal pl-5 space-y-3">
+                {steps.map((step, index) => (
+                  <li key={index} className="font-roboto">
+                    {typeof step === 'string' ? (
+                      step
+                    ) : (
+                      <>
+                        <span className="font-medium">{step.title}</span>: {step.description}
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+          
+          <div className="flex justify-between">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded font-roboto"
+            >
+              Close
+            </button>
+            
+            <button
+              onClick={onNavigate}
+              className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 font-roboto"
+            >
+              Go to Tool
+            </button>
+          </div>
         </div>
-      )}
-      
-      <div className="flex justify-between">
-        <button
-          onClick={onClose}
-          className="px-4 py-2 border border-gray-300 rounded font-roboto"
-        >
-          Close
-        </button>
-        
-        <button
-          onClick={onNavigate}
-          className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 font-roboto"
-        >
-          Go to Tool
-        </button>
       </div>
     </div>
   );
 };
 
-// Cycle Details Modal Component
+/**
+ * Modal to display cycle details
+ */
 const CycleDetailsModal = ({ cycle, onClose }) => {
   if (!cycle) return null;
   
@@ -622,20 +820,20 @@ const CycleDetailsModal = ({ cycle, onClose }) => {
           {cycle.data?.metrics && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-lg">
               <div className="text-center">
-                <div className="text-2xl font-bold text-pink-700">{cycle.data.metrics.satisfaction?.toFixed(1) || "3.0"}</div>
-                <div className="text-sm text-gray-600">Satisfaction</div>
+                <div className="text-2xl font-bold text-pink-500">{cycle.data.metrics.satisfaction?.toFixed(1) || "3.0"}</div>
+                <div className="text-sm text-gray-600 font-roboto">Satisfaction</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-blue-700">{cycle.data.metrics.communication?.toFixed(1) || "3.0"}</div>
-                <div className="text-sm text-gray-600">Communication</div>
+                <div className="text-2xl font-bold text-blue-500">{cycle.data.metrics.communication?.toFixed(1) || "3.0"}</div>
+                <div className="text-sm text-gray-600 font-roboto">Communication</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-purple-700">{cycle.data.metrics.connection?.toFixed(1) || "3.0"}</div>
-                <div className="text-sm text-gray-600">Connection</div>
+                <div className="text-2xl font-bold text-purple-500">{cycle.data.metrics.connection?.toFixed(1) || "3.0"}</div>
+                <div className="text-sm text-gray-600 font-roboto">Connection</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-green-700">{cycle.data.metrics.workload?.toFixed(1) || "3.0"}</div>
-                <div className="text-sm text-gray-600">Workload</div>
+                <div className="text-2xl font-bold text-green-500">{cycle.data.metrics.workload?.toFixed(1) || "3.0"}</div>
+                <div className="text-sm text-gray-600 font-roboto">Workload</div>
               </div>
             </div>
           )}
@@ -665,7 +863,7 @@ const CycleDetailsModal = ({ cycle, onClose }) => {
           {/* Questionnaire Responses */}
           {cycle.data?.questionnaireResponses && Object.keys(cycle.data.questionnaireResponses).length > 0 && (
             <div>
-              <h4 className="font-medium mb-2 font-roboto">Questionnaire Responses</h4>
+              <h4 className="font-medium mb-2 font-roboto">Assessment Responses</h4>
               
               <div className="space-y-3">
                 {Object.entries(cycle.data.questionnaireResponses)
@@ -678,7 +876,13 @@ const CycleDetailsModal = ({ cycle, onClose }) => {
                         </div>
                         <div className="ml-2">
                           <div className="flex items-center bg-blue-100 px-2 py-1 rounded-full">
-                            <span className="text-sm font-medium">{response}/5</span>
+                            <span className="text-sm font-medium font-roboto">
+                              {typeof response === 'number' 
+                                ? `${response}/5` 
+                                : response?.length > 20 
+                                  ? 'Text response' 
+                                  : response}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -699,7 +903,9 @@ const CycleDetailsModal = ({ cycle, onClose }) => {
   );
 };
 
-// Main RelationshipTab Component
+/**
+ * Main RelationshipTab Component
+ */
 const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
   const { 
     selectedUser, 
@@ -728,7 +934,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
     tools: true,
     charts: true,
     history: true,
-    resources: true
+    resources: false
   });
   
   const [relationshipQuestions, setRelationshipQuestions] = useState([]);
@@ -766,7 +972,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
         
         // Check if couple needs to complete questionnaire
         const needsToComplete = !coupleData || !coupleData.questionnaireCompleted;
-        setShowQuestionnaire(needsToComplete);
+        setShowQuestionnaire(false); // Don't show automatically, user can click button
         setQuestionnaireCompleted(!needsToComplete);
         
         // Load previous cycle history
@@ -775,7 +981,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
         // Load AI insights
         try {
           if (window.AllieAIEngineService) {
-            const aiInsights = await AllieAIEngineService.generateRelationshipInsights(
+            const aiInsights = await window.AllieAIEngineService.generateRelationshipInsights(
               familyId,
               currentCycle,
               getRelationshipTrendData(),
@@ -825,7 +1031,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
           history.push({
             cycle: cycleNum,
             data: data.data || {},
-            date: data.completedAt || new Date().toISOString()
+            date: data.completedAt?.toDate?.() || new Date().toISOString()
           });
         }
       });
@@ -869,6 +1075,11 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
     if (onOpenRelationshipMeeting) {
       onOpenRelationshipMeeting();
     }
+  };
+  
+  // Start the questionnaire
+  const handleStartQuestionnaire = () => {
+    setShowQuestionnaire(true);
   };
   
   // Handle relationship questionnaire submission
@@ -933,10 +1144,11 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
       
       // First try to find exact match questions
       Object.entries(responses).forEach(([questionId, value]) => {
-        // Convert value to number if it's not already
-        const numValue = typeof value === 'number' ? value : parseInt(value);
+        // Only include numerical responses for averages
+        const numValue = typeof value === 'number' ? value : 
+                       !isNaN(parseInt(value)) ? parseInt(value) : null;
         
-        if (!isNaN(numValue)) {
+        if (numValue !== null) {
           // Check if question contains any of the keywords
           const matchesKeyword = keys.some(key => 
             questionId.toLowerCase().includes(key) || 
@@ -975,8 +1187,8 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
       
       // Create calendar event
       const event = {
-        summary: `Relationship Questionnaire (Cycle ${currentCycle})`,
-        description: `Completed the relationship health questionnaire for cycle ${currentCycle}`,
+        summary: `Relationship Assessment (Cycle ${currentCycle})`,
+        description: `Completed the relationship health assessment for cycle ${currentCycle}`,
         start: {
           dateTime: new Date().toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -1028,7 +1240,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
   };
   
   // Render section header with expand/collapse functionality
-  const renderSectionHeader = (title, sectionKey, description, borderColor = "border-pink-500", icon = <Heart size={20} className="mr-2" />, notificationCount = 0) => (
+  const renderSectionHeader = (title, sectionKey, description, borderColor = "border-black", icon = <Heart size={20} className="mr-2" />, notificationCount = 0) => (
     <div className={`border-l-4 ${borderColor} p-4 flex justify-between items-center cursor-pointer bg-white rounded-lg shadow-sm mb-2`} 
          onClick={() => toggleSection(sectionKey)}>
       <div className="flex-1">
@@ -1059,7 +1271,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
     switch(templateId) {
       case 'daily-checkin':
         return (
-          <TemplateCard
+          <TemplateModal
             id="daily-checkin"
             title="5-Minute Check-in Template"
             description="A quick daily check-in helps maintain connection amid busy lives. This simple format takes just 5 minutes but keeps your relationship strong."
@@ -1077,7 +1289,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
         
       case 'gratitude-practice':
         return (
-          <TemplateCard
+          <TemplateModal
             id="gratitude-practice"
             title="Daily Gratitude Practice"
             description="Research shows that expressing appreciation regularly strengthens relationships and increases happiness."
@@ -1095,7 +1307,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
         
       case 'date-night':
         return (
-          <TemplateCard
+          <TemplateModal
             id="date-night"
             title="Meaningful Date Night"
             description="Regular date nights are essential for maintaining connection and romance in your relationship."
@@ -1170,7 +1382,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
     <div className="space-y-6">
       {/* Introduction Card */}
       <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-start mb-6">
+        <div className="flex items-start mb-4">
           <div className="mr-4 flex-shrink-0">
             <Heart size={32} className="text-pink-500" />
           </div>
@@ -1183,19 +1395,18 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
           </div>
         </div>
 
-        {/* Cycle Status Tracker */}
-        <CycleStatusTracker 
+        {/* Cycle Manager */}
+        <CycleManager 
           cycle={currentCycle}
           cycleData={cycleData}
-          questionnaireCompleted={questionnaireCompleted}
-          onStartQuestionnaire={() => setShowQuestionnaire(true)}
+          onStartQuestionnaire={handleStartQuestionnaire}
           onStartMeeting={handleOpenRelationshipMeeting}
         />
       </div>
 
       {/* Relationship Health Questionnaire - Only show when needed */}
       {showQuestionnaire && (
-        <RelationshipHealthQuestionnaire 
+        <RelationshipQuestionnaire 
           questions={relationshipQuestions}
           onSubmit={handleQuestionnaireSubmit}
           cycle={currentCycle}
@@ -1209,8 +1420,8 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
         "AI Relationship Insights", 
         "insights", 
         "Personalized recommendations based on your relationship data",
-        "border-purple-500", 
-        <Brain size={20} className="mr-2 text-purple-600" />
+        "border-black", 
+        <Brain size={20} className="mr-2 text-gray-600" />
       )}
       {expandedSections.insights && (
         <div className="space-y-4">
@@ -1219,7 +1430,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
               onClick={async () => {
                 try {
                   // Show loading message or spinner
-                  const aiInsights = await AllieAIEngineService.generateRelationshipInsights(
+                  const aiInsights = await window.AllieAIEngineService?.generateRelationshipInsights(
                     familyId,
                     currentCycle,
                     getRelationshipTrendData(),
@@ -1247,13 +1458,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
           />
           
           {/* Template Modal */}
-          {templateToShow && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg shadow-lg max-w-md w-full m-4">
-                {renderTemplate(templateToShow)}
-              </div>
-            </div>
-          )}
+          {templateToShow && renderTemplate(templateToShow)}
         </div>
       )}
 
@@ -1262,8 +1467,8 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
         "Relationship Charts", 
         "charts", 
         "Track your relationship progress over time",
-        "border-green-500", 
-        <Target size={20} className="mr-2 text-green-600" />
+        "border-black", 
+        <Target size={20} className="mr-2 text-gray-600" />
       )}
       {expandedSections.charts && (
         <div id="relationship-charts" ref={chartsRef} className="space-y-6">
@@ -1277,8 +1482,8 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
         "Relationship Tools", 
         "tools", 
         "Tools to strengthen your connection daily",
-        "border-blue-500", 
-        <Clock size={20} className="mr-2 text-blue-600" />
+        "border-black", 
+        <Clock size={20} className="mr-2 text-gray-600" />
       )}
       {expandedSections.tools && (
         <div id="relationship-tools" ref={toolsRef} className="space-y-6">
@@ -1299,8 +1504,8 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
         "Relationship History", 
         "history", 
         "View your past relationship cycles and progress",
-        "border-indigo-500", 
-        <Bell size={20} className="mr-2 text-indigo-600" />
+        "border-black", 
+        <Calendar size={20} className="mr-2 text-gray-600" />
       )}
       {expandedSections.history && (
         <RelationshipCycleHistory 
@@ -1314,7 +1519,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
         "Relationship Resources", 
         "resources", 
         "Research-backed information to strengthen your relationship",
-        "border-gray-500", 
+        "border-black", 
         <Info size={20} className="mr-2 text-gray-600" />
       )}
       {expandedSections.resources && (
@@ -1322,7 +1527,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
           <div className="space-y-4">
             <div className="border rounded-lg p-4">
               <h5 className="font-medium mb-2 font-roboto flex items-center">
-                <CheckCircle size={16} className="mr-2 text-green-600" />
+                <CheckCircle size={16} className="mr-2 text-gray-600" />
                 The Connection Between Balance and Relationship Health
               </h5>
               <p className="text-sm text-gray-600 font-roboto">
@@ -1332,7 +1537,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
             
             <div className="border rounded-lg p-4">
               <h5 className="font-medium mb-2 font-roboto flex items-center">
-                <CheckCircle size={16} className="mr-2 text-green-600" />
+                <CheckCircle size={16} className="mr-2 text-gray-600" />
                 How Children Benefit from Strong Parental Relationships
               </h5>
               <p className="text-sm text-gray-600 font-roboto">
@@ -1342,7 +1547,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
             
             <div className="border rounded-lg p-4">
               <h5 className="font-medium mb-2 font-roboto flex items-center">
-                <CheckCircle size={16} className="mr-2 text-green-600" />
+                <CheckCircle size={16} className="mr-2 text-gray-600" />
                 Building Connection During Busy Family Life
               </h5>
               <p className="text-sm text-gray-600 font-roboto">
@@ -1357,7 +1562,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="border rounded-lg p-4">
                   <div className="flex items-start">
-                    <Lightbulb size={16} className="text-yellow-500 mr-2 mt-1" />
+                    <Star size={16} className="text-yellow-500 mr-2 mt-1" />
                     <div>
                       <h5 className="font-medium text-sm font-roboto">The 5 Love Languages</h5>
                       <p className="text-xs text-gray-600 font-roboto">Gary Chapman</p>
@@ -1367,7 +1572,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
                 
                 <div className="border rounded-lg p-4">
                   <div className="flex items-start">
-                    <Lightbulb size={16} className="text-yellow-500 mr-2 mt-1" />
+                    <Star size={16} className="text-yellow-500 mr-2 mt-1" />
                     <div>
                       <h5 className="font-medium text-sm font-roboto">Fair Play</h5>
                       <p className="text-xs text-gray-600 font-roboto">Eve Rodsky</p>
@@ -1377,7 +1582,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
                 
                 <div className="border rounded-lg p-4">
                   <div className="flex items-start">
-                    <Lightbulb size={16} className="text-yellow-500 mr-2 mt-1" />
+                    <Star size={16} className="text-yellow-500 mr-2 mt-1" />
                     <div>
                       <h5 className="font-medium text-sm font-roboto">And Baby Makes Three</h5>
                       <p className="text-xs text-gray-600 font-roboto">John & Julie Gottman</p>
