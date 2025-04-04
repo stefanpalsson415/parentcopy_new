@@ -618,247 +618,102 @@ const renderCompletionScreen = () => {
 
 
 
-  // Login Form UI
-  const renderLoginForm = () => {
-    return (
-      <div className="min-h-screen bg-white flex flex-col">
-        {familyMembers.some(m => !m.profilePicture) && (
-  <div className="flex-1 flex flex-col items-center justify-center p-6">
-    <div className="bg-gradient-to-r from-pink-100 to-purple-100 p-4 rounded-lg shadow-sm mb-6 max-w-md w-full">
-      <div className="flex items-start">
-        <Camera className="text-purple-600 mr-3 mt-1 flex-shrink-0" size={20} />
-        <div>
-          <h4 className="font-medium text-purple-800 font-roboto">Make Allie Personal!</h4>
-          <p className="text-sm text-purple-700 mt-1 font-roboto">
-            Adding family photos makes Allie feel more personalized and helps us create a better experience just for you.
-          </p>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-  <div className="flex-1 flex flex-col items-center justify-center p-6">
-  {familyMembers.some(m => !m.profilePicture) && (
-    <div className="bg-gradient-to-r from-pink-100 to-purple-100 p-4 rounded-lg shadow-sm mb-6 max-w-md w-full">
-      <div className="flex items-start">
-        <Camera className="text-purple-600 mr-3 mt-1 flex-shrink-0" size={20} />
-        <div>
-          <h4 className="font-medium text-purple-800 font-roboto">Make Allie Personal!</h4>
-          <p className="text-sm text-purple-700 mt-1 font-roboto">
-            Adding family photos makes Allie feel more personalized and helps us create a better experience just for you.
-          </p>
-        </div>
-      </div>
-    </div>
-  )}
-    {familyMembers.some(m => !m.profilePicture) && (
-      <div className="bg-gradient-to-r from-pink-100 to-purple-100 p-4 rounded-lg shadow-sm mb-6 max-w-md w-full">
-        <div className="flex items-start">
-          <Camera className="text-purple-600 mr-3 mt-1 flex-shrink-0" size={20} />
-          <div>
-            <h4 className="font-medium text-purple-800 font-roboto">Make Allie Personal!</h4>
-            <p className="text-sm text-purple-700 mt-1 font-roboto">
-              Adding family photos makes Allie feel more personalized and helps us create a better experience just for you.
+  // Updated renderLoginForm function to replace in FamilySelectionScreen.jsx
+const renderLoginForm = () => {
+  return (
+    <div className="min-h-screen bg-white flex flex-col">
+      <div className="flex-1 flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <a href="/" className="text-3xl font-bold text-black mb-2 inline-block">Allie</a>
+            <p className="text-gray-600 font-roboto">
+              Log in to access your family's workload balancer
             </p>
           </div>
-        </div>
-      </div>
-    )}
-          <div className="w-full max-w-md">
-            {/* Header */}
-            <div className="text-center mb-8">
-  <a href="/" className="text-3xl font-bold text-black mb-2 inline-block hover:underline">Allie</a>
-  <p className="text-gray-600 font-roboto">
-    Log in to access your family's workload balancer
-  </p>
-</div>
+          
+          {/* Login Form */}
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <h2 className="text-xl font-semibold mb-4 text-center font-roboto">Log In</h2>
             
-            {/* Login Form */}
-            <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-              <h2 className="text-xl font-semibold mb-4 text-center">Log In</h2>
-              
-              {loginError && (
-                <div className="bg-red-50 text-red-700 p-3 rounded mb-4 text-sm">
-                  {loginError}
+            {loginError && (
+              <div className="bg-red-50 text-red-700 p-3 rounded mb-4 text-sm font-roboto">
+                {loginError}
+              </div>
+            )}
+            
+            <form onSubmit={handleLogin}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">Email</label>
+                  <div className="flex border rounded-md overflow-hidden">
+                    <div className="bg-gray-100 p-2 flex items-center justify-center">
+                      <Mail size={18} className="text-gray-500" />
+                    </div>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="flex-1 p-2 focus:outline-none font-roboto"
+                      placeholder="Enter your email"
+                      required
+                    />
+                  </div>
                 </div>
-              )}
-              <div className="mt-4 relative">
-  <div className="absolute inset-0 flex items-center">
-    <div className="w-full border-t border-gray-300"></div>
-  </div>
-  <div className="relative flex justify-center text-sm">
-    <span className="px-2 bg-white text-gray-500">or</span>
-  </div>
-</div>
-
-<button
-  onClick={async () => {
-    setIsLoggingIn(true);
-    setLoginError('');
-    try {
-      // Call Google sign-in and properly handle the async response
-      const user = await signInWithGoogle();
-      if (user) {
-        console.log("Successfully signed in with Google:", user.email);
-        
-        // Load family data for this user
-        const families = await loadAllFamilies(user.uid);
-        if (families && families.length > 0) {
-          await loadFamilyData(families[0].familyId);
-        }
-        
-        setShowLoginForm(false);
-      } else {
-        // User cancelled or something went wrong but was handled in the service
-        setIsLoggingIn(false);
-      }
-    } catch (error) {
-      console.error("Google sign-in error:", error);
-      setLoginError('Google sign-in failed: ' + (error.message || 'Unknown error'));
-      setIsLoggingIn(false);
-    }
-  }}
-  disabled={isLoggingIn}
-  className="w-full mt-4 py-2 border border-gray-300 rounded-md text-black hover:bg-gray-50 flex items-center justify-center"
->
-  <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#4285F4"/>
-  </svg>
-  Sign in with Google
-</button>
-              
-              
-              <form onSubmit={handleLogin}>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                    <div className="flex border rounded-md overflow-hidden">
-                      <div className="bg-gray-100 p-2 flex items-center justify-center">
-                        <Mail size={18} className="text-gray-500" />
-                      </div>
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="flex-1 p-2 focus:outline-none"
-                        placeholder="Enter your email"
-                        required
-                      />
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">Password</label>
+                  <div className="flex border rounded-md overflow-hidden">
+                    <div className="bg-gray-100 p-2 flex items-center justify-center">
+                      <Lock size={18} className="text-gray-500" />
                     </div>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="flex-1 p-2 focus:outline-none font-roboto"
+                      placeholder="Enter your password"
+                      required
+                    />
                   </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                    <div className="flex border rounded-md overflow-hidden">
-                      <div className="bg-gray-100 p-2 flex items-center justify-center">
-                        <Lock size={18} className="text-gray-500" />
-                      </div>
-                      <input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="flex-1 p-2 focus:outline-none"
-                        placeholder="Enter your password"
-                        required
-                      />
-                    </div>
-                  </div>
+                </div>
 
-                  {/* Family Name and Photo */}
-<div className="flex items-center">
-  {/* Family photo */}
-  <div className="mr-4 hidden md:block relative">
-    <div className="w-12 h-12 rounded-lg overflow-hidden border-2 border-white shadow-lg">
-      <img 
-        src={familyPicture || '/favicon.svg'}
-        alt={`${familyName || 'Family'} Photo`}
-        className="w-full h-full object-cover"
-      />
-    </div>
-    <button
-      className="absolute bottom-0 right-0 bg-black text-white p-1 rounded-full"
-      onClick={() => {
-        setUploadForMember({id: 'family', name: 'Family'});
-        setUploadType('family');
-        setShowProfileUpload(true);
-      }}
-    >
-      <Camera size={8} />
-    </button>
-  </div>
-  <div className="flex flex-col">
-    <h1 className="text-xl font-bold font-roboto">Allie</h1>
-    <p className="text-sm font-roboto">Balance family responsibilities together</p>
-    <p className="text-xs text-gray-300 font-roboto">The {familyName ? familyName.split(' ')[0] : ''} Family</p>
-  </div>
-</div>
-                  
-<button
-  type="submit"
-  disabled={isLoggingIn}
-  className="w-full py-2 bg-black text-white rounded-md hover:bg-gray-800 flex items-center justify-center"
->
-  {isLoggingIn ? (
-    <>
-      <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-      Logging in...
-    </>
-  ) : (
-    'Log In'
-  )}
-</button>
-
-
-{window.location.hostname === "localhost" && (
-  <button
-    onClick={async () => {
-      setIsLoggingIn(true);
-      try {
-        // Use the development login function
-        const user = await DatabaseService.signInForDevelopment();
-        
-        // Manually update UI/state to simulate login
-        console.log("Development login successful with user:", user);
-        
-        // Attempt to load families for this user
-        await loadAllFamilies(user.uid);
-      } catch (error) {
-        console.error("Development login error:", error);
-        setLoginError('Development login failed');
-      } finally {
-        setIsLoggingIn(false);
-      }
-    }}
-    className="w-full mt-2 py-2 border border-orange-300 rounded-md text-orange-700 bg-orange-50 hover:bg-orange-100 flex items-center justify-center"
-  >
-    DEV MODE: Test Login
-  </button>
-)}
-
-
-
-               </div>
-              </form>
-            </div>
-            
-            {/* Create New Family Button */}
-            <button
-              onClick={() => navigate('/onboarding')}
-              className="w-full py-3 px-4 rounded-md font-medium text-black border border-black hover:bg-gray-50 flex items-center justify-center"
-            >
-              <PlusCircle size={16} className="mr-2" />
-              Create New Family
-            </button>
+                <button
+                  type="submit"
+                  disabled={isLoggingIn}
+                  className="w-full py-2 bg-black text-white rounded-md hover:bg-gray-800 flex items-center justify-center font-roboto"
+                >
+                  {isLoggingIn ? (
+                    <>
+                      <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Logging in...
+                    </>
+                  ) : (
+                    'Log In'
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
-        </div>
-        
-        {/* Footer */}
-        <div className="p-4 text-center text-sm text-gray-500">
-          <p>Allie v1.0 - Balance family responsibilities together</p>
+          
+          {/* Create New Family Button */}
+          <button
+            onClick={() => navigate('/onboarding')}
+            className="w-full py-3 px-4 rounded-md font-medium text-black border border-black hover:bg-gray-50 flex items-center justify-center font-roboto"
+          >
+            <PlusCircle size={16} className="mr-2" />
+            Create New Family
+          </button>
         </div>
       </div>
-    );
-  };
+      
+      {/* Footer */}
+      <div className="p-4 text-center text-sm text-gray-500 font-roboto">
+        <p>Allie v1.0 - Balance family responsibilities together</p>
+      </div>
+    </div>
+  );
+};
   
   // Empty state UI for when there are no families
   const renderEmptyState = () => {
