@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useFamily } from '../../contexts/FamilyContext';
-import { Heart, Plus, MessageSquare, User, Calendar, X, Edit, Trash2, Send, Smartphone } from 'lucide-react';
-import { doc, setDoc, collection } from 'firebase/firestore';
+import { Heart, Plus, MessageSquare, Edit, Trash2, Send, Star, Check, X } from 'lucide-react';
+import { doc, setDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase';
-import { serverTimestamp } from 'firebase/firestore';
 
-const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSending = false }) => {
+const UpdatedGratitudeTracker = () => {
   const { familyId, familyMembers, selectedUser } = useFamily();
   
   const [gratitudes, setGratitudes] = useState([]);
@@ -21,8 +20,10 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
     thisWeek: 0,
     categories: {}
   });
-  const [showSmsConfirm, setShowSmsConfirm] = useState(false);
-  const [gratitudeToSend, setGratitudeToSend] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [deliveryMethod, setDeliveryMethod] = useState('app');
+  const [sendingNotification, setSendingNotification] = useState(false);
+  const [notificationSent, setNotificationSent] = useState(false);
   
   // Load gratitude data
   useEffect(() => {
@@ -37,7 +38,10 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
         
         const loadedGratitudes = [];
         querySnapshot.forEach((doc) => {
-          loadedGratitudes.push(doc.data());
+          loadedGratitudes.push({
+            id: doc.id,
+            ...doc.data()
+          });
         });
         
         // If no saved gratitudes are found, use mock data
@@ -74,14 +78,10 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
         
         // Calculate stats
         calculateStats(loadedGratitudes.length > 0 ? loadedGratitudes : mockGratitudes);
+        setLoading(false);
       } catch (error) {
         console.error("Error loading gratitude data:", error);
-        // Fall back to mock data if load fails
-        const mockGratitudes = [
-          // same as above
-        ];
-        setGratitudes(mockGratitudes);
-        calculateStats(mockGratitudes);
+        setLoading(false);
       }
     };
     
@@ -137,32 +137,82 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
       familyId: familyId // Important for Firebase queries
     };
     
-    const updatedGratitudes = editIndex !== null 
-      ? gratitudes.map((g, i) => i === editIndex ? gratitude : g)
-      : [gratitude, ...gratitudes];
-    
-    setGratitudes(updatedGratitudes);
-    calculateStats(updatedGratitudes);
-    
-    // Reset form
-    setNewGratitude({
-      text: '',
-      recipientId: '',
-      category: 'appreciation'
-    });
-    setShowAddModal(false);
-    setEditIndex(null);
-    
-    // Save to Firebase
     try {
-      const gratitudeRef = doc(collection(db, "gratitudes"), gratitude.id);
-      await setDoc(gratitudeRef, {
+      // Save to Firebase
+      const gratitudeRef = collection(db, "gratitudes");
+      const docRef = await addDoc(gratitudeRef, {
         ...gratitude,
         createdAt: serverTimestamp()
       });
-      console.log("Gratitude saved successfully");
+      
+      // Add document ID to the gratitude object
+      gratitude.id = docRef.id;
+      
+      // Update state
+      const updatedGratitudes = editIndex !== null 
+        ? gratitudes.map((g, i) => i === editIndex ? gratitude : g)
+        : [gratitude, ...gratitudes];
+      
+      setGratitudes(updatedGratitudes);
+      calculateStats(updatedGratitudes);
+      
+      // If delivery method is selected, send notification
+      if (deliveryMethod === 'app' || deliveryMethod === 'email') {
+        await sendNotification(gratitude, recipient, deliveryMethod);
+      }
+      
+      // Reset form
+      setNewGratitude({
+        text: '',
+        recipientId: '',
+        category: 'appreciation'
+      });
+      setShowAddModal(false);
+      setEditIndex(null);
+      setNotificationSent(false);
+      setDeliveryMethod('app');
+      
+      return true;
     } catch (error) {
       console.error("Error saving gratitude:", error);
+      return false;
+    }
+  };
+  
+  // Send notification
+  const sendNotification = async (gratitude, recipient, method) => {
+    setSendingNotification(true);
+    
+    try {
+      if (method === 'app') {
+        // Create in-app notification
+        await addDoc(collection(db, "notifications"), {
+          userId: recipient.id,
+          type: 'gratitude',
+          title: `${gratitude.fromName} sent you ${gratitude.category}`,
+          message: gratitude.text,
+          read: false,
+          date: serverTimestamp(),
+          gratitudeId: gratitude.id
+        });
+      } else if (method === 'email') {
+        // In a real app, this would send an email
+        // For now, we'll just simulate it
+        console.log(`Email notification sent to ${recipient.name}:`, gratitude);
+      }
+      
+      // Update the gratitude to mark as delivered
+      await setDoc(doc(db, "gratitudes", gratitude.id), {
+        delivered: true,
+        deliveryMethod: method,
+        deliveredAt: serverTimestamp()
+      }, { merge: true });
+      
+      setNotificationSent(true);
+    } catch (error) {
+      console.error("Error sending notification:", error);
+    } finally {
+      setSendingNotification(false);
     }
   };
   
@@ -182,21 +232,24 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
   
   // Delete gratitude
   const deleteGratitude = async (index) => {
-    const confirmed = window.confirm("Are you sure you want to delete this appreciation?");
+    const confirmed = window.confirm("Are you sure you want to delete this?");
     if (!confirmed) return;
     
-    const gratitudeToDelete = gratitudes[index];
-    const updatedGratitudes = gratitudes.filter((_, i) => i !== index);
-    setGratitudes(updatedGratitudes);
-    calculateStats(updatedGratitudes);
-    
-    // Delete from Firebase
     try {
-      const gratitudeRef = doc(db, "gratitudes", gratitudeToDelete.id);
-      await deleteDoc(gratitudeRef);
-      console.log("Gratitude deleted successfully");
+      const gratitudeToDelete = gratitudes[index];
+      
+      // Delete from Firebase
+      await deleteDoc(doc(db, "gratitudes", gratitudeToDelete.id));
+      
+      // Update state
+      const updatedGratitudes = gratitudes.filter((_, i) => i !== index);
+      setGratitudes(updatedGratitudes);
+      calculateStats(updatedGratitudes);
+      
+      return true;
     } catch (error) {
       console.error("Error deleting gratitude:", error);
+      return false;
     }
   };
   
@@ -206,57 +259,14 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   };
   
-  // Handle SMS sending
-  const handleSendSms = async (gratitude) => {
-    // First check if SMS is enabled
-    if (!smsEnabled) {
-      // If not enabled, prompt to enable
-      setShowSmsConfirm(false);
-      if (onEnableSms) {
-        onEnableSms();
-      }
-      return;
-    }
+  // Send a gratitude directly
+  const handleDirectSend = async (gratitude) => {
+    if (!gratitude.toId) return;
     
-    // If enabled, confirm sending
-    if (!showSmsConfirm) {
-      setGratitudeToSend(gratitude);
-      setShowSmsConfirm(true);
-      return;
-    }
+    const recipient = familyMembers.find(m => m.id === gratitude.toId);
     
-    // Send the SMS
-    try {
-      const success = await onSendSms(gratitudeToSend);
-      
-      if (success) {
-        // Update the gratitude to mark as sent
-        const updatedGratitudes = gratitudes.map(g => 
-          g.id === gratitudeToSend.id 
-            ? { ...g, sentViaSms: true, smsSentAt: new Date().toISOString() } 
-            : g
-        );
-        
-        setGratitudes(updatedGratitudes);
-        
-        // Update in Firebase
-        try {
-          const gratitudeRef = doc(db, "gratitudes", gratitudeToSend.id);
-          await updateDoc(gratitudeRef, {
-            sentViaSms: true,
-            smsSentAt: serverTimestamp()
-          });
-        } catch (updateError) {
-          console.error("Error updating gratitude with SMS status:", updateError);
-        }
-        
-        // Clear confirmation
-        setShowSmsConfirm(false);
-        setGratitudeToSend(null);
-      }
-    } catch (error) {
-      console.error("Error sending SMS:", error);
-      alert("Failed to send SMS. Please try again.");
+    if (recipient) {
+      await sendNotification(gratitude, recipient, 'app');
     }
   };
   
@@ -283,6 +293,15 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
     return "";
   };
   
+  // Loading state
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow p-6 flex justify-center items-center h-64">
+        <div className="w-10 h-10 border-4 border-t-transparent border-black rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+  
   return (
     <div className="bg-white rounded-lg shadow">
       <div className="p-6">
@@ -298,6 +317,7 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
               });
               setEditIndex(null);
               setShowAddModal(true);
+              setNotificationSent(false);
             }}
             className="px-3 py-1 bg-black text-white rounded-full flex items-center text-sm font-roboto"
           >
@@ -310,26 +330,6 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
           Regular expressions of gratitude and affirmation strengthen your relationship and improve emotional connection.
         </p>
         
-        {/* SMS Capability Callout */}
-        {!smsEnabled && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg">
-            <div className="flex items-start">
-              <Smartphone size={16} className="text-blue-500 mr-2 mt-1 flex-shrink-0" />
-              <div>
-                <p className="text-sm text-blue-700 font-roboto">
-                  Enable SMS sending to share your appreciation directly to your partner's phone.
-                </p>
-                <button
-                  onClick={onEnableSms}
-                  className="mt-2 text-xs px-3 py-1 bg-blue-500 text-white rounded font-roboto"
-                >
-                  Set Up SMS
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-        
         {/* Stats Display */}
         <div className="grid grid-cols-3 gap-3 mb-5">
           <div className="bg-pink-50 p-3 rounded-lg text-center border border-pink-100">
@@ -339,7 +339,7 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
           
           <div className="bg-blue-50 p-3 rounded-lg text-center border border-blue-100">
             <div className="text-2xl font-bold text-blue-700 font-roboto">{stats.thisWeek}</div>
-            <div className="text-xs text-blue-700 font-roboto">This Cycle</div>
+            <div className="text-xs text-blue-700 font-roboto">This Week</div>
           </div>
           
           <div className="bg-purple-50 p-3 rounded-lg text-center border border-purple-100">
@@ -385,18 +385,14 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
                         </div>
                         
                         <div className="flex space-x-1">
-                          {smsEnabled && gratitude.fromId === selectedUser.id && !gratitude.sentViaSms && (
+                          {/* Show send button if from current user and not already delivered */}
+                          {gratitude.fromId === selectedUser.id && !gratitude.delivered && (
                             <button 
-                              onClick={() => handleSendSms(gratitude)}
-                              disabled={isSending}
+                              onClick={() => handleDirectSend(gratitude)}
                               className="text-blue-500 hover:text-blue-700"
-                              title="Send via SMS"
+                              title="Send via App"
                             >
-                              {isSending && gratitudeToSend?.id === gratitude.id ? (
-                                <div className="w-4 h-4 border-2 border-t-transparent border-blue-500 rounded-full animate-spin"></div>
-                              ) : (
-                                <Send size={14} />
-                              )}
+                              <Send size={14} />
                             </button>
                           )}
 
@@ -432,10 +428,10 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
                           {gratitude.category.charAt(0).toUpperCase() + gratitude.category.slice(1)}
                         </span>
                         
-                        {gratitude.sentViaSms && (
+                        {gratitude.delivered && (
                           <span className="text-xs text-gray-500 flex items-center">
-                            <Smartphone size={12} className="mr-1" />
-                            Sent via SMS
+                            <Check size={12} className="mr-1" />
+                            Delivered via {gratitude.deliveryMethod || 'app'}
                           </span>
                         )}
                       </div>
@@ -454,7 +450,7 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold font-roboto">
-                {editIndex !== null ? 'Edit Appreciation' : 'Express Appreciation'}
+                {editIndex !== null ? 'Edit Expression' : 'Express Appreciation'}
               </h3>
               <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
@@ -525,6 +521,46 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
                 ></textarea>
               </div>
               
+              {/* Delivery method */}
+              <div>
+                <label className="block text-sm font-medium mb-1 font-roboto">Delivery method:</label>
+                <div className="space-y-2">
+                  <label className="flex items-center text-sm font-roboto">
+                    <input 
+                      type="radio" 
+                      name="deliveryMethod" 
+                      value="app" 
+                      checked={deliveryMethod === 'app'}
+                      onChange={() => setDeliveryMethod('app')}
+                      className="mr-2"
+                    />
+                    App notification
+                  </label>
+                  <label className="flex items-center text-sm font-roboto">
+                    <input 
+                      type="radio" 
+                      name="deliveryMethod" 
+                      value="email" 
+                      checked={deliveryMethod === 'email'}
+                      onChange={() => setDeliveryMethod('email')}
+                      className="mr-2"
+                    />
+                    Email
+                  </label>
+                  <label className="flex items-center text-sm font-roboto">
+                    <input 
+                      type="radio" 
+                      name="deliveryMethod" 
+                      value="none" 
+                      checked={deliveryMethod === 'none'}
+                      onChange={() => setDeliveryMethod('none')}
+                      className="mr-2"
+                    />
+                    Don't send (just save)
+                  </label>
+                </div>
+              </div>
+              
               {/* Suggestions */}
               <div>
                 <label className="block text-sm font-medium mb-1 font-roboto">Need inspiration?</label>
@@ -541,21 +577,11 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
                 </div>
               </div>
               
-              {/* SMS Option (if enabled) */}
-              {smsEnabled && (
-                <div className="mt-2">
-                  <label className="flex items-center text-sm font-roboto">
-                    <input 
-                      type="checkbox" 
-                      className="mr-2" 
-                      checked={newGratitude.sendViaSms}
-                      onChange={(e) => setNewGratitude({
-                        ...newGratitude, 
-                        sendViaSms: e.target.checked
-                      })}
-                    />
-                    Send via SMS after saving
-                  </label>
+              {/* Notification status */}
+              {notificationSent && (
+                <div className="p-3 bg-green-50 text-green-700 rounded-lg text-sm font-roboto flex items-center">
+                  <Check size={16} className="mr-2" />
+                  Notification sent successfully!
                 </div>
               )}
             </div>
@@ -569,61 +595,14 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
               </button>
               <button
                 onClick={addGratitude}
-                disabled={!newGratitude.text || !newGratitude.recipientId}
-                className={`px-4 py-2 rounded font-roboto ${
-                  newGratitude.text && newGratitude.recipientId 
-                    ? 'bg-black text-white' 
-                    : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                disabled={!newGratitude.text || !newGratitude.recipientId || sendingNotification}
+                className={`px-4 py-2 rounded font-roboto flex items-center ${
+                  !newGratitude.text || !newGratitude.recipientId || sendingNotification
+                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                    : 'bg-black text-white'
                 }`}
               >
-                {editIndex !== null ? 'Update' : 'Express'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* SMS Confirmation Modal */}
-      {showSmsConfirm && gratitudeToSend && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold font-roboto">Send as SMS</h3>
-              <button 
-                onClick={() => {
-                  setShowSmsConfirm(false);
-                  setGratitudeToSend(null);
-                }} 
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <p className="mb-4 font-roboto">
-              Send this message directly to {gratitudeToSend.toName}'s phone:
-            </p>
-            
-            <div className="p-3 bg-gray-50 rounded-lg mb-4 text-sm font-roboto">
-              {gratitudeToSend.text}
-            </div>
-            
-            <div className="flex space-x-3 justify-end">
-              <button
-                onClick={() => {
-                  setShowSmsConfirm(false);
-                  setGratitudeToSend(null);
-                }}
-                className="px-4 py-2 border rounded font-roboto"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleSendSms(gratitudeToSend)}
-                disabled={isSending}
-                className="px-4 py-2 bg-black text-white rounded font-roboto flex items-center"
-              >
-                {isSending ? (
+                {sendingNotification ? (
                   <>
                     <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2"></div>
                     Sending...
@@ -631,7 +610,7 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
                 ) : (
                   <>
                     <Send size={16} className="mr-2" />
-                    Send SMS
+                    {editIndex !== null ? 'Update' : 'Send'}
                   </>
                 )}
               </button>
@@ -643,4 +622,4 @@ const GratitudeTracker = ({ smsEnabled = false, onEnableSms, onSendSms, isSendin
   );
 };
 
-export default GratitudeTracker;
+export default UpdatedGratitudeTracker;

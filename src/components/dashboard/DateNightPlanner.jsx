@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useFamily } from '../../contexts/FamilyContext';
-import { Calendar, Plus, Heart, Star, X, Clock, CheckCircle, Trash2, Edit } from 'lucide-react';
+import { Calendar, Plus, Heart, Star, X, Clock, CheckCircle, Trash2, Edit, Users, AlertCircle } from 'lucide-react';
+import CalendarService from '../../services/CalendarService';
 
-const DateNightPlanner = () => {
-  const { familyId } = useFamily();
+const EnhancedDateNightPlanner = () => {
+  const { familyId, familyMembers, selectedUser } = useFamily();
   
   const [dateNights, setDateNights] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -14,47 +15,61 @@ const DateNightPlanner = () => {
     date: '',
     time: '19:00',
     category: 'dining',
-    completed: false
+    completed: false,
+    participants: []
   });
   const [editIndex, setEditIndex] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isAddingToCalendar, setIsAddingToCalendar] = useState(false);
+  const [calendarError, setCalendarError] = useState(null);
   
   // Load date night data
   useEffect(() => {
     const loadDateNightData = async () => {
       if (!familyId) return;
       
-      // In a real implementation, this would load from database
-      // For now, using mock data
-      const today = new Date();
-      const nextWeek = new Date(today);
-      nextWeek.setDate(today.getDate() + 7);
-      
-      const mockDateNights = [
-        { 
-          id: '1', 
-          title: 'Dinner at Giovanni\'s',
-          description: 'That Italian place we\'ve been wanting to try',
-          date: nextWeek.toISOString().split('T')[0],
-          time: '19:00',
-          category: 'dining',
-          completed: false
-        },
-        { 
-          id: '2', 
-          title: 'Movie Night',
-          description: 'Watch that new movie that just came out',
-          date: '2023-10-15', // Past date
-          time: '20:00',
-          category: 'entertainment',
-          completed: true
-        }
-      ];
-      
-      setDateNights(mockDateNights);
+      try {
+        // In a real implementation, this would load from database
+        // For now, using mock data
+        const today = new Date();
+        const nextWeek = new Date(today);
+        nextWeek.setDate(today.getDate() + 7);
+        
+        const mockDateNights = [
+          { 
+            id: '1', 
+            title: 'Dinner at Giovanni\'s',
+            description: 'That Italian place we\'ve been wanting to try',
+            date: nextWeek.toISOString().split('T')[0],
+            time: '19:00',
+            category: 'dining',
+            completed: false,
+            participants: familyMembers
+              .filter(m => m.role === 'parent')
+              .map(m => ({ id: m.id, name: m.name }))
+          },
+          { 
+            id: '2', 
+            title: 'Movie Night',
+            description: 'Watch that new movie that just came out',
+            date: '2023-10-15', // Past date
+            time: '20:00',
+            category: 'entertainment',
+            completed: true,
+            participants: familyMembers.map(m => ({ id: m.id, name: m.name }))
+          }
+        ];
+        
+        setDateNights(mockDateNights);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error loading date night data:", error);
+        setLoading(false);
+      }
     };
     
     loadDateNightData();
-  }, [familyId]);
+  }, [familyId, familyMembers]);
   
   // Add new date night
   const addDateNight = () => {
@@ -81,7 +96,8 @@ const DateNightPlanner = () => {
       date: '',
       time: '19:00',
       category: 'dining',
-      completed: false
+      completed: false,
+      participants: []
     });
     setShowAddModal(false);
     setEditIndex(null);
@@ -111,7 +127,8 @@ const DateNightPlanner = () => {
       date: dateNight.date,
       time: dateNight.time,
       category: dateNight.category,
-      completed: dateNight.completed
+      completed: dateNight.completed,
+      participants: dateNight.participants || []
     });
     
     setEditIndex(index);
@@ -134,6 +151,89 @@ const DateNightPlanner = () => {
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+  
+  // Toggle participant selection
+  const toggleParticipant = (memberId) => {
+    const isSelected = newDateNight.participants.some(p => p.id === memberId);
+    
+    if (isSelected) {
+      // Remove participant
+      setNewDateNight({
+        ...newDateNight,
+        participants: newDateNight.participants.filter(p => p.id !== memberId)
+      });
+    } else {
+      // Add participant
+      const member = familyMembers.find(m => m.id === memberId);
+      if (member) {
+        setNewDateNight({
+          ...newDateNight,
+          participants: [...newDateNight.participants, { id: member.id, name: member.name }]
+        });
+      }
+    }
+  };
+  
+  // Add to calendar
+  const addToCalendar = async (dateNight) => {
+    setIsAddingToCalendar(true);
+    setCalendarError(null);
+    
+    try {
+      // Create date objects
+      const startDate = new Date(`${dateNight.date}T${dateNight.time || '19:00'}`);
+      const endDate = new Date(startDate);
+      endDate.setHours(endDate.getHours() + 2); // Default 2 hour duration
+      
+      // Create participants string
+      const participantsStr = dateNight.participants && dateNight.participants.length > 0
+        ? `with ${dateNight.participants.map(p => p.name).join(', ')}`
+        : '';
+      
+      // Create event object
+      const event = {
+        summary: `Date Night: ${dateNight.title}`,
+        description: `${dateNight.description || 'Quality time together'} ${participantsStr}`,
+        location: '',
+        start: {
+          dateTime: startDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: endDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        category: 'relationship'
+      };
+      
+      // Add to calendar
+      const result = await CalendarService.addEvent(event, selectedUser?.id);
+      
+      if (result.success) {
+        // Close modal
+        setShowAddModal(false);
+        
+        // Add to date night
+        if (editIndex !== null) {
+          const updatedDateNights = [...dateNights];
+          updatedDateNights[editIndex] = {
+            ...updatedDateNights[editIndex],
+            inCalendar: true
+          };
+          setDateNights(updatedDateNights);
+        } else {
+          addDateNight();
+        }
+      } else {
+        setCalendarError("Failed to add to calendar. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error adding to calendar:", error);
+      setCalendarError("Error adding to calendar: " + (error.message || "Unknown error"));
+    } finally {
+      setIsAddingToCalendar(false);
+    }
   };
   
   // Get date ideas by category
@@ -160,12 +260,12 @@ const DateNightPlanner = () => {
         "Visit a museum or art gallery",
         "Attend a local sporting event"
       ],
-      relaxation: [
-        "Book a couples massage",
-        "Spend a day at the beach",
-        "Have a spa day at home",
-        "Go stargazing",
-        "Visit a botanical garden"
+      family: [
+        "Family game night",
+        "Backyard camping",
+        "Visit a children's museum",
+        "Go to the zoo or aquarium",
+        "Family bike ride or hike"
       ],
       budget: [
         "Game night at home",
@@ -217,6 +317,15 @@ const DateNightPlanner = () => {
   
   const nextDateNight = getNextDateNight();
   
+  // Loading state
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow p-6 flex justify-center items-center h-64">
+        <div className="w-10 h-10 border-4 border-t-transparent border-black rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+  
   return (
     <div className="bg-white rounded-lg shadow">
       <div className="p-6">
@@ -231,7 +340,8 @@ const DateNightPlanner = () => {
                 date: '',
                 time: '19:00',
                 category: 'dining',
-                completed: false
+                completed: false,
+                participants: []
               });
               setEditIndex(null);
               setShowAddModal(true);
@@ -244,7 +354,7 @@ const DateNightPlanner = () => {
         </div>
         
         <p className="text-sm text-gray-600 mb-4 font-roboto">
-          Regular date nights are essential for maintaining a healthy relationship and reconnecting as a couple.
+          Regular date nights are essential for maintaining a healthy relationship and reconnecting with your loved ones.
         </p>
         
         {/* Next Date Night */}
@@ -276,13 +386,23 @@ const DateNightPlanner = () => {
                   <Clock size={14} className="ml-3 mr-1 text-gray-500" />
                   <span>{nextDateNight.time}</span>
                 </div>
+                
+                {/* Participants */}
+                {nextDateNight.participants && nextDateNight.participants.length > 0 && (
+                  <div className="flex items-center mt-2">
+                    <Users size={14} className="mr-1 text-gray-500" />
+                    <span className="text-sm text-gray-600 font-roboto">
+                      {nextDateNight.participants.map(p => p.name).join(', ')}
+                    </span>
+                  </div>
+                )}
               </div>
               
               <div className={`px-2 py-1 rounded text-xs font-roboto ${
                 nextDateNight.category === 'dining' ? 'bg-green-100 text-green-700' :
                 nextDateNight.category === 'adventure' ? 'bg-orange-100 text-orange-700' :
                 nextDateNight.category === 'entertainment' ? 'bg-purple-100 text-purple-700' :
-                nextDateNight.category === 'relaxation' ? 'bg-blue-100 text-blue-700' :
+                nextDateNight.category === 'family' ? 'bg-blue-100 text-blue-700' :
                 'bg-gray-100 text-gray-700'
               }`}>
                 {nextDateNight.category.charAt(0).toUpperCase() + nextDateNight.category.slice(1)}
@@ -360,6 +480,16 @@ const DateNightPlanner = () => {
                             <Clock size={12} className="ml-2 mr-1 text-gray-500" />
                             <span className="text-gray-600">{dateNight.time}</span>
                           </div>
+                          
+                          {/* Participants */}
+                          {dateNight.participants && dateNight.participants.length > 0 && (
+                            <div className="flex items-center mt-1">
+                              <Users size={12} className="mr-1 text-gray-500" />
+                              <span className="text-xs text-gray-600 font-roboto">
+                                With: {dateNight.participants.map(p => p.name).join(', ')}
+                              </span>
+                            </div>
+                          )}
                         </div>
                         
                         <div className="flex space-x-1">
@@ -404,12 +534,18 @@ const DateNightPlanner = () => {
                           dateNight.category === 'dining' ? 'bg-green-100 text-green-700' :
                           dateNight.category === 'adventure' ? 'bg-orange-100 text-orange-700' :
                           dateNight.category === 'entertainment' ? 'bg-purple-100 text-purple-700' :
-                          dateNight.category === 'relaxation' ? 'bg-blue-100 text-blue-700' :
+                          dateNight.category === 'family' ? 'bg-blue-100 text-blue-700' :
                           dateNight.category === 'budget' ? 'bg-yellow-100 text-yellow-700' :
                           'bg-gray-100 text-gray-700'
                         }`}>
                           {dateNight.category.charAt(0).toUpperCase() + dateNight.category.slice(1)}
                         </span>
+                        
+                        {dateNight.inCalendar && (
+                          <span className="text-xs ml-2 bg-black text-white px-2 py-0.5 rounded-full font-roboto">
+                            In Calendar
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -468,7 +604,7 @@ const DateNightPlanner = () => {
                   <option value="dining">Dining</option>
                   <option value="adventure">Adventure</option>
                   <option value="entertainment">Entertainment</option>
-                  <option value="relaxation">Relaxation</option>
+                  <option value="family">Family Activity</option>
                   <option value="budget">Budget-Friendly</option>
                 </select>
               </div>
@@ -496,6 +632,33 @@ const DateNightPlanner = () => {
                 ></textarea>
               </div>
               
+              {/* Participants */}
+              <div>
+                <label className="block text-sm font-medium mb-1 font-roboto">Participants:</label>
+                <div className="space-y-2 max-h-40 overflow-y-auto border rounded p-2">
+                  {familyMembers.map(member => (
+                    <div 
+                      key={member.id}
+                      className="flex items-center p-2 hover:bg-gray-50 rounded"
+                    >
+                      <input
+                        type="checkbox"
+                        id={`participant-${member.id}`}
+                        checked={newDateNight.participants.some(p => p.id === member.id)}
+                        onChange={() => toggleParticipant(member.id)}
+                        className="mr-2"
+                      />
+                      <label 
+                        htmlFor={`participant-${member.id}`}
+                        className="text-sm font-roboto cursor-pointer flex-1"
+                      >
+                        {member.name} {member.role === 'parent' ? '(Parent)' : '(Child)'}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
               {/* Date Ideas */}
               <div>
                 <div className="flex justify-between items-center">
@@ -509,7 +672,7 @@ const DateNightPlanner = () => {
                     <option value="dining">Dining</option>
                     <option value="adventure">Adventure</option>
                     <option value="entertainment">Entertainment</option>
-                    <option value="relaxation">Relaxation</option>
+                    <option value="family">Family</option>
                     <option value="budget">Budget-Friendly</option>
                   </select>
                 </div>
@@ -526,6 +689,14 @@ const DateNightPlanner = () => {
                   ))}
                 </div>
               </div>
+              
+              {/* Calendar error message */}
+              {calendarError && (
+                <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm font-roboto flex items-start">
+                  <AlertCircle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
+                  <span>{calendarError}</span>
+                </div>
+              )}
             </div>
             
             <div className="flex space-x-3 justify-end">
@@ -536,57 +707,34 @@ const DateNightPlanner = () => {
                 Cancel
               </button>
               <div className="flex space-x-3">
-  <button
-    onClick={addDateNight}
-    disabled={!newDateNight.title || !newDateNight.date}
-    className={`px-4 py-2 rounded font-roboto ${
-      newDateNight.title && newDateNight.date 
-        ? 'bg-black text-white' 
-        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-    }`}
-  >
-    {editIndex !== null ? 'Update' : 'Schedule'}
-  </button>
-  {newDateNight.title && newDateNight.date && (
-    <button
-      onClick={() => {
-        const startTime = new Date(`${newDateNight.date}T${newDateNight.time}`);
-        const endTime = new Date(startTime);
-        endTime.setHours(endTime.getHours() + 2);
-        
-        // Create calendar event
-        import('../../services/CalendarService').then(module => {
-          const CalendarService = module.default;
-          const event = {
-            summary: `Date Night: ${newDateNight.title}`,
-            description: newDateNight.description || 'Scheduled date night',
-            start: {
-              dateTime: startTime.toISOString(),
-              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-            },
-            end: {
-              dateTime: endTime.toISOString(),
-              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-            },
-            location: ''
-          };
-          
-          CalendarService.addEvent(event).then(result => {
-            if (result.success) {
-              alert('Date night added to calendar!');
-            }
-          }).catch(error => {
-            console.error('Error adding to calendar:', error);
-          });
-        });
-      }}
-      className="px-4 py-2 border rounded font-roboto flex items-center"
-    >
-      <Calendar size={16} className="mr-2" />
-      Add to Calendar
-    </button>
-  )}
-</div>
+                <button
+                  onClick={addDateNight}
+                  disabled={!newDateNight.title || !newDateNight.date}
+                  className={`px-4 py-2 rounded font-roboto ${
+                    newDateNight.title && newDateNight.date 
+                      ? 'bg-black text-white' 
+                      : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  {editIndex !== null ? 'Update' : 'Schedule'}
+                </button>
+                {newDateNight.title && newDateNight.date && (
+                  <button
+                    onClick={() => addToCalendar(newDateNight)}
+                    disabled={isAddingToCalendar}
+                    className={`px-4 py-2 border rounded font-roboto flex items-center ${
+                      isAddingToCalendar ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    {isAddingToCalendar ? (
+                      <div className="w-4 h-4 border-2 border-t-transparent border-black rounded-full animate-spin mr-2"></div>
+                    ) : (
+                      <Calendar size={16} className="mr-2" />
+                    )}
+                    Add to Calendar
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -595,4 +743,4 @@ const DateNightPlanner = () => {
   );
 };
 
-export default DateNightPlanner;
+export default EnhancedDateNightPlanner;
