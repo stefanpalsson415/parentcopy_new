@@ -323,6 +323,23 @@ const FamilySelectionScreen = () => {
     }
   };
   
+  const isValidImageUrl = (url) => {
+    // Check if url is defined and not empty
+    if (!url || url === '') return false;
+    
+    // Basic check for broken/placeholder images
+    if (url.includes('undefined') || url.includes('null') || url.includes('Tegner')) return false;
+    
+    // If it's a data URL, it's likely valid
+    if (url.startsWith('data:image/')) return true;
+    
+    // If it has a common image extension, it's likely valid
+    const validExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+    return validExtensions.some(ext => url.toLowerCase().includes(ext));
+  };
+
+
+
   const handleImageFile = async (file) => {
     setIsUploading(true);
     
@@ -601,18 +618,20 @@ const FamilySelectionScreen = () => {
                   }`}
                   onClick={() => !member.completed && handleSelectUser(member)}
                 >
-                  {member.profilePicture ? (
-                    <img 
-                      src={member.profilePicture}
-                      alt={member.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    // Colored placeholder for profile
-                    <div className={`w-full h-full flex items-center justify-center text-white ${getMemberColor(member)}`}>
-                      <span className="text-xl font-medium">{member.name.charAt(0).toUpperCase()}</span>
-                    </div>
-                  )}
+                  {isValidImageUrl(member.profilePicture) ? (
+  <img 
+    src={member.profilePicture}
+    alt={member.name}
+    className="w-full h-full object-cover"
+  />
+) : (
+  // Colored placeholder for profile
+  <div className={`w-full h-full flex items-center justify-center text-white ${getMemberColor(member)}`}>
+    <span className="text-xl font-medium font-roboto">
+      {member.name ? member.name.charAt(0).toUpperCase() : '?'}
+    </span>
+  </div>
+)}
                 </div>
                 
                 {/* Name with better typography */}
