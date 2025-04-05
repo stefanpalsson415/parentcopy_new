@@ -613,7 +613,10 @@ const SurveyScreen = () => {
                 className="w-full h-full object-cover"
               />
             </div>
-            <span>{selectedUser.name}</span>
+            <div className="flex flex-col">
+              <span className="font-medium">{selectedUser.name}</span>
+              <span className="text-xs text-gray-300">{familyName} Family</span>
+            </div>
           </div>
           
           <div className="flex items-center">
@@ -644,7 +647,7 @@ const SurveyScreen = () => {
           </div>
         </div>
       </div>
-        
+      
       {viewingQuestionList ? (
         // Question list view
         <div className="flex-1 p-4">
@@ -713,29 +716,77 @@ const SurveyScreen = () => {
         </div>
       ) : (
         // Main survey view
-        <div className="flex-1 p-4">
-          <div className="max-w-3xl mx-auto">
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-3xl mx-auto p-4">
             {/* Survey title */}
             <div className="text-center mb-4">
               <h2 className="text-2xl font-bold">Initial Survey Assessment</h2>
               {personalizedQuestions.length > 0 && (
                 <p className="text-sm text-gray-600">Personalized to your family's needs</p>
               )}
-              <div className="flex justify-center space-x-4">
+              <div className="flex justify-center space-x-4 mt-2">
                 <button 
                   onClick={toggleQuestionList}
-                  className="text-sm text-blue-600 mt-1 hover:underline"
+                  className="text-sm text-blue-600 hover:underline"
                 >
                   View All Questions
                 </button>
                 <button 
                   onClick={handleManualSave}
-                  className="text-sm text-blue-600 mt-1 hover:underline flex items-center"
+                  className="text-sm text-blue-600 hover:underline flex items-center"
                   disabled={isSaving}
                 >
                   <Save size={14} className="mr-1" />
                   {isSaving ? 'Saving...' : 'Save Progress'}
                 </button>
+              </div>
+            </div>
+            
+            {/* Parent selection - MOVED UP */}
+            <div className="flex justify-center items-center mb-8">
+              <div className="flex w-full max-w-md justify-between items-center">
+                {/* Mama */}
+                <div className="flex flex-col items-center">
+                  <button
+                    onClick={() => handleSelectParent('Mama')}
+                    className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full focus:outline-none border-4 overflow-hidden transition-all ${
+                      selectedParent === 'Mama' 
+                        ? 'border-purple-500 scale-105' 
+                        : 'border-transparent hover:border-purple-300'
+                    }`}
+                  >
+                    <img 
+                      src={parents.mama.image} 
+                      alt="Mama"
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                  <p className="mt-2 font-medium">{parents.mama.name}</p>
+                  <p className="text-xs text-gray-500">(press 'M' key)</p>
+                </div>
+                  
+                {/* Divider */}
+                <div className="h-32 sm:h-40 w-px bg-gray-300"></div>
+                  
+                {/* Papa */}
+                <div className="flex flex-col items-center">
+                  <button
+                    onClick={() => handleSelectParent('Papa')}
+                    className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full focus:outline-none border-4 overflow-hidden transition-all ${
+                      selectedParent === 'Papa' 
+                        ? 'border-blue-500 scale-105' 
+                        : 'border-transparent hover:border-blue-300'
+                    }`}
+                  >
+                    <img 
+                      src={parents.papa.image} 
+                      alt="Papa"
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                  <p className="mt-2 font-medium">{parents.papa.name}</p>
+                  <p className="text-xs text-gray-500">(press 'P' key)</p>
+                </div>
               </div>
             </div>
               
@@ -1060,54 +1111,6 @@ const SurveyScreen = () => {
                     </div>
                     <div className="text-green-900 font-medium">Child Impact</div>
                   </div>
-                </div>
-              </div>
-            </div>
-              
-            {/* Parent selection */}
-            <div className="flex justify-center items-center mb-8">
-              <div className="flex w-full max-w-md justify-between items-center">
-                {/* Mama */}
-                <div className="flex flex-col items-center">
-                  <button
-                    onClick={() => handleSelectParent('Mama')}
-                    className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full focus:outline-none border-4 overflow-hidden transition-all ${
-                      selectedParent === 'Mama' 
-                        ? 'border-purple-500 scale-105' 
-                        : 'border-transparent hover:border-purple-300'
-                    }`}
-                  >
-                    <img 
-                      src={parents.mama.image} 
-                      alt="Mama"
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
-                  <p className="mt-2 font-medium">{parents.mama.name}</p>
-                  <p className="text-xs text-gray-500">(press 'M' key)</p>
-                </div>
-                  
-                {/* Divider */}
-                <div className="h-32 sm:h-40 w-px bg-gray-300"></div>
-                  
-                {/* Papa */}
-                <div className="flex flex-col items-center">
-                  <button
-                    onClick={() => handleSelectParent('Papa')}
-                    className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full focus:outline-none border-4 overflow-hidden transition-all ${
-                      selectedParent === 'Papa' 
-                        ? 'border-blue-500 scale-105' 
-                        : 'border-transparent hover:border-blue-300'
-                    }`}
-                  >
-                    <img 
-                      src={parents.papa.image} 
-                      alt="Papa"
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
-                  <p className="mt-2 font-medium">{parents.papa.name}</p>
-                  <p className="text-xs text-gray-500">(press 'P' key)</p>
                 </div>
               </div>
             </div>
