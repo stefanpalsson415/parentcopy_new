@@ -1,8 +1,10 @@
+// src/components/survey/SurveyScreen.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Info, HelpCircle, Scale, Brain, Heart, Clock, ArrowLeft, ArrowRight, Save, Check, X, Edit } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useSurvey } from '../../contexts/SurveyContext';
+import AllieChat from '../chat/AllieChat'; // Import AllieChat component
 
 const SurveyScreen = () => {
   const navigate = useNavigate();
@@ -37,6 +39,7 @@ const SurveyScreen = () => {
   const [saveErrors, setSaveErrors] = useState({});
   const keyboardInitialized = useRef(false);
   const autoSaveIntervalRef = useRef(null);
+  const [showAllieChat, setShowAllieChat] = useState(false); // State to control AllieChat visibility
 
   const [localCurrentQuestion, setLocalCurrentQuestion] = useState(null);
 
@@ -54,6 +57,15 @@ const SurveyScreen = () => {
       navigate('/');
     }
   }, [selectedUser, navigate]);
+  
+  // Show AllieChat after component mounts
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowAllieChat(true);
+    }, 1000);
+    
+    return () => clearTimeout(timer);
+  }, []);
   
   // Check for saved progress when component mounts
   useEffect(() => {
@@ -1055,7 +1067,8 @@ const handleCompleteSurvey = async () => {
         </div>
       </div>
 
-      
+      {/* Integrate AllieChat component */}
+      {showAllieChat && <AllieChat />}
     </div>
   );
 };
