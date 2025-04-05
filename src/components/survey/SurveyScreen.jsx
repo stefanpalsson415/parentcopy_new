@@ -1,19 +1,22 @@
 // src/components/survey/SurveyScreen.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { LogOut, Info, HelpCircle, Scale, Brain, Heart, Clock, ArrowLeft, ArrowRight, Save, Check, X, Edit } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useSurvey } from '../../contexts/SurveyContext';
-import AllieChat from '../chat/AllieChat.jsx'; // Import AllieChat component
+import AllieChat from '../chat/AllieChat.jsx';
 
 const SurveyScreen = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { 
     selectedUser,
     familyMembers,
     completeInitialSurvey,
     saveSurveyProgress,
-    familyPriorities
+    familyPriorities,
+    familyName,
+    familyId
   } = useFamily();
   
   const { 
@@ -22,8 +25,15 @@ const SurveyScreen = () => {
     updateSurveyResponse,
     resetSurvey,
     getSurveyProgress,
-    updateQuestionWeight
+    updateQuestionWeight,
+    selectPersonalizedInitialQuestions,
+    getPersonalizedInitialQuestions,
+    setFamilyData
   } = useSurvey();
+
+  // State to manage personalized questions
+  const [personalizedQuestions, setPersonalizedQuestions] = useState([]);
+  const [isPersonalizationLoaded, setIsPersonalizationLoaded] = useState(false);
   
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedParent, setSelectedParent] = useState(null);
@@ -35,18 +45,22 @@ const SurveyScreen = () => {
   const [lastSaved, setLastSaved] = useState(null);
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
   const [editingWeight, setEditingWeight] = useState(false);
-  const [weightBeingEdited, setWeightBeingEdited] = useState(null);
   const [saveErrors, setSaveErrors] = useState({});
+  const [showAllieChat, setShowAllieChat] = useState(false);
+
   const keyboardInitialized = useRef(false);
   const autoSaveIntervalRef = useRef(null);
-  const [showAllieChat, setShowAllieChat] = useState(false); // State to control AllieChat visibility
-
+  const hasLoadedProgress = useRef(false);
+  
   const [localCurrentQuestion, setLocalCurrentQuestion] = useState(null);
 
-  // Create a currentQuestion reference that uses the local state when available
-  const currentQuestion = localCurrentQuestion || fullQuestionSet[currentQuestionIndex];
+  // Get the current question, either from local state or the personalized questions array
+  const currentQuestion = localCurrentQuestion || 
+    (personalizedQuestions.length > 0 ? 
+      personalizedQuestions[currentQuestionIndex] : 
+      fullQuestionSet[currentQuestionIndex]);
 
-  // Update setCurrentQuestion function
+  // Function to update current question (for weight editing)
   const setCurrentQuestion = (updatedQuestion) => {
     setLocalCurrentQuestion(updatedQuestion);
   };
@@ -58,82 +72,121 @@ const SurveyScreen = () => {
     }
   }, [selectedUser, navigate]);
   
+  // Load personalized questions when family data is available
+  useEffect(() => {
+    if (familyId && selectedUser && !isPersonalizationLoaded) {
+      console.log("Loading personalized questions for user:", selectedUser.id, "in family:", familyId);
+      
+      // Create a family data object for personalization
+      const familyData = {
+        familyName: familyName,
+        familyId: familyId,
+        parents: familyMembers.filter(m => m.role === 'parent').map(p => ({
+          name: p.name,
+          role: p.roleType || 'parent'
+        })),
+        children: familyMembers.filter(m => m.role === 'child').map(c => ({
+          name: c.name,
+          age: c.age || 10
+        })),
+        priorities: familyPriorities,
+        communication: { style: "open" } // Default communication style
+      };
+      
+      console.log("Family data for personalization:", familyData);
+      
+      // Set the family data in survey context
+      setFamilyData(familyData);
+      
+      // Generate personalized questions
+      const personalized = selectPersonalizedInitialQuestions(fullQuestionSet, familyData);
+      
+      console.log("Generated personalized questions:", personalized.length);
+      setPersonalizedQuestions(personalized);
+      setIsPersonalizationLoaded(true);
+    }
+  }, [familyId, selectedUser, familyMembers, familyName, familyPriorities, fullQuestionSet, isPersonalizationLoaded, selectPersonalizedInitialQuestions, setFamilyData]);
+  
   // Show AllieChat after component mounts
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowAllieChat(true);
-    }, 1000);
+    }, 2000);
     
     return () => clearTimeout(timer);
   }, []);
   
-  // Check for saved progress when component mounts
+  // Load saved progress - separate for each user
   useEffect(() => {
-    // Check if we have a current user and they have saved progress
-    if (selectedUser) {
-      // NEW CODE
-try {
-  // Look specifically for this user's progress
-  const surveyProgress = localStorage.getItem(`surveyInProgress_${selectedUser.id}`);
-  if (surveyProgress) {
-    const progress = JSON.parse(surveyProgress);
-    console.log("Found saved progress for this user, not resetting survey");
-    // Don't reset the survey, keep the loaded progress
-    return;
-  }
-  
-  // If we got here, no saved progress for this specific user
-  console.log("No saved progress for this user, resetting survey");
-  resetSurvey();
-} catch (e) {
-  console.error("Error checking survey progress:", e);
-  resetSurvey();
-}
-    }
+    if (!selectedUser || hasLoadedProgress.current) return;
     
-    // Only reset if we didn't find saved progress for this user
-    resetSurvey();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedUser?.id]);
-
-  // Restore survey progress when component mounts
-  useEffect(() => {
-    // Only run this if we have a selected user and current responses
-    if (selectedUser && currentSurveyResponses && Object.keys(currentSurveyResponses).length > 0) {
-      console.log("Found", Object.keys(currentSurveyResponses).length, "saved responses");
+    const loadUserProgress = async () => {
+      console.log("Checking for saved progress for user:", selectedUser.id);
       
-      // Find the last answered question index
-      let lastAnsweredIndex = -1;
-      
-      // Check which questions have answers
-      fullQuestionSet.forEach((question, index) => {
-        if (currentSurveyResponses[question.id]) {
-          lastAnsweredIndex = Math.max(lastAnsweredIndex, index);
+      try {
+        // Look specifically for this user's progress
+        const storageKey = `surveyInProgress_${selectedUser.id}`;
+        const savedProgress = localStorage.getItem(storageKey);
+        
+        if (savedProgress) {
+          const progressData = JSON.parse(savedProgress);
+          
+          // Verify this is the right user's data
+          if (progressData.userId === selectedUser.id) {
+            console.log("Found saved progress for user:", selectedUser.id);
+            
+            // Load the saved responses if available
+            if (progressData.responses && Object.keys(progressData.responses).length > 0) {
+              // Find the highest answered question index
+              let lastAnsweredIndex = -1;
+              
+              // Get the proper questions array to check against
+              const questionsToCheck = isPersonalizationLoaded ? 
+                personalizedQuestions : fullQuestionSet;
+              
+              // Find the last answered question
+              questionsToCheck.forEach((question, index) => {
+                if (progressData.responses[question.id]) {
+                  lastAnsweredIndex = Math.max(lastAnsweredIndex, index);
+                }
+              });
+              
+              if (lastAnsweredIndex >= 0) {
+                const nextIndex = Math.min(lastAnsweredIndex + 1, questionsToCheck.length - 1);
+                console.log(`Resuming survey from question ${nextIndex + 1}`);
+                
+                // Set current question index
+                setCurrentQuestionIndex(nextIndex);
+                
+                // Set the parent selection for the current question
+                if (nextIndex <= lastAnsweredIndex) {
+                  setSelectedParent(progressData.responses[questionsToCheck[nextIndex].id] || null);
+                }
+                
+                // Set last saved time
+                setLastSaved(new Date(progressData.timestamp));
+              }
+            }
+            
+            // Don't reset the survey
+            hasLoadedProgress.current = true;
+            return;
+          }
         }
-      });
-      
-      // If we found saved answers, jump to the next unanswered question
-      if (lastAnsweredIndex >= 0) {
-        console.log(`Found progress! Last answered question: ${lastAnsweredIndex}`);
         
-        // Set current question to the next unanswered one
-        const nextIndex = Math.min(lastAnsweredIndex + 1, fullQuestionSet.length - 1);
-        setCurrentQuestionIndex(nextIndex);
-        
-        // Set selected parent based on the response to the current question
-        if (nextIndex > 0 && nextIndex <= lastAnsweredIndex) {
-          setSelectedParent(currentSurveyResponses[fullQuestionSet[nextIndex].id] || null);
-        } else {
-          setSelectedParent(null);
-        }
-        
-        console.log(`Restored to question ${nextIndex + 1} with ${Object.keys(currentSurveyResponses).length} saved answers`);
-
-        // Set the last saved timestamp
-        setLastSaved(new Date());
+        // If we got here, no saved progress found for this user
+        console.log("No saved progress for user:", selectedUser.id);
+        resetSurvey();
+        hasLoadedProgress.current = true;
+      } catch (error) {
+        console.error("Error loading saved progress:", error);
+        resetSurvey();
+        hasLoadedProgress.current = true;
       }
-    }
-  }, [selectedUser, fullQuestionSet, currentSurveyResponses]);
+    };
+    
+    loadUserProgress();
+  }, [selectedUser, personalizedQuestions, fullQuestionSet, resetSurvey, isPersonalizationLoaded]);
 
   // Setup auto-save functionality
   useEffect(() => {
@@ -165,21 +218,15 @@ try {
     };
   }, [selectedUser, autoSaveEnabled, currentSurveyResponses, isProcessing]);
   
+  // Reset on user change
+  useEffect(() => {
+    // When selected user changes, reset the progress loading flag
+    hasLoadedProgress.current = false;
+  }, [selectedUser?.id]);
+  
   // Find Mama and Papa users from family members
   const mamaUser = familyMembers.find(m => m.roleType === 'Mama' || m.name === 'Mama');
   const papaUser = familyMembers.find(m => m.roleType === 'Papa' || m.name === 'Papa');
-  
-  // Parent profile images with fallbacks
-  const parents = {
-    mama: {
-      name: mamaUser?.name || 'Mama',
-      image: mamaUser?.profilePicture || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48Y2lyY2xlIGN4PSIxMjgiIGN5PSIxMjgiIHI9IjEyOCIgZmlsbD0iI2U5YjFkYSIvPjxjaXJjbGUgY3g9IjEyOCIgY3k9IjkwIiByPSI0MCIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yMTUsMTcyLjVjMCwzNS05NSwzNS05NSwzNXMtOTUsMC05NS0zNWMwLTIzLjMsOTUtMTAsOTUtMTBTMjE1LDE0OS4yLDIxNSwxNzIuNVoiIGZpbGw9IiNmZmYiLz48L3N2Zz4='
-    },
-    papa: {
-      name: papaUser?.name || 'Papa',
-      image: papaUser?.profilePicture || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48Y2lyY2xlIGN4PSIxMjgiIGN5PSIxMjgiIHI9IjEyOCIgZmlsbD0iIzg0YzRlMiIvPjxjaXJjbGUgY3g9IjEyOCIgY3k9IjkwIiByPSI0MCIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yMTUsMTcyLjVjMCwzNS05NSwzNS05NSwzNXMtOTUsMC05NS0zNWMwLTIzLjMsOTUtMTAsOTUtMTBTMjE1LDE0OS4yLDIxNSwxNzIuNVoiIGZpbGw9IiNmZmYiLz48L3N2Zz4='
-    }
-  };
   
   // Set up keyboard shortcuts with debouncing
   useEffect(() => {
@@ -235,6 +282,17 @@ try {
     };
   }, [currentQuestionIndex, viewingQuestionList, isProcessing]);
   
+  // Parent profile images with fallbacks
+  const parents = {
+    mama: {
+      name: mamaUser?.name || 'Mama',
+      image: mamaUser?.profilePicture || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48Y2lyY2xlIGN4PSIxMjgiIGN5PSIxMjgiIHI9IjEyOCIgZmlsbD0iI2U5YjFkYSIvPjxjaXJjbGUgY3g9IjEyOCIgY3k9IjkwIiByPSI0MCIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yMTUsMTcyLjVjMCwzNS05NSwzNS05NSwzNXMtOTUsMC05NS0zNWMwLTIzLjMsOTUtMTAsOTUtMTBTMjE1LDE0OS4yLDIxNSwxNzIuNVoiIGZpbGw9IiNmZmYiLz48L3N2Zz4='
+    },
+    papa: {
+      name: papaUser?.name || 'Papa',
+      image: papaUser?.profilePicture || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48Y2lyY2xlIGN4PSIxMjgiIGN5PSIxMjgiIHI9IjEyOCIgZmlsbD0iIzg0YzRlMiIvPjxjaXJjbGUgY3g9IjEyOCIgY3k9IjkwIiByPSI0MCIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yMTUsMTcyLjVjMCwzNS05NSwzNS05NSwzNXMtOTUsMC05NS0zNWMwLTIzLjMsOTUtMTAsOTUtMTBTMjE1LDE0OS4yLDIxNSwxNzIuNVoiIGZpbGw9IiNmZmYiLz48L3N2Zz4='
+    }
+  };
   
   // Auto-save function
   const handleAutoSave = useCallback(async () => {
@@ -243,17 +301,18 @@ try {
     setIsSaving(true);
     
     try {
-      console.log("Auto-saving survey progress...");
+      console.log("Auto-saving survey progress for user:", selectedUser.id);
       await saveSurveyProgress(selectedUser.id, currentSurveyResponses);
       
-      // Store survey in progress flag
+      // Store survey in progress flag with responses
       localStorage.setItem(`surveyInProgress_${selectedUser.id}`, JSON.stringify({
         userId: selectedUser.id,
-        timestamp: new Date().getTime()
+        timestamp: new Date().getTime(),
+        responses: currentSurveyResponses
       }));
       
       setLastSaved(new Date());
-      console.log("Survey progress auto-saved");
+      console.log("Survey progress auto-saved for user:", selectedUser.id);
     } catch (error) {
       console.error("Error auto-saving survey progress:", error);
     } finally {
@@ -268,17 +327,18 @@ try {
     setIsSaving(true);
     
     try {
-      console.log("Manually saving survey progress...");
+      console.log("Manually saving survey progress for user:", selectedUser.id);
       await saveSurveyProgress(selectedUser.id, currentSurveyResponses);
       
-      // Store survey in progress flag
+      // Store survey in progress flag with responses
       localStorage.setItem(`surveyInProgress_${selectedUser.id}`, JSON.stringify({
         userId: selectedUser.id,
-        timestamp: new Date().getTime()
+        timestamp: new Date().getTime(),
+        responses: currentSurveyResponses
       }));
       
       setLastSaved(new Date());
-      console.log("Survey progress saved manually");
+      console.log("Survey progress saved manually for user:", selectedUser.id);
     } catch (error) {
       console.error("Error saving survey progress:", error);
     } finally {
@@ -299,11 +359,14 @@ try {
       
       // Use a single timeout with a clear reference
       const timer = setTimeout(() => {
-        if (currentQuestionIndex < fullQuestionSet.length - 1) {
-          setCurrentQuestionIndex(currentQuestionIndex + 1); // Use direct value instead of functional update
+        // Get the right questions array
+        const questionsArray = personalizedQuestions.length > 0 ? 
+          personalizedQuestions : fullQuestionSet;
+          
+        if (currentQuestionIndex < questionsArray.length - 1) {
+          setCurrentQuestionIndex(currentQuestionIndex + 1);
           setSelectedParent(null);
           setShowExplanation(false);
-          // Don't reset showWeightMetrics - it should stay visible
         } else {
           // Survey completed, save responses
           handleCompleteSurvey();
@@ -316,100 +379,108 @@ try {
     }
   };
   
-  // Enhanced handleCompleteSurvey with better completion handling
-const handleCompleteSurvey = async () => {
-  if (isProcessing) return; // Prevent multiple submissions
-  
-  // Set a flag to show we're submitting the whole survey (not just processing a single answer)
-  setIsProcessing(true);
-  
-  try {
-    console.log("Starting survey completion process...");
+  // Enhanced handleCompleteSurvey
+  const handleCompleteSurvey = async () => {
+    if (isProcessing) return; // Prevent multiple submissions
     
-    // First, save the current survey state before navigating
-    await handleManualSave();
+    // Set a flag to show we're submitting the whole survey
+    setIsProcessing(true);
     
-    // Then show loading screen to provide visual feedback
-    navigate('/loading');
-    
-    // IMPORTANT: Wait a moment before completing to ensure UI update happens
-    setTimeout(async () => {
-      try {
-        console.log("Saving final survey responses...");
-        
-        // Now complete the survey with all responses
-        const result = await completeInitialSurvey(selectedUser.id, currentSurveyResponses);
-        
-        if (!result) {
-          throw new Error("Survey completion failed");
-        }
-        
-        // Success! Remove the in-progress flag
-        localStorage.removeItem('surveyInProgress');
-        
-        console.log("Survey completed successfully!");
-        
-        // Check if all family members have completed the survey
-        const allCompleted = familyMembers.every(member => 
-          member.completed || member.id === selectedUser.id
-        );
-        
-        console.log(`All members completed? ${allCompleted}`);
-        
-        // Wait a moment before final navigation
-        setTimeout(() => {
-          if (allCompleted) {
-            console.log("All members completed - going to dashboard");
-            navigate('/dashboard', { replace: true });
-          } else {
-            console.log("Some members still need to complete - going to wait screen");
-            navigate('/login', { 
-              state: { 
-                directAccess: true,
-                showCompletionScreen: true
-              }, 
-              replace: true 
-            });
+    try {
+      console.log("Starting survey completion process for user:", selectedUser.id);
+      
+      // First, save the current survey state before navigating
+      await handleManualSave();
+      
+      // Then show loading screen to provide visual feedback
+      navigate('/loading');
+      
+      // Wait a moment before completing to ensure UI update happens
+      setTimeout(async () => {
+        try {
+          console.log("Saving final survey responses for user:", selectedUser.id);
+          
+          // Now complete the survey with all responses
+          const result = await completeInitialSurvey(selectedUser.id, currentSurveyResponses);
+          
+          if (!result) {
+            throw new Error("Survey completion failed");
           }
-        }, 1500);
-      } catch (submitError) {
-        console.error("Error in delayed survey completion:", submitError);
-        // Navigate back to survey with error message
-        navigate('/survey', { 
-          state: { error: "Failed to complete survey. Please try again." }
-        });
-      }
-    }, 500);
-  } catch (error) {
-    console.error('Error initiating survey completion:', error);
-    alert('There was an error saving your survey. Please try again.');
-    setIsProcessing(false);
-    
-    // Stay on current question
-    navigate('/survey');
-  }
-};
+          
+          // Success! Remove the in-progress flag
+          localStorage.removeItem(`surveyInProgress_${selectedUser.id}`);
+          
+          console.log("Survey completed successfully for user:", selectedUser.id);
+          
+          // Check if all family members have completed the survey
+          const allCompleted = familyMembers.every(member => 
+            member.completed || member.id === selectedUser.id
+          );
+          
+          console.log(`All members completed? ${allCompleted}`);
+          
+          // Wait a moment before final navigation
+          setTimeout(() => {
+            if (allCompleted) {
+              console.log("All members completed - going to dashboard");
+              navigate('/dashboard', { replace: true });
+            } else {
+              console.log("Some members still need to complete - going to wait screen");
+              navigate('/login', { 
+                state: { 
+                  directAccess: true,
+                  showCompletionScreen: true
+                }, 
+                replace: true 
+              });
+            }
+          }, 1500);
+        } catch (submitError) {
+          console.error("Error in delayed survey completion:", submitError);
+          // Navigate back to survey with error message
+          navigate('/survey', { 
+            state: { error: "Failed to complete survey. Please try again." }
+          });
+        }
+      }, 500);
+    } catch (error) {
+      console.error('Error initiating survey completion:', error);
+      alert('There was an error saving your survey. Please try again.');
+      setIsProcessing(false);
+      
+      // Stay on current question
+      navigate('/survey');
+    }
+  };
   
   // Move to previous question
   const handlePrevious = () => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(prevIndex => prevIndex - 1);
-      setSelectedParent(currentSurveyResponses[fullQuestionSet[currentQuestionIndex - 1].id] || null);
+      
+      // Get the right questions array
+      const questionsArray = personalizedQuestions.length > 0 ? 
+        personalizedQuestions : fullQuestionSet;
+        
+      setSelectedParent(currentSurveyResponses[questionsArray[currentQuestionIndex - 1].id] || null);
       setShowExplanation(false);
-      // Don't reset showWeightMetrics - keep it visible
     }
   };
   
   // Jump to specific question
   const jumpToQuestion = (index) => {
     setCurrentQuestionIndex(index);
-    setSelectedParent(currentSurveyResponses[fullQuestionSet[index].id] || null);
+    
+    // Get the right questions array
+    const questionsArray = personalizedQuestions.length > 0 ? 
+      personalizedQuestions : fullQuestionSet;
+      
+    setSelectedParent(currentSurveyResponses[questionsArray[index].id] || null);
     setViewingQuestionList(false);
     setShowExplanation(false);
-    // Don't reset showWeightMetrics - keep it visible
   };
   
-  // Handle pause/exit
+  // Handle pause/exit - enhanced to properly save user-specific state
   const handlePause = async () => {
     if (isProcessing) return; // Prevent multiple actions while processing
     
@@ -418,14 +489,16 @@ const handleCompleteSurvey = async () => {
     try {
       // Save the current progress without marking as completed
       if (selectedUser && Object.keys(currentSurveyResponses).length > 0) {
-        console.log("Saving survey progress before pausing...");
+        console.log("Saving survey progress before pausing for user:", selectedUser.id);
         await saveSurveyProgress(selectedUser.id, currentSurveyResponses);
-        console.log("Progress saved successfully");
+        console.log("Progress saved successfully for user:", selectedUser.id);
         
-        // Set a flag in localStorage to indicate survey is in progress
+        // Set a flag in localStorage to indicate survey is in progress - WITH RESPONSES
         localStorage.setItem(`surveyInProgress_${selectedUser.id}`, JSON.stringify({
           userId: selectedUser.id,
-          timestamp: new Date().getTime()
+          timestamp: new Date().getTime(),
+          responses: currentSurveyResponses,
+          lastQuestionIndex: currentQuestionIndex
         }));
       }
       
@@ -442,11 +515,14 @@ const handleCompleteSurvey = async () => {
   
   // Skip question
   const handleSkip = () => {
-    if (currentQuestionIndex < fullQuestionSet.length - 1) {
+    // Get the right questions array
+    const questionsArray = personalizedQuestions.length > 0 ? 
+      personalizedQuestions : fullQuestionSet;
+      
+    if (currentQuestionIndex < questionsArray.length - 1) {
       setCurrentQuestionIndex(prevIndex => prevIndex + 1);
       setSelectedParent(null);
       setShowExplanation(false);
-      // Don't reset showWeightMetrics - keep it visible
     } else {
       // Survey completed, move to dashboard
       handleCompleteSurvey();
@@ -464,7 +540,10 @@ const handleCompleteSurvey = async () => {
   };
   
   // Calculate progress
-  const progress = getSurveyProgress(fullQuestionSet.length);
+  const questionsToUse = personalizedQuestions.length > 0 ? 
+    personalizedQuestions : fullQuestionSet;
+    
+  const progress = getSurveyProgress(questionsToUse.length);
   
   // Get weight impact color
   const getWeightImpactColor = (weight) => {
@@ -507,7 +586,6 @@ const handleCompleteSurvey = async () => {
   const handleSaveWeightChanges = () => {
     setEditingWeight(false);
     setShowWeightMetrics(true);
-    // Add any additional save logic here if needed
   };
 
   // Handle canceling weight changes
@@ -573,7 +651,10 @@ const handleCompleteSurvey = async () => {
           <div className="max-w-3xl mx-auto">
             <div className="bg-white rounded-lg shadow p-4 mb-4">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold">All Questions ({fullQuestionSet.length})</h2>
+                <h2 className="text-lg font-semibold">
+                  All Questions ({questionsToUse.length}) 
+                  {personalizedQuestions.length > 0 && " - Personalized"}
+                </h2>
                 <button 
                   onClick={toggleQuestionList}
                   className="text-blue-600 text-sm"
@@ -583,7 +664,7 @@ const handleCompleteSurvey = async () => {
               </div>
                 
               <div className="space-y-1 max-h-[70vh] overflow-y-auto">
-                {fullQuestionSet.map((q, index) => {
+                {questionsToUse.map((q, index) => {
                   const answered = currentSurveyResponses[q.id] !== undefined;
                   return (
                     <div 
@@ -637,6 +718,9 @@ const handleCompleteSurvey = async () => {
             {/* Survey title */}
             <div className="text-center mb-4">
               <h2 className="text-2xl font-bold">Initial Survey Assessment</h2>
+              {personalizedQuestions.length > 0 && (
+                <p className="text-sm text-gray-600">Personalized to your family's needs</p>
+              )}
               <div className="flex justify-center space-x-4">
                 <button 
                   onClick={toggleQuestionList}
@@ -1031,7 +1115,7 @@ const handleCompleteSurvey = async () => {
             {/* Progress */}
             <div className="text-center">
               <p className="font-medium mb-2">
-                Question {currentQuestionIndex + 1} of {fullQuestionSet.length}
+                Question {currentQuestionIndex + 1} of {questionsToUse.length}
               </p>
               <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div 
@@ -1065,14 +1149,18 @@ const handleCompleteSurvey = async () => {
           >
             Pause Survey
           </button>
-          {/* Empty div to maintain spacing */}
-          <div></div>
+          <button
+            onClick={handleSkip}
+            className="px-4 py-2 border rounded flex items-center bg-white hover:bg-gray-50"
+          >
+            Skip
+            <ArrowRight size={16} className="ml-1" />
+          </button>
         </div>
       </div>
 
       {/* Integrate AllieChat component */}
-      {showAllieChat && AllieChat ? <AllieChat /> : null}
-
+      {showAllieChat && <AllieChat />}
     </div>
   );
 };
