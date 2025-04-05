@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Brain, Lightbulb, Heart, Users, RefreshCw, ArrowRight, Calendar, Clock, Info } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
-import AllieAIEngineService from '../../services/AllieAIEngineService';
+import AllieAIEngineService from '../../services/AllieAIService';
 
 const AIRelationshipInsights = ({ insights = [], onActionClick }) => {
   const { familyId, currentWeek, relationshipStrategies, coupleCheckInData } = useFamily();

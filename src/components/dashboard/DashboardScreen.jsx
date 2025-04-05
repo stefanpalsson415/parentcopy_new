@@ -200,7 +200,7 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   // Load AllieAIEngineService
   useEffect(() => {
     // Dynamically import the service to avoid circular dependencies
-    import('../../services/AllieAIEngineService').then(module => {
+    import('../../services/AllieAIService').then(module => {
       setAllieAIEngineService(module.default);
       console.log("AllieAIEngineService loaded successfully");
       
