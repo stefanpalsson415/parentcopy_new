@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { Heart, Plus, MessageSquare, Edit, Trash2, Send, Star, Check, X } from 'lucide-react';
-import { doc, setDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { doc, setDoc, collection, addDoc, serverTimestamp, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 
 const UpdatedGratitudeTracker = () => {
@@ -21,69 +21,78 @@ const UpdatedGratitudeTracker = () => {
     categories: {}
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null); // Add this line
   const [deliveryMethod, setDeliveryMethod] = useState('app');
   const [sendingNotification, setSendingNotification] = useState(false);
   const [notificationSent, setNotificationSent] = useState(false);
   
   // Load gratitude data
   useEffect(() => {
-    const loadGratitudeData = async () => {
-      if (!familyId) return;
-      
-      try {
-        // Query Firebase for saved gratitudes
-        const gratitudesRef = collection(db, "gratitudes");
-        const q = query(gratitudesRef, where("familyId", "==", familyId));
-        const querySnapshot = await getDocs(q);
-        
-        const loadedGratitudes = [];
-        querySnapshot.forEach((doc) => {
-          loadedGratitudes.push({
-            id: doc.id,
-            ...doc.data()
-          });
-        });
-        
-        // If no saved gratitudes are found, use mock data
-        if (loadedGratitudes.length === 0) {
-          const mockGratitudes = [
-            { 
-              id: '1', 
-              text: 'Thank you for handling the school pickup yesterday when I was stuck in a meeting.',
-              fromId: familyMembers.find(m => m.roleType === 'Mama')?.id,
-              fromName: familyMembers.find(m => m.roleType === 'Mama')?.name,
-              toId: familyMembers.find(m => m.roleType === 'Papa')?.id,
-              toName: familyMembers.find(m => m.roleType === 'Papa')?.name,
-              date: new Date(Date.now() - 86400000).toISOString(),
-              category: 'appreciation'
-            },
-            { 
-              id: '2', 
-              text: 'I appreciate how you always make time to listen to me even when you\'re busy.',
-              fromId: familyMembers.find(m => m.roleType === 'Papa')?.id,
-              fromName: familyMembers.find(m => m.roleType === 'Papa')?.name,
-              toId: familyMembers.find(m => m.roleType === 'Mama')?.id,
-              toName: familyMembers.find(m => m.roleType === 'Mama')?.name,
-              date: new Date(Date.now() - 172800000).toISOString(),
-              category: 'affirmation'
-            }
-          ];
-          
-          setGratitudes(mockGratitudes);
-        } else {
-          // Sort by date (newest first)
-          loadedGratitudes.sort((a, b) => new Date(b.date) - new Date(a.date));
-          setGratitudes(loadedGratitudes);
+    // In the loadGratitudeData function
+const loadGratitudeData = async () => {
+  if (!familyId) return;
+  
+  setLoading(true);
+  setError(null);
+  
+  try {
+    // Array to store all cycle data
+    const loadedGratitudes = [];
+    // Declare mockGratitudes here, outside the if block
+    let mockGratitudes = [];
+    
+    // Query Firebase for saved gratitudes
+    const gratitudesRef = collection(db, "gratitudes");
+    const q = query(gratitudesRef, where("familyId", "==", familyId));
+    const querySnapshot = await getDocs(q);
+    
+    querySnapshot.forEach((doc) => {
+      loadedGratitudes.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+    
+    // If no saved gratitudes are found, use mock data
+    if (loadedGratitudes.length === 0) {
+      mockGratitudes = [
+        { 
+          id: '1', 
+          text: 'Thank you for handling the school pickup yesterday when I was stuck in a meeting.',
+          fromId: familyMembers.find(m => m.roleType === 'Mama')?.id,
+          fromName: familyMembers.find(m => m.roleType === 'Mama')?.name,
+          toId: familyMembers.find(m => m.roleType === 'Papa')?.id,
+          toName: familyMembers.find(m => m.roleType === 'Papa')?.name,
+          date: new Date(Date.now() - 86400000).toISOString(),
+          category: 'appreciation'
+        },
+        { 
+          id: '2', 
+          text: 'I appreciate how you always make time to listen to me even when you\'re busy.',
+          fromId: familyMembers.find(m => m.roleType === 'Papa')?.id,
+          fromName: familyMembers.find(m => m.roleType === 'Papa')?.name,
+          toId: familyMembers.find(m => m.roleType === 'Mama')?.id,
+          toName: familyMembers.find(m => m.roleType === 'Mama')?.name,
+          date: new Date(Date.now() - 172800000).toISOString(),
+          category: 'affirmation'
         }
-        
-        // Calculate stats
-        calculateStats(loadedGratitudes.length > 0 ? loadedGratitudes : mockGratitudes);
-        setLoading(false);
-      } catch (error) {
-        console.error("Error loading gratitude data:", error);
-        setLoading(false);
-      }
-    };
+      ];
+      
+      setGratitudes(mockGratitudes);
+    } else {
+      // Sort by date (newest first)
+      loadedGratitudes.sort((a, b) => new Date(b.date) - new Date(a.date));
+      setGratitudes(loadedGratitudes);
+    }
+    
+    // Calculate stats
+    calculateStats(loadedGratitudes.length > 0 ? loadedGratitudes : mockGratitudes);
+    setLoading(false);
+  } catch (error) {
+    console.error("Error loading gratitude data:", error);
+    setLoading(false);
+  }
+};
     
     loadGratitudeData();
   }, [familyId, familyMembers]);

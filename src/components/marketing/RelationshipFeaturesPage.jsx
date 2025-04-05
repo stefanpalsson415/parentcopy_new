@@ -690,63 +690,7 @@ const RelationshipFeaturesPage = () => {
         </div>
       </section>
       
-      {/* Testimonials */}
-      <section className="py-20 bg-gray-900 text-white">
-        <div className="max-w-4xl mx-auto px-6">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-light mb-4">Real Relationships, Real Results</h2>
-            <p className="text-xl text-gray-400 font-light max-w-2xl mx-auto">
-              Hear from couples who've transformed their relationships through better balance
-            </p>
-          </div>
-          
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="bg-gray-800 p-6 rounded-lg">
-              <div className="flex items-center mb-4">
-                <div className="w-12 h-12 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center mr-3">
-                  <span className="font-bold">S</span>
-                </div>
-                <div>
-                  <p className="font-medium">Sarah & James</p>
-                  <p className="text-sm text-gray-400">Parents of 2, using Allie for 3 months</p>
-                </div>
-              </div>
-              <p className="text-gray-300 mb-4">
-                "Before Allie, I felt like I was drowning in mental load while my husband had no idea how much I was juggling. Now he takes over meal planning every week and we have a 10-minute check-in every night. Our relationship hasn't been this strong since before kids."
-              </p>
-              <div className="flex space-x-1">
-                <Star className="text-yellow-400" size={20} />
-                <Star className="text-yellow-400" size={20} />
-                <Star className="text-yellow-400" size={20} />
-                <Star className="text-yellow-400" size={20} />
-                <Star className="text-yellow-400" size={20} />
-              </div>
-            </div>
-            
-            <div className="bg-gray-800 p-6 rounded-lg">
-              <div className="flex items-center mb-4">
-                <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3">
-                  <span className="font-bold">M</span>
-                </div>
-                <div>
-                  <p className="font-medium">Michael & Lauren</p>
-                  <p className="text-sm text-gray-400">Parents of 3, using Allie for 6 months</p>
-                </div>
-              </div>
-              <p className="text-gray-300 mb-4">
-                "As a dad, I was completely unaware of how unbalanced our household was. Allie made it measurable and gave me specific tasks to take on. My wife says it's like having a completely different partner. The Date Night Planner alone was worth signing up."
-              </p>
-              <div className="flex space-x-1">
-                <Star className="text-yellow-400" size={20} />
-                <Star className="text-yellow-400" size={20} />
-                <Star className="text-yellow-400" size={20} />
-                <Star className="text-yellow-400" size={20} />
-                <Star className="text-yellow-400" size={20} />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      
       
       {/* CTA Section */}
       <section className="py-16 bg-black text-white">
@@ -765,7 +709,6 @@ const RelationshipFeaturesPage = () => {
       </section>
       
       {/* Footer */}
-      // Updated footer for AboutUsPage.jsx
 <footer className="px-6 py-12 bg-white border-t">
   <div className="max-w-6xl mx-auto">
     <div className="grid grid-cols-1 md:grid-cols-4 gap-8">

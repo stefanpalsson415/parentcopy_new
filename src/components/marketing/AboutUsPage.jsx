@@ -7,6 +7,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import stefanProfilePic from '../../assets/stefan-palsson.jpg'; // Add this image to your assets
 import kimberlyProfilePic from '../../assets/kimberly-palsson.jpg'; // Add this image to your assets
 import teamPhoto from '../../assets/team-photo.jpg'; // Add this image to your assets
+import shaneCulpPic from '../../assets/shane-culp.jpg'; // Add this image to your assets
+
 
 
 const AboutUsPage = () => {
@@ -216,6 +218,38 @@ const AboutUsPage = () => {
               </div>
               <div className="absolute top-4 left-4 w-40 h-40 bg-pink-400 rounded-lg -z-0"></div>
             </div>
+{/* Shane's Profile */}
+<div className="relative">
+  <div className="bg-white p-8 rounded-lg shadow-sm relative z-10">
+    <div className="w-24 h-24 rounded-full overflow-hidden mx-auto mb-6 border-2 border-gray-200">
+      <img 
+        src={shaneCulpPic}
+        alt="Shane Culp" 
+        className="w-full h-full object-cover"
+      />
+    </div>
+    <h3 className="text-xl font-medium text-center mb-2">Shane Culp</h3>
+    <p className="text-black text-center text-sm mb-4">Co-Founder & Chief Technology Officer</p>
+    
+    <p className="text-gray-700 mb-4 font-light">
+      Shane is a seasoned technology leader with over 10 years of experience building high-performance engineering teams and cutting-edge digital products. His expertise in AI systems and web application architecture has been instrumental in bringing Allie to life.
+    </p>
+    <p className="text-gray-700 mb-4 font-light">
+      Previously, Shane managed engineering teams of up to 30 people across 6 cross-functional teams, developing web applications, mobile apps, and AI-driven solutions for partners including Fisher-Price, Sesame Street, and LEGO.
+    </p>
+    <div className="mt-6 pt-6 border-t border-gray-100">
+      <h4 className="font-medium mb-2">Areas of Expertise:</h4>
+      <div className="flex flex-wrap gap-2">
+        <span className="px-3 py-1 bg-gray-100 text-xs rounded-full">AI Systems</span>
+        <span className="px-3 py-1 bg-gray-100 text-xs rounded-full">Web Development</span>
+        <span className="px-3 py-1 bg-gray-100 text-xs rounded-full">Technical Architecture</span>
+        <span className="px-3 py-1 bg-gray-100 text-xs rounded-full">Engineering Leadership</span>
+      </div>
+    </div>
+  </div>
+  <div className="absolute top-4 left-4 w-40 h-40 bg-green-400 rounded-lg -z-0"></div>
+</div>
+
           </div>
 
           <div className="mt-16 text-center">
@@ -438,7 +472,6 @@ const AboutUsPage = () => {
       </section>
       
       {/* Footer */}
-      // Updated footer for AboutUsPage.jsx
 <footer className="px-6 py-12 bg-white border-t">
   <div className="max-w-6xl mx-auto">
     <div className="grid grid-cols-1 md:grid-cols-4 gap-8">

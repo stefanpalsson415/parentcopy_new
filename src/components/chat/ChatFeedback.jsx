@@ -135,5 +135,9 @@ const ChatFeedback = ({ messageId, familyId }) => {
           </div>
         </form>
       )}
-    </div>
-  );
+)}
+</div>
+);
+};
+
+export default ChatFeedback;

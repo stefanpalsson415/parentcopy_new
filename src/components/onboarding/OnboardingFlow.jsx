@@ -5,6 +5,8 @@ import {
   Heart, BarChart, Sliders, Scale, Clock, Users, PlusCircle, Edit, Trash2, User
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import familyPhoto from '../../assets/family-photo.jpg';
+
 
 const OnboardingFlow = () => {
   const navigate = useNavigate();
@@ -318,7 +320,7 @@ const OnboardingFlow = () => {
             <p className="text-lg mb-8 font-roboto">We're excited to help your family find better balance.</p>
             <div className="w-64 h-64 mx-auto mb-8 rounded-full bg-gray-100 flex items-center justify-center">
               <img 
-                src="/api/placeholder/150/150" 
+                src={familyPhoto} 
                 alt="Family Balance" 
                 className="w-48 h-48 object-cover rounded-full"
               />
