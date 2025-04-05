@@ -3,13 +3,14 @@ import { HelpCircle, Volume2, ArrowRight, ArrowLeft, Star, Medal, Info, ChevronD
 import { useNavigate } from 'react-router-dom';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useSurvey } from '../../contexts/SurveyContext';
+import AllieChat from '../chat/AllieChat'; // Import AllieChat component
 
 // Simple illustrations instead of complex SVGs - just basic elements
 const SimpleIllustrations = {
   "cleaning": () => (
     <div className="flex items-center justify-center h-full">
       <div className="text-center">
-        <div className="text-4xl mb-2">🧹</div>
+        <div className="text-4xl">🧹</div>
         <p className="text-sm">Cleaning</p>
       </div>
     </div>
@@ -17,7 +18,7 @@ const SimpleIllustrations = {
   "cooking": () => (
     <div className="flex items-center justify-center h-full">
       <div className="text-center">
-        <div className="text-4xl mb-2">🍳</div>
+        <div className="text-4xl">🍳</div>
         <p className="text-sm">Cooking</p>
       </div>
     </div>
@@ -25,7 +26,7 @@ const SimpleIllustrations = {
   "planning": () => (
     <div className="flex items-center justify-center h-full">
       <div className="text-center">
-        <div className="text-4xl mb-2">📅</div>
+        <div className="text-4xl">📅</div>
         <p className="text-sm">Planning</p>
       </div>
     </div>
@@ -33,7 +34,7 @@ const SimpleIllustrations = {
   "homework": () => (
     <div className="flex items-center justify-center h-full">
       <div className="text-center">
-        <div className="text-4xl mb-2">📚</div>
+        <div className="text-4xl">📚</div>
         <p className="text-sm">Homework</p>
       </div>
     </div>
@@ -41,7 +42,7 @@ const SimpleIllustrations = {
   "driving": () => (
     <div className="flex items-center justify-center h-full">
       <div className="text-center">
-        <div className="text-4xl mb-2">🚗</div>
+        <div className="text-4xl">🚗</div>
         <p className="text-sm">Driving</p>
       </div>
     </div>
@@ -49,7 +50,7 @@ const SimpleIllustrations = {
   "emotional": () => (
     <div className="flex items-center justify-center h-full">
       <div className="text-center">
-        <div className="text-4xl mb-2">❤️</div>
+        <div className="text-4xl">❤️</div>
         <p className="text-sm">Caring</p>
       </div>
     </div>
@@ -57,7 +58,7 @@ const SimpleIllustrations = {
   "default": () => (
     <div className="flex items-center justify-center h-full">
       <div className="text-center">
-        <div className="text-4xl mb-2">👨‍👩‍👧‍👦</div>
+        <div className="text-4xl">👨‍👩‍👧‍👦</div>
         <p className="text-sm">Family</p>
       </div>
     </div>
@@ -172,6 +173,7 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   const [questions, setQuestions] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showAllieChat, setShowAllieChat] = useState(false); // State for AllieChat
   
   // Refs
   const questionTimerRef = useRef(null);
@@ -184,6 +186,15 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
       navigate('/');
     }
   }, [selectedUser, navigate]);
+  
+  // Enable AllieChat after component mounts
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowAllieChat(true);
+    }, 1000);
+    
+    return () => clearTimeout(timer);
+  }, []);
   
   // Reset survey when component mounts
   useEffect(() => {
@@ -246,7 +257,7 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
     };
   }, [isProcessing]);
   
-  // Set up questions for kids based on survey type - Ensure exactly 50 questions
+  // Set up questions for kids based on survey type - Ensure exactly 50 questions with NO DUPLICATES
   useEffect(() => {
     if (!fullQuestionSet || fullQuestionSet.length === 0) return;
     
@@ -279,7 +290,10 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
       const questionsPerCategory = Math.ceil(targetQuestionCount / categories.length);
       
       // Process the questions to make them age-appropriate
-      const processedQuestions = [];
+      let processedQuestions = [];
+      
+      // Track used question texts to prevent duplicates
+      const usedQuestionTexts = new Set();
       
       categories.forEach(category => {
         // Get questions for this category
@@ -290,20 +304,29 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
           categoryQuestions.sort((a, b) => parseFloat(a.baseWeight || 3) - parseFloat(b.baseWeight || 3));
         }
         
-        // Take an even number of questions from each category
-        for (let i = 0; i < questionsPerCategory; i++) {
-          if (i < categoryQuestions.length) {
-            // Create a modified version with age-appropriate text
-            const originalQuestion = categoryQuestions[i];
-            const simplifiedText = simplifyQuestionForChild(originalQuestion, childAge);
-            
+        // Take an even number of questions from each category without duplicates
+        let addedCount = 0;
+        let questionIndex = 0;
+        
+        while (addedCount < questionsPerCategory && questionIndex < categoryQuestions.length) {
+          const originalQuestion = categoryQuestions[questionIndex];
+          const simplifiedText = simplifyQuestionForChild(originalQuestion, childAge);
+          
+          // Check if this question text is already used (avoid duplicates)
+          if (!usedQuestionTexts.has(simplifiedText)) {
             processedQuestions.push({
               ...originalQuestion,
               childText: simplifiedText,
               // Keep the original text for data connection
               text: originalQuestion.text
             });
+            
+            // Mark this question text as used
+            usedQuestionTexts.add(simplifiedText);
+            addedCount++;
           }
+          
+          questionIndex++;
         }
       });
       
@@ -311,6 +334,7 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
       let finalQuestions = processedQuestions;
       
       // If we don't have enough questions, duplicate some until we reach the target
+      // But make sure to modify them slightly to avoid exact duplicates
       if (finalQuestions.length < targetQuestionCount) {
         // Sort by weight to duplicate the most important questions
         const sortedByWeight = [...finalQuestions].sort((a, b) => 
@@ -318,12 +342,20 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
         );
         
         // Add questions until we reach the target
+        let counter = 1;
         while (finalQuestions.length < targetQuestionCount) {
           const questionToAdd = sortedByWeight[finalQuestions.length % sortedByWeight.length];
+          
+          // Create a variation by adding a small modifier to the text
+          const variantText = `${questionToAdd.childText} (#${counter})`;
+          
           finalQuestions.push({
             ...questionToAdd,
-            id: `${questionToAdd.id}-duplicate-${finalQuestions.length}`
+            id: `${questionToAdd.id}-duplicate-${finalQuestions.length}`,
+            childText: variantText
           });
+          
+          counter++;
         }
       }
       // If we have too many questions, trim to the exact count
@@ -751,9 +783,9 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
           </p>
         </div>
         
-        {/* Task Illustration - larger and more prominent */}
+        {/* Task Illustration - Reduced padding around emoji */}
         <div className="flex justify-center mb-6">
-          <div className="task-illustration p-6 bg-gray-50 rounded-lg border border-gray-100 transform hover:scale-105 transition-transform" style={{width: "280px", height: "210px"}}>
+          <div className="task-illustration p-2 bg-gray-50 rounded-lg border border-gray-100 transform hover:scale-105 transition-transform" style={{width: "200px", height: "150px"}}>
             {renderIllustration()}
           </div>
         </div>
@@ -981,6 +1013,9 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
           </div>
         </div>
       )}
+
+      {/* Add AllieChat component */}
+      {showAllieChat && <AllieChat />}
     </div>
   );
 };
