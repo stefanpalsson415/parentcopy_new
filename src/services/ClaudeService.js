@@ -82,15 +82,67 @@ class ClaudeService {
       }
       
       return result.content[0].text;
-    } catch (error) {
-      console.error("Error in Claude API call:", error);
-      
-      // Fall back to personalized response on failure
-      return this.createPersonalizedResponse(
-        messages[messages.length - 1]?.content || "", 
-        context
-      );
+    // NEW CODE with improved error handling
+} catch (error) {
+  console.error("Error in Claude API call:", error.message);
+  
+  // Only use fallback for certain errors
+  if (error.message?.includes("timeout") || error.message?.includes("network")) {
+    console.log("Using fallback response due to network/timeout error");
+    return this.createPersonalizedResponse(
+      messages[messages.length - 1]?.content || "", 
+      context
+    );
+  }
+  
+  // For other errors, retry with simpler prompt
+  try {
+    console.log("Retrying with simplified prompt...");
+    // Create a more focused system prompt
+    const simplifiedSystemPrompt = `You are Allie, an AI assistant focused on family workload balance.
+    Today's date is ${new Date().toLocaleDateString()}.
+    
+    IMPORTANT: Give specific answers about the family data you have access to:
+    - Family: ${context.familyName || 'Unknown'}
+    - Survey data: ${context.surveyData?.mamaPercentage ? `Mama: ${context.surveyData.mamaPercentage.toFixed(1)}%, Papa: ${(100 - context.surveyData.mamaPercentage).toFixed(1)}%` : 'Not yet available'}
+    - Tasks: ${context.tasks?.length || 0} active tasks
+    
+    REMEMBER: Always be specific and precise when referring to this family's data.
+    DO NOT say "I have access to the family's data" - instead SHOW that access by mentioning specific data points.`;
+    
+    // Make a simpler request
+    const response = await fetch(this.proxyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: this.model,
+        max_tokens: 2000,
+        temperature: 0.7,
+        messages: [{ role: "user", content: messages[messages.length - 1]?.content || "" }],
+        system: simplifiedSystemPrompt
+      })
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      if (result && result.content && result.content[0]) {
+        return result.content[0].text;
+      }
     }
+    
+    // If retry fails, fall back to default response
+    return this.createPersonalizedResponse(
+      messages[messages.length - 1]?.content || "", 
+      context
+    );
+  } catch (retryError) {
+    console.error("Retry also failed:", retryError);
+    return this.createPersonalizedResponse(
+      messages[messages.length - 1]?.content || "", 
+      context
+    );
+  }
+}
   }
   
   // Extract calendar event data from user message

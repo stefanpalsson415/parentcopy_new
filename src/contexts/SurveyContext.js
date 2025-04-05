@@ -441,175 +441,166 @@ export function SurveyProvider({ children }) {
     return questions;
   };
 
-  // NEW FUNCTION: Personalized selection of initial survey questions based on family data
-  const selectPersonalizedInitialQuestions = (fullQuestionSet, familyData, targetCount = 72) => {
-    // If no family data is provided, return a balanced default set
-    if (!familyData) {
-      return selectDefaultInitialQuestions(fullQuestionSet, targetCount);
-    }
-    
-    const categories = [
-      "Visible Household Tasks",
-      "Invisible Household Tasks",
-      "Visible Parental Tasks",
-      "Invisible Parental Tasks"
-    ];
-    
-    // Questions per category (evenly distributed)
-    const questionsPerCategory = Math.floor(targetCount / categories.length);
-    
-    // Create an array to hold our selected questions
-    const selectedQuestions = [];
-    
-    // Process family data for personalization
-    const { 
-      children = [],
-      communication = {},
-      priorities = {},
-      aiPreferences = {}
-    } = familyData;
-    
-    // 1. First, handle family priorities from highest to lowest
-    const priorityOrder = [
-      priorities.highestPriority,
-      priorities.secondaryPriority,
-      priorities.tertiaryPriority
-    ].filter(Boolean); // Remove any undefined values
-    
-    // Map non-specified categories
-    const remainingCategories = categories.filter(cat => !priorityOrder.includes(cat));
-    
-    // Complete priority order with remaining categories
-    const fullPriorityOrder = [...priorityOrder, ...remainingCategories];
-    
-    // 2. Create relevance scores for each question based on family data
-    const scoredQuestions = fullQuestionSet
-      .filter(q => categories.includes(q.category)) // Filter out relationship questions
-      .map(question => {
-        let relevanceScore = 0;
-        
-        // Priority-based scoring
-        const categoryIndex = fullPriorityOrder.indexOf(question.category);
-        if (categoryIndex === 0) relevanceScore += 15; // Highest priority
-        else if (categoryIndex === 1) relevanceScore += 10; // Secondary priority
-        else if (categoryIndex === 2) relevanceScore += 5; // Tertiary priority
-        
-        // Child-related scoring
-        if (children && children.length > 0) {
-          // More points for child-development questions if there are children
-          if (question.childDevelopment === "high") {
-            relevanceScore += 5 * Math.min(children.length, 3); // More children = more relevant
-          }
-          
-          // If question text mentions children
-          if (question.text.toLowerCase().includes("child") || 
-              question.text.toLowerCase().includes("kid") ||
-              question.text.toLowerCase().includes("school")) {
-            relevanceScore += 3;
-          }
-          
-          // Age-specific relevance
-          const hasYoungChildren = children.some(child => child.age && parseInt(child.age) < 6);
-          const hasSchoolChildren = children.some(child => child.age && parseInt(child.age) >= 6 && parseInt(child.age) <= 18);
-          
-          if (hasYoungChildren && (
-              question.text.toLowerCase().includes("bath") ||
-              question.text.toLowerCase().includes("bedtime") ||
-              question.text.toLowerCase().includes("daycare"))) {
-            relevanceScore += 8;
-          }
-          
-          if (hasSchoolChildren && (
-              question.text.toLowerCase().includes("homework") ||
-              question.text.toLowerCase().includes("school") ||
-              question.text.toLowerCase().includes("teacher"))) {
-            relevanceScore += 8;
-          }
-        }
-        
-        // Communication style scoring
-        if (communication.style) {
-          // For families with reserved/avoidant communication, emphasize invisible tasks
-          if ((communication.style === "reserved" || communication.style === "avoidant") &&
-              (question.invisibility === "completely" || question.invisibility === "mostly")) {
-            relevanceScore += 6;
-          }
-          
-          // For families with open communication, prioritize balance questions
-          if (communication.style === "open" && question.isBalanceQuestion) {
-            relevanceScore += 6;
-          }
-        }
-        
-        // Challenge areas scoring
-        if (communication.challengeAreas && communication.challengeAreas.length > 0) {
-          // Map challenge areas to keywords
-          const challengeKeywords = {
-            'Household tasks': ['clean', 'chore', 'cook', 'laundry', 'dishes'],
-            'Parenting approaches': ['parent', 'discipline', 'child', 'kid', 'school'],
-            'Time management': ['schedule', 'time', 'plan', 'calendar', 'appointment'],
-            'Emotional support': ['emotion', 'support', 'feel', 'stress', 'talk'],
-            'Financial decisions': ['money', 'bill', 'finance', 'budget', 'spend'],
-            'Personal boundaries': ['boundary', 'personal', 'privacy', 'space', 'time']
-          };
-          
-          // Add points for questions matching challenge areas
-          communication.challengeAreas.forEach(area => {
-            const keywords = challengeKeywords[area] || [];
-            keywords.forEach(keyword => {
-              if (question.text.toLowerCase().includes(keyword)) {
-                relevanceScore += 5;
-              }
-            });
-          });
-        }
-        
-        // Return the question with its relevance score
-        return {
-          ...question,
-          relevanceScore
-        };
-      });
-    
-    // 3. Select questions for each category, prioritizing high relevance scores
-    categories.forEach(category => {
-      // Get questions for this category
-      const categoryQuestions = scoredQuestions.filter(q => q.category === category);
-      
-      // Sort by relevance score (highest first)
-      const sortedQuestions = [...categoryQuestions].sort((a, b) => b.relevanceScore - a.relevanceScore);
-      
-      // Take top questions for this category
-      const topQuestions = sortedQuestions.slice(0, questionsPerCategory);
-      
-      // Add to selected questions
-      selectedQuestions.push(...topQuestions);
+  // Add this updated function in SurveyContext.js to replace the existing one
+const selectPersonalizedInitialQuestions = (fullQuestionSet, familyData, targetCount = 72) => {
+  console.log("Selecting personalized questions with target count:", targetCount);
+  
+  // If no family data is provided, return a balanced default set
+  if (!familyData) {
+    console.log("No family data provided, using default selection");
+    return selectDefaultInitialQuestions(fullQuestionSet, targetCount);
+  }
+  
+  const categories = [
+    "Visible Household Tasks",
+    "Invisible Household Tasks",
+    "Visible Parental Tasks",
+    "Invisible Parental Tasks"
+  ];
+  
+  // Questions per category (evenly distributed by default)
+  const questionsPerCategory = Math.floor(targetCount / categories.length);
+  console.log("Initial questions per category:", questionsPerCategory);
+  
+  // Create an array to hold our selected questions
+  const selectedQuestions = [];
+  
+  // Process family data for personalization
+  const { 
+    children = [],
+    communication = {},
+    priorities = {},
+    aiPreferences = {}
+  } = familyData;
+  
+  // Adjust distribution based on priorities
+  const priorityOrder = [
+    priorities.highestPriority,
+    priorities.secondaryPriority,
+    priorities.tertiaryPriority
+  ].filter(Boolean); // Remove any undefined values
+  
+  // Calculate adjusted distribution
+  let categoryDistribution = {};
+  if (priorityOrder.length > 0) {
+    // Default even distribution
+    categories.forEach(cat => {
+      categoryDistribution[cat] = questionsPerCategory;
     });
     
-    // If we couldn't get enough questions in some categories, fill with others
-    if (selectedQuestions.length < targetCount) {
-      // Get all questions not already selected
-      const remainingQuestions = scoredQuestions.filter(q => 
-        !selectedQuestions.some(selected => selected.id === q.id)
-      );
+    // Boost highest priority by 50%
+    if (priorityOrder[0]) {
+      const boost = Math.min(6, Math.floor(questionsPerCategory * 0.5));
+      categoryDistribution[priorityOrder[0]] += boost;
       
-      // Sort by relevance score
-      const sortedRemaining = [...remainingQuestions].sort((a, b) => b.relevanceScore - a.relevanceScore);
-      
-      // Add enough to reach target count
-      selectedQuestions.push(...sortedRemaining.slice(0, targetCount - selectedQuestions.length));
-    }
-    
-    // Sort the final selection by category and ID for a logical order
-    return selectedQuestions.sort((a, b) => {
-      // First sort by category
-      if (a.category !== b.category) {
-        return categories.indexOf(a.category) - categories.indexOf(b.category);
+      // Take from lowest priority if available
+      const lowestPriority = categories.find(cat => !priorityOrder.includes(cat));
+      if (lowestPriority) {
+        categoryDistribution[lowestPriority] = Math.max(
+          Math.floor(questionsPerCategory * 0.5), 
+          categoryDistribution[lowestPriority] - boost
+        );
       }
-      // Then by ID
-      return parseInt(a.id.replace('q', '')) - parseInt(b.id.replace('q', ''));
+    }
+    
+    console.log("Adjusted distribution based on priorities:", categoryDistribution);
+  } else {
+    // Even distribution
+    categories.forEach(cat => {
+      categoryDistribution[cat] = questionsPerCategory;
     });
-  };
+  }
+  
+  // Now select questions for each category based on the adjusted distribution
+  categories.forEach(category => {
+    // Get all questions for this category
+    const categoryQuestions = fullQuestionSet.filter(q => q.category === category);
+    
+    // Skip if no questions in this category
+    if (categoryQuestions.length === 0) return;
+    
+    // Score each question for relevance
+    const scoredQuestions = categoryQuestions.map(question => {
+      let relevanceScore = 0;
+      
+      // Child-related scoring boost for families with children
+      if (children && children.length > 0) {
+        if (question.childDevelopment === "high") {
+          relevanceScore += 5;
+        }
+        if (question.text.toLowerCase().includes("child") || 
+            question.text.toLowerCase().includes("kid") ||
+            question.text.toLowerCase().includes("school")) {
+          relevanceScore += 3;
+        }
+      }
+      
+      // Communication style relevance
+      if (communication.style) {
+        if ((communication.style === "reserved" || communication.style === "avoidant") &&
+            (question.invisibility === "completely" || question.invisibility === "mostly")) {
+          relevanceScore += 6;
+        }
+      }
+      
+      // Weight importance - prioritize high impact
+      const weight = parseFloat(question.totalWeight || 0);
+      if (weight >= 12) relevanceScore += 10;
+      else if (weight >= 9) relevanceScore += 8;
+      else if (weight >= 6) relevanceScore += 5;
+      
+      return {
+        ...question,
+        relevanceScore
+      };
+    });
+    
+    // Sort by relevance and take the required number for this category
+    const sortedQuestions = [...scoredQuestions].sort((a, b) => 
+      b.relevanceScore - a.relevanceScore
+    );
+    
+    // Take the number of questions based on our distribution
+    const numToTake = categoryDistribution[category] || questionsPerCategory;
+    const selectedForCategory = sortedQuestions.slice(0, numToTake);
+    
+    console.log(`Selected ${selectedForCategory.length} questions for ${category}`);
+    
+    // Add to selected questions
+    selectedQuestions.push(...selectedForCategory);
+  });
+  
+  // If we don't have enough questions, add more from any category
+  if (selectedQuestions.length < targetCount) {
+    console.log(`Only selected ${selectedQuestions.length}/${targetCount} questions, adding more...`);
+    
+    // Get all questions not already selected
+    const remainingQuestions = fullQuestionSet.filter(q => 
+      !selectedQuestions.some(selected => selected.id === q.id) &&
+      categories.includes(q.category)
+    );
+    
+    // Sort by weight (highest first)
+    const sortedRemaining = [...remainingQuestions].sort((a, b) => 
+      parseFloat(b.totalWeight || 0) - parseFloat(a.totalWeight || 0)
+    );
+    
+    // Add enough to reach target count
+    selectedQuestions.push(...sortedRemaining.slice(0, targetCount - selectedQuestions.length));
+    
+    console.log(`After filling, have ${selectedQuestions.length} questions`);
+  }
+  
+  // Sort the final selection by category and ID for a logical order
+  return selectedQuestions.sort((a, b) => {
+    // First sort by category
+    if (a.category !== b.category) {
+      return categories.indexOf(a.category) - categories.indexOf(b.category);
+    }
+    // Then by ID
+    return parseInt(a.id.replace('q', '')) - parseInt(b.id.replace('q', ''));
+  });
+};
 
   // Default selection of initial survey questions without family data
   const selectDefaultInitialQuestions = (fullQuestionSet, targetCount = 72) => {
@@ -1125,41 +1116,42 @@ export function SurveyProvider({ children }) {
     return fullQuestionSet.filter(q => q.isBalanceQuestion === true);
   };
 
-  // Context value
-  const value = {
-    // Filter out relationship questions for regular survey
-    fullQuestionSet: fullQuestionSet
-      .filter(q => q.category !== "Relationship Health"),
-    generateWeeklyQuestions,
-    currentSurveyResponses: currentSurveyResponsesState,
-    completedQuestions,
-    updateSurveyResponse,
-    resetSurvey,
-    getSurveyProgress,
-    setCurrentSurveyResponses,
-    // New property for relationship questions
-    relationshipQuestions: fullQuestionSet.filter(q => q.category === "Relationship Health"),
-    // NEW: Add the user-modified weights state and update function
-    userModifiedWeights,
-    updateQuestionWeight,
-    // NEW: Add family data and personalization functions
-    setFamilyData,
-    getPersonalizedInitialQuestions,
-    // Getter functions
-    getQuestionsByCategory,
-    getHighImpactQuestions,
-    getRelationshipImpactQuestions,
-    getInvisibleWorkQuestions,
-    getEmotionalLaborQuestions,
-    getChildDevelopmentQuestions,
-    getBalanceQuestions,
-    // Share family priorities with other components
-    familyPriorities: {
-      highestPriority: "Invisible Parental Tasks",
-      secondaryPriority: "Visible Parental Tasks",
-      tertiaryPriority: "Invisible Household Tasks"
-    }
-  };
+  // Update the context value
+const value = {
+  // Filter out relationship questions for regular survey
+  fullQuestionSet: fullQuestionSet
+    .filter(q => q.category !== "Relationship Health"),
+  generateWeeklyQuestions,
+  currentSurveyResponses: currentSurveyResponsesState,
+  completedQuestions,
+  updateSurveyResponse,
+  resetSurvey,
+  getSurveyProgress,
+  setCurrentSurveyResponses,
+  // New property for relationship questions
+  relationshipQuestions: fullQuestionSet.filter(q => q.category === "Relationship Health"),
+  // NEW: Add the user-modified weights state and update function
+  userModifiedWeights,
+  updateQuestionWeight,
+  // NEW: Add family data and personalization functions
+  setFamilyData,
+  getPersonalizedInitialQuestions, // Make sure this is exposed
+  selectPersonalizedInitialQuestions, // NEW: Also expose the direct function
+  // Getter functions
+  getQuestionsByCategory,
+  getHighImpactQuestions,
+  getRelationshipImpactQuestions,
+  getInvisibleWorkQuestions,
+  getEmotionalLaborQuestions,
+  getChildDevelopmentQuestions,
+  getBalanceQuestions,
+  // Share family priorities with other components
+  familyPriorities: {
+    highestPriority: "Invisible Parental Tasks",
+    secondaryPriority: "Visible Parental Tasks",
+    tertiaryPriority: "Invisible Household Tasks"
+  }
+};
 
   return (
     <SurveyContext.Provider value={value}>

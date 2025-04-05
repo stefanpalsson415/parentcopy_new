@@ -90,26 +90,38 @@ const AllieChat = () => {
     }
   }, []);
   
-  // Auto-open chat based on the current page and user state
-  useEffect(() => {
-    // Check if we're on a page where we want to auto-open chat
-    const shouldOpen = 
-      location.pathname === '/login' || // Family selection screen
-      location.pathname === '/survey' || // Initial survey
-      location.pathname === '/kid-survey'; // Kid survey screen
-    
-    // Also check if we have family members without profile pictures
-    const hasMissingProfiles = familyMembers.some(m => !m.profilePicture);
-    
-    // Auto-open on login page or if missing profiles
-    if ((shouldOpen || hasMissingProfiles) && !isOpen) {
-      setTimeout(() => {
-        setShouldAutoOpen(true);
-        setIsOpen(true);
-      }, 1500); // Slight delay for better UX
-    }
-  }, [location.pathname, familyMembers, isOpen]);
+  // NEW CODE (replace with this)
+const [userClosedChat, setUserClosedChat] = useState(false);
+
+useEffect(() => {
+  // Check if we're on a page where we want to auto-open chat
+  const shouldOpen = 
+    location.pathname === '/login' || // Family selection screen
+    location.pathname === '/survey' || // Initial survey
+    location.pathname === '/kid-survey'; // Kid survey screen
   
+  // Also check if we have family members without profile pictures
+  const hasMissingProfiles = familyMembers.some(m => !m.profilePicture);
+  
+  // Auto-open on login page or if missing profiles, but only once and respect user choice
+  if ((shouldOpen || hasMissingProfiles) && !isOpen && !userClosedChat) {
+    const timer = setTimeout(() => {
+      setShouldAutoOpen(true);
+      setIsOpen(true);
+    }, 1500); // Slight delay for better UX
+    
+    return () => clearTimeout(timer);
+  }
+}, [location.pathname, familyMembers, userClosedChat]); // Remove isOpen dependency
+
+// Then modify the toggleChat function
+const toggleChat = () => {
+  setIsOpen(!isOpen);
+  // If user is closing the chat, remember this choice
+  if (isOpen) {
+    setUserClosedChat(true);
+  }
+};  
   // Send an initial welcome/tutorial message when chat is first opened
   useEffect(() => {
     if (isOpen && shouldAutoOpen && !initialMessageSent && familyId) {
@@ -192,9 +204,7 @@ const AllieChat = () => {
     }
   };
   
-  const toggleChat = () => {
-    setIsOpen(!isOpen);
-  };
+  
   
   // Handle image file from message
   const handleImageFileFromMessage = async (file, memberId) => {

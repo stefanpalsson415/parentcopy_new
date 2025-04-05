@@ -754,7 +754,7 @@ class DatabaseService {
             completed: false,
             completedDate: null,
             weeklyCompleted: [],
-            profilePicture: parent.profilePicture || '/api/placeholder/150/150'
+            profilePicture: parent.profilePicture || null 
           };
         }),
         ...(Array.isArray(children) ? children : []).map(child => {
@@ -768,7 +768,7 @@ class DatabaseService {
             completed: false,
             completedDate: null,
             weeklyCompleted: [],
-            profilePicture: child.profilePicture || '/api/placeholder/150/150'
+            profilePicture: child.profilePicture || null
           };
         })
       ];

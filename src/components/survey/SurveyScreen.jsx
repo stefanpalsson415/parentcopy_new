@@ -71,21 +71,24 @@ const SurveyScreen = () => {
   useEffect(() => {
     // Check if we have a current user and they have saved progress
     if (selectedUser) {
-      try {
-        const surveyProgress = localStorage.getItem('surveyInProgress');
-        if (surveyProgress) {
-          const progress = JSON.parse(surveyProgress);
-          
-          // Only load progress if it belongs to this user
-          if (progress.userId === selectedUser.id) {
-            console.log("Found saved progress for this user, not resetting survey");
-            // Don't reset the survey, keep the loaded progress
-            return;
-          }
-        }
-      } catch (e) {
-        console.error("Error checking survey progress:", e);
-      }
+      // NEW CODE
+try {
+  // Look specifically for this user's progress
+  const surveyProgress = localStorage.getItem(`surveyInProgress_${selectedUser.id}`);
+  if (surveyProgress) {
+    const progress = JSON.parse(surveyProgress);
+    console.log("Found saved progress for this user, not resetting survey");
+    // Don't reset the survey, keep the loaded progress
+    return;
+  }
+  
+  // If we got here, no saved progress for this specific user
+  console.log("No saved progress for this user, resetting survey");
+  resetSurvey();
+} catch (e) {
+  console.error("Error checking survey progress:", e);
+  resetSurvey();
+}
     }
     
     // Only reset if we didn't find saved progress for this user
@@ -244,7 +247,7 @@ const SurveyScreen = () => {
       await saveSurveyProgress(selectedUser.id, currentSurveyResponses);
       
       // Store survey in progress flag
-      localStorage.setItem('surveyInProgress', JSON.stringify({
+      localStorage.setItem(`surveyInProgress_${selectedUser.id}`, JSON.stringify({
         userId: selectedUser.id,
         timestamp: new Date().getTime()
       }));
@@ -269,7 +272,7 @@ const SurveyScreen = () => {
       await saveSurveyProgress(selectedUser.id, currentSurveyResponses);
       
       // Store survey in progress flag
-      localStorage.setItem('surveyInProgress', JSON.stringify({
+      localStorage.setItem(`surveyInProgress_${selectedUser.id}`, JSON.stringify({
         userId: selectedUser.id,
         timestamp: new Date().getTime()
       }));
@@ -420,7 +423,7 @@ const handleCompleteSurvey = async () => {
         console.log("Progress saved successfully");
         
         // Set a flag in localStorage to indicate survey is in progress
-        localStorage.setItem('surveyInProgress', JSON.stringify({
+        localStorage.setItem(`surveyInProgress_${selectedUser.id}`, JSON.stringify({
           userId: selectedUser.id,
           timestamp: new Date().getTime()
         }));

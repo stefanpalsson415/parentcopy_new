@@ -327,8 +327,9 @@ const FamilySelectionScreen = () => {
     // Check if url is defined and not empty
     if (!url || url === '') return false;
     
-    // Basic check for broken/placeholder images
-    if (url.includes('undefined') || url.includes('null') || url.includes('Tegner')) return false;
+    // Explicit check for problematic cases
+    const invalidPatterns = ['undefined', 'null', 'Tegner', 'Profile', 'broken', 'placeholder'];
+    if (invalidPatterns.some(pattern => url.includes(pattern))) return false;
     
     // If it's a data URL, it's likely valid
     if (url.startsWith('data:image/')) return true;
@@ -618,20 +619,24 @@ const FamilySelectionScreen = () => {
                   }`}
                   onClick={() => !member.completed && handleSelectUser(member)}
                 >
-                  {isValidImageUrl(member.profilePicture) ? (
-  <img 
-    src={member.profilePicture}
-    alt={member.name}
-    className="w-full h-full object-cover"
-  />
-) : (
-  // Colored placeholder for profile
-  <div className={`w-full h-full flex items-center justify-center text-white ${getMemberColor(member)}`}>
-    <span className="text-xl font-medium font-roboto">
-      {member.name ? member.name.charAt(0).toUpperCase() : '?'}
-    </span>
-  </div>
-)}
+                  <div className={`w-20 h-20 rounded-full overflow-hidden mb-3 cursor-pointer border-2 ${
+  member.completed ? 'border-green-400' : 'border-yellow-400'
+}`}>
+  {isValidImageUrl(member.profilePicture) ? (
+    <img 
+      src={member.profilePicture}
+      alt={member.name}
+      className="w-full h-full object-cover"
+    />
+  ) : (
+    // Colored placeholder for profile
+    <div className={`w-full h-full flex items-center justify-center text-white ${getMemberColor(member)}`}>
+      <span className="text-xl font-medium font-roboto">
+        {member.name ? member.name.charAt(0).toUpperCase() : '?'}
+      </span>
+    </div>
+  )}
+</div>
                 </div>
                 
                 {/* Name with better typography */}
