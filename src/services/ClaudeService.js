@@ -22,7 +22,7 @@ class ClaudeService {
         systemPromptLength: systemPrompt.length,
         model: this.model,
         mockMode: this.mockMode,
-        temperature: options.temperature || 0.7,
+        temperature: options.temperature ||.7,
         maxTokens: options.maxTokens || 4000
       });
       
@@ -107,7 +107,9 @@ class ClaudeService {
         - Tasks: ${context.tasks?.length || 0} active tasks
         
         REMEMBER: Always be specific and precise when referring to this family's data.
-        DO NOT say "I have access to the family's data" - instead SHOW that access by mentioning specific data points.`;
+        DO NOT say "I have access to the family's data" - instead SHOW that access by mentioning specific data points.
+        
+        ABOUT SURVEY QUESTIONS: Be informative about all survey questions. Explain why they're asked, how their weights are calculated, and the impact of each factor (frequency, invisibility, emotional labor, child development) on task importance.`;
         
         // Make a simpler request
         const response = await fetch(this.proxyUrl, {
@@ -626,6 +628,16 @@ class ClaudeService {
       }
     }
     
+    // Handle survey question explanations
+    if (userMessageLower.includes("why") && userMessageLower.includes("question")) {
+      return `The survey questions are designed to measure both visible and invisible work in your family. Each question has a weighted impact score based on factors like frequency (how often the task is done), invisibility (how often the work goes unnoticed), emotional labor required, and impact on child development. This helps create a comprehensive picture of your family's workload distribution.`;
+    }
+    
+    // Handle weight/scoring explanations
+    if (userMessageLower.includes("weight") || userMessageLower.includes("score") || userMessageLower.includes("impact")) {
+      return `Task weights in Allie are calculated using several factors: Base Weight (time required), Frequency (daily tasks have higher weight than monthly ones), Invisibility (tasks that go unnoticed have higher weight), Emotional Labor (mental and emotional energy required), and Child Development Impact (how the task affects children's growth). These factors combine to create the total weight you see for each question.`;
+    }
+    
     if (userMessageLower.includes("task") || userMessageLower.includes("what") && userMessageLower.includes("do")) {
       if (context.tasks && context.tasks.length > 0) {
         const pendingTasks = context.tasks.filter(t => !t.completed);
@@ -670,7 +682,7 @@ class ClaudeService {
     }
     
     // If we can't give a specific response based on data, default to something generic but personalized
-    return `I have access to the ${familyName} family's data and can answer specific questions about your survey results, tasks, and balance metrics. What would you like to know?`;
+    return `I'm here to help with your family balance needs. I can answer questions about survey weights, task distribution, and relationship strategies. What would you like to know about?`;
   }
   
   // Format system prompt with family context
@@ -871,6 +883,73 @@ When asked about dates or calendar requests, remember you ARE able to handle cal
       Use these extracted entities to provide a more contextually relevant response.
       `;
     }
+
+    // Special task weight section to improve answers about survey questions
+    const taskWeightSection = `
+    === TASK WEIGHTS AND SURVEY METHODOLOGY ===
+    
+    SURVEY DESIGN:
+    The survey is designed to capture the distribution of both visible and invisible work in the family.
+    Questions are organized into four main categories:
+    1. Visible Household Tasks - Observable tasks like cleaning, cooking, and home maintenance
+    2. Invisible Household Tasks - Tasks like planning, scheduling, and anticipating needs that often go unrecognized
+    3. Visible Parental Tasks - Direct childcare activities like driving kids and helping with homework
+    4. Invisible Parental Tasks - Emotional labor, monitoring development, and coordinating children's needs
+    
+    TASK WEIGHT CALCULATION:
+    Each task is weighted based on several factors:
+    
+    1. Base Weight (1-5): The basic time commitment required for the task
+       - 1: Very quick, takes minutes
+       - 3: Moderate time investment
+       - 5: Significant time commitment
+       
+    2. Frequency Multiplier:
+       - Daily: 1.5x multiplier
+       - Several times weekly: 1.3x multiplier
+       - Weekly: 1.2x multiplier
+       - Monthly: 1.0x multiplier
+       - Quarterly: 0.8x multiplier
+       
+    3. Invisibility Multiplier (how often the work goes unnoticed):
+       - Highly visible: 1.0x multiplier
+       - Partially visible: 1.2x multiplier
+       - Mostly invisible: 1.35x multiplier
+       - Completely invisible: 1.5x multiplier
+       
+    4. Emotional Labor Multiplier:
+       - Minimal: 1.0x multiplier
+       - Low: 1.1x multiplier
+       - Moderate: 1.2x multiplier
+       - High: 1.3x multiplier
+       - Extreme: 1.4x multiplier
+       
+    5. Research Impact Multiplier (based on research findings):
+       - High: 1.3x multiplier
+       - Medium: 1.15x multiplier
+       - Standard: 1.0x multiplier
+       
+    6. Child Development Multiplier (how the task impacts children):
+       - High: 1.25x multiplier
+       - Moderate: 1.15x multiplier
+       - Limited: 1.0x multiplier
+       
+    7. Priority Multiplier (based on family priorities):
+       - Highest priority: 1.5x multiplier
+       - Secondary priority: 1.3x multiplier
+       - Tertiary priority: 1.1x multiplier
+       - None: 1.0x multiplier
+       
+    The final weight is calculated by multiplying the base weight by all applicable multipliers.
+    
+    INTERPRETING WEIGHTS:
+    - 12+ points: Very high impact task - significant contributor to workload imbalance
+    - 9-12 points: High impact task - important for family balance
+    - 6-9 points: Medium impact task - contributes moderately to workload
+    - <6 points: Standard impact task - routine but necessary
+    
+    When a user asks about a specific question or weight, use this framework to explain why certain tasks have higher weights than others, focusing on the multipliers that apply to that specific task.
+    `;
     
     // Create a context-rich system prompt
     return `You are Allie, an AI assistant specialized in family workload balance. 
@@ -927,6 +1006,8 @@ When asked about dates or calendar requests, remember you ARE able to handle cal
     
     ${knowledgeBaseContent}
     
+    ${taskWeightSection}
+    
     ${intentSpecificContext}
     
     ${conversationContext}
@@ -971,6 +1052,13 @@ When asked about dates or calendar requests, remember you ARE able to handle cal
     8. Adding tasks and meetings to calendars
     9. Managing calendar integrations
     10. Analyzing their specific survey data and tasks
+    
+    ABOUT THE SURVEY AND QUESTIONS:
+    - When a user asks about a specific survey question, explain its purpose and importance
+    - Explain task weights in detail when asked, using the Task Weights section above
+    - Relate survey questions to research on family dynamics and balance
+    - Help users understand the difference between visible and invisible work
+    - Connect individual questions to larger categories and patterns
     
     Always be supportive, practical, and focused on improving family dynamics through better balance.
     Remember that all data is confidential to this family.
