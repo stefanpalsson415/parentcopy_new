@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { LogOut, Info, HelpCircle, Scale, Brain, Heart, Clock, ArrowLeft, ArrowRight, Save, Check, X, Edit } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useSurvey } from '../../contexts/SurveyContext';
-import AllieChat from '../chat/AllieChat'; // Import AllieChat component
+import AllieChat from '../chat/AllieChat.jsx'; // Import AllieChat component
 
 const SurveyScreen = () => {
   const navigate = useNavigate();
@@ -1071,7 +1071,8 @@ const handleCompleteSurvey = async () => {
       </div>
 
       {/* Integrate AllieChat component */}
-      {showAllieChat && <AllieChat />}
+      {showAllieChat && AllieChat ? <AllieChat /> : null}
+
     </div>
   );
 };
