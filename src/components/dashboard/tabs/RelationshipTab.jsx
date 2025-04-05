@@ -22,6 +22,7 @@ import {
   arrayUnion, Timestamp
 } from 'firebase/firestore';
 import CalendarService from '../../../services/CalendarService';
+import AllieAIService from '../../../services/AllieAIService';
 
 // Helper to format date consistently throughout the component
 const formatDate = (dateString) => {
@@ -980,18 +981,16 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
         
         // Load AI insights
         try {
-          if (window.AllieAIEngineService) {
-            const aiInsights = await window.AllieAIEngineService.generateRelationshipInsights(
-              familyId,
-              currentCycle,
-              getRelationshipTrendData(),
-              strategies || [],
-              coupleData || {}
-            );
-            
-            if (aiInsights && aiInsights.length > 0) {
-              setInsights(aiInsights);
-            }
+          const aiInsights = await AllieAIService.generateRelationshipInsights(
+            familyId,
+            currentCycle,
+            getRelationshipTrendData(),
+            strategies || [],
+            coupleData || {}
+          );
+          
+          if (aiInsights && aiInsights.length > 0) {
+            setInsights(aiInsights);
           }
         } catch (insightError) {
           console.error("Error loading relationship insights:", insightError);
@@ -1430,7 +1429,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
               onClick={async () => {
                 try {
                   // Show loading message or spinner
-                  const aiInsights = await window.AllieAIEngineService?.generateRelationshipInsights(
+                  const aiInsights = await AllieAIService.generateRelationshipInsights(
                     familyId,
                     currentCycle,
                     getRelationshipTrendData(),
