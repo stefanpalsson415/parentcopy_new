@@ -1,10 +1,10 @@
 // src/components/chat/ChatFeedback.jsx
 import React, { useState } from 'react';
-import { ThumbsUp, ThumbsDown, MessageSquare, X } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, MessageSquare, X, Star, Smile, Frown } from 'lucide-react';
 import EnhancedChatService from '../../services/EnhancedChatService';
 
 /**
- * Component for collecting user feedback on AI responses
+ * Enhanced component for collecting user feedback on AI responses
  */
 const ChatFeedback = ({ messageId, familyId }) => {
   const [feedback, setFeedback] = useState(null);
@@ -12,6 +12,7 @@ const ChatFeedback = ({ messageId, familyId }) => {
   const [correction, setCorrection] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [feedbackType, setFeedbackType] = useState(null);
 
   // Handle feedback button click
   const handleFeedback = async (type) => {
@@ -34,13 +35,24 @@ const ChatFeedback = ({ messageId, familyId }) => {
     }
   };
 
+  // Handle specific feedback type selection
+  const handleFeedbackType = (type) => {
+    setFeedbackType(type);
+  };
+
   // Handle correction submission
   const handleCorrectionSubmit = async (e) => {
     e.preventDefault();
     
     try {
       setIsSubmitting(true);
-      await EnhancedChatService.saveUserFeedback(messageId, 'negative', correction, familyId);
+      // Include feedback type in the submission if selected
+      const feedbackData = {
+        feedback: 'negative',
+        correction: correction,
+        feedbackType: feedbackType
+      };
+      await EnhancedChatService.saveUserFeedback(messageId, 'negative', correction, familyId, feedbackType);
       setSubmitted(true);
       setShowCorrectionForm(false);
       setIsSubmitting(false);
@@ -56,6 +68,7 @@ const ChatFeedback = ({ messageId, familyId }) => {
     setShowCorrectionForm(false);
     setCorrection('');
     setSubmitted(false);
+    setFeedbackType(null);
   };
 
   // If feedback already submitted, show thank you message
@@ -116,6 +129,41 @@ const ChatFeedback = ({ messageId, familyId }) => {
               <X size={14} />
             </button>
           </div>
+          
+          {/* Feedback type selection */}
+          <div className="flex mb-2 gap-1">
+            <button
+              type="button"
+              onClick={() => handleFeedbackType('incorrect')}
+              className={`flex items-center text-xs p-1 rounded flex-1 ${
+                feedbackType === 'incorrect' ? 'bg-red-100 text-red-700' : 'bg-white border'
+              }`}
+            >
+              <Frown size={12} className="mr-1" />
+              Incorrect
+            </button>
+            <button
+              type="button"
+              onClick={() => handleFeedbackType('confusing')}
+              className={`flex items-center text-xs p-1 rounded flex-1 ${
+                feedbackType === 'confusing' ? 'bg-amber-100 text-amber-700' : 'bg-white border'
+              }`}
+            >
+              <MessageSquare size={12} className="mr-1" />
+              Confusing
+            </button>
+            <button
+              type="button"
+              onClick={() => handleFeedbackType('better')}
+              className={`flex items-center text-xs p-1 rounded flex-1 ${
+                feedbackType === 'better' ? 'bg-blue-100 text-blue-700' : 'bg-white border'
+              }`}
+            >
+              <Star size={12} className="mr-1" />
+              Could be better
+            </button>
+          </div>
+          
           <textarea
             value={correction}
             onChange={(e) => setCorrection(e.target.value)}
@@ -135,9 +183,8 @@ const ChatFeedback = ({ messageId, familyId }) => {
           </div>
         </form>
       )}
-)}
-</div>
-);
+    </div>
+  );
 };
 
 export default ChatFeedback;
