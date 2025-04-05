@@ -6,7 +6,7 @@ import { calculateBalanceScores } from '../utils/TaskWeightCalculator';
 import { useSurvey } from './SurveyContext';
 import { db } from '../services/firebase';
 import { collection, doc, setDoc, getDoc, updateDoc, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
-import AllieAIEngineService from '../services/AllieAIEngineService';
+import AllieAIService from '../services/AllieAIService'; // Updated import to use consolidated service
 
 
 
@@ -158,7 +158,7 @@ updateFavicon(familyPicture || getDefaultFavicon());
     setTaskRecommendations([]);
     setTaskEffectivenessData([]);
     setImpactInsights([]);
-    setKidTasksData({});
+    setKidTasksData([]);
     setWeightedScores(null); // Added this line to ensure weightedScores gets reset
     setError(null);
     
@@ -244,48 +244,47 @@ updateFavicon(familyPicture || getDefaultFavicon());
     }
   };
 
-  // Save couple check-in data
   // Save couple check-in data with AI feedback
-// Save couple check-in data with AI feedback
-const saveCoupleCheckInData = async (familyId, weekNumber, data) => {
-  try {
-    if (!familyId) throw new Error("No family ID available");
-    
-    // Save the check-in data to Firestore
-    await DatabaseService.saveCoupleCheckInData(familyId, weekNumber, data);
-    
-    // Get AI insights based on the check-in data
+  // Updated to use consolidated AllieAIService
+  const saveCoupleCheckInData = async (familyId, weekNumber, data) => {
     try {
-      const aiInsights = await AllieAIEngineService.generateCoupleCheckInFeedback(
-        familyId,
-        weekNumber,
-        data
-      );
+      if (!familyId) throw new Error("No family ID available");
       
-      // Save the AI insights along with the check-in data
-      if (aiInsights) {
-        await DatabaseService.saveCoupleCheckInFeedback(familyId, weekNumber, aiInsights);
+      // Save the check-in data to Firestore
+      await DatabaseService.saveCoupleCheckInData(familyId, weekNumber, data);
+      
+      // Get AI insights based on the check-in data
+      try {
+        const aiInsights = await AllieAIService.generateCoupleCheckInFeedback(
+          familyId,
+          weekNumber,
+          data
+        );
+        
+        // Save the AI insights along with the check-in data
+        if (aiInsights) {
+          await DatabaseService.saveCoupleCheckInFeedback(familyId, weekNumber, aiInsights);
+        }
+        
+        // Update local state
+        setCoupleCheckInData(prev => ({
+          ...prev,
+          [weekNumber]: {
+            ...data,
+            aiInsights
+          }
+        }));
+      } catch (insightError) {
+        console.error("Error generating AI feedback:", insightError);
+        // Don't block completion if AI insights fail
       }
       
-      // Update local state
-      setCoupleCheckInData(prev => ({
-        ...prev,
-        [weekNumber]: {
-          ...data,
-          aiInsights
-        }
-      }));
-    } catch (insightError) {
-      console.error("Error generating AI feedback:", insightError);
-      // Don't block completion if AI insights fail
+      return true;
+    } catch (error) {
+      console.error("Error saving couple check-in data:", error);
+      throw error;
     }
-    
-    return true;
-  } catch (error) {
-    console.error("Error saving couple check-in data:", error);
-    throw error;
-  }
-};
+  };
 
   // Get couple check-in data for a specific week
   const getCoupleCheckInData = (weekNumber) => {
@@ -393,10 +392,9 @@ const updateRelationshipStrategy = async (strategyId, updateData) => {
     }
   };
 
-  // Complete initial survey
- // Complete initial survey with enhanced error handling and analytics
-// Enhanced completeInitialSurvey with better error handling and logging
-const completeInitialSurvey = async (memberId, responses) => {
+  // Complete initial survey with enhanced error handling and analytics
+  // Enhanced completeInitialSurvey with better error handling and logging
+  const completeInitialSurvey = async (memberId, responses) => {
   try {
     console.log(`Starting initial survey completion for member ${memberId}`);
     if (!familyId) throw new Error("No family ID available");
@@ -630,32 +628,31 @@ const extractAIPreferencesFromSurvey = (responses) => {
             date: new Date().toISOString().split('T')[0]
           };
           
-// Send relationship data to AI engine for learning
-if (responses && Object.keys(responses).some(key => key.startsWith('rel-'))) {
-  try {
-    // Extract just the relationship responses
-    const relationshipResponses = {};
-    Object.entries(responses).forEach(([key, value]) => {
-      if (key.startsWith('rel-')) {
-        relationshipResponses[key] = value;
-      }
-    });
-    
-    // Don't await this to avoid blocking completion
-    AllieAIEngineService.processRelationshipFeedback(
-      familyId,
-      weekNum,
-      memberId,
-      relationshipResponses
-    ).catch(err => console.error("Error processing relationship feedback:", err));
-    
-    console.log("Sent relationship data to AI engine for learning");
-  } catch (error) {
-    console.error("Error handling relationship responses:", error);
-    // Don't block completion if this fails
-  }
-}
-
+          // Send relationship data to AI engine for learning
+          if (responses && Object.keys(responses).some(key => key.startsWith('rel-'))) {
+            try {
+              // Extract just the relationship responses
+              const relationshipResponses = {};
+              Object.entries(responses).forEach(([key, value]) => {
+                if (key.startsWith('rel-')) {
+                  relationshipResponses[key] = value;
+                }
+              });
+              
+              // Don't await this to avoid blocking completion
+              AllieAIService.processRelationshipFeedback(
+                familyId,
+                weekNum,
+                memberId,
+                relationshipResponses
+              ).catch(err => console.error("Error processing relationship feedback:", err));
+              
+              console.log("Sent relationship data to AI engine for learning");
+            } catch (error) {
+              console.error("Error handling relationship responses:", error);
+              // Don't block completion if this fails
+            }
+          }
 
           return {
             ...member,
@@ -849,214 +846,16 @@ if (responses && Object.keys(responses).some(key => key.startsWith('rel-'))) {
     return imbalances.sort((a, b) => b.imbalanceScore - a.imbalanceScore);
   };
 
-  // NEW: Analyze task effectiveness
+  // Analyze task effectiveness - now using the consolidated AllieAIService
   const analyzeTaskEffectiveness = (completedTasks, weekHistoryData) => {
     console.log("Analyzing task effectiveness based on historical data");
-    
-    // Group tasks by type/focus area
-    const tasksByType = {};
-    completedTasks.forEach(task => {
-      const type = task.focusArea || task.taskType || task.category || 'other';
-      if (!tasksByType[type]) tasksByType[type] = [];
-      tasksByType[type].push(task);
-    });
-    
-    // For each type, check if balance improved in the following week
-    const effectiveness = [];
-    Object.entries(tasksByType).forEach(([type, tasks]) => {
-      // Find the weeks these tasks were completed in
-      const weekNumbers = [...new Set(tasks.map(t => {
-        // Extract week number from task ID or other properties
-        const match = t.id?.toString().match(/^(\d+)-/);
-        return match ? parseInt(match[1]) : null;
-      }))].filter(Boolean);
-      
-      // Check balance before and after
-      const improvementCount = weekNumbers.filter(weekNum => {
-        const beforeWeekData = weekHistoryData[`week${weekNum}`];
-        const afterWeekData = weekHistoryData[`week${weekNum+1}`];
-        
-        if (!beforeWeekData || !afterWeekData) return false;
-        
-        // Calculate if balance improved - extract the balance data
-        const beforeBalance = { 
-          mama: 0, 
-          papa: 0 
-        };
-        
-        // Try to extract mama percentage from different possible data structures
-        if (beforeWeekData.balance?.mama) {
-          beforeBalance.mama = beforeWeekData.balance.mama;
-        } else if (beforeWeekData.surveyResponses) {
-          // Count responses where value is "Mama"
-          let mamaCount = 0;
-          let totalCount = 0;
-          
-          Object.values(beforeWeekData.surveyResponses).forEach(value => {
-            if (value === "Mama" || value === "Papa") {
-              totalCount++;
-              if (value === "Mama") mamaCount++;
-            }
-          });
-          
-          if (totalCount > 0) {
-            beforeBalance.mama = (mamaCount / totalCount) * 100;
-          }
-        }
-        
-        beforeBalance.papa = 100 - beforeBalance.mama;
-        
-        // Same for after week
-        const afterBalance = { 
-          mama: 0, 
-          papa: 0 
-        };
-        
-        if (afterWeekData.balance?.mama) {
-          afterBalance.mama = afterWeekData.balance.mama;
-        } else if (afterWeekData.surveyResponses) {
-          // Count responses where value is "Mama"
-          let mamaCount = 0;
-          let totalCount = 0;
-          
-          Object.values(afterWeekData.surveyResponses).forEach(value => {
-            if (value === "Mama" || value === "Papa") {
-              totalCount++;
-              if (value === "Mama") mamaCount++;
-            }
-          });
-          
-          if (totalCount > 0) {
-            afterBalance.mama = (mamaCount / totalCount) * 100;
-          }
-        }
-        
-        afterBalance.papa = 100 - afterBalance.mama;
-        
-        // Measure distance from perfect balance (50/50)
-        const beforeImbalance = Math.abs(beforeBalance.mama - 50);
-        const afterImbalance = Math.abs(afterBalance.mama - 50);
-        
-        // Return true if balance got better (imbalance decreased)
-        return afterImbalance < beforeImbalance;
-      }).length;
-      
-      // Calculate effectiveness ratio
-      const effectivenessScore = weekNumbers.length > 0 
-        ? improvementCount / weekNumbers.length 
-        : 0.5; // Default if no data
-      
-      effectiveness.push({
-        taskType: type,
-        effectiveness: effectivenessScore,
-        sampleSize: weekNumbers.length,
-        tasksCompleted: tasks.length
-      });
-    });
-    
-    return effectiveness;
+    return AllieAIService.analyzeTaskEffectiveness(completedTasks, weekHistoryData);
   };
 
-  // NEW: Analyze task impact
+  // Analyze task impact - now using the consolidated AllieAIService
   const analyzeTaskImpact = (currentWeekData, previousWeekData) => {
     console.log("Analyzing task impact between weeks");
-    
-    const impactInsights = [];
-    
-    if (!currentWeekData || !previousWeekData) {
-      return impactInsights; // Return empty array if data is missing
-    }
-    
-    // Helper to extract balance data from week data
-    const extractBalance = (weekData, category) => {
-      // First try category-specific balance
-      if (weekData.categoryBalance && weekData.categoryBalance[category]) {
-        return weekData.categoryBalance[category];
-      }
-      
-      // If that's not available, extract from survey responses
-      if (weekData.surveyResponses) {
-        const categoryResponses = Object.entries(weekData.surveyResponses)
-          .filter(([key, _]) => key.includes(category) || 
-                              (key.includes('q') && 
-                              (category === "Visible Household Tasks" && key.match(/q([1-9]|1[0-9]|20)/)) ||
-                              (category === "Invisible Household Tasks" && key.match(/q(2[1-9]|3[0-9]|40)/)) ||
-                              (category === "Visible Parental Tasks" && key.match(/q(4[1-9]|5[0-9]|60)/)) ||
-                              (category === "Invisible Parental Tasks" && key.match(/q(6[1-9]|7[0-9]|80)/))
-                              ));
-        
-        const mamaCount = categoryResponses.filter(([_, value]) => value === "Mama").length;
-        const totalCount = categoryResponses.length;
-        
-        if (totalCount > 0) {
-          return {
-            mamaPercent: (mamaCount / totalCount) * 100,
-            papaPercent: 100 - (mamaCount / totalCount) * 100
-          };
-        }
-      }
-      
-      // If we can't determine from the data, return a balanced default
-      return { mamaPercent: 50, papaPercent: 50 };
-    };
-    
-    // Compare data between weeks for each category
-    const categories = [
-      "Visible Household Tasks",
-      "Invisible Household Tasks",
-      "Visible Parental Tasks",
-      "Invisible Parental Tasks"
-    ];
-    
-    categories.forEach(category => {
-      const previousBalance = extractBalance(previousWeekData, category);
-      const currentBalance = extractBalance(currentWeekData, category);
-      
-      // Calculate improvement (how much closer to 50/50 balance we got)
-      const previousImbalance = Math.abs(previousBalance.mamaPercent - 50);
-      const currentImbalance = Math.abs(currentBalance.mamaPercent - 50);
-      const improvement = previousImbalance - currentImbalance;
-      
-      // Find tasks related to this category
-      const relatedTasks = (currentWeekData.tasks || []).filter(task => 
-        task.category === category || 
-        task.hiddenWorkloadType === category || 
-        task.focusArea === category);
-      
-      const completedTasks = relatedTasks.filter(task => task.completed);
-      
-      if (improvement > 3 && completedTasks.length > 0) {
-        // Significant improvement with completed tasks
-        impactInsights.push({
-          category,
-          improvement: improvement.toFixed(1),
-          effectiveTasks: completedTasks.map(t => t.title || t.description),
-          message: `Your work on ${completedTasks.length} tasks has improved balance in ${category} by ${improvement.toFixed(1)}%!`,
-          type: 'success'
-        });
-      } 
-      else if (improvement <= 0 && completedTasks.length > 0) {
-        // No improvement despite completed tasks
-        impactInsights.push({
-          category,
-          improvement: improvement.toFixed(1),
-          ineffectiveTasks: completedTasks.map(t => t.title || t.description),
-          message: `Despite completing tasks in ${category}, we haven't seen improvement yet. Let's try a different approach next week.`,
-          type: 'warning'
-        });
-      }
-      else if (improvement > 0 && completedTasks.length === 0) {
-        // Improvement without specific tasks
-        impactInsights.push({
-          category,
-          improvement: improvement.toFixed(1),
-          message: `${category} balance improved by ${improvement.toFixed(1)}% even without specific tasks!`,
-          type: 'info'
-        });
-      }
-    });
-    
-    return impactInsights;
+    return AllieAIService.analyzeTaskImpact(currentWeekData, previousWeekData);
   };
 
   // Helper function to determine priority areas based on imbalances and previous focus
@@ -1252,25 +1051,25 @@ if (responses && Object.keys(responses).some(key => key.startsWith('rel-'))) {
     
     // Create the task with AI-driven insight
     // Get the actual parent name from family members
-const getParentName = (role) => {
-  const parent = familyMembers.find(m => m.role === 'parent' && m.roleType === role);
-  return parent ? parent.name : role; // Fall back to role if name not found
-};
+    const getParentName = (role) => {
+      const parent = familyMembers.find(m => m.role === 'parent' && m.roleType === role);
+      return parent ? parent.name : role; // Fall back to role if name not found
+    };
 
-return {
-  id: taskId,
-  title: `${weekNumber > 1 ? `Week ${weekNumber}: ` : ""}${areaData.focusArea}`,
-  description: areaData.description,
-  assignedTo: assignedTo,
-  assignedToName: getParentName(assignedTo),
-  focusArea: areaData.focusArea, 
-  category: areaData.category,
-  completed: false,
-  completedDate: null,
-  comments: [],
-  aiInsight: areaData.insight,
-  subTasks: formattedSubTasks
-};
+    return {
+      id: taskId,
+      title: `${weekNumber > 1 ? `Week ${weekNumber}: ` : ""}${areaData.focusArea}`,
+      description: areaData.description,
+      assignedTo: assignedTo,
+      assignedToName: getParentName(assignedTo),
+      focusArea: areaData.focusArea, 
+      category: areaData.category,
+      completed: false,
+      completedDate: null,
+      comments: [],
+      aiInsight: areaData.insight,
+      subTasks: formattedSubTasks
+    };
   };
 
   // Generate special AI insight task
@@ -1499,15 +1298,16 @@ return {
         previousWeekData = weekHistory.initial;
       }
       
-      const newImpactInsights = analyzeTaskImpact(weekData, previousWeekData);
+      // Using consolidated AllieAIService for task impact analysis
+      const newImpactInsights = AllieAIService.analyzeTaskImpact(weekData, previousWeekData);
       console.log("Generated impact insights:", newImpactInsights);
       
       // Update impact insights state
       const updatedImpactInsights = [...impactInsights, ...newImpactInsights];
       setImpactInsights(updatedImpactInsights);
       
-      // Calculate task effectiveness from historical data
-      const effectivenessData = analyzeTaskEffectiveness(
+      // Calculate task effectiveness from historical data - using AllieAIService
+      const effectivenessData = AllieAIService.analyzeTaskEffectiveness(
         currentTasks.filter(t => t.completed), 
         weekHistory
       );
@@ -1729,7 +1529,7 @@ return {
       // Determine who should be assigned the task
       // Simple heuristic: assign to Papa if contains "Papa", Mama if contains "Mama", alternate otherwise
       const itemLower = item.toLowerCase();
-const assignTo = itemLower.includes("papa") ? "Papa" : 
+      const assignTo = itemLower.includes("papa") ? "Papa" : 
                 itemLower.includes("mama") ? "Mama" : 
                 index % 2 === 0 ? "Papa" : "Mama";
       
