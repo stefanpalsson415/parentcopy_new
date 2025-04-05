@@ -1,8 +1,9 @@
 // src/components/chat/ChatMessage.jsx
 import React from 'react';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, ThumbsUp, Image, Paperclip } from 'lucide-react';
+import ChatFeedback from './ChatFeedback';
 
-const ChatMessage = ({ message }) => {
+const ChatMessage = ({ message, showFeedback = true, onReact = null }) => {
   const isAllie = message.sender === 'allie';
   
   // Function to detect URLs and make them clickable
@@ -62,15 +63,52 @@ const ChatMessage = ({ message }) => {
           ? 'bg-white border border-gray-200 shadow-sm' 
           : 'bg-black text-white'
       }`}>
-        {!isAllie && (
-          <div className="font-medium text-xs mb-1 font-roboto">{message.userName}</div>
-        )}
+        <div className="flex justify-between items-start">
+          {!isAllie && (
+            <div className="font-medium text-xs mb-1 font-roboto">{message.userName}</div>
+          )}
+          {isAllie && (
+            <div className="font-medium text-xs mb-1 font-roboto">Allie</div>
+          )}
+          <div className="text-xs text-gray-500 ml-2 font-roboto">
+            {new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+          </div>
+        </div>
+        
         <div className="text-sm whitespace-pre-wrap font-roboto leading-relaxed">
           {formatWithLineBreaks(message.text)}
         </div>
-        <div className="text-xs text-gray-500 mt-2 text-right font-roboto">
-          {new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-        </div>
+        
+        {/* Show image if present */}
+        {message.imageUrl && (
+          <div className="mt-2 max-w-xs">
+            <img 
+              src={message.imageUrl} 
+              alt="Shared in chat" 
+              className="rounded-md max-w-full h-auto"
+            />
+          </div>
+        )}
+        
+        {/* Show file attachment if present */}
+        {message.fileUrl && (
+          <div className="mt-2">
+            <a 
+              href={message.fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center p-2 bg-gray-100 rounded-md text-sm hover:bg-gray-200"
+            >
+              <Paperclip size={14} className="mr-2 text-gray-600" />
+              <span className="text-gray-800 truncate">{message.fileName || "Attachment"}</span>
+            </a>
+          </div>
+        )}
+        
+        {/* Show feedback component for Allie messages */}
+        {isAllie && showFeedback && message.id && (
+          <ChatFeedback messageId={message.id} familyId={message.familyId} />
+        )}
       </div>
       
       {!isAllie && message.userImage && (
