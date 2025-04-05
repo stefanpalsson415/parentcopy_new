@@ -13,7 +13,7 @@ import DatabaseService from '../../services/DatabaseService';
 import { useLocation } from 'react-router-dom';
 
 const AllieChat = () => {
-  const { familyId, selectedUser, familyMembers, updateMemberProfile, familyName } = useFamily();
+  const { familyId, selectedUser, familyMembers, updateMemberProfile, familyName, currentWeek, completedWeeks } = useFamily();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -25,12 +25,9 @@ const AllieChat = () => {
   const [imagePreview, setImagePreview] = useState(null);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [chatHeight, setChatHeight] = useState(68); // Default height (in rems)
-  const [promptChips, setPromptChips] = useState([
-    { type: 'calendar', text: 'Add an event to my calendar' },
-    { type: 'task', text: 'What tasks do I have this week?' },
-    { type: 'balance', text: 'How is our family balance?' }
-  ]);
-  // New state variables for enhanced features
+  const [promptChips, setPromptChips] = useState([]);
+  
+  // Enhanced state variables
   const [showInsights, setShowInsights] = useState(false);
   const [detectedIntent, setDetectedIntent] = useState(null);
   const [extractedEntities, setExtractedEntities] = useState(null);
@@ -39,6 +36,8 @@ const AllieChat = () => {
   const [initialMessageSent, setInitialMessageSent] = useState(false);
   const [showProfileUploadHelp, setShowProfileUploadHelp] = useState(false);
   const [profileUploadTarget, setProfileUploadTarget] = useState(null);
+  const [userClosedChat, setUserClosedChat] = useState(false);
+  const [textareaHeight, setTextareaHeight] = useState(36); // Default height in px
   
   // Get current location to customize Allie's behavior
   const location = useLocation();
@@ -46,6 +45,7 @@ const AllieChat = () => {
   const messagesEndRef = useRef(null);
   const recognition = useRef(null);
   const fileInputRef = useRef(null);
+  const textareaRef = useRef(null);
   const nlu = useRef(new EnhancedNLU());
   
   // Check if current user can use chat
@@ -90,50 +90,100 @@ const AllieChat = () => {
     }
   }, []);
   
-  // NEW CODE (replace with this)
-const [userClosedChat, setUserClosedChat] = useState(false);
-
-useEffect(() => {
-  // Check if we're on a page where we want to auto-open chat
-  const shouldOpen = 
-    location.pathname === '/login' || // Family selection screen
-    location.pathname === '/survey' || // Initial survey
-    location.pathname === '/kid-survey'; // Kid survey screen
+  // Auto-resize textarea as user types
+  useEffect(() => {
+    if (textareaRef.current) {
+      // Reset height to auto to correctly calculate new height
+      textareaRef.current.style.height = 'auto';
+      // Set new height based on content
+      const newHeight = Math.max(36, Math.min(120, textareaRef.current.scrollHeight));
+      textareaRef.current.style.height = `${newHeight}px`;
+      setTextareaHeight(newHeight);
+    }
+  }, [input]);
   
-  // Also check if we have family members without profile pictures
-  const hasMissingProfiles = familyMembers.some(m => !m.profilePicture);
-  
-  // Auto-open on login page or if missing profiles, but only once and respect user choice
-  if ((shouldOpen || hasMissingProfiles) && !isOpen && !userClosedChat) {
-    const timer = setTimeout(() => {
-      setShouldAutoOpen(true);
-      setIsOpen(true);
-    }, 1500); // Slight delay for better UX
+  // Auto-open chat on specific pages or for missing profiles
+  useEffect(() => {
+    // Check if we're on a page where we want to auto-open chat
+    const shouldOpen = 
+      location.pathname === '/login' || // Family selection screen
+      location.pathname === '/survey' || // Initial survey
+      location.pathname === '/kid-survey'; // Kid survey screen
     
-    return () => clearTimeout(timer);
-  }
-}, [location.pathname, familyMembers, userClosedChat]); // Remove isOpen dependency
-
-// Then modify the toggleChat function
-const toggleChat = () => {
-  setIsOpen(!isOpen);
-  // If user is closing the chat, remember this choice
-  if (isOpen) {
-    setUserClosedChat(true);
-  }
-};  
+    // Also check if we have family members without profile pictures
+    const hasMissingProfiles = familyMembers.some(m => !m.profilePicture);
+    
+    // Auto-open on login page or if missing profiles, but only once and respect user choice
+    if ((shouldOpen || hasMissingProfiles) && !isOpen && !userClosedChat) {
+      const timer = setTimeout(() => {
+        setShouldAutoOpen(true);
+        setIsOpen(true);
+      }, 1500); // Slight delay for better UX
+      
+      return () => clearTimeout(timer);
+    }
+  }, [location.pathname, familyMembers, userClosedChat, isOpen]); 
+  
+  // Set context-aware prompt chips based on current page and progress
+  useEffect(() => {
+    // Determine user's current phase in the app
+    const isSurveyPhase = location.pathname.includes('/survey');
+    const isOnboarding = location.pathname === '/login' || isSurveyPhase;
+    const isMissingProfiles = familyMembers.some(m => !m.profilePicture);
+    const hasSurveyResults = completedWeeks && completedWeeks.length > 0;
+    
+    // Set different prompt chips based on phase
+    if (isOnboarding) {
+      if (isMissingProfiles) {
+        setPromptChips([
+          { type: 'profile', text: 'Add profile pictures' },
+          { type: 'help', text: 'Why take the survey?' },
+          { type: 'info', text: 'How does Allie work?' }
+        ]);
+      } else if (isSurveyPhase) {
+        setPromptChips([
+          { type: 'help', text: 'Why are these questions important?' },
+          { type: 'info', text: 'How is data used?' },
+          { type: 'balance', text: 'Why divide tasks by category?' }
+        ]);
+      } else {
+        setPromptChips([
+          { type: 'help', text: 'What can Allie do?' },
+          { type: 'survey', text: 'Tell me about the survey' },
+          { type: 'profile', text: 'How to set up profiles' }
+        ]);
+      }
+    } else {
+      // Dashboard phase - regular app usage
+      if (hasSurveyResults) {
+        setPromptChips([
+          { type: 'calendar', text: 'Add an event to my calendar' },
+          { type: 'task', text: 'What tasks do I have this week?' },
+          { type: 'balance', text: 'How is our family balance?' }
+        ]);
+      } else {
+        setPromptChips([
+          { type: 'help', text: 'What happens after the survey?' },
+          { type: 'task', text: 'How will tasks be assigned?' },
+          { type: 'balance', text: 'What is family balance?' }
+        ]);
+      }
+    }
+  }, [location.pathname, familyMembers, completedWeeks]);
+  
   // Send an initial welcome/tutorial message when chat is first opened
   useEffect(() => {
     if (isOpen && shouldAutoOpen && !initialMessageSent && familyId) {
       // Small delay for better UX
       const timer = setTimeout(() => {
+        // Check for missing profile pictures first
+        const missingProfiles = familyMembers.filter(m => !m.profilePicture);
+        
         // Check the current page to customize the message
         let initialMessage = "";
         
         if (location.pathname === '/login') {
           // Family selection screen - focus on profile pictures
-          const missingProfiles = familyMembers.filter(m => !m.profilePicture);
-          
           if (missingProfiles.length > 0) {
             initialMessage = `Welcome to Allie! I noticed that ${missingProfiles.length > 1 ? 'some family members' : missingProfiles[0].name} ${missingProfiles.length > 1 ? "don't" : "doesn't"} have profile pictures yet. Would you like me to help you upload ${missingProfiles.length > 1 ? 'them' : 'one'}? Just say "Add profile picture" or select a family member to upload for.`;
             
@@ -148,7 +198,7 @@ const toggleChat = () => {
           }
         } else if (location.pathname === '/survey' || location.pathname === '/kid-survey') {
           // Survey screen - explain the survey
-          initialMessage = `Hi ${selectedUser?.name || 'there'}! I'm here to help with your family survey. This helps me understand how tasks are distributed in your family. Feel free to ask me any questions about the survey or why specific questions are important.`;
+          initialMessage = `Hi ${selectedUser?.name || 'there'}! I'm here to help with your family survey. This helps me understand how tasks are distributed in your family. Feel free to ask me any questions about the survey, like "Why is this task weighted high?" or "What does invisibility mean?"`;
           
           // Update prompt chips for survey
           setPromptChips([
@@ -203,8 +253,6 @@ const toggleChat = () => {
       setLoading(false);
     }
   };
-  
-  
   
   // Handle image file from message
   const handleImageFileFromMessage = async (file, memberId) => {
@@ -427,6 +475,9 @@ const toggleChat = () => {
     } else {
       setInput(promptText);
     }
+    
+    // Focus on the textarea after setting the input
+    textareaRef.current?.focus();
   };
   
   const handleToggleMic = () => {
@@ -600,6 +651,15 @@ const toggleChat = () => {
       });
   };
   
+  // Toggle chat open/closed
+  const toggleChat = () => {
+    setIsOpen(!isOpen);
+    // If user is closing the chat, remember this choice
+    if (isOpen) {
+      setUserClosedChat(true);
+    }
+  };
+  
   // Make sure the chat doesn't render without a user
   if (!selectedUser && !familyId) {
     return null;
@@ -708,7 +768,7 @@ const toggleChat = () => {
                 <div className="flex items-center mb-1">
                   <span className="font-medium text-sm">{msg.userName || (msg.sender === 'allie' ? 'Allie' : 'You')}</span>
                   <span className="text-xs text-gray-500 ml-2">
-                    {new Date(msg.timestamp).toLocaleTimeString()}
+                    {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                   </span>
                 </div>
                 <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
@@ -726,7 +786,7 @@ const toggleChat = () => {
                 <div className="flex items-center mb-1">
                   <span className="font-medium text-sm">Allie</span>
                   <span className="text-xs text-gray-500 ml-2">
-                    {new Date().toLocaleTimeString()}
+                    {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                   </span>
                 </div>
                 <p className="text-sm mb-2">
@@ -811,7 +871,7 @@ const toggleChat = () => {
                 className="bg-gray-100 hover:bg-gray-200 text-xs px-3 py-1 rounded-full font-roboto"
               >
                 {chip.type === 'calendar' && <Calendar size={12} className="inline mr-1" />}
-                {chip.type === 'profile' && <Camera size={12} className="inline mr-1" />}
+                {chip.type === 'profile' && <User size={12} className="inline mr-1" />}
                 {chip.text}
               </button>
             ))}
@@ -852,11 +912,13 @@ const toggleChat = () => {
               <>
                 <div className="flex items-end">
                   <textarea
+                    ref={textareaRef}
                     value={isListening ? transcription : input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder="Message Allie..."
                     className="flex-1 border rounded-l-md p-2 focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm resize-none font-roboto"
+                    style={{ height: `${textareaHeight}px`, maxHeight: '120px' }}
                     rows="1"
                     disabled={isListening}
                   ></textarea>
