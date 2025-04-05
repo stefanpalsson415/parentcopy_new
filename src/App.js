@@ -22,7 +22,6 @@ import FamilySurveyDashboard from './components/survey/FamilySurveyDashboard';
 import PaymentScreen from './components/payment/PaymentScreen';
 import LandingPage from './components/marketing/LandingPage';
 import OnboardingFlow from './components/onboarding/OnboardingFlow';
-import { ChatProvider } from './contexts/ChatContext';
 import RelationshipFeaturesPage from './components/marketing/RelationshipFeaturesPage';
 import AIAssistantPage from './components/marketing/AIAssistantPage';
 import { useAuth } from './contexts/AuthContext';
@@ -192,13 +191,11 @@ function App() {
       <ErrorBoundary>
         <AuthProvider>
           <FamilyProvider>
-            <SurveyProvider>
-              <ChatProvider>
-                <div className="App">
-                  <AppRoutes />
-                </div>
-              </ChatProvider>
-            </SurveyProvider>
+          <SurveyProvider>
+  <div className="App">
+    <AppRoutes />
+  </div>
+</SurveyProvider>
           </FamilyProvider>
         </AuthProvider>
       </ErrorBoundary>
