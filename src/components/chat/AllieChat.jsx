@@ -231,14 +231,14 @@ const AllieChat = () => {
             initialMessage = `Hi ${selectedUser?.name || 'there'}! I'm Allie, your family's AI assistant. I'll help balance responsibilities and improve family harmony. Would you like to learn about what I can do?`;
           }
         } else if (location.pathname === '/survey' || location.pathname === '/kid-survey') {
-          // Survey screen - explain the survey
-          initialMessage = `Hi ${selectedUser?.name || 'there'}! I'm here to help with your family survey. This helps me understand how tasks are distributed in your family. Feel free to ask me any questions about the survey, like "Why is this task weighted high?" or "What does invisibility mean?"`;
+          // Survey screen - focus specifically on the initial survey
+          initialMessage = `Hi ${selectedUser?.name || 'there'}! I'm here to help with your initial family survey. This survey is how I learn about your family's task distribution. Feel free to ask me about any question like "Why is this important?" or "What does task weight mean?" You can also say "Do you know any dad jokes?" if you need a laugh while completing the survey!`;
           
           // Update prompt chips for survey
           setPromptChips([
             { type: 'help', text: 'Why are these questions important?' },
             { type: 'info', text: 'How is task weight calculated?' },
-            { type: 'balance', text: 'What is family balance?' }
+            { type: 'fun', text: 'Tell me a dad joke!' }
           ]);
         } else {
           // Default welcome message

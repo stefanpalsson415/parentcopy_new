@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { HelpCircle, Volume2, ArrowRight, ArrowLeft, Star, Medal, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { HelpCircle, Volume2, ArrowRight, ArrowLeft, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useSurvey } from '../../contexts/SurveyContext';
@@ -8,60 +8,25 @@ import AllieChat from '../chat/AllieChat'; // Import AllieChat component
 // Simple illustrations instead of complex SVGs - just basic elements
 const SimpleIllustrations = {
   "cleaning": () => (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center">
-        <div className="text-4xl">🧹</div>
-        <p className="text-sm">Cleaning</p>
-      </div>
-    </div>
+    <span className="text-2xl">🧹</span>
   ),
   "cooking": () => (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center">
-        <div className="text-4xl">🍳</div>
-        <p className="text-sm">Cooking</p>
-      </div>
-    </div>
+    <span className="text-2xl">🍳</span>
   ),
   "planning": () => (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center">
-        <div className="text-4xl">📅</div>
-        <p className="text-sm">Planning</p>
-      </div>
-    </div>
+    <span className="text-2xl">📅</span>
   ),
   "homework": () => (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center">
-        <div className="text-4xl">📚</div>
-        <p className="text-sm">Homework</p>
-      </div>
-    </div>
+    <span className="text-2xl">📚</span>
   ),
   "driving": () => (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center">
-        <div className="text-4xl">🚗</div>
-        <p className="text-sm">Driving</p>
-      </div>
-    </div>
+    <span className="text-2xl">🚗</span>
   ),
   "emotional": () => (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center">
-        <div className="text-4xl">❤️</div>
-        <p className="text-sm">Caring</p>
-      </div>
-    </div>
+    <span className="text-2xl">❤️</span>
   ),
   "default": () => (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center">
-        <div className="text-4xl">👨‍👩‍👧‍👦</div>
-        <p className="text-sm">Family</p>
-      </div>
-    </div>
+    <span className="text-2xl">👨‍👩‍👧‍👦</span>
   )
 };
 
@@ -163,13 +128,6 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   const [selectedParent, setSelectedParent] = useState(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [userResponses, setUserResponses] = useState({});
-  const [gameStatus, setGameStatus] = useState({
-    mamaPosition: 0,
-    papaPosition: 0,
-    stars: 0
-  });
-  const [showReward, setShowReward] = useState(false);
-  const [totalStars, setTotalStars] = useState(0);
   const [questions, setQuestions] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -394,47 +352,65 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   // Enhanced useEffect to properly restore survey progress
   useEffect(() => {
     // Only run this if we have a user and loaded questions
-    if (selectedUser && questions.length > 0 && currentSurveyResponses && Object.keys(currentSurveyResponses).length > 0) {
-      console.log("Checking for previously saved progress...", currentSurveyResponses);
+    if (selectedUser && questions.length > 0) {
+      console.log("Checking for previously saved progress...");
       
-      // Find the last answered question index
-      let lastAnsweredIndex = -1;
-      const questionResponses = {};
+      // Check for user-specific stored progress first
+      const userProgressKey = `surveyInProgress_${selectedUser.id}`;
+      const savedProgress = localStorage.getItem(userProgressKey);
       
-      // First, extract all responses that match our question IDs
-      questions.forEach((question, index) => {
-        if (currentSurveyResponses[question.id]) {
-          questionResponses[question.id] = currentSurveyResponses[question.id];
-          lastAnsweredIndex = Math.max(lastAnsweredIndex, index);
+      if (savedProgress) {
+        try {
+          const progressData = JSON.parse(savedProgress);
+          
+          // Verify this is the right user's data
+          if (progressData.userId === selectedUser.id) {
+            console.log(`Found saved progress for user: ${selectedUser.id}`);
+            
+            // If we have saved responses, restore them
+            if (progressData.responses && Object.keys(progressData.responses).length > 0) {
+              setUserResponses(progressData.responses);
+            }
+            
+            // Set current question to the last one the user was working on
+            if (progressData.lastQuestionIndex !== undefined) {
+              setCurrentQuestionIndex(progressData.lastQuestionIndex);
+            }
+            
+            console.log(`Restored progress for ${selectedUser.name}`);
+          }
+        } catch (error) {
+          console.error("Error parsing saved progress:", error);
         }
-      });
-      
-      // If we found saved answers, jump to the next unanswered question
-      if (lastAnsweredIndex >= 0) {
-        console.log(`Found progress! Last answered question: ${lastAnsweredIndex}`);
+      } else if (currentSurveyResponses && Object.keys(currentSurveyResponses).length > 0) {
+        // Fall back to checking currentSurveyResponses for this user
+        console.log("No localStorage progress found, checking context responses");
         
-        // Set current question to the next unanswered one (not beyond the end)
-        const nextIndex = Math.min(lastAnsweredIndex + 1, questions.length - 1);
-        setCurrentQuestionIndex(nextIndex);
+        // Find the last answered question index
+        let lastAnsweredIndex = -1;
+        const questionResponses = {};
         
-        // Load all previous answers into local state
-        setUserResponses(questionResponses);
-        
-        // Update game state to match saved progress
-        const mamaCount = Object.values(questionResponses).filter(v => v === 'Mama').length;
-        const papaCount = Object.values(questionResponses).filter(v => v === 'Papa').length;
-        
-        // Update game status - make sure positions reflect actual progress
-        setGameStatus({
-          mamaPosition: mamaCount,
-          papaPosition: papaCount,
-          stars: Math.floor(lastAnsweredIndex / 20)
+        // First, extract all responses that match our question IDs
+        questions.forEach((question, index) => {
+          if (currentSurveyResponses[question.id]) {
+            questionResponses[question.id] = currentSurveyResponses[question.id];
+            lastAnsweredIndex = Math.max(lastAnsweredIndex, index);
+          }
         });
         
-        // Also update total stars
-        setTotalStars(Math.floor(lastAnsweredIndex / 20));
-        
-        console.log(`Restored to question ${nextIndex + 1} with ${Object.keys(questionResponses).length} saved answers`);
+        // If we found saved answers, jump to the next unanswered question
+        if (lastAnsweredIndex >= 0) {
+          console.log(`Found progress! Last answered question: ${lastAnsweredIndex}`);
+          
+          // Set current question to the next unanswered one (not beyond the end)
+          const nextIndex = Math.min(lastAnsweredIndex + 1, questions.length - 1);
+          setCurrentQuestionIndex(nextIndex);
+          
+          // Load all previous answers into local state
+          setUserResponses(questionResponses);
+          
+          console.log(`Restored to question ${nextIndex + 1} with ${Object.keys(questionResponses).length} saved answers`);
+        }
       }
     }
   }, [selectedUser, questions, currentSurveyResponses]);
@@ -447,12 +423,13 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
       console.log("Saving survey progress...");
       await saveSurveyProgress(selectedUser.id, userResponses);
       
-      // Store information about the paused survey in localStorage
-      localStorage.setItem('surveyInProgress', JSON.stringify({
+      // Store information about the paused survey in localStorage with user-specific key
+      localStorage.setItem(`surveyInProgress_${selectedUser.id}`, JSON.stringify({
         userId: selectedUser.id,
         timestamp: new Date().getTime(),
         surveyType: surveyType,
-        lastQuestionIndex: currentQuestionIndex
+        lastQuestionIndex: currentQuestionIndex,
+        responses: userResponses
       }));
       
       console.log("Progress saved successfully");
@@ -512,25 +489,6 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
         console.log(`Moving to question ${nextIndex + 1} (from ${currentIdx + 1})`);
         setCurrentQuestionIndex(nextIndex);
         
-        // Update game state based on answer - use currentIdx instead of currentQuestionIndex
-        setGameStatus(prev => ({
-          ...prev,
-          mamaPosition: parent === 'Mama' ? currentIdx + 1 : prev.mamaPosition,
-          papaPosition: parent === 'Papa' ? currentIdx + 1 : prev.papaPosition,
-          stars: (currentIdx + 1) % 20 === 0 ? prev.stars + 1 : prev.stars
-        }));
-        
-        // Show reward if appropriate
-        if ((currentIdx + 1) % 20 === 0) {
-          setShowReward(true);
-          setTotalStars(prev => prev + 1);
-          
-          // Hide reward after delay
-          setTimeout(() => {
-            setShowReward(false);
-          }, 3000);
-        }
-        
         // Reset selection state
         setSelectedParent(null);
         setIsProcessing(false);
@@ -558,12 +516,13 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
       await saveSurveyProgress(selectedUser.id, allResponses);
       console.log("Progress saved successfully");
       
-      // Store information about the paused survey in localStorage
-      localStorage.setItem('surveyInProgress', JSON.stringify({
+      // Store information about the paused survey in localStorage with user-specific key
+      localStorage.setItem(`surveyInProgress_${selectedUser.id}`, JSON.stringify({
         userId: selectedUser.id,
         timestamp: new Date().getTime(),
         surveyType: surveyType,
-        lastQuestionIndex: currentQuestionIndex
+        lastQuestionIndex: currentQuestionIndex,
+        responses: allResponses
       }));
       
       // Navigate back to login screen
@@ -588,8 +547,6 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   
   // Complete survey - FIXED navigation after completion
   const handleCompleteSurvey = async () => {
-    // Show a big celebration!
-    setShowReward(true);
     setIsSubmitting(true);
     
     try {
@@ -612,7 +569,7 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
       }
       
       // Clear the progress flag since we've completed the survey
-      localStorage.removeItem('surveyInProgress');
+      localStorage.removeItem(`surveyInProgress_${selectedUser.id}`);
       
       // Navigate to loading screen
       console.log("Navigating to loading screen");
@@ -638,7 +595,6 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
       alert('There was an error saving your responses. Please try again.');
       
       // Don't navigate away on error
-      setShowReward(false);
       setIsSubmitting(false);
     }
   };
@@ -724,16 +680,6 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
             <h2 className="font-bold text-black text-xl font-roboto">
               {selectedUser?.name}'s {surveyType === "weekly" ? "Weekly Adventure" : "Family Survey"}
             </h2>
-            <div className="flex items-center">
-              {[...Array(totalStars)].map((_, i) => (
-                <Star key={i} size={16} className="text-amber-400 fill-amber-400" />
-              ))}
-              {totalStars > 0 && 
-                <span className="text-xs text-amber-600 ml-1 font-medium font-roboto">
-                  {totalStars} {totalStars === 1 ? 'Star' : 'Stars'} earned!
-                </span>
-              }
-            </div>
           </div>
         </div>
         <div className="flex flex-col items-end">
@@ -774,20 +720,13 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
         
         <div className="text-center mb-4">
           <h2 className="text-xl font-semibold text-black">
-            {currentQuestion.childText || currentQuestion.text}
+            {currentQuestion.childText || currentQuestion.text} {renderIllustration()}
           </h2>
           
           {/* Simplified explanation always visible */}
           <p className="mt-3 text-sm text-gray-600 bg-gray-50 p-2 rounded-md inline-block">
             Who usually does this in your family?
           </p>
-        </div>
-        
-        {/* Task Illustration - Reduced padding around emoji */}
-        <div className="flex justify-center mb-6">
-          <div className="task-illustration p-2 bg-gray-50 rounded-lg border border-gray-100 transform hover:scale-105 transition-transform" style={{width: "200px", height: "150px"}}>
-            {renderIllustration()}
-          </div>
         </div>
         
         {/* Simple explanation always visible for kids */}
@@ -856,90 +795,8 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
         </div>
       </div>
       
-      {/* Game-like progress tracker */}
-      <div className="mb-6 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg mt-auto">
-        <h2 className="text-lg font-semibold mb-2 text-center text-gray-800">Family Adventure Track!</h2>
-        <div className="relative h-20 bg-white rounded-lg overflow-hidden border-2 border-gray-200">
-          {/* Track background with markers */}
-          <div className="absolute inset-0 flex items-center justify-between px-4">
-            {[...Array(6)].map((_, index) => (
-              <div 
-                key={index} 
-                className={`w-6 h-6 rounded-full z-10 flex items-center justify-center ${
-                  index * (questions.length/5) <= currentQuestionIndex 
-                    ? 'bg-black text-white' 
-                    : 'bg-gray-200 text-gray-600'
-                }`}
-              >
-                {index + 1}
-              </div>
-            ))}
-          </div>
-          
-          {/* Path line */}
-          <div className="absolute top-1/2 left-0 right-0 h-2 bg-gray-200 transform -translate-y-1/2"></div>
-          
-          {/* Progress line */}
-          <div 
-            className="absolute top-1/2 left-0 h-2 bg-gradient-to-r from-gray-400 to-black transform -translate-y-1/2 transition-all duration-500"
-            style={{ width: `${progressPercentage}%` }}
-          ></div>
-          
-          {/* Mama character */}
-          <div 
-            className="absolute top-2 w-10 h-10 transition-all duration-500"
-            style={{ 
-              left: `calc(${Math.min(gameStatus.mamaPosition, questions.length - 1) / (questions.length - 1) * 100}% - 16px)`,
-              maxLeft: 'calc(100% - 32px)'
-            }}
-          >
-            <div className="w-10 h-10 bg-purple-200 rounded-full border-2 border-purple-500 flex items-center justify-center overflow-hidden">
-              <img 
-                src={parents.mama.image} 
-                alt="Mama"
-                className="w-full h-full object-cover"
-              />
-            </div>
-          </div>
-          
-          {/* Papa character */}
-          <div 
-            className="absolute bottom-2 w-10 h-10 transition-all duration-500"
-            style={{ 
-              left: `calc(${Math.min(gameStatus.papaPosition, questions.length - 1) / (questions.length - 1) * 100}% - 16px)`,
-              maxLeft: 'calc(100% - 32px)'
-            }}
-          >
-            <div className="w-10 h-10 bg-blue-200 rounded-full border-2 border-blue-500 flex items-center justify-center overflow-hidden">
-              <img 
-                src={parents.papa.image} 
-                alt="Papa"
-                className="w-full h-full object-cover"
-              />
-            </div>
-          </div>
-          
-          {/* Reward icons at intervals */}
-          {[1, 2, 3, 4, 5].map(idx => (
-            <div 
-              key={idx}
-              className="absolute top-1/2 transform -translate-y-1/2 z-0"
-              style={{ left: `${(idx * 20) - 3}%` }}
-            >
-              <div className="w-5 h-5 flex items-center justify-center">
-                <Star size={16} className={`${
-                  currentQuestionIndex >= (idx * questions.length/5) 
-                    ? 'text-amber-400 fill-amber-400' 
-                    : 'text-gray-300'
-                }`} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      
       {/* Navigation footer */}
-      <div className="flex justify-between items-center bg-gray-50 p-4 rounded-lg">
+      <div className="flex justify-between items-center bg-gray-50 p-4 rounded-lg mt-auto">
         <button 
           onClick={handlePrevious}
           disabled={currentQuestionIndex === 0 || isProcessing || isSubmitting}
@@ -965,55 +822,11 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
         
         <div className="font-medium text-black bg-white px-3 py-1 rounded-lg border border-gray-200">
           <div className="flex items-center">
-            {Math.floor(currentQuestionIndex / (questions.length / 20)) >= 1 && 
-              <Star size={14} className="text-amber-400 fill-amber-400 mr-1" />}
             {currentQuestionIndex + 1} of {questions.length}
           </div>
         </div>
       </div>
       
-      {/* Celebration overlay - shown when earning stars */}
-      {showReward && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-40">
-          <div className="bg-white rounded-xl p-8 shadow-2xl max-w-md text-center relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
-            <div className="relative">
-              <div className="mb-4 flex justify-center">
-                <div className="relative">
-                  <Medal size={60} className="text-amber-500" />
-                  <Star size={24} className="absolute -top-2 -right-2 text-amber-400 fill-amber-400" />
-                </div>
-              </div>
-              
-              <h2 className="text-2xl font-bold text-black mb-2">Amazing Job!</h2>
-              
-              {currentQuestionIndex < questions.length - 1 ? (
-                <>
-                  <p className="text-black mb-3">You earned a star for your help!</p>
-                  <p className="text-sm text-gray-600 mb-6">
-                    Keep going to earn more stars and finish the survey!
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-black mb-3">You completed the whole survey!</p>
-                  <p className="text-sm text-gray-600 mb-6">
-                    Thank you for helping your family balance responsibilities!
-                  </p>
-                </>
-              )}
-              
-              <button 
-                className="px-6 py-3 bg-black text-white rounded-full font-bold hover:bg-gray-800 transform transition-all"
-                onClick={() => setShowReward(false)}
-              >
-                {currentQuestionIndex < questions.length - 1 ? "Continue Adventure!" : "Finish!"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Add AllieChat component */}
       {showAllieChat && <AllieChat />}
     </div>
