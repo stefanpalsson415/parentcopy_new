@@ -137,6 +137,7 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   const questionTimerRef = useRef(null);
   const keyboardInitialized = useRef(false);
   const autoSaveTimerRef = useRef(null);
+  const hasLoadedProgress = useRef(false);
 
   // Redirect if no user is selected
   useEffect(() => {
@@ -349,99 +350,96 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
     }
   }, [userResponses, selectedUser]);
   
-  // Enhanced useEffect to properly restore survey progress
+  // Enhanced useEffect to properly restore survey progress - FIXED version
   useEffect(() => {
     // Only run this if we have a user and loaded questions
-    // Enhanced useEffect to properly restore survey progress
-useEffect(() => {
-  // Only run this if we have a user and loaded questions
-  if (selectedUser && questions.length > 0) {
-    console.log("Checking for previously saved progress...");
-    
-    // Check for user-specific stored progress first
-    const userProgressKey = `surveyInProgress_${selectedUser.id}`;
-    const savedProgress = localStorage.getItem(userProgressKey);
-    
-    let restoredIndex = -1;
-    
-    if (savedProgress) {
-      try {
-        const progressData = JSON.parse(savedProgress);
-        
-        // Verify this is the right user's data
-        if (progressData.userId === selectedUser.id) {
-          console.log(`Found saved progress for user: ${selectedUser.id}`);
+    if (selectedUser && questions.length > 0 && !hasLoadedProgress.current) {
+      console.log("Checking for previously saved progress...");
+      
+      // Check for user-specific stored progress first
+      const userProgressKey = `surveyInProgress_${selectedUser.id}`;
+      const savedProgress = localStorage.getItem(userProgressKey);
+      
+      let restoredIndex = -1;
+      
+      if (savedProgress) {
+        try {
+          const progressData = JSON.parse(savedProgress);
           
-          // If we have saved responses, restore them
-          if (progressData.responses && Object.keys(progressData.responses).length > 0) {
-            const responses = progressData.responses;
-            setUserResponses(responses);
+          // Verify this is the right user's data
+          if (progressData.userId === selectedUser.id) {
+            console.log(`Found saved progress for user: ${selectedUser.id}`);
             
-            // Also update parent context to ensure consistency
-            Object.entries(responses).forEach(([questionId, response]) => {
-              updateSurveyResponse(questionId, response);
-            });
+            // If we have saved responses, restore them
+            if (progressData.responses && Object.keys(progressData.responses).length > 0) {
+              const responses = progressData.responses;
+              setUserResponses(responses);
+              
+              // Also update parent context to ensure consistency
+              Object.entries(responses).forEach(([questionId, response]) => {
+                updateSurveyResponse(questionId, response);
+              });
+            }
+            
+            // Set current question to the last one the user was working on
+            if (progressData.lastQuestionIndex !== undefined) {
+              restoredIndex = progressData.lastQuestionIndex;
+            }
+            
+            console.log(`Restored progress for ${selectedUser.name}`);
           }
-          
-          // Set current question to the last one the user was working on
-          if (progressData.lastQuestionIndex !== undefined) {
-            restoredIndex = progressData.lastQuestionIndex;
+        } catch (error) {
+          console.error("Error parsing saved progress:", error);
+        }
+      } else if (currentSurveyResponses && Object.keys(currentSurveyResponses).length > 0) {
+        // Fall back to checking currentSurveyResponses for this user
+        console.log("No localStorage progress found, checking context responses");
+        
+        // Find the last answered question index
+        let lastAnsweredIndex = -1;
+        const questionResponses = {};
+        
+        // First, extract all responses that match our question IDs
+        questions.forEach((question, index) => {
+          if (currentSurveyResponses[question.id]) {
+            questionResponses[question.id] = currentSurveyResponses[question.id];
+            lastAnsweredIndex = Math.max(lastAnsweredIndex, index);
           }
+        });
+        
+        // If we found saved answers, jump to the next unanswered question
+        if (lastAnsweredIndex >= 0) {
+          console.log(`Found progress! Last answered question: ${lastAnsweredIndex}`);
           
-          console.log(`Restored progress for ${selectedUser.name}`);
+          // Set current question to the next unanswered one (not beyond the end)
+          restoredIndex = Math.min(lastAnsweredIndex + 1, questions.length - 1);
+          
+          // Load all previous answers into local state
+          setUserResponses(questionResponses);
+          
+          console.log(`Restored to question ${restoredIndex + 1} with ${Object.keys(questionResponses).length} saved answers`);
         }
-      } catch (error) {
-        console.error("Error parsing saved progress:", error);
       }
-    } else if (currentSurveyResponses && Object.keys(currentSurveyResponses).length > 0) {
-      // Fall back to checking currentSurveyResponses for this user
-      console.log("No localStorage progress found, checking context responses");
       
-      // Find the last answered question index
-      let lastAnsweredIndex = -1;
-      const questionResponses = {};
-      
-      // First, extract all responses that match our question IDs
-      questions.forEach((question, index) => {
-        if (currentSurveyResponses[question.id]) {
-          questionResponses[question.id] = currentSurveyResponses[question.id];
-          lastAnsweredIndex = Math.max(lastAnsweredIndex, index);
-        }
-      });
-      
-      // If we found saved answers, jump to the next unanswered question
-      if (lastAnsweredIndex >= 0) {
-        console.log(`Found progress! Last answered question: ${lastAnsweredIndex}`);
-        
-        // Set current question to the next unanswered one (not beyond the end)
-        restoredIndex = Math.min(lastAnsweredIndex + 1, questions.length - 1);
-        
-        // Load all previous answers into local state
-        setUserResponses(questionResponses);
-        
-        console.log(`Restored to question ${restoredIndex + 1} with ${Object.keys(questionResponses).length} saved answers`);
+      // Wait for state updates to complete before setting current question index
+      if (restoredIndex >= 0) {
+        // Use a timeout to ensure all state updates have been processed
+        setTimeout(() => {
+          setCurrentQuestionIndex(restoredIndex);
+          // Also set selected parent for the current question
+          const currentQuestionId = questions[restoredIndex]?.id;
+          if (currentQuestionId) {
+            const savedResponse = userResponses[currentQuestionId] || 
+                                currentSurveyResponses[currentQuestionId];
+            setSelectedParent(savedResponse || null);
+          }
+        }, 0);
       }
+      
+      hasLoadedProgress.current = true;
     }
-    
-    // Wait for state updates to complete before setting current question index
-    if (restoredIndex >= 0) {
-      // Use a timeout to ensure all state updates have been processed
-      setTimeout(() => {
-        setCurrentQuestionIndex(restoredIndex);
-        // Also set selected parent for the current question
-        const currentQuestionId = questions[restoredIndex]?.id;
-        if (currentQuestionId) {
-          const savedResponse = userResponses[currentQuestionId] || 
-                               currentSurveyResponses[currentQuestionId];
-          setSelectedParent(savedResponse || null);
-        }
-      }, 0);
-    }
-  }
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [selectedUser, questions.length]); 
-
-// Only depend on user and question count, not the actual questions or responses
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedUser, questions.length]);
   
   // Save progress function (used by both auto-save and manual save)
   const saveProgress = async () => {
@@ -466,68 +464,67 @@ useEffect(() => {
     }
   };
   
-  // Handle parent selection
-  // Handle parent selection
-const handleSelectParent = (parent) => {
-  // Prevent multiple calls while processing
-  if (isProcessing) {
-    console.log("Ignoring selection - already processing");
-    return;
-  }
-  
-  // Set processing state immediately
-  setIsProcessing(true);
-  console.log(`Selected ${parent} for question ${currentQuestionIndex + 1}`);
-  
-  // Cancel any existing timers
-  if (questionTimerRef.current) {
-    clearTimeout(questionTimerRef.current);
-    questionTimerRef.current = null;
-  }
-  
-  // Set the selected parent for UI feedback
-  setSelectedParent(parent);
-  
-  // Get current question
-  const currentQuestion = questions[currentQuestionIndex];
-  if (!currentQuestion) {
-    console.error("No current question found");
-    setIsProcessing(false);
-    return;
-  }
-  
-  // Record response
-  const updatedResponses = {
-    ...userResponses,
-    [currentQuestion.id]: parent
-  };
-  setUserResponses(updatedResponses);
-  
-  // Update parent context
-  updateSurveyResponse(currentQuestion.id, parent);
-  
-  // Store current index in a local variable to avoid closure issues
-  const currentIdx = currentQuestionIndex;
-  
-  // Wait for a moment to show the selection, but no need to modify state again
-  questionTimerRef.current = setTimeout(() => {
-    // Check if we're still at the same question (to avoid race conditions)
-    if (currentIdx === currentQuestionIndex) {
-      // Then decide whether to go to next question or complete survey
-      if (currentIdx < questions.length - 1) {
-        // Move to next question - directly set the new index
-        setCurrentQuestionIndex(currentIdx + 1);
-        
-        // Reset selection state
-        setSelectedParent(null);
-      } else {
-        // Complete the survey
-        handleCompleteSurvey();
-      }
+  // Handle parent selection - FIXED version
+  const handleSelectParent = (parent) => {
+    // Prevent multiple calls while processing
+    if (isProcessing) {
+      console.log("Ignoring selection - already processing");
+      return;
     }
-    setIsProcessing(false);
-  }, 500);
-};
+    
+    // Set processing state immediately
+    setIsProcessing(true);
+    console.log(`Selected ${parent} for question ${currentQuestionIndex + 1}`);
+    
+    // Cancel any existing timers
+    if (questionTimerRef.current) {
+      clearTimeout(questionTimerRef.current);
+      questionTimerRef.current = null;
+    }
+    
+    // Set the selected parent for UI feedback
+    setSelectedParent(parent);
+    
+    // Get current question
+    const currentQuestion = questions[currentQuestionIndex];
+    if (!currentQuestion) {
+      console.error("No current question found");
+      setIsProcessing(false);
+      return;
+    }
+    
+    // Record response
+    const updatedResponses = {
+      ...userResponses,
+      [currentQuestion.id]: parent
+    };
+    setUserResponses(updatedResponses);
+    
+    // Update parent context
+    updateSurveyResponse(currentQuestion.id, parent);
+    
+    // Store current index in a local variable to avoid closure issues
+    const currentIdx = currentQuestionIndex;
+    
+    // Wait for a moment to show the selection, but no need to modify state again
+    questionTimerRef.current = setTimeout(() => {
+      // Check if we're still at the same question (to avoid race conditions)
+      if (currentIdx === currentQuestionIndex) {
+        // Then decide whether to go to next question or complete survey
+        if (currentIdx < questions.length - 1) {
+          // Move to next question - directly set the new index
+          setCurrentQuestionIndex(currentIdx + 1);
+          
+          // Reset selection state
+          setSelectedParent(null);
+        } else {
+          // Complete the survey
+          handleCompleteSurvey();
+        }
+      }
+      setIsProcessing(false);
+    }, 500);
+  };
 
   // Handle pause survey
   const handlePauseSurvey = async () => {
@@ -826,36 +823,36 @@ const handleSelectParent = (parent) => {
         </div>
       </div>
       
-<div className="flex justify-between items-center bg-gray-50 p-4 rounded-lg mt-4">
-  <button 
-    onClick={handlePrevious}
-    disabled={currentQuestionIndex === 0 || isProcessing || isSubmitting}
-    className={`px-4 py-2 rounded-md flex items-center ${
-      currentQuestionIndex === 0 || isProcessing || isSubmitting
-        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-        : 'bg-white text-black hover:bg-gray-100 border border-gray-200'
-    }`}
-  >
-    <ArrowLeft size={16} className="mr-1" />
-    Back
-  </button>
-  
-  <button
-    onClick={handlePauseSurvey}
-    disabled={isProcessing || isSubmitting}
-    className={`px-4 py-2 rounded-md bg-white text-black hover:bg-gray-100 border border-gray-200 ${
-      isProcessing || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
-    }`}
-  >
-    Pause Survey
-  </button>
-  
-  <div className="font-medium text-black bg-white px-3 py-1 rounded-lg border border-gray-200">
-    <div className="flex items-center">
-      {currentQuestionIndex + 1} of {questions.length}
-    </div>
-  </div>
-</div>
+      <div className="flex justify-between items-center bg-gray-50 p-4 rounded-lg mt-4">
+        <button 
+          onClick={handlePrevious}
+          disabled={currentQuestionIndex === 0 || isProcessing || isSubmitting}
+          className={`px-4 py-2 rounded-md flex items-center ${
+            currentQuestionIndex === 0 || isProcessing || isSubmitting
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+              : 'bg-white text-black hover:bg-gray-100 border border-gray-200'
+          }`}
+        >
+          <ArrowLeft size={16} className="mr-1" />
+          Back
+        </button>
+        
+        <button
+          onClick={handlePauseSurvey}
+          disabled={isProcessing || isSubmitting}
+          className={`px-4 py-2 rounded-md bg-white text-black hover:bg-gray-100 border border-gray-200 ${
+            isProcessing || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
+        >
+          Pause Survey
+        </button>
+        
+        <div className="font-medium text-black bg-white px-3 py-1 rounded-lg border border-gray-200">
+          <div className="flex items-center">
+            {currentQuestionIndex + 1} of {questions.length}
+          </div>
+        </div>
+      </div>
       
       {/* Add AllieChat component */}
       {showAllieChat && <AllieChat />}

@@ -578,8 +578,6 @@ const ChildrenTrackingTab = () => {
   };
   
   // Fetch children's data on component mount
-  useEffect(() => {
-   // Fetch children's data on component mount
 useEffect(() => {
   const loadChildrenData = async () => {
     try {
@@ -644,11 +642,7 @@ useEffect(() => {
   };
   
   loadChildrenData();
-}, [familyId, familyMembers]);
-    
-    loadChildrenData();
-  }, [familyId, familyMembers]);
-  
+}, [familyId, familyMembers, activeChild, generateAiInsights, updateNotificationCounts]);  
   // Update notification counts based on data
   const updateNotificationCounts = (data) => {
     if (!data) return;
