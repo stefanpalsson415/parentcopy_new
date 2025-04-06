@@ -139,7 +139,7 @@ const DashboardTab = () => {
         if (familyId && currentWeek) {
           try {
             console.log("Loading AI insights...");
-            const insights = await AllieAIEngineService.generateDashboardInsights(
+            const insights = await AllieAIService.generateDashboardInsights(
               familyId, 
               currentWeek
             );

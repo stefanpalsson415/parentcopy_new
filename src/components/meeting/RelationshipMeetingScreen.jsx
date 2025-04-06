@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Heart, Clock, ChevronDown, ChevronUp, MessageCircle, Calendar, CheckCircle, Star, Smile, Sparkles, Brain, Lightbulb, AlertCircle } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
-import AllieAIEngineService from '../../services/AllieAIEngineService';
+import AllieAIService from '../../services/AllieAIService';
 import CalendarService from '../../services/CalendarService';
 import { doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../services/firebase';
@@ -155,7 +155,7 @@ const RelationshipMeetingScreen = ({ onClose }) => {
         // Load AI agenda
         try {
           console.log("Loading AI relationship meeting agenda...");
-          const meetingAgenda = await AllieAIEngineService.generateRelationshipInsights(
+          const meetingAgenda = await AllieAIService.generateRelationshipInsights(
             familyId,
             currentCycle,
             [],

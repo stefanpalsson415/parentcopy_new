@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useSurvey } from '../../contexts/SurveyContext';
-import AllieAIEngineService from '../../services/AllieAIEngineService';
+import AllieAIService from '../../services/AllieAIService';
 import CalendarService from '../../services/CalendarService';
 
 // Confetti effect component for celebration
@@ -217,7 +217,7 @@ const FamilyMeetingScreen = ({ onClose }) => {
       
       try {
         console.log("Loading AI meeting agenda...");
-        const meetingAgenda = await AllieAIEngineService.generateFamilyMeetingAgenda(
+        const meetingAgenda = await AllieAIService.generateFamilyMeetingAgenda(
           familyId,
           currentWeek
         );

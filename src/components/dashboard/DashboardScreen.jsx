@@ -50,7 +50,7 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
     dashboard: 0
   });
 
-  const [allieAIEngineService, setAllieAIEngineService] = useState(null);
+  const [allieAIService, setAllieAIService] = useState(null);
 
   // Calculate notifications
   useEffect(() => {
@@ -170,10 +170,10 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
           // Any other data loading you need to do...
           
           // Load AI insights if service is available
-          if (currentWeek && allieAIEngineService) {
+          if (currentWeek && allieAIService) {
             try {
               console.log("Loading AI insights...");
-              const aiInsights = await allieAIEngineService.generateDashboardInsights(
+              const aiInsights = await allieAIService.generateDashboardInsights(
                 familyId,
                 currentWeek
               );
@@ -197,12 +197,12 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
     loadDashboardData();
   }, [familyId, currentWeek]);
 
-  // Load AllieAIEngineService
+  // Load AllieAIService
   useEffect(() => {
     // Dynamically import the service to avoid circular dependencies
     import('../../services/AllieAIService').then(module => {
-      setAllieAIEngineService(module.default);
-      console.log("AllieAIEngineService loaded successfully");
+      setAllieAIService(module.default);
+      console.log("AllieAIService loaded successfully");
       
       // If family data is available, try to load AI insights right away
       if (familyId && currentWeek && module.default) {
@@ -216,7 +216,7 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
           .catch(err => console.error("Error loading initial AI insights:", err));
       }
     }).catch(error => {
-      console.error("Failed to load AI Engine service:", error);
+      console.error("Failed to load AI  service:", error);
     });
   }, [familyId, currentWeek]);
   

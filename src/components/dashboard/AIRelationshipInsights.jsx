@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Brain, Lightbulb, Heart, Users, RefreshCw, ArrowRight, Calendar, Clock, Info } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
-import AllieAIEngineService from '../../services/AllieAIService';
+import AllieAIService from '../../services/AllieAIService';
 
 const AIRelationshipInsights = ({ insights = [], onActionClick }) => {
   const { familyId, currentWeek, relationshipStrategies, coupleCheckInData } = useFamily();
@@ -77,8 +77,8 @@ const AIRelationshipInsights = ({ insights = [], onActionClick }) => {
       const trendData = getRelationshipTrendData();
       const checkInData = coupleCheckInData[currentWeek] || {};
       
-      // Generate new insights using the AI engine
-      const newInsights = await AllieAIEngineService.generateRelationshipInsights(
+      // Generate new insights using the AI 
+      const newInsights = await AllieAIService.generateRelationshipInsights(
         familyId,
         currentWeek,
         trendData,
