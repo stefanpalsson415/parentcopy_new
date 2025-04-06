@@ -11,6 +11,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../services/firebase';
 import DatabaseService from '../../services/DatabaseService';
 import { useLocation } from 'react-router-dom';
+import CalendarService from '../../services/CalendarService';
 
 const AllieChat = () => {
   const { familyId, selectedUser, familyMembers, updateMemberProfile, familyName, currentWeek, completedWeeks } = useFamily();
@@ -38,6 +39,8 @@ const AllieChat = () => {
   const [profileUploadTarget, setProfileUploadTarget] = useState(null);
   const [userClosedChat, setUserClosedChat] = useState(false);
   const [textareaHeight, setTextareaHeight] = useState(42); // Increased default height in px
+  const [detectedEventDetails, setDetectedEventDetails] = useState(null);
+  const [showEventConfirmation, setShowEventConfirmation] = useState(false);
   
   // Get current location to customize Allie's behavior
   const location = useLocation();
@@ -181,13 +184,13 @@ const AllieChat = () => {
         setPromptChips([
           { type: 'balance', text: 'How is our family balance?' },
           { type: 'task', text: 'What tasks do I have this week?' },
-          { type: 'help', text: 'How can we improve our balance?' }
+          { type: 'calendar', text: 'Add an event to calendar' }
         ]);
       } else {
         setPromptChips([
           { type: 'help', text: 'What happens after the survey?' },
           { type: 'task', text: 'How will tasks be assigned?' },
-          { type: 'balance', text: 'What is family balance?' }
+          { type: 'calendar', text: 'Schedule a family meeting' }
         ]);
       }
     }
@@ -325,6 +328,85 @@ const AllieChat = () => {
     }
   };
   
+  // Add event to calendar
+  const addEventToCalendar = async (eventDetails) => {
+    try {
+      if (!eventDetails || !selectedUser) return false;
+      
+      // Create start and end date objects
+      const startDate = eventDetails.dateTime || new Date();
+      const endDate = new Date(startDate);
+      endDate.setHours(startDate.getHours() + 1); // Default 1 hour event
+      
+      // Determine event title
+      let eventTitle = eventDetails.title || 'New Event';
+      
+      // Add more context to title based on event type
+      if (eventDetails.eventType === 'birthday' && eventDetails.extraDetails?.birthdayChildName) {
+        const childAge = eventDetails.extraDetails.birthdayChildAge 
+          ? ` (${eventDetails.extraDetails.birthdayChildAge})` 
+          : '';
+        eventTitle = `${eventDetails.extraDetails.birthdayChildName}'s Birthday${childAge}`;
+      } else if (eventDetails.childName) {
+        eventTitle = `${eventTitle} - ${eventDetails.childName}`;
+      }
+      
+      // Create event object
+      const event = {
+        summary: eventTitle,
+        description: eventDetails.extraDetails?.notes || `Added from Allie chat`,
+        location: eventDetails.location || '',
+        start: {
+          dateTime: startDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: endDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        reminders: {
+          useDefault: true
+        }
+      };
+      
+      // Add event to calendar
+      const result = await CalendarService.addEvent(event, selectedUser.id);
+      
+      if (result.success) {
+        // Success message
+        const successMessage = {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `Great! I've added "${eventTitle}" to your calendar for ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.${eventDetails.location ? ` Location: ${eventDetails.location}.` : ''}`,
+          timestamp: new Date().toISOString()
+        };
+        
+        setMessages(prev => [...prev, successMessage]);
+        return true;
+      } else {
+        throw new Error("Failed to add event to calendar");
+      }
+    } catch (error) {
+      console.error("Error adding event to calendar:", error);
+      
+      // Error message
+      const errorMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I'm sorry, I couldn't add the event to your calendar. Please try again or add it manually through the calendar page.`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+      return false;
+    } finally {
+      setDetectedEventDetails(null);
+      setShowEventConfirmation(false);
+    }
+  };
+  
   const handleSend = async () => {
     if (input.trim() && canUseChat && selectedUser && familyId) {
       try {
@@ -335,6 +417,25 @@ const AllieChat = () => {
         // Update NLU insights
         setDetectedIntent(intent);
         setExtractedEntities(entities);
+        
+        // Check for calendar-related intent
+        const isCalendarIntent = intent.startsWith('calendar.') ||
+                               input.toLowerCase().includes('calendar') ||
+                               input.toLowerCase().includes('schedule');
+        
+        // Try to extract event details if it seems like a calendar request
+        if (isCalendarIntent && nlu.current.extractEventDetails) {
+          try {
+            const eventDetails = nlu.current.extractEventDetails(input, familyMembers);
+            if (eventDetails && eventDetails.dateTime) {
+              setDetectedEventDetails(eventDetails);
+              setShowEventConfirmation(true);
+            }
+          } catch (eventError) {
+            console.log("Could not extract event details:", eventError);
+            // Proceed without event extraction
+          }
+        }
         
         // Create user message
         const userMessage = {
@@ -673,7 +774,28 @@ const AllieChat = () => {
       });
   };
   
-  // Toggle chat open/closed - fixed to prevent reopening
+  // Format date for display
+  const formatEventDate = (date) => {
+    if (!date) return 'Unknown date';
+    
+    // Try to convert string to date if needed
+    const eventDate = typeof date === 'string' ? new Date(date) : date;
+    
+    // Check if valid date
+    if (isNaN(eventDate.getTime())) return 'Unknown date';
+    
+    // Format as "Tuesday, April 9 at 2:00 PM"
+    return eventDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric'
+    }) + ' at ' + eventDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  };
+  
+  // Toggle chat open/closed
   const toggleChat = () => {
     setIsOpen(!isOpen);
     // If user is closing the chat, remember this choice
@@ -802,6 +924,52 @@ const AllieChat = () => {
                 )}
               </div>
             ))}
+            
+            {/* Event confirmation UI */}
+            {showEventConfirmation && detectedEventDetails && (
+              <div className="bg-blue-50 p-3 rounded-lg ml-4">
+                <div className="flex items-center mb-1">
+                  <span className="font-medium text-sm">Allie</span>
+                  <span className="text-xs text-gray-500 ml-2">
+                    {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  </span>
+                </div>
+                <p className="text-sm mb-2">
+                  I noticed an event in your message. Would you like me to add this to your calendar?
+                </p>
+                <div className="bg-white rounded-md p-2 mb-2 text-xs border">
+                  <div className="mb-1"><span className="font-medium">Event:</span> {detectedEventDetails.title || 'New Event'}</div>
+                  {detectedEventDetails.childName && (
+                    <div className="mb-1"><span className="font-medium">For:</span> {detectedEventDetails.childName}</div>
+                  )}
+                  <div className="mb-1"><span className="font-medium">When:</span> {formatEventDate(detectedEventDetails.dateTime)}</div>
+                  {detectedEventDetails.location && (
+                    <div className="mb-1"><span className="font-medium">Location:</span> {detectedEventDetails.location}</div>
+                  )}
+                  {detectedEventDetails.eventType && (
+                    <div className="mb-1"><span className="font-medium">Type:</span> {detectedEventDetails.eventType}</div>
+                  )}
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => addEventToCalendar(detectedEventDetails)}
+                    className="flex-1 bg-black text-white px-3 py-1 rounded-md text-xs flex items-center justify-center"
+                  >
+                    <Calendar size={12} className="mr-1" />
+                    Add to Calendar
+                  </button>
+                  <button
+                    onClick={() => {
+                      setDetectedEventDetails(null);
+                      setShowEventConfirmation(false);
+                    }}
+                    className="flex-1 border px-3 py-1 rounded-md text-xs"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
             
             {/* Profile upload UI */}
             {showProfileUploadHelp && profileUploadTarget && (
