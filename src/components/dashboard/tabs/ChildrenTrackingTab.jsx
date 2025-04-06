@@ -72,299 +72,300 @@ const ChildrenTrackingTab = () => {
     routines: 0
   });
 
-// Enhanced AI insights generation with service integration and local fallback
-const generateAiInsights = useCallback(async (data) => {
-  try {
-    if (!familyId || !data) {
-      setAiInsights([]);
-      return;
-    }
+  // Format date for display
+  const formatDate = useCallback((dateString) => {
+    if (!dateString) return "Not scheduled";
     
-    // Try to get insights from AI service
-    try {
-      console.log("Requesting AI-generated child insights from AllieAIService");
-      const aiInsights = await AllieAIService.generateChildInsights(familyId, data);
-      
-      if (aiInsights && aiInsights.length > 0) {
-        console.log(`Received ${aiInsights.length} AI-generated insights`);
-        setAiInsights(aiInsights);
-        return;
-      }
-    } catch (serviceError) {
-      console.warn("AI service error, falling back to local insights:", serviceError);
-    }
-    
-    // If AI service fails or returns no insights, fall back to local generation
-    console.log("Generating local insights as fallback");
-    const localInsights = generateLocalInsights(data);
-    setAiInsights(localInsights);
-    
-  } catch (error) {
-    console.error("Error in insight generation:", error);
-    setAiInsights([]);
-  }
-}, [familyId]);
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  }, []);
 
-// NEW CODE TO ADD - after generateAiInsights and before the useEffect that references it
-// Update notification counts based on data
-const updateNotificationCounts = useCallback((data) => {
-  if (!data) return;
-  
-  const today = new Date();
-  const oneWeekFromNow = new Date();
-  oneWeekFromNow.setDate(today.getDate() + 7);
-  
-  const counts = {
-    medical: 0,
-    growth: 0,
-    routines: 0
-  };
-  
-  // Process for each child
-  Object.keys(data).forEach(childId => {
-    const childData = data[childId];
+  // Get child name by ID
+  const getChildName = useCallback((childId) => {
+    const child = familyMembers.find(member => member.id === childId);
+    return child ? child.name : "Unknown Child";
+  }, [familyMembers]);
+
+  // Get child age by ID
+  const getChildAge = useCallback((childId) => {
+    const child = familyMembers.find(member => member.id === childId);
+    return child ? child.age : null;
+  }, [familyMembers]);
+
+  // Get child's profile picture
+  const getChildProfilePicture = useCallback((childId) => {
+    const child = familyMembers.find(member => member.id === childId);
+    return child && child.profilePicture ? child.profilePicture : '/api/placeholder/48/48';
+  }, [familyMembers]);
+
+  // Helper function to get checkup recommendation based on age
+  const getCheckupRecommendation = useCallback((age, lastCheckup) => {
+    // Based on common pediatric schedules
+    let recommendation = null;
     
-    // Medical appointments coming up in the next week
-    if (childData.medicalAppointments) {
-      counts.medical += childData.medicalAppointments.filter(apt => {
-        const aptDate = new Date(apt.date);
-        return !apt.completed && aptDate >= today && aptDate <= oneWeekFromNow;
-      }).length;
+    if (!lastCheckup) {
+      return `should have regular checkups. No previous checkup information is recorded.`;
     }
     
-    // Growth data - notify if no entry in the last 3 months
-    if (childData.growthData && childData.growthData.length > 0) {
-      const lastGrowthDate = new Date(Math.max(...childData.growthData.map(g => new Date(g.date))));
-      const threeMonthsAgo = new Date();
-      threeMonthsAgo.setMonth(today.getMonth() - 3);
-      
-      if (lastGrowthDate < threeMonthsAgo) {
-        counts.growth += 1;
+    const lastCheckupDate = new Date(lastCheckup.date);
+    const today = new Date();
+    const monthsSinceLastCheckup = (today.getFullYear() - lastCheckupDate.getFullYear()) * 12 + 
+                                  today.getMonth() - lastCheckupDate.getMonth();
+    
+    // Simplified recommendations based on age
+    if (age < 1) {
+      // Infants typically have checkups at 1, 2, 4, 6, 9, and 12 months
+      if (monthsSinceLastCheckup >= 3) {
+        recommendation = `is due for another well-baby checkup. Infants typically need checkups every 2-3 months during the first year.`;
+      }
+    } else if (age < 3) {
+      // Toddlers typically have checkups at 15, 18, 24, and 30 months
+      if (monthsSinceLastCheckup >= 6) {
+        recommendation = `may be due for a checkup. Children aged 1-3 typically need checkups every 6 months.`;
+      }
+    } else if (age < 6) {
+      // Preschoolers typically have annual checkups
+      if (monthsSinceLastCheckup >= 12) {
+        recommendation = `is due for an annual checkup. The last checkup was ${monthsSinceLastCheckup} months ago.`;
       }
     } else {
-      // No growth data at all
-      counts.growth += 1;
+      // School-age children and adolescents typically have annual checkups
+      if (monthsSinceLastCheckup >= 12) {
+        recommendation = `is due for an annual checkup. The last checkup was ${monthsSinceLastCheckup} months ago.`;
+      }
     }
-  });
-  
-  setNotifications(counts);
-}, []);
-
-// NEW CODE TO ADD - place this right after updateNotificationCounts and before useEffects
-// Local fallback implementation for generating insights
-const generateLocalInsights = useCallback((data) => {
-  // For a simplified version, create some dynamic insights based on the data
-  const insights = [];
-  
-  // Process data for each child
-  Object.keys(data).forEach(childId => {
-    const childData = data[childId];
-    const childName = getChildName(childId);
-    const childAge = getChildAge(childId);
     
-    // Medical appointment insights
-    if (childData.medicalAppointments && childData.medicalAppointments.length > 0) {
-      // Check for upcoming appointments
-      const upcomingAppointments = childData.medicalAppointments.filter(apt => 
-        !apt.completed && new Date(apt.date) > new Date()
-      );
+    return recommendation;
+  }, []);
+
+  // Enhanced AI insights generation with service integration and local fallback
+  const generateAiInsights = useCallback(async (data) => {
+    try {
+      if (!familyId || !data) {
+        setAiInsights([]);
+        return;
+      }
       
-      if (upcomingAppointments.length > 0) {
-        const nextAppointment = upcomingAppointments.sort((a, b) => 
-          new Date(a.date) - new Date(b.date)
-        )[0];
+      // Try to get insights from AI service
+      try {
+        console.log("Requesting AI-generated child insights from AllieAIService");
+        const aiInsights = await AllieAIService.generateChildInsights(familyId, data);
         
+        if (aiInsights && aiInsights.length > 0) {
+          console.log(`Received ${aiInsights.length} AI-generated insights`);
+          setAiInsights(aiInsights);
+          return;
+        }
+      } catch (serviceError) {
+        console.warn("AI service error, falling back to local insights:", serviceError);
+      }
+      
+      // If AI service fails or returns no insights, fall back to local generation
+      console.log("Generating local insights as fallback");
+      const localInsights = generateLocalInsights(data);
+      setAiInsights(localInsights);
+      
+    } catch (error) {
+      console.error("Error in insight generation:", error);
+      setAiInsights([]);
+    }
+  }, [familyId]);
+
+  // Update notification counts based on data
+  const updateNotificationCounts = useCallback((data) => {
+    if (!data) return;
+    
+    const today = new Date();
+    const oneWeekFromNow = new Date();
+    oneWeekFromNow.setDate(today.getDate() + 7);
+    
+    const counts = {
+      medical: 0,
+      growth: 0,
+      routines: 0
+    };
+    
+    // Process for each child
+    Object.keys(data).forEach(childId => {
+      const childData = data[childId];
+      
+      // Medical appointments coming up in the next week
+      if (childData.medicalAppointments) {
+        counts.medical += childData.medicalAppointments.filter(apt => {
+          const aptDate = new Date(apt.date);
+          return !apt.completed && aptDate >= today && aptDate <= oneWeekFromNow;
+        }).length;
+      }
+      
+      // Growth data - notify if no entry in the last 3 months
+      if (childData.growthData && childData.growthData.length > 0) {
+        const lastGrowthDate = new Date(Math.max(...childData.growthData.map(g => new Date(g.date))));
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(today.getMonth() - 3);
+        
+        if (lastGrowthDate < threeMonthsAgo) {
+          counts.growth += 1;
+        }
+      } else {
+        // No growth data at all
+        counts.growth += 1;
+      }
+    });
+    
+    setNotifications(counts);
+  }, []);
+
+  // Local fallback implementation for generating insights
+  const generateLocalInsights = useCallback((data) => {
+    // For a simplified version, create some dynamic insights based on the data
+    const insights = [];
+    
+    // Process data for each child
+    Object.keys(data).forEach(childId => {
+      const childData = data[childId];
+      const childName = getChildName(childId);
+      const childAge = getChildAge(childId);
+      
+      // Medical appointment insights
+      if (childData.medicalAppointments && childData.medicalAppointments.length > 0) {
+        // Check for upcoming appointments
+        const upcomingAppointments = childData.medicalAppointments.filter(apt => 
+          !apt.completed && new Date(apt.date) > new Date()
+        );
+        
+        if (upcomingAppointments.length > 0) {
+          const nextAppointment = upcomingAppointments.sort((a, b) => 
+            new Date(a.date) - new Date(b.date)
+          )[0];
+          
+          insights.push({
+            type: "medical",
+            title: "Upcoming Medical Appointment",
+            content: `${childName} has a ${nextAppointment.title} appointment on ${formatDate(nextAppointment.date)}${nextAppointment.time ? ` at ${nextAppointment.time}` : ''}.`,
+            priority: "medium",
+            childId: childId
+          });
+        }
+        
+        // Check if child is due for a check-up based on their age
+        if (childAge) {
+          // Example age-based checkup recommendation
+          const lastCheckup = childData.medicalAppointments.filter(apt => 
+            apt.title.toLowerCase().includes('checkup') || apt.title.toLowerCase().includes('check-up')
+          ).sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+          
+          const checkupRecommendation = getCheckupRecommendation(childAge, lastCheckup);
+          if (checkupRecommendation) {
+            insights.push({
+              type: "recommendation",
+              title: "Checkup Recommendation",
+              content: `${childName} ${checkupRecommendation}`,
+              priority: "high",
+              childId: childId
+            });
+          }
+        }
+      } else if (childAge) {
+        // No appointments recorded, recommend initial checkup
         insights.push({
-          type: "medical",
-          title: "Upcoming Medical Appointment",
-          content: `${childName} has a ${nextAppointment.title} appointment on ${formatDate(nextAppointment.date)}${nextAppointment.time ? ` at ${nextAppointment.time}` : ''}.`,
+          type: "recommendation",
+          title: "Initial Medical Record",
+          content: `Consider adding ${childName}'s doctor information and scheduling a checkup to start building their medical history.`,
           priority: "medium",
           childId: childId
         });
       }
       
-      // Check if child is due for a check-up based on their age
-      if (childAge) {
-        // Example age-based checkup recommendation
-        const lastCheckup = childData.medicalAppointments.filter(apt => 
-          apt.title.toLowerCase().includes('checkup') || apt.title.toLowerCase().includes('check-up')
-        ).sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+      // Growth insights
+      if (childData.growthData && childData.growthData.length > 0) {
+        // Check if growth data is recent
+        const latestGrowthEntry = childData.growthData.sort((a, b) => 
+          new Date(b.date) - new Date(a.date)
+        )[0];
         
-        const checkupRecommendation = getCheckupRecommendation(childAge, lastCheckup);
-        if (checkupRecommendation) {
+        const threeMothsAgo = new Date();
+        threeMothsAgo.setMonth(threeMothsAgo.getMonth() - 3);
+        
+        if (new Date(latestGrowthEntry.date) < threeMothsAgo) {
           insights.push({
-            type: "recommendation",
-            title: "Checkup Recommendation",
-            content: `${childName} ${checkupRecommendation}`,
-            priority: "high",
+            type: "growth",
+            title: "Growth Update Reminder",
+            content: `${childName}'s growth measurements were last updated on ${formatDate(latestGrowthEntry.date)}. Consider updating their height and weight.`,
+            priority: "low",
+            childId: childId
+          });
+        }
+        
+        // Check for shoe size and clothing size updates
+        if (childData.growthData.length >= 2) {
+          const twoLatestEntries = childData.growthData
+            .sort((a, b) => new Date(b.date) - new Date(a.date))
+            .slice(0, 2);
+          
+          if (twoLatestEntries[0].shoeSize !== twoLatestEntries[1].shoeSize && twoLatestEntries[0].shoeSize) {
+            insights.push({
+              type: "growth",
+              title: "Shoe Size Change",
+              content: `${childName}'s shoe size has changed from ${twoLatestEntries[1].shoeSize} to ${twoLatestEntries[0].shoeSize}. You might need to update their footwear.`,
+              priority: "medium",
+              childId: childId
+            });
+          }
+          
+          if (twoLatestEntries[0].clothingSize !== twoLatestEntries[1].clothingSize && twoLatestEntries[0].clothingSize) {
+            insights.push({
+              type: "growth",
+              title: "Clothing Size Change",
+              content: `${childName}'s clothing size has changed from ${twoLatestEntries[1].clothingSize} to ${twoLatestEntries[0].clothingSize}. You might want to check if their clothes still fit.`,
+              priority: "medium",
+              childId: childId
+            });
+          }
+        }
+      } else if (childAge) {
+        // No growth data recorded
+        insights.push({
+          type: "recommendation",
+          title: "Missing Growth Data",
+          content: `You haven't recorded any growth data for ${childName} yet. Tracking height, weight, and sizes helps monitor their development.`,
+          priority: "medium",
+          childId: childId
+        });
+      }
+
+      // Hand-me-down insights
+      if (childData.clothesHandMeDowns && childData.clothesHandMeDowns.length > 0) {
+        const readyItems = childData.clothesHandMeDowns.filter(item => {
+          const readyDate = new Date(item.readyDate);
+          const today = new Date();
+          return !item.used && readyDate <= today;
+        });
+        
+        if (readyItems.length > 0) {
+          insights.push({
+            type: "clothes",
+            title: "Hand-Me-Downs Ready",
+            content: `${childName} has ${readyItems.length} saved clothing ${readyItems.length === 1 ? 'item' : 'items'} ready to be used.`,
+            priority: "low",
             childId: childId
           });
         }
       }
-    } else if (childAge) {
-      // No appointments recorded, recommend initial checkup
-      insights.push({
-        type: "recommendation",
-        title: "Initial Medical Record",
-        content: `Consider adding ${childName}'s doctor information and scheduling a checkup to start building their medical history.`,
-        priority: "medium",
-        childId: childId
-      });
-    }
+    });
     
-    // Growth insights
-    if (childData.growthData && childData.growthData.length > 0) {
-      // Check if growth data is recent
-      const latestGrowthEntry = childData.growthData.sort((a, b) => 
-        new Date(b.date) - new Date(a.date)
-      )[0];
-      
-      const threeMothsAgo = new Date();
-      threeMothsAgo.setMonth(threeMothsAgo.getMonth() - 3);
-      
-      if (new Date(latestGrowthEntry.date) < threeMothsAgo) {
-        insights.push({
-          type: "growth",
-          title: "Growth Update Reminder",
-          content: `${childName}'s growth measurements were last updated on ${formatDate(latestGrowthEntry.date)}. Consider updating their height and weight.`,
-          priority: "low",
-          childId: childId
-        });
-      }
-      
-      // Check for shoe size and clothing size updates
-      if (childData.growthData.length >= 2) {
-        const twoLatestEntries = childData.growthData
-          .sort((a, b) => new Date(b.date) - new Date(a.date))
-          .slice(0, 2);
-        
-        if (twoLatestEntries[0].shoeSize !== twoLatestEntries[1].shoeSize && twoLatestEntries[0].shoeSize) {
-          insights.push({
-            type: "growth",
-            title: "Shoe Size Change",
-            content: `${childName}'s shoe size has changed from ${twoLatestEntries[1].shoeSize} to ${twoLatestEntries[0].shoeSize}. You might need to update their footwear.`,
-            priority: "medium",
-            childId: childId
-          });
-        }
-        
-        if (twoLatestEntries[0].clothingSize !== twoLatestEntries[1].clothingSize && twoLatestEntries[0].clothingSize) {
-          insights.push({
-            type: "growth",
-            title: "Clothing Size Change",
-            content: `${childName}'s clothing size has changed from ${twoLatestEntries[1].clothingSize} to ${twoLatestEntries[0].clothingSize}. You might want to check if their clothes still fit.`,
-            priority: "medium",
-            childId: childId
-          });
-        }
-      }
-    } else if (childAge) {
-      // No growth data recorded
-      insights.push({
-        type: "recommendation",
-        title: "Missing Growth Data",
-        content: `You haven't recorded any growth data for ${childName} yet. Tracking height, weight, and sizes helps monitor their development.`,
-        priority: "medium",
-        childId: childId
-      });
-    }
-
-    // Hand-me-down insights
-    if (childData.clothesHandMeDowns && childData.clothesHandMeDowns.length > 0) {
-      const readyItems = childData.clothesHandMeDowns.filter(item => {
-        const readyDate = new Date(item.readyDate);
-        const today = new Date();
-        return !item.used && readyDate <= today;
-      });
-      
-      if (readyItems.length > 0) {
-        insights.push({
-          type: "clothes",
-          title: "Hand-Me-Downs Ready",
-          content: `${childName} has ${readyItems.length} saved clothing ${readyItems.length === 1 ? 'item' : 'items'} ready to be used.`,
-          priority: "low",
-          childId: childId
-        });
-      }
-    }
-  });
-  
-  // Sort insights by priority (high, medium, low)
-  const priorityOrder = { high: 0, medium: 1, low: 2 };
-  
-  insights.sort((a, b) => {
-    return priorityOrder[a.priority] - priorityOrder[b.priority];
-  });
-  
-  return insights;
-}, [getChildName, getChildAge, formatDate, getCheckupRecommendation]);
-
-// NEW CODE TO ADD - place these after state declarations and before the functions we've already moved up
-// Format date for display
-const formatDate = useCallback((dateString) => {
-  if (!dateString) return "Not scheduled";
-  
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
-}, []);
-
-// Get child name by ID
-const getChildName = useCallback((childId) => {
-  const child = familyMembers.find(member => member.id === childId);
-  return child ? child.name : "Unknown Child";
-}, [familyMembers]);
-
-// Get child age by ID
-const getChildAge = useCallback((childId) => {
-  const child = familyMembers.find(member => member.id === childId);
-  return child ? child.age : null;
-}, [familyMembers]);
-
-// Helper function to get checkup recommendation based on age
-const getCheckupRecommendation = useCallback((age, lastCheckup) => {
-  // Based on common pediatric schedules
-  let recommendation = null;
-  
-  if (!lastCheckup) {
-    return `should have regular checkups. No previous checkup information is recorded.`;
-  }
-  
-  const lastCheckupDate = new Date(lastCheckup.date);
-  const today = new Date();
-  const monthsSinceLastCheckup = (today.getFullYear() - lastCheckupDate.getFullYear()) * 12 + 
-                                today.getMonth() - lastCheckupDate.getMonth();
-  
-  // Simplified recommendations based on age
-  if (age < 1) {
-    // Infants typically have checkups at 1, 2, 4, 6, 9, and 12 months
-    if (monthsSinceLastCheckup >= 3) {
-      recommendation = `is due for another well-baby checkup. Infants typically need checkups every 2-3 months during the first year.`;
-    }
-  } else if (age < 3) {
-    // Toddlers typically have checkups at 15, 18, 24, and 30 months
-    if (monthsSinceLastCheckup >= 6) {
-      recommendation = `may be due for a checkup. Children aged 1-3 typically need checkups every 6 months.`;
-    }
-  } else if (age < 6) {
-    // Preschoolers typically have annual checkups
-    if (monthsSinceLastCheckup >= 12) {
-      recommendation = `is due for an annual checkup. The last checkup was ${monthsSinceLastCheckup} months ago.`;
-    }
-  } else {
-    // School-age children and adolescents typically have annual checkups
-    if (monthsSinceLastCheckup >= 12) {
-      recommendation = `is due for an annual checkup. The last checkup was ${monthsSinceLastCheckup} months ago.`;
-    }
-  }
-  
-  return recommendation;
-}, []);
-
-
+    // Sort insights by priority (high, medium, low)
+    const priorityOrder = { high: 0, medium: 1, low: 2 };
+    
+    insights.sort((a, b) => {
+      return priorityOrder[a.priority] - priorityOrder[b.priority];
+    });
+    
+    return insights;
+  }, [getChildName, getChildAge, formatDate, getCheckupRecommendation]);
 
   // Load healthcare providers
   useEffect(() => {
@@ -650,26 +651,6 @@ const getCheckupRecommendation = useCallback((age, lastCheckup) => {
     setViewMode(viewMode === 'card' ? 'list' : 'card');
   };
 
-  
-
-  // Get child name by ID
-  const getChildName = (childId) => {
-    const child = familyMembers.find(member => member.id === childId);
-    return child ? child.name : "Unknown Child";
-  };
-
-  // Get child age by ID
-  const getChildAge = (childId) => {
-    const child = familyMembers.find(member => member.id === childId);
-    return child ? child.age : null;
-  };
-
-  // Get child's profile picture
-  const getChildProfilePicture = (childId) => {
-    const child = familyMembers.find(member => member.id === childId);
-    return child && child.profilePicture ? child.profilePicture : '/api/placeholder/48/48';
-  };
-  
   // Load documents associated with an appointment
   const loadAppointmentDocuments = async (childId, appointmentId) => {
     try {
@@ -926,51 +907,6 @@ const getCheckupRecommendation = useCallback((age, lastCheckup) => {
     
     loadChildrenData();
   }, [familyId, familyMembers, activeChild, generateAiInsights, updateNotificationCounts]); 
-
-  // Update notification counts based on data
-
-  
-
-
-  // Helper function to get checkup recommendation based on age
-  const getCheckupRecommendation = (age, lastCheckup) => {
-    // Based on common pediatric schedules
-    let recommendation = null;
-    
-    if (!lastCheckup) {
-      return `should have regular checkups. No previous checkup information is recorded.`;
-    }
-    
-    const lastCheckupDate = new Date(lastCheckup.date);
-    const today = new Date();
-    const monthsSinceLastCheckup = (today.getFullYear() - lastCheckupDate.getFullYear()) * 12 + 
-                                  today.getMonth() - lastCheckupDate.getMonth();
-    
-    // Simplified recommendations based on age
-    if (age < 1) {
-      // Infants typically have checkups at 1, 2, 4, 6, 9, and 12 months
-      if (monthsSinceLastCheckup >= 3) {
-        recommendation = `is due for another well-baby checkup. Infants typically need checkups every 2-3 months during the first year.`;
-      }
-    } else if (age < 3) {
-      // Toddlers typically have checkups at 15, 18, 24, and 30 months
-      if (monthsSinceLastCheckup >= 6) {
-        recommendation = `may be due for a checkup. Children aged 1-3 typically need checkups every 6 months.`;
-      }
-    } else if (age < 6) {
-      // Preschoolers typically have annual checkups
-      if (monthsSinceLastCheckup >= 12) {
-        recommendation = `is due for an annual checkup. The last checkup was ${monthsSinceLastCheckup} months ago.`;
-      }
-    } else {
-      // School-age children and adolescents typically have annual checkups
-      if (monthsSinceLastCheckup >= 12) {
-        recommendation = `is due for an annual checkup. The last checkup was ${monthsSinceLastCheckup} months ago.`;
-      }
-    }
-    
-    return recommendation;
-  };
   
   // Handle form submission for different data types
   const handleFormSubmit = async (formType) => {
@@ -2287,1475 +2223,4 @@ const getCheckupRecommendation = useCallback((age, lastCheckup) => {
         
         <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
           {filteredChildren.map(child => (
-            <div key={child.id} className={`bg-white rounded-lg shadow ${viewMode === 'card' ? 'p-4' : 'p-4'}`}>
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
-                    <img 
-                      src={child.profilePicture || '/api/placeholder/40/40'} 
-                      alt={child.name} 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div>
-                    <h4 className="font-medium font-roboto text-lg">{child.name}'s Schedule</h4>
-                    <p className="text-sm text-gray-500 font-roboto">
-                      {childrenData[child.id]?.routines?.length || 0} routines
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  <button 
-                    className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
-                    onClick={() => openModal('routine', {
-                      title: '',
-                      days: [],
-                      startTime: '08:00',
-                      endTime: '',
-                      notes: '',
-                      childId: child.id
-                    })}
-                  >
-                    <Clock size={14} className="mr-1" />
-                    Add Routine
-                  </button>
-                </div>
-              </div>
-              
-              {/* Weekly schedule visualization */}
-              <div className="mb-6 bg-gray-50 p-4 rounded-lg">
-                <h5 className="font-medium text-sm font-roboto mb-3">Weekly Schedule</h5>
-                
-                <div className="overflow-x-auto">
-                  <div className="min-w-max">
-                    {/* Days of Week Headers */}
-                    <div className="flex">
-                      <div className="w-16"></div> {/* Time column */}
-                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
-                        <div key={day} className="flex-1 text-center py-1 font-medium text-sm font-roboto">
-                          {day.substring(0, 3)}
-                        </div>
-                      ))}
-                    </div>
-                    
-                    {/* Time slots from 6AM to 9PM */}
-                    {Array.from({ length: 16 }, (_, i) => i + 6).map(hour => (
-                      <div key={hour} className="flex border-t">
-                        <div className="w-16 text-xs text-gray-500 pt-1 pr-2 text-right font-roboto">
-                          {hour === 12 ? '12 PM' : hour < 12 ? `${hour} AM` : `${hour - 12} PM`}
-                        </div>
-                        
-                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => {
-                          // Find routines for this day and time
-                          const routines = childrenData[child.id]?.routines?.filter(r => {
-                            if (!r.days.includes(day)) return false;
-                            
-                            const startHour = parseInt(r.startTime.split(':')[0]);
-                            const endHour = r.endTime ? parseInt(r.endTime.split(':')[0]) : startHour + 1;
-                            
-                            return startHour <= hour && endHour > hour;
-                          }) || [];
-                          
-                          return (
-                            <div key={day} className="flex-1 h-10 border-l relative">
-                              {routines.map((routine, index) => (
-                                <div 
-                                  key={index}
-                                  className="absolute left-0 right-0 mx-1 p-1 text-xs rounded truncate bg-blue-100 text-blue-800"
-                                  style={{ top: `${index * 20}%` }}
-                                >
-                                  {routine.title}
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <h5 className="font-medium text-sm font-roboto">Daily Routines</h5>
-                  <button className="text-xs text-blue-600 hover:underline font-roboto">View all</button>
-                </div>
-                
-                {childrenData[child.id]?.routines?.length > 0 ? (
-                  <div className="space-y-2">
-                    {childrenData[child.id].routines
-                      .slice(0, 4)
-                      .map(routine => (
-                        <div key={routine.id} className="border rounded-lg p-3 hover:bg-gray-50">
-                          <div className="flex justify-between">
-                            <div>
-                              <h5 className="font-medium font-roboto">{routine.title}</h5>
-                              <p className="text-sm text-gray-600 font-roboto">
-                                {routine.days.join(', ')} at {routine.startTime}
-                                {routine.endTime && ` - ${routine.endTime}`}
-                              </p>
-                            </div>
-                            <div className="flex space-x-2">
-                              <button 
-                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                onClick={() => openModal('routine', {...routine, childId: child.id})}
-                              >
-                                <Edit size={16} />
-                              </button>
-                              <button 
-                                className="p-1 text-red-600 hover:bg-red-50 rounded"
-                                onClick={() => handleRemoveItem('routine', child.id, routine.id)}
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          </div>
-                          {routine.notes && (
-                            <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
-                              <p>{routine.notes}</p>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                  </div>
-                ) : (
-                  <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-500 font-roboto">No routines added yet</p>
-                    <button 
-                      className="mt-2 px-3 py-1 bg-blue-500 text-white rounded-md text-sm font-roboto"
-                      onClick={() => openModal('routine', {
-                        title: '',
-                        days: [],
-                        startTime: '08:00',
-                        endTime: '',
-                        notes: '',
-                        childId: child.id
-                      })}
-                    >
-                      Add First Routine
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-  
-  // Render section header with expand/collapse functionality
-  const renderSectionHeader = (title, sectionKey, icon, notificationCount = 0) => (
-    <div 
-      className="border-l-4 border-black p-4 flex justify-between items-center cursor-pointer bg-white rounded-lg shadow-sm mb-2" 
-      onClick={() => toggleSection(sectionKey)}
-    >
-      <div className="flex items-center">
-        {icon}
-        <h4 className="font-medium text-lg font-roboto ml-2">{title}</h4>
-        {notificationCount > 0 && (
-          <span className="ml-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full font-roboto">
-            {notificationCount}
-          </span>
-        )}
-      </div>
-      <button className="p-2 rounded-full hover:bg-gray-100">
-        {expandedSections[sectionKey] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-      </button>
-    </div>
-  );
-  
-  // Render AI insights section
-  const renderAiInsights = () => {
-    const childrenWithInsights = aiInsights.filter(insight => 
-      !activeChild || insight.childId === activeChild
-    );
-    
-    return (
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-4 font-roboto">Allie AI Insights</h3>
-        
-        {childrenWithInsights.length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {childrenWithInsights.map((insight, index) => (
-              <div 
-                key={index} 
-                className={`p-4 rounded-lg border-l-4 ${
-                  insight.priority === 'high' 
-                    ? 'border-red-500 bg-red-50' 
-                    : insight.priority === 'medium'
-                      ? 'border-yellow-500 bg-yellow-50'
-                      : 'border-blue-500 bg-blue-50'
-                }`}
-              >
-                <div className="flex items-start">
-                  {insight.type === 'recommendation' ? (
-                    <Info size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
-                  ) : insight.type === 'medical' ? (
-                    <AlertCircle size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
-                  ) : insight.type === 'growth' ? (
-                    <Activity size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
-                  ) : insight.type === 'clothes' ? (
-                    <Clipboard size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
-                  ) : (
-                    <Info size={18} className="text-gray-600 mr-2 mt-1 flex-shrink-0" />
-                  )}
-                  <div>
-                    <h4 className="font-medium mb-1 font-roboto">{insight.title}</h4>
-                    <p className="text-sm font-roboto">{insight.content}</p>
-                    {insight.actionable && (
-                      <div className="mt-2 text-sm text-blue-600 font-roboto">
-                        <button className="hover:underline">
-                          {insight.actionable}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white p-4 rounded-lg shadow-sm text-center">
-            <p className="text-gray-500 font-roboto">
-              Allie is learning about your family. As you add more data, insights will appear here to help you stay on top of your children's needs.
-            </p>
-          </div>
-        )}
-      </div>
-    );
-  };
-  
-  // Main render function
-  return (
-    <div className="relative">
-      {/* Loading overlay */}
-      {loading && (
-        <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-t-transparent border-blue-600 rounded-full animate-spin mx-auto"></div>
-            <p className="mt-2 text-blue-600 font-medium font-roboto">Loading children data...</p>
-          </div>
-        </div>
-      )}
-      
-      {/* Error message */}
-      {tabError && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
-          <span className="block sm:inline font-roboto">{tabError}</span>
-          <button 
-            className="absolute top-0 bottom-0 right-0 px-4 py-3" 
-            onClick={() => setTabError(null)}
-          >
-            <span className="sr-only">Close</span>
-            <X size={18} />
-          </button>
-        </div>
-      )}
-      
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold font-roboto">Children Tracking Dashboard</h2>
-        <p className="text-gray-600 font-roboto mt-1">
-          Keep track of medical appointments, growth, and daily routines for your children
-        </p>
-      </div>
-      
-      {/* Voice entry mode */}
-      {newVoiceEntry && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-lg w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium font-roboto">Voice Entry</h3>
-              <button 
-                className="text-gray-400 hover:text-gray-500"
-                onClick={() => {
-                  setNewVoiceEntry(false);
-                  setIsRecording(false);
-                  setRecordingText('');
-                }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="text-center mb-4">
-              {isRecording ? (
-                <div className="mx-auto w-20 h-20 rounded-full bg-red-500 flex items-center justify-center animate-pulse">
-                  <Mic size={32} className="text-white" />
-                </div>
-              ) : (
-                <div className="mx-auto w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center">
-                  <Mic size={32} className="text-gray-500" />
-                </div>
-              )}
-            </div>
-            
-            <div className="mb-4">
-              <div className="border rounded-lg p-3 h-32 overflow-y-auto bg-gray-50">
-                {recordingText || (
-                  <p className="text-gray-400 text-center italic font-roboto">
-                    {isRecording 
-                      ? "Listening..." 
-                      : "Press the microphone button and speak to add information"}
-                  </p>
-                )}
-              </div>
-            </div>
-            
-            <div className="flex justify-between">
-              <button 
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
-                onClick={() => {
-                  setNewVoiceEntry(false);
-                  setIsRecording(false);
-                  setRecordingText('');
-                }}
-              >
-                Cancel
-              </button>
-              
-              <div className="space-x-2">
-                {isRecording ? (
-                  <button 
-                    className="px-4 py-2 bg-red-500 text-white rounded-md font-roboto hover:bg-red-600"
-                    onClick={() => setIsRecording(false)}
-                  >
-                    Stop
-                  </button>
-                ) : (
-                  <>
-                    <button 
-                      className="px-4 py-2 bg-blue-500 text-white rounded-md font-roboto hover:bg-blue-600"
-                      onClick={handleVoiceInput}
-                    >
-                      Record
-                    </button>
-                    
-                    {recordingText && (
-                      <button 
-                        className="px-4 py-2 bg-green-500 text-white rounded-md font-roboto hover:bg-green-600"
-                        onClick={() => processVoiceCommand(recordingText)}
-                      >
-                        Process
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Children selector tabs */}
-      <div className="mb-6 bg-white p-4 rounded-lg shadow">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium font-roboto">Filter by Child</h3>
-          <div className="flex space-x-3">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search..."
-                className="w-48 border rounded-full pl-10 pr-4 py-2 text-sm"
-                value={searchQuery}
-                onChange={handleSearch}
-                ref={searchInputRef}
-              />
-              <Search size={18} className="text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
-            </div>
-            
-            <button 
-              className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
-              onClick={handleVoiceInput}
-              ref={microphoneRef}
-            >
-              <Mic size={18} />
-            </button>
-            
-            <button
-              className="p-2 rounded-md hover:bg-gray-100"
-              onClick={toggleViewMode}
-              title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
-            >
-              {viewMode === 'card' ? <List size={18} /> : <Grid size={18} />}
-            </button>
-            
-            <button
-              className="p-2 rounded-md hover:bg-gray-100"
-              onClick={() => setActiveChild(null)}
-              title="Show all children"
-            >
-              <Users size={18} />
-            </button>
-          </div>
-        </div>
-        
-        <div className="flex flex-wrap gap-3">
-          {familyMembers.filter(member => member.role === 'child').map(child => (
-            <div 
-              key={child.id}
-              className={`border rounded-lg p-2 cursor-pointer hover:border-black transition-colors ${
-                activeChild === child.id ? 'border-black bg-gray-50' : 'border-gray-200'
-              }`}
-              onClick={() => setActiveChild(child.id === activeChild ? null : child.id)}
-            >
-              <div className="flex items-center">
-                <div className="w-10 h-10 rounded-full overflow-hidden mr-2">
-                  <img 
-                    src={child.profilePicture || '/api/placeholder/40/40'} 
-                    alt={child.name} 
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div>
-                  <p className="font-medium font-roboto">{child.name}</p>
-                  <p className="text-xs text-gray-500 font-roboto">
-                    {child.age ? `${child.age} years old` : 'Age not set'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      
-      {/* AI Insights Section */}
-      {renderAiInsights()}
-      
-      {/* Main Sections */}
-      <div className="space-y-6">
-        {/* Medical Section */}
-        <div>
-          {renderSectionHeader(
-            'Medical Appointments & Health Records', 
-            'medical', 
-            <AlertCircle size={20} className="text-red-500" />,
-            notifications.medical
-          )}
-          {expandedSections.medical && renderMedicalSection()}
-        </div>
-        
-        {/* Growth & Development Section */}
-        <div>
-          {renderSectionHeader(
-            'Growth & Development Tracking', 
-            'growth', 
-            <Activity size={20} className="text-blue-500" />,
-            notifications.growth
-          )}
-          {expandedSections.growth && renderGrowthSection()}
-        </div>
-        
-        {/* Routines & Activities Section */}
-        <div>
-          {renderSectionHeader(
-            'Daily Routines & Activities', 
-            'routines', 
-            <Clock size={20} className="text-purple-500" />,
-            notifications.routines
-          )}
-          {renderRoutinesSection()}
-        </div>
-      </div>
-      
-      {/* Footer Help Section */}
-      <div className="mt-8 bg-gray-50 p-4 rounded-lg border border-gray-200">
-        <div className="flex items-start">
-          <HelpCircle size={24} className="text-blue-500 mr-3 flex-shrink-0" />
-          <div>
-            <h3 className="font-medium font-roboto">Need help with Children Tracking?</h3>
-            <p className="text-sm text-gray-600 font-roboto mt-1">
-              Just ask Allie in the chat! Try saying "Allie, add a doctor's appointment for Emma next Tuesday" 
-              or "When was Jack's last growth measurement?"
-            </p>
-          </div>
-        </div>
-      </div>
-      
-      {/* Allie Message */}
-      {allieMessage && (
-        <div className={`fixed bottom-20 right-4 max-w-xs p-4 rounded-lg shadow-lg z-50 ${
-          allieMessage.type === 'success' ? 'bg-green-50 border-l-4 border-green-500' :
-          allieMessage.type === 'warning' ? 'bg-yellow-50 border-l-4 border-yellow-500' :
-          allieMessage.type === 'error' ? 'bg-red-50 border-l-4 border-red-500' :
-          'bg-blue-50 border-l-4 border-blue-500'
-        }`}>
-          <div className="flex">
-            <div className={`flex-shrink-0 mr-2 ${
-              allieMessage.type === 'success' ? 'text-green-500' :
-              allieMessage.type === 'warning' ? 'text-yellow-500' :
-              allieMessage.type === 'error' ? 'text-red-500' :
-              'text-blue-500'
-            }`}>
-              {allieMessage.type === 'success' && <CheckCircle size={16} />}
-              {allieMessage.type === 'warning' && <AlertCircle size={16} />}
-              {allieMessage.type === 'error' && <X size={16} />}
-              {allieMessage.type === 'info' && <Info size={16} />}
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-roboto">{allieMessage.text}</p>
-            </div>
-            <button 
-              className="ml-2 text-gray-400 hover:text-gray-600"
-              onClick={() => setAllieMessage(null)}
-            >
-              <X size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-      
-      {/* MODALS */}
-      
-      {/* Appointment Modal */}
-      {activeModal === 'appointment' && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium font-roboto">
-                {modalData.id ? 'Edit Appointment' : 'Add New Appointment'}
-              </h3>
-              <button 
-                className="text-gray-400 hover:text-gray-500"
-                onClick={closeModal}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    Appointment Type <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="e.g. Checkup, Dentist, Vaccination"
-                    value={modalData.title || ''}
-                    onChange={(e) => setModalData({...modalData, title: e.target.value})}
-                    required
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                      Date <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                      value={modalData.date || ''}
-                      onChange={(e) => setModalData({...modalData, date: e.target.value})}
-                      required
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                      Time <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="time"
-                      className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                      value={modalData.time || ''}
-                      onChange={(e) => setModalData({...modalData, time: e.target.value})}
-                      required
-                    />
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    Healthcare Provider
-                  </label>
-                  <div className="flex items-center space-x-2">
-                    <select
-                      className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                      value={modalData.providerId || ''}
-                      onChange={(e) => {
-                        const providerId = e.target.value;
-                        if (providerId) {
-                          const provider = healthcareProviders.find(p => p.id === providerId);
-                          setModalData({
-                            ...modalData, 
-                            providerId,
-                            doctor: provider ? provider.name : '',
-                            providerDetails: provider ? {
-                              id: provider.id,
-                              name: provider.name,
-                              specialty: provider.specialty,
-                              phone: provider.phone,
-                              email: provider.email,
-                              address: provider.address
-                            } : undefined
-                          });
-                        } else {
-                          setModalData({
-                            ...modalData, 
-                            providerId: '',
-                            doctor: '',
-                            providerDetails: undefined
-                          });
-                        }
-                      }}
-                    >
-                      <option value="">Select provider</option>
-                      {healthcareProviders.map(provider => (
-                        <option key={provider.id} value={provider.id}>
-                          {provider.name} ({provider.specialty})
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      className="p-2 rounded-md bg-black text-white hover:bg-gray-800 shrink-0"
-                      onClick={() => openModal('provider', {})}
-                      title="Add new provider"
-                    >
-                      <Plus size={16} />
-                    </button>
-                  </div>
-                </div>
-                
-                {!modalData.providerId && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                      Doctor/Provider Name (optional)
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="e.g. Dr. Smith"
-                      value={modalData.doctor || ''}
-                      onChange={(e) => setModalData({...modalData, doctor: e.target.value})}
-                    />
-                  </div>
-                )}
-                
-                {modalData.providerDetails && (
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <h4 className="text-sm font-medium font-roboto mb-2">Provider Details</h4>
-                    <div className="text-sm space-y-1 font-roboto">
-                      <p>
-                        <span className="font-medium">Specialty:</span> {modalData.providerDetails.specialty || 'Not specified'}
-                      </p>
-                      {modalData.providerDetails.phone && (
-                        <p>
-                          <span className="font-medium">Phone:</span> {modalData.providerDetails.phone}
-                        </p>
-                      )}
-                      {modalData.providerDetails.email && (
-                        <p>
-                          <span className="font-medium">Email:</span> {modalData.providerDetails.email}
-                        </p>
-                      )}
-                      {modalData.providerDetails.address && (
-                        <p>
-                          <span className="font-medium">Address:</span> {modalData.providerDetails.address}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    Notes (optional)
-                  </label>
-                  <textarea
-                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Any additional information"
-                    rows="3"
-                    value={modalData.notes || ''}
-                    onChange={(e) => setModalData({...modalData, notes: e.target.value})}
-                  ></textarea>
-                </div>
-                
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
-                    checked={modalData.completed || false}
-                    onChange={(e) => setModalData({...modalData, completed: e.target.checked})}
-                    id="completed-checkbox"
-                  />
-                  <label htmlFor="completed-checkbox" className="ml-2 block text-sm text-gray-900 font-roboto">
-                    Mark as completed
-                  </label>
-                </div>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <h4 className="text-md font-medium mb-2 font-roboto flex items-center">
-                    <Paperclip size={16} className="mr-1" />
-                    Appointment Documents
-                  </h4>
-                  
-                  <div className="border rounded-lg p-3 bg-gray-50">
-                    <input
-                      type="file"
-                      className="hidden"
-                      ref={fileInputRef}
-                      onChange={handleFileUpload}
-                    />
-                    <button
-                      className="w-full p-4 border border-dashed rounded-md flex flex-col items-center justify-center hover:bg-gray-100"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadingDocument}
-                    >
-                      {uploadingDocument ? (
-                        <>
-                          <RefreshCw size={24} className="text-blue-500 mb-2 animate-spin" />
-                          <p className="text-sm text-gray-600 font-roboto">Uploading... {uploadProgress}%</p>
-                        </>
-                      ) : (
-                        <>
-                          <Upload size={24} className="text-gray-400 mb-2" />
-                          <p className="text-sm text-gray-600 font-roboto">Click to upload documents or photos</p>
-                          <p className="text-xs text-gray-500 font-roboto">PDF, JPG, PNG files accepted</p>
-                        </>
-                      )}
-                    </button>
-                    
-                    {documents.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        <h5 className="text-sm font-medium font-roboto">Uploaded Documents</h5>
-                        
-                        {documents.map((doc) => (
-                          <div key={doc.id} className="flex items-center justify-between p-2 border rounded-md bg-white">
-                            <div className="flex items-center overflow-hidden">
-                              <FileText size={16} className="text-blue-500 mr-2 flex-shrink-0" />
-                              <span className="text-sm font-roboto truncate">{doc.fileName}</span>
-                            </div>
-                            <div className="flex space-x-2 flex-shrink-0">
-                              <a 
-                                href={doc.fileUrl} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                title="Download"
-                              >
-                                <Download size={14} />
-                              </a>
-                              <button 
-                                className="p-1 text-red-600 hover:bg-red-50 rounded"
-                                onClick={() => handleRemoveDocument(doc.id)}
-                                title="Delete"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="p-3 border rounded-lg bg-blue-50 mt-4">
-                  <h4 className="text-sm font-medium mb-2 font-roboto">Add to Calendar</h4>
-                  <p className="text-sm text-gray-600 font-roboto">
-                    This appointment will be automatically added to your family calendar when saved.
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
-                onClick={closeModal}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
-                onClick={() => handleFormSubmit('appointment')}
-                disabled={loadingSection === 'appointment'}
-              >
-                {loadingSection === 'appointment' ? (
-                  <span className="flex items-center">
-                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Saving...
-                  </span>
-                ) : (
-                  modalData.id ? 'Update Appointment' : 'Save Appointment'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Growth Measurement Modal */}
-      {activeModal === 'growth' && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium font-roboto">
-                {modalData.id ? 'Edit Measurement' : 'Add New Measurement'}
-              </h3>
-              <button 
-                className="text-gray-400 hover:text-gray-500"
-                onClick={closeModal}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Date
-                </label>
-                <input
-                  type="date"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={modalData.date || ''}
-                  onChange={(e) => setModalData({...modalData, date: e.target.value})}
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    Height
-                  </label>
-                  <div className="flex">
-                    <input
-                      type="text"
-                      className="w-full border rounded-l-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="e.g. 42in or 107cm"
-                      value={modalData.height || ''}
-                      onChange={(e) => setModalData({...modalData, height: e.target.value})}
-                      pattern="^\d+(\.\d+)?\s*(cm|in|inches|feet|ft)$"
-                      title="Enter a number followed by a unit (e.g., 42in or 107cm)"
-                    />
-                    <div className="bg-gray-100 p-2 rounded-r-md flex items-center">
-                      <Activity size={16} className="text-gray-500" />
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">Format: 42in or 107cm</p>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    Weight
-                  </label>
-                  <div className="flex">
-                    <input
-                      type="text"
-                      className="w-full border rounded-l-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="e.g. 40lb or 18kg"
-                      value={modalData.weight || ''}
-                      onChange={(e) => setModalData({...modalData, weight: e.target.value})}
-                      pattern="^\d+(\.\d+)?\s*(kg|kilos|lb|pounds)$"
-                      title="Enter a number followed by a unit (e.g., 40lb or 18kg)"
-                    />
-                    <div className="bg-gray-100 p-2 rounded-r-md flex items-center">
-                      <Activity size={16} className="text-gray-500" />
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">Format: 40lb or 18kg</p>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    Shoe Size
-                  </label>
-                  <div className="flex items-center">
-                    <button 
-                      className="bg-gray-100 p-2 rounded-l-md"
-                      onClick={() => {
-                        const currentSize = parseFloat(modalData.shoeSize) || 0;
-                        if (currentSize > 0) {
-                          setModalData({...modalData, shoeSize: (currentSize - 0.5).toString()});
-                        }
-                      }}
-                    >
-                      <ChevronDown size={16} className="text-gray-500" />
-                    </button>
-                    <input
-                      type="text"
-                      className="flex-1 border-t border-b p-2 text-center focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Shoe size"
-                      value={modalData.shoeSize || ''}
-                      onChange={(e) => {
-                        // Only allow numbers and decimal points
-                        const value = e.target.value.replace(/[^\d.]/g, '');
-                        setModalData({...modalData, shoeSize: value});
-                      }}
-                    />
-                    <button 
-                      className="bg-gray-100 p-2 rounded-r-md"
-                      onClick={() => {
-                        const currentSize = parseFloat(modalData.shoeSize) || 0;
-                        setModalData({...modalData, shoeSize: (currentSize + 0.5).toString()});
-                      }}
-                    >
-                      <ChevronUp size={16} className="text-gray-500" />
-                    </button>
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    Clothing Size
-                  </label>
-                  <select
-                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                    value={modalData.clothingSize || ''}
-                    onChange={(e) => setModalData({...modalData, clothingSize: e.target.value})}
-                  >
-                    <option value="">Select size</option>
-                    <option value="Newborn">Newborn</option>
-                    <option value="0-3M">0-3 Months</option>
-                    <option value="3-6M">3-6 Months</option>
-                    <option value="6-9M">6-9 Months</option>
-                    <option value="9-12M">9-12 Months</option>
-                    <option value="12-18M">12-18 Months</option>
-                    <option value="18-24M">18-24 Months</option>
-                    <option value="2T">2T</option>
-                    <option value="3T">3T</option>
-                    <option value="4T">4T</option>
-                    <option value="5T">5T</option>
-                    <option value="XS">XS (4-5)</option>
-                    <option value="S">S (6-7)</option>
-                    <option value="M">M (8-10)</option>
-                    <option value="L">L (10-12)</option>
-                    <option value="XL">XL (14-16)</option>
-                    <option value="XXL">XXL (18-20)</option>
-                  </select>
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Notes (optional)
-                </label>
-                <textarea
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Any additional information"
-                  rows="2"
-                  value={modalData.notes || ''}
-                  onChange={(e) => setModalData({...modalData, notes: e.target.value})}
-                ></textarea>
-              </div>
-            </div>
-            
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
-                onClick={closeModal}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
-                onClick={() => handleFormSubmit('growth')}
-                disabled={loadingSection === 'growth'}
-              >
-                {loadingSection === 'growth' ? (
-                  <span className="flex items-center">
-                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Saving...
-                  </span>
-                ) : (
-                  modalData.id ? 'Update Measurement' : 'Save Measurement'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Routine Modal */}
-      {activeModal === 'routine' && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium font-roboto">
-                {modalData.id ? 'Edit Routine' : 'Add New Routine'}
-              </h3>
-              <button 
-                className="text-gray-400 hover:text-gray-500"
-                onClick={closeModal}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Routine Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. Morning Routine, Bedtime, etc."
-                  value={modalData.title || ''}
-                  onChange={(e) => setModalData({...modalData, title: e.target.value})}
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Days of Week <span className="text-red-500">*</span>
-                </label>
-                <div className="grid grid-cols-7 gap-1">
-                  {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
-                    <button
-                      key={day}
-                      className={`text-xs p-2 rounded-md ${
-                        modalData.days?.includes(day) 
-                          ? 'bg-blue-500 text-white' 
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                      onClick={() => {
-                        const currentDays = modalData.days || [];
-                        if (currentDays.includes(day)) {
-                          setModalData({
-                            ...modalData, 
-                            days: currentDays.filter(d => d !== day)
-                          });
-                        } else {
-                          setModalData({
-                            ...modalData,
-                            days: [...currentDays, day]
-                          });
-                        }
-                      }}
-                    >
-                      {day.substring(0, 3)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    Start Time <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex">
-                    <select
-                      className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                      value={modalData.startTime || ''}
-                      onChange={(e) => setModalData({...modalData, startTime: e.target.value})}
-                      required
-                    >
-                      <option value="">Select time</option>
-                      {Array.from({ length: 24 }, (_, hour) => (
-                        <>
-                          <option key={`${hour}:00`} value={`${hour.toString().padStart(2, '0')}:00`}>
-                            {hour === 0 ? '12:00 AM' : 
-                             hour < 12 ? `${hour}:00 AM` : 
-                             hour === 12 ? '12:00 PM' : 
-                             `${hour - 12}:00 PM`}
-                          </option>
-                          <option key={`${hour}:30`} value={`${hour.toString().padStart(2, '0')}:30`}>
-                            {hour === 0 ? '12:30 AM' : 
-                             hour < 12 ? `${hour}:30 AM` : 
-                             hour === 12 ? '12:30 PM' : 
-                             `${hour - 12}:30 PM`}
-                          </option>
-                        </>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    End Time (optional)
-                  </label>
-                  <div className="flex">
-                    <select
-                      className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                      value={modalData.endTime || ''}
-                      onChange={(e) => setModalData({...modalData, endTime: e.target.value})}
-                    >
-                      <option value="">Duration</option>
-                      <option value="30 minutes">30 minutes</option>
-                      <option value="60 minutes">1 hour</option>
-                      <option value="90 minutes">1.5 hours</option>
-                      <option value="120 minutes">2 hours</option>
-                      <option value="custom">Custom time...</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-              
-              {modalData.endTime === 'custom' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                    Custom End Time
-                  </label>
-                  <select
-                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                    value={modalData.customEndTime || ''}
-                    onChange={(e) => setModalData({...modalData, customEndTime: e.target.value})}
-                  >
-                    <option value="">Select end time</option>
-                    {Array.from({ length: 24 }, (_, hour) => (
-                      <>
-                        <option key={`${hour}:00`} value={`${hour.toString().padStart(2, '0')}:00`}>
-                          {hour === 0 ? '12:00 AM' : 
-                           hour < 12 ? `${hour}:00 AM` : 
-                           hour === 12 ? '12:00 PM' : 
-                           `${hour - 12}:00 PM`}
-                        </option>
-                        <option key={`${hour}:30`} value={`${hour.toString().padStart(2, '0')}:30`}>
-                          {hour === 0 ? '12:30 AM' : 
-                           hour < 12 ? `${hour}:30 AM` : 
-                           hour === 12 ? '12:30 PM' : 
-                           `${hour - 12}:30 PM`}
-                        </option>
-                      </>
-                    ))}
-                  </select>
-                </div>
-              )}
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Notes (optional)
-                </label>
-                <textarea
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Any additional information"
-                  rows="2"
-                  value={modalData.notes || ''}
-                  onChange={(e) => setModalData({...modalData, notes: e.target.value})}
-                ></textarea>
-              </div>
-            </div>
-            
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
-                onClick={closeModal}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
-                onClick={() => handleFormSubmit('routine')}
-                disabled={loadingSection === 'routine'}
-              >
-                {loadingSection === 'routine' ? (
-                  <span className="flex items-center">
-                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Saving...
-                  </span>
-                ) : (
-                  modalData.id ? 'Update Routine' : 'Save Routine'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Healthcare Provider Modal */}
-      {activeModal === 'provider' && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium font-roboto">
-                {modalData.id ? 'Edit Healthcare Provider' : 'Add New Healthcare Provider'}
-              </h3>
-              <button 
-                className="text-gray-400 hover:text-gray-500"
-                onClick={closeModal}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Provider Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. Dr. Smith"
-                  value={modalData.name || ''}
-                  onChange={(e) => setModalData({...modalData, name: e.target.value})}
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Specialty <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. Pediatrician, Dentist, etc."
-                  value={modalData.specialty || ''}
-                  onChange={(e) => setModalData({...modalData, specialty: e.target.value})}
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Phone (optional)
-                </label>
-                <input
-                  type="tel"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. (555) 123-4567"
-                  value={modalData.phone || ''}
-                  onChange={(e) => setModalData({...modalData, phone: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Email (optional)
-                </label>
-                <input
-                  type="email"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. provider@example.com"
-                  value={modalData.email || ''}
-                  onChange={(e) => setModalData({...modalData, email: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Address (optional)
-                </label>
-                <input
-                  type="text"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. 123 Main St, City, State"
-                  value={modalData.address || ''}
-                  onChange={(e) => setModalData({...modalData, address: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Notes (optional)
-                </label>
-                <textarea
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Any additional information"
-                  rows="2"
-                  value={modalData.notes || ''}
-                  onChange={(e) => setModalData({...modalData, notes: e.target.value})}
-                ></textarea>
-              </div>
-            </div>
-            
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
-                onClick={closeModal}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
-                onClick={() => handleProviderSubmit(modalData)}
-                disabled={loadingSection === 'provider'}
-              >
-                {loadingSection === 'provider' ? (
-                  <span className="flex items-center">
-                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Saving...
-                  </span>
-                ) : (
-                  modalData.id ? 'Update Provider' : 'Save Provider'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Hand-me-down Modal */}
-      {activeModal === 'handmedown' && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium font-roboto">
-                {modalData.id ? 'Edit Hand-Me-Down' : 'Add New Hand-Me-Down'}
-              </h3>
-              <button 
-                className="text-gray-400 hover:text-gray-500"
-                onClick={closeModal}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Item Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. Winter Jacket, Soccer Cleats, etc."
-                  value={modalData.name || ''}
-                  onChange={(e) => setModalData({...modalData, name: e.target.value})}
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Description <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Describe the item (color, condition, etc.)"
-                  rows="2"
-                  value={modalData.description || ''}
-                  onChange={(e) => setModalData({...modalData, description: e.target.value})}
-                  required
-                ></textarea>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Size
-                </label>
-                <input
-                  type="text"
-                  className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. 5T, Youth M, etc."
-                  value={modalData.size || ''}
-                  onChange={(e) => setModalData({...modalData, size: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Ready Date <span className="text-red-500">*</span>
-                </label>
-                <div className="flex items-center">
-                  <input
-                    type="date"
-                    className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                    value={modalData.readyDate || ''}
-                    onChange={(e) => setModalData({...modalData, readyDate: e.target.value})}
-                    required
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-1">When will this item be ready for use?</p>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
-                  Photo (optional)
-                </label>
-                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                  <div className="space-y-1 text-center">
-                    <Camera size={24} className="mx-auto text-gray-400" />
-                    <div className="flex text-sm text-gray-600">
-                      <label
-                        htmlFor="file-upload"
-                        className="relative cursor-pointer rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none"
-                      >
-                        <span>Upload a file</span>
-                        <input
-                          id="file-upload"
-                          name="file-upload"
-                          type="file"
-                          className="sr-only"
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              setModalData({...modalData, imageFile: file});
-                            }
-                          }}
-                        />
-                      </label>
-                      <p className="pl-1">or drag and drop</p>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      PNG, JPG, GIF up to 10MB
-                    </p>
-                  </div>
-                </div>
-                {modalData.imageFile && (
-                  <p className="mt-2 text-xs text-gray-600 font-roboto">
-                    Selected file: {modalData.imageFile.name}
-                  </p>
-                )}
-                {modalData.imageUrl && !modalData.imageFile && (
-                  <div className="mt-2">
-                    <img 
-                      src={modalData.imageUrl}
-                      alt="Saved"
-                      className="h-20 w-auto object-cover rounded"
-                    />
-                  </div>
-                )}
-              </div>
-              
-              {modalData.id && (
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
-                    checked={modalData.used || false}
-                    onChange={(e) => setModalData({...modalData, used: e.target.checked})}
-                    id="used-checkbox"
-                  />
-                  <label htmlFor="used-checkbox" className="ml-2 block text-sm text-gray-900 font-roboto">
-                    Mark as used
-                  </label>
-                </div>
-              )}
-            </div>
-            
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
-                onClick={closeModal}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-black text-white rounded-md font-roboto hover:bg-gray-800"
-                onClick={() => handleFormSubmit('handmedown')}
-                disabled={loadingSection === 'handmedown'}
-              >
-                {loadingSection === 'handmedown' ? (
-                  <span className="flex items-center">
-                    <div className="mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Saving...
-                  </span>
-                ) : (
-                  modalData.id ? 'Update Item' : 'Save Item'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default ChildrenTrackingTab;
+            <div key={child.id} className={`bg-white
