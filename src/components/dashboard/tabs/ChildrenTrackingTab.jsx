@@ -2224,3 +2224,1136 @@ const ChildrenTrackingTab = () => {
         <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
           {filteredChildren.map(child => (
             <div key={child.id} className={`bg-white
+
+                <div className="flex items-center">
+                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
+                    <img 
+                      src={child.profilePicture || '/api/placeholder/40/40'} 
+                      alt={child.name} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div>
+                    <h4 className="font-medium font-roboto text-lg">{child.name}'s Routines</h4>
+                    <p className="text-sm text-gray-500 font-roboto">
+                      {childrenData[child.id]?.routines?.length || 0} routines
+                    </p>
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <button 
+                    className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
+                    onClick={() => openModal('routine', {
+                      title: '',
+                      days: [],
+                      startTime: '08:00',
+                      endTime: '',
+                      notes: '',
+                      childId: child.id
+                    })}
+                  >
+                    <PlusCircle size={14} className="mr-1" />
+                    Add Routine
+                  </button>
+                </div>
+              </div>
+              
+              {/* Routines list */}
+              <div className="space-y-3 mt-4">
+                {childrenData[child.id]?.routines?.length > 0 ? (
+                  childrenData[child.id].routines.map(routine => (
+                    <div key={routine.id} className="border rounded-lg p-3 hover:bg-gray-50">
+                      <div className="flex justify-between">
+                        <div>
+                          <h5 className="font-medium text-sm font-roboto">{routine.title}</h5>
+                          <p className="text-xs text-gray-600 font-roboto">
+                            {routine.days.join(', ')} at {routine.startTime}
+                            {routine.endTime ? ` - ${routine.endTime}` : ''}
+                          </p>
+                        </div>
+                        <div className="flex space-x-2">
+                          <button 
+                            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                            onClick={() => openModal('routine', {...routine, childId: child.id})}
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button 
+                            className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            onClick={() => handleRemoveItem('routine', child.id, routine.id)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                      {routine.notes && (
+                        <p className="text-xs mt-1 text-gray-600 font-roboto">{routine.notes}</p>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-500 font-roboto">No routines added yet</p>
+                    <button 
+                      className="mt-2 px-3 py-1 bg-blue-500 text-white rounded-md text-sm font-roboto"
+                      onClick={() => openModal('routine', {
+                        title: '',
+                        days: [],
+                        startTime: '08:00',
+                        endTime: '',
+                        notes: '',
+                        childId: child.id
+                      })}
+                    >
+                      Add First Routine
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  
+  // Render AI insights section
+  const renderInsightsSection = () => {
+    if (aiInsights.length === 0) {
+      return null;
+    }
+    
+    return (
+      <div className="mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium font-roboto">Allie Insights</h3>
+          <button className="text-sm text-blue-600 hover:underline font-roboto flex items-center">
+            <RefreshCw size={14} className="mr-1" />
+            Refresh Insights
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {aiInsights.map((insight, index) => (
+            <div key={index} className={`border rounded-lg p-4 ${
+              insight.priority === 'high' ? 'border-red-200 bg-red-50' :
+              insight.priority === 'medium' ? 'border-orange-200 bg-orange-50' :
+              'border-blue-200 bg-blue-50'
+            }`}>
+              <div className="flex items-start">
+                <div className={`flex-shrink-0 mr-3 ${
+                  insight.priority === 'high' ? 'text-red-500' :
+                  insight.priority === 'medium' ? 'text-orange-500' :
+                  'text-blue-500'
+                }`}>
+                  {insight.type === 'medical' ? <Calendar size={20} /> :
+                   insight.type === 'growth' ? <Activity size={20} /> :
+                   insight.type === 'recommendation' ? <Info size={20} /> :
+                   insight.type === 'clothes' ? <Clipboard size={20} /> :
+                   <Brain size={20} />}
+                </div>
+                <div>
+                  <h4 className="font-medium text-sm font-roboto mb-1">{insight.title}</h4>
+                  <p className="text-sm font-roboto">{insight.content}</p>
+                  
+                  {insight.childId && (
+                    <div className="mt-2 flex items-center">
+                      <img 
+                        src={getChildProfilePicture(insight.childId)} 
+                        alt={getChildName(insight.childId)} 
+                        className="w-5 h-5 rounded-full mr-1"
+                      />
+                      <span className="text-xs font-roboto">{getChildName(insight.childId)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  
+  // Render main content
+  return (
+    <div className="max-w-6xl mx-auto p-4">
+      {tabError ? (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg mb-6">
+          <p className="font-roboto">{tabError}</p>
+        </div>
+      ) : loading ? (
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-black"></div>
+        </div>
+      ) : (
+        <>
+          {/* Child selector and actions */}
+          <div className="mb-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold font-roboto">Children Tracking</h2>
+              <div className="flex space-x-3">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    value={searchQuery}
+                    onChange={handleSearch}
+                    ref={searchInputRef}
+                    className="px-3 py-2 pr-8 border rounded-md text-sm font-roboto"
+                  />
+                  <Search size={16} className="absolute right-3 top-2.5 text-gray-400" />
+                  {searchQuery && (
+                    <button
+                      className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                      onClick={() => setSearchQuery('')}
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+                <button
+                  className="px-3 py-2 bg-black text-white rounded-md text-sm font-roboto flex items-center"
+                  onClick={handleVoiceInput}
+                  title="Add via voice"
+                >
+                  <Mic size={16} className="mr-1" />
+                  Voice Input
+                </button>
+              </div>
+            </div>
+            
+            {/* Child selector */}
+            <div className="flex space-x-2 mt-4 overflow-x-auto pb-2">
+              <button
+                className={`px-3 py-2 rounded-md text-sm font-roboto flex items-center whitespace-nowrap ${
+                  activeChild === null
+                    ? 'bg-black text-white'
+                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                }`}
+                onClick={() => setActiveChild(null)}
+              >
+                <Users size={16} className="mr-1" />
+                All Children
+              </button>
+              {familyMembers
+                .filter(member => member.role === 'child')
+                .map(child => (
+                  <button
+                    key={child.id}
+                    className={`px-3 py-2 rounded-md text-sm font-roboto flex items-center whitespace-nowrap ${
+                      activeChild === child.id
+                        ? 'bg-black text-white'
+                        : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                    }`}
+                    onClick={() => setActiveChild(child.id)}
+                  >
+                    <div className="w-5 h-5 rounded-full overflow-hidden mr-1">
+                      <img 
+                        src={child.profilePicture || '/api/placeholder/20/20'} 
+                        alt={child.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    {child.name}
+                    {child.age && <span className="ml-1 text-xs">({child.age})</span>}
+                  </button>
+                ))}
+            </div>
+          </div>
+          
+          {/* Allie message */}
+          {allieMessage && (
+            <div className={`mb-6 p-3 rounded-lg flex items-start ${
+              allieMessage.type === 'error' ? 'bg-red-50 text-red-700 border border-red-200' :
+              allieMessage.type === 'warning' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
+              allieMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' :
+              'bg-blue-50 text-blue-700 border border-blue-200'
+            }`}>
+              <div className="flex-shrink-0 mr-2 mt-0.5">
+                {allieMessage.type === 'error' ? <AlertCircle size={16} /> :
+                 allieMessage.type === 'warning' ? <AlertCircle size={16} /> :
+                 allieMessage.type === 'success' ? <CheckCircle size={16} /> :
+                 <Info size={16} />}
+              </div>
+              <div className="font-roboto text-sm flex-1">
+                {allieMessage.text}
+              </div>
+              <button
+                className="ml-2 text-gray-500 hover:text-gray-700"
+                onClick={() => setAllieMessage(null)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+          
+          {/* Voice input UI */}
+          {newVoiceEntry && (
+            <div className="mb-6 p-4 bg-white rounded-lg border shadow-md">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-medium font-roboto">Voice Command</h3>
+                <button
+                  className="text-gray-500 hover:text-gray-700"
+                  onClick={() => {
+                    setNewVoiceEntry(false);
+                    setIsRecording(false);
+                    setRecordingText('');
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              
+              <div className="flex items-center">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center mr-4 ${
+                  isRecording ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-gray-100 text-gray-600'
+                }`}>
+                  <Mic size={24} />
+                </div>
+                <div className="flex-1">
+                  {isRecording ? (
+                    <div className="font-roboto">
+                      <div className="text-sm font-medium mb-1">Listening...</div>
+                      <div className="text-sm">{recordingText || "Speak now..."}</div>
+                    </div>
+                  ) : (
+                    <div className="font-roboto">
+                      <div className="text-sm font-medium mb-1">Voice Command</div>
+                      <div className="text-sm">
+                        {recordingText || "Try saying something like 'Add a doctor's appointment for Emma'"}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <button
+                  className={`px-3 py-2 rounded-md text-sm font-roboto ${
+                    isRecording
+                      ? 'bg-red-500 text-white hover:bg-red-600'
+                      : 'bg-black text-white hover:bg-gray-800'
+                  }`}
+                  onClick={isRecording ? () => setIsRecording(false) : recognizeSpeech}
+                  ref={microphoneRef}
+                >
+                  {isRecording ? 'Stop' : 'Start Recording'}
+                </button>
+              </div>
+            </div>
+          )}
+          
+          {/* AI insights section */}
+          {renderInsightsSection()}
+          
+          {/* Main content sections */}
+          <div className="space-y-6">
+            {/* Medical section */}
+            <div className="bg-white rounded-lg shadow">
+              <div 
+                className="p-4 flex justify-between items-center cursor-pointer"
+                onClick={() => toggleSection('medical')}
+              >
+                <div className="flex items-center">
+                  <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center mr-3">
+                    <Calendar size={18} className="text-red-600" />
+                  </div>
+                  <h3 className="text-lg font-medium font-roboto">Medical & Health</h3>
+                  {notifications.medical > 0 && (
+                    <div className="ml-3 px-2 py-0.5 bg-red-100 text-red-800 rounded-full text-xs font-roboto">
+                      {notifications.medical}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  {expandedSections.medical ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                </div>
+              </div>
+              
+              {expandedSections.medical && (
+                <div className="p-4 border-t">
+                  {renderMedicalSection()}
+                </div>
+              )}
+            </div>
+            
+            {/* Growth section */}
+            <div className="bg-white rounded-lg shadow">
+              <div 
+                className="p-4 flex justify-between items-center cursor-pointer"
+                onClick={() => toggleSection('growth')}
+              >
+                <div className="flex items-center">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3">
+                    <Activity size={18} className="text-blue-600" />
+                  </div>
+                  <h3 className="text-lg font-medium font-roboto">Growth & Development</h3>
+                  {notifications.growth > 0 && (
+                    <div className="ml-3 px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs font-roboto">
+                      {notifications.growth}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  {expandedSections.growth ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                </div>
+              </div>
+              
+              {expandedSections.growth && (
+                <div className="p-4 border-t">
+                  {renderGrowthSection()}
+                </div>
+              )}
+            </div>
+            
+            {/* Routines section */}
+            <div className="bg-white rounded-lg shadow">
+              <div 
+                className="p-4 flex justify-between items-center cursor-pointer"
+                onClick={() => toggleSection('routines')}
+              >
+                <div className="flex items-center">
+                  <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-3">
+                    <Clock size={18} className="text-purple-600" />
+                  </div>
+                  <h3 className="text-lg font-medium font-roboto">Routines & Activities</h3>
+                  {notifications.routines > 0 && (
+                    <div className="ml-3 px-2 py-0.5 bg-purple-100 text-purple-800 rounded-full text-xs font-roboto">
+                      {notifications.routines}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  {expandedSections.routines ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                </div>
+              </div>
+              
+              {expandedSections.routines && (
+                <div className="p-4 border-t">
+                  {renderRoutinesSection()}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Help section */}
+          <div className="mt-6 bg-gray-50 p-4 rounded-lg border">
+            <div className="flex items-start">
+              <div className="flex-shrink-0 mr-3">
+                <HelpCircle size={20} className="text-blue-500" />
+              </div>
+              <div>
+                <h3 className="font-medium text-sm font-roboto mb-1">Need help?</h3>
+                <p className="text-sm text-gray-600 font-roboto">
+                  Use the voice input button to quickly add information or ask Allie in the chat. Try phrases like "Add a doctor's appointment for Emma" or "Record Jack's height measurement".
+                </p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+      
+      {/* Modals */}
+      {activeModal === 'appointment' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="p-4 border-b flex justify-between items-center">
+              <h3 className="text-lg font-medium font-roboto">
+                {modalData.id ? 'Edit' : 'Add'} Medical Appointment
+              </h3>
+              <button className="text-gray-500 hover:text-gray-700" onClick={closeModal}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-4">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Appointment Type
+                  </label>
+                  <input
+                    type="text"
+                    value={modalData.title || ''}
+                    onChange={e => setModalData({...modalData, title: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                    placeholder="e.g., Checkup, Dental Visit, etc."
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                      Date
+                    </label>
+                    <input
+                      type="date"
+                      value={modalData.date || ''}
+                      onChange={e => setModalData({...modalData, date: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                      Time
+                    </label>
+                    <input
+                      type="time"
+                      value={modalData.time || ''}
+                      onChange={e => setModalData({...modalData, time: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Healthcare Provider
+                  </label>
+                  <select
+                    value={modalData.providerId || ''}
+                    onChange={e => setModalData({...modalData, providerId: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                  >
+                    <option value="">Select a provider</option>
+                    {healthcareProviders.map(provider => (
+                      <option key={provider.id} value={provider.id}>
+                        {provider.name} ({provider.specialty})
+                      </option>
+                    ))}
+                  </select>
+                  <div className="mt-1 flex justify-end">
+                    <button
+                      type="button"
+                      className="text-xs text-blue-600 hover:underline font-roboto"
+                      onClick={() => openModal('provider', { familyId })}
+                    >
+                      Add New Provider
+                    </button>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Notes
+                  </label>
+                  <textarea
+                    value={modalData.notes || ''}
+                    onChange={e => setModalData({...modalData, notes: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                    rows={3}
+                    placeholder="Add any additional information about the appointment"
+                  />
+                </div>
+                
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="completed"
+                    checked={modalData.completed || false}
+                    onChange={e => setModalData({...modalData, completed: e.target.checked})}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="completed" className="ml-2 block text-sm text-gray-700 font-roboto">
+                    Mark as completed
+                  </label>
+                </div>
+                
+                {/* Documents section - only for existing appointments */}
+                {modalData.id && (
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2 font-roboto">
+                      Documents
+                    </label>
+                    
+                    {documents.length > 0 ? (
+                      <div className="space-y-2 mb-3">
+                        {documents.map(doc => (
+                          <div key={doc.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                            <div className="flex items-center">
+                              <FileText size={16} className="text-gray-500 mr-2" />
+                              <span className="text-sm font-roboto truncate max-w-xs">
+                                {doc.fileName}
+                              </span>
+                            </div>
+                            <div className="flex space-x-2">
+                              
+                                href={doc.fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800"
+                              >
+                                <Download size={16} />
+                              </a>
+                              <button
+                                className="text-red-600 hover:text-red-800"
+                                onClick={() => handleRemoveDocument(doc.id)}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-500 mb-3 font-roboto">
+                        No documents attached
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingDocument}
+                        className={`px-3 py-2 text-sm rounded-md flex items-center ${
+                          uploadingDocument
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                        }`}
+                      >
+                        <Paperclip size={14} className="mr-1" />
+                        {uploadingDocument ? 'Uploading...' : 'Attach Document'}
+                      </button>
+                      
+                      {uploadingDocument && (
+                        <div className="ml-3 flex-1">
+                          <div className="w-full bg-gray-200 rounded-full h-2.5">
+                            <div
+                              className="bg-blue-600 h-2.5 rounded-full"
+                              style={{ width: `${uploadProgress}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="p-4 border-t flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 font-roboto"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleFormSubmit('appointment')}
+                disabled={loadingSection === 'appointment'}
+                className={`px-4 py-2 text-sm font-medium rounded-md font-roboto ${
+                  loadingSection === 'appointment'
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-black text-white hover:bg-gray-800'
+                }`}
+              >
+                {loadingSection === 'appointment' ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {activeModal === 'growth' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+            <div className="p-4 border-b flex justify-between items-center">
+              <h3 className="text-lg font-medium font-roboto">
+                {modalData.id ? 'Edit' : 'Add'} Growth Measurement
+              </h3>
+              <button className="text-gray-500 hover:text-gray-700" onClick={closeModal}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-4">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    value={modalData.date || ''}
+                    onChange={e => setModalData({...modalData, date: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                      Height
+                    </label>
+                    <input
+                      type="text"
+                      value={modalData.height || ''}
+                      onChange={e => setModalData({...modalData, height: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                      placeholder="e.g., 42 in or 107 cm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                      Weight
+                    </label>
+                    <input
+                      type="text"
+                      value={modalData.weight || ''}
+                      onChange={e => setModalData({...modalData, weight: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                      placeholder="e.g., 40 lb or 18 kg"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                      Shoe Size
+                    </label>
+                    <input
+                      type="text"
+                      value={modalData.shoeSize || ''}
+                      onChange={e => setModalData({...modalData, shoeSize: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                      placeholder="e.g., 5"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                      Clothing Size
+                    </label>
+                    <input
+                      type="text"
+                      value={modalData.clothingSize || ''}
+                      onChange={e => setModalData({...modalData, clothingSize: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                      placeholder="e.g., 4T"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Notes
+                  </label>
+                  <textarea
+                    value={modalData.notes || ''}
+                    onChange={e => setModalData({...modalData, notes: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                    rows={2}
+                    placeholder="Add any additional notes about this measurement"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4 border-t flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 font-roboto"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleFormSubmit('growth')}
+                disabled={loadingSection === 'growth'}
+                className={`px-4 py-2 text-sm font-medium rounded-md font-roboto ${
+                  loadingSection === 'growth'
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-black text-white hover:bg-gray-800'
+                }`}
+              >
+                {loadingSection === 'growth' ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {activeModal === 'routine' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+            <div className="p-4 border-b flex justify-between items-center">
+              <h3 className="text-lg font-medium font-roboto">
+                {modalData.id ? 'Edit' : 'Add'} Routine
+              </h3>
+              <button className="text-gray-500 hover:text-gray-700" onClick={closeModal}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-4">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Title
+                  </label>
+                  <input
+                    type="text"
+                    value={modalData.title || ''}
+                    onChange={e => setModalData({...modalData, title: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                    placeholder="e.g., Morning Routine, Bedtime, etc."
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Days of the Week
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => {
+                          const days = modalData.days || [];
+                          if (days.includes(day)) {
+                            setModalData({
+                              ...modalData,
+                              days: days.filter(d => d !== day)
+                            });
+                          } else {
+                            setModalData({
+                              ...modalData,
+                              days: [...days, day]
+                            });
+                          }
+                        }}
+                        className={`px-3 py-1 text-sm rounded-md ${
+                          (modalData.days || []).includes(day)
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        {day.substring(0, 3)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                      Start Time
+                    </label>
+                    <input
+                      type="time"
+                      value={modalData.startTime || ''}
+                      onChange={e => setModalData({...modalData, startTime: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                      End Time (optional)
+                    </label>
+                    <input
+                      type="time"
+                      value={modalData.endTime || ''}
+                      onChange={e => setModalData({...modalData, endTime: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Notes
+                  </label>
+                  <textarea
+                    value={modalData.notes || ''}
+                    onChange={e => setModalData({...modalData, notes: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                    rows={3}
+                    placeholder="Add any details about this routine"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4 border-t flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 font-roboto"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleFormSubmit('routine')}
+                disabled={loadingSection === 'routine'}
+                className={`px-4 py-2 text-sm font-medium rounded-md font-roboto ${
+                  loadingSection === 'routine'
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-black text-white hover:bg-gray-800'
+                }`}
+              >
+                {loadingSection === 'routine' ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {activeModal === 'handmedown' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+            <div className="p-4 border-b flex justify-between items-center">
+              <h3 className="text-lg font-medium font-roboto">
+                {modalData.id ? 'Edit' : 'Add'} Hand-Me-Down Item
+              </h3>
+              <button className="text-gray-500 hover:text-gray-700" onClick={closeModal}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-4">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Item Name
+                  </label>
+                  <input
+                    type="text"
+                    value={modalData.name || ''}
+                    onChange={e => setModalData({...modalData, name: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                    placeholder="e.g., Winter Jacket, Dress Shoes, etc."
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Description
+                  </label>
+                  <textarea
+                    value={modalData.description || ''}
+                    onChange={e => setModalData({...modalData, description: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                    rows={2}
+                    placeholder="Add details about this item"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                      Size
+                    </label>
+                    <input
+                      type="text"
+                      value={modalData.size || ''}
+                      onChange={e => setModalData({...modalData, size: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                      placeholder="e.g., 4T, 5, etc."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                      Ready to Use Date
+                    </label>
+                    <input
+                      type="date"
+                      value={modalData.readyDate || ''}
+                      onChange={e => setModalData({...modalData, readyDate: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Upload Image (optional)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={e => {
+                      if (e.target.files && e.target.files[0]) {
+                        setModalData({
+                          ...modalData,
+                          imageFile: e.target.files[0]
+                        });
+                      }
+                    }}
+                    className="w-full text-sm text-gray-600 font-roboto"
+                  />
+                </div>
+                
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="used"
+                    checked={modalData.used || false}
+                    onChange={e => setModalData({...modalData, used: e.target.checked})}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="used" className="ml-2 block text-sm text-gray-700 font-roboto">
+                    Mark as already used
+                  </label>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4 border-t flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 font-roboto"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleFormSubmit('handmedown')}
+                disabled={loadingSection === 'handmedown'}
+                className={`px-4 py-2 text-sm font-medium rounded-md font-roboto ${
+                  loadingSection === 'handmedown'
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-black text-white hover:bg-gray-800'
+                }`}
+              >
+                {loadingSection === 'handmedown' ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {activeModal === 'provider' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+            <div className="p-4 border-b flex justify-between items-center">
+              <h3 className="text-lg font-medium font-roboto">
+                {modalData.id ? 'Edit' : 'Add'} Healthcare Provider
+              </h3>
+              <button className="text-gray-500 hover:text-gray-700" onClick={closeModal}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-4">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Provider Name
+                  </label>
+                  <input
+                    type="text"
+                    value={modalData.name || ''}
+                    onChange={e => setModalData({...modalData, name: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                    placeholder="e.g., Dr. Smith"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Specialty
+                  </label>
+                  <input
+                    type="text"
+                    value={modalData.specialty || ''}
+                    onChange={e => setModalData({...modalData, specialty: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                    placeholder="e.g., Pediatrician, Dentist, etc."
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                      Phone
+                    </label>
+                    <input
+                      type="tel"
+                      value={modalData.phone || ''}
+                      onChange={e => setModalData({...modalData, phone: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                      placeholder="e.g., 555-555-5555"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={modalData.email || ''}
+                      onChange={e => setModalData({...modalData, email: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                      placeholder="e.g., doctor@example.com"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Address
+                  </label>
+                  <textarea
+                    value={modalData.address || ''}
+                    onChange={e => setModalData({...modalData, address: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                    rows={2}
+                    placeholder="Practice address"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                    Notes
+                  </label>
+                  <textarea
+                    value={modalData.notes || ''}
+                    onChange={e => setModalData({...modalData, notes: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                    rows={2}
+                    placeholder="Additional notes about this provider"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4 border-t flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 font-roboto"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleProviderSubmit(modalData)}
+                disabled={loadingSection === 'provider'}
+                className={`px-4 py-2 text-sm font-medium rounded-md font-roboto ${
+                  loadingSection === 'provider'
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-black text-white hover:bg-gray-800'
+                }`}
+              >
+                {loadingSection === 'provider' ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ChildrenTrackingTab;
