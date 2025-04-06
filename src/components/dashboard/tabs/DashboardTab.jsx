@@ -136,26 +136,27 @@ const DashboardTab = () => {
         setBalanceHistory(historyData);
         
         // Load AI insights
-        try {
-          console.log("Loading AI insights...");
-          const insights = await AllieAIService.generateDashboardInsights(
-            familyId, 
-            currentWeek
-          );
-          
-          // Ensure insights is always an array
-          if (insights && insights.insights && Array.isArray(insights.insights)) {
-            setAiInsights(insights.insights);
-          } else if (Array.isArray(insights)) {
-            setAiInsights(insights);
-          } else {
-            console.warn("AI insights returned invalid format:", insights);
+        if (familyId && currentWeek) {
+          try {
+            console.log("Loading AI insights...");
+            const insights = await AllieAIEngineService.generateDashboardInsights(
+              familyId, 
+              currentWeek
+            );
+            
+            // Ensure insights is always an array
+            if (insights && insights.insights && Array.isArray(insights.insights)) {
+              setAiInsights(insights.insights);
+            } else if (Array.isArray(insights)) {
+              setAiInsights(insights);
+            } else {
+              console.warn("AI insights returned invalid format:", insights);
+              setAiInsights([]);
+            }
+          } catch (insightError) {
+            console.error("Error loading AI insights:", insightError);
             setAiInsights([]);
           }
-        } catch (insightError) {
-          console.error("Error loading AI insights:", insightError);
-          setAiInsights([]);
-        }
         }
       } catch (error) {
         console.error("Error loading dashboard data:", error);
