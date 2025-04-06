@@ -352,7 +352,7 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   // Enhanced useEffect to properly restore survey progress
   useEffect(() => {
     // Only run this if we have a user and loaded questions
-    // Enhanced useEffect to properly restore survey progress - with fix for race conditions
+    // Enhanced useEffect to properly restore survey progress
 useEffect(() => {
   // Only run this if we have a user and loaded questions
   if (selectedUser && questions.length > 0) {
@@ -439,7 +439,9 @@ useEffect(() => {
     }
   }
 // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [selectedUser, questions.length]);  // Only depend on user and question count, not the actual questions or responses
+}, [selectedUser, questions.length]); 
+
+// Only depend on user and question count, not the actual questions or responses
   
   // Save progress function (used by both auto-save and manual save)
   const saveProgress = async () => {
