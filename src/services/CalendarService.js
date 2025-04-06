@@ -150,8 +150,102 @@ async addEvent(event, userId) {
   }
 }
 
-// Update to src/services/CalendarService.js
-// Add new methods for child events
+// Add this method to CalendarService class
+async addChildEvent(event, userId) {
+  try {
+    if (!userId) {
+      throw new Error("User ID is required to add events");
+    }
+    
+    // Ensure event has required fields
+    if (!event.title) {
+      event.title = "Untitled Child Event";
+    }
+    
+    // Format child event
+    const standardizedEvent = {
+      ...event,
+      summary: event.title,
+      description: event.description || '',
+      start: {
+        dateTime: event.dateTime instanceof Date ? event.dateTime.toISOString() : new Date(event.dateTime).toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: event.endDateTime instanceof Date ? 
+          event.endDateTime.toISOString() : 
+          new Date(new Date(event.dateTime).getTime() + 60*60000).toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      location: event.location || '',
+      childId: event.childId,
+      childName: event.childName,
+      attendingParentId: event.attendingParentId,
+      eventType: event.eventType || 'other',
+      extraDetails: event.extraDetails || {},
+      creationSource: event.creationSource || 'manual'
+    };
+    
+    // Save event to Firestore
+    const eventData = {
+      ...standardizedEvent,
+      userId,
+      familyId: event.familyId || null,
+      createdAt: serverTimestamp()
+    };
+    
+    const eventRef = collection(db, "calendar_child_events");
+    const docRef = await addDoc(eventRef, eventData);
+    
+    // Dispatch an event to notify components
+    if (typeof window !== 'undefined') {
+      const updateEvent = new CustomEvent('calendar-child-event-added', {
+        detail: { eventId: docRef.id, childId: event.childId }
+      });
+      window.dispatchEvent(updateEvent);
+    }
+    
+    // Show success notification
+    this.showNotification(`Event "${standardizedEvent.summary}" added to your calendar for ${event.childName}`, "success");
+    
+    return {
+      success: true,
+      eventId: docRef.id,
+      isMock: false
+    };
+  } catch (error) {
+    console.error("Error adding child event to calendar:", error);
+    this.showNotification("Failed to add child event to calendar", "error");
+    return { success: false, error: error.message || "Unknown error" };
+  }
+}
+
+// Create a date formatter that handles both US and SE formats
+formatDateForDisplay(date, region = 'US') {
+  if (!date) return '';
+  
+  try {
+    const dateObj = date instanceof Date ? date : new Date(date);
+    
+    // Format differently based on region
+    if (region === 'SE') {
+      // Swedish format: DD/MM/YYYY, 24-hour clock
+      return {
+        date: dateObj.toLocaleDateString('sv-SE', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        time: dateObj.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', hour12: false })
+      };
+    } else {
+      // US format: MM/DD/YYYY, 12-hour clock
+      return {
+        date: dateObj.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
+        time: dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+      };
+    }
+  } catch (error) {
+    console.error("Error formatting date:", error);
+    return { date: '', time: '' };
+  }
+}
 
 // Add this method to CalendarService class
 async addChildEvent(event, userId) {
