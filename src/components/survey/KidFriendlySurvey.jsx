@@ -796,7 +796,6 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
         </div>
       </div>
       
-      // Navigation footer - UPDATED CODE
 <div className="flex justify-between items-center bg-gray-50 p-4 rounded-lg mt-4">
   <button 
     onClick={handlePrevious}
