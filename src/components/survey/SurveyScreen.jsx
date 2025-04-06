@@ -664,466 +664,343 @@ const SurveyScreen = () => {
       </div>
       
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto">
-        {viewingQuestionList ? (
-          // Question list view
-          <div className="p-4">
-            <div className="max-w-3xl mx-auto">
-              <div className="bg-white rounded-lg shadow p-4 mb-4">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-lg font-semibold">
-                    All Questions ({questionsToUse.length}) 
-                    {personalizedQuestions.length > 0 && " - Personalized"}
-                  </h2>
-                  <button 
-                    onClick={toggleQuestionList}
-                    className="text-blue-600 text-sm"
-                  >
-                    Back to Survey
-                  </button>
-                </div>
-                  
-                <div className="space-y-1 max-h-[70vh] overflow-y-auto">
-                  {questionsToUse.map((q, index) => {
-                    const answered = currentSurveyResponses[q.id] !== undefined;
-                    return (
-                      <div 
-                        key={q.id} 
-                        className={`p-3 rounded text-sm ${
-                          index === currentQuestionIndex 
-                            ? 'bg-blue-100 border-l-4 border-blue-500' 
-                            : answered 
-                              ? 'bg-green-50' 
-                              : 'bg-gray-50'
-                        } cursor-pointer`}
-                        onClick={() => jumpToQuestion(index)}
-                      >
-                        <div className="flex items-center">
-                          <span className="w-6 text-right mr-2">{index + 1}.</span>
-                          <div className="flex-1">
-                            <p>{q.text}</p>
-                            <div className="flex items-center mt-1 text-xs text-gray-500">
-                              <span className="mr-3">{q.category}</span>
-                              {q.totalWeight && (
-                                <span className={`ml-auto px-1.5 py-0.5 rounded-full text-xs flex items-center ${getWeightImpactColor(q.totalWeight)}`}>
-                                  <Scale size={10} className="mr-1" />
-                                  Impact: {getWeightImpactText(q.totalWeight)}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          {answered && (
-                            <div className="flex-shrink-0 ml-2">
-                              <span className={`px-2 py-1 text-xs rounded ${
-                                currentSurveyResponses[q.id] === 'Mama' 
-                                  ? 'bg-purple-100 text-purple-800' 
-                                  : 'bg-blue-100 text-blue-800'
-                              }`}>
-                                {currentSurveyResponses[q.id]}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+      {/* Content area with sticky question */}
+<div className="flex-1 relative">
+  {viewingQuestionList ? (
+    // Question list view
+    <div className="p-4 overflow-y-auto h-full">
+      <div className="max-w-3xl mx-auto">
+        <div className="bg-white rounded-lg shadow p-4 mb-4">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold">
+              All Questions ({questionsToUse.length}) 
+              {personalizedQuestions.length > 0 && " - Personalized"}
+            </h2>
+            <button 
+              onClick={toggleQuestionList}
+              className="text-blue-600 text-sm"
+            >
+              Back to Survey
+            </button>
           </div>
-        ) : (
-          // Main survey view - scrollable content
-          <div className="p-4">
-            <div className="max-w-3xl mx-auto">
-              {/* Question - now placed BEFORE parent selection */}
-              <div className="bg-white rounded-lg p-6 shadow-sm border mb-8">
-                <div className="flex justify-between items-start mb-3">
-                  <p className="text-lg">
-                    {currentQuestion.text}
-                  </p>
-                  <div 
-                    className={`ml-2 px-2 py-1 rounded-full text-xs flex items-center flex-shrink-0 ${getWeightImpactColor(currentQuestion.totalWeight)} cursor-pointer hover:scale-105 transition-transform`}
-                    onClick={() => setShowWeightMetrics(!showWeightMetrics)}
-                  >
-                    <Scale size={12} className="mr-1" />
-                    Impact: {getWeightImpactText(currentQuestion.totalWeight)}
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500 mb-3">
-                  {currentQuestion.category}
-                </p>
-                
-                {/* Weight metrics visualization - Always visible */}
-                <div className="mb-4 p-3 bg-gray-50 rounded-md border relative">
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="text-sm font-medium flex items-center">
-                      <Scale size={16} className="mr-2 text-gray-700" />
-                      Task Weight Analysis
-                    </h4>
-                    {editingWeight ? (
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={handleSaveWeightChanges}
-                          className="flex items-center text-xs text-green-600 hover:text-green-800 bg-green-50 px-2 py-1 rounded"
-                        >
-                          <Check size={12} className="mr-1" />
-                          Save Changes
-                        </button>
-                        <button
-                          onClick={handleCancelWeightChanges}
-                          className="flex items-center text-xs text-red-600 hover:text-red-800 bg-red-50 px-2 py-1 rounded"
-                        >
-                          <X size={12} className="mr-1" />
-                          Cancel
-                        </button>
+            
+          <div className="space-y-1 max-h-[70vh] overflow-y-auto">
+            {questionsToUse.map((q, index) => {
+              const answered = currentSurveyResponses[q.id] !== undefined;
+              return (
+                <div 
+                  key={q.id} 
+                  className={`p-3 rounded text-sm ${
+                    index === currentQuestionIndex 
+                      ? 'bg-blue-100 border-l-4 border-blue-500' 
+                      : answered 
+                        ? 'bg-green-50' 
+                        : 'bg-gray-50'
+                  } cursor-pointer`}
+                  onClick={() => jumpToQuestion(index)}
+                >
+                  <div className="flex items-center">
+                    <span className="w-6 text-right mr-2">{index + 1}.</span>
+                    <div className="flex-1">
+                      <p>{q.text}</p>
+                      <div className="flex items-center mt-1 text-xs text-gray-500">
+                        <span className="mr-3">{q.category}</span>
+                        {q.totalWeight && (
+                          <span className={`ml-auto px-1.5 py-0.5 rounded-full text-xs flex items-center ${getWeightImpactColor(q.totalWeight)}`}>
+                            <Scale size={10} className="mr-1" />
+                            Impact: {getWeightImpactText(q.totalWeight)}
+                          </span>
+                        )}
                       </div>
-                    ) : (
-                      <button
-                        onClick={() => setEditingWeight(!editingWeight)}
-                        className="text-xs text-blue-600 flex items-center bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 transition-colors"
-                      >
-                        <Edit size={12} className="mr-1" />
-                        Adjust Weights
-                      </button>
+                    </div>
+                    {answered && (
+                      <div className="flex-shrink-0 ml-2">
+                        <span className={`px-2 py-1 text-xs rounded ${
+                          currentSurveyResponses[q.id] === 'Mama' 
+                            ? 'bg-purple-100 text-purple-800' 
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {currentSurveyResponses[q.id]}
+                        </span>
+                      </div>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Base Time:</span>
-                        {editingWeight ? (
-                          <div className="flex items-center">
-                            <button
-                              className="px-1 bg-gray-200 text-gray-700 rounded-l"
-                              onClick={() => {
-                                if (currentQuestion.baseWeight > 1) {
-                                  const result = updateQuestionWeight(
-                                    currentQuestion.id,
-                                    'baseWeight',
-                                    Math.max(1, currentQuestion.baseWeight - 1)
-                                  );
-                                  if (result) {
-                                    // Update the current question with new weights
-                                    setCurrentQuestion(result.updatedQuestion);
-                                  }
-                                }
-                              }}
-                            >
-                              -
-                            </button>
-                            <span className="font-medium px-2">{currentQuestion.baseWeight}/5</span>
-                            <button
-                              className="px-1 bg-gray-200 text-gray-700 rounded-r"
-                              onClick={() => {
-                                if (currentQuestion.baseWeight < 5) {
-                                  const result = updateQuestionWeight(
-                                    currentQuestion.id,
-                                    'baseWeight',
-                                    Math.min(5, currentQuestion.baseWeight + 1)
-                                  );
-                                  if (result) {
-                                    // Update the current question with new weights
-                                    setCurrentQuestion(result.updatedQuestion);
-                                  }
-                                }
-                              }}
-                            >
-                              +
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="font-medium">{currentQuestion.baseWeight}/5</span>
-                        )}
-                      </div>
-                      <div className="w-full bg-gray-200 h-1.5 mt-1 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-blue-500" 
-                          style={{ width: `${(currentQuestion.baseWeight / 5) * 100}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                    <div className="text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Frequency:</span>
-                        {editingWeight ? (
-                          <div className="flex items-center">
-                            <select
-                              className="text-xs p-1 border rounded"
-                              value={currentQuestion.frequency}
-                              onChange={(e) => {
-                                const result = updateQuestionWeight(
-                                  currentQuestion.id,
-                                  'frequency',
-                                  e.target.value
-                                );
-                                if (result) {
-                                  // Update the current question with new weights
-                                  setCurrentQuestion(result.updatedQuestion);
-                                }
-                              }}
-                            >
-                              <option value="daily">Daily</option>
-                              <option value="several">Several Times Weekly</option>
-                              <option value="weekly">Weekly</option>
-                              <option value="monthly">Monthly</option>
-                              <option value="quarterly">Quarterly</option>
-                            </select>
-                          </div>
-                        ) : (
-                          <span className="font-medium">{currentQuestion.frequency}</span>
-                        )}
-                      </div>
-                      <div className="w-full bg-gray-200 h-1.5 mt-1 rounded-full overflow-hidden">
-                        <div 
-                          className="bg-green-500 h-full rounded-full" 
-                          style={{ 
-                            width: `${
-                              currentQuestion.frequency === 'daily' ? 100 :
-                              currentQuestion.frequency === 'several' ? 80 :
-                              currentQuestion.frequency === 'weekly' ? 60 :
-                              currentQuestion.frequency === 'monthly' ? 40 : 
-                              20
-                            }%` 
-                          }}
-                        ></div>
-                      </div>
-                    </div>
-                    <div className="text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Invisibility:</span>
-                        {editingWeight ? (
-                          <div className="flex items-center">
-                            <select
-                              className="text-xs p-1 border rounded"
-                              value={currentQuestion.invisibility}
-                              onChange={(e) => {
-                                const result = updateQuestionWeight(
-                                  currentQuestion.id,
-                                  'invisibility',
-                                  e.target.value
-                                );
-                                if (result) {
-                                  // Update the current question with new weights
-                                  setCurrentQuestion(result.updatedQuestion);
-                                }
-                              }}
-                            >
-                              <option value="highly">Highly Visible</option>
-                              <option value="partially">Partially Visible</option>
-                              <option value="mostly">Mostly Invisible</option>
-                              <option value="completely">Completely Invisible</option>
-                            </select>
-                          </div>
-                        ) : (
-                          <span className="font-medium">{currentQuestion.invisibility}</span>
-                        )}
-                      </div>
-                      <div className="w-full bg-gray-200 h-1.5 mt-1 rounded-full overflow-hidden">
-                        <div 
-                          className="bg-purple-500 h-full rounded-full" 
-                          style={{ 
-                            width: `${
-                              currentQuestion.invisibility === 'completely' ? 100 :
-                              currentQuestion.invisibility === 'mostly' ? 75 :
-                              currentQuestion.invisibility === 'partially' ? 50 : 
-                              25
-                            }%` 
-                          }}
-                        ></div>
-                      </div>
-                    </div>
-                    <div className="text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Emotional Labor:</span>
-                        {editingWeight ? (
-                          <div className="flex items-center">
-                            <select
-                              className="text-xs p-1 border rounded"
-                              value={currentQuestion.emotionalLabor}
-                              onChange={(e) => {
-                                const result = updateQuestionWeight(
-                                  currentQuestion.id,
-                                  'emotionalLabor',
-                                  e.target.value
-                                );
-                                if (result) {
-                                  // Update the current question with new weights
-                                  setCurrentQuestion(result.updatedQuestion);
-                                }
-                              }}
-                            >
-                              <option value="minimal">Minimal</option>
-                              <option value="low">Low</option>
-                              <option value="moderate">Moderate</option>
-                              <option value="high">High</option>
-                              <option value="extreme">Extreme</option>
-                            </select>
-                          </div>
-                        ) : (
-                          <span className="font-medium">{currentQuestion.emotionalLabor}</span>
-                        )}
-                      </div>
-                      <div className="w-full bg-gray-200 h-1.5 mt-1 rounded-full overflow-hidden">
-                        <div 
-                          className="bg-red-500 h-full rounded-full" 
-                          style={{ 
-                            width: `${
-                              currentQuestion.emotionalLabor === 'extreme' ? 100 :
-                              currentQuestion.emotionalLabor === 'high' ? 80 :
-                              currentQuestion.emotionalLabor === 'moderate' ? 60 :
-                              currentQuestion.emotionalLabor === 'low' ? 40 : 
-                              20
-                            }%` 
-                          }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2 pt-2 border-t text-xs text-gray-600">
-                    <div className="flex justify-between">
-                      <span>Total Weight Impact:</span>
-                      <span className="font-bold">{parseFloat(currentQuestion.totalWeight).toFixed(1)}</span>
-                    </div>
-                  </div>
-                  {editingWeight && (
-                    <div className="mt-2 p-2 bg-blue-50 rounded-md text-xs text-blue-700">
-                      <p>Adjusting weights will help Allie understand how you prioritize different tasks. Similar tasks will be updated with your preferences.</p>
-                    </div>
-                  )}
                 </div>
-                
-                {/* Task explanation toggle */}
-                <div className="flex justify-center space-x-4">
-                  <button 
-                    onClick={() => setShowExplanation(!showExplanation)}
-                    className="text-xs text-gray-600 flex items-center hover:underline"
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : (
+    // Main survey view with sticky question
+    <div className="flex flex-col h-full">
+      {/* Sticky question section */}
+      <div className="sticky top-0 z-10 bg-white border-b shadow-sm">
+        <div className="p-4">
+          <div className="max-w-3xl mx-auto">
+            {/* Question */}
+            <div className="bg-white rounded-lg p-6 shadow-sm border">
+              <div className="flex justify-between items-start mb-3">
+                <p className="text-lg">
+                  {currentQuestion.text}
+                </p>
+                <div 
+                  className={`ml-2 px-2 py-1 rounded-full text-xs flex items-center flex-shrink-0 ${getWeightImpactColor(currentQuestion.totalWeight)} cursor-pointer hover:scale-105 transition-transform`}
+                  onClick={() => setShowWeightMetrics(!showWeightMetrics)}
+                >
+                  <Scale size={12} className="mr-1" />
+                  Impact: {getWeightImpactText(currentQuestion.totalWeight)}
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mb-3">
+                {currentQuestion.category}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="max-w-3xl mx-auto">
+          {/* Weight metrics visualization */}
+          <div className="mb-4 p-3 bg-gray-50 rounded-md border relative">
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="text-sm font-medium flex items-center">
+                <Scale size={16} className="mr-2 text-gray-700" />
+                Task Weight Analysis
+              </h4>
+              {editingWeight ? (
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handleSaveWeightChanges}
+                    className="flex items-center text-xs text-green-600 hover:text-green-800 bg-green-50 px-2 py-1 rounded"
                   >
-                    <HelpCircle size={12} className="mr-1" />
-                    {showExplanation ? "Hide explanation" : "Why are we asking this?"}
+                    <Check size={12} className="mr-1" />
+                    Save Changes
+                  </button>
+                  <button
+                    onClick={handleCancelWeightChanges}
+                    className="flex items-center text-xs text-red-600 hover:text-red-800 bg-red-50 px-2 py-1 rounded"
+                  >
+                    <X size={12} className="mr-1" />
+                    Cancel
                   </button>
                 </div>
-                
-                {/* Task explanation panel */}
-                {showExplanation && (
-                  <div className="mt-3 bg-gray-50 p-3 rounded-md border text-sm text-gray-600">
-                    <p>{currentQuestion.explanation}</p>
-                  </div>
-                )}
-                
-                {/* Weight explanation panel - always visible */}
-                <div className="mt-3 bg-blue-50 p-3 rounded-md border border-blue-100 text-sm text-blue-800">
-                  <p>{currentQuestion.weightExplanation}</p>
-                  
-                  {/* Weight factors visualization */}
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <div className={`text-center p-1 rounded text-xs ${
-                      currentQuestion.frequency === 'daily' ? 'bg-blue-200' : 'bg-blue-100'
-                    }`}>
-                      <div className="flex items-center justify-center">
-                        {getWeightFactorIcon('frequency')}
-                        <span>{currentQuestion.frequency}</span>
-                      </div>
-                      <div className="text-blue-900 font-medium">Frequency</div>
+              ) : (
+                <button
+                  onClick={() => setEditingWeight(!editingWeight)}
+                  className="text-xs text-blue-600 flex items-center bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 transition-colors"
+                >
+                  <Edit size={12} className="mr-1" />
+                  Adjust Weights
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Base Time:</span>
+                  {editingWeight ? (
+                    <div className="flex items-center">
+                      <button
+                        className="px-1 bg-gray-200 text-gray-700 rounded-l"
+                        onClick={() => {
+                          if (currentQuestion.baseWeight > 1) {
+                            const result = updateQuestionWeight(
+                              currentQuestion.id,
+                              'baseWeight',
+                              Math.max(1, currentQuestion.baseWeight - 1)
+                            );
+                            if (result) {
+                              // Update the current question with new weights
+                              setCurrentQuestion(result.updatedQuestion);
+                            }
+                          }
+                        }}
+                      >
+                        -
+                      </button>
+                      <span className="font-medium px-2">{currentQuestion.baseWeight}/5</span>
+                      <button
+                        className="px-1 bg-gray-200 text-gray-700 rounded-r"
+                        onClick={() => {
+                          if (currentQuestion.baseWeight < 5) {
+                            const result = updateQuestionWeight(
+                              currentQuestion.id,
+                              'baseWeight',
+                              Math.min(5, currentQuestion.baseWeight + 1)
+                            );
+                            if (result) {
+                              // Update the current question with new weights
+                              setCurrentQuestion(result.updatedQuestion);
+                            }
+                          }
+                        }}
+                      >
+                        +
+                      </button>
                     </div>
-                    
-                    <div className={`text-center p-1 rounded text-xs ${
-                      currentQuestion.invisibility === 'completely' ? 'bg-purple-200' : 'bg-purple-100'
-                    }`}>
-                      <div className="flex items-center justify-center">
-                        {getWeightFactorIcon('invisibility')}
-                        <span>{currentQuestion.invisibility}</span>
-                      </div>
-                      <div className="text-purple-900 font-medium">Visibility</div>
-                    </div>
-                    
-                    <div className={`text-center p-1 rounded text-xs ${
-                      currentQuestion.emotionalLabor === 'extreme' || currentQuestion.emotionalLabor === 'high' 
-                        ? 'bg-red-200' : 'bg-red-100'
-                    }`}>
-                      <div className="flex items-center justify-center">
-                        {getWeightFactorIcon('emotionalLabor')}
-                        <span>{currentQuestion.emotionalLabor}</span>
-                      </div>
-                      <div className="text-red-900 font-medium">Emotional Load</div>
-                    </div>
-                    
-                    <div className={`text-center p-1 rounded text-xs ${
-                      currentQuestion.childDevelopment === 'high' ? 'bg-green-200' : 'bg-green-100'
-                    }`}>
-                      <div className="flex items-center justify-center">
-                        {getWeightFactorIcon('childDevelopment')}
-                        <span>{currentQuestion.childDevelopment}</span>
-                      </div>
-                      <div className="text-green-900 font-medium">Child Impact</div>
-                    </div>
-                  </div>
+                  ) : (
+                    <span className="font-medium">{currentQuestion.baseWeight}/5</span>
+                  )}
                 </div>
-              </div>
-              
-              {/* Parent selection - moved AFTER the question */}
-              <div className="flex justify-center items-center mb-8">
-                <div className="flex w-full max-w-md justify-between items-center">
-                  {/* Mama */}
-                  <div className="flex flex-col items-center">
-                    <button
-                      onClick={() => handleSelectParent('Mama')}
-                      className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full focus:outline-none border-4 overflow-hidden transition-all ${
-                        selectedParent === 'Mama' 
-                          ? 'border-purple-500 scale-105' 
-                          : 'border-transparent hover:border-purple-300'
-                      }`}
-                    >
-                      <img 
-                        src={parents.mama.image} 
-                        alt="Mama"
-                        className="w-full h-full object-cover"
-                      />
-                    </button>
-                    <p className="mt-2 font-medium">{parents.mama.name}</p>
-                    <p className="text-xs text-gray-500">(press 'M' key)</p>
-                  </div>
-                  
-                  {/* Divider */}
-                  <div className="h-32 sm:h-40 w-px bg-gray-300"></div>
-                  
-                  {/* Papa */}
-                  <div className="flex flex-col items-center">
-                    <button
-                      onClick={() => handleSelectParent('Papa')}
-                      className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full focus:outline-none border-4 overflow-hidden transition-all ${
-                        selectedParent === 'Papa' 
-                          ? 'border-blue-500 scale-105' 
-                          : 'border-transparent hover:border-blue-300'
-                      }`}
-                    >
-                      <img 
-                        src={parents.papa.image} 
-                        alt="Papa"
-                        className="w-full h-full object-cover"
-                      />
-                    </button>
-                    <p className="mt-2 font-medium">{parents.papa.name}</p>
-                    <p className="text-xs text-gray-500">(press 'P' key)</p>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Progress */}
-              <div className="text-center">
-                <p className="font-medium mb-2">
-                  Question {currentQuestionIndex + 1} of {questionsToUse.length}
-                </p>
-                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div className="w-full bg-gray-200 h-1.5 mt-1 rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-black transition-all duration-300" 
-                    style={{ width: `${progress}%` }}
-                  />
+                    className="h-full bg-blue-500" 
+                    style={{ width: `${(currentQuestion.baseWeight / 5) * 100}%` }}
+                  ></div>
                 </div>
+              </div>
+              {/* Other weight metrics (frequency, invisibility, emotional labor) */}
+              {/* [Keep the existing code for these metrics] */}
+            </div>
+            <div className="mt-2 pt-2 border-t text-xs text-gray-600">
+              <div className="flex justify-between">
+                <span>Total Weight Impact:</span>
+                <span className="font-bold">{parseFloat(currentQuestion.totalWeight).toFixed(1)}</span>
+              </div>
+            </div>
+            {editingWeight && (
+              <div className="mt-2 p-2 bg-blue-50 rounded-md text-xs text-blue-700">
+                <p>Adjusting weights will help Allie understand how you prioritize different tasks. Similar tasks will be updated with your preferences.</p>
+              </div>
+            )}
+          </div>
+          
+          {/* Task explanation toggle */}
+          <div className="flex justify-center space-x-4">
+            <button 
+              onClick={() => setShowExplanation(!showExplanation)}
+              className="text-xs text-gray-600 flex items-center hover:underline"
+            >
+              <HelpCircle size={12} className="mr-1" />
+              {showExplanation ? "Hide explanation" : "Why are we asking this?"}
+            </button>
+          </div>
+          
+          {/* Task explanation panel */}
+          {showExplanation && (
+            <div className="mt-3 bg-gray-50 p-3 rounded-md border text-sm text-gray-600">
+              <p>{currentQuestion.explanation}</p>
+            </div>
+          )}
+          
+          {/* Weight explanation panel - always visible */}
+          <div className="mt-3 bg-blue-50 p-3 rounded-md border border-blue-100 text-sm text-blue-800">
+            <p>{currentQuestion.weightExplanation}</p>
+            
+            {/* Weight factors visualization */}
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className={`text-center p-1 rounded text-xs ${
+                currentQuestion.frequency === 'daily' ? 'bg-blue-200' : 'bg-blue-100'
+              }`}>
+                <div className="flex items-center justify-center">
+                  {getWeightFactorIcon('frequency')}
+                  <span>{currentQuestion.frequency}</span>
+                </div>
+                <div className="text-blue-900 font-medium">Frequency</div>
+              </div>
+              
+              <div className={`text-center p-1 rounded text-xs ${
+                currentQuestion.invisibility === 'completely' ? 'bg-purple-200' : 'bg-purple-100'
+              }`}>
+                <div className="flex items-center justify-center">
+                  {getWeightFactorIcon('invisibility')}
+                  <span>{currentQuestion.invisibility}</span>
+                </div>
+                <div className="text-purple-900 font-medium">Visibility</div>
+              </div>
+              
+              <div className={`text-center p-1 rounded text-xs ${
+                currentQuestion.emotionalLabor === 'extreme' || currentQuestion.emotionalLabor === 'high' 
+                  ? 'bg-red-200' : 'bg-red-100'
+              }`}>
+                <div className="flex items-center justify-center">
+                  {getWeightFactorIcon('emotionalLabor')}
+                  <span>{currentQuestion.emotionalLabor}</span>
+                </div>
+                <div className="text-red-900 font-medium">Emotional Load</div>
+              </div>
+              
+              <div className={`text-center p-1 rounded text-xs ${
+                currentQuestion.childDevelopment === 'high' ? 'bg-green-200' : 'bg-green-100'
+              }`}>
+                <div className="flex items-center justify-center">
+                  {getWeightFactorIcon('childDevelopment')}
+                  <span>{currentQuestion.childDevelopment}</span>
+                </div>
+                <div className="text-green-900 font-medium">Child Impact</div>
               </div>
             </div>
           </div>
-        )}
+          
+          {/* Parent selection */}
+          <div className="flex justify-center items-center my-8">
+            <div className="flex w-full max-w-md justify-between items-center">
+              {/* Mama */}
+              <div className="flex flex-col items-center">
+                <button
+                  onClick={() => handleSelectParent('Mama')}
+                  className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full focus:outline-none border-4 overflow-hidden transition-all ${
+                    selectedParent === 'Mama' 
+                      ? 'border-purple-500 scale-105' 
+                      : 'border-transparent hover:border-purple-300'
+                  }`}
+                >
+                  <img 
+                    src={parents.mama.image} 
+                    alt="Mama"
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+                <p className="mt-2 font-medium">{parents.mama.name}</p>
+                <p className="text-xs text-gray-500">(press 'M' key)</p>
+              </div>
+              
+              {/* Divider */}
+              <div className="h-32 sm:h-40 w-px bg-gray-300"></div>
+              
+              {/* Papa */}
+              <div className="flex flex-col items-center">
+                <button
+                  onClick={() => handleSelectParent('Papa')}
+                  className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full focus:outline-none border-4 overflow-hidden transition-all ${
+                    selectedParent === 'Papa' 
+                      ? 'border-blue-500 scale-105' 
+                      : 'border-transparent hover:border-blue-300'
+                  }`}
+                >
+                  <img 
+                    src={parents.papa.image} 
+                    alt="Papa"
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+                <p className="mt-2 font-medium">{parents.papa.name}</p>
+                <p className="text-xs text-gray-500">(press 'P' key)</p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Progress */}
+          <div className="text-center">
+            <p className="font-medium mb-2">
+              Question {currentQuestionIndex + 1} of {questionsToUse.length}
+            </p>
+            <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-black transition-all duration-300" 
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        </div>
       </div>
+    </div>
+  )}
+</div>
       
       {/* Footer with navigation - fixed at bottom */}
       <div className="border-t bg-white p-4 mt-auto">

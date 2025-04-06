@@ -352,68 +352,94 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   // Enhanced useEffect to properly restore survey progress
   useEffect(() => {
     // Only run this if we have a user and loaded questions
-    if (selectedUser && questions.length > 0) {
-      console.log("Checking for previously saved progress...");
-      
-      // Check for user-specific stored progress first
-      const userProgressKey = `surveyInProgress_${selectedUser.id}`;
-      const savedProgress = localStorage.getItem(userProgressKey);
-      
-      if (savedProgress) {
-        try {
-          const progressData = JSON.parse(savedProgress);
+    // Enhanced useEffect to properly restore survey progress - with fix for race conditions
+useEffect(() => {
+  // Only run this if we have a user and loaded questions
+  if (selectedUser && questions.length > 0) {
+    console.log("Checking for previously saved progress...");
+    
+    // Check for user-specific stored progress first
+    const userProgressKey = `surveyInProgress_${selectedUser.id}`;
+    const savedProgress = localStorage.getItem(userProgressKey);
+    
+    let restoredIndex = -1;
+    
+    if (savedProgress) {
+      try {
+        const progressData = JSON.parse(savedProgress);
+        
+        // Verify this is the right user's data
+        if (progressData.userId === selectedUser.id) {
+          console.log(`Found saved progress for user: ${selectedUser.id}`);
           
-          // Verify this is the right user's data
-          if (progressData.userId === selectedUser.id) {
-            console.log(`Found saved progress for user: ${selectedUser.id}`);
+          // If we have saved responses, restore them
+          if (progressData.responses && Object.keys(progressData.responses).length > 0) {
+            const responses = progressData.responses;
+            setUserResponses(responses);
             
-            // If we have saved responses, restore them
-            if (progressData.responses && Object.keys(progressData.responses).length > 0) {
-              setUserResponses(progressData.responses);
-            }
-            
-            // Set current question to the last one the user was working on
-            if (progressData.lastQuestionIndex !== undefined) {
-              setCurrentQuestionIndex(progressData.lastQuestionIndex);
-            }
-            
-            console.log(`Restored progress for ${selectedUser.name}`);
+            // Also update parent context to ensure consistency
+            Object.entries(responses).forEach(([questionId, response]) => {
+              updateSurveyResponse(questionId, response);
+            });
           }
-        } catch (error) {
-          console.error("Error parsing saved progress:", error);
-        }
-      } else if (currentSurveyResponses && Object.keys(currentSurveyResponses).length > 0) {
-        // Fall back to checking currentSurveyResponses for this user
-        console.log("No localStorage progress found, checking context responses");
-        
-        // Find the last answered question index
-        let lastAnsweredIndex = -1;
-        const questionResponses = {};
-        
-        // First, extract all responses that match our question IDs
-        questions.forEach((question, index) => {
-          if (currentSurveyResponses[question.id]) {
-            questionResponses[question.id] = currentSurveyResponses[question.id];
-            lastAnsweredIndex = Math.max(lastAnsweredIndex, index);
+          
+          // Set current question to the last one the user was working on
+          if (progressData.lastQuestionIndex !== undefined) {
+            restoredIndex = progressData.lastQuestionIndex;
           }
-        });
-        
-        // If we found saved answers, jump to the next unanswered question
-        if (lastAnsweredIndex >= 0) {
-          console.log(`Found progress! Last answered question: ${lastAnsweredIndex}`);
           
-          // Set current question to the next unanswered one (not beyond the end)
-          const nextIndex = Math.min(lastAnsweredIndex + 1, questions.length - 1);
-          setCurrentQuestionIndex(nextIndex);
-          
-          // Load all previous answers into local state
-          setUserResponses(questionResponses);
-          
-          console.log(`Restored to question ${nextIndex + 1} with ${Object.keys(questionResponses).length} saved answers`);
+          console.log(`Restored progress for ${selectedUser.name}`);
         }
+      } catch (error) {
+        console.error("Error parsing saved progress:", error);
+      }
+    } else if (currentSurveyResponses && Object.keys(currentSurveyResponses).length > 0) {
+      // Fall back to checking currentSurveyResponses for this user
+      console.log("No localStorage progress found, checking context responses");
+      
+      // Find the last answered question index
+      let lastAnsweredIndex = -1;
+      const questionResponses = {};
+      
+      // First, extract all responses that match our question IDs
+      questions.forEach((question, index) => {
+        if (currentSurveyResponses[question.id]) {
+          questionResponses[question.id] = currentSurveyResponses[question.id];
+          lastAnsweredIndex = Math.max(lastAnsweredIndex, index);
+        }
+      });
+      
+      // If we found saved answers, jump to the next unanswered question
+      if (lastAnsweredIndex >= 0) {
+        console.log(`Found progress! Last answered question: ${lastAnsweredIndex}`);
+        
+        // Set current question to the next unanswered one (not beyond the end)
+        restoredIndex = Math.min(lastAnsweredIndex + 1, questions.length - 1);
+        
+        // Load all previous answers into local state
+        setUserResponses(questionResponses);
+        
+        console.log(`Restored to question ${restoredIndex + 1} with ${Object.keys(questionResponses).length} saved answers`);
       }
     }
-  }, [selectedUser, questions, currentSurveyResponses]);
+    
+    // Wait for state updates to complete before setting current question index
+    if (restoredIndex >= 0) {
+      // Use a timeout to ensure all state updates have been processed
+      setTimeout(() => {
+        setCurrentQuestionIndex(restoredIndex);
+        // Also set selected parent for the current question
+        const currentQuestionId = questions[restoredIndex]?.id;
+        if (currentQuestionId) {
+          const savedResponse = userResponses[currentQuestionId] || 
+                               currentSurveyResponses[currentQuestionId];
+          setSelectedParent(savedResponse || null);
+        }
+      }, 0);
+    }
+  }
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [selectedUser, questions.length]);  // Only depend on user and question count, not the actual questions or responses
   
   // Save progress function (used by both auto-save and manual save)
   const saveProgress = async () => {
@@ -439,65 +465,67 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   };
   
   // Handle parent selection
-  const handleSelectParent = (parent) => {
-    // Prevent multiple calls while processing
-    if (isProcessing) {
-      console.log("Ignoring selection - already processing");
-      return;
-    }
-    
-    // Set processing state immediately
-    setIsProcessing(true);
-    console.log(`Selected ${parent} for question ${currentQuestionIndex + 1}`);
-    
-    // Cancel any existing timers
-    if (questionTimerRef.current) {
-      clearTimeout(questionTimerRef.current);
-      questionTimerRef.current = null;
-    }
-    
-    // Set the selected parent for UI feedback
-    setSelectedParent(parent);
-    
-    // Get current question
-    const currentQuestion = questions[currentQuestionIndex];
-    if (!currentQuestion) {
-      console.error("No current question found");
-      setIsProcessing(false);
-      return;
-    }
-    
-    // Record response
-    const updatedResponses = {
-      ...userResponses,
-      [currentQuestion.id]: parent
-    };
-    setUserResponses(updatedResponses);
-    
-    // Update parent context
-    updateSurveyResponse(currentQuestion.id, parent);
-    
-    // Store current index in a local variable to avoid closure issues
-    const currentIdx = currentQuestionIndex;
-    
-    // Wait for a moment to show the selection
-    questionTimerRef.current = setTimeout(() => {
+  // Handle parent selection
+const handleSelectParent = (parent) => {
+  // Prevent multiple calls while processing
+  if (isProcessing) {
+    console.log("Ignoring selection - already processing");
+    return;
+  }
+  
+  // Set processing state immediately
+  setIsProcessing(true);
+  console.log(`Selected ${parent} for question ${currentQuestionIndex + 1}`);
+  
+  // Cancel any existing timers
+  if (questionTimerRef.current) {
+    clearTimeout(questionTimerRef.current);
+    questionTimerRef.current = null;
+  }
+  
+  // Set the selected parent for UI feedback
+  setSelectedParent(parent);
+  
+  // Get current question
+  const currentQuestion = questions[currentQuestionIndex];
+  if (!currentQuestion) {
+    console.error("No current question found");
+    setIsProcessing(false);
+    return;
+  }
+  
+  // Record response
+  const updatedResponses = {
+    ...userResponses,
+    [currentQuestion.id]: parent
+  };
+  setUserResponses(updatedResponses);
+  
+  // Update parent context
+  updateSurveyResponse(currentQuestion.id, parent);
+  
+  // Store current index in a local variable to avoid closure issues
+  const currentIdx = currentQuestionIndex;
+  
+  // Wait for a moment to show the selection, but no need to modify state again
+  questionTimerRef.current = setTimeout(() => {
+    // Check if we're still at the same question (to avoid race conditions)
+    if (currentIdx === currentQuestionIndex) {
       // Then decide whether to go to next question or complete survey
       if (currentIdx < questions.length - 1) {
-        // Move to next question - use exact index instead of functional update
-        const nextIndex = currentIdx + 1;
-        console.log(`Moving to question ${nextIndex + 1} (from ${currentIdx + 1})`);
-        setCurrentQuestionIndex(nextIndex);
+        // Move to next question - directly set the new index
+        setCurrentQuestionIndex(currentIdx + 1);
         
         // Reset selection state
         setSelectedParent(null);
-        setIsProcessing(false);
       } else {
         // Complete the survey
         handleCompleteSurvey();
       }
-    }, 500);
-  };
+    }
+    setIsProcessing(false);
+  }, 500);
+};
 
   // Handle pause survey
   const handlePauseSurvey = async () => {
