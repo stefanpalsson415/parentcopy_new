@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Calendar, ChevronDown, ChevronUp, Clock, Heart, AlertCircle, 
   Activity, Users, Star, Clipboard, Camera, Plus, Edit, Trash2, 
@@ -71,6 +71,43 @@ const ChildrenTrackingTab = () => {
     growth: 0,
     routines: 0
   });
+
+// Enhanced AI insights generation with service integration and local fallback
+const generateAiInsights = useCallback(async (data) => {
+  try {
+    if (!familyId || !data) {
+      setAiInsights([]);
+      return;
+    }
+    
+    // Try to get insights from AI service
+    try {
+      console.log("Requesting AI-generated child insights from AllieAIService");
+      const aiInsights = await AllieAIService.generateChildInsights(familyId, data);
+      
+      if (aiInsights && aiInsights.length > 0) {
+        console.log(`Received ${aiInsights.length} AI-generated insights`);
+        setAiInsights(aiInsights);
+        return;
+      }
+    } catch (serviceError) {
+      console.warn("AI service error, falling back to local insights:", serviceError);
+    }
+    
+    // If AI service fails or returns no insights, fall back to local generation
+    console.log("Generating local insights as fallback");
+    const localInsights = generateLocalInsights(data);
+    setAiInsights(localInsights);
+    
+  } catch (error) {
+    console.error("Error in insight generation:", error);
+    setAiInsights([]);
+  }
+}, [familyId]);
+
+
+
+
 
   // Load healthcare providers
   useEffect(() => {
@@ -577,72 +614,72 @@ const ChildrenTrackingTab = () => {
     }
   };
   
-  // Fetch children's data on component mount
-useEffect(() => {
-  const loadChildrenData = async () => {
-    try {
-      if (!familyId) return;
-      
-      setLoading(true);
-      console.log("Loading children data...");
-      
-      const docRef = doc(db, "families", familyId);
-      const docSnap = await getDoc(docRef);
-      
-      if (docSnap.exists()) {
-        const familyData = docSnap.data();
+  useEffect(() => {
+    const loadChildrenData = async () => {
+      try {
+        if (!familyId) return;
         
-        // Check if we have children data structure, if not create it
-        if (!familyData.childrenData) {
-          // Initialize empty children data structure
-          const initialChildrenData = {};
+        setLoading(true);
+        console.log("Loading children data...");
+        
+        const docRef = doc(db, "families", familyId);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          const familyData = docSnap.data();
           
-          // Create entry for each child in the family
-          familyMembers
-            .filter(member => member.role === 'child')
-            .forEach(child => {
-              initialChildrenData[child.id] = {
-                medicalAppointments: [],
-                growthData: [],
-                routines: [],
-                clothesHandMeDowns: []
-              };
+          // Check if we have children data structure, if not create it
+          if (!familyData.childrenData) {
+            // Initialize empty children data structure
+            const initialChildrenData = {};
+            
+            // Create entry for each child in the family
+            familyMembers
+              .filter(member => member.role === 'child')
+              .forEach(child => {
+                initialChildrenData[child.id] = {
+                  medicalAppointments: [],
+                  growthData: [],
+                  routines: [],
+                  clothesHandMeDowns: []
+                };
+              });
+            
+            // Save initial structure to Firebase
+            await updateDoc(docRef, {
+              childrenData: initialChildrenData
             });
+            
+            setChildrenData(initialChildrenData);
+          } else {
+            setChildrenData(familyData.childrenData);
+          }
           
-          // Save initial structure to Firebase
-          await updateDoc(docRef, {
-            childrenData: initialChildrenData
-          });
+          // Generate AI insights based on the children data
+          if (familyData.childrenData) {
+            await generateAiInsights(familyData.childrenData);
+          }
           
-          setChildrenData(initialChildrenData);
-        } else {
-          setChildrenData(familyData.childrenData);
+          // Set active child to the first child if none is selected
+          if (!activeChild && familyMembers.filter(m => m.role === 'child').length > 0) {
+            setActiveChild(familyMembers.filter(m => m.role === 'child')[0].id);
+          }
+          
+          // Update notification counts
+          updateNotificationCounts(familyData.childrenData);
         }
         
-        // Generate AI insights based on the children data (now using AllieAIService)
-        if (familyData.childrenData) {
-          await generateAiInsights(familyData.childrenData);
-        }
-        
-        // Set active child to the first child if none is selected
-        if (!activeChild && familyMembers.filter(m => m.role === 'child').length > 0) {
-          setActiveChild(familyMembers.filter(m => m.role === 'child')[0].id);
-        }
-        
-        // Update notification counts
-        updateNotificationCounts(familyData.childrenData);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error loading children data:", error);
+        setLoading(false);
+        setTabError("There was an error loading children data. Please try refreshing the page.");
       }
-      
-      setLoading(false);
-    } catch (error) {
-      console.error("Error loading children data:", error);
-      setLoading(false);
-      setTabError("There was an error loading children data. Please try refreshing the page.");
-    }
-  };
-  
-  loadChildrenData();
-}, [familyId, familyMembers, activeChild, generateAiInsights, updateNotificationCounts]);  
+    };
+    
+    loadChildrenData();
+  }, [familyId, familyMembers, activeChild, generateAiInsights, updateNotificationCounts]); 
+
   // Update notification counts based on data
   const updateNotificationCounts = (data) => {
     if (!data) return;
@@ -687,39 +724,7 @@ useEffect(() => {
     setNotifications(counts);
   };
   
-  // Generate AI insights for children data (simplified version)
-  // Enhanced AI insights generation with service integration and local fallback
-const generateAiInsights = async (data) => {
-  try {
-    if (!familyId || !data) {
-      setAiInsights([]);
-      return;
-    }
-    
-    // Try to get insights from AI service
-    try {
-      console.log("Requesting AI-generated child insights from AllieAIService");
-      const aiInsights = await AllieAIService.generateChildInsights(familyId, data);
-      
-      if (aiInsights && aiInsights.length > 0) {
-        console.log(`Received ${aiInsights.length} AI-generated insights`);
-        setAiInsights(aiInsights);
-        return;
-      }
-    } catch (serviceError) {
-      console.warn("AI service error, falling back to local insights:", serviceError);
-    }
-    
-    // If AI service fails or returns no insights, fall back to local generation
-    console.log("Generating local insights as fallback");
-    const localInsights = generateLocalInsights(data);
-    setAiInsights(localInsights);
-    
-  } catch (error) {
-    console.error("Error in insight generation:", error);
-    setAiInsights([]);
-  }
-};
+
 
 // Local fallback implementation for generating insights
 const generateLocalInsights = (data) => {
