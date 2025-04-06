@@ -105,7 +105,264 @@ const generateAiInsights = useCallback(async (data) => {
   }
 }, [familyId]);
 
+// NEW CODE TO ADD - after generateAiInsights and before the useEffect that references it
+// Update notification counts based on data
+const updateNotificationCounts = useCallback((data) => {
+  if (!data) return;
+  
+  const today = new Date();
+  const oneWeekFromNow = new Date();
+  oneWeekFromNow.setDate(today.getDate() + 7);
+  
+  const counts = {
+    medical: 0,
+    growth: 0,
+    routines: 0
+  };
+  
+  // Process for each child
+  Object.keys(data).forEach(childId => {
+    const childData = data[childId];
+    
+    // Medical appointments coming up in the next week
+    if (childData.medicalAppointments) {
+      counts.medical += childData.medicalAppointments.filter(apt => {
+        const aptDate = new Date(apt.date);
+        return !apt.completed && aptDate >= today && aptDate <= oneWeekFromNow;
+      }).length;
+    }
+    
+    // Growth data - notify if no entry in the last 3 months
+    if (childData.growthData && childData.growthData.length > 0) {
+      const lastGrowthDate = new Date(Math.max(...childData.growthData.map(g => new Date(g.date))));
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(today.getMonth() - 3);
+      
+      if (lastGrowthDate < threeMonthsAgo) {
+        counts.growth += 1;
+      }
+    } else {
+      // No growth data at all
+      counts.growth += 1;
+    }
+  });
+  
+  setNotifications(counts);
+}, []);
 
+// NEW CODE TO ADD - place this right after updateNotificationCounts and before useEffects
+// Local fallback implementation for generating insights
+const generateLocalInsights = useCallback((data) => {
+  // For a simplified version, create some dynamic insights based on the data
+  const insights = [];
+  
+  // Process data for each child
+  Object.keys(data).forEach(childId => {
+    const childData = data[childId];
+    const childName = getChildName(childId);
+    const childAge = getChildAge(childId);
+    
+    // Medical appointment insights
+    if (childData.medicalAppointments && childData.medicalAppointments.length > 0) {
+      // Check for upcoming appointments
+      const upcomingAppointments = childData.medicalAppointments.filter(apt => 
+        !apt.completed && new Date(apt.date) > new Date()
+      );
+      
+      if (upcomingAppointments.length > 0) {
+        const nextAppointment = upcomingAppointments.sort((a, b) => 
+          new Date(a.date) - new Date(b.date)
+        )[0];
+        
+        insights.push({
+          type: "medical",
+          title: "Upcoming Medical Appointment",
+          content: `${childName} has a ${nextAppointment.title} appointment on ${formatDate(nextAppointment.date)}${nextAppointment.time ? ` at ${nextAppointment.time}` : ''}.`,
+          priority: "medium",
+          childId: childId
+        });
+      }
+      
+      // Check if child is due for a check-up based on their age
+      if (childAge) {
+        // Example age-based checkup recommendation
+        const lastCheckup = childData.medicalAppointments.filter(apt => 
+          apt.title.toLowerCase().includes('checkup') || apt.title.toLowerCase().includes('check-up')
+        ).sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+        
+        const checkupRecommendation = getCheckupRecommendation(childAge, lastCheckup);
+        if (checkupRecommendation) {
+          insights.push({
+            type: "recommendation",
+            title: "Checkup Recommendation",
+            content: `${childName} ${checkupRecommendation}`,
+            priority: "high",
+            childId: childId
+          });
+        }
+      }
+    } else if (childAge) {
+      // No appointments recorded, recommend initial checkup
+      insights.push({
+        type: "recommendation",
+        title: "Initial Medical Record",
+        content: `Consider adding ${childName}'s doctor information and scheduling a checkup to start building their medical history.`,
+        priority: "medium",
+        childId: childId
+      });
+    }
+    
+    // Growth insights
+    if (childData.growthData && childData.growthData.length > 0) {
+      // Check if growth data is recent
+      const latestGrowthEntry = childData.growthData.sort((a, b) => 
+        new Date(b.date) - new Date(a.date)
+      )[0];
+      
+      const threeMothsAgo = new Date();
+      threeMothsAgo.setMonth(threeMothsAgo.getMonth() - 3);
+      
+      if (new Date(latestGrowthEntry.date) < threeMothsAgo) {
+        insights.push({
+          type: "growth",
+          title: "Growth Update Reminder",
+          content: `${childName}'s growth measurements were last updated on ${formatDate(latestGrowthEntry.date)}. Consider updating their height and weight.`,
+          priority: "low",
+          childId: childId
+        });
+      }
+      
+      // Check for shoe size and clothing size updates
+      if (childData.growthData.length >= 2) {
+        const twoLatestEntries = childData.growthData
+          .sort((a, b) => new Date(b.date) - new Date(a.date))
+          .slice(0, 2);
+        
+        if (twoLatestEntries[0].shoeSize !== twoLatestEntries[1].shoeSize && twoLatestEntries[0].shoeSize) {
+          insights.push({
+            type: "growth",
+            title: "Shoe Size Change",
+            content: `${childName}'s shoe size has changed from ${twoLatestEntries[1].shoeSize} to ${twoLatestEntries[0].shoeSize}. You might need to update their footwear.`,
+            priority: "medium",
+            childId: childId
+          });
+        }
+        
+        if (twoLatestEntries[0].clothingSize !== twoLatestEntries[1].clothingSize && twoLatestEntries[0].clothingSize) {
+          insights.push({
+            type: "growth",
+            title: "Clothing Size Change",
+            content: `${childName}'s clothing size has changed from ${twoLatestEntries[1].clothingSize} to ${twoLatestEntries[0].clothingSize}. You might want to check if their clothes still fit.`,
+            priority: "medium",
+            childId: childId
+          });
+        }
+      }
+    } else if (childAge) {
+      // No growth data recorded
+      insights.push({
+        type: "recommendation",
+        title: "Missing Growth Data",
+        content: `You haven't recorded any growth data for ${childName} yet. Tracking height, weight, and sizes helps monitor their development.`,
+        priority: "medium",
+        childId: childId
+      });
+    }
+
+    // Hand-me-down insights
+    if (childData.clothesHandMeDowns && childData.clothesHandMeDowns.length > 0) {
+      const readyItems = childData.clothesHandMeDowns.filter(item => {
+        const readyDate = new Date(item.readyDate);
+        const today = new Date();
+        return !item.used && readyDate <= today;
+      });
+      
+      if (readyItems.length > 0) {
+        insights.push({
+          type: "clothes",
+          title: "Hand-Me-Downs Ready",
+          content: `${childName} has ${readyItems.length} saved clothing ${readyItems.length === 1 ? 'item' : 'items'} ready to be used.`,
+          priority: "low",
+          childId: childId
+        });
+      }
+    }
+  });
+  
+  // Sort insights by priority (high, medium, low)
+  const priorityOrder = { high: 0, medium: 1, low: 2 };
+  
+  insights.sort((a, b) => {
+    return priorityOrder[a.priority] - priorityOrder[b.priority];
+  });
+  
+  return insights;
+}, [getChildName, getChildAge, formatDate, getCheckupRecommendation]);
+
+// NEW CODE TO ADD - place these after state declarations and before the functions we've already moved up
+// Format date for display
+const formatDate = useCallback((dateString) => {
+  if (!dateString) return "Not scheduled";
+  
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+}, []);
+
+// Get child name by ID
+const getChildName = useCallback((childId) => {
+  const child = familyMembers.find(member => member.id === childId);
+  return child ? child.name : "Unknown Child";
+}, [familyMembers]);
+
+// Get child age by ID
+const getChildAge = useCallback((childId) => {
+  const child = familyMembers.find(member => member.id === childId);
+  return child ? child.age : null;
+}, [familyMembers]);
+
+// Helper function to get checkup recommendation based on age
+const getCheckupRecommendation = useCallback((age, lastCheckup) => {
+  // Based on common pediatric schedules
+  let recommendation = null;
+  
+  if (!lastCheckup) {
+    return `should have regular checkups. No previous checkup information is recorded.`;
+  }
+  
+  const lastCheckupDate = new Date(lastCheckup.date);
+  const today = new Date();
+  const monthsSinceLastCheckup = (today.getFullYear() - lastCheckupDate.getFullYear()) * 12 + 
+                                today.getMonth() - lastCheckupDate.getMonth();
+  
+  // Simplified recommendations based on age
+  if (age < 1) {
+    // Infants typically have checkups at 1, 2, 4, 6, 9, and 12 months
+    if (monthsSinceLastCheckup >= 3) {
+      recommendation = `is due for another well-baby checkup. Infants typically need checkups every 2-3 months during the first year.`;
+    }
+  } else if (age < 3) {
+    // Toddlers typically have checkups at 15, 18, 24, and 30 months
+    if (monthsSinceLastCheckup >= 6) {
+      recommendation = `may be due for a checkup. Children aged 1-3 typically need checkups every 6 months.`;
+    }
+  } else if (age < 6) {
+    // Preschoolers typically have annual checkups
+    if (monthsSinceLastCheckup >= 12) {
+      recommendation = `is due for an annual checkup. The last checkup was ${monthsSinceLastCheckup} months ago.`;
+    }
+  } else {
+    // School-age children and adolescents typically have annual checkups
+    if (monthsSinceLastCheckup >= 12) {
+      recommendation = `is due for an annual checkup. The last checkup was ${monthsSinceLastCheckup} months ago.`;
+    }
+  }
+  
+  return recommendation;
+}, []);
 
 
 
@@ -393,17 +650,7 @@ const generateAiInsights = useCallback(async (data) => {
     setViewMode(viewMode === 'card' ? 'list' : 'card');
   };
 
-  // Format date for display
-  const formatDate = (dateString) => {
-    if (!dateString) return "Not scheduled";
-    
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
+  
 
   // Get child name by ID
   const getChildName = (childId) => {
@@ -681,199 +928,10 @@ const generateAiInsights = useCallback(async (data) => {
   }, [familyId, familyMembers, activeChild, generateAiInsights, updateNotificationCounts]); 
 
   // Update notification counts based on data
-  const updateNotificationCounts = (data) => {
-    if (!data) return;
-    
-    const today = new Date();
-    const oneWeekFromNow = new Date();
-    oneWeekFromNow.setDate(today.getDate() + 7);
-    
-    const counts = {
-      medical: 0,
-      growth: 0,
-      routines: 0
-    };
-    
-    // Process for each child
-    Object.keys(data).forEach(childId => {
-      const childData = data[childId];
-      
-      // Medical appointments coming up in the next week
-      if (childData.medicalAppointments) {
-        counts.medical += childData.medicalAppointments.filter(apt => {
-          const aptDate = new Date(apt.date);
-          return !apt.completed && aptDate >= today && aptDate <= oneWeekFromNow;
-        }).length;
-      }
-      
-      // Growth data - notify if no entry in the last 3 months
-      if (childData.growthData && childData.growthData.length > 0) {
-        const lastGrowthDate = new Date(Math.max(...childData.growthData.map(g => new Date(g.date))));
-        const threeMonthsAgo = new Date();
-        threeMonthsAgo.setMonth(today.getMonth() - 3);
-        
-        if (lastGrowthDate < threeMonthsAgo) {
-          counts.growth += 1;
-        }
-      } else {
-        // No growth data at all
-        counts.growth += 1;
-      }
-    });
-    
-    setNotifications(counts);
-  };
+
   
 
 
-// Local fallback implementation for generating insights
-const generateLocalInsights = (data) => {
-  // For a simplified version, create some dynamic insights based on the data
-  const insights = [];
-  
-  // Process data for each child
-  Object.keys(data).forEach(childId => {
-    const childData = data[childId];
-    const childName = getChildName(childId);
-    const childAge = getChildAge(childId);
-    
-    // Medical appointment insights
-    if (childData.medicalAppointments && childData.medicalAppointments.length > 0) {
-      // Check for upcoming appointments
-      const upcomingAppointments = childData.medicalAppointments.filter(apt => 
-        !apt.completed && new Date(apt.date) > new Date()
-      );
-      
-      if (upcomingAppointments.length > 0) {
-        const nextAppointment = upcomingAppointments.sort((a, b) => 
-          new Date(a.date) - new Date(b.date)
-        )[0];
-        
-        insights.push({
-          type: "medical",
-          title: "Upcoming Medical Appointment",
-          content: `${childName} has a ${nextAppointment.title} appointment on ${formatDate(nextAppointment.date)}${nextAppointment.time ? ` at ${nextAppointment.time}` : ''}.`,
-          priority: "medium",
-          childId: childId
-        });
-      }
-      
-      // Check if child is due for a check-up based on their age
-      if (childAge) {
-        // Example age-based checkup recommendation
-        const lastCheckup = childData.medicalAppointments.filter(apt => 
-          apt.title.toLowerCase().includes('checkup') || apt.title.toLowerCase().includes('check-up')
-        ).sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-        
-        const checkupRecommendation = getCheckupRecommendation(childAge, lastCheckup);
-        if (checkupRecommendation) {
-          insights.push({
-            type: "recommendation",
-            title: "Checkup Recommendation",
-            content: `${childName} ${checkupRecommendation}`,
-            priority: "high",
-            childId: childId
-          });
-        }
-      }
-    } else if (childAge) {
-      // No appointments recorded, recommend initial checkup
-      insights.push({
-        type: "recommendation",
-        title: "Initial Medical Record",
-        content: `Consider adding ${childName}'s doctor information and scheduling a checkup to start building their medical history.`,
-        priority: "medium",
-        childId: childId
-      });
-    }
-    
-    // Growth insights
-    if (childData.growthData && childData.growthData.length > 0) {
-      // Check if growth data is recent
-      const latestGrowthEntry = childData.growthData.sort((a, b) => 
-        new Date(b.date) - new Date(a.date)
-      )[0];
-      
-      const threeMothsAgo = new Date();
-      threeMothsAgo.setMonth(threeMothsAgo.getMonth() - 3);
-      
-      if (new Date(latestGrowthEntry.date) < threeMothsAgo) {
-        insights.push({
-          type: "growth",
-          title: "Growth Update Reminder",
-          content: `${childName}'s growth measurements were last updated on ${formatDate(latestGrowthEntry.date)}. Consider updating their height and weight.`,
-          priority: "low",
-          childId: childId
-        });
-      }
-      
-      // Check for shoe size and clothing size updates
-      if (childData.growthData.length >= 2) {
-        const twoLatestEntries = childData.growthData
-          .sort((a, b) => new Date(b.date) - new Date(a.date))
-          .slice(0, 2);
-        
-        if (twoLatestEntries[0].shoeSize !== twoLatestEntries[1].shoeSize && twoLatestEntries[0].shoeSize) {
-          insights.push({
-            type: "growth",
-            title: "Shoe Size Change",
-            content: `${childName}'s shoe size has changed from ${twoLatestEntries[1].shoeSize} to ${twoLatestEntries[0].shoeSize}. You might need to update their footwear.`,
-            priority: "medium",
-            childId: childId
-          });
-        }
-        
-        if (twoLatestEntries[0].clothingSize !== twoLatestEntries[1].clothingSize && twoLatestEntries[0].clothingSize) {
-          insights.push({
-            type: "growth",
-            title: "Clothing Size Change",
-            content: `${childName}'s clothing size has changed from ${twoLatestEntries[1].clothingSize} to ${twoLatestEntries[0].clothingSize}. You might want to check if their clothes still fit.`,
-            priority: "medium",
-            childId: childId
-          });
-        }
-      }
-    } else if (childAge) {
-      // No growth data recorded
-      insights.push({
-        type: "recommendation",
-        title: "Missing Growth Data",
-        content: `You haven't recorded any growth data for ${childName} yet. Tracking height, weight, and sizes helps monitor their development.`,
-        priority: "medium",
-        childId: childId
-      });
-    }
-
-    // Hand-me-down insights
-    if (childData.clothesHandMeDowns && childData.clothesHandMeDowns.length > 0) {
-      const readyItems = childData.clothesHandMeDowns.filter(item => {
-        const readyDate = new Date(item.readyDate);
-        const today = new Date();
-        return !item.used && readyDate <= today;
-      });
-      
-      if (readyItems.length > 0) {
-        insights.push({
-          type: "clothes",
-          title: "Hand-Me-Downs Ready",
-          content: `${childName} has ${readyItems.length} saved clothing ${readyItems.length === 1 ? 'item' : 'items'} ready to be used.`,
-          priority: "low",
-          childId: childId
-        });
-      }
-    }
-  });
-  
-  // Sort insights by priority (high, medium, low)
-  const priorityOrder = { high: 0, medium: 1, low: 2 };
-  
-  insights.sort((a, b) => {
-    return priorityOrder[a.priority] - priorityOrder[b.priority];
-  });
-  
-  return insights;
-};
-  
   // Helper function to get checkup recommendation based on age
   const getCheckupRecommendation = (age, lastCheckup) => {
     // Based on common pediatric schedules
