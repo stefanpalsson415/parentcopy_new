@@ -665,7 +665,8 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   }
   
   return (
-    <div className="max-w-3xl mx-auto bg-white p-4 shadow-lg min-h-screen flex flex-col font-roboto">
+    <div className="max-w-3xl mx-auto bg-white p-4 shadow-lg flex flex-col font-roboto" style={{ minHeight: 'calc(100vh - 2rem)' }}>
+
       {/* Header with user info */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center">
@@ -795,37 +796,37 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
         </div>
       </div>
       
-      {/* Navigation footer */}
-      <div className="flex justify-between items-center bg-gray-50 p-4 rounded-lg mt-auto">
-        <button 
-          onClick={handlePrevious}
-          disabled={currentQuestionIndex === 0 || isProcessing || isSubmitting}
-          className={`px-4 py-2 rounded-md flex items-center ${
-            currentQuestionIndex === 0 || isProcessing || isSubmitting
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-              : 'bg-white text-black hover:bg-gray-100 border border-gray-200'
-          }`}
-        >
-          <ArrowLeft size={16} className="mr-1" />
-          Back
-        </button>
-        
-        <button
-          onClick={handlePauseSurvey}
-          disabled={isProcessing || isSubmitting}
-          className={`px-4 py-2 rounded-md bg-white text-black hover:bg-gray-100 border border-gray-200 ${
-            isProcessing || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
-          }`}
-        >
-          Pause Survey
-        </button>
-        
-        <div className="font-medium text-black bg-white px-3 py-1 rounded-lg border border-gray-200">
-          <div className="flex items-center">
-            {currentQuestionIndex + 1} of {questions.length}
-          </div>
-        </div>
-      </div>
+      // Navigation footer - UPDATED CODE
+<div className="flex justify-between items-center bg-gray-50 p-4 rounded-lg mt-4">
+  <button 
+    onClick={handlePrevious}
+    disabled={currentQuestionIndex === 0 || isProcessing || isSubmitting}
+    className={`px-4 py-2 rounded-md flex items-center ${
+      currentQuestionIndex === 0 || isProcessing || isSubmitting
+        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+        : 'bg-white text-black hover:bg-gray-100 border border-gray-200'
+    }`}
+  >
+    <ArrowLeft size={16} className="mr-1" />
+    Back
+  </button>
+  
+  <button
+    onClick={handlePauseSurvey}
+    disabled={isProcessing || isSubmitting}
+    className={`px-4 py-2 rounded-md bg-white text-black hover:bg-gray-100 border border-gray-200 ${
+      isProcessing || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+    }`}
+  >
+    Pause Survey
+  </button>
+  
+  <div className="font-medium text-black bg-white px-3 py-1 rounded-lg border border-gray-200">
+    <div className="flex items-center">
+      {currentQuestionIndex + 1} of {questions.length}
+    </div>
+  </div>
+</div>
       
       {/* Add AllieChat component */}
       {showAllieChat && <AllieChat />}

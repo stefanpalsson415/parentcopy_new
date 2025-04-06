@@ -5,7 +5,7 @@ import { auth } from './firebase';
 class ClaudeService {
   constructor() {
     this.proxyUrl = 'http://localhost:3001/api/claude';
-    this.model = 'claude-3-sonnet-20240229'; // Using a more cost-effective model
+    this.model = this.model = 'claude-3-opus-20240229'; // Using a more cost-effective model
     this.mockMode = false; // Explicitly disable mock mode
     
     console.log("Claude service initialized to use local proxy server");
