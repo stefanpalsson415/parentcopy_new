@@ -37,7 +37,7 @@ const AllieChat = () => {
   const [showProfileUploadHelp, setShowProfileUploadHelp] = useState(false);
   const [profileUploadTarget, setProfileUploadTarget] = useState(null);
   const [userClosedChat, setUserClosedChat] = useState(false);
-  const [textareaHeight, setTextareaHeight] = useState(36); // Default height in px
+  const [textareaHeight, setTextareaHeight] = useState(42); // Increased default height in px
   
   // Get current location to customize Allie's behavior
   const location = useLocation();
@@ -47,6 +47,12 @@ const AllieChat = () => {
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const nlu = useRef(new EnhancedNLU());
+  
+  // Initialize userClosedChat from localStorage on component mount
+  useEffect(() => {
+    const userClosed = localStorage.getItem('allieChat_userClosed') === 'true';
+    setUserClosedChat(userClosed);
+  }, []);
   
   // Check if current user can use chat
   useEffect(() => {
@@ -90,20 +96,30 @@ const AllieChat = () => {
     }
   }, []);
   
-  // Auto-resize textarea as user types
+  // Auto-resize textarea as user types - improved version
   useEffect(() => {
     if (textareaRef.current) {
+      // Store the current scroll position
+      const scrollPos = textareaRef.current.scrollTop;
+      
       // Reset height to auto to correctly calculate new height
       textareaRef.current.style.height = 'auto';
-      // Set new height based on content
-      const newHeight = Math.max(36, Math.min(120, textareaRef.current.scrollHeight));
+      
+      // Set new height based on content with a higher maximum
+      const newHeight = Math.max(42, Math.min(150, textareaRef.current.scrollHeight));
       textareaRef.current.style.height = `${newHeight}px`;
       setTextareaHeight(newHeight);
+      
+      // Restore scroll position
+      textareaRef.current.scrollTop = scrollPos;
     }
   }, [input]);
   
-  // Auto-open chat on specific pages or for missing profiles
+  // Auto-open chat on specific pages or for missing profiles - with fix for reopening
   useEffect(() => {
+    // Don't auto-open if user has explicitly closed the chat
+    if (userClosedChat) return;
+    
     // Check if we're on a page where we want to auto-open chat
     const shouldOpen = 
       location.pathname === '/login' || // Family selection screen
@@ -114,7 +130,7 @@ const AllieChat = () => {
     const hasMissingProfiles = familyMembers.some(m => !m.profilePicture);
     
     // Auto-open on login page or if missing profiles, but only once and respect user choice
-    if ((shouldOpen || hasMissingProfiles) && !isOpen && !userClosedChat) {
+    if ((shouldOpen || hasMissingProfiles) && !isOpen && !shouldAutoOpen) {
       const timer = setTimeout(() => {
         setShouldAutoOpen(true);
         setIsOpen(true);
@@ -122,9 +138,9 @@ const AllieChat = () => {
       
       return () => clearTimeout(timer);
     }
-  }, [location.pathname, familyMembers, userClosedChat, isOpen]); 
+  }, [location.pathname, familyMembers, userClosedChat, isOpen, shouldAutoOpen]);
   
-  // Set context-aware prompt chips based on current page and progress
+  // Set context-aware prompt chips based on current page and progress - improved version
   useEffect(() => {
     // Determine user's current phase in the app
     const isSurveyPhase = location.pathname.includes('/survey');
@@ -132,21 +148,27 @@ const AllieChat = () => {
     const isMissingProfiles = familyMembers.some(m => !m.profilePicture);
     const hasSurveyResults = completedWeeks && completedWeeks.length > 0;
     
+    // Check if user has completed the initial survey
+    const hasCompletedInitialSurvey = selectedUser && selectedUser.completed;
+    
     // Set different prompt chips based on phase
-    if (isOnboarding) {
-      if (isMissingProfiles) {
+    if (isOnboarding || !hasCompletedInitialSurvey) {
+      if (isMissingProfiles && location.pathname !== '/survey') {
+        // Missing profile pictures is high priority except during survey
         setPromptChips([
           { type: 'profile', text: 'Add profile pictures' },
           { type: 'help', text: 'Why take the survey?' },
           { type: 'info', text: 'How does Allie work?' }
         ]);
       } else if (isSurveyPhase) {
+        // Survey-specific prompts
         setPromptChips([
           { type: 'help', text: 'Why are these questions important?' },
-          { type: 'info', text: 'How is data used?' },
+          { type: 'info', text: 'How is task weight calculated?' },
           { type: 'balance', text: 'Why divide tasks by category?' }
         ]);
       } else {
+        // General onboarding prompts
         setPromptChips([
           { type: 'help', text: 'What can Allie do?' },
           { type: 'survey', text: 'Tell me about the survey' },
@@ -157,9 +179,9 @@ const AllieChat = () => {
       // Dashboard phase - regular app usage
       if (hasSurveyResults) {
         setPromptChips([
-          { type: 'calendar', text: 'Add an event to my calendar' },
+          { type: 'balance', text: 'How is our family balance?' },
           { type: 'task', text: 'What tasks do I have this week?' },
-          { type: 'balance', text: 'How is our family balance?' }
+          { type: 'help', text: 'How can we improve our balance?' }
         ]);
       } else {
         setPromptChips([
@@ -169,7 +191,19 @@ const AllieChat = () => {
         ]);
       }
     }
-  }, [location.pathname, familyMembers, completedWeeks]);
+  }, [location.pathname, familyMembers, completedWeeks, selectedUser]);
+  
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+  
+  // Load messages when component mounts or familyId changes
+  useEffect(() => {
+    if (selectedUser && familyId) {
+      loadMessages();
+    }
+  }, [selectedUser, familyId]);
   
   // Send an initial welcome/tutorial message when chat is first opened
   useEffect(() => {
@@ -203,7 +237,7 @@ const AllieChat = () => {
           // Update prompt chips for survey
           setPromptChips([
             { type: 'help', text: 'Why are these questions important?' },
-            { type: 'info', text: 'How is data used?' },
+            { type: 'info', text: 'How is task weight calculated?' },
             { type: 'balance', text: 'What is family balance?' }
           ]);
         } else {
@@ -227,18 +261,6 @@ const AllieChat = () => {
       return () => clearTimeout(timer);
     }
   }, [isOpen, shouldAutoOpen, initialMessageSent, location.pathname, familyId, familyMembers, selectedUser]);
-  
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-  
-  // Load messages when component mounts or familyId changes
-  useEffect(() => {
-    if (selectedUser && familyId) {
-      loadMessages();
-    }
-  }, [selectedUser, familyId]);
   
   const loadMessages = async () => {
     try {
@@ -651,12 +673,13 @@ const AllieChat = () => {
       });
   };
   
-  // Toggle chat open/closed
+  // Toggle chat open/closed - fixed to prevent reopening
   const toggleChat = () => {
     setIsOpen(!isOpen);
     // If user is closing the chat, remember this choice
     if (isOpen) {
       setUserClosedChat(true);
+      localStorage.setItem('allieChat_userClosed', 'true');
     }
   };
   
@@ -918,7 +941,7 @@ const AllieChat = () => {
                     onKeyPress={handleKeyPress}
                     placeholder="Message Allie..."
                     className="flex-1 border rounded-l-md p-2 focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm resize-none font-roboto"
-                    style={{ height: `${textareaHeight}px`, maxHeight: '120px' }}
+                    style={{ height: `${textareaHeight}px`, maxHeight: '150px' }}
                     rows="1"
                     disabled={isListening}
                   ></textarea>

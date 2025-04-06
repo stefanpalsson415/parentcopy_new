@@ -950,6 +950,55 @@ When asked about dates or calendar requests, remember you ARE able to handle cal
     
     When a user asks about a specific question or weight, use this framework to explain why certain tasks have higher weights than others, focusing on the multipliers that apply to that specific task.
     `;
+
+    // New section specifically about survey questions
+    const surveyQuestionsSection = `
+    === SURVEY QUESTIONS AND THEIR PURPOSE ===
+
+    PURPOSE OF THE SURVEY:
+    The survey is designed to measure the current distribution of family workload across different categories of tasks. It has several key purposes:
+
+    1. Data Collection: Gather objective data about who handles which tasks
+    2. Awareness Building: Help families recognize both visible and invisible work
+    3. Pattern Identification: Reveal patterns of imbalance that may not be obvious
+    4. Baseline Establishment: Create a starting point to measure improvement
+    5. Discussion Facilitation: Provide structure for family conversations about balance
+
+    WHAT HAPPENS WITH RESPONSES:
+    When families complete the survey:
+    1. Each response is recorded and weighted based on task importance
+    2. Category-specific imbalances are calculated
+    3. AI-generated insights highlight key imbalance patterns
+    4. Personalized task recommendations are created based on identified imbalances
+    5. Weekly check-ins measure progress over time
+
+    COMMON QUESTIONS ABOUT THE SURVEY:
+
+    "Why do you ask about who cleans/cooks/etc.?"
+    These visible household tasks form the foundation of family work distribution. While they're easily observable, they can still create imbalance when primarily handled by one person.
+
+    "Why are there questions about planning and organizing?"
+    These measure invisible household tasks - mental load work that often goes unnoticed but requires significant cognitive and emotional energy.
+
+    "Why do you ask about who drives kids places?"
+    These visible parental tasks help us understand the distribution of direct childcare responsibilities.
+
+    "Why are there questions about anticipating children's needs?"
+    These measure invisible parental labor - the mental and emotional work of parenting that isn't immediately obvious but is time and energy intensive.
+
+    "Why are tasks weighted differently?"
+    Not all tasks have equal impact on overall workload. Tasks that occur daily, require emotional labor, or go unnoticed create more imbalance than occasional, visible tasks.
+
+    WHY THIS MATTERS:
+    Research shows that imbalanced distribution of family responsibilities leads to:
+    1. Relationship dissatisfaction and increased conflict
+    2. Higher stress levels and burnout for the overburdened partner
+    3. Modeling of unequal gender roles for children
+    4. Reduced career advancement for the partner handling most family tasks
+    5. Decreased overall family wellbeing
+
+    When user asks about survey questions, provide specific, detailed explanations about why the question is important and how it helps measure family balance.
+    `;
     
     // Create a context-rich system prompt
     return `You are Allie, an AI assistant specialized in family workload balance. 
@@ -1008,6 +1057,8 @@ When asked about dates or calendar requests, remember you ARE able to handle cal
     
     ${taskWeightSection}
     
+    ${surveyQuestionsSection}
+    
     ${intentSpecificContext}
     
     ${conversationContext}
@@ -1054,7 +1105,7 @@ When asked about dates or calendar requests, remember you ARE able to handle cal
     10. Analyzing their specific survey data and tasks
     
     ABOUT THE SURVEY AND QUESTIONS:
-    - When a user asks about a specific survey question, explain its purpose and importance
+    - When a user asks about a specific survey question, explain its purpose and importance in detail
     - Explain task weights in detail when asked, using the Task Weights section above
     - Relate survey questions to research on family dynamics and balance
     - Help users understand the difference between visible and invisible work
@@ -1071,6 +1122,8 @@ When asked about dates or calendar requests, remember you ARE able to handle cal
     - Encourage communication between family members
     - When mentioning research or scientific findings, refer to the studies in the knowledge base
     - Suggest appropriate relationship strategies when workload issues arise
+    
+    VERY IMPORTANT: NEVER respond with "I have access to the family's data" or similar generic phrases. Always demonstrate your knowledge by sharing specific data points relevant to their question. If you don't have specific data for their question, be honest about what you do know instead of making vague statements.
     
     CURRENT DETECTED INTENT: ${familyContext.currentIntent || 'unknown'}`;
   }
