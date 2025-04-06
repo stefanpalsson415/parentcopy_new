@@ -1,24 +1,42 @@
 // src/components/calendar/EventConfirmationCard.jsx
-import React, { useState } from 'react';
-import { Calendar, MapPin, User, Users, Clock, CheckCircle, Edit, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, MapPin, User, Users, Clock, CheckCircle, Edit, X, Calendar, Info, AlertTriangle } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import CalendarService from '../../services/CalendarService';
 
-const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel }) => {
-  const { familyId, familyMembers } = useFamily();
+const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId }) => {
+  const { familyMembers } = useFamily();
   const [isEditing, setIsEditing] = useState(false);
   const [editedEvent, setEditedEvent] = useState(event);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [attendingParent, setAttendingParent] = useState(event.attendingParentId || 'both');
+  const [attendingParent, setAttendingParent] = useState(event.attendingParentId || 'undecided');
+  const [selectedSiblings, setSelectedSiblings] = useState([]);
   
   const parents = familyMembers.filter(m => m.role === 'parent');
   const children = familyMembers.filter(m => m.role === 'child');
+  const siblings = children.filter(child => child.id !== event.childId);
+  
+  // Initialize event with current date/time if missing
+  useEffect(() => {
+    if (!editedEvent.dateTime) {
+      setEditedEvent(prev => ({
+        ...prev,
+        dateTime: new Date().toISOString()
+      }));
+    }
+  }, [editedEvent.dateTime]);
   
   const handleSave = async () => {
     try {
       setSaving(true);
       setError(null);
+      
+      if (!editedEvent.childId || !editedEvent.title) {
+        setError("Please select a child and provide an event title");
+        setSaving(false);
+        return;
+      }
       
       // Update with attending parent selection
       const finalEvent = {
@@ -27,11 +45,41 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel }) => {
         familyId
       };
       
+      // Handle siblings
+      if (selectedSiblings.length > 0) {
+        finalEvent.siblingIds = selectedSiblings;
+        
+        // Add siblings' names for display purposes
+        finalEvent.siblingNames = selectedSiblings.map(sibId => {
+          const sibling = children.find(c => c.id === sibId);
+          return sibling ? sibling.name : '';
+        }).filter(Boolean);
+      }
+      
       // Add the event to the calendar
       const result = await CalendarService.addChildEvent(finalEvent);
       
+      // If additional events should be created for siblings, handle that
+      if (selectedSiblings.length > 0 && result.success) {
+        for (const siblingId of selectedSiblings) {
+          const sibling = children.find(c => c.id === siblingId);
+          if (sibling) {
+            const siblingEvent = {
+              ...finalEvent,
+              childId: siblingId,
+              childName: sibling.name,
+              // No need to duplicate sibling information for sibling's own event
+              siblingIds: undefined,
+              siblingNames: undefined
+            };
+            
+            await CalendarService.addChildEvent(siblingEvent);
+          }
+        }
+      }
+      
       if (result.success) {
-        onConfirm();
+        onConfirm(finalEvent);
       } else {
         setError(result.error || "Failed to save event");
       }
@@ -60,93 +108,136 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel }) => {
     }));
   };
   
+  const toggleSibling = (siblingId) => {
+    setSelectedSiblings(prev => {
+      if (prev.includes(siblingId)) {
+        return prev.filter(id => id !== siblingId);
+      } else {
+        return [...prev, siblingId];
+      }
+    });
+  };
+  
   const formatDate = (date) => {
     if (!date) return '';
-    const dateObj = new Date(date);
-    return dateObj.toLocaleDateString();
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return dateObj.toLocaleDateString(undefined, { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
   };
   
   const formatTime = (date) => {
     if (!date) return '';
-    const dateObj = new Date(date);
-    return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return dateObj.toLocaleTimeString(undefined, { 
+      hour: '2-digit', 
+      minute: '2-digit'
+    });
+  };
+  
+  const getEventTypeBadge = () => {
+    switch(editedEvent.eventType) {
+      case 'birthday':
+        return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+          Birthday
+        </span>;
+      case 'playdate':
+        return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+          Playdate
+        </span>;
+      case 'sports':
+        return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+          Sports
+        </span>;
+      case 'appointment':
+        return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+          Appointment
+        </span>;
+      default:
+        return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+          Event
+        </span>;
+    }
   };
   
   return (
-    <div className="bg-white border rounded-lg p-4">
-      <h3 className="text-lg font-medium mb-3 flex items-center">
+    <div className="p-4">
+      <div className="mb-3 flex items-center">
         <CheckCircle size={18} className="mr-2 text-green-500" />
-        Event Details Detected
-      </h3>
+        <h3 className="text-lg font-medium">Event Details {getEventTypeBadge()}</h3>
+      </div>
       
       {!isEditing ? (
-        <div className="space-y-3">
-          <div>
-            <h4 className="font-medium">{editedEvent.title}</h4>
+        <div className="space-y-4">
+          <div className="bg-gray-50 p-4 rounded-lg border">
+            <div className="flex justify-between">
+              <h4 className="font-medium text-lg mb-2">{editedEvent.title}</h4>
+              <button
+                onClick={handleEdit}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <Edit size={16} />
+              </button>
+            </div>
             
-            <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
+            <div className="grid sm:grid-cols-2 gap-3 mt-2">
               <div className="flex items-start">
-                <Calendar size={16} className="mr-1 mt-1 flex-shrink-0" />
+                <Calendar size={16} className="mr-2 mt-0.5 text-gray-500 flex-shrink-0" />
                 <div>
-                  <div>{formatDate(editedEvent.dateTime)}</div>
-                  <div>{formatTime(editedEvent.dateTime)}</div>
+                  <div className="font-medium text-sm">Date & Time</div>
+                  <div className="text-sm">{formatDate(editedEvent.dateTime)}</div>
+                  <div className="text-sm">{formatTime(editedEvent.dateTime)}</div>
                 </div>
               </div>
               
               <div className="flex items-start">
-                <MapPin size={16} className="mr-1 mt-1 flex-shrink-0" />
-                <div>{editedEvent.location || 'No location'}</div>
-              </div>
-              
-              <div className="flex items-start">
-                <User size={16} className="mr-1 mt-1 flex-shrink-0" />
+                <MapPin size={16} className="mr-2 mt-0.5 text-gray-500 flex-shrink-0" />
                 <div>
-                  {editedEvent.childName || 'Select child'}
-                  {!editedEvent.childName && children.length > 0 && (
-                    <select
-                      value={editedEvent.childId || ''}
-                      onChange={(e) => {
-                        const child = children.find(c => c.id === e.target.value);
-                        handleInputChange('childId', e.target.value);
-                        handleInputChange('childName', child ? child.name : '');
-                      }}
-                      className="ml-2 border rounded p-1 text-xs"
-                    >
-                      <option value="">Select child</option>
-                      {children.map(child => (
-                        <option key={child.id} value={child.id}>{child.name}</option>
-                      ))}
-                    </select>
-                  )}
+                  <div className="font-medium text-sm">Location</div>
+                  <div className="text-sm">{editedEvent.location || 'No location specified'}</div>
                 </div>
               </div>
               
-              {editedEvent.eventType === 'birthday' && (
-                <div className="flex items-start">
-                  <User size={16} className="mr-1 mt-1 flex-shrink-0" />
-                  <div>
-                    {editedEvent.extraDetails?.birthdayChildName}, age{' '}
-                    {editedEvent.extraDetails?.birthdayChildAge}
-                  </div>
+              <div className="flex items-start">
+                <User size={16} className="mr-2 mt-0.5 text-gray-500 flex-shrink-0" />
+                <div>
+                  <div className="font-medium text-sm">For Child</div>
+                  <div className="text-sm">{editedEvent.childName || 'Unknown child'}</div>
                 </div>
-              )}
+              </div>
               
               <div className="flex items-start">
-                <Users size={16} className="mr-1 mt-1 flex-shrink-0" />
-                <div>{editedEvent.hostParent || 'No host info'}</div>
+                <Users size={16} className="mr-2 mt-0.5 text-gray-500 flex-shrink-0" />
+                <div>
+                  <div className="font-medium text-sm">Host</div>
+                  <div className="text-sm">{editedEvent.hostParent || 'No host information'}</div>
+                </div>
               </div>
             </div>
             
+            {editedEvent.eventType === 'birthday' && editedEvent.extraDetails && (
+              <div className="mt-3 p-2 bg-purple-50 rounded-md text-sm">
+                <div className="font-medium text-purple-800">Birthday Details</div>
+                <div className="text-purple-800">
+                  {editedEvent.extraDetails.birthdayChildName || 'Child'} is turning {' '}
+                  {editedEvent.extraDetails.birthdayChildAge || '?'}
+                </div>
+              </div>
+            )}
+            
             {editedEvent.extraDetails?.notes && (
-              <div className="mt-2 text-sm">
-                <div className="font-medium">Notes:</div>
-                <div className="text-gray-600">{editedEvent.extraDetails.notes}</div>
+              <div className="mt-3 p-2 bg-yellow-50 rounded-md">
+                <div className="font-medium text-sm text-yellow-800">Notes</div>
+                <div className="text-sm text-yellow-800">{editedEvent.extraDetails.notes}</div>
               </div>
             )}
           </div>
           
-          <div className="pt-3 border-t">
-            <div className="text-sm font-medium mb-2">Who will take {editedEvent.childName}?</div>
+          {/* Parent Selection */}
+          <div className="bg-gray-50 p-4 rounded-lg border">
+            <div className="font-medium mb-2">Who will take {editedEvent.childName}?</div>
             
             <div className="flex flex-wrap gap-2">
               {parents.map(parent => (
@@ -159,7 +250,7 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel }) => {
                       : 'bg-gray-100 hover:bg-gray-200 border border-transparent'
                   }`}
                 >
-                  {parent.roleType || parent.name}
+                  {parent.name || parent.roleType}
                 </button>
               ))}
               
@@ -171,7 +262,7 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel }) => {
                     : 'bg-gray-100 hover:bg-gray-200 border border-transparent'
                 }`}
               >
-                Both
+                Both Parents
               </button>
               
               <button
@@ -182,74 +273,92 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel }) => {
                     : 'bg-gray-100 hover:bg-gray-200 border border-transparent'
                 }`}
               >
-                Undecided
+                Decide Later
               </button>
             </div>
           </div>
           
-          {error && (
-            <div className="p-2 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
-              {error}
+          {/* Sibling Selection */}
+          {siblings.length > 0 && (
+            <div className="bg-gray-50 p-4 rounded-lg border">
+              <div className="font-medium mb-2">Include siblings?</div>
+              
+              <div className="flex flex-wrap gap-2">
+                {siblings.map(sibling => (
+                  <button
+                    key={sibling.id}
+                    onClick={() => toggleSibling(sibling.id)}
+                    className={`px-3 py-1 rounded-full text-sm ${
+                      selectedSiblings.includes(sibling.id) 
+                        ? 'bg-green-100 text-green-800 border border-green-200' 
+                        : 'bg-gray-100 hover:bg-gray-200 border border-transparent'
+                    }`}
+                  >
+                    {sibling.name}
+                    {selectedSiblings.includes(sibling.id) && 
+                      <CheckCircle size={12} className="ml-1 inline" />
+                    }
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           
-          <div className="flex justify-between pt-3 border-t">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm flex items-center">
+              <AlertTriangle size={16} className="mr-2 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+          
+          <div className="flex justify-between pt-3">
             <button
               onClick={onCancel}
-              className="px-3 py-1 border rounded-md text-sm hover:bg-gray-50"
+              className="px-3 py-2 border rounded-md text-sm hover:bg-gray-50"
             >
               Cancel
             </button>
             
-            <div className="flex space-x-2">
-              <button
-                onClick={handleEdit}
-                className="px-3 py-1 bg-gray-100 rounded-md text-sm hover:bg-gray-200 flex items-center"
-              >
-                <Edit size={14} className="mr-1" />
-                Edit
-              </button>
-              
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-4 py-1 bg-black text-white rounded-md hover:bg-gray-800 disabled:bg-gray-400 flex items-center"
-              >
-                {saving ? (
-                  <>
-                    <div className="w-3 h-3 border-2 border-t-transparent border-white rounded-full animate-spin mr-1"></div>
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle size={14} className="mr-1" />
-                    Save to Calendar
-                  </>
-                )}
-              </button>
-            </div>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 disabled:bg-gray-400 flex items-center"
+            >
+              {saving ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2"></div>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Calendar size={16} className="mr-2" />
+                  Add to Calendar
+                </>
+              )}
+            </button>
           </div>
         </div>
       ) : (
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium mb-1">Title</label>
+            <label className="block text-sm font-medium mb-1">Event Title</label>
             <input
               type="text"
-              value={editedEvent.title}
+              value={editedEvent.title || ''}
               onChange={(e) => handleInputChange('title', e.target.value)}
               className="w-full border rounded p-2 text-sm"
+              placeholder="e.g., Birthday Party, Soccer Practice"
             />
           </div>
           
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium mb-1">Date</label>
               <input
                 type="date"
-                value={new Date(editedEvent.dateTime).toISOString().split('T')[0]}
+                value={editedEvent.dateTime ? new Date(editedEvent.dateTime).toISOString().split('T')[0] : ''}
                 onChange={(e) => {
-                  const date = new Date(editedEvent.dateTime);
+                  const date = new Date(editedEvent.dateTime || new Date());
                   const newDate = new Date(e.target.value);
                   date.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
                   handleInputChange('dateTime', date.toISOString());
@@ -262,9 +371,9 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel }) => {
               <label className="block text-sm font-medium mb-1">Time</label>
               <input
                 type="time"
-                value={new Date(editedEvent.dateTime).toTimeString().slice(0, 5)}
+                value={editedEvent.dateTime ? new Date(editedEvent.dateTime).toTimeString().slice(0, 5) : ''}
                 onChange={(e) => {
-                  const date = new Date(editedEvent.dateTime);
+                  const date = new Date(editedEvent.dateTime || new Date());
                   const [hours, minutes] = e.target.value.split(':');
                   date.setHours(hours, minutes);
                   handleInputChange('dateTime', date.toISOString());
@@ -281,6 +390,7 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel }) => {
               value={editedEvent.location || ''}
               onChange={(e) => handleInputChange('location', e.target.value)}
               className="w-full border rounded p-2 text-sm"
+              placeholder="e.g., Laserdome, Pizza Palace"
             />
           </div>
           
@@ -309,13 +419,14 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel }) => {
               value={editedEvent.hostParent || ''}
               onChange={(e) => handleInputChange('hostParent', e.target.value)}
               className="w-full border rounded p-2 text-sm"
+              placeholder="e.g., Emma's mom"
             />
           </div>
           
           {editedEvent.eventType === 'birthday' && (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium mb-1">Birthday Child</label>
+                <label className="block text-sm font-medium mb-1">Birthday Child's Name</label>
                 <input
                   type="text"
                   value={editedEvent.extraDetails?.birthdayChildName || ''}
@@ -327,6 +438,7 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel }) => {
                     }
                   }))}
                   className="w-full border rounded p-2 text-sm"
+                  placeholder="e.g., Emma"
                 />
               </div>
               
@@ -339,10 +451,11 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel }) => {
                     ...prev,
                     extraDetails: {
                       ...prev.extraDetails,
-                      birthdayChildAge: parseInt(e.target.value)
+                      birthdayChildAge: e.target.value ? parseInt(e.target.value) : ''
                     }
                   }))}
                   className="w-full border rounded p-2 text-sm"
+                  placeholder="e.g., 8"
                   min="1"
                   max="18"
                 />
@@ -362,13 +475,14 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel }) => {
                 }
               }))}
               className="w-full border rounded p-2 text-sm min-h-[80px]"
+              placeholder="e.g., Bring socks, will have cake"
             ></textarea>
           </div>
           
-          <div className="flex justify-end pt-3 border-t">
+          <div className="flex justify-end pt-3">
             <button
               onClick={() => setIsEditing(false)}
-              className="px-3 py-1 border rounded-md text-sm hover:bg-gray-50 mr-2"
+              className="px-3 py-2 border rounded-md text-sm hover:bg-gray-50 mr-2"
             >
               <X size={14} className="mr-1 inline" />
               Cancel
@@ -376,7 +490,7 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel }) => {
             
             <button
               onClick={handleUpdate}
-              className="px-4 py-1 bg-black text-white rounded-md hover:bg-gray-800"
+              className="px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800"
             >
               <CheckCircle size={14} className="mr-1 inline" />
               Update
