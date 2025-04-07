@@ -444,7 +444,7 @@ setEventParsingSource('image');
     }
   };
   
-  // Add event to calendar
+  // In AllieChat.jsx - Update the addEventToCalendar function
 const addEventToCalendar = async (eventDetails) => {
   try {
     if (!eventDetails || !selectedUser) return false;
@@ -521,10 +521,22 @@ const addEventToCalendar = async (eventDetails) => {
       
       setMessages(prev => [...prev, successMessage]);
       
-      // Force calendar refresh
+      // Force calendar refresh with multiple events to ensure it's caught
       if (typeof window !== 'undefined') {
-        const refreshEvent = new CustomEvent('force-calendar-refresh');
-        window.dispatchEvent(refreshEvent);
+        // First dispatch the standard event
+        const calendarEvent = new CustomEvent('calendar-event-added', {
+          detail: { 
+            eventId: result.eventId,
+            title: eventTitle,
+            time: startDate.toISOString()
+          }
+        });
+        window.dispatchEvent(calendarEvent);
+        
+        // Then dispatch the force refresh event with a slight delay
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        }, 300);
       }
       
       return true;

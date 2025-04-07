@@ -8,6 +8,7 @@ import AllieChat from '../chat/AllieChat.jsx';
 import QuestionFeedbackService from '../../services/QuestionFeedbackService';
 
 
+
 const SurveyScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -30,6 +31,7 @@ const SurveyScreen = () => {
     updateQuestionWeight,
     selectPersonalizedInitialQuestions,
     getPersonalizedInitialQuestions,
+    getFilteredQuestionsForAdult,
     setFamilyData
   } = useSurvey();
 
@@ -481,9 +483,6 @@ useEffect(() => {
     }
   };
   
-// In SurveyScreen.jsx - Add import for QuestionFeedbackService
-import QuestionFeedbackService from '../../services/QuestionFeedbackService';
-
 // Add handleQuestionFeedback function after the existing functions
 const handleQuestionFeedback = async (feedbackType) => {
   if (isProcessing) return; // Prevent actions while processing

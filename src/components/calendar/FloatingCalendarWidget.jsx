@@ -240,23 +240,35 @@ useEffect(() => {
     }
   }, [isOpen, familyId, lastRefresh, selectedDate]);
 
-  // Enhance the event listener with better logging
+  // In FloatingCalendarWidget.jsx - Update the event listener
 useEffect(() => {
-  // Function to reload events
+  // Function to reload events with enhanced logging
   const refreshEvents = (e) => {
-    console.log("Calendar event added event received", e.detail);
+    console.log("Calendar event refresh triggered", e?.type || 'manual refresh', e?.detail || {});
+    
+    // Clear event cache to ensure fresh data
+    setEventCache(new Set());
+    
+    // Force immediate refresh
     setLastRefresh(Date.now());
+    
+    // Rebuild event cache after a brief delay to ensure Firestore has updated
+    setTimeout(() => {
+      buildEventCache();
+    }, 500);
   };
   
-  // Set up event listener for calendar updates
+  // Set up event listeners for both event types
   window.addEventListener('calendar-event-added', refreshEvents);
+  window.addEventListener('force-calendar-refresh', refreshEvents);
   
-  // Log that we've set up the listener
-  console.log("Calendar event listener initialized");
+  // Log that we've set up the listeners
+  console.log("Calendar event listeners initialized");
   
   // Clean up
   return () => {
     window.removeEventListener('calendar-event-added', refreshEvents);
+    window.removeEventListener('force-calendar-refresh', refreshEvents);
   };
 }, []);
   
@@ -378,7 +390,7 @@ useEffect(() => {
     }
   };
   
-  // Enhance the loadAllEvents function for better logging and debugging
+ // In FloatingCalendarWidget.jsx - Enhance the loadAllEvents function
 const loadAllEvents = async () => {
   try {
     setLoading(true);
@@ -404,13 +416,16 @@ const loadAllEvents = async () => {
     const generalEvents = await loadGeneralCalendarEvents();
     console.log("Loaded general calendar events:", generalEvents.length);
     
-    // For debugging, print the first few general events
+    // For debugging, print details of all general events
     if (generalEvents.length > 0) {
-      console.log("Sample general events:", generalEvents.slice(0, 2).map(e => ({
+      console.log("All general events:", generalEvents.map(e => ({
         title: e.title,
         date: e.dateObj ? e.dateObj.toISOString() : 'No date',
-        location: e.location || 'No location'
+        location: e.location || 'No location',
+        firestoreId: e.firestoreId
       })));
+    } else {
+      console.warn("No general calendar events found - this might indicate a query issue");
     }
     
     // Track already added events
@@ -434,24 +449,11 @@ const loadAllEvents = async () => {
       ...generalEvents // Include chat-added events
     ];
     
-    // Clean up events - ensure no duplicates by checking for similar events
-    const cleanedEvents = [];
-    const eventSignatures = new Set();
-    
-    combined.forEach(event => {
-      // Create signature using our consistent function
-      const signature = createEventSignature(event);
-      
-      // Only add if we haven't seen this signature before
-      if (!eventSignatures.has(signature)) {
-        eventSignatures.add(signature);
-        cleanedEvents.push(event);
-      }
-    });
-    
-    console.log(`Final combined events: ${cleanedEvents.length}`);
-    setAllEvents(cleanedEvents);
+    // Set all events directly without deduplication initially
+    setAllEvents(combined);
     setLoading(false);
+    
+    console.log(`Final combined events: ${combined.length}`);
   } catch (error) {
     console.error("Error loading events:", error);
     setLoading(false);

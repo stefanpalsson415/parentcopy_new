@@ -84,6 +84,7 @@ class CalendarService {
 // Replace the addEvent method in CalendarService.js with this improved version:
 // Replace the addEvent method in CalendarService.js with this improved version:
 // Improve the addEvent method with better error handling and clearer logging
+// In CalendarService.js - Update the addEvent method to dispatch an event
 async addEvent(event, userId) {
   try {
     if (!userId) {
@@ -140,6 +141,7 @@ async addEvent(event, userId) {
     
     // Dispatch an event to notify components of the new calendar event
     if (typeof window !== 'undefined') {
+      // First, dispatch the standard event
       const updateEvent = new CustomEvent('calendar-event-added', {
         detail: { 
           eventId: docRef.id, 
@@ -150,6 +152,12 @@ async addEvent(event, userId) {
       });
       console.log("Dispatching calendar-event-added event");
       window.dispatchEvent(updateEvent);
+      
+      // Then, dispatch the force-refresh event with a slight delay to ensure both are processed
+      setTimeout(() => {
+        console.log("Dispatching force-calendar-refresh event");
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+      }, 300);
     }
     
     // Show success notification

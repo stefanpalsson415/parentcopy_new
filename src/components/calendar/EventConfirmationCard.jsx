@@ -2,20 +2,21 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, MapPin, User, Users, Clock, CheckCircle, Edit, X, Info, AlertTriangle } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
-import { useAuth } from '../../contexts/AuthContext';  // Add this import
+import { useAuth } from '../../contexts/AuthContext';
 import CalendarService from '../../services/CalendarService';
-import ParserFeedbackService from '../../services/ParserFeedbackService';
-
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../services/firebase';
 
 const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId }) => {
   const { familyMembers } = useFamily();
-  const { currentUser } = useAuth();  // Add this line to get currentUser
+  const { currentUser } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [editedEvent, setEditedEvent] = useState(event);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [attendingParent, setAttendingParent] = useState(event.attendingParentId || 'undecided');
   const [selectedSiblings, setSelectedSiblings] = useState([]);
+  const [pendingAction, setPendingAction] = useState(null);
   
   const parents = familyMembers.filter(m => m.role === 'parent');
   const children = familyMembers.filter(m => m.role === 'child');
@@ -113,6 +114,7 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
     setIsEditing(true);
   };
   
+  // Simplified update handler without references to undefined variables
   const handleUpdate = async () => {
     try {
       setPendingAction('update');
@@ -123,15 +125,11 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
         return;
       }
       
-      // Preserve linkedEntity when updating
-      const linkedEntity = editedEvent.linkedEntity || selectedEvent?.linkedEntity;
-      
       // Create updated event object
       const updatedEvent = {
         summary: editedEvent.title,
         description: editedEvent.description || '',
         location: editedEvent.location || 'TBD',
-        linkedEntity
       };
       
       // Update date/time if changed
@@ -141,12 +139,8 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
         };
         
-        // Calculate end time (preserve duration if available)
-        const duration = editedEvent.dateEndObj && selectedEvent.dateObj 
-          ? editedEvent.dateEndObj.getTime() - selectedEvent.dateObj.getTime()
-          : 60 * 60 * 1000; // Default 1 hour
-        
-        const endDate = new Date(editedEvent.dateObj.getTime() + duration);
+        // Calculate end time (default 1 hour duration)
+        const endDate = new Date(editedEvent.dateObj.getTime() + 60 * 60 * 1000);
         
         updatedEvent.end = {
           dateTime: endDate.toISOString(),
@@ -158,54 +152,22 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
       const docRef = doc(db, "calendar_events", editedEvent.firestoreId);
       await updateDoc(docRef, updatedEvent);
       
-      // Update local state
-      setAllEvents(prev => 
-        prev.map(event => 
-          event.firestoreId === editedEvent.firestoreId 
-            ? { ...event, ...editedEvent } 
-            : event
-        )
-      );
+      // Apply updates to local state
+      setEditedEvent(prev => ({
+        ...prev,
+        ...updatedEvent
+      }));
       
-      // Close edit mode and update selected event
-      setIsEditingEvent(false);
-      setSelectedEvent({
-        ...selectedEvent,
-        ...editedEvent
-      });
+      // Close edit mode
+      setIsEditing(false);
       
-      // NEW CODE: Record parser feedback if this was an AI-parsed event
-      if (selectedEvent.creationSource && 
-          (selectedEvent.creationSource === 'AI-parse-text' || 
-           selectedEvent.creationSource === 'text' ||
-           selectedEvent.creationSource === 'image' ||
-           selectedEvent.creationSource === 'voice')) {
-        
-        // Record the original text/parsing and the user's edits
-        const feedbackData = {
-          originalInput: selectedEvent.originalText || selectedEvent.description || "Unknown input",
-          initialParse: { ...selectedEvent },
-          userEdits: { ...editedEvent },
-          eventType: selectedEvent.eventType || 'general',
-          source: selectedEvent.creationSource,
-          familyId: familyId
-        };
-        
-        // Send feedback asynchronously (don't wait for result)
-        ParserFeedbackService.recordFeedback(feedbackData)
-          .then(result => {
-            if (result.success) {
-              console.log("Parser feedback recorded successfully:", result.id);
-            }
-          })
-          .catch(error => console.warn("Error recording parser feedback:", error));
+      // Pass the updated event back to parent
+      if (onEdit) {
+        onEdit(editedEvent);
       }
       
       // Show notification
       CalendarService.showNotification("Event updated successfully", "success");
-      
-      // Refresh events
-      setLastRefresh(Date.now());
       
       setPendingAction(null);
     } catch (error) {
