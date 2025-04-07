@@ -1,6 +1,8 @@
 // src/services/AIQuestionGenerator.js
 import { knowledgeBase } from '../data/AllieKnowledgeBase';
 import ClaudeService from './ClaudeService';
+import QuestionFeedbackService from './QuestionFeedbackService';
+
 
 class AIQuestionGenerator {
   constructor() {
@@ -90,6 +92,245 @@ class AIQuestionGenerator {
       }
     ];
   }
+
+
+
+// Then add this new method to the AIQuestionGenerator class
+/**
+ * Generate questions for children with enhanced personalization and filtering
+ * @param {Object} familyData - Family structure and diagnostic information
+ * @param {Array} parentQuestions - The questions generated for parents
+ * @param {Number} childAge - Age of the child
+ * @param {String} childId - ID of the child (for personalization)
+ * @returns {Promise<Array>} Array of age-appropriate questions for the child
+ */
+async generateEnhancedChildQuestions(familyData, parentQuestions, childAge, childId) {
+  try {
+    console.log(`Generating enhanced child questions for child age ${childAge}`);
+    
+    // First, get questions to exclude based on previous feedback
+    const questionIdsToExclude = await QuestionFeedbackService.getQuestionsToExclude(
+      familyData.familyId, 
+      childId
+    );
+    
+    console.log(`Excluding ${questionIdsToExclude.length} questions based on feedback`);
+    
+    // Start with creating age-appropriate versions of parent questions
+    const systemPrompt = `You are an expert in creating age-appropriate survey questions for children about family dynamics.
+    
+    Your task is to adapt adult survey questions about family workload balance into child-friendly versions that are:
+    1. Appropriate for a ${childAge}-year-old child
+    2. Simple and concrete rather than abstract
+    3. Free of complex language or concepts
+    4. Focused on observable behaviors rather than invisible work
+    5. Engaging and easy to understand
+    6. Framed from the child's perspective, not asking them to evaluate adult responsibilities directly
+    
+    For each question, provide:
+    - The original adult question ID
+    - The adapted child-friendly question text
+    - A reasoning for why this question is appropriate for this child
+    
+    Return the questions as a JSON object with this structure:
+    {
+      "childQuestions": [
+        {
+          "originalId": "q1",
+          "id": "child-q1",
+          "childText": "Simplified question for child",
+          "category": "Same category as original",
+          "ageAppropriate": true,
+          "reasoning": "Why this question works for this child"
+        }
+      ]
+    }`;
+    
+    // Filter out questions that have received negative feedback
+    const filteredParentQuestions = parentQuestions.filter(q => 
+      !questionIdsToExclude.includes(q.id)
+    );
+    
+    // Additional filtering for age-appropriateness
+    const ageFilteredQuestions = this.preFilterQuestionsForChild(filteredParentQuestions, childAge);
+    
+    // Pass additional context about the specific child and family
+    const userMessage = `Adapt these parent questions into child-friendly versions appropriate for a ${childAge}-year-old child.
+    
+    Family Context:
+    - Child age: ${childAge}
+    - Family has ${familyData.children?.length || 1} children
+    - Child is ${childAge < 8 ? 'young' : 'older'}
+    
+    Focus on creating questions that:
+    1. This child can understand based on their developmental stage
+    2. Make sense in the child's world and daily experiences
+    3. Don't ask the child to evaluate complex adult tasks that they wouldn't observe
+    4. Use simple language appropriate for a ${childAge}-year-old
+    
+    Here are the questions to adapt:
+    ${JSON.stringify(ageFilteredQuestions.slice(0, 30), null, 2)}`;
+    
+    // Call Claude API
+    const claudeResponse = await ClaudeService.generateResponse(
+      [{ role: 'user', content: userMessage }],
+      { system: systemPrompt }
+    );
+    
+    // Parse the JSON response
+    try {
+      const parsedResponse = JSON.parse(claudeResponse);
+      
+      // Return generated child questions
+      return parsedResponse.childQuestions;
+    } catch (parseError) {
+      console.error("Error parsing child questions response:", parseError);
+      // Fallback to simplified versions
+      return this._generateFallbackChildQuestions(ageFilteredQuestions, childAge);
+    }
+  } catch (error) {
+    console.error("Error generating enhanced child questions:", error);
+    
+    // Fallback to simplified versions of parent questions
+    return this._generateFallbackChildQuestions(parentQuestions, childAge);
+  }
+}
+
+/**
+ * Pre-filter questions for child appropriateness based on age and content
+ * @param {Array} questions - Parent questions to filter
+ * @param {Number} childAge - Age of the child
+ * @returns {Array} Pre-filtered questions
+ * @private
+ */
+preFilterQuestionsForChild(questions, childAge) {
+  // Skip questions about complex abstract concepts for young children
+  if (childAge < 8) {
+    return questions.filter(q => {
+      const questionText = q.text.toLowerCase();
+      
+      // Skip questions about abstract concepts
+      if (questionText.includes("mental load") || 
+          questionText.includes("emotional labor") ||
+          questionText.includes("anticipates") ||
+          questionText.includes("developmental needs") ||
+          questionText.includes("long-term planning") ||
+          questionText.includes("financial")) {
+        return false;
+      }
+      
+      return true;
+    });
+  }
+  
+  // For older children, filter out only the most complex questions
+  if (childAge < 13) {
+    return questions.filter(q => {
+      const questionText = q.text.toLowerCase();
+      
+      // Skip only the most complex questions
+      if (questionText.includes("financial management") ||
+          questionText.includes("long-term planning") ||
+          questionText.includes("anticipates developmental needs")) {
+        return false;
+      }
+      
+      return true;
+    });
+  }
+  
+  // Teenagers can get most questions with appropriate wording
+  return questions;
+}
+
+/**
+ * Generate improved fallback child questions with better age-appropriate wording
+ * @private
+ */
+_generateImprovedFallbackChildQuestions(parentQuestions, childAge) {
+  // Create simplified versions of parent questions appropriate for a child
+  return parentQuestions.slice(0, 30).map((question, index) => {
+    const simplifiedText = this._improvedSimplifyQuestionForChild(question, childAge);
+    
+    return {
+      originalId: question.id,
+      id: `child-${question.id}`,
+      childText: simplifiedText,
+      category: question.category,
+      ageAppropriate: true
+    };
+  });
+}
+
+/**
+ * Improved simplification of questions for children
+ * @private
+ */
+_improvedSimplifyQuestionForChild(question, childAge) {
+  if (!question) return "Who does this in your family?";
+  
+  const originalText = question.text;
+  const category = question.category || '';
+  
+  // Very young children (3-7)
+  if (childAge < 8) {
+    // For household tasks
+    if (category.includes("Household")) {
+      if (originalText.includes("clean") || originalText.includes("dust")) {
+        return "Who cleans up the house?";
+      } else if (originalText.includes("cook") || originalText.includes("meal")) {
+        return "Who makes food for everyone?";
+      } else if (originalText.includes("shop") || originalText.includes("grocery")) {
+        return "Who buys the food at the store?";
+      } else if (originalText.includes("laundry") || originalText.includes("clothes")) {
+        return "Who washes the clothes?";
+      }
+      // Default household
+      return `Who ${originalText.toLowerCase().replace("who ", "").replace("responsible for", "does")}?`;
+    } 
+    // For parental tasks (reframe for child's perspective)
+    else if (category.includes("Parental")) {
+      if (originalText.includes("homework") || originalText.includes("school")) {
+        return "Who helps you with your schoolwork?";
+      } else if (originalText.includes("doctor") || originalText.includes("sick")) {
+        return "Who takes care of you when you're sick?";
+      } else if (originalText.includes("drive") || originalText.includes("car")) {
+        return "Who drives you to places?";
+      } else if (originalText.includes("emotion") || originalText.includes("feel")) {
+        return "Who helps when you feel sad?";
+      } else if (originalText.includes("bedtime")) {
+        return "Who puts you to bed at night?";
+      }
+      // Default parental
+      return `Who helps you with your ${originalText.toLowerCase().replace("who ", "").replace("coordinates", "plans").replace("manages", "takes care of")}?`;
+    }
+  } 
+  // Older children (8-12)
+  else if (childAge < 13) {
+    let simplified = originalText
+      .replace("responsible for", "usually does")
+      .replace("coordinates", "plans")
+      .replace("anticipates", "knows about")
+      .replace("mental load", "remembering everything");
+    
+    // Make sure it starts with "Who"
+    if (!simplified.startsWith("Who")) {
+      simplified = `Who ${simplified.toLowerCase()}?`;
+    }
+    return simplified;
+  }
+  // Teenagers
+  else {
+    return originalText
+      .replace("responsible for", "takes care of")
+      .replace("emotional labor", "emotional support")
+      .replace("anticipates developmental needs", "plans ahead for what's needed");
+  }
+  
+  return originalText; // Fallback
+}
+
+
 
   /**
    * Generate personalized survey questions based on diagnostic results

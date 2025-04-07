@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useSurvey } from '../../contexts/SurveyContext';
 import AllieChat from '../chat/AllieChat'; // Import AllieChat component
+import QuestionFeedbackService from '../../services/QuestionFeedbackService';
+
 
 // Simple illustrations instead of complex SVGs - just basic elements
 const SimpleIllustrations = {
@@ -30,6 +32,9 @@ const SimpleIllustrations = {
   )
 };
 
+const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
+
+
 // Enhanced helper function to simplify questions for kids of different ages
 const simplifyQuestionForChild = (question, childAge) => {
   if (!question) return "Who does this in your family?";
@@ -42,6 +47,7 @@ const simplifyQuestionForChild = (question, childAge) => {
   
   // For very young children (ages 3-7)
   if (childAge < 8) {
+    // Handle Household Tasks
     if (category.includes("Household")) {
       if (originalText.includes("clean") || originalText.includes("dust")) {
         return "Who cleans up the house?";
@@ -54,13 +60,18 @@ const simplifyQuestionForChild = (question, childAge) => {
       } else if (originalText.includes("laundry") || originalText.includes("clothes")) {
         return "Who washes the clothes?";
       } else if (originalText.includes("plan")) {
-        return "Who decides what we're going to do?";
+        return "Who decides what your family is going to do?";
+      } else if (originalText.includes("responsible for")) {
+        return `Who ${originalText.toLowerCase().replace("who is responsible for", "does the")}?`;
       }
       // Default household simplification
       return `Who ${originalText.toLowerCase().replace("who ", "").replace("responsible for", "does")}?`;
     } 
+    // Handle Parental Tasks - completely reframe these for children
     else if (category.includes("Parental")) {
-      if (originalText.includes("homework") || originalText.includes("school")) {
+      if (originalText.includes("primary responsibility")) {
+        return "Who takes care of you the most?";
+      } else if (originalText.includes("homework") || originalText.includes("school")) {
         return "Who helps you with your schoolwork?";
       } else if (originalText.includes("doctor") || originalText.includes("sick")) {
         return "Who takes care of you when you're sick?";
@@ -70,34 +81,58 @@ const simplifyQuestionForChild = (question, childAge) => {
         return "Who helps when you feel sad?";
       } else if (originalText.includes("bedtime")) {
         return "Who puts you to bed at night?";
+      } else if (originalText.includes("coordinates")) {
+        return "Who makes sure you get to all your activities?";
+      } else if (originalText.includes("mental load") || originalText.includes("invisible")) {
+        return "Who remembers all the important things in your family?";
+      } else if (originalText.includes("anticipates")) {
+        return "Who knows what you need before you ask?";
       }
-      // Default parental simplification
+      // Default parental simplification - properly reframe for child's perspective
       return `Who helps you ${originalText.toLowerCase().replace("who ", "").replace("responsible for", "with")}?`;
     }
   }
   // For older children (8-12)
   else if (childAge < 13) {
-    if (originalText.includes("responsible for")) {
-      return originalText.replace("responsible for", "usually does");
+    if (category.includes("Parental")) {
+      if (originalText.includes("primary responsibility")) {
+        return "Who usually takes care of you day-to-day?";
+      } else if (originalText.includes("mental load") || originalText.includes("invisible")) {
+        return "Who remembers all the important things for your family?";
+      } else if (originalText.includes("coordinates")) {
+        return "Who organizes your activities and schedule?";
+      } else if (originalText.includes("anticipates")) {
+        return "Who usually knows what you need before you ask?";
+      } else if (originalText.includes("responsible for")) {
+        return originalText.replace("responsible for", "usually takes care of");
+      }
+    } else if (category.includes("Household")) {
+      if (originalText.includes("responsible for")) {
+        return originalText.replace("responsible for", "usually does");
+      }
     }
-    if (originalText.includes("coordinates")) {
-      return originalText.replace("coordinates", "plans");
-    }
-    if (originalText.includes("anticipates")) {
-      return originalText.replace("anticipates", "knows about");
-    }
+    
+    // Replace complex terms with simpler ones
+    let simplifiedText = originalText
+      .replace("coordinates", "plans")
+      .replace("anticipates", "figures out")
+      .replace("manages", "takes care of")
+      .replace("mental load", "remembering things");
+      
     // Add "Who" if it doesn't start with it
-    if (!originalText.startsWith("Who")) {
-      return `Who ${originalText.toLowerCase()}?`;
+    if (!simplifiedText.startsWith("Who")) {
+      return `Who ${simplifiedText.toLowerCase()}?`;
     }
-    return originalText;
+    return simplifiedText;
   }
   // For teenagers (13+), keep original but simplify complex terms
   else {
     return originalText
-      .replace("responsible for", "takes care of")
+      .replace("responsible for", "usually handles")
       .replace("emotional labor", "emotional support")
-      .replace("anticipates developmental needs", "plans ahead for what you need");
+      .replace("mental load", "remembering and planning")
+      .replace("anticipates developmental needs", "plans ahead for what you need")
+      .replace("coordinates", "organizes");
   }
   
   return originalText; // Fallback to original text
@@ -441,6 +476,47 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUser, questions.length]);
   
+  // Then update the handleQuestionFeedback function
+const handleQuestionFeedback = async (feedbackType) => {
+  if (isProcessing) return; // Prevent actions while processing
+  
+  setIsProcessing(true);
+  
+  try {
+    // Create feedback object
+    const feedback = {
+      questionId: currentQuestion.id,
+      questionText: currentQuestion.text,
+      childText: currentQuestion.childText,
+      feedbackType: feedbackType,
+      category: currentQuestion.category,
+      childAge: selectedUser?.age,
+      childId: selectedUser?.id,
+      familyId: familyId
+    };
+    
+    console.log("Sending question feedback:", feedback);
+    
+    // Send feedback to our service
+    await QuestionFeedbackService.recordQuestionFeedback(feedback);
+    
+    // Skip to the next question
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex(prevIndex => prevIndex + 1);
+      setSelectedParent(null);
+      setShowExplanation(false);
+    } else {
+      // Last question, complete the survey
+      handleCompleteSurvey();
+    }
+  } catch (error) {
+    console.error("Error sending question feedback:", error);
+  } finally {
+    setIsProcessing(false);
+  }
+};
+  
+  
   // Save progress function (used by both auto-save and manual save)
   const saveProgress = async () => {
     if (!selectedUser || Object.keys(userResponses).length === 0) return;
@@ -751,6 +827,27 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
             {currentQuestion.childText || currentQuestion.text} {renderIllustration()}
           </h2>
           
+          // Add this to the main survey section in KidFriendlySurvey.jsx, near where the question is displayed
+<div className="text-center mb-4">
+  <h2 className="text-xl font-semibold text-black">
+    {currentQuestion.childText || currentQuestion.text} {renderIllustration()}
+  </h2>
+  
+  {/* Simplified explanation always visible */}
+  <p className="mt-3 text-sm text-gray-600 bg-gray-50 p-2 rounded-md inline-block">
+    Who usually does this in your family?
+  </p>
+  
+  {/* Not Applicable button */}
+  <button 
+    onClick={() => handleQuestionFeedback('not_applicable')}
+    className="mt-2 text-xs text-gray-500 underline flex items-center mx-auto"
+  >
+    <span className="mr-1">❓</span> This doesn't apply to my family
+  </button>
+</div>
+
+
           {/* Simplified explanation always visible */}
           <p className="mt-3 text-sm text-gray-600 bg-gray-50 p-2 rounded-md inline-block">
             Who usually does this in your family?
