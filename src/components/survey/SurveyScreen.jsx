@@ -9,6 +9,8 @@ import { useFamily } from '../../contexts/FamilyContext';
 import { useSurvey } from '../../contexts/SurveyContext';
 import AllieChat from '../chat/AllieChat.jsx';
 import QuestionFeedbackService from '../../services/QuestionFeedbackService';
+import QuestionFeedbackPanel from './QuestionFeedbackPanel';
+
 
 const SurveyScreen = ({ mode = 'initial' }) => {
   const navigate = useNavigate();
@@ -42,6 +44,8 @@ const SurveyScreen = ({ mode = 'initial' }) => {
   // State to manage personalized questions
   const [personalizedQuestions, setPersonalizedQuestions] = useState([]);
   const [isPersonalizationLoaded, setIsPersonalizationLoaded] = useState(false);
+  const [showFeedbackPanel, setShowFeedbackPanel] = useState(false);
+
   
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedParent, setSelectedParent] = useState(null);
@@ -1018,12 +1022,50 @@ useEffect(() => {
                     <p className="text-xs text-gray-500 mb-3">
                       {currentQuestion.category}
                     </p>
-                    <button 
-                      onClick={() => handleQuestionFeedback('not_applicable')}
-                      className="mt-2 text-xs text-gray-500 hover:text-gray-700 underline flex items-center mx-auto"
-                    >
-                      <span className="mr-1">❓</span> This doesn't apply to my family
-                    </button>
+                    <div className="flex justify-center space-x-4">
+  <button 
+    onClick={() => setShowExplanation(!showExplanation)}
+    className="text-xs text-gray-600 flex items-center hover:underline"
+  >
+    <HelpCircle size={12} className="mr-1" />
+    {showExplanation ? "Hide explanation" : "Why are we asking this?"}
+  </button>
+  
+  <button 
+    onClick={() => setShowWeightMetrics(!showWeightMetrics)}
+    className="text-xs text-blue-600 flex items-center hover:underline"
+  >
+    <Info size={12} className="mr-1" />
+    {showWeightMetrics ? "Hide task impact info" : "Why does this task matter?"}
+  </button>
+  
+  <button 
+    onClick={() => setShowFeedbackPanel(true)}
+    className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full flex items-center hover:bg-gray-200"
+  >
+    <Scale size={12} className="mr-1" />
+    Question Feedback
+  </button>
+</div>
+{/* Add the feedback panel modal */}
+{showFeedbackPanel && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <QuestionFeedbackPanel
+      questionId={currentQuestion.id}
+      questionText={currentQuestion.text}
+      category={currentQuestion.category}
+      familyId={familyId}
+      onSave={(feedbackType) => {
+        setShowFeedbackPanel(false);
+        if (feedbackType === 'not_applicable') {
+          // If question is marked not applicable, skip to next question
+          handleSkip();
+        }
+      }}
+      onCancel={() => setShowFeedbackPanel(false)}
+    />
+  </div>
+)}
                   </div>
                 </div>
               </div>

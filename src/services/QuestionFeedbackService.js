@@ -1,78 +1,205 @@
 // src/services/QuestionFeedbackService.js
 import { db } from './firebase';
-import { collection, addDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
+import { 
+  collection, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  getDocs, 
+  query, 
+  where, 
+  serverTimestamp 
+} from 'firebase/firestore';
 
 /**
- * Service for tracking and learning from survey question feedback
+ * Service for handling question feedback and inapplicable questions
  */
 class QuestionFeedbackService {
-  constructor() {
-    this.feedbackCollection = 'question_feedback';
-  }
-
   /**
-   * Record feedback about an inapplicable or inappropriate question
-   * @param {Object} feedbackData - Data about the question and feedback
-   * @returns {Promise<Object>} Result of the feedback submission
+   * Record feedback for a specific question
+   * @param {Object} feedback - Feedback object with question details and feedback data
+   * @returns {Promise<boolean>} Success indicator
    */
-  async recordQuestionFeedback(feedbackData) {
+  async recordQuestionFeedback(feedback) {
     try {
-      // Validate required fields
-      if (!feedbackData.questionId || !feedbackData.feedbackType) {
-        console.warn("Incomplete feedback data:", feedbackData);
-        return { success: false, error: "Incomplete feedback data" };
+      if (!feedback.questionId || !feedback.familyId) {
+        console.error("Missing required feedback parameters");
+        return false;
       }
-
-      // Add metadata
-      const enhancedFeedback = {
-        ...feedbackData,
+      
+      // Create document ID using family and question ID
+      const docId = `${feedback.familyId}-${feedback.questionId}`;
+      
+      // Create the feedback document
+      const feedbackDoc = {
+        questionId: feedback.questionId,
+        questionText: feedback.questionText || "",
+        category: feedback.category || "",
+        familyId: feedback.familyId,
+        feedbackType: feedback.feedbackType || "not_applicable",
         timestamp: serverTimestamp(),
-        processed: false,
-        learningApplied: false
+        // Store detailed feedback if available
+        feedbackData: feedback.feedbackData || null,
+        comments: feedback.comments || ""
       };
-
-      // Store in Firestore
-      const docRef = await addDoc(collection(db, this.feedbackCollection), enhancedFeedback);
-      console.log("Question feedback recorded with ID:", docRef.id);
-
-      return { success: true, id: docRef.id };
+      
+      // Save to Firestore
+      await setDoc(doc(db, "questionFeedback", docId), feedbackDoc);
+      
+      // Also update the family's list of excluded questions if not applicable
+      if (feedback.feedbackType === 'not_applicable') {
+        await this.updateFamilyExcludedQuestions(feedback.familyId, feedback.questionId, true);
+      } else if (feedback.feedbackType === 'applicable') {
+        // If marked as applicable, remove from excluded list if present
+        await this.updateFamilyExcludedQuestions(feedback.familyId, feedback.questionId, false);
+      }
+      
+      return true;
     } catch (error) {
       console.error("Error recording question feedback:", error);
-      return { success: false, error: error.message };
+      return false;
     }
   }
-
+  
   /**
-   * Get questions to exclude based on feedback patterns
-   * @param {string} familyId - The family ID
-   * @param {string} childId - The child ID (optional)
-   * @returns {Promise<Array>} Array of question IDs to exclude
+   * Update the family's list of excluded questions
+   * @param {string} familyId - Family ID
+   * @param {string} questionId - Question ID
+   * @param {boolean} exclude - Whether to exclude (true) or include (false) the question
+   * @returns {Promise<boolean>} Success indicator
    */
-  async getQuestionsToExclude(familyId, childId = null) {
+  async updateFamilyExcludedQuestions(familyId, questionId, exclude) {
     try {
-      // Query for feedback from this family
-      let q = query(
-        collection(db, this.feedbackCollection),
-        where("familyId", "==", familyId),
-        where("feedbackType", "==", "not_applicable")
-      );
+      // Get the current document if it exists
+      const docRef = doc(db, "familyQuestionSettings", familyId);
+      const docSnap = await getDoc(docRef);
       
-      if (childId) {
-        // If child ID provided, get specific feedback for this child
-        q = query(q, where("childId", "==", childId));
+      let excludedQuestions = [];
+      
+      // If document exists, get current list of excluded questions
+      if (docSnap.exists()) {
+        excludedQuestions = docSnap.data().excludedQuestions || [];
       }
       
-      const querySnapshot = await getDocs(q);
-      const questionIds = [];
+      // Add or remove the question from the excluded list
+      if (exclude && !excludedQuestions.includes(questionId)) {
+        excludedQuestions.push(questionId);
+      } else if (!exclude && excludedQuestions.includes(questionId)) {
+        excludedQuestions = excludedQuestions.filter(q => q !== questionId);
+      } else {
+        // No change needed
+        return true;
+      }
       
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        questionIds.push(data.questionId);
-      });
+      // Save updated list back to Firestore
+      await setDoc(docRef, {
+        familyId,
+        excludedQuestions,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
       
-      return questionIds;
+      return true;
+    } catch (error) {
+      console.error("Error updating excluded questions:", error);
+      return false;
+    }
+  }
+  
+  /**
+   * Get list of questions to exclude based on feedback
+   * @param {string} familyId - Family ID
+   * @param {string} memberId - Optional member ID for child-specific exclusions
+   * @returns {Promise<Array>} Array of question IDs to exclude
+   */
+  async getQuestionsToExclude(familyId, memberId = null) {
+    try {
+      if (!familyId) return [];
+      
+      // Get the family's excluded questions document
+      const docRef = doc(db, "familyQuestionSettings", familyId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        // Get the basic family-wide exclusions
+        const baseExclusions = docSnap.data().excludedQuestions || [];
+        
+        // If we're not looking for member-specific exclusions, return the base list
+        if (!memberId) {
+          return baseExclusions;
+        }
+        
+        // For children, we might have additional exclusions
+        if (memberId.includes("child") || memberId.includes("kid")) {
+          // Get any child-specific exclusions
+          const childDocRef = doc(db, "familyQuestionSettings", `${familyId}-child`);
+          const childDocSnap = await getDoc(childDocRef);
+          
+          if (childDocSnap.exists()) {
+            const childExclusions = childDocSnap.data().excludedQuestions || [];
+            // Combine both lists
+            return [...new Set([...baseExclusions, ...childExclusions])];
+          }
+        }
+        
+        return baseExclusions;
+      }
+      
+      return [];
     } catch (error) {
       console.error("Error getting questions to exclude:", error);
+      return [];
+    }
+  }
+  
+  /**
+   * Get detailed feedback for a specific question
+   * @param {string} familyId - Family ID
+   * @param {string} questionId - Question ID
+   * @returns {Promise<Object|null>} Feedback object or null if not found
+   */
+  async getQuestionFeedback(familyId, questionId) {
+    try {
+      if (!familyId || !questionId) return null;
+      
+      // Get the feedback document
+      const docRef = doc(db, "questionFeedback", `${familyId}-${questionId}`);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return docSnap.data();
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error getting question feedback:", error);
+      return null;
+    }
+  }
+  
+  /**
+   * Get all feedback for a family
+   * @param {string} familyId - Family ID
+   * @returns {Promise<Array>} Array of feedback objects
+   */
+  async getAllFamilyFeedback(familyId) {
+    try {
+      if (!familyId) return [];
+      
+      // Query all feedback documents for this family
+      const q = query(
+        collection(db, "questionFeedback"), 
+        where("familyId", "==", familyId)
+      );
+      const querySnapshot = await getDocs(q);
+      
+      const feedbackList = [];
+      querySnapshot.forEach((doc) => {
+        feedbackList.push(doc.data());
+      });
+      
+      return feedbackList;
+    } catch (error) {
+      console.error("Error getting all family feedback:", error);
       return [];
     }
   }
