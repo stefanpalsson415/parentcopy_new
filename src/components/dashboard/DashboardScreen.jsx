@@ -18,6 +18,8 @@ import FloatingCalendarWidget from '../calendar/FloatingCalendarWidget';
 import DashboardTutorial from '../onboarding/DashboardTutorial';
 import ErrorBoundary from '../common/ErrorBoundary';
 import ChildrenTrackingTab from './tabs/ChildrenTrackingTab';
+import SurveyScreen from '../survey/SurveyScreen';
+
 
 const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const navigate = useNavigate();
@@ -39,6 +41,7 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const [activeTab, setActiveTab] = useState('tasks');
   const [showTutorial, setShowTutorial] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [activeComponent, setActiveComponent] = useState(null);
   const [showFamilyMeeting, setShowFamilyMeeting] = useState(false);
   const [loadingFamily, setLoadingFamily] = useState(false);
   const [loadError, setLoadError] = useState(null);
