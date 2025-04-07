@@ -125,6 +125,7 @@ const QuestionFeedbackPanel = ({ questionId, questionText, category, familyId, o
             <Home size={16} className="mr-2 text-gray-700" />
             <label className="font-medium text-sm font-roboto">Family Structure Relevance</label>
           </div>
+          <p className="text-xs text-gray-600 mb-1 font-roboto">Does this question fit your family's composition (parents, children, living arrangements)?</p>
           <input
             type="range"
             min="1"
@@ -148,6 +149,7 @@ const QuestionFeedbackPanel = ({ questionId, questionText, category, familyId, o
             <Scale size={16} className="mr-2 text-gray-700" />
             <label className="font-medium text-sm font-roboto">Role Distribution</label>
           </div>
+          <p className="text-xs text-gray-600 mb-1 font-roboto">Do the Mama/Papa roles in this question match how your family divides responsibilities?</p>
           <input
             type="range"
             min="1"
@@ -171,6 +173,7 @@ const QuestionFeedbackPanel = ({ questionId, questionText, category, familyId, o
             <Clock size={16} className="mr-2 text-gray-700" />
             <label className="font-medium text-sm font-roboto">Task Frequency</label>
           </div>
+          <p className="text-xs text-gray-600 mb-1 font-roboto">How often does this task occur in your family's routine?</p>
           <input
             type="range"
             min="1"
@@ -194,6 +197,7 @@ const QuestionFeedbackPanel = ({ questionId, questionText, category, familyId, o
             <Star size={16} className="mr-2 text-gray-700" />
             <label className="font-medium text-sm font-roboto">Importance to Your Family</label>
           </div>
+          <p className="text-xs text-gray-600 mb-1 font-roboto">How much does this task matter in your household's daily functioning?</p>
           <input
             type="range"
             min="1"

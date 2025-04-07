@@ -542,6 +542,47 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
     }
   };
   
+// Get a stable color for a member based on their id
+const getMemberColor = (member) => {
+  if (!member || !member.id) return profileColors[0];
+  
+  // Use a simple hash of the member's id to pick a color consistently
+  const hashCode = member.id.split('').reduce(
+    (acc, char) => acc + char.charCodeAt(0), 0
+  );
+  
+  return profileColors[hashCode % profileColors.length];
+};
+
+// Array of vibrant colors for profile placeholders
+const profileColors = [
+  'bg-purple-500',  // Vibrant purple
+  'bg-blue-500',    // Bright blue
+  'bg-pink-500',    // Vibrant pink
+  'bg-green-500',   // Bright green
+  'bg-amber-500',   // Warm amber
+  'bg-cyan-500',    // Teal/cyan
+  'bg-red-500',     // Vibrant red
+  'bg-indigo-500',  // Rich indigo
+];
+
+// Check if an image URL is valid
+const isValidImageUrl = (url) => {
+  // Check if url is defined and not empty
+  if (!url || url === '') return false;
+  
+  // Explicit check for problematic cases
+  const invalidPatterns = ['undefined', 'null', 'Tegner', 'Profile', 'broken', 'placeholder'];
+  if (invalidPatterns.some(pattern => url?.includes(pattern))) return false;
+  
+  // If it's a data URL, it's likely valid
+  if (url?.startsWith('data:image/')) return true;
+  
+  // If it has a common image extension, it's likely valid
+  const validExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+  return validExtensions.some(ext => url?.toLowerCase().includes(ext));
+};
+
   // Handle parent selection - FIXED version
   const handleSelectParent = (parent) => {
     // Prevent multiple calls while processing
@@ -780,13 +821,22 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
       {/* Header with user info */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center">
-          <div className="w-12 h-12 rounded-full overflow-hidden mr-3 border-2 border-black shadow-md">
-            <img 
-              src={selectedUser?.profilePicture} 
-              alt={selectedUser?.name}
-              className="w-full h-full object-cover"
-            />
-          </div>
+        <div className="w-12 h-12 rounded-full overflow-hidden mr-3 border-2 border-black shadow-md">
+  {isValidImageUrl(selectedUser?.profilePicture) ? (
+    <img 
+      src={selectedUser?.profilePicture} 
+      alt={selectedUser?.name}
+      className="w-full h-full object-cover"
+    />
+  ) : (
+    // Colored placeholder for profile
+    <div className={`w-full h-full flex items-center justify-center text-white ${getMemberColor(selectedUser)}`}>
+      <span className="text-2xl font-bold font-roboto">
+        {selectedUser?.name ? selectedUser.name.charAt(0).toUpperCase() : '?'}
+      </span>
+    </div>
+  )}
+</div>
           <div>
             <h2 className="font-bold text-black text-xl font-roboto">
               {selectedUser?.name}'s {surveyType === "weekly" ? "Weekly Adventure" : "Family Survey"}
@@ -839,13 +889,7 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
             Who usually does this in your family?
           </p>
           
-          {/* Not Applicable button */}
-          <button 
-            onClick={() => handleQuestionFeedback('not_applicable')}
-            className="mt-2 text-xs text-gray-500 underline flex items-center mx-auto"
-          >
-            <span className="mr-1">❓</span> This doesn't apply to my family
-          </button>
+          
         </div>
         
         {/* Simple explanation always visible for kids */}

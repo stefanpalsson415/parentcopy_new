@@ -1001,52 +1001,47 @@ useEffect(() => {
                 <div className="max-w-3xl mx-auto">
                   {/* Question */}
                   <div className="bg-white rounded-lg p-6 shadow-sm border">
-                    <div className="flex justify-between items-start mb-3">
-                      <p className="text-lg">
-                        {currentQuestion.text}
-                      </p>
-                      {currentQuestion.totalWeight && (
-                        <div 
-                          className={`ml-2 px-2 py-1 rounded-full text-xs flex items-center flex-shrink-0 ${getWeightImpactColor(currentQuestion.totalWeight)} cursor-pointer hover:scale-105 transition-transform`}
-                          onClick={() => setShowWeightMetrics(!showWeightMetrics)}
-                        >
-                          <Scale size={12} className="mr-1" />
-                          Impact: {getWeightImpactText(currentQuestion.totalWeight)}
-                          <div className="ml-1 bg-white bg-opacity-30 rounded-full w-4 h-4 flex items-center justify-center">
-                            <ChevronDown size={10} className={showWeightMetrics ? "hidden" : "block"} />
-                            <ChevronUp size={10} className={showWeightMetrics ? "block" : "hidden"} />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500 mb-3">
-                      {currentQuestion.category}
-                    </p>
-                    <div className="flex justify-center space-x-4">
-  <button 
-    onClick={() => setShowExplanation(!showExplanation)}
-    className="text-xs text-gray-600 flex items-center hover:underline"
-  >
-    <HelpCircle size={12} className="mr-1" />
-    {showExplanation ? "Hide explanation" : "Why are we asking this?"}
-  </button>
-  
-  <button 
-    onClick={() => setShowWeightMetrics(!showWeightMetrics)}
-    className="text-xs text-blue-600 flex items-center hover:underline"
-  >
-    <Info size={12} className="mr-1" />
-    {showWeightMetrics ? "Hide task impact info" : "Why does this task matter?"}
-  </button>
-  
-  <button 
-    onClick={() => setShowFeedbackPanel(true)}
-    className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full flex items-center hover:bg-gray-200"
-  >
-    <Scale size={12} className="mr-1" />
-    Question Feedback
-  </button>
-</div>
+  <div className="flex justify-between items-start mb-3">
+    <p className="text-lg">
+      {currentQuestion.text}
+    </p>
+    {currentQuestion.totalWeight && (
+      <div 
+        className={`ml-2 px-2 py-1 rounded-full text-xs flex items-center flex-shrink-0 ${getWeightImpactColor(currentQuestion.totalWeight)} cursor-pointer hover:scale-105 transition-transform`}
+        onClick={() => setShowWeightMetrics(!showWeightMetrics)}
+      >
+        <Scale size={12} className="mr-1" />
+        Impact: {getWeightImpactText(currentQuestion.totalWeight)}
+        <div className="ml-1 bg-white bg-opacity-30 rounded-full w-4 h-4 flex items-center justify-center">
+          <ChevronDown size={10} className={showWeightMetrics ? "hidden" : "block"} />
+          <ChevronUp size={10} className={showWeightMetrics ? "block" : "hidden"} />
+        </div>
+      </div>
+    )}
+  </div>
+  <p className="text-xs text-gray-500 mb-3">
+    {currentQuestion.category}
+  </p>
+  <div className="flex space-x-4">
+    <button 
+      onClick={() => setShowExplanation(!showExplanation)}
+      className="text-xs text-gray-600 flex items-center hover:underline"
+    >
+      <HelpCircle size={12} className="mr-1" />
+      {showExplanation ? "Hide explanation" : "Why are we asking this?"}
+    </button>
+    
+    <button 
+      onClick={() => setShowFeedbackPanel(true)}
+      className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full flex items-center hover:bg-gray-200"
+    >
+      <Scale size={12} className="mr-1" />
+      Question Feedback
+      <div className="ml-1 bg-white bg-opacity-50 rounded-full w-4 h-4 flex items-center justify-center">
+        <ChevronDown size={10} />
+      </div>
+    </button>
+  </div>
 {/* Add the feedback panel modal */}
 {showFeedbackPanel && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -1315,24 +1310,7 @@ useEffect(() => {
                   </div>
                 )}
                 
-                {/* Task explanation toggle */}
-                <div className="flex justify-center space-x-4">
-                  <button 
-                    onClick={() => setShowExplanation(!showExplanation)}
-                    className="text-xs text-gray-600 flex items-center hover:underline"
-                  >
-                    <HelpCircle size={12} className="mr-1" />
-                    {showExplanation ? "Hide explanation" : "Why are we asking this?"}
-                  </button>
-                  
-                  <button 
-                    onClick={() => setShowWeightMetrics(!showWeightMetrics)}
-                    className="text-xs text-blue-600 flex items-center hover:underline"
-                  >
-                    <Info size={12} className="mr-1" />
-                    {showWeightMetrics ? "Hide task impact info" : "Why does this task matter?"}
-                  </button>
-                </div>
+                
                 
                 {/* Task explanation panel */}
                 {showExplanation && (
