@@ -367,6 +367,28 @@ const ChildrenTrackingTab = () => {
     return insights;
   }, [getChildName, getChildAge, formatDate, getCheckupRecommendation]);
 
+// Add this useEffect hook in FloatingCalendarWidget.jsx
+useEffect(() => {
+  // Listen for force-calendar-refresh events
+  const handleForceRefresh = () => {
+    console.log("Force calendar refresh triggered");
+    setLastRefresh(Date.now());
+    
+    // Clear cache and rebuild it
+    setEventCache(new Set());
+    buildEventCache();
+  };
+  
+  window.addEventListener('force-calendar-refresh', handleForceRefresh);
+  
+  return () => {
+    window.removeEventListener('force-calendar-refresh', handleForceRefresh);
+  };
+}, []);
+
+
+
+
   // Load healthcare providers
   useEffect(() => {
     const loadHealthcareProviders = async () => {
@@ -1029,8 +1051,8 @@ const ChildrenTrackingTab = () => {
       [`childrenData.${childId}.medicalAppointments`]: updatedData[childId].medicalAppointments
     });
     
-    // If the appointment has a future date, add it to the calendar
-    // If the appointment has a future date, add it to the calendar
+    // In ChildrenTrackingTab.jsx - replace the calendar event creation code (around line 2080-2130)
+// If the appointment has a future date, add it to the calendar
 const appointmentDate = new Date(formData.date);
 if (appointmentDate > new Date() && !formData.completed) {
   try {
@@ -1042,24 +1064,36 @@ if (appointmentDate > new Date() && !formData.completed) {
     const endDate = new Date(appointmentDate);
     endDate.setMinutes(endDate.getMinutes() + 30);
     
-    // Create child event object specifically for calendar
-    const childEventData = {
-      title: formData.title,
-      dateTime: appointmentDate,
-      endDateTime: endDate,
-      location: formData.providerDetails?.address || '',
+    // Create event object for the calendar
+    const calendarEvent = {
+      summary: `${getChildName(childId)}'s ${formData.title}`,
       description: formData.notes || `Medical appointment: ${formData.title}`,
+      location: formData.providerDetails?.address || '',
+      start: {
+        dateTime: appointmentDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: endDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
       childId: childId,
       childName: getChildName(childId),
-      attendingParentId: null, // Can be filled later if needed
+      category: 'medical',
       eventType: 'appointment',
       familyId: familyId,
-      creationSource: 'child-tracking-tab'
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'popup', minutes: 24 * 60 }, // 1 day before
+          { method: 'popup', minutes: 60 } // 1 hour before
+        ]
+      }
     };
     
-    // Use addChildEvent specifically for children's appointments
+    // Add to calendar using the standard addEvent method
     if (CalendarService) {
-      await CalendarService.addChildEvent(childEventData, currentUser?.uid);
+      await CalendarService.addEvent(calendarEvent, currentUser?.uid);
     }
   } catch (calendarError) {
     console.error("Error adding to calendar:", calendarError);
