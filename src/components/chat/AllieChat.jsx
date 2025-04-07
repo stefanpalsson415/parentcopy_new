@@ -12,6 +12,8 @@ import { storage } from '../../services/firebase';
 import DatabaseService from '../../services/DatabaseService';
 import { useLocation } from 'react-router-dom';
 import CalendarService from '../../services/CalendarService';
+import EventParserService from '../../services/EventParserService';
+import EventConfirmationCard from '../calendar/EventConfirmationCard';
 
 const AllieChat = () => {
   const { familyId, selectedUser, familyMembers, updateMemberProfile, familyName, currentWeek, completedWeeks } = useFamily();
@@ -41,6 +43,11 @@ const AllieChat = () => {
   const [textareaHeight, setTextareaHeight] = useState(42); // Increased default height in px
   const [detectedEventDetails, setDetectedEventDetails] = useState(null);
   const [showEventConfirmation, setShowEventConfirmation] = useState(false);
+  
+  // Event parsing variables
+  const [parsedEventDetails, setParsedEventDetails] = useState(null);
+  const [showEventParser, setShowEventParser] = useState(false);
+  const [eventParsingSource, setEventParsingSource] = useState(null); // 'text', 'image', or 'voice'
   
   // Get current location to customize Allie's behavior
   const location = useLocation();
@@ -184,7 +191,7 @@ const AllieChat = () => {
         setPromptChips([
           { type: 'balance', text: 'How is our family balance?' },
           { type: 'task', text: 'What tasks do I have this week?' },
-          { type: 'calendar', text: 'Add an event to calendar' }
+          { type: 'calendar', text: 'Add an event from invite' }
         ]);
       } else {
         setPromptChips([
@@ -279,6 +286,49 @@ const AllieChat = () => {
     }
   };
   
+  // Process message for events
+  const processMessageForEvents = async (text) => {
+    try {
+      // Only try to parse events if we have family context
+      if (!familyId || !selectedUser) return false;
+      
+      // Get basic NLU analysis
+      const intent = nlu.current.detectIntent(text);
+      
+      // Check if this seems like an event-related message
+      const isEventRelated = 
+        intent.startsWith('calendar.') ||
+        text.toLowerCase().includes('invite') ||
+        text.toLowerCase().includes('birthday') ||
+        text.toLowerCase().includes('party') ||
+        text.toLowerCase().includes('kalas');
+        
+      if (!isEventRelated) return false;
+      
+      // Get family context for better parsing
+      const familyContext = {
+        familyId,
+        children: familyMembers.filter(m => m.role === 'child')
+      };
+      
+      // Try to parse the text as an event
+      const eventDetails = await EventParserService.parseEventText(text, familyContext);
+      
+      if (eventDetails) {
+        // We successfully parsed an event
+        setParsedEventDetails(eventDetails);
+        setShowEventParser(true);
+        setEventParsingSource('text');
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error("Error parsing event from message:", error);
+      return false;
+    }
+  };
+  
   // Handle image file from message
   const handleImageFileFromMessage = async (file, memberId) => {
     if (!file || !memberId) return false;
@@ -324,6 +374,69 @@ const AllieChat = () => {
       setShowProfileUploadHelp(false);
       setProfileUploadTarget(null);
       
+      return false;
+    }
+  };
+  
+  // Handle image processing for event extraction
+  const handleImageProcessForEvent = async (file) => {
+    try {
+      setLoading(true);
+      
+      // Get family context for better parsing
+      const familyContext = {
+        familyId,
+        children: familyMembers.filter(m => m.role === 'child')
+      };
+      
+      // Try to parse the image as an event
+      const eventDetails = await EventParserService.parseEventImage(file, familyContext);
+      
+      if (eventDetails) {
+        // We successfully parsed an event
+        setParsedEventDetails(eventDetails);
+        setShowEventParser(true);
+        setEventParsingSource('image');
+        
+        // Add a message about what we found
+        const infoMessage = {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `I've analyzed your image and found what looks like an event invitation. Let me help you add this to your calendar!`,
+          timestamp: new Date().toISOString()
+        };
+        
+        setMessages(prev => [...prev, infoMessage]);
+      } else {
+        // Could not parse an event
+        const errorMessage = {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `I wasn't able to detect any event details in that image. Could you try uploading a clearer image or paste the invitation text directly?`,
+          timestamp: new Date().toISOString()
+        };
+        
+        setMessages(prev => [...prev, errorMessage]);
+      }
+      
+      setLoading(false);
+      return eventDetails != null;
+    } catch (error) {
+      console.error("Error processing image for event:", error);
+      
+      // Error message
+      const errorMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I'm sorry, I couldn't process that image to extract event details. Please try again or paste the invitation text directly.`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+      setLoading(false);
       return false;
     }
   };
@@ -418,25 +531,6 @@ const AllieChat = () => {
         setDetectedIntent(intent);
         setExtractedEntities(entities);
         
-        // Check for calendar-related intent
-        const isCalendarIntent = intent.startsWith('calendar.') ||
-                               input.toLowerCase().includes('calendar') ||
-                               input.toLowerCase().includes('schedule');
-        
-        // Try to extract event details if it seems like a calendar request
-        if (isCalendarIntent && nlu.current.extractEventDetails) {
-          try {
-            const eventDetails = nlu.current.extractEventDetails(input, familyMembers);
-            if (eventDetails && eventDetails.dateTime) {
-              setDetectedEventDetails(eventDetails);
-              setShowEventConfirmation(true);
-            }
-          } catch (eventError) {
-            console.log("Could not extract event details:", eventError);
-            // Proceed without event extraction
-          }
-        }
-        
         // Create user message
         const userMessage = {
           familyId,
@@ -446,14 +540,6 @@ const AllieChat = () => {
           text: input,
           timestamp: new Date().toISOString()
         };
-        
-        // Check if this is a profile picture request
-        const isProfileRequest = 
-          input.toLowerCase().includes('profile picture') || 
-          input.toLowerCase().includes('profile photo') ||
-          input.toLowerCase().includes('upload picture') ||
-          input.toLowerCase().includes('add picture') ||
-          input.toLowerCase().includes('change picture');
         
         // Optimistically add message to UI
         setMessages(prev => [...prev, userMessage]);
@@ -466,6 +552,25 @@ const AllieChat = () => {
           setImageFile(null);
           setImagePreview(null);
         }
+        
+        // Try to parse the message as an event
+        const isEvent = await processMessageForEvents(input);
+        
+        // If this is an event, don't send to AI yet
+        if (isEvent) {
+          // Save message to database (but don't get AI response yet)
+          await EnhancedChatService.saveMessage(userMessage);
+          setLoading(false);
+          return;
+        }
+        
+        // Check if this is a profile picture request
+        const isProfileRequest = 
+          input.toLowerCase().includes('profile picture') || 
+          input.toLowerCase().includes('profile photo') ||
+          input.toLowerCase().includes('upload picture') ||
+          input.toLowerCase().includes('add picture') ||
+          input.toLowerCase().includes('change picture');
         
         // Save message to database
         const savedMessage = await EnhancedChatService.saveMessage(userMessage);
@@ -542,6 +647,25 @@ const AllieChat = () => {
           return;
         }
         
+        // Check if this is a calendar-related intent
+        const isCalendarIntent = intent.startsWith('calendar.') ||
+                               input.toLowerCase().includes('calendar') ||
+                               input.toLowerCase().includes('schedule');
+        
+        // Try to extract event details if it seems like a calendar request
+        if (isCalendarIntent && nlu.current.extractEventDetails) {
+          try {
+            const eventDetails = nlu.current.extractEventDetails(input, familyMembers);
+            if (eventDetails && eventDetails.startDate) {
+              setDetectedEventDetails(eventDetails);
+              setShowEventConfirmation(true);
+            }
+          } catch (eventError) {
+            console.log("Could not extract event details:", eventError);
+            // Proceed without event extraction
+          }
+        }
+        
         // Get AI response for normal messages
         const aiResponse = await EnhancedChatService.getAIResponse(
           input, 
@@ -595,6 +719,21 @@ const AllieChat = () => {
       } else {
         setInput(promptText);
       }
+    } else if (promptText.includes('event from invite')) {
+      // This is an event parsing prompt
+      setInput('I want to add an event from an invitation');
+      setShowEventParser(true);
+      
+      // Add a helper message
+      const helperMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I can help you add an event to your calendar from an invitation! Please paste the invitation text or upload a screenshot, and I'll extract the details for you.`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, helperMessage]);
     } else {
       setInput(promptText);
     }
@@ -640,6 +779,9 @@ const AllieChat = () => {
         // If we have a profile upload target, process the image
         if (profileUploadTarget) {
           handleImageFileFromMessage(file, profileUploadTarget.id);
+        } else if (showEventParser) {
+          // If we're in event parsing mode, try to extract event details
+          handleImageProcessForEvent(file);
         } else {
           setIsProcessingImage(false);
         }
@@ -968,6 +1110,51 @@ const AllieChat = () => {
                     Cancel
                   </button>
                 </div>
+              </div>
+            )}
+            
+            {/* Event Parser UI */}
+            {showEventParser && parsedEventDetails && (
+              <div className="bg-blue-50 p-3 rounded-lg ml-4">
+                <div className="mb-2 text-sm font-medium flex items-center">
+                  <Calendar size={14} className="mr-1 text-blue-600" />
+                  <span>I found an event! Would you like to add it to your calendar?</span>
+                </div>
+                
+                <EventConfirmationCard 
+                  event={parsedEventDetails}
+                  onConfirm={(event) => {
+                    // Add success message
+                    setMessages(prev => [...prev, {
+                      familyId,
+                      sender: 'allie',
+                      userName: 'Allie',
+                      text: `I've added "${event.title}" to your calendar on ${new Date(event.dateTime).toLocaleDateString()} at ${new Date(event.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.`,
+                      timestamp: new Date().toISOString()
+                    }]);
+                    
+                    // Close event parser
+                    setShowEventParser(false);
+                    setParsedEventDetails(null);
+                  }}
+                  onEdit={(updatedEvent) => {
+                    setParsedEventDetails(updatedEvent);
+                  }}
+                  onCancel={() => {
+                    setShowEventParser(false);
+                    setParsedEventDetails(null);
+                    
+                    // Add message that user cancelled
+                    setMessages(prev => [...prev, {
+                      familyId,
+                      sender: 'allie',
+                      userName: 'Allie',
+                      text: `No problem! I won't add that event to your calendar. Is there anything else I can help with?`,
+                      timestamp: new Date().toISOString()
+                    }]);
+                  }}
+                  familyId={familyId}
+                />
               </div>
             )}
             
