@@ -316,6 +316,8 @@ const AllieChat = () => {
       
       if (eventDetails) {
         // We successfully parsed an event
+        // Add source tracking for learning feedback
+        eventDetails.creationSource = 'text';
         setParsedEventDetails(eventDetails);
         setShowEventParser(true);
         setEventParsingSource('text');
@@ -394,9 +396,10 @@ const AllieChat = () => {
       
       if (eventDetails) {
         // We successfully parsed an event
-        setParsedEventDetails(eventDetails);
-        setShowEventParser(true);
-        setEventParsingSource('image');
+        eventDetails.creationSource = 'image';
+setParsedEventDetails(eventDetails);
+setShowEventParser(true);
+setEventParsingSource('image');
         
         // Add a message about what we found
         const infoMessage = {

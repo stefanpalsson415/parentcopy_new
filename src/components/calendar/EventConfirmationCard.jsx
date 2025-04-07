@@ -4,6 +4,8 @@ import { Calendar, MapPin, User, Users, Clock, CheckCircle, Edit, X, Info, Alert
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';  // Add this import
 import CalendarService from '../../services/CalendarService';
+import ParserFeedbackService from '../../services/ParserFeedbackService';
+
 
 const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId }) => {
   const { familyMembers } = useFamily();
@@ -111,9 +113,106 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
     setIsEditing(true);
   };
   
-  const handleUpdate = () => {
-    onEdit(editedEvent);
-    setIsEditing(false);
+  const handleUpdate = async () => {
+    try {
+      setPendingAction('update');
+      
+      if (!editedEvent || !editedEvent.firestoreId) {
+        CalendarService.showNotification("Cannot update this event - no valid ID found", "error");
+        setPendingAction(null);
+        return;
+      }
+      
+      // Preserve linkedEntity when updating
+      const linkedEntity = editedEvent.linkedEntity || selectedEvent?.linkedEntity;
+      
+      // Create updated event object
+      const updatedEvent = {
+        summary: editedEvent.title,
+        description: editedEvent.description || '',
+        location: editedEvent.location || 'TBD',
+        linkedEntity
+      };
+      
+      // Update date/time if changed
+      if (editedEvent.dateObj) {
+        updatedEvent.start = {
+          dateTime: editedEvent.dateObj.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        };
+        
+        // Calculate end time (preserve duration if available)
+        const duration = editedEvent.dateEndObj && selectedEvent.dateObj 
+          ? editedEvent.dateEndObj.getTime() - selectedEvent.dateObj.getTime()
+          : 60 * 60 * 1000; // Default 1 hour
+        
+        const endDate = new Date(editedEvent.dateObj.getTime() + duration);
+        
+        updatedEvent.end = {
+          dateTime: endDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        };
+      }
+      
+      // Update in Firestore
+      const docRef = doc(db, "calendar_events", editedEvent.firestoreId);
+      await updateDoc(docRef, updatedEvent);
+      
+      // Update local state
+      setAllEvents(prev => 
+        prev.map(event => 
+          event.firestoreId === editedEvent.firestoreId 
+            ? { ...event, ...editedEvent } 
+            : event
+        )
+      );
+      
+      // Close edit mode and update selected event
+      setIsEditingEvent(false);
+      setSelectedEvent({
+        ...selectedEvent,
+        ...editedEvent
+      });
+      
+      // NEW CODE: Record parser feedback if this was an AI-parsed event
+      if (selectedEvent.creationSource && 
+          (selectedEvent.creationSource === 'AI-parse-text' || 
+           selectedEvent.creationSource === 'text' ||
+           selectedEvent.creationSource === 'image' ||
+           selectedEvent.creationSource === 'voice')) {
+        
+        // Record the original text/parsing and the user's edits
+        const feedbackData = {
+          originalInput: selectedEvent.originalText || selectedEvent.description || "Unknown input",
+          initialParse: { ...selectedEvent },
+          userEdits: { ...editedEvent },
+          eventType: selectedEvent.eventType || 'general',
+          source: selectedEvent.creationSource,
+          familyId: familyId
+        };
+        
+        // Send feedback asynchronously (don't wait for result)
+        ParserFeedbackService.recordFeedback(feedbackData)
+          .then(result => {
+            if (result.success) {
+              console.log("Parser feedback recorded successfully:", result.id);
+            }
+          })
+          .catch(error => console.warn("Error recording parser feedback:", error));
+      }
+      
+      // Show notification
+      CalendarService.showNotification("Event updated successfully", "success");
+      
+      // Refresh events
+      setLastRefresh(Date.now());
+      
+      setPendingAction(null);
+    } catch (error) {
+      console.error("Error updating event:", error);
+      CalendarService.showNotification("Failed to update event: " + error.message, "error");
+      setPendingAction(null);
+    }
   };
   
   const handleInputChange = (field, value) => {

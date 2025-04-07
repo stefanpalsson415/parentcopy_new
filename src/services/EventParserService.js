@@ -56,24 +56,24 @@ class EventParserService {
       console.log("Extracted notes:", notes);
       
       // Create a structured event object
-      const eventDetails = {
-        eventType: eventType,
-        title: this.generateEventTitle(eventType, childInfo, birthdayInfo || hostInfo),
-        childId: childInfo.childId,
-        childName: childInfo.childName,
-        dateTime: dateTime,
-        location: location,
-        hostParent: hostInfo.name,
-        extraDetails: {
-          birthdayChildName: birthdayInfo?.name || hostInfo.birthdayChildName,
-          birthdayChildAge: birthdayInfo?.age || hostInfo.birthdayChildAge,
-          notes: notes
-        },
-        attendingParentId: null, // To be filled in by user
-        creationSource: 'AI-parse-text',
-        region: region, // Store the detected region for reference
-        originalText: text // Store original text for reference
-      };
+const eventDetails = {
+    eventType: eventType,
+    title: this.generateEventTitle(eventType, childInfo, birthdayInfo || hostInfo),
+    childId: childInfo.childId,
+    childName: childInfo.childName,
+    dateTime: dateTime,
+    location: location,
+    hostParent: hostInfo.name,
+    extraDetails: {
+      birthdayChildName: birthdayInfo?.name || hostInfo.birthdayChildName,
+      birthdayChildAge: birthdayInfo?.age || hostInfo.birthdayChildAge,
+      notes: notes
+    },
+    attendingParentId: null, // To be filled in by user
+    creationSource: 'AI-parse-text',
+    region: region, // Store the detected region for reference
+    originalText: text // Store original text for learning feedback
+  };
       
       return eventDetails;
     } catch (error) {
