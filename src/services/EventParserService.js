@@ -202,45 +202,129 @@ const eventDetails = {
   }
   
   detectEventType(text) {
+    // Handle null or empty input
+    if (!text) return 'event';
+    
     const text_lower = text.toLowerCase();
     
-    // Check for birthday indicators
-    if (text_lower.includes('birthday') || 
-        text_lower.includes('kalas') || 
-        text_lower.includes('fyller') ||
-        text_lower.includes('turning') ||
-        text_lower.includes('years old')) {
-      return 'birthday';
+    // Define event type patterns with confidence weights
+    const eventTypes = [
+      {
+        type: 'birthday',
+        patterns: ['birthday', 'kalas', 'fyller', 'turning', 'years old', 'celebration', 'cake', 'party for', 'year-old', 'år', 'födelsedag'],
+        confidence: 0
+      },
+      {
+        type: 'dental',
+        patterns: ['dentist', 'dental', 'teeth', 'tooth', 'orthodontist', 'braces', 'cleaning', 'checkup', 'cavity', 'tandläkare', 'tand'],
+        confidence: 0
+      },
+      {
+        type: 'doctor',
+        patterns: ['doctor', 'physician', 'pediatrician', 'medical', 'checkup', 'vaccination', 'shot', 'health', 'clinic', 'hospital', 'läkare', 'vaccination', 'hälsa'],
+        confidence: 0
+      },
+      {
+        type: 'playdate',
+        patterns: ['playdate', 'play date', 'lekträff', 'come over', 'play together', 'playgroup', 'play with us', 'come play', 'hang out'],
+        confidence: 0
+      },
+      {
+        type: 'sports',
+        patterns: ['practice', 'game', 'training', 'match', 'soccer', 'football', 'baseball', 'basketball', 'hockey', 'gym', 'swimming', 'tournament', 'competition', 'team', 'coach'],
+        confidence: 0
+      },
+      {
+        type: 'music',
+        patterns: ['music', 'lesson', 'recital', 'concert', 'piano', 'guitar', 'violin', 'band', 'orchestra', 'choir', 'singing', 'performance'],
+        confidence: 0
+      },
+      {
+        type: 'dance',
+        patterns: ['dance', 'ballet', 'jazz', 'tap', 'hip hop', 'choreography', 'studio', 'dancing', 'dancer', 'recital', 'performance'],
+        confidence: 0
+      },
+      {
+        type: 'school',
+        patterns: ['school', 'class', 'parent-teacher', 'conference', 'open house', 'field trip', 'pta', 'assembly', 'principal', 'teacher', 'classroom', 'skola', 'föräldramöte'],
+        confidence: 0
+      },
+      {
+        type: 'camp',
+        patterns: ['camp', 'summer', 'holiday', 'break', 'day camp', 'overnight', 'wilderness', 'retreat', 'program', 'adventure', 'outdoor'],
+        confidence: 0
+      },
+      {
+        type: 'tutoring',
+        patterns: ['tutor', 'tutoring', 'study', 'homework', 'help', 'academic', 'session', 'learning', 'education', 'teacher', 'mentor'],
+        confidence: 0
+      },
+      {
+        type: 'art',
+        patterns: ['art', 'craft', 'drawing', 'painting', 'pottery', 'creative', 'studio', 'workshop', 'project', 'supplies', 'museum', 'gallery', 'exhibition'],
+        confidence: 0
+      },
+      {
+        type: 'coding',
+        patterns: ['coding', 'programming', 'computer', 'tech', 'robotics', 'stem', 'science', 'minecraft', 'scratch', 'class', 'workshop', 'lab'],
+        confidence: 0
+      },
+      {
+        type: 'sleepover',
+        patterns: ['sleepover', 'overnight', 'stay over', 'sleeping bag', 'pajamas', 'spend the night', 'sleep at', 'staying at', 'pajama party'],
+        confidence: 0
+      },
+      {
+        type: 'family',
+        patterns: ['family', 'gathering', 'reunion', 'holiday', 'celebration', 'dinner', 'relative', 'aunt', 'uncle', 'grandparent', 'cousin', 'thanksgiving', 'christmas', 'easter'],
+        confidence: 0
+      },
+      {
+        type: 'religious',
+        patterns: ['church', 'synagogue', 'mosque', 'temple', 'worship', 'sunday school', 'youth group', 'bible', 'faith', 'prayer', 'religious', 'spiritual'],
+        confidence: 0
+      },
+      {
+        type: 'community',
+        patterns: ['community', 'volunteer', 'service', 'town', 'neighborhood', 'local', 'fair', 'festival', 'parade', 'charity', 'drive', 'donation'],
+        confidence: 0
+      }
+    ];
+  
+    // Calculate confidence scores based on pattern matches
+    eventTypes.forEach(eventType => {
+      eventType.patterns.forEach(pattern => {
+        if (text_lower.includes(pattern)) {
+          eventType.confidence += 1;
+          
+          // Boost confidence for exact matches or strong indicators
+          if (new RegExp(`\\b${pattern}\\b`, 'i').test(text_lower)) {
+            eventType.confidence += 0.5;
+          }
+        }
+      });
+    });
+  
+    // Sort by confidence score
+    eventTypes.sort((a, b) => b.confidence - a.confidence);
+    
+    // If we have a confident match (at least 1 match)
+    if (eventTypes[0].confidence >= 1) {
+      console.log(`Detected event type: ${eventTypes[0].type} with confidence ${eventTypes[0].confidence}`);
+      return eventTypes[0].type;
     }
     
-    // Check for appointment indicators
-    if (text_lower.includes('appointment') || 
-        text_lower.includes('doctor') || 
-        text_lower.includes('dentist') ||
-        text_lower.includes('läkare') ||
-        text_lower.includes('tandläkare')) {
-      return 'appointment';
+    // Map appointment types to more specific categories
+    if (text_lower.includes('appointment') || text_lower.includes('visit') || text_lower.includes('checkup')) {
+      if (text_lower.includes('dentist') || text_lower.includes('dental') || text_lower.includes('tooth') || text_lower.includes('teeth')) {
+        return 'dental';
+      }
+      if (text_lower.includes('doctor') || text_lower.includes('medical') || text_lower.includes('health') || text_lower.includes('pediatrician')) {
+        return 'doctor';
+      }
     }
     
-    // Check for playdate indicators
-    if (text_lower.includes('playdate') || 
-        text_lower.includes('play date') || 
-        text_lower.includes('lekträff')) {
-      return 'playdate';
-    }
-
-    // Check for sports/activity indicators
-    if (text_lower.includes('practice') || 
-        text_lower.includes('game') || 
-        text_lower.includes('training') ||
-        text_lower.includes('match') ||
-        text_lower.includes('soccer') ||
-        text_lower.includes('football') ||
-        text_lower.includes('gym')) {
-      return 'sports';
-    }
-    
-    // Default to other
+    // Default to generic event
     return 'event';
   }
   
@@ -430,26 +514,51 @@ const eventDetails = {
     }
     
     // If still no time found, set default based on event type
-    if (!timeFound) {
-      const eventType = this.detectEventType(text);
-      
-      switch (eventType) {
-        case 'birthday':
-          date.setHours(14, 0, 0, 0); // 2:00 PM default for birthdays
-          break;
-        case 'appointment':
-          date.setHours(10, 0, 0, 0); // 10:00 AM default for appointments
-          break;
-        case 'playdate':
-          date.setHours(15, 0, 0, 0); // 3:00 PM default for playdates
-          break;
-        case 'sports':
-          date.setHours(16, 0, 0, 0); // 4:00 PM default for sports
-          break;
-        default:
-          date.setHours(12, 0, 0, 0); // Noon default for other events
-      }
+    // If still no time found, set default based on event type
+if (!timeFound) {
+    const eventType = this.detectEventType(text);
+    
+    switch (eventType) {
+      case 'birthday':
+        date.setHours(14, 0, 0, 0); // 2:00 PM default for birthdays
+        break;
+      case 'doctor':
+      case 'dental':
+        date.setHours(10, 0, 0, 0); // 10:00 AM default for appointments
+        break;
+      case 'playdate':
+        date.setHours(15, 0, 0, 0); // 3:00 PM default for playdates
+        break;
+      case 'sports':
+        date.setHours(16, 0, 0, 0); // 4:00 PM default for sports
+        break;
+      case 'music':
+      case 'dance':
+      case 'art':
+      case 'coding':
+      case 'tutoring':
+        date.setHours(16, 30, 0, 0); // 4:30 PM default for after-school activities
+        break;
+      case 'school':
+        date.setHours(18, 0, 0, 0); // 6:00 PM default for school events
+        break;
+      case 'sleepover':
+        date.setHours(17, 0, 0, 0); // 5:00 PM default for sleepovers
+        break;
+      case 'family':
+      case 'religious':
+        date.setHours(10, 0, 0, 0); // 10:00 AM default for family/religious events (often weekend mornings)
+        break;
+      case 'community':
+        date.setHours(11, 0, 0, 0); // 11:00 AM default for community events
+        break;
+      case 'camp':
+        date.setHours(9, 0, 0, 0); // 9:00 AM default for camps
+        break;
+      default:
+        date.setHours(12, 0, 0, 0); // Noon default for other events
     }
+  }
     
     // Make sure the date is in the future
     const currentDate = new Date();

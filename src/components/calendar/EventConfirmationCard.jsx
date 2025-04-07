@@ -17,6 +17,7 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
   const [attendingParent, setAttendingParent] = useState(event.attendingParentId || 'undecided');
   const [selectedSiblings, setSelectedSiblings] = useState([]);
   const [pendingAction, setPendingAction] = useState(null);
+  const [showSuccess, setShowSuccess] = useState(false);
   
   const parents = familyMembers.filter(m => m.role === 'parent');
   const children = familyMembers.filter(m => m.role === 'child');
@@ -141,7 +142,13 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
         }
-        onConfirm(finalEvent);
+        
+        // Show success animation
+        setShowSuccess(true);
+        setTimeout(() => {
+          setShowSuccess(false);
+          onConfirm(finalEvent);
+        }, 1500);
       } else {
         setError(result.error || "Failed to save event");
       }
@@ -258,32 +265,40 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
   };
   
   const getEventTypeBadge = () => {
-    switch(editedEvent.eventType) {
-      case 'birthday':
-        return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-          Birthday
-        </span>;
-      case 'playdate':
-        return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-          Playdate
-        </span>;
-      case 'sports':
-        return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-          Sports
-        </span>;
-      case 'appointment':
-        return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-          Appointment
-        </span>;
-      default:
-        return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-          Event
-        </span>;
-    }
+    const eventType = editedEvent.eventType || 'event';
+    const typeConfig = {
+      'birthday': { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Birthday', icon: '🎂' },
+      'doctor': { bg: 'bg-red-100', text: 'text-red-800', label: 'Doctor', icon: '👨‍⚕️' },
+      'dental': { bg: 'bg-red-100', text: 'text-red-800', label: 'Dental', icon: '🦷' },
+      'playdate': { bg: 'bg-green-100', text: 'text-green-800', label: 'Playdate', icon: '👭' },
+      'sports': { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Sports', icon: '🏀' },
+      'music': { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Music', icon: '🎵' },
+      'dance': { bg: 'bg-pink-100', text: 'text-pink-800', label: 'Dance', icon: '💃' },
+      'school': { bg: 'bg-amber-100', text: 'text-amber-800', label: 'School', icon: '🏫' },
+      'art': { bg: 'bg-teal-100', text: 'text-teal-800', label: 'Art', icon: '🎨' },
+      'coding': { bg: 'bg-cyan-100', text: 'text-cyan-800', label: 'Coding', icon: '💻' },
+      'tutoring': { bg: 'bg-lime-100', text: 'text-lime-800', label: 'Tutoring', icon: '📚' },
+      'camp': { bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'Camp', icon: '⛺' },
+      'sleepover': { bg: 'bg-indigo-100', text: 'text-indigo-800', label: 'Sleepover', icon: '🛌' },
+      'family': { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Family', icon: '👪' },
+      'religious': { bg: 'bg-slate-100', text: 'text-slate-800', label: 'Religious', icon: '🙏' },
+      'community': { bg: 'bg-rose-100', text: 'text-rose-800', label: 'Community', icon: '🌱' },
+      'appointment': { bg: 'bg-red-100', text: 'text-red-800', label: 'Appointment', icon: '🩺' },
+      'event': { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Event', icon: '📅' }
+    };
+    
+    const config = typeConfig[eventType] || typeConfig['event'];
+    
+    return (
+      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
+        <span className="mr-1">{config.icon}</span>
+        {config.label}
+      </span>
+    );
   };
   
   return (
-    <div className="p-4">
+    <div className="p-4 font-roboto">
       <div className="mb-3 flex items-center">
         <CheckCircle size={18} className="mr-2 text-green-500" />
         <h3 className="text-lg font-medium">Event Details {getEventTypeBadge()}</h3>
@@ -615,6 +630,21 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
               <CheckCircle size={14} className="mr-1 inline" />
               Update
             </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Success animation */}
+      {showSuccess && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-20">
+          <div className="bg-white rounded-lg p-6 shadow-lg transform transition-all duration-500 ease-out scale-100 opacity-100 animate-bounce">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-3">
+                <CheckCircle className="h-8 w-8 text-green-500" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-1">Event Added!</h3>
+              <p className="text-sm text-gray-500">Successfully added to your calendar</p>
+            </div>
           </div>
         </div>
       )}
