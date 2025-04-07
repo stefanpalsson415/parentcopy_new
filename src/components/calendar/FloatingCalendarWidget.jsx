@@ -241,36 +241,38 @@ useEffect(() => {
   }, [isOpen, familyId, lastRefresh, selectedDate]);
 
   // In FloatingCalendarWidget.jsx - Update the event listener
-useEffect(() => {
-  // Function to reload events with enhanced logging
-  const refreshEvents = (e) => {
-    console.log("Calendar event refresh triggered", e?.type || 'manual refresh', e?.detail || {});
+  useEffect(() => {
+    // Function to reload events with enhanced logging
+    const refreshEvents = (e) => {
+      console.log("Calendar event refresh triggered", e?.type || 'manual refresh', e?.detail || {});
+      
+      // Clear event cache to ensure fresh data
+      setEventCache(new Set());
+      
+      // Force immediate refresh
+      setLastRefresh(Date.now());
+      
+      // Rebuild event cache after a brief delay to ensure Firestore has updated
+      setTimeout(() => {
+        buildEventCache();
+      }, 500);
+    };
     
-    // Clear event cache to ensure fresh data
-    setEventCache(new Set());
+    // Set up event listeners for all event types
+    window.addEventListener('calendar-event-added', refreshEvents);
+    window.addEventListener('calendar-child-event-added', refreshEvents); // Added this listener
+    window.addEventListener('force-calendar-refresh', refreshEvents);
     
-    // Force immediate refresh
-    setLastRefresh(Date.now());
+    // Log that we've set up the listeners
+    console.log("Calendar event listeners initialized");
     
-    // Rebuild event cache after a brief delay to ensure Firestore has updated
-    setTimeout(() => {
-      buildEventCache();
-    }, 500);
-  };
-  
-  // Set up event listeners for both event types
-  window.addEventListener('calendar-event-added', refreshEvents);
-  window.addEventListener('force-calendar-refresh', refreshEvents);
-  
-  // Log that we've set up the listeners
-  console.log("Calendar event listeners initialized");
-  
-  // Clean up
-  return () => {
-    window.removeEventListener('calendar-event-added', refreshEvents);
-    window.removeEventListener('force-calendar-refresh', refreshEvents);
-  };
-}, []);
+    // Clean up
+    return () => {
+      window.removeEventListener('calendar-event-added', refreshEvents);
+      window.removeEventListener('calendar-child-event-added', refreshEvents); // Added this cleanup
+      window.removeEventListener('force-calendar-refresh', refreshEvents);
+    };
+  }, []);
   
   // Drag to resize functionality
   useEffect(() => {

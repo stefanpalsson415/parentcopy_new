@@ -61,8 +61,8 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
         userId: currentUserId
       };
       
-      // Handle siblings
-      if (selectedSiblings.length > 0) {
+      // Only add siblingIds if siblings are selected
+      if (selectedSiblings && selectedSiblings.length > 0) {
         finalEvent.siblingIds = selectedSiblings;
         
         // Add siblings' names for display purposes
@@ -72,31 +72,75 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
         }).filter(Boolean);
       }
       
-      // Add the event to the calendar
-      const result = await CalendarService.addChildEvent(finalEvent, currentUserId);
+      // Convert to format expected by addEvent method
+      let calendarEvent = {
+        summary: finalEvent.title,
+        title: finalEvent.title, // Include both for compatibility
+        description: finalEvent.description || `Event for ${finalEvent.childName}`,
+        location: finalEvent.location || '',
+        start: {
+          dateTime: new Date(finalEvent.dateTime).toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: new Date(new Date(finalEvent.dateTime).getTime() + 3600000).toISOString(), // Add 1 hour
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        // Add metadata
+        category: finalEvent.eventType || 'event',
+        childId: finalEvent.childId,
+        childName: finalEvent.childName,
+        eventType: finalEvent.eventType || 'general',
+        extraDetails: finalEvent.extraDetails || {},
+        attendingParentId: finalEvent.attendingParentId,
+        familyId: familyId,
+      };
       
-      // If additional events should be created for siblings, handle that
-      if (selectedSiblings.length > 0 && result.success) {
+      // Only add siblingIds if they exist and have values
+      if (finalEvent.siblingIds && finalEvent.siblingIds.length > 0) {
+        calendarEvent.siblingIds = finalEvent.siblingIds;
+        calendarEvent.siblingNames = finalEvent.siblingNames;
+      }
+      
+      // Clean the object - remove any undefined values
+      calendarEvent = Object.fromEntries(
+        Object.entries(calendarEvent).filter(([_, value]) => value !== undefined)
+      );
+      
+      // Add the event to the calendar using addEvent instead of addChildEvent
+      const result = await CalendarService.addEvent(calendarEvent, currentUserId);
+      
+      // If siblings are selected, create separate events for them too
+      if (selectedSiblings && selectedSiblings.length > 0 && result.success) {
         for (const siblingId of selectedSiblings) {
           const sibling = children.find(c => c.id === siblingId);
           if (sibling) {
-            const siblingEvent = {
-              ...finalEvent,
+            let siblingEvent = {
+              ...calendarEvent,
               childId: siblingId,
               childName: sibling.name,
-              // Explicitly include the user ID
-              userId: currentUserId,
-              // No need to duplicate sibling information for sibling's own event
+              summary: calendarEvent.summary.replace(finalEvent.childName, sibling.name),
+              title: calendarEvent.title.replace(finalEvent.childName, sibling.name),
+              // Don't include siblingIds in the sibling's own event
               siblingIds: undefined,
               siblingNames: undefined
             };
             
-            await CalendarService.addChildEvent(siblingEvent, currentUserId);
+            // Clean the object - remove any undefined values
+            siblingEvent = Object.fromEntries(
+              Object.entries(siblingEvent).filter(([_, value]) => value !== undefined)
+            );
+            
+            await CalendarService.addEvent(siblingEvent, currentUserId);
           }
         }
       }
       
       if (result.success) {
+        // Dispatch a force refresh event to ensure calendar reloads
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        }
         onConfirm(finalEvent);
       } else {
         setError(result.error || "Failed to save event");
