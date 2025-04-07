@@ -1117,6 +1117,20 @@ const selectPersonalizedInitialQuestions = (fullQuestionSet, familyData, targetC
   const getBalanceQuestions = () => {
     return fullQuestionSet.filter(q => q.isBalanceQuestion === true);
   };
+  
+  // NEW: Get filtered questions for specific child (excluding questions marked as not applicable)
+  const getFilteredQuestionsForChild = async (childId, familyId, baseQuestions) => {
+    try {
+      // Get questions to exclude based on previous feedback
+      const questionIdsToExclude = await QuestionFeedbackService.getQuestionsToExclude(familyId, childId);
+      
+      // Filter out questions that were marked as not applicable
+      return baseQuestions.filter(question => !questionIdsToExclude.includes(question.id));
+    } catch (error) {
+      console.error("Error filtering questions for child:", error);
+      return baseQuestions; // Return original questions on error
+    }
+  };
 
   // Update the context value
 const value = {
@@ -1147,6 +1161,8 @@ const value = {
   getEmotionalLaborQuestions,
   getChildDevelopmentQuestions,
   getBalanceQuestions,
+  // NEW: Add function to get filtered questions for children
+  getFilteredQuestionsForChild,
   // Share family priorities with other components
   familyPriorities: {
     highestPriority: "Invisible Parental Tasks",
