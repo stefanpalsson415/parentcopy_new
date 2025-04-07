@@ -2167,82 +2167,137 @@ const ChildrenTrackingTab = () => {
   };
   
   // Render routines section
-  const renderRoutinesSection = () => {
-    if (!expandedSections.routines) {
-      return null;
-    }
-    
-    const children = familyMembers.filter(member => member.role === 'child');
-    
-    if (children.length === 0) {
-      return (
-        <div className="text-center p-4 bg-gray-50 rounded-lg">
-          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
-        </div>
-      );
-    }
-    
-    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
-    
+  // The routines section should look like this - modify the renderRoutinesSection function:
+
+const renderRoutinesSection = () => {
+  if (!expandedSections.routines) {
+    return null;
+  }
+  
+  const children = familyMembers.filter(member => member.role === 'child');
+  
+  if (children.length === 0) {
     return (
-      <div className="space-y-6 p-4 bg-white rounded-lg">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium font-roboto">Daily Routines & Activities</h3>
-          <div className="flex space-x-2">
-            <button
-              className="p-2 rounded-md hover:bg-gray-100"
-              onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
-              title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
-            >
-              {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
-            </button>
-            <button 
-              className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
-              onClick={() => {
-                if (activeChild) {
-                  openModal('routine', {
+      <div className="text-center p-4 bg-gray-50 rounded-lg">
+        <p className="text-gray-500 font-roboto">No children added to your family yet</p>
+      </div>
+    );
+  }
+  
+  const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
+  
+  return (
+    <div className="space-y-6 p-4 bg-white rounded-lg">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-medium font-roboto">Daily Routines & Activities</h3>
+        <div className="flex space-x-2">
+          <button
+            className="p-2 rounded-md hover:bg-gray-100"
+            onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
+            title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
+          >
+            {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
+          </button>
+          <button 
+            className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
+            onClick={() => {
+              if (activeChild) {
+                openModal('routine', {
+                  title: '',
+                  days: [],
+                  startTime: '08:00',
+                  endTime: '',
+                  notes: '',
+                  childId: activeChild
+                });
+              } else {
+                setAllieMessage({
+                  type: 'warning',
+                  text: 'Please select a child first before adding a routine.'
+                });
+              }
+            }}
+          >
+            <Plus size={20} />
+          </button>
+        </div>
+      </div>
+      
+      <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
+        {filteredChildren.map(child => (
+          <div key={child.id} className="bg-white rounded-lg shadow p-4">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center">
+                <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
+                  <img 
+                    src={child.profilePicture || '/api/placeholder/40/40'} 
+                    alt={child.name} 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div>
+                  <h4 className="font-medium font-roboto text-lg">{child.name}'s Routines</h4>
+                  <p className="text-sm text-gray-500 font-roboto">
+                    {childrenData[child.id]?.routines?.length || 0} routines
+                  </p>
+                </div>
+              </div>
+              <div className="flex space-x-2">
+                <button 
+                  className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
+                  onClick={() => openModal('routine', {
                     title: '',
                     days: [],
                     startTime: '08:00',
                     endTime: '',
                     notes: '',
-                    childId: activeChild
-                  });
-                } else {
-                  setAllieMessage({
-                    type: 'warning',
-                    text: 'Please select a child first before adding a routine.'
-                  });
-                }
-              }}
-            >
-              <Plus size={20} />
-            </button>
-          </div>
-        </div>
-        
-        <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
-          {filteredChildren.map(child => (
-            <div key={child.id} className={`bg-white
-
-                <div className="flex items-center">
-                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
-                    <img 
-                      src={child.profilePicture || '/api/placeholder/40/40'} 
-                      alt={child.name} 
-                      className="w-full h-full object-cover"
-                    />
+                    childId: child.id
+                  })}
+                >
+                  <PlusCircle size={14} className="mr-1" />
+                  Add Routine
+                </button>
+              </div>
+            </div>
+            
+            {/* Routines list */}
+            <div className="space-y-3 mt-4">
+              {childrenData[child.id]?.routines?.length > 0 ? (
+                childrenData[child.id].routines.map(routine => (
+                  <div key={routine.id} className="border rounded-lg p-3 hover:bg-gray-50">
+                    <div className="flex justify-between">
+                      <div>
+                        <h5 className="font-medium text-sm font-roboto">{routine.title}</h5>
+                        <p className="text-xs text-gray-600 font-roboto">
+                          {routine.days.join(', ')} at {routine.startTime}
+                          {routine.endTime ? ` - ${routine.endTime}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button 
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                          onClick={() => openModal('routine', {...routine, childId: child.id})}
+                        >
+                          <Edit size={16} />
+                        </button>
+                        <button 
+                          className="p-1 text-red-600 hover:bg-red-50 rounded"
+                          onClick={() => handleRemoveItem('routine', child.id, routine.id)}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                    {routine.notes && (
+                      <p className="text-xs mt-1 text-gray-600 font-roboto">{routine.notes}</p>
+                    )}
                   </div>
-                  <div>
-                    <h4 className="font-medium font-roboto text-lg">{child.name}'s Routines</h4>
-                    <p className="text-sm text-gray-500 font-roboto">
-                      {childrenData[child.id]?.routines?.length || 0} routines
-                    </p>
-                  </div>
-                </div>
-                <div className="flex space-x-2">
+                ))
+              ) : (
+                <div className="text-center p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-500 font-roboto">No routines added yet</p>
                   <button 
-                    className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
+                    className="mt-2 px-3 py-1 bg-blue-500 text-white rounded-md text-sm font-roboto"
                     onClick={() => openModal('routine', {
                       title: '',
                       days: [],
@@ -2252,70 +2307,17 @@ const ChildrenTrackingTab = () => {
                       childId: child.id
                     })}
                   >
-                    <PlusCircle size={14} className="mr-1" />
-                    Add Routine
+                    Add First Routine
                   </button>
                 </div>
-              </div>
-              
-              {/* Routines list */}
-              <div className="space-y-3 mt-4">
-                {childrenData[child.id]?.routines?.length > 0 ? (
-                  childrenData[child.id].routines.map(routine => (
-                    <div key={routine.id} className="border rounded-lg p-3 hover:bg-gray-50">
-                      <div className="flex justify-between">
-                        <div>
-                          <h5 className="font-medium text-sm font-roboto">{routine.title}</h5>
-                          <p className="text-xs text-gray-600 font-roboto">
-                            {routine.days.join(', ')} at {routine.startTime}
-                            {routine.endTime ? ` - ${routine.endTime}` : ''}
-                          </p>
-                        </div>
-                        <div className="flex space-x-2">
-                          <button 
-                            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                            onClick={() => openModal('routine', {...routine, childId: child.id})}
-                          >
-                            <Edit size={16} />
-                          </button>
-                          <button 
-                            className="p-1 text-red-600 hover:bg-red-50 rounded"
-                            onClick={() => handleRemoveItem('routine', child.id, routine.id)}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </div>
-                      {routine.notes && (
-                        <p className="text-xs mt-1 text-gray-600 font-roboto">{routine.notes}</p>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-500 font-roboto">No routines added yet</p>
-                    <button 
-                      className="mt-2 px-3 py-1 bg-blue-500 text-white rounded-md text-sm font-roboto"
-                      onClick={() => openModal('routine', {
-                        title: '',
-                        days: [],
-                        startTime: '08:00',
-                        endTime: '',
-                        notes: '',
-                        childId: child.id
-                      })}
-                    >
-                      Add First Routine
-                    </button>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
-    );
-  };
+    </div>
+  );
+};
   
   // Render AI insights section
   const renderInsightsSection = () => {
