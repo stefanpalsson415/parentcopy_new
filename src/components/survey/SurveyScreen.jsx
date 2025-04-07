@@ -96,73 +96,89 @@ const SurveyScreen = ({ mode = 'initial' }) => {
   }, [selectedUser, currentWeek, navigate, mode]);
 
   // Load appropriate questions based on mode
-  useEffect(() => {
-    if (familyId && selectedUser && !isPersonalizationLoaded) {
-      console.log(`Loading ${mode} questions for user:`, selectedUser.id, "in family:", familyId);
+  // Load appropriate questions based on mode
+useEffect(() => {
+  if (familyId && selectedUser && !isPersonalizationLoaded) {
+    console.log(`Loading ${mode} questions for user:`, selectedUser.id, "in family:", familyId);
+    
+    // Create a family data object for personalization
+    const familyData = {
+      familyName: familyName,
+      familyId: familyId,
+      parents: familyMembers.filter(m => m.role === 'parent').map(p => ({
+        name: p.name,
+        role: p.roleType || 'parent'
+      })),
+      children: familyMembers.filter(m => m.role === 'child').map(c => ({
+        name: c.name,
+        age: c.age || 10
+      })),
+      priorities: familyPriorities,
+      communication: { style: "open" } // Default communication style
+    };
+    
+    // Set the family data in survey context
+    setFamilyData(familyData);
+    
+    if (mode === 'initial') {
+      // Generate personalized questions for initial survey
+      const personalized = selectPersonalizedInitialQuestions(fullQuestionSet, familyData);
       
-      // Create a family data object for personalization
-      const familyData = {
-        familyName: familyName,
-        familyId: familyId,
-        parents: familyMembers.filter(m => m.role === 'parent').map(p => ({
-          name: p.name,
-          role: p.roleType || 'parent'
-        })),
-        children: familyMembers.filter(m => m.role === 'child').map(c => ({
-          name: c.name,
-          age: c.age || 10
-        })),
-        priorities: familyPriorities,
-        communication: { style: "open" } // Default communication style
+      // Apply feedback filter to remove inapplicable questions
+      const loadFilteredQuestions = async () => {
+        try {
+          const filteredQuestions = await getFilteredQuestionsForAdult(familyId, personalized);
+          console.log("Generated personalized questions:", filteredQuestions.length);
+          setPersonalizedQuestions(filteredQuestions);
+          setIsPersonalizationLoaded(true);
+        } catch (error) {
+          console.error("Error filtering questions:", error);
+          // Fallback to unfiltered questions
+          setPersonalizedQuestions(personalized);
+          setIsPersonalizationLoaded(true);
+        }
       };
       
-      // Set the family data in survey context
-      setFamilyData(familyData);
-      
-      if (mode === 'initial') {
-        // Generate personalized questions for initial survey
-        const personalized = selectPersonalizedInitialQuestions(fullQuestionSet, familyData);
-        
-        // Apply feedback filter to remove inapplicable questions
-        const loadFilteredQuestions = async () => {
-          try {
-            const filteredQuestions = await getFilteredQuestionsForAdult(familyId, personalized);
-            console.log("Generated personalized questions:", filteredQuestions.length);
-            setPersonalizedQuestions(filteredQuestions);
-            setIsPersonalizationLoaded(true);
-          } catch (error) {
-            console.error("Error filtering questions:", error);
-            // Fallback to unfiltered questions
-            setPersonalizedQuestions(personalized);
-            setIsPersonalizationLoaded(true);
-          }
-        };
-        
-        loadFilteredQuestions();
-      } else if (mode === 'weekly') {
-        // Generate weekly questions
+      loadFilteredQuestions();
+    } else if (mode === 'weekly') {
+      // Generate weekly questions with enhanced error handling
+      try {
         const weeklyQuestions = generateWeeklyQuestions(currentWeek);
-        setPersonalizedQuestions(weeklyQuestions);
-        setIsPersonalizationLoaded(true);
+        console.log(`Generated ${weeklyQuestions?.length || 0} weekly questions for week ${currentWeek}`);
         
-        console.log(`Generated ${weeklyQuestions.length} weekly questions for week ${currentWeek}`);
+        if (!weeklyQuestions || weeklyQuestions.length === 0) {
+          console.error("No weekly questions generated, using fallback");
+          // Fallback to a subset of full questions if weekly generation fails
+          const fallbackQuestions = fullQuestionSet.slice(0, 20);
+          setPersonalizedQuestions(fallbackQuestions);
+        } else {
+          setPersonalizedQuestions(weeklyQuestions);
+        }
+        setIsPersonalizationLoaded(true);
+      } catch (error) {
+        console.error("Error generating weekly questions:", error);
+        // Fallback to a subset of full questions
+        const fallbackQuestions = fullQuestionSet.slice(0, 20);
+        setPersonalizedQuestions(fallbackQuestions);
+        setIsPersonalizationLoaded(true);
       }
     }
-  }, [
-    familyId, 
-    selectedUser, 
-    familyMembers, 
-    familyName, 
-    familyPriorities, 
-    fullQuestionSet, 
-    isPersonalizationLoaded, 
-    mode, 
-    currentWeek,
-    selectPersonalizedInitialQuestions, 
-    setFamilyData, 
-    getFilteredQuestionsForAdult,
-    generateWeeklyQuestions
-  ]);
+  }
+}, [
+  familyId, 
+  selectedUser, 
+  familyMembers, 
+  familyName, 
+  familyPriorities, 
+  fullQuestionSet, 
+  isPersonalizationLoaded, 
+  mode, 
+  currentWeek,
+  selectPersonalizedInitialQuestions, 
+  setFamilyData, 
+  getFilteredQuestionsForAdult,
+  generateWeeklyQuestions
+]);
   
   // Show AllieChat after component mounts
   useEffect(() => {
@@ -451,7 +467,7 @@ const SurveyScreen = ({ mode = 'initial' }) => {
       setTimeout(() => {
         // Get the right questions array
         const questionsArray = personalizedQuestions.length > 0 ? 
-          personalizedQuestions : (mode === 'initial' ? fullQuestionSet : []);
+  personalizedQuestions : (mode === 'initial' ? fullQuestionSet : generateWeeklyQuestions(currentWeek));
           
         if (currentQuestionIndex < questionsArray.length - 1) {
           setCurrentQuestionIndex(currentQuestionIndex + 1);
