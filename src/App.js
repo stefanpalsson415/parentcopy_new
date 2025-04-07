@@ -5,6 +5,7 @@ import { FamilyProvider } from './contexts/FamilyContext';
 import { SurveyProvider } from './contexts/SurveyContext';
 import { useFamily } from './contexts/FamilyContext';
 import AboutUsPage from './components/marketing/AboutUsPage';
+import FamilyMemory from './components/marketing/FamilyMemoryPage';
 import HowThisWorksScreen from './components/education/HowThisWorksScreen';
 import ProductOverviewPage from './components/marketing/ProductOverviewPage'; 
 import BlogHomePage from './components/blog/BlogHomePage';
@@ -69,6 +70,7 @@ function AppRoutes() {
         <Route path="/relationship-features" element={<RelationshipFeaturesPage />} />
         <Route path="/ai-assistant" element={<AIAssistantPage />} />
         <Route path="/about-us" element={<AboutUsPage />} />
+        <Route path="/family-memory" element={<FamilyMemory />} />
         <Route path="/product-overview" element={<ProductOverviewPage />} />
         <Route path="/blog" element={<BlogHomePage />} />
         <Route path="/blog/:slug" element={<BlogArticlePage />} />

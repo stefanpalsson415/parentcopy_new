@@ -5,8 +5,8 @@ import {
   ArrowRight, Calendar, Heart, Star, BarChart, 
   Users, Check, Clock, Search, List, AlertTriangle,
   RefreshCw, Code, BookOpen, Database, FileText,
-  Upload, Camera, Smartphone, Layers, BookOpen,
-  DownloadCloud, Eye, Cpu, Sparkles, Lightning, PenTool
+  Upload, Camera, Smartphone, Layers, 
+  DownloadCloud, Eye, Cpu, Sparkles, PenTool
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -142,7 +142,7 @@ const AIAssistantPage = () => {
                 </div>
                 <div className="flex items-start">
                   <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mr-3">
-                    <Lightning className="text-blue-600" size={16} />
+                    <Zap className="text-blue-600" size={16} />
                   </div>
                   <div>
                     <p className="font-medium">Context Awareness</p>

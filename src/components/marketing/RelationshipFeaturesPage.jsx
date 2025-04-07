@@ -6,7 +6,7 @@ import {
   BookOpen, Users, Smile, Activity, Zap, RefreshCw,
   ArrowRight, FileText, CheckCircle, PieChart, Layout,
   UploadCloud, Search, Bookmark, Bell, Target, Layers,
-  Repeat, MoreHorizontal, Cpu, Shield, MicrophoneIcon as Microphone,
+  Repeat, MoreHorizontal, Cpu, Shield, Mic,
   Camera, Smartphone, ArrowUpRight
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -831,7 +831,7 @@ const FamilyCommandCenterPage = () => {
           <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 mb-12">
             <div className="flex flex-col md:flex-row items-center mb-6">
               <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mb-4 md:mb-0 md:mr-4 flex-shrink-0">
-                <Microphone className="text-purple-600" size={24} />
+                <Mic className="text-purple-600" size={24} />
               </div>
               <div>
                 <h3 className="text-xl font-medium mb-1 text-center md:text-left">Voice Command Integration</h3>
@@ -842,7 +842,7 @@ const FamilyCommandCenterPage = () => {
             <div className="grid md:grid-cols-2 gap-4">
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h4 className="font-medium text-sm mb-3 flex items-center">
-                  <Microphone size={16} className="text-purple-600 mr-2" />
+                  <Mic size={16} className="text-purple-600 mr-2" />
                   Say This...
                 </h4>
                 <div className="space-y-3">
@@ -892,7 +892,7 @@ const FamilyCommandCenterPage = () => {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="text-center">
                   <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-2">
-                    <Microphone className="text-gray-600" size={20} />
+                    <Mic className="text-gray-600" size={20} />
                   </div>
                   <p className="text-sm font-medium">Voice</p>
                 </div>
@@ -940,62 +940,7 @@ const FamilyCommandCenterPage = () => {
         </div>
       </section>
       
-      {/* Testimonials */}
-      <section className="py-20 bg-black text-white">
-        <div className="max-w-4xl mx-auto px-6">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-light mb-4">Families in Command</h2>
-            <p className="text-xl text-gray-400 font-light max-w-2xl mx-auto">
-              How real families use the Command Center to transform their daily lives
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="bg-gray-800 p-6 rounded-lg">
-              <div className="mb-4">
-                <Star className="text-yellow-400 inline-block" size={20} />
-                <Star className="text-yellow-400 inline-block" size={20} />
-                <Star className="text-yellow-400 inline-block" size={20} />
-                <Star className="text-yellow-400 inline-block" size={20} />
-                <Star className="text-yellow-400 inline-block" size={20} />
-              </div>
-              <p className="text-gray-300 mb-4">
-                "Having all our children's information in one place with smart reminders has been life-changing. The Document Command saved us when we needed immunization records late at night for a school trip the next day."
-              </p>
-              <p className="font-medium">Jennifer, mother of three</p>
-            </div>
             
-            <div className="bg-gray-800 p-6 rounded-lg">
-              <div className="mb-4">
-                <Star className="text-yellow-400 inline-block" size={20} />
-                <Star className="text-yellow-400 inline-block" size={20} />
-                <Star className="text-yellow-400 inline-block" size={20} />
-                <Star className="text-yellow-400 inline-block" size={20} />
-                <Star className="text-yellow-400 inline-block" size={20} />
-              </div>
-              <p className="text-gray-300 mb-4">
-                "The Relationship Command transformed how we manage household responsibilities. Seeing the data didn't lie—I was handling 76% of planning. Visualizing it changed everything and our connection has improved dramatically."
-              </p>
-              <p className="font-medium">David, father of two</p>
-            </div>
-            
-            <div className="bg-gray-800 p-6 rounded-lg">
-              <div className="mb-4">
-                <Star className="text-yellow-400 inline-block" size={20} />
-                <Star className="text-yellow-400 inline-block" size={20} />
-                <Star className="text-yellow-400 inline-block" size={20} />
-                <Star className="text-yellow-400 inline-block" size={20} />
-                <Star className="text-yellow-400 inline-block" size={20} />
-              </div>
-              <p className="text-gray-300 mb-4">
-                "I uploaded a pediatrician's note about my child's medication through chat. Six months later, I asked Allie about the dosage and it immediately pulled up the exact information along with the original document."
-              </p>
-              <p className="font-medium">Michelle, mother of two</p>
-            </div>
-          </div>
-        </div>
-      </section>
-      
       {/* CTA Section */}
       <section className="py-16 bg-purple-600 text-white">
         <div className="max-w-4xl mx-auto px-6 text-center">
