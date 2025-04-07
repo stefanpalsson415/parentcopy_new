@@ -32,9 +32,6 @@ const SimpleIllustrations = {
   )
 };
 
-const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
-
-
 // Enhanced helper function to simplify questions for kids of different ages
 const simplifyQuestionForChild = (question, childAge) => {
   if (!question) return "Who does this in your family?";
@@ -155,7 +152,8 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
     completeInitialSurvey,
     completeWeeklyCheckIn,
     saveSurveyProgress,
-    currentWeek 
+    currentWeek,
+    familyId 
   } = useFamily();
   
   // State
@@ -166,7 +164,8 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   const [questions, setQuestions] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showAllieChat, setShowAllieChat] = useState(false); // State for AllieChat
+  const [showAllieChat, setShowAllieChat] = useState(false);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
   
   // Refs
   const questionTimerRef = useRef(null);
@@ -254,6 +253,8 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   // Set up questions for kids based on survey type - Ensure exactly 50 questions with NO DUPLICATES
   useEffect(() => {
     if (!fullQuestionSet || fullQuestionSet.length === 0) return;
+    
+    setIsLoadingQuestions(true);
     
     let questionSet;
     
@@ -362,6 +363,8 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
     } else {
       setQuestions(questionSet || []);
     }
+    
+    setIsLoadingQuestions(false);
   }, [fullQuestionSet, selectedUser, surveyType, currentWeek, generateWeeklyQuestions]);
   
   // Set up auto-save timer
@@ -476,46 +479,45 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUser, questions.length]);
   
-  // Then update the handleQuestionFeedback function
-const handleQuestionFeedback = async (feedbackType) => {
-  if (isProcessing) return; // Prevent actions while processing
-  
-  setIsProcessing(true);
-  
-  try {
-    // Create feedback object
-    const feedback = {
-      questionId: currentQuestion.id,
-      questionText: currentQuestion.text,
-      childText: currentQuestion.childText,
-      feedbackType: feedbackType,
-      category: currentQuestion.category,
-      childAge: selectedUser?.age,
-      childId: selectedUser?.id,
-      familyId: familyId
-    };
+  // Handle question feedback when a question doesn't apply
+  const handleQuestionFeedback = async (feedbackType) => {
+    if (isProcessing) return; // Prevent actions while processing
     
-    console.log("Sending question feedback:", feedback);
+    setIsProcessing(true);
     
-    // Send feedback to our service
-    await QuestionFeedbackService.recordQuestionFeedback(feedback);
-    
-    // Skip to the next question
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(prevIndex => prevIndex + 1);
-      setSelectedParent(null);
-      setShowExplanation(false);
-    } else {
-      // Last question, complete the survey
-      handleCompleteSurvey();
+    try {
+      // Create feedback object
+      const feedback = {
+        questionId: currentQuestion.id,
+        questionText: currentQuestion.text,
+        childText: currentQuestion.childText,
+        feedbackType: feedbackType,
+        category: currentQuestion.category,
+        childAge: selectedUser?.age,
+        childId: selectedUser?.id,
+        familyId: familyId
+      };
+      
+      console.log("Sending question feedback:", feedback);
+      
+      // Send feedback to our service
+      await QuestionFeedbackService.recordQuestionFeedback(feedback);
+      
+      // Skip to the next question
+      if (currentQuestionIndex < questions.length - 1) {
+        setCurrentQuestionIndex(prevIndex => prevIndex + 1);
+        setSelectedParent(null);
+        setShowExplanation(false);
+      } else {
+        // Last question, complete the survey
+        handleCompleteSurvey();
+      }
+    } catch (error) {
+      console.error("Error sending question feedback:", error);
+    } finally {
+      setIsProcessing(false);
     }
-  } catch (error) {
-    console.error("Error sending question feedback:", error);
-  } finally {
-    setIsProcessing(false);
-  }
-};
-  
+  };
   
   // Save progress function (used by both auto-save and manual save)
   const saveProgress = async () => {
@@ -762,6 +764,11 @@ const handleQuestionFeedback = async (feedbackType) => {
   // Current question
   const currentQuestion = questions[currentQuestionIndex];
   
+  // Handle loading state
+  if (isLoadingQuestions) {
+    return <div className="flex items-center justify-center h-64">Loading fun questions...</div>;
+  }
+  
   // Only render when questions are loaded
   if (!currentQuestion) {
     return <div className="flex items-center justify-center h-64">Loading fun questions...</div>;
@@ -827,31 +834,18 @@ const handleQuestionFeedback = async (feedbackType) => {
             {currentQuestion.childText || currentQuestion.text} {renderIllustration()}
           </h2>
           
-          // Add this to the main survey section in KidFriendlySurvey.jsx, near where the question is displayed
-<div className="text-center mb-4">
-  <h2 className="text-xl font-semibold text-black">
-    {currentQuestion.childText || currentQuestion.text} {renderIllustration()}
-  </h2>
-  
-  {/* Simplified explanation always visible */}
-  <p className="mt-3 text-sm text-gray-600 bg-gray-50 p-2 rounded-md inline-block">
-    Who usually does this in your family?
-  </p>
-  
-  {/* Not Applicable button */}
-  <button 
-    onClick={() => handleQuestionFeedback('not_applicable')}
-    className="mt-2 text-xs text-gray-500 underline flex items-center mx-auto"
-  >
-    <span className="mr-1">❓</span> This doesn't apply to my family
-  </button>
-</div>
-
-
           {/* Simplified explanation always visible */}
           <p className="mt-3 text-sm text-gray-600 bg-gray-50 p-2 rounded-md inline-block">
             Who usually does this in your family?
           </p>
+          
+          {/* Not Applicable button */}
+          <button 
+            onClick={() => handleQuestionFeedback('not_applicable')}
+            className="mt-2 text-xs text-gray-500 underline flex items-center mx-auto"
+          >
+            <span className="mr-1">❓</span> This doesn't apply to my family
+          </button>
         </div>
         
         {/* Simple explanation always visible for kids */}
