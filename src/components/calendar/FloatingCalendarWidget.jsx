@@ -58,32 +58,57 @@ const FloatingCalendarWidget = () => {
   const [eventCache, setEventCache] = useState(new Set());
   
   // Function to fetch all event IDs and cache them to prevent duplicates
-  const buildEventCache = async () => {
-    try {
-      if (!currentUser?.uid || !familyId) return;
-      
-      const eventsQuery = query(
-        collection(db, "calendar_events"),
-        where("userId", "==", currentUser.uid)
-      );
-      
-      const querySnapshot = await getDocs(eventsQuery);
-      const eventSignatures = new Set();
-      
-      querySnapshot.forEach((doc) => {
-        const eventData = doc.data();
-        // Create a unique signature for each event
-        const signature = `${eventData.summary || eventData.title || ''}-${eventData.start?.dateTime || eventData.start?.date || ''}-${eventData.location || ''}`;
-        eventSignatures.add(signature);
-      });
-      
-      setEventCache(eventSignatures);
-      console.log(`Cached ${eventSignatures.size} event signatures to prevent duplicates`);
-    } catch (error) {
-      console.error("Error building event cache:", error);
-    }
-  };
+const buildEventCache = async () => {
+  try {
+    if (!currentUser?.uid || !familyId) return;
+    
+    const eventsQuery = query(
+      collection(db, "calendar_events"),
+      where("userId", "==", currentUser.uid)
+    );
+    
+    const querySnapshot = await getDocs(eventsQuery);
+    const eventSignatures = new Set();
+    
+    querySnapshot.forEach((doc) => {
+      const eventData = doc.data();
+      // Create a unique signature for each event
+      const signature = `${eventData.summary || eventData.title || ''}-${eventData.start?.dateTime || eventData.start?.date || ''}-${eventData.location || ''}`;
+      eventSignatures.add(signature);
+    });
+    
+    setEventCache(eventSignatures);
+    console.log(`Cached ${eventSignatures.size} event signatures to prevent duplicates`);
+  } catch (error) {
+    console.error("Error building event cache:", error);
+  }
+};
+
+// Helper function to check if an event already exists
+const eventExists = (event) => {
+  const signature = `${event.title || event.summary || ''}-${event.date || event.dateObj?.toISOString() || ''}-${event.location || ''}`;
+  return eventCache.has(signature);
+};
+
+// Use effect for initializing event cache
+useEffect(() => {
+  if (isOpen && currentUser?.uid) {
+    buildEventCache();
+  }
+}, [isOpen, currentUser]);
   
+// Enhanced initialization to handle calendar-related errors cleanly
+useEffect(() => {
+  // Start error suppression for non-critical calendar errors
+  CalendarErrorHandler.suppressApiErrors();
+  
+  // Clean up on unmount
+  return () => {
+    CalendarErrorHandler.restoreConsoleError();
+  };
+}, []);
+
+
   // Enhanced initialization to handle calendar-related errors cleanly
   useEffect(() => {
     // Start error suppression for non-critical calendar errors
@@ -95,11 +120,7 @@ const FloatingCalendarWidget = () => {
     };
   }, []);
   
-  // Helper function to check if an event already exists
-  const eventExists = (event) => {
-    const signature = `${event.title || event.summary || ''}-${event.date || event.dateObj?.toISOString() || ''}-${event.location || ''}`;
-    return eventCache.has(signature);
-  };
+
 
   // Use effect for initializing event cache
   useEffect(() => {
@@ -135,6 +156,16 @@ const FloatingCalendarWidget = () => {
       return nextMonth;
     });
   };
+
+
+
+
+// Use effect for initializing event cache
+useEffect(() => {
+  if (isOpen && currentUser?.uid) {
+    buildEventCache();
+  }
+}, [isOpen, currentUser]);
   
   // Calculate today's day of month
   const today = new Date();

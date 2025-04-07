@@ -1,11 +1,13 @@
 // src/components/calendar/EventConfirmationCard.jsx
 import React, { useState, useEffect } from 'react';
-import { Calendar, MapPin, User, Users, Clock, CheckCircle, Edit, X, Calendar, Info, AlertTriangle } from 'lucide-react';
+import { Calendar, MapPin, User, Users, Clock, CheckCircle, Edit, X, Info, AlertTriangle } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
+import { useAuth } from '../../contexts/AuthContext';  // Add this import
 import CalendarService from '../../services/CalendarService';
 
 const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId }) => {
   const { familyMembers } = useFamily();
+  const { currentUser } = useAuth();  // Add this line to get currentUser
   const [isEditing, setIsEditing] = useState(false);
   const [editedEvent, setEditedEvent] = useState(event);
   const [saving, setSaving] = useState(false);
@@ -38,11 +40,22 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
         return;
       }
       
+      // Get current user ID from auth context
+      const currentUserId = currentUser?.uid;
+      
+      if (!currentUserId) {
+        setError("You must be logged in to add events to the calendar");
+        setSaving(false);
+        return;
+      }
+      
       // Update with attending parent selection
       const finalEvent = {
         ...editedEvent,
         attendingParentId: attendingParent,
-        familyId
+        familyId,
+        // Explicitly include the user ID
+        userId: currentUserId
       };
       
       // Handle siblings
@@ -57,7 +70,7 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
       }
       
       // Add the event to the calendar
-      const result = await CalendarService.addChildEvent(finalEvent);
+      const result = await CalendarService.addChildEvent(finalEvent, currentUserId);
       
       // If additional events should be created for siblings, handle that
       if (selectedSiblings.length > 0 && result.success) {
@@ -68,12 +81,14 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
               ...finalEvent,
               childId: siblingId,
               childName: sibling.name,
+              // Explicitly include the user ID
+              userId: currentUserId,
               // No need to duplicate sibling information for sibling's own event
               siblingIds: undefined,
               siblingNames: undefined
             };
             
-            await CalendarService.addChildEvent(siblingEvent);
+            await CalendarService.addChildEvent(siblingEvent, currentUserId);
           }
         }
       }

@@ -82,6 +82,7 @@ class CalendarService {
 // In src/services/CalendarService.js - Update the addEvent method to dispatch an event
 
 // Replace the addEvent method in CalendarService.js with this improved version:
+// Replace the addEvent method in CalendarService.js with this improved version:
 async addEvent(event, userId) {
   try {
     if (!userId) {
@@ -247,6 +248,7 @@ formatDateForDisplay(date, region = 'US') {
   }
 }
 
+// Add this method to CalendarService class
 // Add this method to CalendarService class
 async addChildEvent(event, userId) {
   try {

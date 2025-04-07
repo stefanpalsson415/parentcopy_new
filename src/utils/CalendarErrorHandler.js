@@ -3,9 +3,11 @@ class CalendarErrorHandler {
   constructor() {
     this.suppressedErrors = [
       'Token refresh failed',
+      'The query requires an index',
       'Could not extract valid JSON from response',
       'Could not extract valid JSON',
-      'JSON parsing failed'
+      'JSON parsing failed',
+      'orderBy is not defined'
     ];
     this.originalConsoleError = null;
     this.isSuppressing = false;
