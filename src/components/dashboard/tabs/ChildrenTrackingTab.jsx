@@ -1046,9 +1046,13 @@ if (appointmentDate > new Date() && !formData.completed) {
     const endDate = new Date(appointmentDate);
     endDate.setMinutes(endDate.getMinutes() + 30);
     
-    // Create event object for the calendar
+    // Get child name with proper formatting
+    const childName = getChildName(childId);
+    
+    // Create event object for the calendar with proper title formatting
     const calendarEvent = {
-      summary: `${getChildName(childId)}'s ${formData.title}`,
+      summary: `${childName}'s ${formData.title}`,
+      title: `${childName}'s ${formData.title}`, // Add title for consistency
       description: formData.notes || `Medical appointment: ${formData.title}`,
       location: formData.providerDetails?.address || '',
       start: {
@@ -1060,7 +1064,7 @@ if (appointmentDate > new Date() && !formData.completed) {
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       },
       childId: childId,
-      childName: getChildName(childId),
+      childName: childName,
       category: 'medical',
       eventType: 'appointment',
       familyId: familyId,
@@ -1070,8 +1074,12 @@ if (appointmentDate > new Date() && !formData.completed) {
           { method: 'popup', minutes: 24 * 60 }, // 1 day before
           { method: 'popup', minutes: 60 } // 1 hour before
         ]
-      }
+      },
+      // Add a unique identifier to prevent duplicates
+      uniqueId: `appointment-${childId}-${Date.now()}`
     };
+    
+    console.log("Creating calendar event:", calendarEvent.summary);
     
     // Add to calendar using the standard addEvent method
     if (CalendarService) {

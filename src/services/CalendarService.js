@@ -73,99 +73,111 @@ class CalendarService {
     }
   }
 
-  // In src/services/CalendarService.js - Update the addEvent method to dispatch an event
-
-
-// In CalendarService.js - Update the addEvent method to dispatch an event
-async addEvent(event, userId) {
-  try {
-    if (!userId) {
-      throw new Error("User ID is required to add events");
-    }
-    
-    // Log the incoming event for debugging
-    console.log("Adding calendar event:", {
-      title: event.summary || event.title || 'Untitled',
-      hasStart: !!event.start,
-      hasDate: !!(event.start?.dateTime || event.start?.date),
-      userId
-    });
-    
-    // Ensure event has required fields
-    if (!event.summary && !event.title) {
-      event.summary = "Untitled Event";
-    }
-    
-    // Standardize event format
-    const standardizedEvent = {
-      ...event,
-      summary: event.summary || event.title,
-      description: event.description || '',
-      // Ensure start and end dates are properly formatted
-      start: event.start || {
-        dateTime: new Date().toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      end: event.end || {
-        dateTime: new Date(new Date().getTime() + 60*60000).toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-    };
-    
-    // Add relationship category tag if applicable
-    if (event.summary?.toLowerCase().includes('relationship') || 
-        event.summary?.toLowerCase().includes('couple') ||
-        event.category === 'relationship') {
-      standardizedEvent.category = 'relationship';
-    }
-    
-    // Save event to Firestore
-    const eventData = {
-      ...standardizedEvent,
-      userId,
-      familyId: event.familyId || null,
-      createdAt: serverTimestamp()
-    };
-    
-    const eventRef = collection(db, "calendar_events");
-    const docRef = await addDoc(eventRef, eventData);
-    console.log("Event saved to Firestore with ID:", docRef.id);
-    
-    // Dispatch an event to notify components of the new calendar event
-    if (typeof window !== 'undefined') {
-      // First, dispatch the standard event
-      const updateEvent = new CustomEvent('calendar-event-added', {
-        detail: { 
-          eventId: docRef.id, 
-          category: standardizedEvent.category,
-          title: standardizedEvent.summary,
-          time: new Date().toISOString()
-        }
-      });
-      console.log("Dispatching calendar-event-added event");
-      window.dispatchEvent(updateEvent);
+  async addEvent(event, userId) {
+    try {
+      if (!userId) {
+        throw new Error("User ID is required to add events");
+      }
       
-      // Then, dispatch the force-refresh event with a slight delay to ensure both are processed
-      setTimeout(() => {
-        console.log("Dispatching force-calendar-refresh event");
-        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-      }, 300);
+      // Log the incoming event for debugging
+      console.log("Adding calendar event:", {
+        title: event.summary || event.title || 'Untitled',
+        hasStart: !!event.start,
+        hasDate: !!(event.start?.dateTime || event.start?.date),
+        childName: event.childName || 'None',
+        userId
+      });
+      
+      // Ensure event has required fields
+      if (!event.summary && !event.title) {
+        event.summary = "Untitled Event";
+      }
+      
+      // Standardize event format
+      const standardizedEvent = {
+        ...event,
+        summary: event.summary || event.title,
+        title: event.title || event.summary, // Ensure both are set
+        description: event.description || '',
+        // Ensure start and end dates are properly formatted
+        start: event.start || {
+          dateTime: new Date().toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: event.end || {
+          dateTime: new Date(new Date().getTime() + 60*60000).toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+      };
+      
+      // Check if a similar event already exists
+      if (event.familyId && event.childName) {
+        const eventsQuery = query(
+          collection(db, "calendar_events"),
+          where("familyId", "==", event.familyId),
+          where("childName", "==", event.childName),
+          where("userId", "==", userId)
+        );
+        
+        const querySnapshot = await getDocs(eventsQuery);
+        let isDuplicate = false;
+        
+        // Check if there's a similar event on the same day with the same title
+        querySnapshot.forEach((doc) => {
+          const existingEvent = doc.data();
+          if (existingEvent.summary === standardizedEvent.summary) {
+            const existingDate = new Date(existingEvent.start.dateTime);
+            const newDate = new Date(standardizedEvent.start.dateTime);
+            
+            // Compare dates (ignoring time)
+            if (existingDate.toDateString() === newDate.toDateString()) {
+              console.log("Found duplicate event, skipping creation");
+              isDuplicate = true;
+            }
+          }
+        });
+        
+        if (isDuplicate) {
+          this.showNotification("This event already exists in your calendar", "info");
+          return { success: true, isDuplicate: true };
+        }
+      }
+      
+      // Save event to Firestore
+      const eventData = {
+        ...standardizedEvent,
+        userId,
+        familyId: event.familyId || null,
+        createdAt: serverTimestamp()
+      };
+      
+      const eventRef = collection(db, "calendar_events");
+      const docRef = await addDoc(eventRef, eventData);
+      console.log("Event saved to Firestore with ID:", docRef.id);
+      
+      // Dispatch events
+      if (typeof window !== 'undefined') {
+        // Force refresh with slight delay
+        setTimeout(() => {
+          console.log("Dispatching force-calendar-refresh event");
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        }, 300);
+      }
+      
+      // Show success notification
+      this.showNotification(`Event "${standardizedEvent.summary}" added to your calendar`, "success");
+      
+      return {
+        success: true,
+        eventId: docRef.id,
+        isMock: false
+      };
+    } catch (error) {
+      console.error("Error adding event to calendar:", error);
+      this.showNotification("Failed to add event to calendar", "error");
+      return { success: false, error: error.message || "Unknown error" };
     }
-    
-    // Show success notification
-    this.showNotification(`Event "${standardizedEvent.summary}" added to your calendar`, "success");
-    
-    return {
-      success: true,
-      eventId: docRef.id,
-      isMock: false
-    };
-  } catch (error) {
-    console.error("Error adding event to calendar:", error);
-    this.showNotification("Failed to add event to calendar", "error");
-    return { success: false, error: error.message || "Unknown error" };
   }
-}
 
 /// In CalendarService.js - Find the addChildEvent method and replace it with this:
 // Fix for CalendarService.js - replace the addChildEvent method

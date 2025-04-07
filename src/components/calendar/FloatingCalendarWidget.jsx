@@ -92,6 +92,9 @@ const createEventSignature = (event) => {
   // Normalize title/summary
   const title = event.summary || event.title || '';
   
+  // Get child name if available
+  const childName = event.childName || '';
+  
   // Normalize date format
   let dateStr = '';
   if (event.start?.dateTime) {
@@ -104,10 +107,11 @@ const createEventSignature = (event) => {
     dateStr = event.dateObj.toISOString();
   }
   
-  // Normalize location
-  const location = event.location || '';
+  // Extract just the date part for consistency
+  const datePart = dateStr.split('T')[0] || '';
   
-  return `${title}-${dateStr}-${location}`.toLowerCase();
+  // Create signature that will match similar events
+  return `${childName}-${title}-${datePart}`.toLowerCase();
 };
 
 // Helper function to check if an event already exists
@@ -143,24 +147,7 @@ useEffect(() => {
   };
 }, []);
 
-// Add this useEffect hook in FloatingCalendarWidget.jsx
-useEffect(() => {
-  // Listen for force-calendar-refresh events
-  const handleForceRefresh = () => {
-    console.log("Force calendar refresh triggered");
-    setLastRefresh(Date.now());
-    
-    // Clear cache and rebuild it
-    setEventCache(new Set());
-    buildEventCache();
-  };
-  
-  window.addEventListener('force-calendar-refresh', handleForceRefresh);
-  
-  return () => {
-    window.removeEventListener('force-calendar-refresh', handleForceRefresh);
-  };
-}, []);
+
 
 
 // Enhanced initialization to handle calendar-related errors cleanly
