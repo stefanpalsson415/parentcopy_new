@@ -143,6 +143,25 @@ useEffect(() => {
   };
 }, []);
 
+// Add this useEffect hook in FloatingCalendarWidget.jsx
+useEffect(() => {
+  // Listen for force-calendar-refresh events
+  const handleForceRefresh = () => {
+    console.log("Force calendar refresh triggered");
+    setLastRefresh(Date.now());
+    
+    // Clear cache and rebuild it
+    setEventCache(new Set());
+    buildEventCache();
+  };
+  
+  window.addEventListener('force-calendar-refresh', handleForceRefresh);
+  
+  return () => {
+    window.removeEventListener('force-calendar-refresh', handleForceRefresh);
+  };
+}, []);
+
 
 // Enhanced initialization to handle calendar-related errors cleanly
 useEffect(() => {
