@@ -5,6 +5,8 @@ import { LogOut, Info, HelpCircle, Scale, Brain, Heart, Clock, ArrowLeft, ArrowR
 import { useFamily } from '../../contexts/FamilyContext';
 import { useSurvey } from '../../contexts/SurveyContext';
 import AllieChat from '../chat/AllieChat.jsx';
+import QuestionFeedbackService from '../../services/QuestionFeedbackService';
+
 
 const SurveyScreen = () => {
   const navigate = useNavigate();
@@ -72,41 +74,53 @@ const SurveyScreen = () => {
     }
   }, [selectedUser, navigate]);
   
-  // Load personalized questions when family data is available
-  useEffect(() => {
-    if (familyId && selectedUser && !isPersonalizationLoaded) {
-      console.log("Loading personalized questions for user:", selectedUser.id, "in family:", familyId);
-      
-      // Create a family data object for personalization
-      const familyData = {
-        familyName: familyName,
-        familyId: familyId,
-        parents: familyMembers.filter(m => m.role === 'parent').map(p => ({
-          name: p.name,
-          role: p.roleType || 'parent'
-        })),
-        children: familyMembers.filter(m => m.role === 'child').map(c => ({
-          name: c.name,
-          age: c.age || 10
-        })),
-        priorities: familyPriorities,
-        communication: { style: "open" } // Default communication style
-      };
-      
-      console.log("Family data for personalization:", familyData);
-      
-      // Set the family data in survey context
-      setFamilyData(familyData);
-      
-      // Generate personalized questions
-      const personalized = selectPersonalizedInitialQuestions(fullQuestionSet, familyData);
-      
-      console.log("Generated personalized questions:", personalized.length);
-      setPersonalizedQuestions(personalized);
-      setIsPersonalizationLoaded(true);
-    }
-  }, [familyId, selectedUser, familyMembers, familyName, familyPriorities, fullQuestionSet, isPersonalizationLoaded, selectPersonalizedInitialQuestions, setFamilyData]);
-  
+  // In SurveyScreen.jsx - Update the useEffect for personalizedQuestions
+useEffect(() => {
+  if (familyId && selectedUser && !isPersonalizationLoaded) {
+    console.log("Loading personalized questions for user:", selectedUser.id, "in family:", familyId);
+    
+    // Create a family data object for personalization
+    const familyData = {
+      familyName: familyName,
+      familyId: familyId,
+      parents: familyMembers.filter(m => m.role === 'parent').map(p => ({
+        name: p.name,
+        role: p.roleType || 'parent'
+      })),
+      children: familyMembers.filter(m => m.role === 'child').map(c => ({
+        name: c.name,
+        age: c.age || 10
+      })),
+      priorities: familyPriorities,
+      communication: { style: "open" } // Default communication style
+    };
+    
+    console.log("Family data for personalization:", familyData);
+    
+    // Set the family data in survey context
+    setFamilyData(familyData);
+    
+    // Generate personalized questions
+    const personalized = selectPersonalizedInitialQuestions(fullQuestionSet, familyData);
+    
+    // Apply feedback filter to remove inapplicable questions
+    const loadFilteredQuestions = async () => {
+      try {
+        const filteredQuestions = await getFilteredQuestionsForAdult(familyId, personalized);
+        console.log("Generated personalized questions:", filteredQuestions.length);
+        setPersonalizedQuestions(filteredQuestions);
+        setIsPersonalizationLoaded(true);
+      } catch (error) {
+        console.error("Error filtering questions:", error);
+        // Fallback to unfiltered questions
+        setPersonalizedQuestions(personalized);
+        setIsPersonalizationLoaded(true);
+      }
+    };
+    
+    loadFilteredQuestions();
+  }
+}, [familyId, selectedUser, familyMembers, familyName, familyPriorities, fullQuestionSet, isPersonalizationLoaded, selectPersonalizedInitialQuestions, setFamilyData, getFilteredQuestionsForAdult]);  
   // Show AllieChat after component mounts
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -467,6 +481,50 @@ const SurveyScreen = () => {
     }
   };
   
+// In SurveyScreen.jsx - Add import for QuestionFeedbackService
+import QuestionFeedbackService from '../../services/QuestionFeedbackService';
+
+// Add handleQuestionFeedback function after the existing functions
+const handleQuestionFeedback = async (feedbackType) => {
+  if (isProcessing) return; // Prevent actions while processing
+  
+  setIsProcessing(true);
+  
+  try {
+    // Create feedback object
+    const feedback = {
+      questionId: currentQuestion.id,
+      questionText: currentQuestion.text,
+      feedbackType: feedbackType,
+      category: currentQuestion.category,
+      familyId: familyId
+    };
+    
+    console.log("Sending question feedback:", feedback);
+    
+    // Send feedback to our service
+    await QuestionFeedbackService.recordQuestionFeedback(feedback);
+    
+    // Skip to the next question
+    if (currentQuestionIndex < personalizedQuestions.length - 1) {
+      setCurrentQuestionIndex(prevIndex => prevIndex + 1);
+      setSelectedParent(null);
+      setShowExplanation(false);
+      setShowWeightMetrics(false);
+    } else {
+      // Last question, complete the survey
+      handleCompleteSurvey();
+    }
+  } catch (error) {
+    console.error("Error sending question feedback:", error);
+  } finally {
+    setIsProcessing(false);
+  }
+};
+
+
+
+
   // Jump to specific question
   const jumpToQuestion = (index) => {
     setCurrentQuestionIndex(index);
@@ -756,6 +814,12 @@ const SurveyScreen = () => {
               <p className="text-xs text-gray-500 mb-3">
                 {currentQuestion.category}
               </p>
+              <button 
+  onClick={() => handleQuestionFeedback('not_applicable')}
+  className="mt-2 text-xs text-gray-500 hover:text-gray-700 underline flex items-center mx-auto"
+>
+  <span className="mr-1">❓</span> This doesn't apply to my family
+</button>
             </div>
           </div>
         </div>

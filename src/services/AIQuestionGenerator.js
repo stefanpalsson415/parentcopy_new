@@ -333,92 +333,183 @@ _improvedSimplifyQuestionForChild(question, childAge) {
 
 
   /**
-   * Generate personalized survey questions based on diagnostic results
-   * @param {Object} diagnosticResponses - Responses from diagnostic survey
-   * @param {Object} familyData - Basic family structure information
-   * @returns Promise resolving to an array of personalized questions
-   */
-  async generatePersonalizedQuestions(diagnosticResponses, familyData) {
-    try {
-      // Prepare context from diagnostic responses and family data
-      const context = this._prepareContext(diagnosticResponses, familyData);
-      
-      // Pull relevant content from whitepapers based on priorities
-      const relevantResearch = this._getRelevantResearchContent(diagnosticResponses);
-      
-      // Format system prompt for Claude
-      const systemPrompt = `You are an expert in family dynamics and workload balance. 
-      Your task is to generate a personalized set of 40-50 survey questions for a family seeking to better balance their responsibilities.
-      
-      The questions should:
-      1. Focus on their specific priorities and pain points
-      2. Cover both visible and invisible work
-      3. Address the specific family structure
-      4. Incorporate research-backed insights
-      5. Include a mix of task-specific and meta-level questions about workload distribution
-      
-      For each question, provide:
-      - A unique question ID (q1, q2, etc.)
-      - The question text
-      - The category (Visible Household Tasks, Invisible Household Tasks, Visible Parental Tasks, Invisible Parental Tasks)
-      - A brief explanation of why this question matters for this family
-      - A weighting that reflects the question's importance based on this family's priorities
-      
-      Return the questions as a JSON object with this structure:
-      {
-        "questions": [
-          {
-            "id": "q1",
-            "text": "Question text here",
-            "category": "Category name",
-            "explanation": "Why this matters for this family",
-            "weightExplanation": "How this impacts workload calculation",
-            "baseWeight": 3,
-            "frequency": "daily",
-            "invisibility": "completely",
-            "emotionalLabor": "high",
-            "childDevelopment": "high",
-            "relationshipImpact": "extreme",
-            "totalWeight": 12.5
-          }
-        ]
-      }`;
-      
-      // User message with the specific context
-      const userMessage = `Generate a personalized set of survey questions for this family based on:
-      
-      Family Structure:
-      ${JSON.stringify(familyData, null, 2)}
-      
-      Their Diagnostic Responses:
-      ${JSON.stringify(diagnosticResponses, null, 2)}
-      
-      Relevant Research:
-      ${relevantResearch}
-      
-      Their priorities are: ${this._extractPriorities(diagnosticResponses).join(', ')}
-      Their main pain points are: ${this._extractPainPoints(diagnosticResponses).join(', ')}
-      Their obstacles to balance are: ${this._extractObstacles(diagnosticResponses).join(', ')}`;
-      
-      // Call Claude API
-      const claudeResponse = await ClaudeService.generateResponse(
-        [{ role: 'user', content: userMessage }],
-        { system: systemPrompt }
-      );
-      
-      // Parse the JSON response
-      const parsedResponse = JSON.parse(claudeResponse);
-      
-      // Return generated questions
-      return parsedResponse.questions;
-    } catch (error) {
-      console.error("Error generating personalized questions:", error);
-      
-      // Fallback to base questions if AI generation fails
-      return this._getFallbackQuestions(diagnosticResponses, familyData);
+ * Generate personalized survey questions based on diagnostic results
+ * @param {Object} diagnosticResponses - Responses from diagnostic survey
+ * @param {Object} familyData - Basic family structure information
+ * @returns Promise resolving to an array of personalized questions
+ */
+async generatePersonalizedQuestions(diagnosticResponses, familyData) {
+  try {
+    // Get questions to exclude based on previous feedback
+    let questionIdsToExclude = [];
+    if (familyData && familyData.familyId) {
+      try {
+        questionIdsToExclude = await QuestionFeedbackService.getQuestionsToExclude(
+          familyData.familyId
+        );
+        console.log(`Excluding ${questionIdsToExclude.length} questions based on feedback`);
+      } catch (feedbackError) {
+        console.error("Error getting feedback exclusions:", feedbackError);
+        // Continue with empty exclusion list if there's an error
+      }
     }
+    
+    // Prepare context from diagnostic responses and family data
+    const context = this._prepareContext(diagnosticResponses, familyData);
+    
+    // Pull relevant content from whitepapers based on priorities
+    const relevantResearch = this._getRelevantResearchContent(diagnosticResponses);
+    
+    // Format system prompt for Claude
+    const systemPrompt = `You are an expert in family dynamics and workload balance. 
+    Your task is to generate a personalized set of 40-50 survey questions for a family seeking to better balance their responsibilities.
+    
+    The questions should:
+    1. Focus on their specific priorities and pain points
+    2. Cover both visible and invisible work
+    3. Address the specific family structure
+    4. Incorporate research-backed insights
+    5. Include a mix of task-specific and meta-level questions about workload distribution
+    
+    For each question, provide:
+    - A unique question ID (q1, q2, etc.)
+    - The question text
+    - The category (Visible Household Tasks, Invisible Household Tasks, Visible Parental Tasks, Invisible Parental Tasks)
+    - A brief explanation of why this question matters for this family
+    - A weighting that reflects the question's importance based on this family's priorities
+    
+    Return the questions as a JSON object with this structure:
+    {
+      "questions": [
+        {
+          "id": "q1",
+          "text": "Question text here",
+          "category": "Category name",
+          "explanation": "Why this matters for this family",
+          "weightExplanation": "How this impacts workload calculation",
+          "baseWeight": 3,
+          "frequency": "daily",
+          "invisibility": "completely",
+          "emotionalLabor": "high",
+          "childDevelopment": "high",
+          "relationshipImpact": "extreme",
+          "totalWeight": 12.5
+        }
+      ]
+    }`;
+    
+    // Add information about regional considerations if available
+    let regionalContext = "";
+    if (familyData && familyData.location) {
+      regionalContext = `\nConsider the regional context: ${familyData.location}. Avoid questions about activities that wouldn't be relevant in this location (e.g., snow shoveling in tropical regions).`;
+      systemPrompt += regionalContext;
+    }
+    
+    // Add information about questions to avoid based on feedback
+    if (questionIdsToExclude.length > 0) {
+      systemPrompt += `\n\nIMPORTANT: Based on previous feedback, avoid generating questions similar to these topics that weren't applicable to this family.`;
+    }
+    
+    // User message with the specific context
+    const userMessage = `Generate a personalized set of survey questions for this family based on:
+    
+    Family Structure:
+    ${JSON.stringify(familyData, null, 2)}
+    
+    Their Diagnostic Responses:
+    ${JSON.stringify(diagnosticResponses, null, 2)}
+    
+    Relevant Research:
+    ${relevantResearch}
+    
+    Their priorities are: ${this._extractPriorities(diagnosticResponses).join(', ')}
+    Their main pain points are: ${this._extractPainPoints(diagnosticResponses).join(', ')}
+    Their obstacles to balance are: ${this._extractObstacles(diagnosticResponses).join(', ')}`;
+    
+    // Call Claude API
+    const claudeResponse = await ClaudeService.generateResponse(
+      [{ role: 'user', content: userMessage }],
+      { system: systemPrompt }
+    );
+    
+    // Parse the JSON response
+    const parsedResponse = JSON.parse(claudeResponse);
+    
+    // Get the generated questions
+    let generatedQuestions = parsedResponse.questions || [];
+    
+    // Filter out any questions that match excluded IDs or are too similar to excluded questions
+    if (questionIdsToExclude.length > 0) {
+      // Get the text of excluded questions for similarity comparison
+      const excludedQuestionTexts = questionIdsToExclude.map(id => {
+        const question = this.baseQuestionSet?.find(q => q.id === id);
+        return question ? question.text.toLowerCase() : '';
+      }).filter(Boolean);
+      
+      // Filter out questions that are too similar to excluded ones
+      generatedQuestions = generatedQuestions.filter(question => {
+        // Skip questions with IDs that are explicitly excluded
+        if (questionIdsToExclude.includes(question.id)) {
+          return false;
+        }
+        
+        // Check similarity with excluded question texts
+        const questionText = question.text.toLowerCase();
+        return !excludedQuestionTexts.some(excludedText => {
+          // Simple similarity check - if question contains 70% of the words in excluded text
+          if (!excludedText) return false;
+          
+          const excludedWords = excludedText.split(/\s+/);
+          const matchingWords = excludedWords.filter(word => 
+            word.length > 4 && questionText.includes(word)
+          );
+          
+          return matchingWords.length > (excludedWords.length * 0.7);
+        });
+      });
+    }
+    
+    // If we don't have enough questions after filtering, add some general ones
+    if (generatedQuestions.length < 40) {
+      const additionalQuestions = this._getFallbackQuestions(
+        diagnosticResponses, 
+        familyData
+      ).filter(q => !questionIdsToExclude.includes(q.id));
+      
+      // Add enough additional questions to reach at least 40
+      const neededCount = Math.max(0, 40 - generatedQuestions.length);
+      generatedQuestions = [
+        ...generatedQuestions,
+        ...additionalQuestions.slice(0, neededCount)
+      ];
+    }
+    
+    console.log(`Generated ${generatedQuestions.length} personalized questions after feedback filtering`);
+    
+    return generatedQuestions;
+  } catch (error) {
+    console.error("Error generating personalized questions:", error);
+    
+    // Fallback to base questions if AI generation fails
+    const fallbackQuestions = this._getFallbackQuestions(diagnosticResponses, familyData);
+    
+    // Apply feedback filtering to fallback questions if possible
+    if (familyData && familyData.familyId) {
+      try {
+        const questionIdsToExclude = await QuestionFeedbackService.getQuestionsToExclude(
+          familyData.familyId
+        );
+        
+        // Filter fallback questions
+        return fallbackQuestions.filter(q => !questionIdsToExclude.includes(q.id));
+      } catch (filterError) {
+        console.error("Error filtering fallback questions:", filterError);
+      }
+    }
+    
+    return fallbackQuestions;
   }
-
+}
   /**
    * Generate questions for children based on family context
    * @param {Object} familyData - Family structure and diagnostic information

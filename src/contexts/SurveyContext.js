@@ -1132,6 +1132,21 @@ const selectPersonalizedInitialQuestions = (fullQuestionSet, familyData, targetC
     }
   };
 
+  const getFilteredQuestionsForAdult = async (familyId, baseQuestions) => {
+    try {
+      // Get questions to exclude based on previous feedback
+      const questionIdsToExclude = await QuestionFeedbackService.getQuestionsToExclude(familyId);
+      
+      // Filter out questions that were marked as not applicable
+      return baseQuestions.filter(question => !questionIdsToExclude.includes(question.id));
+    } catch (error) {
+      console.error("Error filtering questions for adult:", error);
+      return baseQuestions; // Return original questions on error
+    }
+  };
+  
+
+
   // Update the context value
 const value = {
   // Filter out relationship questions for regular survey
@@ -1161,6 +1176,8 @@ const value = {
   getEmotionalLaborQuestions,
   getChildDevelopmentQuestions,
   getBalanceQuestions,
+  getFilteredQuestionsForAdult,
+
   // NEW: Add function to get filtered questions for children
   getFilteredQuestionsForChild,
   // Share family priorities with other components
