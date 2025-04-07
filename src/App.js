@@ -72,11 +72,12 @@ function AppRoutes() {
         <Route path="/product-overview" element={<ProductOverviewPage />} />
         <Route path="/blog" element={<BlogHomePage />} />
         <Route path="/blog/:slug" element={<BlogArticlePage />} />
+
         <Route path="/survey" element={
-          selectedUser?.role === 'child' 
-            ? <KidFriendlySurvey surveyType="initial" /> 
-            : <SurveyScreen />
-        } />
+  selectedUser?.role === 'child' 
+    ? <KidFriendlySurvey surveyType="initial" /> 
+    : <SurveyScreen mode="initial" />
+} />
         <Route path="/mini-survey" element={<MiniSurvey />} />
         <Route path="/mini-results" element={<MiniResultsScreen />} />
         <Route path="/payment" element={<PaymentScreen />} />
@@ -85,10 +86,10 @@ function AppRoutes() {
         
         {/* Route for weekly check-in - directs kids to kid-friendly version */}
         <Route path="/weekly-check-in" element={
-          selectedUser?.role === 'child' 
-            ? <KidFriendlySurvey surveyType="weekly" /> 
-            : <WeeklyCheckInScreen />
-        } />
+  selectedUser?.role === 'child' 
+    ? <KidFriendlySurvey surveyType="weekly" /> 
+    : <SurveyScreen mode="weekly" />
+} />
         
         <Route path="/loading" element={<LoadingScreen />} />
         <Route path="*" element={<Navigate to="/" />} />
