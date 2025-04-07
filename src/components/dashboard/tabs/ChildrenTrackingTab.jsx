@@ -2777,21 +2777,21 @@ const renderRoutinesSection = () => {
                               </span>
                             </div>
                             <div className="flex space-x-2">
-                              
-                                href={doc.fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:text-blue-800"
-                              >
-                                <Download size={16} />
-                              </a>
-                              <button
-                                className="text-red-600 hover:text-red-800"
-                                onClick={() => handleRemoveDocument(doc.id)}
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
+  
+    href={doc.fileUrl}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="text-blue-600 hover:text-blue-800"
+  >
+    <Download size={16} />
+  </a>
+  <button
+    className="text-red-600 hover:text-red-800"
+    onClick={() => handleRemoveDocument(doc.id)}
+  >
+    <Trash2 size={16} />
+  </button>
+</div>
                           </div>
                         ))}
                       </div>
