@@ -1,13 +1,17 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Heart, Users, Clock, Calendar, Star, CheckCircle, 
-  Lightbulb, MessageCircle, Brain, BarChart, Activity,
-  ArrowRight, BookOpen, Smile, Award, Zap, RefreshCw
+  Command, Calendar, Database, Brain, MessageSquare, 
+  ShieldCheck, Clock, Heart, Star, BarChart, 
+  BookOpen, Users, Smile, Activity, Zap, RefreshCw,
+  ArrowRight, FileText, CheckCircle, PieChart, Layout,
+  UploadCloud, Search, Bookmark, Bell, Target, Layers,
+  Repeat, MoreHorizontal, Cpu, Shield, MicrophoneIcon as Microphone,
+  Camera, Smartphone, ArrowUpRight
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-const RelationshipFeaturesPage = () => {
+const FamilyCommandCenterPage = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
 
@@ -18,140 +22,145 @@ const RelationshipFeaturesPage = () => {
   return (
     <div className="min-h-screen bg-white font-['Roboto']">
       {/* Header/Nav */}
-<header className="px-6 py-4 border-b bg-white sticky top-0 z-50">
-  <div className="max-w-6xl mx-auto flex justify-between items-center">
-    <h1 className="text-3xl font-light cursor-pointer" onClick={() => navigate('/')}>Allie</h1>
-    <nav className="hidden md:flex space-x-8">
-      <button 
-        onClick={() => navigate('/how-it-works')}
-        className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-      >
-        How It Works
-      </button>
-      <button
-        onClick={() => navigate('/about-us')}
-        className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-      >
-        About Us
-      </button>
-      <button 
-        onClick={() => navigate('/relationship-features')}
-        className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-      >
-        Relationship Features
-      </button>
-      <button 
-        onClick={() => navigate('/ai-assistant')}
-        className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-      >
-        AI Assistant
-      </button>
-      <button 
-        onClick={() => navigate('/blog')}
-        className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-      >
-        Blog
-      </button>
-      {currentUser ? (
-        <button 
-          onClick={() => navigate('/login', { state: { directAccess: true, fromLanding: true } })}
-          className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
-        >
-          Jump Back In
-        </button>
-      ) : (
-        <>
-          <button 
-            onClick={() => navigate('/login')}
-            className="px-4 py-2 border border-gray-800 rounded hover:bg-gray-100"
-          >
-            Log In
-          </button>
-          <button 
-            onClick={() => navigate('/onboarding')}
-            className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
-          >
-            Sign Up
-          </button>
-        </>
-      )}
-    </nav>
-  </div>
-</header>
+      <header className="px-6 py-4 border-b bg-white sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto flex justify-between items-center">
+          <h1 className="text-3xl font-light cursor-pointer" onClick={() => navigate('/')}>Allie</h1>
+          <nav className="hidden md:flex space-x-8">
+            <button 
+              onClick={() => navigate('/how-it-works')}
+              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+            >
+              How It Works
+            </button>
+            <button
+              onClick={() => navigate('/about-us')}
+              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+            >
+              About Us
+            </button>
+            <button 
+              onClick={() => navigate('/family-command-center')}
+              className="text-black font-medium border-b-2 border-black"
+            >
+              Family Command Center
+            </button>
+            <button 
+              onClick={() => navigate('/ai-assistant')}
+              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+            >
+              AI Assistant
+            </button>
+            <button 
+              onClick={() => navigate('/blog')}
+              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+            >
+              Blog
+            </button>
+            {currentUser ? (
+              <button 
+                onClick={() => navigate('/login', { state: { directAccess: true, fromLanding: true } })}
+                className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
+              >
+                Jump Back In
+              </button>
+            ) : (
+              <>
+                <button 
+                  onClick={() => navigate('/login')}
+                  className="px-4 py-2 border border-gray-800 rounded hover:bg-gray-100"
+                >
+                  Log In
+                </button>
+                <button 
+                  onClick={() => navigate('/onboarding')}
+                  className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
+                >
+                  Sign Up
+                </button>
+              </>
+            )}
+          </nav>
+        </div>
+      </header>
       
       {/* Hero Section */}
       <section className="py-20 bg-black text-white">
         <div className="max-w-4xl mx-auto px-6 text-center">
-          <h1 className="text-4xl md:text-5xl font-light mb-6">Transform Your Relationship Through Balance</h1>
+          <div className="flex justify-center mb-6">
+            <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center">
+              <Command size={32} className="text-black" />
+            </div>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-light mb-6">The Family Command Center</h1>
           <p className="text-xl font-light max-w-2xl mx-auto">
-            Discover how Allie strengthens your bond while creating a more balanced family life—one small change at a time.
+            The intelligent heart of your family—connecting schedules, documents, child development, and relationships in one unified hub.
           </p>
           <div className="flex justify-center mt-8">
             <button 
               onClick={() => navigate('/onboarding')}
               className="px-6 py-3 bg-white text-black rounded-md font-medium hover:bg-gray-100"
             >
-              Start Your Journey
+              Take Command Today
             </button>
           </div>
         </div>
       </section>
       
-      {/* The Connection Section */}
+      {/* Command Center Overview */}
       <section className="py-20">
         <div className="max-w-4xl mx-auto px-6">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
-              <div className="inline-block p-2 bg-pink-100 rounded-lg mb-4">
-                <Heart className="text-pink-600" size={24} />
+              <div className="inline-block p-2 bg-purple-100 rounded-lg mb-4">
+                <Layout className="text-purple-600" size={24} />
               </div>
-              <h2 className="text-3xl font-light mb-6">The Workload-Relationship Connection</h2>
+              <h2 className="text-3xl font-light mb-6">Your Family's Digital Command Center</h2>
               <p className="text-lg mb-4 font-light">
-                Research shows that inequitable distribution of family responsibilities is one of the leading causes of relationship strain.
+                Families today manage an overwhelming amount of information across disconnected systems—calendars, messages, documents, reminders, and more.
               </p>
               <p className="text-lg mb-4 font-light">
-                When one partner carries more than their share of the mental and physical workload, resentment builds, emotional connection suffers, and satisfaction plummets.
+                The Family Command Center unifies everything in one intelligent hub, creating a seamless system where information flows effortlessly between all aspects of family life.
               </p>
               <p className="text-lg font-light">
-                Allie's relationship features are built on a core insight: <span className="font-medium">balanced families have happier relationships</span>.
+                Powered by AI, it not only organizes your family data but actively learns and anticipates your needs, ensuring nothing falls through the cracks.
               </p>
             </div>
             <div className="bg-gray-50 p-8 rounded-lg">
               <h3 className="text-xl font-medium mb-4 flex items-center">
-                <BarChart className="text-blue-600 mr-2" size={24} />
-                The Research Is Clear
+                <Brain className="text-blue-600 mr-2" size={24} />
+                Command Center Intelligence
               </h3>
               <div className="space-y-4">
                 <div className="flex items-start">
                   <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mr-3">
-                    <span className="text-blue-600 font-bold">1</span>
+                    <Cpu className="text-blue-600" size={16} />
                   </div>
                   <div>
-                    <p className="font-medium">83% of couples</p>
-                    <p className="text-gray-600 text-sm">
-                      Report improved relationship satisfaction after just 6 weeks of better workload balance
+                    <p className="font-medium">Adaptive Learning</p>
+                    <p className="text-sm text-gray-600">
+                      Allie learns from every interaction, survey response, and document to build a detailed understanding of your family's patterns and needs
                     </p>
                   </div>
                 </div>
                 <div className="flex items-start">
                   <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mr-3">
-                    <span className="text-blue-600 font-bold">2</span>
+                    <MessageSquare className="text-blue-600" size={16} />
                   </div>
                   <div>
-                    <p className="font-medium">67% reduction</p>
-                    <p className="text-gray-600 text-sm">
-                      In household-related arguments when balance improves by just 15%
+                    <p className="font-medium">Natural Language Understanding</p>
+                    <p className="text-sm text-gray-600">
+                      Advanced NLU lets you interact naturally, whether adding events from a screenshot or asking for childhood milestones from years ago
                     </p>
                   </div>
                 </div>
                 <div className="flex items-start">
                   <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mr-3">
-                    <span className="text-blue-600 font-bold">3</span>
+                    <Layers className="text-blue-600" size={16} />
                   </div>
                   <div>
-                    <p className="font-medium">42% increase</p>
-                    <p className="text-gray-600 text-sm">
-                      In reported emotional connection after implementing balanced responsibility sharing
+                    <p className="font-medium">Contextual Awareness</p>
+                    <p className="text-sm text-gray-600">
+                      The system maintains connections between events, documents, and people to provide a complete picture of your family's needs
                     </p>
                   </div>
                 </div>
@@ -161,195 +170,293 @@ const RelationshipFeaturesPage = () => {
         </div>
       </section>
       
-      {/* 10 Strategic Actions */}
+      {/* The Five Command Systems */}
       <section className="py-20 bg-gray-50">
         <div className="max-w-4xl mx-auto px-6">
           <div className="text-center mb-12">
             <div className="inline-block p-2 bg-purple-100 rounded-lg mb-4">
-              <Star className="text-purple-600" size={24} />
+              <Command className="text-purple-600" size={24} />
             </div>
-            <h2 className="text-3xl font-light mb-4">10 Relationship-Strengthening Strategies</h2>
+            <h2 className="text-3xl font-light mb-4">The Five Command Systems</h2>
             <p className="text-xl text-gray-600 font-light max-w-2xl mx-auto">
-              Allie's approach is built on research-backed strategies that strengthen your bond while improving family balance
+              A comprehensive approach to family management, working together as one integrated system
             </p>
           </div>
           
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-              <div className="flex items-start">
-                <div className="w-12 h-12 rounded-full bg-pink-100 flex items-center justify-center mr-4 flex-shrink-0">
-                  <Clock size={24} className="text-pink-600" />
+          {/* Calendar Command */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-100 mb-8 overflow-hidden">
+            <div className="md:flex">
+              <div className="md:w-1/3 bg-blue-600 text-white p-8 flex flex-col justify-center">
+                <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mb-4">
+                  <Calendar size={32} className="text-blue-600" />
                 </div>
-                <div>
-                  <h3 className="font-medium text-lg mb-2">Brief Daily Check-ins</h3>
-                  <p className="text-gray-600 text-sm">
-                    5-10 minute daily conversations to maintain emotional connection
-                  </p>
-                  <div className="mt-3 flex items-center text-sm">
-                    <span className="text-purple-700">Allie feature:</span>
-                    <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">Daily Check-in Reminders</span>
+                <h3 className="text-2xl font-light mb-2">Calendar Command</h3>
+                <p className="text-sm opacity-90">
+                  The unified scheduling system that brings every family commitment into one intelligent view
+                </p>
+              </div>
+              <div className="md:w-2/3 p-8">
+                <div className="space-y-4">
+                  <div className="flex items-start">
+                    <CheckCircle size={20} className="text-blue-600 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Universal Event Capture</p>
+                      <p className="text-sm text-gray-600">
+                        Add events from text conversations, screenshots, voice commands, or images of invitations
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start">
+                    <CheckCircle size={20} className="text-blue-600 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Smart Scheduling</p>
+                      <p className="text-sm text-gray-600">
+                        AI-powered suggestions for optimal family meeting times and event planning based on everyone's patterns
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start">
+                    <CheckCircle size={20} className="text-blue-600 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Family-Wide Visibility</p>
+                      <p className="text-sm text-gray-600">
+                        See everyone's commitments in one place—school events, medical appointments, activities, and tasks
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-4 mt-2 border-t border-gray-100">
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <p className="text-sm italic text-blue-800">
+                        "Just a simple 'Hey Allie, add Emma's soccer practice every Tuesday at 4pm' and it's on the calendar with reminders for everyone. The days of forgotten commitments are over."
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-            
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-              <div className="flex items-start">
-                <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mr-4 flex-shrink-0">
-                  <CheckCircle size={24} className="text-green-600" />
+          </div>
+          
+          {/* Document Command */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-100 mb-8 overflow-hidden">
+            <div className="md:flex">
+              <div className="md:w-1/3 bg-amber-600 text-white p-8 flex flex-col justify-center">
+                <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mb-4">
+                  <Database size={32} className="text-amber-600" />
                 </div>
-                <div>
-                  <h3 className="font-medium text-lg mb-2">Divide & Conquer Tasks</h3>
-                  <p className="text-gray-600 text-sm">
-                    Clear role assignment and decision-making for household responsibilities
-                  </p>
-                  <div className="mt-3 flex items-center text-sm">
-                    <span className="text-purple-700">Allie feature:</span>
-                    <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">Task Assignment Dashboard</span>
+                <h3 className="text-2xl font-light mb-2">Document Command</h3>
+                <p className="text-sm opacity-90">
+                  The intelligent document system that captures, organizes, and recalls family information
+                </p>
+              </div>
+              <div className="md:w-2/3 p-8">
+                <div className="space-y-4">
+                  <div className="flex items-start">
+                    <CheckCircle size={20} className="text-amber-600 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Multi-Source Document Capture</p>
+                      <p className="text-sm text-gray-600">
+                        Upload documents through photos, PDF attachments, text scan, or direct chat input
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start">
+                    <CheckCircle size={20} className="text-amber-600 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Intelligent Organization</p>
+                      <p className="text-sm text-gray-600">
+                        Automatic categorization connecting documents to medical providers, schools, or relevant family members
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start">
+                    <CheckCircle size={20} className="text-amber-600 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Long-Term Information Retrieval</p>
+                      <p className="text-sm text-gray-600">
+                        Ask questions about past documents years later—"What words did the teacher want us to practice last year?"
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-4 mt-2 border-t border-gray-100">
+                    <div className="bg-amber-50 p-4 rounded-lg">
+                      <p className="text-sm italic text-amber-800">
+                        "I snapped a photo of our pediatrician's instructions and six months later asked Allie what dosage was recommended. It pulled up the exact info and the original document—like having a perfect memory."
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-            
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-              <div className="flex items-start">
-                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mr-4 flex-shrink-0">
-                  <Heart size={24} className="text-red-600" />
+          </div>
+          
+          {/* Child Development Command */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-100 mb-8 overflow-hidden">
+            <div className="md:flex">
+              <div className="md:w-1/3 bg-green-600 text-white p-8 flex flex-col justify-center">
+                <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mb-4">
+                  <Activity size={32} className="text-green-600" />
                 </div>
-                <div>
-                  <h3 className="font-medium text-lg mb-2">Regular Date Nights</h3>
-                  <p className="text-gray-600 text-sm">
-                    Dedicated one-on-one time to nurture your connection as partners
-                  </p>
-                  <div className="mt-3 flex items-center text-sm">
-                    <span className="text-purple-700">Allie feature:</span>
-                    <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">Date Night Planner</span>
+                <h3 className="text-2xl font-light mb-2">Child Development Command</h3>
+                <p className="text-sm opacity-90">
+                  The comprehensive tracking system for your children's growth, health, and education
+                </p>
+              </div>
+              <div className="md:w-2/3 p-8">
+                <div className="space-y-4">
+                  <div className="flex items-start">
+                    <CheckCircle size={20} className="text-green-600 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Multi-Dimensional Tracking</p>
+                      <p className="text-sm text-gray-600">
+                        Record medical appointments, growth measurements, emotional wellbeing, and academic progress
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start">
+                    <CheckCircle size={20} className="text-green-600 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Voice-Enabled Updates</p>
+                      <p className="text-sm text-gray-600">
+                        Quick voice input like "Add Emma's height measurement" or "Record Jack's dentist appointment"
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start">
+                    <CheckCircle size={20} className="text-green-600 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">AI-Generated Insights</p>
+                      <p className="text-sm text-gray-600">
+                        Smart recommendations based on developmental milestones and health patterns
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-4 mt-2 border-t border-gray-100">
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <p className="text-sm italic text-green-800">
+                        "Having all our children's information in one place with smart reminders has been life-changing. Allie notices patterns we miss and reminds us of check-ups before we even think about them."
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-            
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-              <div className="flex items-start">
-                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mr-4 flex-shrink-0">
-                  <Smile size={24} className="text-amber-600" />
+          </div>
+          
+          {/* Relationship Command */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-100 mb-8 overflow-hidden">
+            <div className="md:flex">
+              <div className="md:w-1/3 bg-pink-600 text-white p-8 flex flex-col justify-center">
+                <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mb-4">
+                  <Heart size={32} className="text-pink-600" />
                 </div>
-                <div>
-                  <h3 className="font-medium text-lg mb-2">Gratitude & Affirmation</h3>
-                  <p className="text-gray-600 text-sm">
-                    Regular appreciation for each other's contributions and qualities
-                  </p>
-                  <div className="mt-3 flex items-center text-sm">
-                    <span className="text-purple-700">Allie feature:</span>
-                    <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">Gratitude Tracker</span>
+                <h3 className="text-2xl font-light mb-2">Relationship Command</h3>
+                <p className="text-sm opacity-90">
+                  The balancing system for family workload distribution and relationship strength
+                </p>
+              </div>
+              <div className="md:w-2/3 p-8">
+                <div className="space-y-4">
+                  <div className="flex items-start">
+                    <CheckCircle size={20} className="text-pink-600 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Workload Balance Analytics</p>
+                      <p className="text-sm text-gray-600">
+                        Visualize the true distribution of visible and invisible tasks across all family members
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start">
+                    <CheckCircle size={20} className="text-pink-600 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Research-Based Strategies</p>
+                      <p className="text-sm text-gray-600">
+                        10 relationship-strengthening approaches personalized to your family's specific needs
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start">
+                    <CheckCircle size={20} className="text-pink-600 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Guided Family Meetings</p>
+                      <p className="text-sm text-gray-600">
+                        Structured check-ins and discussions that strengthen connection and resolve imbalances
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-4 mt-2 border-t border-gray-100">
+                    <div className="bg-pink-50 p-4 rounded-lg">
+                      <p className="text-sm italic text-pink-800">
+                        "The data didn't lie—I was doing 76% of the household planning. Seeing it visualized changed everything. Our relationship has improved dramatically now that we're truly sharing the load."
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-            
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-              <div className="flex items-start">
-                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mr-4 flex-shrink-0">
-                  <Calendar size={24} className="text-blue-600" />
+          </div>
+          
+          {/* Chat Command */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-100 mb-8 overflow-hidden">
+            <div className="md:flex">
+              <div className="md:w-1/3 bg-indigo-600 text-white p-8 flex flex-col justify-center">
+                <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mb-4">
+                  <MessageSquare size={32} className="text-indigo-600" />
                 </div>
-                <div>
-                  <h3 className="font-medium text-lg mb-2">Unified Family Calendar</h3>
-                  <p className="text-gray-600 text-sm">
-                    Shared scheduling system to manage family commitments
-                  </p>
-                  <div className="mt-3 flex items-center text-sm">
-                    <span className="text-purple-700">Allie feature:</span>
-                    <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">Calendar Integration</span>
-                  </div>
-                </div>
+                <h3 className="text-2xl font-light mb-2">Allie Chat Command</h3>
+                <p className="text-sm opacity-90">
+                  The conversational interface that brings all commands together through natural language
+                </p>
               </div>
-            </div>
-            
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-              <div className="flex items-start">
-                <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center mr-4 flex-shrink-0">
-                  <Lightbulb size={24} className="text-indigo-600" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-lg mb-2">Collaborative Problem-Solving</h3>
-                  <p className="text-gray-600 text-sm">
-                    Structured approach to resolving challenges as a team
-                  </p>
-                  <div className="mt-3 flex items-center text-sm">
-                    <span className="text-purple-700">Allie feature:</span>
-                    <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">Guided Meetings</span>
+              <div className="md:w-2/3 p-8">
+                <div className="space-y-4">
+                  <div className="flex items-start">
+                    <CheckCircle size={20} className="text-indigo-600 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Natural Language Understanding</p>
+                      <p className="text-sm text-gray-600">
+                        Enhanced NLU detects your intent whether asking about tasks, children, or calendar events
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-              <div className="flex items-start">
-                <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mr-4 flex-shrink-0">
-                  <Activity size={24} className="text-emerald-600" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-lg mb-2">Self-Care & Support</h3>
-                  <p className="text-gray-600 text-sm">
-                    Ensuring each parent has personal time for well-being
-                  </p>
-                  <div className="mt-3 flex items-center text-sm">
-                    <span className="text-purple-700">Allie feature:</span>
-                    <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">Self-Care Task Assignment</span>
+                  
+                  <div className="flex items-start">
+                    <CheckCircle size={20} className="text-indigo-600 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Multi-Modal Input</p>
+                      <p className="text-sm text-gray-600">
+                        Share text, images, voice recordings, or documents directly in conversations
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-              <div className="flex items-start">
-                <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center mr-4 flex-shrink-0">
-                  <MessageCircle size={24} className="text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-lg mb-2">Professional Development</h3>
-                  <p className="text-gray-600 text-sm">
-                    Educational resources or counseling when needed
-                  </p>
-                  <div className="mt-3 flex items-center text-sm">
-                    <span className="text-purple-700">Allie feature:</span>
-                    <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">Relationship Resources</span>
+                  
+                  <div className="flex items-start">
+                    <CheckCircle size={20} className="text-indigo-600 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Complete Family Context</p>
+                      <p className="text-sm text-gray-600">
+                        Allie remembers your history, preferences, and needs across all command systems
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-              <div className="flex items-start">
-                <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center mr-4 flex-shrink-0">
-                  <Award size={24} className="text-yellow-600" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-lg mb-2">Celebrate Milestones</h3>
-                  <p className="text-gray-600 text-sm">
-                    Acknowledge achievements and special moments together
-                  </p>
-                  <div className="mt-3 flex items-center text-sm">
-                    <span className="text-purple-700">Allie feature:</span>
-                    <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">Progress Celebrations</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-              <div className="flex items-start">
-                <div className="w-12 h-12 rounded-full bg-cyan-100 flex items-center justify-center mr-4 flex-shrink-0">
-                  <BookOpen size={24} className="text-cyan-600" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-lg mb-2">Shared Future Planning</h3>
-                  <p className="text-gray-600 text-sm">
-                    Joint vision-setting for family goals and direction
-                  </p>
-                  <div className="mt-3 flex items-center text-sm">
-                    <span className="text-purple-700">Allie feature:</span>
-                    <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">Goal Setting Tools</span>
+                  
+                  <div className="pt-4 mt-2 border-t border-gray-100">
+                    <div className="bg-indigo-50 p-4 rounded-lg">
+                      <p className="text-sm italic text-indigo-800">
+                        "It's like talking to a family member who knows everything about us. I can switch from scheduling a doctor's appointment to asking about our relationship balance, and Allie follows perfectly."
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -358,103 +465,201 @@ const RelationshipFeaturesPage = () => {
         </div>
       </section>
       
-      {/* The Command Center */}
+      {/* How It All Works Together */}
       <section className="py-20">
         <div className="max-w-4xl mx-auto px-6">
           <div className="text-center mb-12">
-            <div className="inline-block p-2 bg-blue-100 rounded-lg mb-4">
-              <Brain className="text-blue-600" size={24} />
+            <div className="inline-block p-2 bg-purple-100 rounded-lg mb-4">
+              <Layers className="text-purple-600" size={24} />
             </div>
-            <h2 className="text-3xl font-light mb-4">The Relationship Command Center</h2>
+            <h2 className="text-3xl font-light mb-4">How the Command Center Works</h2>
             <p className="text-xl text-gray-600 font-light max-w-2xl mx-auto">
-              Your complete relationship dashboard that integrates workload balance with relationship health
+              A seamless system where each component strengthens the others through AI integration
             </p>
           </div>
           
-          <div className="bg-gray-50 p-8 rounded-lg mb-12">
-            <div className="grid md:grid-cols-2 gap-8">
-              <div>
-                <h3 className="text-xl font-medium mb-6">Dashboard Features</h3>
-                <div className="space-y-4">
-                  <div className="flex items-start">
-                    <div className="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center mr-3 flex-shrink-0">
-                      <Heart size={16} className="text-pink-600" />
-                    </div>
-                    <div>
-                      <p className="font-medium">Relationship & Workload Balance Chart</p>
-                      <p className="text-sm text-gray-600">
-                        Visualize the direct correlation between workload sharing and relationship satisfaction
-                      </p>
+          <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 mb-12">
+            <h3 className="text-xl font-medium mb-6 text-center">The Information Flow</h3>
+            
+            <div className="grid md:grid-cols-3 gap-8 mb-8">
+              <div className="text-center">
+                <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
+                  <UploadCloud className="text-blue-600" size={24} />
+                </div>
+                <h4 className="font-medium mb-2">Input Layer</h4>
+                <p className="text-sm text-gray-600">
+                  Multiple channels capture family information – chats, uploads, surveys, photos, and voice
+                </p>
+              </div>
+              
+              <div className="text-center">
+                <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4">
+                  <Brain className="text-purple-600" size={24} />
+                </div>
+                <h4 className="font-medium mb-2">Processing Layer</h4>
+                <p className="text-sm text-gray-600">
+                  AI analyzes, connects, and synthesizes information across all command systems
+                </p>
+              </div>
+              
+              <div className="text-center">
+                <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+                  <Zap className="text-green-600" size={24} />
+                </div>
+                <h4 className="font-medium mb-2">Action Layer</h4>
+                <p className="text-sm text-gray-600">
+                  Personalized insights, reminders, suggestions, and organized information delivered when needed
+                </p>
+              </div>
+            </div>
+            
+            <div className="p-6 bg-gray-50 rounded-lg">
+              <h4 className="font-medium mb-4 text-center">Real-World Example Flow</h4>
+              
+              <div className="space-y-6">
+                <div className="flex items-start">
+                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center mr-3 flex-shrink-0">
+                    <span className="font-bold">1</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">School Sends Home a Document</p>
+                    <p className="text-sm text-gray-600 mb-2">
+                      Your child's teacher sends home a note about an upcoming field trip requiring forms and payment
+                    </p>
+                    <div className="flex space-x-2">
+                      <span className="text-xs py-1 px-2 bg-blue-100 text-blue-700 rounded-full">Input: Photo Upload</span>
+                      <span className="text-xs py-1 px-2 bg-indigo-100 text-indigo-700 rounded-full">Via: Allie Chat</span>
                     </div>
                   </div>
-                  
-                  <div className="flex items-start">
-                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-3 flex-shrink-0">
-                      <Star size={16} className="text-purple-600" />
-                    </div>
-                    <div>
-                      <p className="font-medium">Strategy Implementation Tracker</p>
-                      <p className="text-sm text-gray-600">
-                        Track your progress implementing the 10 relationship-strengthening strategies
-                      </p>
+                </div>
+                
+                <div className="flex items-start">
+                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center mr-3 flex-shrink-0">
+                    <span className="font-bold">2</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">Command Center Processing</p>
+                    <p className="text-sm text-gray-600 mb-2">
+                      Allie extracts key information: due date, cost, required forms, and connects it to your child's profile
+                    </p>
+                    <div className="flex space-x-2">
+                      <span className="text-xs py-1 px-2 bg-amber-100 text-amber-700 rounded-full">Processing: Document Analysis</span>
+                      <span className="text-xs py-1 px-2 bg-purple-100 text-purple-700 rounded-full">System: Document Command</span>
                     </div>
                   </div>
-                  
-                  <div className="flex items-start">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
-                      <Lightbulb size={16} className="text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="font-medium">AI-Powered Relationship Insights</p>
-                      <p className="text-sm text-gray-600">
-                        Receive personalized recommendations based on your unique relationship patterns
-                      </p>
+                </div>
+                
+                <div className="flex items-start">
+                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center mr-3 flex-shrink-0">
+                    <span className="font-bold">3</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">Integrated Actions Across Systems</p>
+                    <p className="text-sm text-gray-600 mb-2">
+                      The Command Center activates multiple systems to support this single document
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:space-x-2">
+                      <span className="text-xs py-1 px-2 bg-blue-100 text-blue-700 rounded-full">Calendar Command: Adds form due date</span>
+                      <span className="text-xs py-1 px-2 bg-green-100 text-green-700 rounded-full">Child Command: Links to school record</span>
+                      <span className="text-xs py-1 px-2 bg-amber-100 text-amber-700 rounded-full">Document Command: Stores original</span>
+                      <span className="text-xs py-1 px-2 bg-indigo-100 text-indigo-700 rounded-full">Chat Command: Sends reminder</span>
                     </div>
                   </div>
-                  
-                  <div className="flex items-start">
-                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center mr-3 flex-shrink-0">
-                      <MessageCircle size={16} className="text-green-600" />
-                    </div>
-                    <div>
-                      <p className="font-medium">Guided Relationship Meetings</p>
-                      <p className="text-sm text-gray-600">
-                        Structured 15-minute check-ins with your partner to strengthen connection
-                      </p>
+                </div>
+                
+                <div className="flex items-start">
+                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center mr-3 flex-shrink-0">
+                    <span className="font-bold">4</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">Long-Term Command Center Memory</p>
+                    <p className="text-sm text-gray-600 mb-2">
+                      Months later, you can ask "What did Emma's field trip to the science museum cost last year?" and get the exact answer
+                    </p>
+                    <div className="flex space-x-2">
+                      <span className="text-xs py-1 px-2 bg-green-100 text-green-700 rounded-full">Output: Historical Reference</span>
+                      <span className="text-xs py-1 px-2 bg-purple-100 text-purple-700 rounded-full">Benefit: Institutional Family Memory</span>
                     </div>
                   </div>
                 </div>
               </div>
-              
-              <div className="bg-black text-white p-6 rounded-lg">
-                <h3 className="text-xl font-medium mb-4">Strategic Features</h3>
-                <div className="space-y-3">
-                  <div className="p-3 bg-white bg-opacity-10 rounded">
-                    <h4 className="text-white font-medium">Date Night Planner</h4>
-                    <p className="text-sm text-gray-300">
-                      Schedule and track quality time together with date suggestions
-                    </p>
+            </div>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-6 mb-12">
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4">
+                <Repeat className="text-blue-600" size={24} />
+              </div>
+              <h3 className="font-medium text-lg mb-2">Continuous Learning Cycle</h3>
+              <p className="text-sm text-gray-600">
+                Every interaction improves the system's understanding of your family's unique patterns and needs
+              </p>
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <CheckCircle size={14} className="text-blue-600 mr-2 flex-shrink-0" />
+                    <p className="text-xs text-gray-700">Weekly check-ins provide fresh data</p>
                   </div>
-                  
-                  <div className="p-3 bg-white bg-opacity-10 rounded">
-                    <h4 className="text-white font-medium">Gratitude Tracker</h4>
-                    <p className="text-sm text-gray-300">
-                      Record expressions of appreciation to nurture positive feelings
-                    </p>
+                  <div className="flex items-center">
+                    <CheckCircle size={14} className="text-blue-600 mr-2 flex-shrink-0" />
+                    <p className="text-xs text-gray-700">Survey responses refine understanding</p>
                   </div>
-                  
-                  <div className="p-3 bg-white bg-opacity-10 rounded">
-                    <h4 className="text-white font-medium">Relationship Progress Chart</h4>
-                    <p className="text-sm text-gray-300">
-                      Visualize improvement in connection, satisfaction, and balance over time
-                    </p>
+                  <div className="flex items-center">
+                    <CheckCircle size={14} className="text-blue-600 mr-2 flex-shrink-0" />
+                    <p className="text-xs text-gray-700">AI adapts recommendations over time</p>
                   </div>
-                  
-                  <div className="p-3 bg-white bg-opacity-10 rounded">
-                    <h4 className="text-white font-medium">Couple Check-ins</h4>
-                    <p className="text-sm text-gray-300">
-                      Weekly relationship pulse checks to identify opportunities for growth
-                    </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-4">
+                <Shield className="text-amber-600" size={24} />
+              </div>
+              <h3 className="font-medium text-lg mb-2">Privacy-First Architecture</h3>
+              <p className="text-sm text-gray-600">
+                Your family's data remains secure and private within your family account
+              </p>
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <CheckCircle size={14} className="text-amber-600 mr-2 flex-shrink-0" />
+                    <p className="text-xs text-gray-700">End-to-end encryption of sensitive data</p>
+                  </div>
+                  <div className="flex items-center">
+                    <CheckCircle size={14} className="text-amber-600 mr-2 flex-shrink-0" />
+                    <p className="text-xs text-gray-700">No data sharing with third parties</p>
+                  </div>
+                  <div className="flex items-center">
+                    <CheckCircle size={14} className="text-amber-600 mr-2 flex-shrink-0" />
+                    <p className="text-xs text-gray-700">Parent controls for child data access</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-4">
+                <Smartphone className="text-green-600" size={24} />
+              </div>
+              <h3 className="font-medium text-lg mb-2">Seamless Multi-Device Access</h3>
+              <p className="text-sm text-gray-600">
+                Access your Command Center from any device, anywhere, with perfect synchronization
+              </p>
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <CheckCircle size={14} className="text-green-600 mr-2 flex-shrink-0" />
+                    <p className="text-xs text-gray-700">Mobile, tablet, and desktop optimized</p>
+                  </div>
+                  <div className="flex items-center">
+                    <CheckCircle size={14} className="text-green-600 mr-2 flex-shrink-0" />
+                    <p className="text-xs text-gray-700">Real-time updates across all devices</p>
+                  </div>
+                  <div className="flex items-center">
+                    <CheckCircle size={14} className="text-green-600 mr-2 flex-shrink-0" />
+                    <p className="text-xs text-gray-700">Works offline with automatic syncing</p>
                   </div>
                 </div>
               </div>
@@ -463,294 +668,413 @@ const RelationshipFeaturesPage = () => {
         </div>
       </section>
       
-      {/* Dad's Corner */}
+      {/* Feature Showcase */}
       <section className="py-20 bg-gray-50">
         <div className="max-w-4xl mx-auto px-6">
           <div className="text-center mb-12">
-            <div className="inline-block p-2 bg-amber-100 rounded-lg mb-4">
-              <Users className="text-amber-600" size={24} />
+            <div className="inline-block p-2 bg-blue-100 rounded-lg mb-4">
+              <Star className="text-blue-600" size={24} />
             </div>
-            <h2 className="text-3xl font-light mb-4">Dad's Corner</h2>
+            <h2 className="text-3xl font-light mb-4">Command Center in Action</h2>
             <p className="text-xl text-gray-600 font-light max-w-2xl mx-auto">
-              Simple ways to make her day (and strengthen your relationship)
+              Explore key features that make the Family Command Center revolutionary
             </p>
           </div>
           
-          <div className="bg-white p-8 rounded-lg border border-gray-200 mb-8">
-            <h3 className="text-xl font-medium mb-6">Three Things That Will Blow Her Mind</h3>
+          <div className="grid md:grid-cols-2 gap-6 mb-12">
+            {/* Feature 1 */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+              <div className="h-48 bg-indigo-600 flex items-center justify-center">
+                <div className="text-center p-4">
+                  <MessageSquare size={32} className="text-white mx-auto mb-2" />
+                  <p className="text-white font-medium">Allie Chat Experience</p>
+                </div>
+              </div>
+              <div className="p-6">
+                <h3 className="font-medium text-lg mb-2">Advanced Natural Language Understanding</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Allie's enhanced NLU engine recognizes your intent whether asking about tasks, children's records, or calendar events, creating a seamless conversational experience.
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-start">
+                    <div className="bg-indigo-100 p-1 rounded mr-2 mt-0.5">
+                      <CheckCircle size={12} className="text-indigo-600" />
+                    </div>
+                    <p className="text-sm">Extract events from screenshots or invitations</p>
+                  </div>
+                  <div className="flex items-start">
+                    <div className="bg-indigo-100 p-1 rounded mr-2 mt-0.5">
+                      <CheckCircle size={12} className="text-indigo-600" />
+                    </div>
+                    <p className="text-sm">Process and interpret medical notes or school documents</p>
+                  </div>
+                  <div className="flex items-start">
+                    <div className="bg-indigo-100 p-1 rounded mr-2 mt-0.5">
+                      <CheckCircle size={12} className="text-indigo-600" />
+                    </div>
+                    <p className="text-sm">Parse voice commands for quick information input</p>
+                  </div>
+                </div>
+              </div>
+            </div>
             
-            <div className="space-y-6">
-              <div className="flex items-start">
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mr-4">
-                  <span className="font-bold text-blue-600">1</span>
-                </div>
-                <div>
-                  <h4 className="font-medium text-lg">Take Over One Invisible Task</h4>
-                  <p className="text-gray-600 mb-2">
-                    Handling meal planning, scheduling appointments, or tracking household supplies—without being asked—will immediately reduce her mental load.
-                  </p>
-                  <p className="text-gray-800 bg-blue-50 p-3 rounded-lg text-sm">
-                    <strong>Just one thing:</strong> Try saying "I've got the meal planning this week" and watch her expression. Most women have been carrying this invisible work for years.
-                  </p>
+            {/* Feature 2 */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+              <div className="h-48 bg-amber-600 flex items-center justify-center">
+                <div className="text-center p-4">
+                  <FileText size={32} className="text-white mx-auto mb-2" />
+                  <p className="text-white font-medium">Document Intelligence</p>
                 </div>
               </div>
-              
-              <div className="flex items-start">
-                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mr-4">
-                  <span className="font-bold text-green-600">2</span>
-                </div>
-                <div>
-                  <h4 className="font-medium text-lg">Daily 10-Minute Check-in</h4>
-                  <p className="text-gray-600 mb-2">
-                    Set a recurring alarm for a daily 10-minute conversation with no distractions—no phones, no TV, just connection.
-                  </p>
-                  <p className="text-gray-800 bg-green-50 p-3 rounded-lg text-sm">
-                    <strong>Just one thing:</strong> Ask "What can I do to make your day easier tomorrow?" and then actually do it. This simple habit creates a profound sense of partnership.
-                  </p>
+              <div className="p-6">
+                <h3 className="font-medium text-lg mb-2">Multi-Modal Document Processing</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Share documents through photos, PDFs, or text scans and Allie intelligently extracts and organizes the information for long-term reference and retrieval.
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-start">
+                    <div className="bg-amber-100 p-1 rounded mr-2 mt-0.5">
+                      <CheckCircle size={12} className="text-amber-600" />
+                    </div>
+                    <p className="text-sm">Automatic categorization of medical and school documents</p>
+                  </div>
+                  <div className="flex items-start">
+                    <div className="bg-amber-100 p-1 rounded mr-2 mt-0.5">
+                      <CheckCircle size={12} className="text-amber-600" />
+                    </div>
+                    <p className="text-sm">Extract key information from prescriptions, forms, and instructions</p>
+                  </div>
+                  <div className="flex items-start">
+                    <div className="bg-amber-100 p-1 rounded mr-2 mt-0.5">
+                      <CheckCircle size={12} className="text-amber-600" />
+                    </div>
+                    <p className="text-sm">Retrieve specific information years later through natural questions</p>
+                  </div>
                 </div>
               </div>
-              
-              <div className="flex items-start">
-                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 mr-4">
-                  <span className="font-bold text-purple-600">3</span>
+            </div>
+            
+            {/* Feature 3 */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+              <div className="h-48 bg-blue-600 flex items-center justify-center">
+                <div className="text-center p-4">
+                  <Calendar size={32} className="text-white mx-auto mb-2" />
+                  <p className="text-white font-medium">Unified Calendar</p>
                 </div>
-                <div>
-                  <h4 className="font-medium text-lg">Specific, Genuine Appreciation</h4>
-                  <p className="text-gray-600 mb-2">
-                    Notice and acknowledge something specific she does that usually goes unrecognized.
-                  </p>
-                  <p className="text-gray-800 bg-purple-50 p-3 rounded-lg text-sm">
-                    <strong>Just one thing:</strong> Try "I noticed how you always remember everyone's appointments and keep us on schedule. That's a huge contribution that makes our family work." Be specific about invisible work.
-                  </p>
+              </div>
+              <div className="p-6">
+                <h3 className="font-medium text-lg mb-2">Intelligent Event Management</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  A single view of all family commitments with smart scheduling capabilities that integrate with your existing calendar systems.
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-start">
+                    <div className="bg-blue-100 p-1 rounded mr-2 mt-0.5">
+                      <CheckCircle size={12} className="text-blue-600" />
+                    </div>
+                    <p className="text-sm">Extract events from emails, messages, and screenshots</p>
+                  </div>
+                  <div className="flex items-start">
+                    <div className="bg-blue-100 p-1 rounded mr-2 mt-0.5">
+                      <CheckCircle size={12} className="text-blue-600" />
+                    </div>
+                    <p className="text-sm">Intelligent suggestions for optimal meeting times</p>
+                  </div>
+                  <div className="flex items-start">
+                    <div className="bg-blue-100 p-1 rounded mr-2 mt-0.5">
+                      <CheckCircle size={12} className="text-blue-600" />
+                    </div>
+                    <p className="text-sm">Filter events by family member, category, or priority</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Feature 4 */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+              <div className="h-48 bg-green-600 flex items-center justify-center">
+                <div className="text-center p-4">
+                  <Activity size={32} className="text-white mx-auto mb-2" />
+                  <p className="text-white font-medium">Child Development Tracking</p>
+                </div>
+              </div>
+              <div className="p-6">
+                <h3 className="font-medium text-lg mb-2">Comprehensive Child Profiles</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Track every aspect of your children's development with voice-enabled updates, AI insights, and document integration.
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-start">
+                    <div className="bg-green-100 p-1 rounded mr-2 mt-0.5">
+                      <CheckCircle size={12} className="text-green-600" />
+                    </div>
+                    <p className="text-sm">Medical history with appointment tracking and reminders</p>
+                  </div>
+                  <div className="flex items-start">
+                    <div className="bg-green-100 p-1 rounded mr-2 mt-0.5">
+                      <CheckCircle size={12} className="text-green-600" />
+                    </div>
+                    <p className="text-sm">Growth charts and developmental milestone tracking</p>
+                  </div>
+                  <div className="flex items-start">
+                    <div className="bg-green-100 p-1 rounded mr-2 mt-0.5">
+                      <CheckCircle size={12} className="text-green-600" />
+                    </div>
+                    <p className="text-sm">Emotional wellbeing and academic progress monitoring</p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
           
-          <div className="bg-black text-white p-8 rounded-lg">
-            <div className="flex items-start">
-              <div className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center mr-4 flex-shrink-0">
-                <Zap size={20} />
+          {/* Voice Command Showcase */}
+          <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 mb-12">
+            <div className="flex flex-col md:flex-row items-center mb-6">
+              <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mb-4 md:mb-0 md:mr-4 flex-shrink-0">
+                <Microphone className="text-purple-600" size={24} />
               </div>
               <div>
-                <h3 className="text-xl font-medium mb-4">The Dad Challenge</h3>
-                <p className="text-gray-300 mb-4">
-                  Try just one Allie task per week. That's it. No big commitments, no complex systems—just one small action each week.
-                </p>
-                <p className="text-white font-medium mb-4">
-                  After 4 weeks, ask your partner if she's noticed a difference in how supported she feels.
-                </p>
-                <p className="text-gray-300 italic">
-                  "I was skeptical, but after following Allie's suggestions for a month, my wife told me she feels like we're truly partners for the first time in years. And honestly? Our relationship has never been better." — Mark, father of three
-                </p>
+                <h3 className="text-xl font-medium mb-1 text-center md:text-left">Voice Command Integration</h3>
+                <p className="text-gray-600 text-center md:text-left">Say it, and the Command Center makes it happen</p>
               </div>
-            </div>
-          </div>
-        </div>
-      </section>
-      
-      {/* Science Meets Practice */}
-      <section className="py-20">
-        <div className="max-w-4xl mx-auto px-6">
-          <div className="text-center mb-12">
-            <div className="inline-block p-2 bg-indigo-100 rounded-lg mb-4">
-              <Activity className="text-indigo-600" size={24} />
-            </div>
-            <h2 className="text-3xl font-light mb-4">Science Meets Daily Practice</h2>
-            <p className="text-xl text-gray-600 font-light max-w-2xl mx-auto">
-              How Allie's cycle system builds stronger relationships through habit formation
-            </p>
-          </div>
-          
-          <div className="grid md:grid-cols-2 gap-8 mb-12">
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-              <h3 className="text-xl font-medium mb-4 flex items-center">
-                <RefreshCw className="text-blue-600 mr-2" size={24} />
-                The Allie Cycle System
-              </h3>
-              <p className="text-gray-600 mb-4">
-                Our weekly cycle creates a rhythm of relationship-strengthening activities that build over time:
-              </p>
-              <ol className="space-y-3">
-                <li className="flex items-start">
-                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-2 flex-shrink-0 mt-0.5 text-sm font-bold">1</div>
-                  <div className="text-sm">
-                    <span className="font-medium">Task Completion Phase</span>
-                    <p className="text-gray-600">Implementing targeted relationship-strengthening behaviors</p>
-                  </div>
-                </li>
-                <li className="flex items-start">
-                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-2 flex-shrink-0 mt-0.5 text-sm font-bold">2</div>
-                  <div className="text-sm">
-                    <span className="font-medium">Couple Check-in</span>
-                    <p className="text-gray-600">Measuring the impact on relationship satisfaction</p>
-                  </div>
-                </li>
-                <li className="flex items-start">
-                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-2 flex-shrink-0 mt-0.5 text-sm font-bold">3</div>
-                  <div className="text-sm">
-                    <span className="font-medium">Relationship Meeting</span>
-                    <p className="text-gray-600">Discussing progress and planning continued growth</p>
-                  </div>
-                </li>
-                <li className="flex items-start">
-                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-2 flex-shrink-0 mt-0.5 text-sm font-bold">4</div>
-                  <div className="text-sm">
-                    <span className="font-medium">AI Learning & New Recommendations</span>
-                    <p className="text-gray-600">Customized suggestions based on what works for your relationship</p>
-                  </div>
-                </li>
-              </ol>
             </div>
             
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-              <h3 className="text-xl font-medium mb-4 flex items-center">
-                <Brain className="text-purple-600 mr-2" size={24} />
-                The Science of Habit Building
-              </h3>
-              <p className="text-gray-600 mb-4">
-                Allie applies behavioral science principles to make relationship improvement sustainable:
-              </p>
-              <div className="space-y-3">
-                <div className="flex items-start">
-                  <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center mr-2 flex-shrink-0">
-                    <Lightbulb size={16} />
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium text-sm mb-3 flex items-center">
+                  <Microphone size={16} className="text-purple-600 mr-2" />
+                  Say This...
+                </h4>
+                <div className="space-y-3">
+                  <div className="p-2 bg-purple-50 rounded-lg">
+                    <p className="text-sm">"Add Emma's dentist appointment next Tuesday at 3pm"</p>
                   </div>
-                  <div className="text-sm">
-                    <span className="font-medium">Small, Consistent Actions</span>
-                    <p className="text-gray-600">Research shows tiny habits are more sustainable than major changes</p>
+                  <div className="p-2 bg-purple-50 rounded-lg">
+                    <p className="text-sm">"Record Jack's height as 4 feet 2 inches"</p>
                   </div>
-                </div>
-                <div className="flex items-start">
-                  <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center mr-2 flex-shrink-0">
-                    <Lightbulb size={16} />
+                  <div className="p-2 bg-purple-50 rounded-lg">
+                    <p className="text-sm">"Add soccer practice every Wednesday at 4pm starting next week"</p>
                   </div>
-                  <div className="text-sm">
-                    <span className="font-medium">Positive Reinforcement</span>
-                    <p className="text-gray-600">Celebrating small wins creates a reward loop for continued improvement</p>
+                  <div className="p-2 bg-purple-50 rounded-lg">
+                    <p className="text-sm">"Take a photo of this school form and save it to Emma's profile"</p>
                   </div>
                 </div>
-                <div className="flex items-start">
-                  <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center mr-2 flex-shrink-0">
-                    <Lightbulb size={16} />
+              </div>
+              
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium text-sm mb-3 flex items-center">
+                  <Zap size={16} className="text-purple-600 mr-2" />
+                  ...And Allie Does This
+                </h4>
+                <div className="space-y-3">
+                  <div className="p-2 bg-white rounded-lg border border-purple-100">
+                    <p className="text-sm">Creates calendar event, sends reminder, links to dental records</p>
                   </div>
-                  <div className="text-sm">
-                    <span className="font-medium">Feedback Loops</span>
-                    <p className="text-gray-600">Regular measurement creates awareness and motivation for change</p>
+                  <div className="p-2 bg-white rounded-lg border border-purple-100">
+                    <p className="text-sm">Updates growth chart, adds to child profile, tracks against milestones</p>
                   </div>
-                </div>
-                <div className="flex items-start">
-                  <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center mr-2 flex-shrink-0">
-                    <Lightbulb size={16} />
+                  <div className="p-2 bg-white rounded-lg border border-purple-100">
+                    <p className="text-sm">Creates recurring event, adds to child's activities, sends weekly reminders</p>
                   </div>
-                  <div className="text-sm">
-                    <span className="font-medium">Incremental Progress</span>
-                    <p className="text-gray-600">Small improvements compound into significant relationship enhancements</p>
+                  <div className="p-2 bg-white rounded-lg border border-purple-100">
+                    <p className="text-sm">Captures, categorizes document, extracts key information, connects to school</p>
                   </div>
                 </div>
               </div>
             </div>
           </div>
           
-          <div className="bg-gray-50 p-8 rounded-lg">
-            <h3 className="text-xl font-medium mb-4">How The Cycle Improves AI Recommendations</h3>
-            <p className="text-gray-600 mb-4">
-              With each weekly cycle, Allie's AI engine gets smarter about what works for your specific relationship:
-            </p>
-            <div className="grid md:grid-cols-3 gap-4">
-              <div className="bg-white p-4 rounded border border-gray-200">
-                <div className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center mb-3">
-                  <span className="font-bold">1</span>
+          {/* Multi-modal showcase */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+            <div className="p-8">
+              <h3 className="text-xl font-medium mb-6 text-center">Multiple Ways to Add Information</h3>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="text-center">
+                  <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-2">
+                    <Microphone className="text-gray-600" size={20} />
+                  </div>
+                  <p className="text-sm font-medium">Voice</p>
                 </div>
-                <h4 className="font-medium mb-1">Data Collection</h4>
-                <p className="text-sm text-gray-600">
-                  As you complete tasks and check-ins, Allie learns which strategies impact your satisfaction most
-                </p>
+                <div className="text-center">
+                  <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-2">
+                    <Camera className="text-gray-600" size={20} />
+                  </div>
+                  <p className="text-sm font-medium">Photos</p>
+                </div>
+                <div className="text-center">
+                  <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-2">
+                    <UploadCloud className="text-gray-600" size={20} />
+                  </div>
+                  <p className="text-sm font-medium">Documents</p>
+                </div>
+                <div className="text-center">
+                  <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-2">
+                    <MessageSquare className="text-gray-600" size={20} />
+                  </div>
+                  <p className="text-sm font-medium">Chat</p>
+                </div>
               </div>
-              <div className="bg-white p-4 rounded border border-gray-200">
-                <div className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center mb-3">
-                  <span className="font-bold">2</span>
+              
+              <div className="p-6 bg-indigo-50 rounded-lg">
+                <div className="flex items-start">
+                  <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center mr-3 flex-shrink-0">
+                    <MessageSquare className="text-indigo-600" size={20} />
+                  </div>
+                  <div>
+                    <div className="mb-3">
+                      <p className="text-sm italic text-indigo-700">
+                        "Here's a screenshot of Jack's soccer practice schedule. Can you add these to the calendar and remind me 30 minutes before each practice?"
+                      </p>
+                    </div>
+                    <div className="p-3 bg-white rounded-lg border border-indigo-100">
+                      <p className="text-sm text-gray-700">
+                        I've added Jack's soccer practices to the calendar for every Tuesday and Thursday at 4:30pm starting next week. I've also set up 30-minute reminders before each practice. You can view these events in the Calendar Command or ask me about them anytime.
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <h4 className="font-medium mb-1">Pattern Recognition</h4>
-                <p className="text-sm text-gray-600">
-                  The AI identifies correlations between specific actions and relationship quality improvements
-                </p>
-              </div>
-              <div className="bg-white p-4 rounded border border-gray-200">
-                <div className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center mb-3">
-                  <span className="font-bold">3</span>
-                </div>
-                <h4 className="font-medium mb-1">Tailored Recommendations</h4>
-                <p className="text-sm text-gray-600">
-                  Each new cycle delivers more personalized suggestions based on what's working for you
-                </p>
               </div>
             </div>
           </div>
         </div>
       </section>
       
-      
+      {/* Testimonials */}
+      <section className="py-20 bg-black text-white">
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-light mb-4">Families in Command</h2>
+            <p className="text-xl text-gray-400 font-light max-w-2xl mx-auto">
+              How real families use the Command Center to transform their daily lives
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="bg-gray-800 p-6 rounded-lg">
+              <div className="mb-4">
+                <Star className="text-yellow-400 inline-block" size={20} />
+                <Star className="text-yellow-400 inline-block" size={20} />
+                <Star className="text-yellow-400 inline-block" size={20} />
+                <Star className="text-yellow-400 inline-block" size={20} />
+                <Star className="text-yellow-400 inline-block" size={20} />
+              </div>
+              <p className="text-gray-300 mb-4">
+                "Having all our children's information in one place with smart reminders has been life-changing. The Document Command saved us when we needed immunization records late at night for a school trip the next day."
+              </p>
+              <p className="font-medium">Jennifer, mother of three</p>
+            </div>
+            
+            <div className="bg-gray-800 p-6 rounded-lg">
+              <div className="mb-4">
+                <Star className="text-yellow-400 inline-block" size={20} />
+                <Star className="text-yellow-400 inline-block" size={20} />
+                <Star className="text-yellow-400 inline-block" size={20} />
+                <Star className="text-yellow-400 inline-block" size={20} />
+                <Star className="text-yellow-400 inline-block" size={20} />
+              </div>
+              <p className="text-gray-300 mb-4">
+                "The Relationship Command transformed how we manage household responsibilities. Seeing the data didn't lie—I was handling 76% of planning. Visualizing it changed everything and our connection has improved dramatically."
+              </p>
+              <p className="font-medium">David, father of two</p>
+            </div>
+            
+            <div className="bg-gray-800 p-6 rounded-lg">
+              <div className="mb-4">
+                <Star className="text-yellow-400 inline-block" size={20} />
+                <Star className="text-yellow-400 inline-block" size={20} />
+                <Star className="text-yellow-400 inline-block" size={20} />
+                <Star className="text-yellow-400 inline-block" size={20} />
+                <Star className="text-yellow-400 inline-block" size={20} />
+              </div>
+              <p className="text-gray-300 mb-4">
+                "I uploaded a pediatrician's note about my child's medication through chat. Six months later, I asked Allie about the dosage and it immediately pulled up the exact information along with the original document."
+              </p>
+              <p className="font-medium">Michelle, mother of two</p>
+            </div>
+          </div>
+        </div>
+      </section>
       
       {/* CTA Section */}
-      <section className="py-16 bg-black text-white">
+      <section className="py-16 bg-purple-600 text-white">
         <div className="max-w-4xl mx-auto px-6 text-center">
-          <h2 className="text-3xl font-light mb-4">Start Your Relationship Transformation</h2>
-          <p className="text-xl opacity-80 mb-8 max-w-2xl mx-auto font-light">
-            Small changes. Measurable improvements. Stronger connection.
+          <h2 className="text-3xl font-light mb-4">Take Command of Your Family Life</h2>
+          <p className="text-xl opacity-90 mb-8 max-w-2xl mx-auto font-light">
+            Join thousands of families creating harmony through better organization, communication, and balance.
           </p>
-          <button 
-            onClick={() => navigate('/onboarding')}
-            className="px-8 py-4 bg-white text-black rounded-md font-medium hover:bg-gray-100"
-          >
-            Get Started
-          </button>
+          <div className="flex flex-col md:flex-row justify-center items-center space-y-4 md:space-y-0 md:space-x-4">
+            <button 
+              onClick={() => navigate('/onboarding')}
+              className="px-8 py-4 bg-white text-purple-700 rounded-md font-medium hover:bg-gray-100"
+            >
+              Start Your Command Center
+            </button>
+            <button
+              onClick={() => navigate('/dashboard?demo=true')}
+              className="px-8 py-4 bg-transparent border border-white text-white rounded-md font-medium hover:bg-white hover:bg-opacity-10"
+            >
+              See Demo <ArrowUpRight size={16} className="inline ml-1" />
+            </button>
+          </div>
         </div>
       </section>
       
       {/* Footer */}
-<footer className="px-6 py-12 bg-white border-t">
-  <div className="max-w-6xl mx-auto">
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-      <div>
-        <h2 className="text-2xl font-light mb-4">Allie</h2>
-        <p className="text-gray-600 font-light">Balancing family responsibilities together</p>
-      </div>
-      
-      <div>
-        <h3 className="text-gray-800 font-medium mb-4">Product</h3>
-        <ul className="space-y-2">
-          <li>
-            <button onClick={() => navigate('/how-it-works')} className="text-gray-600 hover:text-gray-900 font-light">How It Works</button>
-          </li>
-          <li>
-            <button onClick={() => navigate('/relationship-features')} className="text-gray-600 hover:text-gray-900 font-light">Relationship Features</button>
-          </li>
-          <li>
-            <button onClick={() => navigate('/ai-assistant')} className="text-gray-600 hover:text-gray-900 font-light">AI Assistant</button>
-          </li>
-        </ul>
-      </div>
-      
-      <div>
-        <h3 className="text-gray-800 font-medium mb-4">Company</h3>
-        <ul className="space-y-2">
-          <li>
-            <button onClick={() => navigate('/about-us')} className="text-gray-600 hover:text-gray-900 font-light">About Us</button>
-          </li>
-          <li>
-            <button onClick={() => navigate('/blog')} className="text-gray-600 hover:text-gray-900 font-light">Blog</button>
-          </li>
-        </ul>
-      </div>
-    </div>
-    <div className="mt-8 pt-8 border-t text-center text-gray-500 text-sm">
-      <p>© 2025 Allie. All rights reserved.</p>
-    </div>
-  </div>
-</footer>
+      <footer className="px-6 py-12 bg-white border-t">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div>
+              <h2 className="text-2xl font-light mb-4">Allie</h2>
+              <p className="text-gray-600 font-light">Your Family Command Center</p>
+            </div>
+            
+            <div>
+              <h3 className="text-gray-800 font-medium mb-4">Product</h3>
+              <ul className="space-y-2">
+                <li>
+                  <button onClick={() => navigate('/how-it-works')} className="text-gray-600 hover:text-gray-900 font-light">How It Works</button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/family-command-center')} className="text-gray-600 hover:text-gray-900 font-light">Family Command Center</button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/ai-assistant')} className="text-gray-600 hover:text-gray-900 font-light">AI Assistant</button>
+                </li>
+              </ul>
+            </div>
+            
+            <div>
+              <h3 className="text-gray-800 font-medium mb-4">Company</h3>
+              <ul className="space-y-2">
+                <li>
+                  <button onClick={() => navigate('/about-us')} className="text-gray-600 hover:text-gray-900 font-light">About Us</button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/blog')} className="text-gray-600 hover:text-gray-900 font-light">Blog</button>
+                </li>
+              </ul>
+            </div>
+            
+            <div>
+              <h3 className="text-gray-800 font-medium mb-4">Support</h3>
+              <ul className="space-y-2">
+                <li>
+                  <button onClick={() => navigate('/faq')} className="text-gray-600 hover:text-gray-900 font-light">FAQ</button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/contact')} className="text-gray-600 hover:text-gray-900 font-light">Contact Us</button>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div className="mt-8 pt-8 border-t text-center text-gray-500 text-sm">
+            <p>© 2025 Allie. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };
 
-export default RelationshipFeaturesPage;
+export default FamilyCommandCenterPage;

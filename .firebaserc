@@ -4,7 +4,8 @@
     "dev": "parentload-ba995",
     "production": "parentload-ba995",
     "allie": "parentload-ba995",
-    "live": "parentload-ba995"
+    "live": "parentload-ba995",
+    "build": "parentload-ba995"
   },
   "targets": {},
   "etags": {}
