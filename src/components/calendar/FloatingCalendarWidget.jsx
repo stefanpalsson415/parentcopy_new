@@ -58,6 +58,9 @@ const FloatingCalendarWidget = () => {
   const [eventCache, setEventCache] = useState(new Set());
   
   // Function to fetch all event IDs and cache them to prevent duplicates
+// Replace the buildEventCache and eventExists functions with these consistent versions:
+
+// Function to fetch all event IDs and cache them to prevent duplicates
 const buildEventCache = async () => {
   try {
     if (!currentUser?.uid || !familyId) return;
@@ -72,8 +75,8 @@ const buildEventCache = async () => {
     
     querySnapshot.forEach((doc) => {
       const eventData = doc.data();
-      // Create a unique signature for each event
-      const signature = `${eventData.summary || eventData.title || ''}-${eventData.start?.dateTime || eventData.start?.date || ''}-${eventData.location || ''}`;
+      // Create a unique signature for each event - ORDER MATTERS!
+      const signature = createEventSignature(eventData);
       eventSignatures.add(signature);
     });
     
@@ -84,11 +87,35 @@ const buildEventCache = async () => {
   }
 };
 
+// Helper function to create consistent event signatures
+const createEventSignature = (event) => {
+  // Normalize title/summary
+  const title = event.summary || event.title || '';
+  
+  // Normalize date format
+  let dateStr = '';
+  if (event.start?.dateTime) {
+    dateStr = event.start.dateTime;
+  } else if (event.start?.date) {
+    dateStr = event.start.date;
+  } else if (event.date) {
+    dateStr = event.date;
+  } else if (event.dateObj) {
+    dateStr = event.dateObj.toISOString();
+  }
+  
+  // Normalize location
+  const location = event.location || '';
+  
+  return `${title}-${dateStr}-${location}`.toLowerCase();
+};
+
 // Helper function to check if an event already exists
 const eventExists = (event) => {
-  const signature = `${event.title || event.summary || ''}-${event.date || event.dateObj?.toISOString() || ''}-${event.location || ''}`;
+  const signature = createEventSignature(event);
   return eventCache.has(signature);
 };
+
 
 // Use effect for initializing event cache
 useEffect(() => {
@@ -96,7 +123,27 @@ useEffect(() => {
     buildEventCache();
   }
 }, [isOpen, currentUser]);
+
+// Add this useEffect hook in FloatingCalendarWidget.jsx
+useEffect(() => {
+  // Listen for force-calendar-refresh events
+  const handleForceRefresh = () => {
+    console.log("Force calendar refresh triggered");
+    setLastRefresh(Date.now());
+    
+    // Clear cache and rebuild it
+    setEventCache(new Set());
+    buildEventCache();
+  };
   
+  window.addEventListener('force-calendar-refresh', handleForceRefresh);
+  
+  return () => {
+    window.removeEventListener('force-calendar-refresh', handleForceRefresh);
+  };
+}, []);
+
+
 // Enhanced initialization to handle calendar-related errors cleanly
 useEffect(() => {
   // Start error suppression for non-critical calendar errors
@@ -193,21 +240,25 @@ useEffect(() => {
     }
   }, [isOpen, familyId, lastRefresh, selectedDate]);
 
-  // Inside the FloatingCalendarWidget component, after the initial useEffect hooks
-  useEffect(() => {
-    // Function to reload events
-    const refreshEvents = () => {
-      setLastRefresh(Date.now());
-    };
-    
-    // Set up event listener for calendar updates
-    window.addEventListener('calendar-event-added', refreshEvents);
-    
-    // Clean up
-    return () => {
-      window.removeEventListener('calendar-event-added', refreshEvents);
-    };
-  }, []);
+  // Enhance the event listener with better logging
+useEffect(() => {
+  // Function to reload events
+  const refreshEvents = (e) => {
+    console.log("Calendar event added event received", e.detail);
+    setLastRefresh(Date.now());
+  };
+  
+  // Set up event listener for calendar updates
+  window.addEventListener('calendar-event-added', refreshEvents);
+  
+  // Log that we've set up the listener
+  console.log("Calendar event listener initialized");
+  
+  // Clean up
+  return () => {
+    window.removeEventListener('calendar-event-added', refreshEvents);
+  };
+}, []);
   
   // Drag to resize functionality
   useEffect(() => {
@@ -327,70 +378,85 @@ useEffect(() => {
     }
   };
   
-  // Load all events from various sources
-  const loadAllEvents = async () => {
-    try {
-      setLoading(true);
-      
-      // Get children data from Firebase
-      const childrenData = await loadChildrenEvents();
-      
-      // Get family meeting data
-      const familyMeetings = getUpcomingMeetings();
-      
-      // Get relationship events
-      const relationshipEvents = await loadRelationshipEvents();
-      
-      // Get task events
-      const taskEvents = await loadTaskEvents();
-      
-      // Get general calendar events (including those added via chat)
-      const generalEvents = await loadGeneralCalendarEvents();
-      
-      // Track already added events
-      const addedEventsMap = {};
-      generalEvents.forEach(event => {
-        const eventKey = getEventKey(event);
-        if (eventKey) {
-          addedEventsMap[eventKey] = true;
-        }
-      });
-      setAddedEvents(addedEventsMap);
-      
-      // Combine all events
-      const combined = [
-        ...childrenData.childrenEvents || [],
-        ...childrenData.childrenAppointments || [],
-        ...childrenData.childrenActivities || [],
-        ...familyMeetings,
-        ...relationshipEvents,
-        ...taskEvents,
-        ...generalEvents // Include chat-added events
-      ];
-      
-      // Clean up events - ensure no duplicates by checking for similar events
-      const cleanedEvents = [];
-      const eventSignatures = new Set();
-      
-      combined.forEach(event => {
-        // Create signature based on title and date
-        const dateStr = event.dateObj ? event.dateObj.toISOString().split('T')[0] : '';
-        const signature = `${event.title}-${dateStr}`;
-        
-        // Only add if we haven't seen this signature before
-        if (!eventSignatures.has(signature)) {
-          eventSignatures.add(signature);
-          cleanedEvents.push(event);
-        }
-      });
-      
-      setAllEvents(cleanedEvents);
-      setLoading(false);
-    } catch (error) {
-      console.error("Error loading events:", error);
-      setLoading(false);
+  // Enhance the loadAllEvents function for better logging and debugging
+const loadAllEvents = async () => {
+  try {
+    setLoading(true);
+    console.log("Loading all calendar events...");
+    
+    // Get children data from Firebase
+    const childrenData = await loadChildrenEvents();
+    console.log("Loaded children events:", childrenData.childrenEvents.length);
+    
+    // Get family meeting data
+    const familyMeetings = getUpcomingMeetings();
+    console.log("Loaded family meetings:", familyMeetings.length);
+    
+    // Get relationship events
+    const relationshipEvents = await loadRelationshipEvents();
+    console.log("Loaded relationship events:", relationshipEvents.length);
+    
+    // Get task events
+    const taskEvents = await loadTaskEvents();
+    console.log("Loaded task events:", taskEvents.length);
+    
+    // Get general calendar events (including those added via chat)
+    const generalEvents = await loadGeneralCalendarEvents();
+    console.log("Loaded general calendar events:", generalEvents.length);
+    
+    // For debugging, print the first few general events
+    if (generalEvents.length > 0) {
+      console.log("Sample general events:", generalEvents.slice(0, 2).map(e => ({
+        title: e.title,
+        date: e.dateObj ? e.dateObj.toISOString() : 'No date',
+        location: e.location || 'No location'
+      })));
     }
-  };
+    
+    // Track already added events
+    const addedEventsMap = {};
+    generalEvents.forEach(event => {
+      const eventKey = getEventKey(event);
+      if (eventKey) {
+        addedEventsMap[eventKey] = true;
+      }
+    });
+    setAddedEvents(addedEventsMap);
+    
+    // Combine all events
+    const combined = [
+      ...childrenData.childrenEvents || [],
+      ...childrenData.childrenAppointments || [],
+      ...childrenData.childrenActivities || [],
+      ...familyMeetings,
+      ...relationshipEvents,
+      ...taskEvents,
+      ...generalEvents // Include chat-added events
+    ];
+    
+    // Clean up events - ensure no duplicates by checking for similar events
+    const cleanedEvents = [];
+    const eventSignatures = new Set();
+    
+    combined.forEach(event => {
+      // Create signature using our consistent function
+      const signature = createEventSignature(event);
+      
+      // Only add if we haven't seen this signature before
+      if (!eventSignatures.has(signature)) {
+        eventSignatures.add(signature);
+        cleanedEvents.push(event);
+      }
+    });
+    
+    console.log(`Final combined events: ${cleanedEvents.length}`);
+    setAllEvents(cleanedEvents);
+    setLoading(false);
+  } catch (error) {
+    console.error("Error loading events:", error);
+    setLoading(false);
+  }
+};
 
   // Load children's events from Firebase
   const loadChildrenEvents = async () => {

@@ -321,6 +321,7 @@ class EnhancedNLU {
  * @param {Array} familyMembers - Family members for context
  * @returns {Object} Extracted event details
  */
+// Add this improved parsing for birthday events
 extractEventDetails(text, familyMembers = []) {
   try {
     // Determine likely region (US or SE)
@@ -329,6 +330,88 @@ extractEventDetails(text, familyMembers = []) {
     // Extract event type
     const eventType = this.detectEventType(text);
     
+    // Special handling for birthday parties
+    if (eventType === 'birthday' || text.toLowerCase().includes('birthday') || text.toLowerCase().includes('party')) {
+      const birthdayPatterns = [
+        /(?:invited to|join us for)\s+([A-Za-z]+(?:'s)?)\s+(?:birthday|party)/i,
+        /([A-Za-z]+(?:'s)?)\s+(?:\d+(?:st|nd|rd|th)?\s+)?birthday\s+party/i,
+        /party\s+for\s+([A-Za-z]+)/i,
+        /([A-Za-z]+)\s+is\s+turning\s+(\d+)/i,
+        /([A-Za-z]+)\s+turns\s+(\d+)/i
+      ];
+
+      let birthdayChild = null;
+      let birthdayAge = null;
+
+      // Try to extract birthday child name
+      for (const pattern of birthdayPatterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          birthdayChild = match[1].replace(/'s$/, '').trim(); // Remove possessive if present
+          if (match[2] && !isNaN(parseInt(match[2]))) {
+            birthdayAge = parseInt(match[2]);
+          }
+          break;
+        }
+      }
+
+      // Look for age if not found with name
+      if (!birthdayAge) {
+        const agePattern = /turning\s+(\d+)|(\d+)(?:st|nd|rd|th)?\s+birthday/i;
+        const ageMatch = text.match(agePattern);
+        if (ageMatch) {
+          birthdayAge = parseInt(ageMatch[1] || ageMatch[2]);
+        }
+      }
+
+      // Extract location
+      const locationPatterns = [
+        /at\s+([A-Za-z0-9\s'.]+?)(?:[,.]|\s+on|\s+at|\s+from)/i,
+        /at\s+([A-Za-z0-9\s'.]+?)$/i,
+        /location\s*:?\s*([A-Za-z0-9\s'.]+?)(?:[,.]|$)/i
+      ];
+
+      let location = null;
+      for (const pattern of locationPatterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          location = match[1].trim();
+          break;
+        }
+      }
+
+      // Extract date and time using existing functions
+      const dateTime = this.extractDateTime(text, region);
+
+      // Construct the event
+      const eventDetails = {
+        eventType: 'birthday',
+        title: birthdayChild ? `${birthdayChild}'s Birthday Party` : 'Birthday Party',
+        dateTime: dateTime,
+        location: location,
+        extraDetails: {
+          birthdayChildName: birthdayChild,
+          birthdayChildAge: birthdayAge,
+          notes: text // Include original text for reference
+        }
+      };
+
+      // Try to match a child if it's for one of the family's children
+      if (birthdayChild && familyMembers.length > 0) {
+        const matchedChild = familyMembers.find(child => 
+          child.name.toLowerCase() === birthdayChild.toLowerCase()
+        );
+        
+        if (matchedChild) {
+          eventDetails.childId = matchedChild.id;
+          eventDetails.childName = matchedChild.name;
+        }
+      }
+
+      return eventDetails;
+    }
+    
+    // Continue with original method for other event types
     // Extract date and time considering regional formats
     const dateTime = this.extractEventDateTime(text, region);
     

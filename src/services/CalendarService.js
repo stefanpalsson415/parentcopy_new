@@ -83,11 +83,20 @@ class CalendarService {
 
 // Replace the addEvent method in CalendarService.js with this improved version:
 // Replace the addEvent method in CalendarService.js with this improved version:
+// Improve the addEvent method with better error handling and clearer logging
 async addEvent(event, userId) {
   try {
     if (!userId) {
       throw new Error("User ID is required to add events");
     }
+    
+    // Log the incoming event for debugging
+    console.log("Adding calendar event:", {
+      title: event.summary || event.title || 'Untitled',
+      hasStart: !!event.start,
+      hasDate: !!(event.start?.dateTime || event.start?.date),
+      userId
+    });
     
     // Ensure event has required fields
     if (!event.summary && !event.title) {
@@ -127,12 +136,19 @@ async addEvent(event, userId) {
     
     const eventRef = collection(db, "calendar_events");
     const docRef = await addDoc(eventRef, eventData);
+    console.log("Event saved to Firestore with ID:", docRef.id);
     
     // Dispatch an event to notify components of the new calendar event
     if (typeof window !== 'undefined') {
       const updateEvent = new CustomEvent('calendar-event-added', {
-        detail: { eventId: docRef.id, category: standardizedEvent.category }
+        detail: { 
+          eventId: docRef.id, 
+          category: standardizedEvent.category,
+          title: standardizedEvent.summary,
+          time: new Date().toISOString()
+        }
       });
+      console.log("Dispatching calendar-event-added event");
       window.dispatchEvent(updateEvent);
     }
     

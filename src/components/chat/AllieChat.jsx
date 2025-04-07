@@ -442,83 +442,111 @@ const AllieChat = () => {
   };
   
   // Add event to calendar
-  const addEventToCalendar = async (eventDetails) => {
-    try {
-      if (!eventDetails || !selectedUser) return false;
+const addEventToCalendar = async (eventDetails) => {
+  try {
+    if (!eventDetails || !selectedUser) return false;
+    
+    // Ensure we have a valid Date object
+    const startDate = eventDetails.dateTime ? 
+      (eventDetails.dateTime instanceof Date ? 
+        eventDetails.dateTime : 
+        new Date(eventDetails.dateTime)) : 
+      new Date();
       
-      // Create start and end date objects
-      const startDate = eventDetails.dateTime || new Date();
-      const endDate = new Date(startDate);
-      endDate.setHours(startDate.getHours() + 1); // Default 1 hour event
-      
-      // Determine event title
-      let eventTitle = eventDetails.title || 'New Event';
-      
-      // Add more context to title based on event type
-      if (eventDetails.eventType === 'birthday' && eventDetails.extraDetails?.birthdayChildName) {
-        const childAge = eventDetails.extraDetails.birthdayChildAge 
-          ? ` (${eventDetails.extraDetails.birthdayChildAge})` 
-          : '';
-        eventTitle = `${eventDetails.extraDetails.birthdayChildName}'s Birthday${childAge}`;
-      } else if (eventDetails.childName) {
-        eventTitle = `${eventTitle} - ${eventDetails.childName}`;
-      }
-      
-      // Create event object
-      const event = {
-        summary: eventTitle,
-        description: eventDetails.extraDetails?.notes || `Added from Allie chat`,
-        location: eventDetails.location || '',
-        start: {
-          dateTime: startDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        end: {
-          dateTime: endDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        reminders: {
-          useDefault: true
-        }
-      };
-      
-      // Add event to calendar
-      const result = await CalendarService.addEvent(event, selectedUser.id);
-      
-      if (result.success) {
-        // Success message
-        const successMessage = {
-          familyId,
-          sender: 'allie',
-          userName: 'Allie',
-          text: `Great! I've added "${eventTitle}" to your calendar for ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.${eventDetails.location ? ` Location: ${eventDetails.location}.` : ''}`,
-          timestamp: new Date().toISOString()
-        };
-        
-        setMessages(prev => [...prev, successMessage]);
-        return true;
-      } else {
-        throw new Error("Failed to add event to calendar");
-      }
-    } catch (error) {
-      console.error("Error adding event to calendar:", error);
-      
-      // Error message
-      const errorMessage = {
+    // Log the date conversion for debugging
+    console.log("Event date conversion:", {
+      original: eventDetails.dateTime,
+      converted: startDate,
+      iso: startDate.toISOString()
+    });
+    
+    const endDate = new Date(startDate);
+    endDate.setHours(startDate.getHours() + 1); // Default 1 hour event
+    
+    // Determine event title
+    let eventTitle = eventDetails.title || 'New Event';
+    
+    // Add more context to title based on event type
+    if (eventDetails.eventType === 'birthday' && eventDetails.extraDetails?.birthdayChildName) {
+      const childAge = eventDetails.extraDetails.birthdayChildAge 
+        ? ` (${eventDetails.extraDetails.birthdayChildAge})` 
+        : '';
+      eventTitle = `${eventDetails.extraDetails.birthdayChildName}'s Birthday${childAge}`;
+    } else if (eventDetails.childName) {
+      eventTitle = `${eventTitle} - ${eventDetails.childName}`;
+    }
+    
+    // Create event object with explicit structure
+    const event = {
+      summary: eventTitle,
+      title: eventTitle, // Include both for compatibility
+      description: eventDetails.extraDetails?.notes || `Added from Allie chat`,
+      location: eventDetails.location || '',
+      start: {
+        dateTime: startDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: endDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      reminders: {
+        useDefault: true
+      },
+      // Add additional metadata
+      familyId: familyId,
+      eventType: eventDetails.eventType || 'general',
+      childId: eventDetails.childId,
+      childName: eventDetails.childName,
+      extraDetails: eventDetails.extraDetails || {}
+    };
+    
+    console.log("Adding event to calendar:", event);
+    
+    // Add event to calendar
+    const result = await CalendarService.addEvent(event, selectedUser.id);
+    
+    if (result.success) {
+      // Success message
+      const successMessage = {
         familyId,
         sender: 'allie',
         userName: 'Allie',
-        text: `I'm sorry, I couldn't add the event to your calendar. Please try again or add it manually through the calendar page.`,
+        text: `Great! I've added "${eventTitle}" to your calendar for ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.${eventDetails.location ? ` Location: ${eventDetails.location}.` : ''}`,
         timestamp: new Date().toISOString()
       };
       
-      setMessages(prev => [...prev, errorMessage]);
-      return false;
-    } finally {
-      setDetectedEventDetails(null);
-      setShowEventConfirmation(false);
+      setMessages(prev => [...prev, successMessage]);
+      
+      // Force calendar refresh
+      if (typeof window !== 'undefined') {
+        const refreshEvent = new CustomEvent('force-calendar-refresh');
+        window.dispatchEvent(refreshEvent);
+      }
+      
+      return true;
+    } else {
+      throw new Error("Failed to add event to calendar");
     }
-  };
+  } catch (error) {
+    console.error("Error adding event to calendar:", error);
+    
+    // Error message
+    const errorMessage = {
+      familyId,
+      sender: 'allie',
+      userName: 'Allie',
+      text: `I'm sorry, I couldn't add the event to your calendar. Please try again or add it manually through the calendar page.`,
+      timestamp: new Date().toISOString()
+    };
+    
+    setMessages(prev => [...prev, errorMessage]);
+    return false;
+  } finally {
+    setDetectedEventDetails(null);
+    setShowEventConfirmation(false);
+  }
+};
   
   const handleSend = async () => {
     if (input.trim() && canUseChat && selectedUser && familyId) {
