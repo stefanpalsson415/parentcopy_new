@@ -1030,48 +1030,42 @@ const ChildrenTrackingTab = () => {
     });
     
     // If the appointment has a future date, add it to the calendar
-    const appointmentDate = new Date(formData.date);
-    if (appointmentDate > new Date() && !formData.completed) {
-      try {
-        // Parse time strings
-        const [hours, minutes] = formData.time.split(':');
-        appointmentDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-        
-        // End time is 30 minutes after start
-        const endDate = new Date(appointmentDate);
-        endDate.setMinutes(endDate.getMinutes() + 30);
-        
-        // Create calendar event
-        const calendarEvent = {
-          summary: `${getChildName(childId)}'s ${formData.title}`,
-          description: formData.notes || `Medical appointment: ${formData.title}`,
-          location: formData.providerDetails?.address || '',
-          start: {
-            dateTime: appointmentDate.toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          end: {
-            dateTime: endDate.toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          reminders: {
-            useDefault: false,
-            overrides: [
-              { method: 'popup', minutes: 24 * 60 }, // 1 day before
-              { method: 'popup', minutes: 60 } // 1 hour before
-            ]
-          }
-        };
-        
-        // Add to calendar
-        if (CalendarService) {
-          await CalendarService.addEvent(calendarEvent, currentUser?.uid);
-        }
-      } catch (calendarError) {
-        console.error("Error adding to calendar:", calendarError);
-        // Don't block the save if calendar fails
-      }
+    // If the appointment has a future date, add it to the calendar
+const appointmentDate = new Date(formData.date);
+if (appointmentDate > new Date() && !formData.completed) {
+  try {
+    // Parse time strings
+    const [hours, minutes] = formData.time.split(':');
+    appointmentDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    
+    // End time is 30 minutes after start
+    const endDate = new Date(appointmentDate);
+    endDate.setMinutes(endDate.getMinutes() + 30);
+    
+    // Create child event object specifically for calendar
+    const childEventData = {
+      title: formData.title,
+      dateTime: appointmentDate,
+      endDateTime: endDate,
+      location: formData.providerDetails?.address || '',
+      description: formData.notes || `Medical appointment: ${formData.title}`,
+      childId: childId,
+      childName: getChildName(childId),
+      attendingParentId: null, // Can be filled later if needed
+      eventType: 'appointment',
+      familyId: familyId,
+      creationSource: 'child-tracking-tab'
+    };
+    
+    // Use addChildEvent specifically for children's appointments
+    if (CalendarService) {
+      await CalendarService.addChildEvent(childEventData, currentUser?.uid);
     }
+  } catch (calendarError) {
+    console.error("Error adding to calendar:", calendarError);
+    // Don't block the save if calendar fails
+  }
+}
     
     return true;
   };

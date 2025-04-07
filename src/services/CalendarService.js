@@ -75,15 +75,7 @@ class CalendarService {
 
   // In src/services/CalendarService.js - Update the addEvent method to dispatch an event
 
-// CalendarService.js - Replace the addEvent method with this corrected version
-// In src/services/CalendarService.js - Update the addEvent method to dispatch an event
 
-// Replace the addEvent method with this corrected version
-// In src/services/CalendarService.js - Update the addEvent method to dispatch an event
-
-// Replace the addEvent method in CalendarService.js with this improved version:
-// Replace the addEvent method in CalendarService.js with this improved version:
-// Improve the addEvent method with better error handling and clearer logging
 // In CalendarService.js - Update the addEvent method to dispatch an event
 async addEvent(event, userId) {
   try {
@@ -176,11 +168,19 @@ async addEvent(event, userId) {
 }
 
 /// In CalendarService.js - Find the addChildEvent method and replace it with this:
+// Fix for CalendarService.js - replace the addChildEvent method
 async addChildEvent(event, userId) {
   try {
     if (!userId) {
       throw new Error("User ID is required to add events");
     }
+    
+    console.log("Adding child calendar event:", {
+      title: event.title || 'Untitled',
+      childName: event.childName || 'Unknown child',
+      hasDate: !!(event.dateTime),
+      userId
+    });
     
     // Ensure event has required fields
     if (!event.title) {
@@ -218,36 +218,31 @@ async addChildEvent(event, userId) {
       creationSource: cleanedEvent.creationSource || 'manual'
     };
     
-    // Ensure we never pass undefined values to Firestore
-    const eventData = Object.fromEntries(
-      Object.entries({
-        ...standardizedEvent,
-        userId,
-        familyId: cleanedEvent.familyId || null,
-        createdAt: serverTimestamp()
-      }).filter(([_, value]) => value !== undefined)
-    );
+    // Save event to Firestore
+    const eventData = {
+      ...standardizedEvent,
+      userId,
+      familyId: cleanedEvent.familyId || null,
+      createdAt: serverTimestamp()
+    };
     
-    // Check specifically for siblingIds to ensure it's properly handled
-    if (eventData.siblingIds && !Array.isArray(eventData.siblingIds)) {
-      delete eventData.siblingIds;
-    } else if (eventData.siblingIds && eventData.siblingIds.length === 0) {
-      delete eventData.siblingIds;
-    }
-    
-    const eventRef = collection(db, "calendar_child_events");
+    const eventRef = collection(db, "calendar_events"); // Use regular events collection, not child-specific
     const docRef = await addDoc(eventRef, eventData);
     
-    // Dispatch an event to notify components
+    // Dispatch a single event to notify components - NO force refresh to avoid duplication
     if (typeof window !== 'undefined') {
       const updateEvent = new CustomEvent('calendar-child-event-added', {
-        detail: { eventId: docRef.id, childId: cleanedEvent.childId }
+        detail: { 
+          eventId: docRef.id, 
+          childId: cleanedEvent.childId,
+          childName: cleanedEvent.childName
+        }
       });
       window.dispatchEvent(updateEvent);
     }
     
     // Show success notification
-    this.showNotification(`Event "${standardizedEvent.summary}" added to your calendar for ${cleanedEvent.childName}`, "success");
+    this.showNotification(`${standardizedEvent.summary} added to your calendar for ${cleanedEvent.childName}`, "success");
     
     return {
       success: true,
