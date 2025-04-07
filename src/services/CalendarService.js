@@ -151,7 +151,7 @@ async addEvent(event, userId) {
   }
 }
 
-// Add this method to CalendarService class
+/// In CalendarService.js - Find the addChildEvent method and replace it with this:
 async addChildEvent(event, userId) {
   try {
     if (!userId) {
@@ -163,37 +163,53 @@ async addChildEvent(event, userId) {
       event.title = "Untitled Child Event";
     }
     
+    // Clean event object by removing any undefined fields
+    const cleanedEvent = Object.fromEntries(
+      Object.entries(event).filter(([_, value]) => value !== undefined)
+    );
+    
     // Format child event
     const standardizedEvent = {
-      ...event,
-      summary: event.title,
-      description: event.description || '',
+      ...cleanedEvent,
+      summary: cleanedEvent.title,
+      description: cleanedEvent.description || '',
       start: {
-        dateTime: event.dateTime instanceof Date ? event.dateTime.toISOString() : new Date(event.dateTime).toISOString(),
+        dateTime: cleanedEvent.dateTime instanceof Date 
+          ? cleanedEvent.dateTime.toISOString() 
+          : new Date(cleanedEvent.dateTime).toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       },
       end: {
-        dateTime: event.endDateTime instanceof Date ? 
-          event.endDateTime.toISOString() : 
-          new Date(new Date(event.dateTime).getTime() + 60*60000).toISOString(),
+        dateTime: cleanedEvent.endDateTime instanceof Date 
+          ? cleanedEvent.endDateTime.toISOString() 
+          : new Date(new Date(cleanedEvent.dateTime).getTime() + 60*60000).toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       },
-      location: event.location || '',
-      childId: event.childId,
-      childName: event.childName,
-      attendingParentId: event.attendingParentId,
-      eventType: event.eventType || 'other',
-      extraDetails: event.extraDetails || {},
-      creationSource: event.creationSource || 'manual'
+      location: cleanedEvent.location || '',
+      childId: cleanedEvent.childId,
+      childName: cleanedEvent.childName,
+      attendingParentId: cleanedEvent.attendingParentId,
+      eventType: cleanedEvent.eventType || 'other',
+      extraDetails: cleanedEvent.extraDetails || {},
+      creationSource: cleanedEvent.creationSource || 'manual'
     };
     
-    // Save event to Firestore
-    const eventData = {
-      ...standardizedEvent,
-      userId,
-      familyId: event.familyId || null,
-      createdAt: serverTimestamp()
-    };
+    // Ensure we never pass undefined values to Firestore
+    const eventData = Object.fromEntries(
+      Object.entries({
+        ...standardizedEvent,
+        userId,
+        familyId: cleanedEvent.familyId || null,
+        createdAt: serverTimestamp()
+      }).filter(([_, value]) => value !== undefined)
+    );
+    
+    // Check specifically for siblingIds to ensure it's properly handled
+    if (eventData.siblingIds && !Array.isArray(eventData.siblingIds)) {
+      delete eventData.siblingIds;
+    } else if (eventData.siblingIds && eventData.siblingIds.length === 0) {
+      delete eventData.siblingIds;
+    }
     
     const eventRef = collection(db, "calendar_child_events");
     const docRef = await addDoc(eventRef, eventData);
@@ -201,13 +217,13 @@ async addChildEvent(event, userId) {
     // Dispatch an event to notify components
     if (typeof window !== 'undefined') {
       const updateEvent = new CustomEvent('calendar-child-event-added', {
-        detail: { eventId: docRef.id, childId: event.childId }
+        detail: { eventId: docRef.id, childId: cleanedEvent.childId }
       });
       window.dispatchEvent(updateEvent);
     }
     
     // Show success notification
-    this.showNotification(`Event "${standardizedEvent.summary}" added to your calendar for ${event.childName}`, "success");
+    this.showNotification(`Event "${standardizedEvent.summary}" added to your calendar for ${cleanedEvent.childName}`, "success");
     
     return {
       success: true,
