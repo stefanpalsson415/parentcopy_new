@@ -153,7 +153,8 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
     completeWeeklyCheckIn,
     saveSurveyProgress,
     currentWeek,
-    familyId 
+    familyId,
+    selectFamilyMember 
   } = useFamily();
   
   // State
@@ -173,6 +174,23 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
   const autoSaveTimerRef = useRef(null);
   const hasLoadedProgress = useRef(false);
 
+
+// Ensure we have the correct selected user on mount
+useEffect(() => {
+  if (familyMembers.length > 0) {
+    const storedUserId = localStorage.getItem('selectedUserId');
+    if (storedUserId && (!selectedUser || selectedUser.id !== storedUserId)) {
+      const userToSelect = familyMembers.find(m => m.id === storedUserId);
+      if (userToSelect && userToSelect.role === 'child') {
+        console.log("Restoring correct child for kid survey:", userToSelect.name);
+        selectFamilyMember(userToSelect);
+      }
+    }
+  }
+}, [familyMembers]);
+
+
+  
   // Redirect if no user is selected
   useEffect(() => {
     if (!selectedUser) {

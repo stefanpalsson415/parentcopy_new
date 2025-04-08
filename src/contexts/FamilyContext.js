@@ -116,6 +116,19 @@ export function FamilyProvider({ children }) {
     }
   }, [initialFamilyData, currentUser]);
 
+// Restore selected user from localStorage if available
+useEffect(() => {
+  if (familyMembers.length > 0 && !selectedUser) {
+    const storedUserId = localStorage.getItem('selectedUserId');
+    if (storedUserId) {
+      const userFromStorage = familyMembers.find(member => member.id === storedUserId);
+      if (userFromStorage) {
+        console.log("Restoring selected user from localStorage:", userFromStorage.name);
+        setSelectedUser(userFromStorage);
+      }
+    }
+  }
+}, [familyMembers, selectedUser]);
 
 
   // Update favicon helper function

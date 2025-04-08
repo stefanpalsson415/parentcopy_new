@@ -24,7 +24,8 @@ const SurveyScreen = ({ mode = 'initial' }) => {
     familyPriorities,
     familyName,
     familyId,
-    currentWeek
+    currentWeek,
+    selectFamilyMember
   } = useFamily();
   
   const { 
@@ -81,6 +82,21 @@ const SurveyScreen = ({ mode = 'initial' }) => {
     setLocalCurrentQuestion(updatedQuestion);
     setHasWeightChanges(true);
   };
+
+// Ensure we have the correct selected user on mount
+useEffect(() => {
+  if (familyMembers.length > 0) {
+    const storedUserId = localStorage.getItem('selectedUserId');
+    if (storedUserId && (!selectedUser || selectedUser.id !== storedUserId)) {
+      const userToSelect = familyMembers.find(m => m.id === storedUserId);
+      if (userToSelect) {
+        console.log("Restoring correct user for survey:", userToSelect.name);
+        selectFamilyMember(userToSelect);
+      }
+    }
+  }
+}, [familyMembers]);
+
 
   // Redirect if no user is selected
   useEffect(() => {
