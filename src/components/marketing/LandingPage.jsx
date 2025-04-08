@@ -2,6 +2,8 @@ import { useNavigate } from 'react-router-dom';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import familyPhoto from '../../assets/family-photo.jpg';
+import MarketingHeader from '../shared/MarketingHeader';
+import MarketingFooter from '../shared/MarketingFooter';
 import { 
   ArrowRight, ArrowLeft, CheckCircle, Star, Award, Brain, 
   Heart, ChevronDown, ChevronUp, Book, BarChart, Scale, 
@@ -25,7 +27,7 @@ const LandingPage = () => {
       content: (
         <div className="bg-gray-50 p-4 rounded-lg">
           <h4 className="font-medium mb-4">The Allie Ecosystem</h4>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex items-start">
               <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center mr-3 flex-shrink-0">
                 <Scale className="text-pink-600" size={20} />
@@ -127,7 +129,7 @@ const LandingPage = () => {
       description: "The intelligent heart of your family—connecting schedules, documents, child development, and relationships in one unified hub.",
       content: (
         <div className="bg-gray-50 p-4 rounded-lg">
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div className="bg-white p-3 rounded-lg border">
               <div className="flex items-center mb-2">
                 <Calendar size={16} className="text-blue-600 mr-2" />
@@ -191,7 +193,7 @@ const LandingPage = () => {
               <Upload size={14} className="text-blue-600 mr-2" />
               Multiple Ways to Add Information
             </h5>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <div className="text-center">
                 <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-1">
                   <Mic size={16} className="text-gray-600" />
@@ -244,12 +246,12 @@ const LandingPage = () => {
         <div className="bg-gray-50 p-4 rounded-lg">
           <h4 className="font-medium mb-2">Task Weighting System</h4>
           <div className="bg-white p-3 rounded-lg border mb-3">
-            <div className="text-xs text-gray-700 font-mono">
+            <div className="text-xs text-gray-700 font-mono overflow-x-auto">
               TaskWeight = BaseTime × Frequency × Invisibility × EmotionalLabor × Priority
             </div>
           </div>
           
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="bg-white p-3 rounded-lg border">
               <h5 className="text-xs font-medium mb-2">Family Balance Analysis</h5>
               <div className="space-y-2">
@@ -357,85 +359,19 @@ const LandingPage = () => {
   return (
     <div className="min-h-screen bg-white font-['Roboto']">
       {/* Header/Nav */}
-      <header className="px-6 py-4 border-b bg-white sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto flex justify-between items-center">
-          <h1 className="text-3xl font-light">Allie</h1>
-          <nav className="hidden md:flex space-x-8">
-            <button 
-              onClick={() => navigate('/how-it-works')}
-              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-            >
-              How It Works
-            </button>
-            <button
-              onClick={() => navigate('/about-us')}
-              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-            >
-              About Us
-            </button>
-            <button 
-              onClick={() => navigate('/family-command-center')}
-              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-            >
-              Family Command Center
-            </button>
-            <button 
-              onClick={() => navigate('/ai-assistant')}
-              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-            >
-              AI Assistant
-            </button>
-            <button 
-              onClick={() => navigate('/family-memory')}
-              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-            >
-              Family Memory
-            </button>
-            <button 
-              onClick={() => navigate('/blog')}
-              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-            >
-              Blog
-            </button>
-            
-          {currentUser ? (
-            <button 
-              onClick={() => navigate('/login', { state: { directAccess: true } })}
-              className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
-            >
-              Jump Back In
-            </button>
-          ) : (
-              <>
-                <button 
-                  onClick={() => navigate('/login')}
-                  className="px-4 py-2 border border-gray-800 rounded hover:bg-gray-100"
-                >
-                  Log In
-                </button>
-                <button 
-                  onClick={() => navigate('/onboarding')}
-                  className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
-                >
-                  Sign Up
-                </button>
-              </>
-            )}
-          </nav>
-        </div>
-      </header>
+      <MarketingHeader />
       
       {/* Hero Section */}
-      <section className="py-20">
-        <div className="max-w-5xl mx-auto px-6 grid md:grid-cols-2 gap-12 items-center">
+      <section className="py-12 md:py-20">
+        <div className="max-w-5xl mx-auto px-6 grid md:grid-cols-2 gap-8 md:gap-12 items-center">
           <div>
-            <h2 className="text-5xl font-light mb-6">Balance family responsibilities together.</h2>
-            <p className="text-xl text-gray-600 mb-8 font-light">
+            <h2 className="text-3xl md:text-5xl font-light mb-4 md:mb-6">Balance family responsibilities together.</h2>
+            <p className="text-lg md:text-xl text-gray-600 mb-6 md:mb-8 font-light">
               Allie is your family's all-in-one assistant, using AI to balance workload, remember everything, and make family life smoother.
             </p>
             <button 
               onClick={() => navigate('/onboarding')}
-              className="px-8 py-4 bg-black text-white rounded-md text-lg font-medium hover:bg-gray-800"
+              className="w-full sm:w-auto px-6 py-3 md:px-8 md:py-4 bg-black text-white rounded-md text-base md:text-lg font-medium hover:bg-gray-800"
             >
               Get Started
             </button>
@@ -451,17 +387,17 @@ const LandingPage = () => {
       </section>
       
       {/* Interactive Demo Section */}
-      <section className="py-16 bg-gray-50">
+      <section className="py-10 md:py-16 bg-gray-50">
         <div className="max-w-5xl mx-auto px-6">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl font-bold mb-3">See Allie in Action</h2>
-            <p className="text-lg text-gray-600 font-light">
+          <div className="text-center mb-8 md:mb-10">
+            <h2 className="text-2xl md:text-3xl font-bold mb-2 md:mb-3">See Allie in Action</h2>
+            <p className="text-base md:text-lg text-gray-600 font-light">
               Discover how Allie transforms every aspect of family life
             </p>
           </div>
           
           {/* Demo Navigation */}
-          <div className="flex justify-center mb-8">
+          <div className="flex justify-center mb-6 md:mb-8">
             <div className="inline-flex items-center">
               <button 
                 onClick={prevDemoStep}
@@ -472,12 +408,25 @@ const LandingPage = () => {
               </button>
               
               <div className="flex space-x-2 mx-4">
-                {demoSteps.map((_, index) => (
+                {/* Show only first 5 dots on mobile, all on desktop */}
+                {demoSteps.slice(0, Math.min(5, demoSteps.length)).map((_, index) => (
                   <button 
                     key={index}
                     onClick={() => setActiveDemo(index + 1)}
-                    className={`w-3 h-3 rounded-full ${activeDemo === index + 1 ? 'bg-black' : 'bg-gray-300'}`}
+                    className={`w-2 md:w-3 h-2 md:h-3 rounded-full ${activeDemo === index + 1 ? 'bg-black' : 'bg-gray-300'}`}
                     aria-label={`Demo step ${index + 1}`}
+                  />
+                ))}
+                {demoSteps.length > 5 && (
+                  <span className="text-gray-500 text-xs md:hidden">...</span>
+                )}
+                {/* Show remaining dots only on desktop */}
+                {demoSteps.slice(5).map((_, index) => (
+                  <button 
+                    key={index + 5}
+                    onClick={() => setActiveDemo(index + 6)}
+                    className={`hidden md:block w-3 h-3 rounded-full ${activeDemo === index + 6 ? 'bg-black' : 'bg-gray-300'}`}
+                    aria-label={`Demo step ${index + 6}`}
                   />
                 ))}
               </div>
@@ -493,15 +442,15 @@ const LandingPage = () => {
           </div>
           
           {/* Demo Content */}
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-12">
-            <div className="p-6 md:p-8">
-              <div className="flex flex-col md:flex-row gap-8">
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-8 md:mb-12">
+            <div className="p-4 md:p-8">
+              <div className="flex flex-col md:flex-row gap-6 md:gap-8">
                 <div className="flex-1">
-                  <span className="inline-block px-3 py-1 bg-black text-white rounded-full text-sm font-medium mb-4">
+                  <span className="inline-block px-3 py-1 bg-black text-white rounded-full text-sm font-medium mb-3 md:mb-4">
                     Step {activeDemo} of {demoSteps.length}
                   </span>
-                  <h3 className="text-2xl font-bold mb-3">{demoSteps[activeDemo - 1].title}</h3>
-                  <p className="text-gray-600 mb-6 font-light">
+                  <h3 className="text-xl md:text-2xl font-bold mb-2 md:mb-3">{demoSteps[activeDemo - 1].title}</h3>
+                  <p className="text-gray-600 mb-4 md:mb-6 font-light">
                     {demoSteps[activeDemo - 1].description}
                   </p>
                   
@@ -510,7 +459,7 @@ const LandingPage = () => {
                   <button
                     onClick={nextDemoStep}
                     disabled={activeDemo === demoSteps.length}
-                    className="mt-6 px-6 py-2 bg-black text-white rounded-md hover:bg-gray-800 inline-flex items-center"
+                    className="mt-4 md:mt-6 px-4 py-2 md:px-6 md:py-2 bg-black text-white rounded-md hover:bg-gray-800 inline-flex items-center"
                   >
                     {activeDemo === demoSteps.length ? "Get Started" : "Next Step"}
                     <ArrowRight size={16} className="ml-2" />
@@ -523,63 +472,80 @@ const LandingPage = () => {
       </section>
 
       {/* Family Journey Section */}
-      <section className="py-16">
+      <section className="py-10 md:py-16">
         <div className="max-w-5xl mx-auto px-6">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">Your Journey to Family Balance</h2>
-            <p className="text-lg text-gray-600 font-light">
+          <div className="text-center mb-8 md:mb-12">
+            <h2 className="text-2xl md:text-3xl font-bold mb-2 md:mb-4">Your Journey to Family Balance</h2>
+            <p className="text-base md:text-lg text-gray-600 font-light">
               See the path from imbalance to harmony with Allie
             </p>
           </div>
           
-          {/* Roadmap Steps - Horizontal Version */}
-          <div className="relative mb-16">
-            {/* Connecting Line */}
-            <div className="absolute left-0 right-0 top-10 h-1 bg-gray-200 hidden md:block" />
-            
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-8">
-              {roadmapSteps.map((step, index) => (
-                <div 
-                  key={index}
-                  className="relative flex flex-col items-center text-center"
-                  onClick={() => setActiveRoadmapStep(index + 1)}
-                >
-                  {/* Circle with icon */}
-                  <div 
-                    className={`w-20 h-20 rounded-full bg-white flex items-center justify-center z-10 border-2 transition-all ${
-                      activeRoadmapStep === index + 1 ? 'border-black shadow-lg scale-110' : 'border-gray-200'
-                    }`}
-                  >
-                    {step.icon}
+          {/* Mobile Roadmap (Vertical) */}
+          <div className="md:hidden space-y-6 mb-8">
+            {roadmapSteps.map((step, index) => (
+              <div key={index} className="bg-white border border-gray-200 p-4 rounded-lg">
+                <div className="flex items-center mb-3">
+                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center border-2 border-black mr-3">
+                    <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold">
+                      {index + 1}
+                    </div>
                   </div>
-                  
-                  {/* Step number */}
-                  <div className="absolute top-0 right-0 w-6 h-6 bg-black rounded-full flex items-center justify-center text-white text-xs font-bold z-20">
-                    {index + 1}
-                  </div>
-                  
-                  <h3 className="mt-4 font-semibold text-lg">{step.title}</h3>
-                  <p className="text-sm text-gray-600 font-light mt-2">{step.description}</p>
+                  <h3 className="font-semibold text-lg">{step.title}</h3>
                 </div>
-              ))}
-            </div>
+                <p className="text-sm text-gray-600 ml-13">{step.description}</p>
+              </div>
+            ))}
+          </div>
+          
+          {/* Desktop Roadmap (Horizontal) */}
+          <div className="hidden md:grid md:grid-cols-5 gap-6 mb-12">
+            {roadmapSteps.map((step, index) => (
+              <div 
+                key={index}
+                className="relative flex flex-col items-center text-center"
+                onClick={() => setActiveRoadmapStep(index + 1)}
+              >
+                {/* Circle with icon */}
+                <div 
+                  className={`w-20 h-20 rounded-full bg-white flex items-center justify-center z-10 border-2 transition-all ${
+                    activeRoadmapStep === index + 1 ? 'border-black shadow-lg scale-110' : 'border-gray-200'
+                  }`}
+                >
+                  {step.icon}
+                </div>
+                
+                {/* Step number */}
+                <div className="absolute top-0 right-0 w-6 h-6 bg-black rounded-full flex items-center justify-center text-white text-xs font-bold z-20">
+                  {index + 1}
+                </div>
+                
+                <h3 className="mt-4 font-semibold text-lg">{step.title}</h3>
+                <p className="text-sm text-gray-600 mt-2">{step.description}</p>
+
+                {/* Connecting line (between steps) */}
+                {index < roadmapSteps.length - 1 && (
+                  <div className="absolute top-10 left-full w-full h-0.5 bg-gray-200 -ml-3 z-0"></div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </section>
       
       {/* The Problem & Solution */}
-      <section className="py-20 bg-white">
+      <section className="py-10 md:py-20 bg-white">
         <div className="max-w-4xl mx-auto px-6">
-          <div className="mb-16">
-            <h2 className="text-3xl font-bold mb-8 text-center">The Problems We're Solving</h2>
+          <div className="mb-10 md:mb-16">
+            <h2 className="text-2xl md:text-3xl font-bold mb-6 md:mb-8 text-center">The Problems We're Solving</h2>
             
-            <div className="grid md:grid-cols-3 gap-8">
-              <div className="bg-gray-50 p-8 rounded-lg">
-                <h3 className="text-xl font-medium mb-4 flex items-center">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
+              <div className="bg-gray-50 p-6 md:p-8 rounded-lg">
+                <h3 className="text-lg md:text-xl font-medium mb-3 md:mb-4 flex items-center">
                   <Heart className="text-red-500 mr-3" size={24} />
                   Family Imbalance Crisis
                 </h3>
-                <p className="text-gray-700 mb-4 font-light">
+                <p className="text-gray-700 mb-3 md:mb-4 font-light">
                   Research shows that imbalanced family workloads lead to:
                 </p>
                 <ul className="space-y-2 text-gray-700">
@@ -598,12 +564,12 @@ const LandingPage = () => {
                 </ul>
               </div>
               
-              <div className="bg-gray-50 p-8 rounded-lg">
-                <h3 className="text-xl font-medium mb-4 flex items-center">
+              <div className="bg-gray-50 p-6 md:p-8 rounded-lg">
+                <h3 className="text-lg md:text-xl font-medium mb-3 md:mb-4 flex items-center">
                   <Brain className="text-purple-500 mr-3" size={24} />
                   The Hidden Mental Load
                 </h3>
-                <p className="text-gray-700 mb-4 font-light">
+                <p className="text-gray-700 mb-3 md:mb-4 font-light">
                   Traditional approaches to balance fail because they ignore:
                 </p>
                 <ul className="space-y-2 text-gray-700">
@@ -622,12 +588,12 @@ const LandingPage = () => {
                 </ul>
               </div>
               
-              <div className="bg-gray-50 p-8 rounded-lg">
-                <h3 className="text-xl font-medium mb-4 flex items-center">
+              <div className="bg-gray-50 p-6 md:p-8 rounded-lg">
+                <h3 className="text-lg md:text-xl font-medium mb-3 md:mb-4 flex items-center">
                   <Search className="text-blue-500 mr-3" size={24} />
                   The Information Overload
                 </h3>
-                <p className="text-gray-700 mb-4 font-light">
+                <p className="text-gray-700 mb-3 md:mb-4 font-light">
                   Parents struggle with information management:
                 </p>
                 <ul className="space-y-2 text-gray-700">
@@ -651,10 +617,10 @@ const LandingPage = () => {
       </section>
       
       {/* Features Section */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-10 md:py-20 bg-gray-50">
         <div className="max-w-6xl mx-auto px-6">
-          <h2 className="text-3xl font-bold text-center mb-12">How Allie Helps Families</h2>
-          <div className="grid md:grid-cols-3 gap-8">
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8 md:mb-12">How Allie Helps Families</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
             <div className="bg-white p-6 rounded-lg shadow-md">
               <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-4">
                 <Command className="text-purple-600" size={24} />
@@ -689,11 +655,11 @@ const LandingPage = () => {
       </section>
       
       {/* Results Section */}
-      <section className="py-20 bg-white">
+      <section className="py-10 md:py-20 bg-white">
         <div className="max-w-4xl mx-auto px-6">
-          <h2 className="text-3xl font-bold mb-8 text-center">The Results Families Experience</h2>
+          <h2 className="text-2xl md:text-3xl font-bold mb-6 md:mb-8 text-center">The Results Families Experience</h2>
           
-          <div className="grid md:grid-cols-3 gap-6 mb-12">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8 md:mb-12">
             <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm text-center">
               <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
                 <Brain className="text-blue-600" size={24} />
@@ -731,20 +697,20 @@ const LandingPage = () => {
       </section>
       
       {/* CTA Section */}
-      <section className="py-16 bg-black text-white">
+      <section className="py-10 md:py-16 bg-black text-white">
         <div className="max-w-4xl mx-auto px-6 text-center">
-          <h2 className="text-3xl font-light mb-4">Ready to create a more balanced family life?</h2>
-          <p className="text-xl mb-8 font-light">Join thousands of families who are transforming their relationships through better balance.</p>
+          <h2 className="text-2xl md:text-3xl font-light mb-3 md:mb-4">Ready to create a more balanced family life?</h2>
+          <p className="text-lg md:text-xl mb-6 md:mb-8 font-light">Join thousands of families who are transforming their relationships through better balance.</p>
           <div className="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-6">
             <button 
               onClick={() => navigate('/onboarding')}
-              className="px-8 py-4 bg-white text-black rounded-md text-lg font-medium hover:bg-gray-100"
+              className="w-full sm:w-auto px-6 py-3 md:px-8 md:py-4 bg-white text-black rounded-md text-base md:text-lg font-medium hover:bg-gray-100"
             >
               Get Started
             </button>
             <button 
               onClick={() => navigate('/mini-survey')}
-              className="px-8 py-4 border border-white text-white rounded-md font-light hover:bg-white hover:bg-opacity-10"
+              className="w-full sm:w-auto px-6 py-3 md:px-8 md:py-4 border border-white text-white rounded-md font-light hover:bg-white hover:bg-opacity-10"
             >
               Try Our Mini Assessment
             </button>
@@ -753,52 +719,7 @@ const LandingPage = () => {
       </section>
       
       {/* Footer */}
-      <footer className="px-6 py-12 bg-gray-50 border-t">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div>
-              <h2 className="text-2xl font-light mb-4">Allie</h2>
-              <p className="text-gray-600 font-light">Balancing family responsibilities together</p>
-            </div>
-            
-            <div>
-              <h3 className="text-gray-800 font-medium mb-4">Product</h3>
-              <ul className="space-y-2">
-                <li>
-                  <button onClick={() => navigate('/how-it-works')} className="text-gray-600 hover:text-gray-900 font-light">How It Works</button>
-                </li>
-                <li>
-                  <button onClick={() => navigate('/family-command-center')} className="text-gray-600 hover:text-gray-900 font-light">Family Command Center</button>
-                </li>
-                <li>
-                  <button onClick={() => navigate('/ai-assistant')} className="text-gray-600 hover:text-gray-900 font-light">AI Assistant</button>
-                </li>
-                <li>
-                  <button onClick={() => navigate('/family-memory')} className="text-gray-600 hover:text-gray-900 font-light">Family Memory</button>
-                </li>
-                <li>
-                  <button onClick={() => navigate('/mini-survey')} className="text-gray-600 hover:text-gray-900 font-light">Mini Assessment</button>
-                </li>
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="text-gray-800 font-medium mb-4">Company</h3>
-              <ul className="space-y-2">
-                <li>
-                  <button onClick={() => navigate('/about-us')} className="text-gray-600 hover:text-gray-900 font-light">About Us</button>
-                </li>
-                <li>
-                  <button onClick={() => navigate('/blog')} className="text-gray-600 hover:text-gray-900 font-light">Blog</button>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div className="mt-8 pt-8 border-t text-center text-gray-500 text-sm">
-            <p>© 2025 Allie. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      <MarketingFooter />
     </div>
   );
 };
