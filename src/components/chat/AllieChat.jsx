@@ -1,6 +1,6 @@
 // src/components/chat/AllieChat.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, X, MinusSquare, Send, Info, Calendar, PlusCircle, Mic, User, ChevronUp, ChevronDown, Upload, Camera } from 'lucide-react';
+import { MessageSquare, X, MinusSquare, Send, Info, Calendar, PlusCircle, Mic, User, ChevronUp, ChevronDown, Upload, Camera, Maximize } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import EnhancedChatService from '../../services/EnhancedChatService';
 import EnhancedNLU from '../../services/EnhancedNLU';
@@ -28,6 +28,7 @@ const AllieChat = () => {
   const [imagePreview, setImagePreview] = useState(null);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [chatHeight, setChatHeight] = useState(68); // Default height (in rems)
+  const [chatWidth, setChatWidth] = useState(96); // Default width (in rems) for desktop
   const [promptChips, setPromptChips] = useState([]);
   
   // Enhanced state variables
@@ -49,6 +50,12 @@ const AllieChat = () => {
   const [showEventParser, setShowEventParser] = useState(false);
   const [eventParsingSource, setEventParsingSource] = useState(null); // 'text', 'image', or 'voice'
   
+  // Resizing state
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeType, setResizeType] = useState(null); // 'width', 'height', 'both'
+  const [startResizePos, setStartResizePos] = useState({ x: 0, y: 0 });
+  const [startResizeDims, setStartResizeDims] = useState({ width: 0, height: 0 });
+  
   // Get current location to customize Allie's behavior
   const location = useLocation();
   
@@ -56,6 +63,7 @@ const AllieChat = () => {
   const recognition = useRef(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
+  const chatContainerRef = useRef(null);
   const nlu = useRef(new EnhancedNLU());
   
   // Initialize userClosedChat from localStorage on component mount
@@ -124,6 +132,50 @@ const AllieChat = () => {
       textareaRef.current.scrollTop = scrollPos;
     }
   }, [input]);
+  
+  // Add resize event listeners for the chat window
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isResizing) return;
+      
+      const deltaX = e.clientX - startResizePos.x;
+      const deltaY = e.clientY - startResizePos.y;
+      
+      if (resizeType === 'width' || resizeType === 'both') {
+        // Calculate new width as percentage of viewport width
+        const newWidthPx = startResizeDims.width + deltaX;
+        const newWidthRem = Math.max(40, Math.min(120, newWidthPx / 16));
+        setChatWidth(newWidthRem);
+      }
+      
+      if (resizeType === 'height' || resizeType === 'both') {
+        // Calculate new height as percentage of viewport height
+        const newHeightPx = startResizeDims.height + deltaY;
+        // Convert to vh (viewport height percentage)
+        const viewportHeight = window.innerHeight;
+        const newHeightRem = Math.max(40, Math.min(90, (newHeightPx / viewportHeight) * 100));
+        setChatHeight(newHeightRem);
+      }
+    };
+    
+    const handleMouseUp = () => {
+      if (isResizing) {
+        setIsResizing(false);
+        setResizeType(null);
+        document.body.style.cursor = 'default';
+      }
+    };
+    
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, startResizePos, startResizeDims, resizeType]);
   
   // Auto-open chat on specific pages or for missing profiles - with fix for reopening
   useEffect(() => {
@@ -286,7 +338,7 @@ const AllieChat = () => {
     }
   };
   
-  // Process message for events
+  // Process message for events - enhanced to distinguish between queries and creation
   const processMessageForEvents = async (text) => {
     try {
       // Only try to parse events if we have family context
@@ -294,16 +346,44 @@ const AllieChat = () => {
       
       // Get basic NLU analysis
       const intent = nlu.current.detectIntent(text);
+      const entities = nlu.current.extractEntities(text);
       
-      // Check if this seems like an event-related message
-      const isEventRelated = 
-        intent.startsWith('calendar.') ||
-        text.toLowerCase().includes('invite') ||
-        text.toLowerCase().includes('birthday') ||
-        text.toLowerCase().includes('party') ||
-        text.toLowerCase().includes('kalas');
+      // Determine if this is a query about existing events
+      const isCalendarQuery = 
+        intent === 'calendar.check' || 
+        text.toLowerCase().includes('when is') || 
+        text.toLowerCase().includes('what time is') ||
+        text.match(/\b(next|upcoming)\s+(appointment|event|meeting)\b/i);
+      
+      // If it looks like a calendar query, try to get existing events
+      if (isCalendarQuery) {
+        const eventInfo = await EnhancedChatService.lookupCalendarEvent(text, familyId, selectedUser.id);
+        // If we found event info, return true to indicate we handled it
+        if (eventInfo && eventInfo.success) {
+          // Add a response message with the event information
+          const responseMessage = {
+            familyId,
+            sender: 'allie',
+            userName: 'Allie',
+            text: eventInfo.message,
+            timestamp: new Date().toISOString()
+          };
+          
+          setMessages(prev => [...prev, responseMessage]);
+          return true;
+        }
+      }
+      
+      // Check if this seems like an event-related message for creation
+      const isEventCreation = 
+        intent.startsWith('calendar.add') ||
+        intent.startsWith('calendar.schedule') ||
+        text.toLowerCase().includes('add to calendar') ||
+        text.toLowerCase().includes('schedule') ||
+        text.toLowerCase().includes('book') ||
+        text.toLowerCase().includes('create event');
         
-      if (!isEventRelated) return false;
+      if (!isEventCreation) return false;
       
       // Get family context for better parsing
       const familyContext = {
@@ -312,7 +392,18 @@ const AllieChat = () => {
       };
       
       // Try to parse the text as an event
-      const eventDetails = await EventParserService.parseEventText(text, familyContext);
+      let eventDetails = null;
+      
+      // Try to extract using both methods
+      const standardEvent = nlu.current.extractEventDetails(text, familyMembers);
+      const parsedEvent = await EventParserService.parseEventText(text, familyContext);
+      
+      // Use the more detailed result
+      if (parsedEvent && Object.keys(parsedEvent).length > standardEvent && Object.keys(standardEvent).length) {
+        eventDetails = parsedEvent;
+      } else if (standardEvent) {
+        eventDetails = standardEvent;
+      }
       
       if (eventDetails) {
         // We successfully parsed an event
@@ -397,9 +488,9 @@ const AllieChat = () => {
       if (eventDetails) {
         // We successfully parsed an event
         eventDetails.creationSource = 'image';
-setParsedEventDetails(eventDetails);
-setShowEventParser(true);
-setEventParsingSource('image');
+        setParsedEventDetails(eventDetails);
+        setShowEventParser(true);
+        setEventParsingSource('image');
         
         // Add a message about what we found
         const infoMessage = {
@@ -445,123 +536,123 @@ setEventParsingSource('image');
   };
   
   // In AllieChat.jsx - Update the addEventToCalendar function
-const addEventToCalendar = async (eventDetails) => {
-  try {
-    if (!eventDetails || !selectedUser) return false;
-    
-    // Ensure we have a valid Date object
-    const startDate = eventDetails.dateTime ? 
-      (eventDetails.dateTime instanceof Date ? 
-        eventDetails.dateTime : 
-        new Date(eventDetails.dateTime)) : 
-      new Date();
+  const addEventToCalendar = async (eventDetails) => {
+    try {
+      if (!eventDetails || !selectedUser) return false;
       
-    // Log the date conversion for debugging
-    console.log("Event date conversion:", {
-      original: eventDetails.dateTime,
-      converted: startDate,
-      iso: startDate.toISOString()
-    });
-    
-    const endDate = new Date(startDate);
-    endDate.setHours(startDate.getHours() + 1); // Default 1 hour event
-    
-    // Determine event title
-    let eventTitle = eventDetails.title || 'New Event';
-    
-    // Add more context to title based on event type
-    if (eventDetails.eventType === 'birthday' && eventDetails.extraDetails?.birthdayChildName) {
-      const childAge = eventDetails.extraDetails.birthdayChildAge 
-        ? ` (${eventDetails.extraDetails.birthdayChildAge})` 
-        : '';
-      eventTitle = `${eventDetails.extraDetails.birthdayChildName}'s Birthday${childAge}`;
-    } else if (eventDetails.childName) {
-      eventTitle = `${eventTitle} - ${eventDetails.childName}`;
-    }
-    
-    // Create event object with explicit structure
-    const event = {
-      summary: eventTitle,
-      title: eventTitle, // Include both for compatibility
-      description: eventDetails.extraDetails?.notes || `Added from Allie chat`,
-      location: eventDetails.location || '',
-      start: {
-        dateTime: startDate.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      end: {
-        dateTime: endDate.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      reminders: {
-        useDefault: true
-      },
-      // Add additional metadata
-      familyId: familyId,
-      eventType: eventDetails.eventType || 'general',
-      childId: eventDetails.childId,
-      childName: eventDetails.childName,
-      extraDetails: eventDetails.extraDetails || {}
-    };
-    
-    console.log("Adding event to calendar:", event);
-    
-    // Add event to calendar
-    const result = await CalendarService.addEvent(event, selectedUser.id);
-    
-    if (result.success) {
-      // Success message
-      const successMessage = {
+      // Ensure we have a valid Date object
+      const startDate = eventDetails.dateTime ? 
+        (eventDetails.dateTime instanceof Date ? 
+          eventDetails.dateTime : 
+          new Date(eventDetails.dateTime)) : 
+        new Date();
+        
+      // Log the date conversion for debugging
+      console.log("Event date conversion:", {
+        original: eventDetails.dateTime,
+        converted: startDate,
+        iso: startDate.toISOString()
+      });
+      
+      const endDate = new Date(startDate);
+      endDate.setHours(startDate.getHours() + 1); // Default 1 hour event
+      
+      // Determine event title
+      let eventTitle = eventDetails.title || 'New Event';
+      
+      // Add more context to title based on event type
+      if (eventDetails.eventType === 'birthday' && eventDetails.extraDetails?.birthdayChildName) {
+        const childAge = eventDetails.extraDetails.birthdayChildAge 
+          ? ` (${eventDetails.extraDetails.birthdayChildAge})` 
+          : '';
+        eventTitle = `${eventDetails.extraDetails.birthdayChildName}'s Birthday${childAge}`;
+      } else if (eventDetails.childName) {
+        eventTitle = `${eventTitle} - ${eventDetails.childName}`;
+      }
+      
+      // Create event object with explicit structure
+      const event = {
+        summary: eventTitle,
+        title: eventTitle, // Include both for compatibility
+        description: eventDetails.extraDetails?.notes || `Added from Allie chat`,
+        location: eventDetails.location || '',
+        start: {
+          dateTime: startDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: endDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        reminders: {
+          useDefault: true
+        },
+        // Add additional metadata
+        familyId: familyId,
+        eventType: eventDetails.eventType || 'general',
+        childId: eventDetails.childId,
+        childName: eventDetails.childName,
+        extraDetails: eventDetails.extraDetails || {}
+      };
+      
+      console.log("Adding event to calendar:", event);
+      
+      // Add event to calendar
+      const result = await CalendarService.addEvent(event, selectedUser.id);
+      
+      if (result.success) {
+        // Success message
+        const successMessage = {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `Great! I've added "${eventTitle}" to your calendar for ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.${eventDetails.location ? ` Location: ${eventDetails.location}.` : ''}`,
+          timestamp: new Date().toISOString()
+        };
+        
+        setMessages(prev => [...prev, successMessage]);
+        
+        // Force calendar refresh with multiple events to ensure it's caught
+        if (typeof window !== 'undefined') {
+          // First dispatch the standard event
+          const calendarEvent = new CustomEvent('calendar-event-added', {
+            detail: { 
+              eventId: result.eventId,
+              title: eventTitle,
+              time: startDate.toISOString()
+            }
+          });
+          window.dispatchEvent(calendarEvent);
+          
+          // Then dispatch the force refresh event with a slight delay
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+          }, 300);
+        }
+        
+        return true;
+      } else {
+        throw new Error("Failed to add event to calendar");
+      }
+    } catch (error) {
+      console.error("Error adding event to calendar:", error);
+      
+      // Error message
+      const errorMessage = {
         familyId,
         sender: 'allie',
         userName: 'Allie',
-        text: `Great! I've added "${eventTitle}" to your calendar for ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.${eventDetails.location ? ` Location: ${eventDetails.location}.` : ''}`,
+        text: `I'm sorry, I couldn't add the event to your calendar. Please try again or add it manually through the calendar page.`,
         timestamp: new Date().toISOString()
       };
       
-      setMessages(prev => [...prev, successMessage]);
-      
-      // Force calendar refresh with multiple events to ensure it's caught
-      if (typeof window !== 'undefined') {
-        // First dispatch the standard event
-        const calendarEvent = new CustomEvent('calendar-event-added', {
-          detail: { 
-            eventId: result.eventId,
-            title: eventTitle,
-            time: startDate.toISOString()
-          }
-        });
-        window.dispatchEvent(calendarEvent);
-        
-        // Then dispatch the force refresh event with a slight delay
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-        }, 300);
-      }
-      
-      return true;
-    } else {
-      throw new Error("Failed to add event to calendar");
+      setMessages(prev => [...prev, errorMessage]);
+      return false;
+    } finally {
+      setDetectedEventDetails(null);
+      setShowEventConfirmation(false);
     }
-  } catch (error) {
-    console.error("Error adding event to calendar:", error);
-    
-    // Error message
-    const errorMessage = {
-      familyId,
-      sender: 'allie',
-      userName: 'Allie',
-      text: `I'm sorry, I couldn't add the event to your calendar. Please try again or add it manually through the calendar page.`,
-      timestamp: new Date().toISOString()
-    };
-    
-    setMessages(prev => [...prev, errorMessage]);
-    return false;
-  } finally {
-    setDetectedEventDetails(null);
-    setShowEventConfirmation(false);
-  }
-};
+  };
   
   const handleSend = async () => {
     if (input.trim() && canUseChat && selectedUser && familyId) {
@@ -847,6 +938,7 @@ const addEventToCalendar = async (eventDetails) => {
     }
   };
   
+  // Resize button handler (upward/downward adjustment)
   const handleResize = (direction) => {
     const minHeight = 50; // Min height in rems
     const maxHeight = 85; // Max height in rems (almost full screen)
@@ -855,6 +947,27 @@ const addEventToCalendar = async (eventDetails) => {
       setChatHeight(chatHeight - 5);
     } else if (direction === 'down' && chatHeight < maxHeight) {
       setChatHeight(chatHeight + 5);
+    }
+  };
+  
+  // Start resize drag operation
+  const handleStartResize = (e, type) => {
+    e.preventDefault();
+    setIsResizing(true);
+    setResizeType(type);
+    setStartResizePos({ x: e.clientX, y: e.clientY });
+    
+    // Get current dimensions
+    const rect = chatContainerRef.current?.getBoundingClientRect() || { width: 0, height: 0 };
+    setStartResizeDims({ width: rect.width, height: rect.height });
+    
+    // Set cursor based on resize type
+    if (type === 'width') {
+      document.body.style.cursor = 'ew-resize';
+    } else if (type === 'height') {
+      document.body.style.cursor = 'ns-resize';
+    } else {
+      document.body.style.cursor = 'nwse-resize';
     }
   };
   
@@ -997,7 +1110,7 @@ const addEventToCalendar = async (eventDetails) => {
   
   // Render the chat component
   return (
-    <div className="fixed bottom-0 right-0 z-50 md:w-96 w-full flex flex-col">
+    <div className="fixed bottom-0 right-0 z-50 md:w-auto w-full flex flex-col">
       {/* Chat header (shown when closed) */}
       {!isOpen && (
         <div 
@@ -1022,8 +1135,13 @@ const addEventToCalendar = async (eventDetails) => {
       {/* Full chat interface (shown when open) */}
       {isOpen && (
         <div 
-          className="bg-white shadow-lg rounded-t-lg mx-4 flex flex-col transition-all duration-300 font-roboto"
-          style={{ height: `${chatHeight}vh` }}
+          ref={chatContainerRef}
+          className="bg-white shadow-lg rounded-t-lg mx-4 flex flex-col transition-all duration-300 font-roboto relative"
+          style={{ 
+            height: `${chatHeight}vh`, 
+            width: `${chatWidth}rem`, 
+            maxWidth: '95vw'
+          }}
         >
           {/* Chat header */}
           <div className="p-3 border-b flex items-center justify-between">
@@ -1127,21 +1245,21 @@ const addEventToCalendar = async (eventDetails) => {
                   {detectedEventDetails.childName && (
                     <div className="mb-1"><span className="font-medium">For:</span> {detectedEventDetails.childName}</div>
                   )}
-                  <div className="mb-1"><span className="font-medium">When:</span> {formatEventDate(detectedEventDetails.dateTime)}</div>
+                  <div className="mb-1"><span className="font-medium">When:</span> {formatEventDate(detectedEventDetails.startDate || detectedEventDetails.dateTime)}</div>
                   {detectedEventDetails.location && (
                     <div className="mb-1"><span className="font-medium">Location:</span> {detectedEventDetails.location}</div>
                   )}
-                  {detectedEventDetails.eventType && (
-                    <div className="mb-1"><span className="font-medium">Type:</span> {detectedEventDetails.eventType}</div>
+                  {detectedEventDetails.category && (
+                    <div className="mb-1"><span className="font-medium">Type:</span> {detectedEventDetails.category}</div>
                   )}
                 </div>
                 <div className="flex space-x-2">
                   <button
-                    onClick={() => addEventToCalendar(detectedEventDetails)}
+                    onClick={() => setShowEventParser(true)}
                     className="flex-1 bg-black text-white px-3 py-1 rounded-md text-xs flex items-center justify-center"
                   >
                     <Calendar size={12} className="mr-1" />
-                    Add to Calendar
+                    Edit & Add to Calendar
                   </button>
                   <button
                     onClick={() => {
@@ -1157,35 +1275,41 @@ const addEventToCalendar = async (eventDetails) => {
             )}
             
             {/* Event Parser UI */}
-            {showEventParser && parsedEventDetails && (
+            {showEventParser && (
               <div className="bg-blue-50 p-3 rounded-lg ml-4">
                 <div className="mb-2 text-sm font-medium flex items-center">
                   <Calendar size={14} className="mr-1 text-blue-600" />
-                  <span>I found an event! Would you like to add it to your calendar?</span>
+                  <span>Let's add this event to your calendar</span>
                 </div>
                 
                 <EventConfirmationCard 
-                  event={parsedEventDetails}
+                  event={parsedEventDetails || detectedEventDetails}
                   onConfirm={(event) => {
                     // Add success message
                     setMessages(prev => [...prev, {
                       familyId,
                       sender: 'allie',
                       userName: 'Allie',
-                      text: `I've added "${event.title}" to your calendar on ${new Date(event.dateTime).toLocaleDateString()} at ${new Date(event.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.`,
+                      text: `I've added "${event.title}" to your calendar on ${new Date(event.dateTime || event.startDate).toLocaleDateString()} at ${new Date(event.dateTime || event.startDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.`,
                       timestamp: new Date().toISOString()
                     }]);
                     
                     // Close event parser
                     setShowEventParser(false);
                     setParsedEventDetails(null);
+                    setDetectedEventDetails(null);
                   }}
                   onEdit={(updatedEvent) => {
-                    setParsedEventDetails(updatedEvent);
+                    if (parsedEventDetails) {
+                      setParsedEventDetails(updatedEvent);
+                    } else {
+                      setDetectedEventDetails(updatedEvent);
+                    }
                   }}
                   onCancel={() => {
                     setShowEventParser(false);
                     setParsedEventDetails(null);
+                    setDetectedEventDetails(null);
                     
                     // Add message that user cancelled
                     setMessages(prev => [...prev, {
@@ -1384,6 +1508,25 @@ const addEventToCalendar = async (eventDetails) => {
               </>
             )}
           </div>
+          
+          {/* Resize handles */}
+          <div 
+            className="absolute top-0 right-0 w-5 h-5 cursor-nwse-resize" 
+            onMouseDown={(e) => handleStartResize(e, 'both')}
+            title="Resize chat"
+          >
+            <div className="w-3 h-3 border-t-2 border-r-2 border-gray-400 absolute top-1 right-1"></div>
+          </div>
+          
+          <div 
+            className="absolute top-0 right-0 bottom-0 w-2 cursor-ew-resize"
+            onMouseDown={(e) => handleStartResize(e, 'width')}
+          ></div>
+          
+          <div 
+            className="absolute left-0 right-0 top-0 h-2 cursor-ns-resize"
+            onMouseDown={(e) => handleStartResize(e, 'height')}
+          ></div>
         </div>
       )}
     </div>
