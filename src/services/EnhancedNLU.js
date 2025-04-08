@@ -315,6 +315,10 @@ class EnhancedNLU {
 
 // Add these new methods to the EnhancedNLU class
 
+// Add to src/services/EnhancedNLU.js
+
+// Add these new methods to the EnhancedNLU class
+
 /**
  * Enhanced extraction of event details from text
  * @param {string} text - Text to parse
@@ -455,6 +459,184 @@ extractEventDetails(text, familyMembers = []) {
     throw error;
   }
 }
+
+/**
+ * Detect if text is likely to be in US or Swedish regional format
+ * @param {string} text - Text to analyze
+ * @returns {string} 'US' or 'SE'
+ */
+detectTextRegion(text) {
+  const text_lower = text.toLowerCase();
+  
+  // Count Swedish indicators
+  let swedishScore = 0;
+  if (text_lower.match(/\bkl\.?\s+\d{1,2}[\.:]\d{2}\b/)) swedishScore += 3; // kl. 14:00
+  if (text_lower.match(/\bkalas\b/)) swedishScore += 2;
+  if (text_lower.match(/\bvälkommen\b/)) swedishScore += 2;
+  if (text_lower.match(/\bfyller\b/)) swedishScore += 2;
+  if (text_lower.match(/\blir\b/)) swedishScore += 1;
+  if (text_lower.match(/\d{1,2}[\.:]\d{2}\b/)) swedishScore += 1; // 24h time
+  
+  // Count US indicators
+  let usScore = 0;
+  if (text_lower.match(/\b\d{1,2}:\d{2}\s*(am|pm)\b/i)) usScore += 3; // 2:00 pm
+  if (text_lower.match(/\bbirthday\s+party\b/)) usScore += 2;
+  if (text_lower.match(/\binvited\b/)) usScore += 1;
+  if (text_lower.match(/\bplease\s+join\b/)) usScore += 1;
+  if (text_lower.match(/\bcelebrating\b/)) usScore += 1;
+  
+  return swedishScore > usScore ? 'SE' : 'US';
+}
+
+/**
+ * Detect type of event from text
+ * @param {string} text - Text to analyze
+ * @returns {string} Event type
+ */
+detectEventType(text) {
+  const text_lower = text.toLowerCase();
+  
+  // Birthday indicators
+  if (text_lower.match(/\bbirthday\b/) || 
+      text_lower.match(/\bkalas\b/) || 
+      text_lower.match(/\bfyller\b/) ||
+      text_lower.match(/\bturns\b.*\d+/) ||
+      text_lower.match(/\bturning\b.*\d+/)) {
+    return 'birthday';
+  }
+  
+  // Playdate indicators
+  if (text_lower.match(/\bplaydate\b/) || 
+      text_lower.match(/\bplay\s+date\b/) || 
+      text_lower.match(/\blekträff\b/)) {
+    return 'playdate';
+  }
+  
+  // Sports or activity indicators
+  if (text_lower.match(/\bsoccer\b/) || 
+      text_lower.match(/\bfootball\b/) || 
+      text_lower.match(/\bgame\b/) ||
+      text_lower.match(/\bpractice\b/) ||
+      text_lower.match(/\blesson\b/)) {
+    return 'sports';
+  }
+  
+  // Appointment indicators
+  if (text_lower.match(/\bappointment\b/) || 
+      text_lower.match(/\bdoctor\b/) || 
+      text_lower.match(/\bdentist\b/)) {
+    return 'appointment';
+  }
+  
+  // Default to generic event
+  return 'event';
+}
+
+/**
+ * Extract date and time from text considering regional formats
+ * @param {string} text - Text to analyze
+ * @param {string} region - 'US' or 'SE'
+ * @returns {Date} Event date/time
+ */
+extractEventDateTime(text, region = 'US') {
+  // This is a simplified implementation - would need more robust parsing
+  
+  let dateMatch = null;
+  let timeMatch = null;
+  let date = new Date();
+  date.setHours(0, 0, 0, 0); // Reset time
+  
+  // Handle date formats based on region
+  if (region === 'SE') {
+    // DD/MM format (Sweden)
+    dateMatch = text.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
+    if (dateMatch) {
+      const day = parseInt(dateMatch[1]);
+      const month = parseInt(dateMatch[2]) - 1; // 0-indexed
+      const year = dateMatch[3] ? parseInt(dateMatch[3]) : date.getFullYear();
+      
+      // Check if year is 2-digit
+      const fullYear = year < 100 ? 2000 + year : year;
+      
+      date.setFullYear(fullYear, month, day);
+    }
+    
+    // 24-hour time format
+    timeMatch = text.match(/(\d{1,2})[\.:](\d{2})/);
+    if (timeMatch) {
+      const hours = parseInt(timeMatch[1]);
+      const minutes = parseInt(timeMatch[2]);
+      date.setHours(hours, minutes);
+    }
+  } else {
+    // MM/DD format (US)
+    dateMatch = text.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
+    if (dateMatch) {
+      const month = parseInt(dateMatch[1]) - 1; // 0-indexed
+      const day = parseInt(dateMatch[2]);
+      const year = dateMatch[3] ? parseInt(dateMatch[3]) : date.getFullYear();
+      
+      // Check if year is 2-digit
+      const fullYear = year < 100 ? 2000 + year : year;
+      
+      date.setFullYear(fullYear, month, day);
+    }
+    
+    // 12-hour time format
+    timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1]);
+      const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+      const period = timeMatch[3]?.toLowerCase();
+      
+      // Adjust hours for AM/PM
+      if (period === 'pm' && hours < 12) hours += 12;
+      if (period === 'am' && hours === 12) hours = 0;
+      
+      date.setHours(hours, minutes);
+    }
+  }
+  
+  // Check for natural language date formats (April 12th)
+  const monthNames = [
+    'january', 'february', 'march', 'april', 'may', 'june', 
+    'july', 'august', 'september', 'october', 'november', 'december'
+  ];
+  
+  const monthPattern = new RegExp(`\\b(${monthNames.join('|')})\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b`, 'i');
+  const monthMatch = text.match(monthPattern);
+  
+  if (monthMatch) {
+    const monthName = monthMatch[1].toLowerCase();
+    const day = parseInt(monthMatch[2]);
+    
+    const monthIndex = monthNames.findIndex(m => m === monthName);
+    if (monthIndex !== -1) {
+      date.setMonth(monthIndex, day);
+    }
+  }
+  
+  // If we couldn't find time, default based on event type
+  if (!timeMatch) {
+    const eventType = this.detectEventType(text);
+    
+    if (eventType === 'birthday' || eventType === 'playdate') {
+      date.setHours(14, 0); // 2:00 PM default for social events
+    } else if (eventType === 'appointment') {
+      date.setHours(10, 0); // 10:00 AM default for appointments
+    } else if (eventType === 'sports') {
+      date.setHours(16, 0); // 4:00 PM default for sports
+    } else {
+      date.setHours(12, 0); // Noon default
+    }
+  }
+  
+  return date;
+}
+
+// Add more parsing methods...
+
+// Methods for extracting location, child reference, host info, etc.
 
 /**
  * Detect if text is likely to be in US or Swedish regional format
