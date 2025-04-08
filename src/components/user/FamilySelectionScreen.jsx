@@ -544,36 +544,44 @@ const FamilySelectionScreen = () => {
   };
   
   // Login and logout functions
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setIsLoggingIn(true);
-    setLoginError('');
+  // Updated handleLogin function in src/components/user/FamilySelectionScreen.jsx
+const handleLogin = async (e) => {
+  e.preventDefault();
+  setIsLoggingIn(true);
+  setLoginError('');
+  
+  try {
+    // Step 1: Just authenticate - this is fast
+    const user = await login(email, password);
+    console.log("Login successful:", user);
+
+    // Step 2: Show UI immediately with loading state
+    setShowLoginForm(false);
     
-    try {
-      const user = await login(email, password);
-      console.log("Login successful:", user);
-
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Explicitly load all families
-      const families = await loadAllFamilies(user.uid);
-      console.log("Loaded families:", families);
-
-      // If families exist, load the first one to populate familyMembers
-      if (families && families.length > 0) {
-        console.log("Loading first family:", families[0].familyId);
-        await loadFamilyData(families[0].familyId);
-      }
-      
-      // Stay on the family selection screen
-      setShowLoginForm(false);
-    } catch (error) {
-      console.error("Login error:", error);
-      setLoginError('Invalid email or password. Please try again.');
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
+    // Step 3: Load families in the background
+    loadAllFamilies(user.uid)
+      .then(families => {
+        console.log("Loaded families:", families);
+        
+        // If families exist, load the first one to populate familyMembers
+        if (families && families.length > 0) {
+          console.log("Loading first family:", families[0].familyId);
+          return loadFamilyData(families[0].familyId);
+        }
+      })
+      .catch(error => {
+        console.error("Error loading family data:", error);
+        // Don't throw - just show the UI anyway
+      })
+      .finally(() => {
+        setIsLoggingIn(false);
+      });
+  } catch (error) {
+    console.error("Login error:", error);
+    setLoginError('Invalid email or password. Please try again.');
+    setIsLoggingIn(false);
+  }
+};
 
   const handleLogout = async () => {
     try {
@@ -652,13 +660,23 @@ const FamilySelectionScreen = () => {
             ))}
           </div>
           
-          {/* Switch User button with improved styling */}
-          <button
-            onClick={() => navigate('/login')}
-            className="px-10 py-3 bg-black text-white rounded-md hover:bg-gray-800 font-roboto shadow-sm transition-colors"
-          >
-            Switch User
-          </button>
+          {/* Container with both buttons */}
+<div className="flex space-x-4 justify-center">
+  <button
+    onClick={() => navigate('/login')}
+    className="px-8 py-3 bg-black text-white rounded-md hover:bg-gray-800 font-roboto shadow-sm transition-colors"
+  >
+    Switch User
+  </button>
+  
+  <button
+    onClick={handleLogout}
+    className="px-8 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-100 font-roboto shadow-sm transition-colors flex items-center"
+  >
+    <LogOut size={16} className="mr-2" />
+    Log Out
+  </button>
+</div>
         </div>
 
         {/* Add AllieChat here */}
@@ -818,6 +836,28 @@ const FamilySelectionScreen = () => {
   if (showEmptyState) {
     return renderEmptyState();
   }
+
+  // Add after the line: if (showEmptyState) { return renderEmptyState(); }
+
+// Show loading state if we're logged in but still loading family data
+if (currentUser && isLoggingIn) {
+  return (
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-md text-center">
+        <a href="/" className="text-3xl font-bold text-black mb-6 inline-block">Allie</a>
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+          <div className="flex flex-col items-center justify-center p-8">
+            <div className="w-12 h-12 border-4 border-black border-t-transparent rounded-full animate-spin mb-4"></div>
+            <h2 className="text-xl font-semibold mb-2 font-roboto">Loading Your Family</h2>
+            <p className="text-gray-600 font-roboto">
+              Just a moment while we prepare your family profiles...
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
   // Check if some family members have completed the survey but others haven't
   const someCompleted = familyMembers.some(m => m.completed);

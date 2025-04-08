@@ -1045,6 +1045,42 @@ class EnhancedChatService {
     return response;
   }
   
+// Add this function after other functions in EnhancedChatService.js (around line 1650)
+// Check if all family members have completed the initial survey
+async isInitialOnboardingPhase(familyId) {
+  try {
+    if (!familyId) return true; // Default to onboarding if no family ID
+    
+    // Get family data from Firestore
+    const docRef = doc(db, "families", familyId);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      const familyMembers = data.familyMembers || [];
+      
+      // Check if all parents have completed the survey
+      const parents = familyMembers.filter(m => m.role === 'parent');
+      const allParentsCompleted = parents.every(p => p.completed);
+      
+      // If not all parents have completed, it's still onboarding
+      if (!allParentsCompleted) return true;
+      
+      // Check if we have completed any weeks
+      const hasCompletedWeeks = data.completedWeeks && data.completedWeeks.length > 0;
+      
+      // If we have completed weeks, onboarding is done
+      return !hasCompletedWeeks;
+    }
+    
+    return true; // Default to onboarding if we can't determine
+  } catch (error) {
+    console.error("Error checking onboarding phase:", error);
+    return true; // Default to onboarding on error
+  }
+}
+
+
   // Get AI response to a message with enhanced NLU
   async getAIResponse(text, familyId, previousMessages) {
     try {
@@ -1067,6 +1103,50 @@ class EnhancedChatService {
         return "I didn't receive any message to respond to. Please try again.";
       }
       
+
+// Modify the getAIResponse function in EnhancedChatService.js (around line 920)
+// Add this code after the initial checks and before calling the specialized handlers
+
+// Check if we're in the onboarding phase
+const isOnboarding = await this.isInitialOnboardingPhase(familyId);
+
+// If we're in onboarding, restrict to specific topics
+if (isOnboarding) {
+  // Allow only specific intents during onboarding
+  const allowedIntents = [
+    'general.greeting', 
+    'general.question', 
+    'technical.help',
+    'survey.result',
+    'survey.insight',
+    'creative.writing' // Allow fun/creative content like dad jokes
+  ];
+  
+  // Check if the intent is restricted
+  const isIntentRestricted = !allowedIntents.some(allowed => 
+    intent.startsWith(allowed.split('.')[0])
+  );
+  
+  // If the intent is outside allowed topics, redirect to onboarding-focused response
+  if (isIntentRestricted && 
+      !text.toLowerCase().includes('survey') && 
+      !text.toLowerCase().includes('allie') &&
+      !text.toLowerCase().includes('profile') &&
+      !text.toLowerCase().includes('help')) {
+    
+    const onboardingResponse = `I'd love to help with that once your family completes the initial setup! For now, I can answer questions about:
+
+1. How Allie works and what I can do
+2. The initial survey and why it's important
+3. Setting up family profiles
+4. The different types of tasks we measure
+
+Would you like to know more about one of these topics?`;
+    
+    return onboardingResponse;
+  }
+}
+
       // Add a start timestamp for performance tracking
       const startTime = Date.now();
       console.log(`Starting AI response generation at ${new Date().toISOString()}`);

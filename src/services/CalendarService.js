@@ -1,5 +1,5 @@
 // src/services/CalendarService.js
-import { doc, getDoc, setDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, addDoc,deleteDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 
 class CalendarService {

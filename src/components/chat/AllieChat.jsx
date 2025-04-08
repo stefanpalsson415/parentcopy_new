@@ -30,6 +30,8 @@ const AllieChat = () => {
   const [chatHeight, setChatHeight] = useState(45); // Default height (in rems)
 const [chatWidth, setChatWidth] = useState(60); // Default width (in rems) for desktop
   const [promptChips, setPromptChips] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
+const [dragCounter, setDragCounter] = useState(0);
   
   // Enhanced state variables
   const [showInsights, setShowInsights] = useState(false);
@@ -568,69 +570,81 @@ const checkMessageHistoryForEvents = () => {
     }
   };
   
-  // Handle image processing for event extraction
-  const handleImageProcessForEvent = async (file) => {
-    try {
-      setLoading(true);
+  // Replace the existing handleImageProcessForEvent function (around line 471) with this enhanced version
+const handleImageProcessForEvent = async (file) => {
+  try {
+    setLoading(true);
+    
+    // Add a processing message to give user feedback
+    const processingMessage = {
+      familyId,
+      sender: 'allie',
+      userName: 'Allie',
+      text: `I'm analyzing the image to see if it contains event information...`,
+      timestamp: new Date().toISOString()
+    };
+    
+    setMessages(prev => [...prev, processingMessage]);
+    
+    // Get family context for better parsing
+    const familyContext = {
+      familyId,
+      children: familyMembers.filter(m => m.role === 'child')
+    };
+    
+    // Try to parse the image as an event
+    const eventDetails = await EventParserService.parseEventImage(file, familyContext);
+    
+    if (eventDetails && (eventDetails.title || eventDetails.eventType)) {
+      // We successfully parsed an event
+      eventDetails.creationSource = 'image';
+      setParsedEventDetails(eventDetails);
+      setShowEventParser(true);
+      setEventParsingSource('image');
       
-      // Get family context for better parsing
-      const familyContext = {
+      // Add a message about what we found
+      const infoMessage = {
         familyId,
-        children: familyMembers.filter(m => m.role === 'child')
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I found what looks like an event in your image! I've extracted these details: ${eventDetails.title || eventDetails.eventType} ${eventDetails.dateTime ? `on ${new Date(eventDetails.dateTime).toLocaleDateString()}` : ''}. Would you like to add this to your calendar?`,
+        timestamp: new Date().toISOString()
       };
       
-      // Try to parse the image as an event
-      const eventDetails = await EventParserService.parseEventImage(file, familyContext);
-      
-      if (eventDetails) {
-        // We successfully parsed an event
-        eventDetails.creationSource = 'image';
-        setParsedEventDetails(eventDetails);
-        setShowEventParser(true);
-        setEventParsingSource('image');
-        
-        // Add a message about what we found
-        const infoMessage = {
-          familyId,
-          sender: 'allie',
-          userName: 'Allie',
-          text: `I've analyzed your image and found what looks like an event invitation. Let me help you add this to your calendar!`,
-          timestamp: new Date().toISOString()
-        };
-        
-        setMessages(prev => [...prev, infoMessage]);
-      } else {
-        // Could not parse an event
-        const errorMessage = {
-          familyId,
-          sender: 'allie',
-          userName: 'Allie',
-          text: `I wasn't able to detect any event details in that image. Could you try uploading a clearer image or paste the invitation text directly?`,
-          timestamp: new Date().toISOString()
-        };
-        
-        setMessages(prev => [...prev, errorMessage]);
-      }
-      
-      setLoading(false);
-      return eventDetails != null;
-    } catch (error) {
-      console.error("Error processing image for event:", error);
-      
-      // Error message
+      setMessages(prev => [...prev, infoMessage]);
+      return true;
+    } else {
+      // Could not parse an event
       const errorMessage = {
         familyId,
         sender: 'allie',
         userName: 'Allie',
-        text: `I'm sorry, I couldn't process that image to extract event details. Please try again or paste the invitation text directly.`,
+        text: `I analyzed the image but couldn't find clear event details. If this is an invitation, you can describe the event to me and I'll help you add it to your calendar.`,
         timestamp: new Date().toISOString()
       };
       
       setMessages(prev => [...prev, errorMessage]);
-      setLoading(false);
       return false;
     }
-  };
+  } catch (error) {
+    console.error("Error processing image for event:", error);
+    
+    // Error message
+    const errorMessage = {
+      familyId,
+      sender: 'allie',
+      userName: 'Allie',
+      text: `I had trouble analyzing that image. If it contains an event invitation, you can tell me about the event directly and I'll help you add it to your calendar.`,
+      timestamp: new Date().toISOString()
+    };
+    
+    setMessages(prev => [...prev, errorMessage]);
+    setLoading(false);
+    return false;
+  } finally {
+    setLoading(false);
+  }
+};
   
   // In AllieChat.jsx - Update the addEventToCalendar function
   const addEventToCalendar = async (eventDetails) => {
@@ -667,6 +681,102 @@ const checkMessageHistoryForEvents = () => {
         eventTitle = `${eventTitle} - ${eventDetails.childName}`;
       }
       
+// Add these drag event handlers before the return statement (around line 670)
+const handleDragEnter = (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  setDragCounter(prev => prev + 1);
+  if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+    setIsDragging(true);
+  }
+};
+
+const handleDragLeave = (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  setDragCounter(prev => prev - 1);
+  if (dragCounter - 1 === 0) {
+    setIsDragging(false);
+  }
+};
+
+const handleDragOver = (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (!isDragging) {
+    setIsDragging(true);
+  }
+};
+
+const handleDrop = (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  setIsDragging(false);
+  setDragCounter(0);
+  
+  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    const droppedFile = e.dataTransfer.files[0];
+    
+    // Check if it's an image
+    if (droppedFile.type.startsWith('image/')) {
+      // Create a preview URL
+      const previewUrl = URL.createObjectURL(droppedFile);
+      setImageFile(droppedFile);
+      setImagePreview(previewUrl);
+      
+      // If we have a profile upload target, process the image
+      if (profileUploadTarget) {
+        handleImageFileFromMessage(droppedFile, profileUploadTarget.id);
+      } else if (showEventParser) {
+        // If we're in event parsing mode, try to extract event details
+        handleImageProcessForEvent(droppedFile);
+      } else {
+        // Try to parse the image for event information
+        handleImageProcessForEvent(droppedFile);
+      }
+    } else if (droppedFile.type === 'application/pdf' || 
+               droppedFile.type.includes('text') || 
+               droppedFile.type.includes('document')) {
+      // Handle document files - let the user know we're analyzing it
+      const processingMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I see you've shared a document. I'm analyzing it to see if it contains any useful information...`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, processingMessage]);
+      
+      // Set a timeout to simulate processing (in production this would be replaced with actual document processing)
+      setTimeout(() => {
+        const responseMessage = {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `I've looked at your document. If this contains event information, you can also type a brief description of the event and I'll help you add it to your calendar.`,
+          timestamp: new Date().toISOString()
+        };
+        
+        setMessages(prev => [...prev, responseMessage]);
+      }, 1500);
+    } else {
+      // Unsupported file type
+      const errorMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `Sorry, I can't process this type of file (${droppedFile.type}). I can work with images, PDFs, and text documents.`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+    }
+  }
+};
+
+
+
       // Create event object with explicit structure
       const event = {
         summary: eventTitle,
@@ -1214,6 +1324,22 @@ const checkMessageHistoryForEvents = () => {
             maxWidth: '95vw'
           }}
         >
+          {/* Add the drag overlay */}
+  {isDragging && (
+    <div
+      className="absolute inset-0 bg-blue-500 bg-opacity-10 border-2 border-blue-500 border-dashed rounded-t-lg z-50 flex items-center justify-center"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      <div className="bg-white p-4 rounded-lg shadow-lg text-center">
+        <Upload size={32} className="mx-auto text-blue-500 mb-2" />
+        <p className="text-sm font-medium">Drop files here</p>
+        <p className="text-xs text-gray-500 mt-1">Images & documents accepted</p>
+      </div>
+    </div>
+  )}
           {/* Chat header */}
           <div className="p-3 border-b flex items-center justify-between">
             <div className="flex items-center">
@@ -1282,22 +1408,50 @@ const checkMessageHistoryForEvents = () => {
             )}
             
             {/* Render messages */}
-            {messages.map((msg, index) => (
-              <div key={index} className={`p-3 rounded-lg ${msg.sender === 'allie' ? 'bg-blue-50 ml-4' : 'bg-gray-100 mr-4'}`}>
-                <div className="flex items-center mb-1">
-                  <span className="font-medium text-sm">{msg.userName || (msg.sender === 'allie' ? 'Allie' : 'You')}</span>
-                  <span className="text-xs text-gray-500 ml-2">
-                    {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                  </span>
-                </div>
-                <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
-                
-                {/* Add feedback component for Allie messages */}
-                {msg.sender === 'allie' && msg.id && (
-                  <ChatFeedback messageId={msg.id} familyId={familyId} />
-                )}
-              </div>
-            ))}
+{messages.map((msg, index) => (
+  <div key={index} className={`flex mb-4 ${msg.sender === 'allie' ? 'justify-start' : 'justify-end'}`}>
+    {msg.sender === 'allie' && (
+      <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center mr-2 flex-shrink-0">
+        <span className="text-xs font-bold">A</span>
+      </div>
+    )}
+    
+    <div className={`max-w-[80%] p-3 rounded-lg ${
+      msg.sender === 'allie' 
+        ? 'bg-white border border-gray-200 shadow-sm' 
+        : 'bg-blue-600 text-white'
+    }`}>
+      <div className="flex justify-between items-start">
+        {!msg.sender !== 'allie' && (
+          <div className="font-medium text-xs mb-1">{msg.userName}</div>
+        )}
+        {msg.sender === 'allie' && (
+          <div className="font-medium text-xs mb-1">Allie</div>
+        )}
+        <div className="text-xs text-gray-500 ml-2">
+          {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+        </div>
+      </div>
+      
+      <div className="text-sm whitespace-pre-wrap">{msg.text}</div>
+      
+      {/* Add feedback component for Allie messages */}
+      {msg.sender === 'allie' && msg.id && (
+        <ChatFeedback messageId={msg.id} familyId={familyId} />
+      )}
+    </div>
+    
+    {msg.sender !== 'allie' && msg.userImage && (
+      <div className="h-8 w-8 rounded-full overflow-hidden ml-2 flex-shrink-0">
+        <img 
+          src={msg.userImage} 
+          alt={msg.userName}
+          className="w-full h-full object-cover"
+        />
+      </div>
+    )}
+  </div>
+))}
             
             {/* Event confirmation UI */}
             {showEventConfirmation && detectedEventDetails && (
@@ -1518,67 +1672,69 @@ const checkMessageHistoryForEvents = () => {
             </div>
           )}
           
-          {/* Input area */}
-          <div className="p-3 border-t mt-auto">
-            {!canUseChat ? (
-              <div className="bg-amber-50 p-2 rounded-md text-xs text-amber-800 mb-2">
-                Chat is disabled for children. Please ask a parent to enable this feature.
-              </div>
-            ) : (
-              <>
-                <div className="flex items-end">
-                  <textarea
-                    ref={textareaRef}
-                    value={isListening ? transcription : input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    placeholder="Message Allie..."
-                    className="flex-1 border rounded-l-md p-2 focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm resize-none font-roboto"
-                    style={{ height: `${textareaHeight}px`, maxHeight: '150px' }}
-                    rows="1"
-                    disabled={isListening}
-                  ></textarea>
-                  <div className="flex bg-gray-100 rounded-r-md border-t border-r border-b">
-                    <button
-                      onClick={handleToggleMic}
-                      className={`p-3 ${isListening ? 'text-red-500' : 'text-gray-500 hover:text-gray-700'}`}
-                      title={isListening ? "Stop recording" : "Record voice"}
-                    >
-                      <Mic size={18} />
-                    </button>
-                    <button
-                      onClick={handleAttachImage}
-                      className="p-3 text-gray-500 hover:text-gray-700"
-                      title="Upload image"
-                    >
-                      <Upload size={18} />
-                    </button>
-                    <button
-                      onClick={handleSend}
-                      disabled={(!input.trim() && !imageFile) || loading}
-                      className="bg-blue-600 text-white p-3 rounded-r-md hover:bg-blue-700 disabled:bg-blue-300"
-                      title="Send message"
-                    >
-                      <Send size={18} />
-                    </button>
-                  </div>
-                  {/* Hidden file input */}
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileUpload}
-                    accept="image/*"
-                    className="hidden"
-                  />
-                </div>
-                {isListening && (
-                  <p className="text-xs text-red-500 mt-1 animate-pulse">
-                    Listening... speak now
-                  </p>
-                )}
-              </>
-            )}
-          </div>
+          {/* Replace the input area (around line 966) */}
+<div className="p-3 border-t mt-auto">
+  {!canUseChat ? (
+    <div className="bg-amber-50 p-2 rounded-md text-xs text-amber-800 mb-2">
+      Chat is disabled for children. Please ask a parent to enable this feature.
+    </div>
+  ) : (
+    <>
+      <div className="flex items-end">
+        <div className="flex-1 relative">
+          <textarea
+            ref={textareaRef}
+            value={isListening ? transcription : input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Message Allie..."
+            className="w-full border rounded-l-md p-3 pl-4 focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm resize-none font-roboto"
+            style={{ height: `${textareaHeight}px`, maxHeight: '150px' }}
+            rows="1"
+            disabled={isListening}
+          ></textarea>
+        </div>
+        <div className="flex bg-white rounded-r-md border-t border-r border-b">
+          <button
+            onClick={handleToggleMic}
+            className={`p-3 ${isListening ? 'text-red-500' : 'text-gray-500 hover:text-gray-700'} transition-colors`}
+            title={isListening ? "Stop recording" : "Record voice"}
+          >
+            <Mic size={18} />
+          </button>
+          <button
+            onClick={handleAttachImage}
+            className="p-3 text-gray-500 hover:text-gray-700 transition-colors"
+            title="Upload image"
+          >
+            <Upload size={18} />
+          </button>
+          <button
+            onClick={handleSend}
+            disabled={(!input.trim() && !imageFile) || loading}
+            className="bg-blue-600 text-white p-3 rounded-r-md hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
+            title="Send message"
+          >
+            <Send size={18} />
+          </button>
+        </div>
+        {/* Hidden file input */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileUpload}
+          accept="image/*"
+          className="hidden"
+        />
+      </div>
+      {isListening && (
+        <p className="text-xs text-red-500 mt-1 animate-pulse">
+          Listening... speak now
+        </p>
+      )}
+    </>
+  )}
+</div>
           
           {/* Resize handles */}
 <div 
