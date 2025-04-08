@@ -946,11 +946,11 @@ if (currentUser && isLoggingIn) {
                           <div className={`w-16 h-16 rounded-full overflow-hidden border-2 border-dashed border-gray-300 relative flex items-center justify-center ${getMemberColor(member)}`}>
                             <span className="text-2xl font-bold text-white">{member.name.charAt(0).toUpperCase()}</span>
                             <button
-                              className="absolute bottom-0 right-0 bg-black text-white p-1 rounded-full shadow-lg transform hover:scale-110 transition-transform"
-                              onClick={(e) => handleSelectForUpload(member, e)}
-                            >
-                              <Camera size={12} />
-                            </button>
+  className="absolute -bottom-1 -right-1 bg-pink-500 text-white p-2 rounded-full shadow-lg transform hover:scale-110 border-2 border-white transition-all animate-pulse"
+  onClick={(e) => handleSelectForUpload(member, e)}
+>
+  <Camera size={14} />
+</button>
                           </div>
                         ) : (
                           <div className="relative">
@@ -962,11 +962,11 @@ if (currentUser && isLoggingIn) {
                               />
                             </div>
                             <button
-                              className="absolute bottom-0 right-0 bg-black text-white p-1 rounded-full shadow-lg"
-                              onClick={(e) => handleSelectForUpload(member, e)}
-                            >
-                              <Camera size={12} />
-                            </button>
+  className="absolute -bottom-1 -right-1 bg-pink-500 text-white p-2 rounded-full shadow-lg transform hover:scale-110 border-2 border-white transition-all animate-pulse"
+  onClick={(e) => handleSelectForUpload(member, e)}
+>
+  <Camera size={14} />
+</button>
                           </div>
                         )}
                       </div>

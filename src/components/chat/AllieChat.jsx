@@ -651,6 +651,33 @@ const handleImageProcessForEvent = async (file) => {
   }
 };
 
+// Add these drag event handlers before the return statement (around line 670)
+const handleDragEnter = (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  setDragCounter(prev => prev + 1);
+  if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+    setIsDragging(true);
+  }
+};
+
+const handleDragLeave = (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  setDragCounter(prev => prev - 1);
+  if (dragCounter - 1 === 0) {
+    setIsDragging(false);
+  }
+};
+
+const handleDragOver = (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (!isDragging) {
+    setIsDragging(true);
+  }
+};
+
 // Also update the handleDrop function to better handle documents
 const handleDrop = (e) => {
   e.preventDefault();
@@ -1682,7 +1709,7 @@ const handleDrop = (e) => {
             <div ref={messagesEndRef} />
           </div>
           
-          // Update the NLU insights panel in src/components/chat/AllieChat.jsx
+          
 {/* NLU insights panel */}
 {showInsights && (
   <div className="border-t p-2 bg-gray-50 text-xs overflow-y-auto max-h-40">
