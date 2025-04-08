@@ -396,7 +396,27 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
       
       // Check for user-specific stored progress first
       const userProgressKey = `surveyInProgress_${selectedUser.id}`;
-      const savedProgress = localStorage.getItem(userProgressKey);
+let savedProgress = localStorage.getItem(userProgressKey);
+
+// If not found with user-specific key, try the old format for backward compatibility
+if (!savedProgress) {
+  const oldFormatKey = 'surveyInProgress';
+  const oldProgress = localStorage.getItem(oldFormatKey);
+  if (oldProgress) {
+    try {
+      const parsed = JSON.parse(oldProgress);
+      if (parsed.userId === selectedUser.id) {
+        savedProgress = oldProgress;
+        // Migrate to new format
+        localStorage.setItem(userProgressKey, oldProgress);
+        localStorage.removeItem(oldFormatKey);
+        console.log("Migrated survey progress to user-specific key");
+      }
+    } catch (err) {
+      console.error("Error checking old format progress:", err);
+    }
+  }
+}
       
       let restoredIndex = -1;
       

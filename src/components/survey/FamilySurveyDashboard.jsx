@@ -15,34 +15,42 @@ const FamilySurveyDashboard = () => {
   const { logout } = useAuth();
   
   // Handle selecting a user
-  // Handle selecting a user
+// NEW FIXED VERSION for FamilySurveyDashboard.jsx:
 const handleSelectUser = (member) => {
-    console.log("Selecting member in dashboard:", member);
-    
-    // First select the family member in context
-    selectFamilyMember(member);
-    
-    // Check if this member has a paused survey
-    let hasInProgressSurvey = false;
-    try {
-      const surveyProgress = localStorage.getItem('surveyInProgress');
-      if (surveyProgress) {
-        const progress = JSON.parse(surveyProgress);
-        hasInProgressSurvey = progress.userId === member.id;
-      }
-    } catch (e) {
-      console.error("Error checking survey progress:", e);
+  console.log("Selecting member in dashboard:", member);
+  
+  // IMPORTANT: Store the selected user ID first
+  localStorage.setItem('selectedUserId', member.id);
+  
+  // First select the family member in context
+  selectFamilyMember(member);
+  
+  // Check if this member has a paused survey - FIXED to use user-specific key
+  let hasInProgressSurvey = false;
+  try {
+    const userProgressKey = `surveyInProgress_${member.id}`;
+    const savedProgress = localStorage.getItem(userProgressKey);
+    if (savedProgress) {
+      const progress = JSON.parse(savedProgress);
+      hasInProgressSurvey = progress.userId === member.id;
+      console.log(`Found saved progress for ${member.name}:`, progress);
     }
-    
+  } catch (e) {
+    console.error("Error checking survey progress:", e);
+  }
+  
+  // Give the context time to update before navigating
+  setTimeout(() => {
     // Navigate to the appropriate survey type based on role
     if (member.role === 'child') {
+      console.log(`Navigating to kid survey for child: ${member.name}`);
       navigate('/kid-survey');
     } else {
+      console.log(`Navigating to adult survey for: ${member.name}`);
       navigate('/survey');
     }
-  };
-  
-  // Check completion status
+  }, 100);
+};  // Check completion status
   const completedMembers = familyMembers.filter(m => m.completed);
   const pendingMembers = familyMembers.filter(m => !m.completed);
   const allCompleted = pendingMembers.length === 0;

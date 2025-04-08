@@ -220,41 +220,58 @@ const FamilySelectionScreen = () => {
         console.log(`Selected user does NOT have Google auth data`);
       }
       
-      // Navigate to the appropriate screen based on survey completion
-      if (member.completed) {
-        navigate('/dashboard');
-      } else {
-        try {
-          // Check if this member has a paused survey
-          let hasInProgressSurvey = false;
-          try {
-            const surveyProgress = localStorage.getItem('surveyInProgress');
-            if (surveyProgress) {
-              const progress = JSON.parse(surveyProgress);
-              hasInProgressSurvey = progress.userId === member.id;
-            }
-          } catch (e) {
-            console.error("Error checking survey progress:", e);
-          }
-          
-          if (hasInProgressSurvey) {
-            // Try to load their saved responses before navigating
-            const responses = await getMemberSurveyResponses(member.id, 'initial');
-            if (responses && Object.keys(responses).length > 0) {
-              // Update the survey context with their saved responses
-              setCurrentSurveyResponses(responses);
-              console.log("Loaded saved survey progress:", Object.keys(responses).length, "responses");
-            }
-          }
-          
-          // Then navigate to the survey
-          navigate('/survey');
-        } catch (error) {
-          console.error("Error loading saved survey progress:", error);
-          // Still navigate to survey even if loading fails
-          navigate('/survey');
-        }
+      // NEW CODE TO INSERT:
+// Navigate to the appropriate screen based on survey completion
+if (member.completed) {
+  navigate('/dashboard');
+} else {
+  try {
+    // Check if this member has a paused survey - IMPROVED to use user-specific key
+    let hasInProgressSurvey = false;
+    try {
+      const userProgressKey = `surveyInProgress_${member.id}`;
+      const savedProgress = localStorage.getItem(userProgressKey);
+      if (savedProgress) {
+        const progress = JSON.parse(savedProgress);
+        hasInProgressSurvey = progress.userId === member.id;
+        console.log(`Found saved progress for ${member.name}:`, progress);
       }
+    } catch (e) {
+      console.error("Error checking survey progress:", e);
+    }
+    
+    if (hasInProgressSurvey) {
+      // Try to load their saved responses before navigating
+      const responses = await getMemberSurveyResponses(member.id, 'initial');
+      if (responses && Object.keys(responses).length > 0) {
+        // Update the survey context with their saved responses
+        setCurrentSurveyResponses(responses);
+        console.log("Loaded saved survey progress:", Object.keys(responses).length, "responses");
+      }
+    }
+    
+    // Wait for context to be updated before navigating
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Navigate to the appropriate survey type based on role
+    if (member.role === 'child') {
+      console.log(`Navigating to kid survey for child: ${member.name}`);
+      navigate('/kid-survey');
+    } else {
+      console.log(`Navigating to adult survey for: ${member.name}`);
+      navigate('/survey');
+    }
+  } catch (error) {
+    console.error("Error loading saved survey progress:", error);
+    
+    // Still navigate to the appropriate survey based on role
+    if (member.role === 'child') {
+      navigate('/kid-survey');
+    } else {
+      navigate('/survey');
+    }
+  }
+}
     } catch (error) {
       console.error("Error in handleSelectUser:", error);
       // If there's an error, try a basic navigation
