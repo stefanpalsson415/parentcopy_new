@@ -1229,61 +1229,161 @@ const loadAllEvents = async () => {
     }
   };
   
-  // Get the attendees avatars for an event
-  const getEventAttendees = (event) => {
-    let attendees = [];
-    
-    // For child events
-    if (event.childName) {
-      const child = familyMembers.find(m => m.name === event.childName);
-      if (child) {
+  // src/components/calendar/FloatingCalendarWidget.jsx - Replace the getEventAttendees function
+
+// Get the attendees avatars for an event - Enhanced to include all event participant types
+const getEventAttendees = (event) => {
+  let attendees = [];
+  
+  // For child events
+  if (event.childName) {
+    const child = familyMembers.find(m => m.id === event.childId || m.name === event.childName);
+    if (child) {
+      attendees.push({
+        id: child.id,
+        name: child.name,
+        profilePicture: child.profilePicture,
+        role: 'child'
+      });
+    } else if (event.childName) {
+      // If we can't find the child in familyMembers but have a name
+      attendees.push({
+        id: event.childId || `child-${event.childName}`,
+        name: event.childName,
+        profilePicture: null,
+        role: 'child'
+      });
+    }
+  }
+  
+  // For siblings
+  if (event.siblingIds && event.siblingIds.length > 0) {
+    event.siblingIds.forEach(sibId => {
+      const sibling = familyMembers.find(m => m.id === sibId);
+      if (sibling) {
         attendees.push({
-          id: child.id,
-          name: child.name,
-          profilePicture: child.profilePicture
+          id: sibling.id,
+          name: sibling.name,
+          profilePicture: sibling.profilePicture,
+          role: 'child'
         });
       }
-    }
-    
-    // For tasks
-    if (event.assignedToName) {
-      const member = familyMembers.find(m => m.name === event.assignedToName || m.roleType === event.assignedTo);
-      if (member) {
+    });
+  } else if (event.siblingNames && event.siblingNames.length > 0) {
+    event.siblingNames.forEach(name => {
+      const sibling = familyMembers.find(m => m.role === 'child' && m.name === name);
+      if (sibling) {
         attendees.push({
-          id: member.id,
-          name: member.name,
-          profilePicture: member.profilePicture
+          id: sibling.id,
+          name: sibling.name,
+          profilePicture: sibling.profilePicture,
+          role: 'child'
+        });
+      } else {
+        // If we can't find the sibling in familyMembers but have a name
+        attendees.push({
+          id: `sibling-${name}`,
+          name: name,
+          profilePicture: null,
+          role: 'child'
         });
       }
-    }
-    
-    // For family meetings, include all family members
-    if (event.eventType === 'meeting' && event.title && event.title.includes('Family Meeting')) {
-      attendees = familyMembers.map(member => ({
+    });
+  }
+  
+  // For tasks
+  if (event.assignedToName) {
+    const member = familyMembers.find(m => m.name === event.assignedToName || m.roleType === event.assignedTo);
+    if (member) {
+      attendees.push({
         id: member.id,
         name: member.name,
-        profilePicture: member.profilePicture
-      }));
+        profilePicture: member.profilePicture,
+        role: member.role
+      });
+    } else {
+      // If we can't find the member but have a name
+      attendees.push({
+        id: `assigned-${event.assignedToName}`,
+        name: event.assignedToName,
+        profilePicture: null,
+        role: 'parent'
+      });
     }
-    
-    // For couple check-ins and relationship events, include parents
-    if (event.category === 'relationship') {
-      attendees = familyMembers
-        .filter(member => member.role === 'parent')
-        .map(member => ({
+  }
+  
+  // For attending parent
+  if (event.attendingParentId) {
+    if (event.attendingParentId === 'both') {
+      // Add both parents
+      const parents = familyMembers.filter(m => m.role === 'parent');
+      parents.forEach(parent => {
+        // Only add if not already in the attendees list
+        if (!attendees.some(a => a.id === parent.id)) {
+          attendees.push({
+            id: parent.id,
+            name: parent.name,
+            profilePicture: parent.profilePicture,
+            role: 'parent'
+          });
+        }
+      });
+    } else if (event.attendingParentId !== 'undecided') {
+      const parent = familyMembers.find(m => m.id === event.attendingParentId);
+      if (parent && !attendees.some(a => a.id === parent.id)) {
+        attendees.push({
+          id: parent.id,
+          name: parent.name,
+          profilePicture: parent.profilePicture,
+          role: 'parent'
+        });
+      }
+    }
+  }
+  
+  // For family meetings, include all family members
+  if (event.eventType === 'meeting' && event.title && event.title.includes('Family Meeting')) {
+    familyMembers.forEach(member => {
+      // Only add if not already in the attendees list
+      if (!attendees.some(a => a.id === member.id)) {
+        attendees.push({
           id: member.id,
           name: member.name,
-          profilePicture: member.profilePicture
-        }));
-    }
-    
-    // If we have explicit attendees from the event data, use those
-    if (event.attendees && event.attendees.length > 0) {
-      return event.attendees;
-    }
-    
-    return attendees;
-  };
+          profilePicture: member.profilePicture,
+          role: member.role
+        });
+      }
+    });
+  }
+  
+  // For couple check-ins and relationship events, include parents
+  if (event.category === 'relationship') {
+    const parents = familyMembers.filter(member => member.role === 'parent');
+    parents.forEach(parent => {
+      // Only add if not already in the attendees list
+      if (!attendees.some(a => a.id === parent.id)) {
+        attendees.push({
+          id: parent.id,
+          name: parent.name,
+          profilePicture: parent.profilePicture,
+          role: 'parent'
+        });
+      }
+    });
+  }
+  
+  // If we have explicit attendees from the event data, append them to our list
+  if (event.attendees && event.attendees.length > 0) {
+    event.attendees.forEach(attendee => {
+      // Only add if not already in attendees list (by ID or name)
+      if (!attendees.some(a => a.id === attendee.id || a.name === attendee.name)) {
+        attendees.push(attendee);
+      }
+    });
+  }
+  
+  return attendees;
+}
   
   // Function to navigate to linked entity - Enhanced to properly handle family meetings
   const navigateToLinkedEntity = (event) => {
@@ -1331,20 +1431,57 @@ const loadAllEvents = async () => {
   };
   
   // Delete event from calendar - Enhanced with error handling
-  const deleteEvent = async (event) => {
-    try {
-      setPendingAction('delete');
+  // src/components/calendar/FloatingCalendarWidget.jsx - Replace the deleteEvent function
+
+// Delete event from calendar - Enhanced with error handling
+const deleteEvent = async (event) => {
+  try {
+    setPendingAction('delete');
+    
+    if (!event || !event.firestoreId) {
+      // Try to use Firestore ID or fall back to event ID
+      const eventId = event.id || event.eventId;
       
-      if (!event || !event.firestoreId) {
+      if (!eventId) {
         CalendarService.showNotification("Cannot delete this event - no valid ID found", "error");
         setPendingAction(null);
         return;
       }
       
-      // Delete from Firestore
-      const docRef = doc(db, "calendar_events", event.firestoreId);
-      await deleteDoc(docRef);
-      
+      // If we have an ID but no firestoreId, try to find the event
+      try {
+        const eventsQuery = query(
+          collection(db, "calendar_events"),
+          where("eventId", "==", eventId)
+        );
+        
+        const querySnapshot = await getDocs(eventsQuery);
+        if (!querySnapshot.empty) {
+          const docId = querySnapshot.docs[0].id;
+          // Update the event object with the found Firestore ID
+          event.firestoreId = docId;
+        } else {
+          throw new Error("Event not found in database");
+        }
+      } catch (findError) {
+        console.error("Error finding event to delete:", findError);
+        CalendarService.showNotification("Cannot locate this event in the database", "error");
+        setPendingAction(null);
+        return;
+      }
+    }
+    
+    // Now we should have a firestoreId to delete
+    if (!event.firestoreId) {
+      CalendarService.showNotification("Cannot delete this event - no valid ID found", "error");
+      setPendingAction(null);
+      return;
+    }
+    
+    // Delete using CalendarService
+    const result = await CalendarService.deleteEvent(event.firestoreId, currentUser?.uid);
+    
+    if (result.success) {
       // Update local state
       setAddedEvents(prev => {
         const newState = {...prev};
@@ -1354,26 +1491,26 @@ const loadAllEvents = async () => {
       
       // Remove from all events array
       setAllEvents(prev => prev.filter(e => 
-        e.firestoreId !== event.firestoreId
+        e.firestoreId !== event.firestoreId && e.id !== event.id
       ));
       
       // Close the details modal
       setShowEventDetails(false);
       
-      // Show notification
-      CalendarService.showNotification("Event deleted successfully", "success");
-      
       // Refresh events
       setLastRefresh(Date.now());
       await buildEventCache();
-      
-      setPendingAction(null);
-    } catch (error) {
-      console.error("Error deleting event:", error);
-      CalendarService.showNotification("Failed to delete event: " + error.message, "error");
-      setPendingAction(null);
+    } else {
+      CalendarService.showNotification(result.error || "Failed to delete event", "error");
     }
-  };
+    
+    setPendingAction(null);
+  } catch (error) {
+    console.error("Error deleting event:", error);
+    CalendarService.showNotification("Failed to delete event: " + error.message, "error");
+    setPendingAction(null);
+  }
+}
   
   // Update event - Enhanced with error handling
   const updateEvent = async () => {
@@ -1756,23 +1893,39 @@ const loadAllEvents = async () => {
                               {event.location && ` - ${event.location}`}
                             </p>
                             
-                            {/* Attendee avatars */}
-                            <div className="flex -space-x-2 ml-2">
-                              {getEventAttendees(event).slice(0, 3).map((attendee, i) => (
-                                <div key={i} className="w-6 h-6 rounded-full overflow-hidden border border-white">
-                                  <img 
-                                    src={attendee.profilePicture || `/api/placeholder/24/24`} 
-                                    alt={attendee.name}
-                                    className="w-full h-full object-cover"
-                                  />
-                                </div>
-                              ))}
-                              {getEventAttendees(event).length > 3 && (
-                                <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center border border-white text-xs">
-                                  +{getEventAttendees(event).length - 3}
-                                </div>
-                              )}
-                            </div>
+                            // src/components/calendar/FloatingCalendarWidget.jsx - Replace the rendering of attendee avatars in both event list sections
+
+{/* Enhanced attendee avatars with better styling and info */}
+<div className="flex -space-x-2 ml-2 items-center">
+  {getEventAttendees(event).slice(0, 3).map((attendee, i) => (
+    <div 
+      key={i} 
+      className="w-6 h-6 rounded-full overflow-hidden border border-white shadow-sm bg-white"
+      title={attendee.name}
+    >
+      <img 
+        src={attendee.profilePicture || `/api/placeholder/24/24`} 
+        alt={attendee.name}
+        className="w-full h-full object-cover"
+      />
+    </div>
+  ))}
+  {event.siblingIds && event.siblingIds.length > 0 && (
+    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center border border-white shadow-sm" title="Siblings included">
+      <Users size={12} className="text-blue-600" />
+    </div>
+  )}
+  {event.attendingParentId === 'both' && (
+    <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center border border-white shadow-sm" title="Both parents attending">
+      <Users size={12} className="text-purple-600" />
+    </div>
+  )}
+  {getEventAttendees(event).length > 3 && (
+    <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center border border-white shadow-sm text-xs" title={`${getEventAttendees(event).length - 3} more attendees`}>
+      +{getEventAttendees(event).length - 3}
+    </div>
+  )}
+</div>
                           </div>
                         </div>
                         
@@ -2179,241 +2332,329 @@ const loadAllEvents = async () => {
         <Calendar size={24} />
       </button>
 
-      {/* Event Details Modal */}
-      {showEventDetails && selectedEvent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-4 border-b flex justify-between items-center">
+      // src/components/calendar/FloatingCalendarWidget.jsx - Replace the event details modal content 
+
+{/* Event Details Modal - Enhanced with complete metadata */}
+{showEventDetails && selectedEvent && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <div className="p-4 border-b flex justify-between items-center">
+        {isEditingEvent ? (
+          <input
+            type="text"
+            className="text-lg font-semibold font-roboto border p-1 rounded w-full"
+            value={editedEvent?.title || ''}
+            onChange={(e) => setEditedEvent({...editedEvent, title: e.target.value})}
+          />
+        ) : (
+          <h3 className="text-lg font-semibold font-roboto flex items-center">
+            {selectedEvent.title}
+            <span className="ml-2 text-xs px-2 py-1 rounded-full bg-gray-100">
+              {selectedEvent.eventType || 'event'}
+            </span>
+          </h3>
+        )}
+        <button
+          onClick={() => {
+            setShowEventDetails(false);
+            setIsEditingEvent(false);
+            setEditedEvent(null);
+          }}
+          className="p-1 hover:bg-gray-100 rounded"
+        >
+          <X size={18} />
+        </button>
+      </div>
+      <div className="p-4">
+        <div className="space-y-4">
+          {/* Date and Time */}
+          <div className="flex items-start">
+            <Clock size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+            <div>
+              <p className="font-medium text-sm font-roboto">Date & Time</p>
+              {isEditingEvent ? (
+                <div className="space-y-2">
+                  <input
+                    type="date"
+                    className="border p-1 rounded text-sm w-full"
+                    value={editedEvent?.dateObj ? editedEvent.dateObj.toISOString().split('T')[0] : ''}
+                    onChange={(e) => {
+                      const newDate = new Date(e.target.value);
+                      // Preserve time from old date
+                      if (editedEvent.dateObj) {
+                        newDate.setHours(editedEvent.dateObj.getHours(), editedEvent.dateObj.getMinutes());
+                      }
+                      setEditedEvent({...editedEvent, dateObj: newDate});
+                    }}
+                  />
+                  <input
+                    type="time"
+                    className="border p-1 rounded text-sm w-full"
+                    value={editedEvent?.dateObj ? 
+                      `${String(editedEvent.dateObj.getHours()).padStart(2, '0')}:${String(editedEvent.dateObj.getMinutes()).padStart(2, '0')}` : 
+                      ''}
+                    onChange={(e) => {
+                      const [hours, minutes] = e.target.value.split(':').map(Number);
+                      const newDate = new Date(editedEvent.dateObj);
+                      newDate.setHours(hours, minutes);
+                      setEditedEvent({...editedEvent, dateObj: newDate});
+                    }}
+                  />
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-600 font-roboto">
+                    {selectedEvent.dateObj?.toLocaleDateString('en-US', { 
+                      weekday: 'long', 
+                      month: 'long', 
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                  </p>
+                  <p className="text-sm text-gray-600 font-roboto">
+                    {selectedEvent.time || selectedEvent.dateObj?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    {selectedEvent.dateEndObj && ` - ${selectedEvent.dateEndObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+          
+          {/* Location */}
+          <div className="flex items-start">
+            <MapPin size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+            <div>
+              <p className="font-medium text-sm font-roboto">Location</p>
               {isEditingEvent ? (
                 <input
                   type="text"
-                  className="text-lg font-semibold font-roboto border p-1 rounded w-full"
-                  value={editedEvent?.title || ''}
-                  onChange={(e) => setEditedEvent({...editedEvent, title: e.target.value})}
+                  className="border p-1 rounded text-sm w-full"
+                  placeholder="TBD"
+                  value={editedEvent?.location || ''}
+                  onChange={(e) => setEditedEvent({...editedEvent, location: e.target.value})}
                 />
               ) : (
-                <h3 className="text-lg font-semibold font-roboto">{selectedEvent.title}</h3>
+                <p className="text-sm text-gray-600 font-roboto">{selectedEvent.location || "TBD"}</p>
               )}
-              <button
-                onClick={() => {
-                  setShowEventDetails(false);
-                  setIsEditingEvent(false);
-                  setEditedEvent(null);
-                }}
-                className="p-1 hover:bg-gray-100 rounded"
-              >
-                <X size={18} />
-              </button>
             </div>
-            <div className="p-4">
-              <div className="space-y-4">
-                {/* Date and Time */}
-                <div className="flex items-start">
-                  <Clock size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
-                  <div>
-                    <p className="font-medium text-sm font-roboto">Date & Time</p>
-                    {isEditingEvent ? (
-                      <div className="space-y-2">
-                        <input
-                          type="date"
-                          className="border p-1 rounded text-sm w-full"
-                          value={editedEvent?.dateObj ? editedEvent.dateObj.toISOString().split('T')[0] : ''}
-                          onChange={(e) => {
-                            const newDate = new Date(e.target.value);
-                            // Preserve time from old date
-                            if (editedEvent.dateObj) {
-                              newDate.setHours(editedEvent.dateObj.getHours(), editedEvent.dateObj.getMinutes());
-                            }
-                            setEditedEvent({...editedEvent, dateObj: newDate});
-                          }}
-                        />
-                        <input
-                          type="time"
-                          className="border p-1 rounded text-sm w-full"
-                          value={editedEvent?.dateObj ? 
-                            `${String(editedEvent.dateObj.getHours()).padStart(2, '0')}:${String(editedEvent.dateObj.getMinutes()).padStart(2, '0')}` : 
-                            ''}
-                          onChange={(e) => {
-                            const [hours, minutes] = e.target.value.split(':').map(Number);
-                            const newDate = new Date(editedEvent.dateObj);
-                            newDate.setHours(hours, minutes);
-                            setEditedEvent({...editedEvent, dateObj: newDate});
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <>
-                        <p className="text-sm text-gray-600 font-roboto">
-                          {selectedEvent.dateObj?.toLocaleDateString('en-US', { 
-                            weekday: 'long', 
-                            month: 'long', 
-                            day: 'numeric',
-                            year: 'numeric'
-                          })}
-                        </p>
-                        <p className="text-sm text-gray-600 font-roboto">
-                          {selectedEvent.time || selectedEvent.dateObj?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                          {selectedEvent.dateEndObj && ` - ${selectedEvent.dateEndObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Location */}
-                <div className="flex items-start">
-                  <MapPin size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
-                  <div>
-                    <p className="font-medium text-sm font-roboto">Location</p>
-                    {isEditingEvent ? (
-                      <input
-                        type="text"
-                        className="border p-1 rounded text-sm w-full"
-                        placeholder="TBD"
-                        value={editedEvent?.location || ''}
-                        onChange={(e) => setEditedEvent({...editedEvent, location: e.target.value})}
+          </div>
+          
+          {/* Child Information */}
+          {(selectedEvent.childName || selectedEvent.childId) && (
+            <div className="flex items-start">
+              <User size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-sm font-roboto">For Child</p>
+                <div className="flex items-center">
+                  {selectedEvent.childId && familyMembers.find(m => m.id === selectedEvent.childId) && (
+                    <div className="w-6 h-6 rounded-full overflow-hidden mr-2">
+                      <img 
+                        src={familyMembers.find(m => m.id === selectedEvent.childId)?.profilePicture || `/api/placeholder/24/24`}
+                        alt={selectedEvent.childName}
+                        className="w-full h-full object-cover"
                       />
-                    ) : (
-                      <p className="text-sm text-gray-600 font-roboto">{selectedEvent.location || "TBD"}</p>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Person */}
-                {(selectedEvent.childName || selectedEvent.assignedToName) && (
-                  <div className="flex items-start">
-                    <User size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium text-sm font-roboto">For</p>
-                      <div className="flex items-center">
-                        {getEventAttendees(selectedEvent).map((attendee, i) => (
-                          <div key={i} className="flex items-center mr-3">
-                            <div className="w-6 h-6 rounded-full overflow-hidden mr-1">
-                              <img 
-                                src={attendee.profilePicture || `/api/placeholder/24/24`} 
-                                alt={attendee.name}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                            <span className="text-sm text-gray-600 font-roboto">{attendee.name}</span>
-                          </div>
-                        ))}
-                      </div>
                     </div>
-                  </div>
-                )}
-                
-                {/* Description */}
-                <div className="flex items-start">
-                  <Info size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
-                  <div>
-                    <p className="font-medium text-sm font-roboto">Description</p>
-                    {isEditingEvent ? (
-                      <textarea
-                        className="border p-1 rounded text-sm w-full min-h-[80px]"
-                        placeholder="Add a description"
-                        value={editedEvent?.description || ''}
-                          onChange={(e) => setEditedEvent({...editedEvent, description: e.target.value})}
-                      />
-                    ) : (
-                      <p className="text-sm text-gray-600 font-roboto whitespace-pre-line">
-                        {selectedEvent.description || selectedEvent.notes || "No description provided"}
-                      </p>
-                    )}
-                  </div>
+                  )}
+                  <span className="text-sm text-gray-600 font-roboto">{selectedEvent.childName || 'Unknown child'}</span>
                 </div>
                 
-                {/* Linked Entity */}
-                {selectedEvent.linkedEntity && (
-                  <div className="flex items-start">
-                    <Link size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium text-sm font-roboto">Linked to</p>
-                      <button 
-                        onClick={() => navigateToLinkedEntity(selectedEvent)}
-                        className="text-sm text-blue-600 hover:underline font-roboto flex items-center"
-                      >
-                        {selectedEvent.linkedEntity.type === 'meeting' ? 'Open Family Meeting' :
-                         selectedEvent.linkedEntity.type === 'task' ? 'View Task Details' :
-                         selectedEvent.linkedEntity.type === 'relationship' ? 'View Relationship Section' :
-                         selectedEvent.linkedEntity.type === 'child' ? 'View Child Profile' :
-                         'View Details'}
-                        <ArrowUpRight size={14} className="ml-1" />
-                      </button>
+                {/* Show sibling information if available */}
+                {(selectedEvent.siblingIds?.length > 0 || selectedEvent.siblingNames?.length > 0) && (
+                  <div className="mt-1">
+                    <p className="text-xs text-gray-500 font-roboto">Also includes:</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {(selectedEvent.siblingNames || []).map((name, idx) => (
+                        <span key={idx} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                          {name}
+                        </span>
+                      ))}
+                      {selectedEvent.siblingIds?.map(sibId => {
+                        const sibling = familyMembers.find(m => m.id === sibId);
+                        if (!sibling) return null;
+                        return (
+                          <span key={sibId} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                            {sibling.name}
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
               </div>
             </div>
-            <div className="p-4 border-t flex justify-between">
-              {isEditingEvent ? (
-                <>
-                  <button
-                    onClick={() => {
-                      setIsEditingEvent(false);
-                      setEditedEvent(null);
-                    }}
-                    className="px-4 py-2 border rounded hover:bg-gray-50 font-roboto"
-                    disabled={pendingAction === 'update'}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={updateEvent}
-                    className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 font-roboto flex items-center"
-                    disabled={pendingAction === 'update'}
-                  >
-                    {pendingAction === 'update' ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2"></div>
-                        Updating...
-                      </>
-                    ) : (
-                      'Save Changes'
-                    )}
-                  </button>
-                </>
-              ) : (
-                <>
-                  {selectedEvent.firestoreId && (
-                    <button
-                      onClick={() => {
-                        if (window.confirm("Are you sure you want to delete this event?")) {
-                          deleteEvent(selectedEvent);
-                        }
-                      }}
-                      className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-50 font-roboto flex items-center"
-                      disabled={pendingAction === 'delete'}
-                    >
-                      {pendingAction === 'delete' ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-t-transparent border-red-500 rounded-full animate-spin mr-2"></div>
-                          Deleting...
-                        </>
-                      ) : (
-                        <>
-                          <Trash2 size={16} className="mr-2" />
-                          Delete
-                        </>
+          )}
+          
+          {/* Parent Information */}
+          {selectedEvent.attendingParentId && (
+            <div className="flex items-start">
+              <Users size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-sm font-roboto">Attending Parent</p>
+                <div className="flex items-center">
+                  {selectedEvent.attendingParentId === 'both' ? (
+                    <span className="text-sm text-purple-600 font-roboto flex items-center">
+                      <Users size={14} className="mr-1" />
+                      Both Parents
+                    </span>
+                  ) : selectedEvent.attendingParentId === 'undecided' ? (
+                    <span className="text-sm text-orange-600 font-roboto">To be decided</span>
+                  ) : (
+                    <>
+                      {familyMembers.find(m => m.id === selectedEvent.attendingParentId) && (
+                        <div className="w-6 h-6 rounded-full overflow-hidden mr-2">
+                          <img 
+                            src={familyMembers.find(m => m.id === selectedEvent.attendingParentId)?.profilePicture || `/api/placeholder/24/24`}
+                            alt={familyMembers.find(m => m.id === selectedEvent.attendingParentId)?.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
                       )}
-                    </button>
+                      <span className="text-sm text-gray-600 font-roboto">
+                        {familyMembers.find(m => m.id === selectedEvent.attendingParentId)?.name || 
+                         selectedEvent.attendingParentId}
+                      </span>
+                    </>
                   )}
-                  <button
-                    onClick={() => {
-                      setIsEditingEvent(true);
-                      setEditedEvent({...selectedEvent});
-                    }}
-                    className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 font-roboto flex items-center"
-                  >
-                    <Edit size={16} className="mr-2" />
-                    Edit
-                  </button>
-                </>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Host Information */}
+          {selectedEvent.hostParent && (
+            <div className="flex items-start">
+              <User size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-sm font-roboto">Host</p>
+                <p className="text-sm text-gray-600 font-roboto">{selectedEvent.hostParent}</p>
+              </div>
+            </div>
+          )}
+          
+          {/* Description */}
+          <div className="flex items-start">
+            <Info size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+            <div>
+              <p className="font-medium text-sm font-roboto">Description</p>
+              {isEditingEvent ? (
+                <textarea
+                  className="border p-1 rounded text-sm w-full min-h-[80px]"
+                  placeholder="Add a description"
+                  value={editedEvent?.description || ''}
+                    onChange={(e) => setEditedEvent({...editedEvent, description: e.target.value})}
+                />
+              ) : (
+                <p className="text-sm text-gray-600 font-roboto whitespace-pre-line">
+                  {selectedEvent.description || selectedEvent.notes || "No description provided"}
+                </p>
               )}
             </div>
           </div>
+          
+          {/* Event Type specific details */}
+          {selectedEvent.eventType === 'birthday' && selectedEvent.extraDetails && (
+            <div className="flex items-start">
+              <Info size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-sm font-roboto">Birthday Details</p>
+                <p className="text-sm text-gray-600 font-roboto">
+                  {selectedEvent.extraDetails.birthdayChildName || 'Child'} is turning {' '}
+                  {selectedEvent.extraDetails.birthdayChildAge || '?'}
+                </p>
+              </div>
+            </div>
+          )}
+          
+          {/* Notes */}
+          {selectedEvent.extraDetails?.notes && (
+            <div className="flex items-start">
+              <Info size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-sm font-roboto">Notes</p>
+                <p className="text-sm text-gray-600 font-roboto whitespace-pre-line">
+                  {selectedEvent.extraDetails.notes}
+                </p>
+              </div>
+            </div>
+          )}
+          
+          {/* Show source information (chat, etc.) */}
+          {selectedEvent.source && (
+            <div className="mt-4 pt-3 border-t text-xs text-gray-500">
+              Added via: {selectedEvent.source === 'chat' ? 'Allie Chat' : 
+                      selectedEvent.source === 'parser' ? 'Message Parser' : 
+                      selectedEvent.source === 'manual' ? 'Calendar' : selectedEvent.source}
+            </div>
+          )}
         </div>
-      )}
+      </div>
+      <div className="p-4 border-t flex justify-between">
+        {isEditingEvent ? (
+          <>
+            <button
+              onClick={() => {
+                setIsEditingEvent(false);
+                setEditedEvent(null);
+              }}
+              className="px-4 py-2 border rounded hover:bg-gray-50 font-roboto"
+              disabled={pendingAction === 'update'}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={updateEvent}
+              className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 font-roboto flex items-center"
+              disabled={pendingAction === 'update'}
+            >
+              {pendingAction === 'update' ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2"></div>
+                  Updating...
+                </>
+              ) : (
+                'Save Changes'
+              )}
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => {
+                if (window.confirm("Are you sure you want to delete this event?")) {
+                  deleteEvent(selectedEvent);
+                }
+              }}
+              className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-50 font-roboto flex items-center"
+              disabled={pendingAction === 'delete'}
+            >
+              {pendingAction === 'delete' ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-t-transparent border-red-500 rounded-full animate-spin mr-2"></div>
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 size={16} className="mr-2" />
+                  Delete
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => {
+                setIsEditingEvent(true);
+                setEditedEvent({...selectedEvent});
+              }}
+              className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 font-roboto flex items-center"
+            >
+              <Edit size={16} className="mr-2" />
+              Edit
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 };

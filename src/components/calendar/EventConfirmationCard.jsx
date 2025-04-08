@@ -33,133 +33,143 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
     }
   }, [editedEvent.dateTime]);
   
-  const handleSave = async () => {
-    try {
-      setSaving(true);
-      setError(null);
-      
-      if (!editedEvent.childId && !editedEvent.title) {
-        setError("Please provide an event title or select a child");
-        setSaving(false);
-        return;
-      }
-      
-      // Get current user ID from auth context
-      const currentUserId = currentUser?.uid;
-      
-      if (!currentUserId) {
-        setError("You must be logged in to add events to the calendar");
-        setSaving(false);
-        return;
-      }
-      
-      // Update with attending parent selection
-      const finalEvent = {
-        ...editedEvent,
-        attendingParentId: attendingParent,
-        familyId,
-        // Explicitly include the user ID
-        userId: currentUserId
-      };
-      
-      // Only add siblingIds if siblings are selected
-      if (selectedSiblings && selectedSiblings.length > 0) {
-        finalEvent.siblingIds = selectedSiblings;
-        
-        // Add siblings' names for display purposes
-        finalEvent.siblingNames = selectedSiblings.map(sibId => {
-          const sibling = children.find(c => c.id === sibId);
-          return sibling ? sibling.name : '';
-        }).filter(Boolean);
-      }
-      
-      // Convert to format expected by addEvent method
-      let calendarEvent = {
-        summary: finalEvent.title,
-        title: finalEvent.title, // Include both for compatibility
-        description: finalEvent.description || `Event for ${finalEvent.childName || 'family'}`,
-        location: finalEvent.location || '',
-        start: {
-          dateTime: new Date(finalEvent.dateTime).toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        end: {
-          dateTime: new Date(new Date(finalEvent.dateTime).getTime() + 3600000).toISOString(), // Add 1 hour
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        // Add metadata
-        category: finalEvent.eventType || 'event',
-        childId: finalEvent.childId,
-        childName: finalEvent.childName,
-        eventType: finalEvent.eventType || 'general',
-        extraDetails: finalEvent.extraDetails || {},
-        attendingParentId: finalEvent.attendingParentId,
-        familyId: familyId,
-      };
-      
-      // Only add siblingIds if they exist and have values
-      if (finalEvent.siblingIds && finalEvent.siblingIds.length > 0) {
-        calendarEvent.siblingIds = finalEvent.siblingIds;
-        calendarEvent.siblingNames = finalEvent.siblingNames;
-      }
-      
-      // Clean the object - remove any undefined values
-      calendarEvent = Object.fromEntries(
-        Object.entries(calendarEvent).filter(([_, value]) => value !== undefined)
-      );
-      
-      // Add the event to the calendar using addEvent instead of addChildEvent
-      const result = await CalendarService.addEvent(calendarEvent, currentUserId);
-      
-      // If siblings are selected, create separate events for them too
-      if (selectedSiblings && selectedSiblings.length > 0 && result.success) {
-        for (const siblingId of selectedSiblings) {
-          const sibling = children.find(c => c.id === siblingId);
-          if (sibling) {
-            let siblingEvent = {
-              ...calendarEvent,
-              childId: siblingId,
-              childName: sibling.name,
-              summary: calendarEvent.summary.replace(finalEvent.childName || '', sibling.name),
-              title: calendarEvent.title.replace(finalEvent.childName || '', sibling.name),
-              // Don't include siblingIds in the sibling's own event
-              siblingIds: undefined,
-              siblingNames: undefined
-            };
-            
-            // Clean the object - remove any undefined values
-            siblingEvent = Object.fromEntries(
-              Object.entries(siblingEvent).filter(([_, value]) => value !== undefined)
-            );
-            
-            await CalendarService.addEvent(siblingEvent, currentUserId);
-          }
-        }
-      }
-      
-      if (result.success) {
-        // Dispatch a force refresh event to ensure calendar reloads
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-        }
-        
-        // Show success animation
-        setShowSuccess(true);
-        setTimeout(() => {
-          setShowSuccess(false);
-          onConfirm(finalEvent);
-        }, 1500);
-      } else {
-        setError(result.error || "Failed to save event");
-      }
-      
+  // src/components/calendar/EventConfirmationCard.jsx - Replace the handleSave function
+
+const handleSave = async () => {
+  try {
+    setSaving(true);
+    setError(null);
+    
+    if (!editedEvent.childId && !editedEvent.title) {
+      setError("Please provide an event title or select a child");
       setSaving(false);
-    } catch (error) {
-      console.error("Error saving event:", error);
-      setError("An error occurred while saving the event");
-      setSaving(false);
+      return;
     }
-  };
+    
+    // Get current user ID from auth context
+    const currentUserId = currentUser?.uid;
+    
+    if (!currentUserId) {
+      setError("You must be logged in to add events to the calendar");
+      setSaving(false);
+      return;
+    }
+    
+    // Update with attending parent selection
+    const finalEvent = {
+      ...editedEvent,
+      attendingParentId: attendingParent,
+      familyId,
+      // Explicitly include the user ID
+      userId: currentUserId,
+      // Record source 
+      source: editedEvent.source || 'parser'
+    };
+    
+    // Only add siblingIds if siblings are selected
+    if (selectedSiblings && selectedSiblings.length > 0) {
+      finalEvent.siblingIds = selectedSiblings;
+      
+      // Add siblings' names for display purposes
+      finalEvent.siblingNames = selectedSiblings.map(sibId => {
+        const sibling = children.find(c => c.id === sibId);
+        return sibling ? sibling.name : '';
+      }).filter(Boolean);
+    }
+    
+    // Convert to standard calendar event format
+    let calendarEvent = {
+      summary: finalEvent.title,
+      title: finalEvent.title, // Include both for compatibility
+      description: finalEvent.description || `Event for ${finalEvent.childName || 'family'}`,
+      location: finalEvent.location || '',
+      start: {
+        dateTime: new Date(finalEvent.dateTime).toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: new Date(new Date(finalEvent.dateTime).getTime() + 3600000).toISOString(), // Add 1 hour
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      // Add all metadata
+      category: finalEvent.eventType || 'event',
+      childId: finalEvent.childId,
+      childName: finalEvent.childName,
+      eventType: finalEvent.eventType || 'general',
+      extraDetails: finalEvent.extraDetails || {},
+      attendingParentId: finalEvent.attendingParentId,
+      familyId: familyId,
+      siblingIds: finalEvent.siblingIds,
+      siblingNames: finalEvent.siblingNames,
+      source: finalEvent.source,
+      // Add original text for reference/debugging
+      originalText: finalEvent.originalText
+    };
+    
+    // Clean the object - remove any undefined values
+    calendarEvent = Object.fromEntries(
+      Object.entries(calendarEvent).filter(([_, value]) => value !== undefined)
+    );
+    
+    // Add the event to the calendar using the standard method
+    const result = await CalendarService.addEvent(calendarEvent, currentUserId);
+    
+    // If siblings are selected, create separate events for them too
+    if (selectedSiblings && selectedSiblings.length > 0 && result.success) {
+      for (const siblingId of selectedSiblings) {
+        const sibling = children.find(c => c.id === siblingId);
+        if (sibling) {
+          let siblingEvent = {
+            ...calendarEvent,
+            childId: siblingId,
+            childName: sibling.name,
+            summary: calendarEvent.summary.replace(finalEvent.childName || '', sibling.name),
+            title: calendarEvent.title.replace(finalEvent.childName || '', sibling.name),
+            // Store reference to main event
+            linkedToEventId: result.firestoreId,
+            // Don't include siblingIds in the sibling's own event
+            siblingIds: undefined,
+            siblingNames: undefined
+          };
+          
+          // Clean the object - remove any undefined values
+          siblingEvent = Object.fromEntries(
+            Object.entries(siblingEvent).filter(([_, value]) => value !== undefined)
+          );
+          
+          await CalendarService.addEvent(siblingEvent, currentUserId);
+        }
+      }
+    }
+    
+    if (result.success) {
+      // Dispatch a force refresh event to ensure calendar reloads
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+      }
+      
+      // Show success animation
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+        // Return the final event including the Firestore ID
+        onConfirm({
+          ...finalEvent,
+          firestoreId: result.firestoreId,
+          id: result.eventId || result.firestoreId
+        });
+      }, 1500);
+    } else {
+      setError(result.error || "Failed to save event");
+    }
+    
+    setSaving(false);
+  } catch (error) {
+    console.error("Error saving event:", error);
+    setError("An error occurred while saving the event");
+    setSaving(false);
+  }
+}
   
   const handleEdit = () => {
     setIsEditing(true);

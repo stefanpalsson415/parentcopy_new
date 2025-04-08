@@ -73,111 +73,201 @@ class CalendarService {
     }
   }
 
-  async addEvent(event, userId) {
+
+  async updateEvent(eventId, updateData, userId) {
     try {
-      if (!userId) {
-        throw new Error("User ID is required to add events");
+      if (!eventId || !userId) {
+        throw new Error("Event ID and User ID are required to update events");
       }
       
-      // Log the incoming event for debugging
-      console.log("Adding calendar event:", {
-        title: event.summary || event.title || 'Untitled',
-        hasStart: !!event.start,
-        hasDate: !!(event.start?.dateTime || event.start?.date),
-        childName: event.childName || 'None',
-        userId
-      });
+      console.log("Updating calendar event:", { eventId, updateFields: Object.keys(updateData) });
       
-      // Ensure event has required fields
-      if (!event.summary && !event.title) {
-        event.summary = "Untitled Event";
-      }
-      
-      // Standardize event format
-      const standardizedEvent = {
-        ...event,
-        summary: event.summary || event.title,
-        title: event.title || event.summary, // Ensure both are set
-        description: event.description || '',
-        // Ensure start and end dates are properly formatted
-        start: event.start || {
-          dateTime: new Date().toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        end: event.end || {
-          dateTime: new Date(new Date().getTime() + 60*60000).toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
+      // Standardize the update data
+      const updates = {
+        ...updateData,
+        updatedAt: serverTimestamp()
       };
       
-      // Check if a similar event already exists
-      if (event.familyId && event.childName) {
-        const eventsQuery = query(
-          collection(db, "calendar_events"),
-          where("familyId", "==", event.familyId),
-          where("childName", "==", event.childName),
-          where("userId", "==", userId)
-        );
-        
-        const querySnapshot = await getDocs(eventsQuery);
-        let isDuplicate = false;
-        
-        // Check if there's a similar event on the same day with the same title
-        querySnapshot.forEach((doc) => {
-          const existingEvent = doc.data();
-          if (existingEvent.summary === standardizedEvent.summary) {
-            const existingDate = new Date(existingEvent.start.dateTime);
-            const newDate = new Date(standardizedEvent.start.dateTime);
-            
-            // Compare dates (ignoring time)
-            if (existingDate.toDateString() === newDate.toDateString()) {
-              console.log("Found duplicate event, skipping creation");
-              isDuplicate = true;
-            }
-          }
-        });
-        
-        if (isDuplicate) {
-          this.showNotification("This event already exists in your calendar", "info");
-          return { success: true, isDuplicate: true };
-        }
+      // If there are changes to title/summary, ensure both fields are updated
+      if (updates.title && !updates.summary) {
+        updates.summary = updates.title;
+      } else if (updates.summary && !updates.title) {
+        updates.title = updates.summary;
       }
       
-      // Save event to Firestore
-      const eventData = {
-        ...standardizedEvent,
-        userId,
-        familyId: event.familyId || null,
-        createdAt: serverTimestamp()
-      };
+      // Update in Firestore
+      const docRef = doc(db, "calendar_events", eventId);
+      await updateDoc(docRef, updates);
       
-      const eventRef = collection(db, "calendar_events");
-      const docRef = await addDoc(eventRef, eventData);
-      console.log("Event saved to Firestore with ID:", docRef.id);
-      
-      // Dispatch events
+      // Dispatch events for UI refresh
       if (typeof window !== 'undefined') {
-        // Force refresh with slight delay
-        setTimeout(() => {
-          console.log("Dispatching force-calendar-refresh event");
-          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-        }, 300);
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        window.dispatchEvent(new CustomEvent('calendar-event-updated', {
+          detail: { eventId }
+        }));
       }
       
-      // Show success notification
-      this.showNotification(`Event "${standardizedEvent.summary}" added to your calendar`, "success");
+      this.showNotification("Event updated successfully", "success");
       
       return {
         success: true,
-        eventId: docRef.id,
-        isMock: false
+        eventId
       };
     } catch (error) {
-      console.error("Error adding event to calendar:", error);
-      this.showNotification("Failed to add event to calendar", "error");
+      console.error("Error updating event:", error);
+      this.showNotification("Failed to update event", "error");
       return { success: false, error: error.message || "Unknown error" };
     }
   }
+  
+  // Enhanced delete method
+  async deleteEvent(eventId, userId) {
+    try {
+      if (!eventId || !userId) {
+        throw new Error("Event ID and User ID are required to delete events");
+      }
+      
+      console.log("Deleting calendar event:", { eventId });
+      
+      // Delete from Firestore
+      const docRef = doc(db, "calendar_events", eventId);
+      await deleteDoc(docRef);
+      
+      // Dispatch events for UI refresh
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        window.dispatchEvent(new CustomEvent('calendar-event-deleted', {
+          detail: { eventId }
+        }));
+      }
+      
+      this.showNotification("Event deleted from calendar", "success");
+      
+      return {
+        success: true
+      };
+    } catch (error) {
+      console.error("Error deleting event:", error);
+      this.showNotification("Failed to delete event", "error");
+      return { success: false, error: error.message || "Unknown error" };
+    }
+  }
+
+
+
+  // src/services/CalendarService.js - Replace the addEvent method with this improved version
+
+async addEvent(event, userId) {
+  try {
+    if (!userId) {
+      throw new Error("User ID is required to add events");
+    }
+    
+    // Log the incoming event for debugging
+    console.log("Adding calendar event:", {
+      title: event.summary || event.title || 'Untitled',
+      hasStart: !!event.start,
+      hasDate: !!(event.start?.dateTime || event.start?.date),
+      childName: event.childName || 'None',
+      userId
+    });
+    
+    // Ensure event has required fields
+    if (!event.summary && !event.title) {
+      event.summary = "Untitled Event";
+    }
+    
+    // Standardize event format - this ensures a consistent structure
+    const standardizedEvent = {
+      ...event,
+      summary: event.summary || event.title,
+      title: event.title || event.summary, // Ensure both are set for compatibility
+      description: event.description || '',
+      // Ensure start and end dates are properly formatted
+      start: event.start || {
+        dateTime: new Date().toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: event.end || {
+        dateTime: new Date(new Date().getTime() + 60*60000).toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      // Always include these fields
+      userId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      source: event.source || 'manual',
+      // Standardize the unique identifier
+      eventId: event.eventId || `event-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+    };
+    
+    // Check if a similar event already exists to prevent duplicates
+    if (event.familyId) {
+      const eventsQuery = query(
+        collection(db, "calendar_events"),
+        where("familyId", "==", event.familyId),
+        where("userId", "==", userId)
+      );
+      
+      const querySnapshot = await getDocs(eventsQuery);
+      let isDuplicate = false;
+      
+      querySnapshot.forEach((doc) => {
+        const existingEvent = doc.data();
+        if (existingEvent.summary === standardizedEvent.summary) {
+          const existingDate = new Date(existingEvent.start.dateTime || existingEvent.start.date);
+          const newDate = new Date(standardizedEvent.start.dateTime || standardizedEvent.start.date);
+          
+          // Compare dates (ignoring time precision issues)
+          if (Math.abs(existingDate - newDate) < 3600000) { // Within 1 hour
+            console.log("Found duplicate event, skipping creation");
+            isDuplicate = true;
+          }
+        }
+      });
+      
+      if (isDuplicate) {
+        this.showNotification("This event already exists in your calendar", "info");
+        return { success: true, isDuplicate: true };
+      }
+    }
+    
+    // Save event to Firestore in the single calendar_events collection
+    const eventRef = collection(db, "calendar_events");
+    const docRef = await addDoc(eventRef, standardizedEvent);
+    console.log("Event saved to Firestore with ID:", docRef.id);
+    
+    // Dispatch events - this is crucial for keeping the UI in sync
+    if (typeof window !== 'undefined') {
+      // Force refresh all calendar views
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        // Also dispatch specific event type for more targeted refreshes
+        window.dispatchEvent(new CustomEvent('calendar-event-added', {
+          detail: { 
+            eventId: docRef.id,
+            eventType: standardizedEvent.eventType,
+            childId: standardizedEvent.childId,
+            childName: standardizedEvent.childName
+          }
+        }));
+      }, 300);
+    }
+    
+    // Show success notification
+    this.showNotification(`Event "${standardizedEvent.summary}" added to your calendar`, "success");
+    
+    return {
+      success: true,
+      eventId: docRef.id,
+      firestoreId: docRef.id  // Always include the Firestore ID as the universal ID
+    };
+  } catch (error) {
+    console.error("Error adding event to calendar:", error);
+    this.showNotification("Failed to add event to calendar", "error");
+    return { success: false, error: error.message || "Unknown error" };
+  }
+}
 
 /// In CalendarService.js - Find the addChildEvent method and replace it with this:
 // Fix for CalendarService.js - replace the addChildEvent method
@@ -481,25 +571,75 @@ formatDateForDisplay(date, region = 'US') {
     }
   }
 
-  // Helper to show notifications
   showNotification(message, type = "info") {
     if (typeof window === 'undefined') return;
     
+    // First check if we already have a notification container
+    let container = document.getElementById('allie-notification-container');
+    
+    // Create container if it doesn't exist
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'allie-notification-container';
+      container.style.cssText = `
+        position: fixed; bottom: 20px; right: 20px; 
+        z-index: 9999; display: flex; flex-direction: column;
+        gap: 10px; max-width: 350px;
+      `;
+      document.body.appendChild(container);
+    }
+    
+    // Create notification element
     const notification = document.createElement('div');
-    notification.innerText = message;
     
     const bgColor = type === "success" ? "#4caf50" : 
                   type === "error" ? "#f44336" : 
-                  "#2196f3";
+                  type === "warning" ? "#ff9800" : "#2196f3";
                   
     notification.style.cssText = `
-      position: fixed; bottom: 20px; right: 20px; background: ${bgColor};
-      color: white; padding: 12px 20px; border-radius: 4px; z-index: 9999;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-family: Roboto, sans-serif;
+      background: ${bgColor}; color: white; padding: 12px 20px;
+      border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      font-family: Roboto, sans-serif; animation: slideIn 0.3s ease-out;
+      display: flex; align-items: center; justify-content: space-between;
     `;
     
-    document.body.appendChild(notification);
-    setTimeout(() => notification.remove(), 5000);
+    // Add message
+    const messageSpan = document.createElement('span');
+    messageSpan.innerText = message;
+    notification.appendChild(messageSpan);
+    
+    // Add close button
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '×';
+    closeBtn.style.cssText = `
+      background: transparent; border: none; color: white;
+      font-size: 18px; margin-left: 10px; cursor: pointer;
+    `;
+    closeBtn.onclick = () => notification.remove();
+    notification.appendChild(closeBtn);
+    
+    // Add animation
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes fadeOut {
+        from { opacity: 1; }
+        to { opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // Add to container
+    container.appendChild(notification);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+      notification.style.animation = 'fadeOut 0.3s ease-out forwards';
+      setTimeout(() => notification.remove(), 300);
+    }, 5000);
   }
 
   // Create event object from a task
