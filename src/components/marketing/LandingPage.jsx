@@ -5,224 +5,305 @@ import familyPhoto from '../../assets/family-photo.jpg';
 import { 
   ArrowRight, ArrowLeft, CheckCircle, Star, Award, Brain, 
   Heart, ChevronDown, ChevronUp, Book, BarChart, Scale, 
-  Clock, Sliders, AlertTriangle, Users, Target, PlusCircle, LogOut,
-  ChevronRight
+  Clock, Sliders, AlertTriangle, Users, Target, Command,
+  Calendar, MessageSquare, Database, FileText, Activity,
+  Search, Upload, Bookmark, Shield, Smartphone, Sparkles,
+  Zap, PlusCircle, Camera, Mic, Download, ChevronRight
 } from 'lucide-react';
 
 const LandingPage = () => {
-  console.log("LandingPage attempting to render...");
-
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const [activeDemo, setActiveDemo] = useState(1);
   const [activeRoadmapStep, setActiveRoadmapStep] = useState(1);
   
-  // Sample family data for the interactive demo
-  const sampleFamilyData = {
-    name: "The Johnsons",
-    members: [
-      { name: "Sarah", role: "Mama", taskPercentage: 68 },
-      { name: "Mike", role: "Papa", taskPercentage: 32 },
-      { name: "Emma", age: 8 },
-      { name: "Noah", age: 5 }
-    ],
-    taskCategories: [
-      { name: "Visible Household", mama: 58, papa: 42 },
-      { name: "Invisible Household", mama: 72, papa: 28 },
-      { name: "Visible Parental", mama: 60, papa: 40 },
-      { name: "Invisible Parental", mama: 82, papa: 18 }
-    ],
-    weeklyProgress: [
-      { week: 1, mamaPercentage: 68, papaPercentage: 32 },
-      { week: 2, mamaPercentage: 65, papaPercentage: 35 },
-      { week: 3, mamaPercentage: 62, papaPercentage: 38 },
-      { week: 4, mamaPercentage: 58, papaPercentage: 42 },
-      { week: 6, mamaPercentage: 55, papaPercentage: 45 },
-      { week: 8, mamaPercentage: 53, papaPercentage: 47 }
-    ]
-  };
-  
   // Demo steps for the interactive demo
   const demoSteps = [
     {
-      title: "Initial Assessment",
-      description: "Each family member completes an 80-question assessment to establish your family's baseline balance.",
+      title: "The Complete Family Assistant",
+      description: "Allie combines AI, data science, and behavioral psychology to create a comprehensive system that manages all aspects of family life.",
       content: (
         <div className="bg-gray-50 p-4 rounded-lg">
-          <h4 className="font-medium mb-2">The Math Behind the Assessment</h4>
-          <p className="text-sm text-gray-600 mb-3">
-            Our assessment uses a proprietary algorithm to weight tasks based on:
-          </p>
-          <ul className="space-y-1 text-sm text-gray-600">
-            <li className="flex items-center">
-              <span className="w-4 h-4 rounded-full bg-purple-100 flex items-center justify-center mr-2 flex-shrink-0">
-                <span className="text-purple-600 text-xs">1</span>
-              </span>
-              <span>Time investment: BaseTime (1-5 scale)</span>
-            </li>
-            <li className="flex items-center">
-              <span className="w-4 h-4 rounded-full bg-blue-100 flex items-center justify-center mr-2 flex-shrink-0">
-                <span className="text-blue-600 text-xs">2</span>
-              </span>
-              <span>Frequency: Daily (1.5×) to Quarterly (0.8×)</span>
-            </li>
-            <li className="flex items-center">
-              <span className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center mr-2 flex-shrink-0">
-                <span className="text-green-600 text-xs">3</span>
-              </span>
-              <span>Invisibility: Highly visible (1.0×) to Completely invisible (1.5×)</span>
-            </li>
-            <li className="flex items-center">
-              <span className="w-4 h-4 rounded-full bg-red-100 flex items-center justify-center mr-2 flex-shrink-0">
-                <span className="text-red-600 text-xs">4</span>
-              </span>
-              <span>Emotional Labor: Minimal (1.0×) to Extreme (1.4×)</span>
-            </li>
-          </ul>
-        </div>
-      )
-    },
-    {
-      title: "Data Visualization",
-      description: "See a clear breakdown of your family's current task distribution across all categories.",
-      content: (
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <h4 className="font-medium mb-2">The Johnson Family Balance</h4>
-          <div className="space-y-3">
-            {sampleFamilyData.taskCategories.map((category, index) => (
-              <div key={index}>
-                <div className="flex justify-between text-sm">
-                  <span>{category.name}</span>
-                  <div>
-                    <span className="text-purple-600">Mama: {category.mama}%</span>
-                    <span className="mx-2">|</span>
-                    <span className="text-blue-600">Papa: {category.papa}%</span>
-                  </div>
-                </div>
-                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-purple-600"
-                    style={{ width: `${category.mama}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-          <p className="text-sm text-gray-600 mt-3">
-            TaskWeight = BaseTime × Frequency × Invisibility × EmotionalLabor × Priority
-          </p>
-        </div>
-      )
-    },
-    {
-      title: "AI-Powered Insights",
-      description: "Receive personalized recommendations based on your family's unique imbalances.",
-      content: (
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <h4 className="font-medium mb-2">Sample Insight Analysis</h4>
-          <div className="p-3 bg-white rounded border border-gray-200">
+          <h4 className="font-medium mb-4">The Allie Ecosystem</h4>
+          <div className="grid grid-cols-2 gap-4">
             <div className="flex items-start">
-              <Brain className="text-purple-600 mt-1 mr-2 flex-shrink-0" size={16} />
+              <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center mr-3 flex-shrink-0">
+                <Scale className="text-pink-600" size={20} />
+              </div>
               <div>
-                <p className="text-sm font-medium text-gray-800">Invisible Household Tasks Imbalance</p>
-                <p className="text-xs text-gray-600">
-                  Our AI has detected that Mama is handling 72% of invisible household tasks, creating a significant imbalance of 44%. 
-                  We recommend Papa takes over meal planning (weight: 13.42) to improve balance.
+                <p className="font-medium">Family Workload Balance</p>
+                <p className="text-sm text-gray-600">
+                  Measuring and equalizing the distribution of both visible tasks and invisible mental load
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-start">
+              <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center mr-3 flex-shrink-0">
+                <Command className="text-purple-600" size={20} />
+              </div>
+              <div>
+                <p className="font-medium">Family Command Center</p>
+                <p className="text-sm text-gray-600">
+                  Centralized hub for scheduling, documents, and family management
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-start">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center mr-3 flex-shrink-0">
+                <FileText className="text-amber-600" size={20} />
+              </div>
+              <div>
+                <p className="font-medium">Family Memory System</p>
+                <p className="text-sm text-gray-600">
+                  Your family's institutional memory, remembering everything so you don't have to
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-start">
+              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mr-3 flex-shrink-0">
+                <Activity className="text-green-600" size={20} />
+              </div>
+              <div>
+                <p className="font-medium">Child Development Tracking</p>
+                <p className="text-sm text-gray-600">
+                  Monitoring growth, health, education, and milestones
                 </p>
               </div>
             </div>
           </div>
-          <div className="text-xs text-gray-500 mt-2">
-            AI recommendations are generated using a combination of pattern recognition and mathematical weighting.
-          </div>
         </div>
       )
     },
     {
-      title: "Weekly Check-ins",
-      description: "Quick 5-minute surveys to track progress and adjust recommendations in real-time.",
+      title: "Allie Chat: Your Family's AI Assistant",
+      description: "An intelligent AI assistant that understands your family's unique context and needs, accessible through natural conversation.",
       content: (
         <div className="bg-gray-50 p-4 rounded-lg">
-          <h4 className="font-medium mb-2">Weekly Progress</h4>
-          <div className="h-32">
-            <div className="flex h-full items-end">
-              {sampleFamilyData.weeklyProgress.map((week, index) => (
-                <div key={index} className="flex-1 mx-1 flex flex-col items-center">
-                  <div className="w-full flex">
-                    <div
-                      className="bg-purple-600"
-                      style={{ 
-                        height: `${week.mamaPercentage * 0.7}px`,
-                        width: '50%'
-                      }}
-                    />
-                    <div
-                      className="bg-blue-600"
-                      style={{ 
-                        height: `${week.papaPercentage * 0.7}px`,
-                        width: '50%'
-                      }}
-                    />
-                  </div>
-                  <span className="text-xs mt-1">W{week.week}</span>
+          <div className="bg-white p-4 rounded-lg border shadow-sm">
+            <div className="flex justify-between items-center mb-3">
+              <h5 className="font-medium">Allie Chat</h5>
+            </div>
+            <div className="space-y-3">
+              <div className="flex justify-end">
+                <div className="bg-black text-white rounded-lg p-3 max-w-xs">
+                  <p className="text-sm">When was Jack's last dentist appointment and what did they recommend?</p>
                 </div>
-              ))}
-            </div>
-          </div>
-          <div className="flex justify-center mt-2 text-xs">
-            <div className="flex items-center mr-4">
-              <div className="w-3 h-3 bg-purple-600 mr-1" />
-              <span>Mama</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-3 h-3 bg-blue-600 mr-1" />
-              <span>Papa</span>
+              </div>
+              
+              <div className="flex">
+                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-2 flex-shrink-0">
+                  <Brain size={14} className="text-purple-600" />
+                </div>
+                <div className="bg-gray-100 rounded-lg p-3 max-w-xs">
+                  <p className="text-sm">Jack's last dentist appointment was on March 14, 2025 with Dr. Chen. They noted good overall dental health but recommended increasing flossing to daily instead of 3x/week.</p>
+                </div>
+              </div>
+              
+              <div className="flex justify-end">
+                <div className="bg-black text-white rounded-lg p-3 flex items-center max-w-xs">
+                  <Camera size={16} className="mr-2" />
+                  <p className="text-sm">Save this birthday party invitation</p>
+                </div>
+              </div>
+              
+              <div className="flex">
+                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-2 flex-shrink-0">
+                  <Brain size={14} className="text-purple-600" />
+                </div>
+                <div className="bg-gray-100 rounded-lg p-3 max-w-xs">
+                  <p className="text-sm">I've saved this birthday party invitation for Tyler's friend Max. I've added it to your Family Calendar on Saturday, April 19 at 2:00 PM at Adventure Zone. Would you like me to set a reminder to buy a present?</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       )
     },
     {
-      title: "Guided Family Meetings",
-      description: "Structured 30-minute discussions to evaluate progress and set goals together.",
+      title: "Family Command Center",
+      description: "The intelligent heart of your family—connecting schedules, documents, child development, and relationships in one unified hub.",
       content: (
         <div className="bg-gray-50 p-4 rounded-lg">
-          <h4 className="font-medium mb-2">Meeting Structure</h4>
-          <div className="space-y-2 text-sm">
-            <div className="flex items-start">
-              <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center mr-2 flex-shrink-0 text-blue-600 text-xs font-medium">
-                1
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="bg-white p-3 rounded-lg border">
+              <div className="flex items-center mb-2">
+                <Calendar size={16} className="text-blue-600 mr-2" />
+                <h5 className="font-medium text-sm">Calendar Command</h5>
               </div>
-              <div>
-                <p className="font-medium">Review Progress (5min)</p>
-                <p className="text-xs text-gray-600">Examine the week's task distribution data</p>
+              <p className="text-xs text-gray-600">
+                Extract events from screenshots, emails, or conversation. See everyone's schedule in one view.
+              </p>
+            </div>
+            
+            <div className="bg-white p-3 rounded-lg border">
+              <div className="flex items-center mb-2">
+                <Database size={16} className="text-amber-600 mr-2" />
+                <h5 className="font-medium text-sm">Document Command</h5>
+              </div>
+              <p className="text-xs text-gray-600">
+                Capture documents via photo, upload, or text. Automatically organize and connect.
+              </p>
+            </div>
+            
+            <div className="bg-white p-3 rounded-lg border">
+              <div className="flex items-center mb-2">
+                <Activity size={16} className="text-green-600 mr-2" />
+                <h5 className="font-medium text-sm">Child Development</h5>
+              </div>
+              <p className="text-xs text-gray-600">
+                Track growth, health, education, and milestones. Voice-enabled quick updates.
+              </p>
+            </div>
+            
+            <div className="bg-white p-3 rounded-lg border">
+              <div className="flex items-center mb-2">
+                <Heart size={16} className="text-pink-600 mr-2" />
+                <h5 className="font-medium text-sm">Relationship Command</h5>
+              </div>
+              <p className="text-xs text-gray-600">
+                Balance analytics, guided family meetings, and research-backed strategies.
+              </p>
+            </div>
+          </div>
+          
+          <div className="bg-black p-3 rounded-lg text-white">
+            <div className="flex items-center">
+              <Command size={16} className="text-white mr-2" />
+              <p className="text-sm font-medium">Seamless Integration</p>
+            </div>
+            <p className="text-xs text-gray-300 mt-1">
+              All systems work together: A doctor's appointment triggers calendar events, document links, health tracking, and conversation context.
+            </p>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Your Family Memory",
+      description: "Everything your family needs to remember, always available. Allie captures, organizes, and recalls information exactly when you need it.",
+      content: (
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <div className="bg-white p-3 rounded-lg border mb-3">
+            <h5 className="font-medium text-sm mb-2 flex items-center">
+              <Upload size={14} className="text-blue-600 mr-2" />
+              Multiple Ways to Add Information
+            </h5>
+            <div className="grid grid-cols-4 gap-2">
+              <div className="text-center">
+                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-1">
+                  <Mic size={16} className="text-gray-600" />
+                </div>
+                <p className="text-xs">Voice</p>
+              </div>
+              <div className="text-center">
+                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-1">
+                  <Camera size={16} className="text-gray-600" />
+                </div>
+                <p className="text-xs">Photos</p>
+              </div>
+              <div className="text-center">
+                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-1">
+                  <Upload size={16} className="text-gray-600" />
+                </div>
+                <p className="text-xs">Documents</p>
+              </div>
+              <div className="text-center">
+                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-1">
+                  <MessageSquare size={16} className="text-gray-600" />
+                </div>
+                <p className="text-xs">Chat</p>
               </div>
             </div>
-            <div className="flex items-start">
-              <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center mr-2 flex-shrink-0 text-blue-600 text-xs font-medium">
-                2
+          </div>
+          
+          <div className="bg-white p-3 rounded-lg border">
+            <h5 className="font-medium text-sm mb-2">Long-Term Memory</h5>
+            <div className="flex items-start mb-2">
+              <div className="bg-amber-100 p-1 rounded mr-2 mt-0.5">
+                <Search size={12} className="text-amber-600" />
               </div>
-              <div>
-                <p className="font-medium">Celebrate Wins (5min)</p>
-                <p className="text-xs text-gray-600">Acknowledge improvements in balance metrics</p>
+              <p className="text-xs text-gray-600 italic">
+                "What were the 5 vocabulary words from Emma's teacher last spring?"
+              </p>
+            </div>
+            <div className="bg-gray-50 p-2 rounded text-xs">
+              <p className="mb-1">From Ms. Thompson (March 15 last year):</p>
+              <p className="text-gray-700">Perseverance, Dedication, Integrity, Compassion, Collaboration</p>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Data-Driven Approach",
+      description: "Allie uses a revolutionary system to accurately measure and visualize your family's workload distribution.",
+      content: (
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <h4 className="font-medium mb-2">Task Weighting System</h4>
+          <div className="bg-white p-3 rounded-lg border mb-3">
+            <div className="text-xs text-gray-700 font-mono">
+              TaskWeight = BaseTime × Frequency × Invisibility × EmotionalLabor × Priority
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white p-3 rounded-lg border">
+              <h5 className="text-xs font-medium mb-2">Family Balance Analysis</h5>
+              <div className="space-y-2">
+                <div>
+                  <div className="flex justify-between text-xs">
+                    <span>Visible Household</span>
+                    <div>
+                      <span className="text-purple-600">Mama: 55%</span>
+                      <span className="mx-1">|</span>
+                      <span className="text-blue-600">Papa: 45%</span>
+                    </div>
+                  </div>
+                  <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-purple-600" style={{ width: '55%' }} />
+                  </div>
+                </div>
+                
+                <div>
+                  <div className="flex justify-between text-xs">
+                    <span>Invisible Household</span>
+                    <div>
+                      <span className="text-purple-600">Mama: 78%</span>
+                      <span className="mx-1">|</span>
+                      <span className="text-blue-600">Papa: 22%</span>
+                    </div>
+                  </div>
+                  <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-purple-600" style={{ width: '78%' }} />
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="flex items-start">
-              <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center mr-2 flex-shrink-0 text-blue-600 text-xs font-medium">
-                3
-              </div>
-              <div>
-                <p className="font-medium">Discuss Challenges (10min)</p>
-                <p className="text-xs text-gray-600">Address any difficulties in implementing tasks</p>
-              </div>
-            </div>
-            <div className="flex items-start">
-              <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center mr-2 flex-shrink-0 text-blue-600 text-xs font-medium">
-                4
-              </div>
-              <div>
-                <p className="font-medium">Set Next Week's Goals (10min)</p>
-                <p className="text-xs text-gray-600">Commit to specific tasks for the coming week</p>
+            
+            <div className="bg-white p-3 rounded-lg border">
+              <h5 className="text-xs font-medium mb-2">Weekly Progress</h5>
+              <div className="h-20">
+                <div className="flex h-full items-end">
+                  {[
+                    { week: 1, mama: 68, papa: 32 },
+                    { week: 2, mama: 65, papa: 35 },
+                    { week: 3, mama: 62, papa: 38 },
+                    { week: 4, mama: 58, papa: 42 },
+                    { week: 6, mama: 55, papa: 45 },
+                    { week: 8, mama: 53, papa: 47 }
+                  ].map((week, index) => (
+                    <div key={index} className="flex-1 mx-0.5 flex flex-col items-center">
+                      <div className="w-full flex">
+                        <div className="bg-purple-600" style={{ height: `${week.mama * 0.5}px`, width: '50%' }} />
+                        <div className="bg-blue-600" style={{ height: `${week.papa * 0.5}px`, width: '50%' }} />
+                      </div>
+                      <span className="text-[8px] mt-0.5">W{week.week}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -234,29 +315,29 @@ const LandingPage = () => {
   // Roadmap steps - family journey
   const roadmapSteps = [
     {
-      title: "Discover Current Imbalance",
-      description: "Comprehensive assessment unveils your family's current workload distribution, including often-overlooked 'invisible' tasks.",
+      title: "Full Family Assessment",
+      description: "Comprehensive survey captures your current workload distribution, child development needs, and communication patterns.",
       icon: <BarChart className="text-blue-600" size={24} />
     },
     {
-      title: "Receive Personalized Plan",
-      description: "AI-generated recommendations tailored to your family's unique situation, with specific tasks to redistribute.",
-      icon: <Brain className="text-purple-600" size={24} />
+      title: "AI-Powered Command Center",
+      description: "Your family's command center connects calendars, documents, child tracking, and relationship analytics in one place.",
+      icon: <Command className="text-purple-600" size={24} />
     },
     {
-      title: "Implement Weekly Tasks",
-      description: "Small, manageable changes each week create sustainable progress without overwhelming anyone.",
+      title: "Smart Family Memory",
+      description: "Allie remembers everything - doctor's advice, school details, measurements - so you can recall it when needed.",
+      icon: <Brain className="text-amber-600" size={24} />
+    },
+    {
+      title: "Weekly Balance Progress",
+      description: "Guided check-ins, personalized tasks, and family meetings create sustainable improvement in workload sharing.",
       icon: <Clock className="text-green-600" size={24} />
     },
     {
-      title: "Family Communication",
-      description: "Guided family meetings help everyone discuss progress and challenges in a constructive way.",
-      icon: <Users className="text-amber-600" size={24} />
-    },
-    {
-      title: "Balanced Family Life",
-      description: "Reduced stress, stronger relationships, and healthier, happier family members through equitable task sharing.",
-      icon: <Award className="text-pink-600" size={24} />
+      title: "Stronger Family Connection",
+      description: "Reduced mental load, better communication, and more quality time together lead to happier, healthier relationships.",
+      icon: <Heart className="text-pink-600" size={24} />
     }
   ];
 
@@ -264,8 +345,6 @@ const LandingPage = () => {
     window.scrollTo(0, 0);
   }, []);
 
-
-  
   // Navigate through demo steps
   const nextDemoStep = () => {
     setActiveDemo(prev => (prev < demoSteps.length) ? prev + 1 : prev);
@@ -282,47 +361,51 @@ const LandingPage = () => {
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <h1 className="text-3xl font-light">Allie</h1>
           <nav className="hidden md:flex space-x-8">
-  <button 
-    onClick={() => navigate('/how-it-works')}
-    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-  >
-    How It Works
-  </button>
-  <button
-    onClick={() => navigate('/about-us')}
-    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-  >
-    About Us
-  </button>
-  <button 
-    onClick={() => navigate('/relationship-features')}
-    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-  >
-    Relationship Features
-  </button>
-  <button 
-    onClick={() => navigate('/ai-assistant')}
-    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-  >
-    AI Assistant
-  </button>
-  <button 
-    onClick={() => navigate('/blog')}
-    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-  >
-    Blog
-  </button>
+            <button 
+              onClick={() => navigate('/how-it-works')}
+              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+            >
+              How It Works
+            </button>
+            <button
+              onClick={() => navigate('/about-us')}
+              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+            >
+              About Us
+            </button>
+            <button 
+              onClick={() => navigate('/family-command-center')}
+              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+            >
+              Family Command Center
+            </button>
+            <button 
+              onClick={() => navigate('/ai-assistant')}
+              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+            >
+              AI Assistant
+            </button>
+            <button 
+              onClick={() => navigate('/family-memory')}
+              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+            >
+              Family Memory
+            </button>
+            <button 
+              onClick={() => navigate('/blog')}
+              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+            >
+              Blog
+            </button>
             
-  {currentUser ? (
-  <button 
-    onClick={() => navigate('/login', { state: { directAccess: true } })}
-    className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
-  >
-    Jump Back In
-  </button>
-) : (
-  // Login and Sign Up buttons...
-
+          {currentUser ? (
+            <button 
+              onClick={() => navigate('/login', { state: { directAccess: true } })}
+              className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
+            >
+              Jump Back In
+            </button>
+          ) : (
               <>
                 <button 
                   onClick={() => navigate('/login')}
@@ -348,7 +431,7 @@ const LandingPage = () => {
           <div>
             <h2 className="text-5xl font-light mb-6">Balance family responsibilities together.</h2>
             <p className="text-xl text-gray-600 mb-8 font-light">
-              Allie helps families measure, analyze, and balance parenting duties for happier households.
+              Allie is your family's all-in-one assistant, using AI to balance workload, remember everything, and make family life smoother.
             </p>
             <button 
               onClick={() => navigate('/onboarding')}
@@ -370,10 +453,10 @@ const LandingPage = () => {
       {/* Interactive Demo Section */}
       <section className="py-16 bg-gray-50">
         <div className="max-w-5xl mx-auto px-6">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">See Allie in Action</h2>
-            <p className="text-xl text-gray-600 font-light">
-              Our data-driven approach measures both visible and invisible family work
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-bold mb-3">See Allie in Action</h2>
+            <p className="text-lg text-gray-600 font-light">
+              Discover how Allie transforms every aspect of family life
             </p>
           </div>
           
@@ -417,7 +500,7 @@ const LandingPage = () => {
                   <span className="inline-block px-3 py-1 bg-black text-white rounded-full text-sm font-medium mb-4">
                     Step {activeDemo} of {demoSteps.length}
                   </span>
-                  <h3 className="text-2xl font-bold mb-4">{demoSteps[activeDemo - 1].title}</h3>
+                  <h3 className="text-2xl font-bold mb-3">{demoSteps[activeDemo - 1].title}</h3>
                   <p className="text-gray-600 mb-6 font-light">
                     {demoSteps[activeDemo - 1].description}
                   </p>
@@ -444,7 +527,7 @@ const LandingPage = () => {
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold mb-4">Your Journey to Family Balance</h2>
-            <p className="text-xl text-gray-600 font-light">
+            <p className="text-lg text-gray-600 font-light">
               See the path from imbalance to harmony with Allie
             </p>
           </div>
@@ -484,167 +567,13 @@ const LandingPage = () => {
         </div>
       </section>
       
-      {/* Our Story Section */}
-      <section className="py-16 bg-white border-t border-gray-100">
-        <div className="max-w-4xl mx-auto px-6">
-          <h2 className="text-3xl font-bold text-center mb-8">Our Family's Story</h2>
-          <div className="bg-white p-8 rounded-lg shadow-md">
-            <p className="text-lg mb-4 font-light">
-              We built Allie because we experienced firsthand the challenges of balancing family responsibilities. Like many families, we struggled with the uneven distribution of household and parenting tasks, often not even realizing the imbalance until it led to frustration and conflict.
-            </p>
-            <p className="text-lg mb-4 font-light">
-              As a family of five with three active children, we found ourselves constantly negotiating who would handle which tasks, from school pickups to meal planning to emotional support. We wanted a data-driven, scientific approach to understand our family dynamics better.
-            </p>
-            <p className="text-lg mb-4 font-light">
-              Allie was born from our desire to create a tool that doesn't just identify imbalances but helps families work together to create meaningful, lasting change. We're excited to share it with your family and hope it brings more harmony to your home, just as it has to ours.
-            </p>
-            <p className="text-lg font-medium text-right">- The Palsson Family</p>
-          </div>
-        </div>
-      </section>
-      
-      {/* Features Section */}
-      <section className="py-20">
-        <div className="max-w-6xl mx-auto px-6">
-          <h2 className="text-3xl font-bold text-center mb-12">How Allie Helps Families</h2>
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Measure & Track</h3>
-              <p className="text-gray-600 font-light">
-                Gather perspectives from every family member to objectively measure how responsibilities are distributed.
-              </p>
-            </div>
-            
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold mb-2">AI-Powered Insights</h3>
-              <p className="text-gray-600 font-light">
-                Get personalized recommendations based on your family's unique dynamics and needs.
-              </p>
-            </div>
-            
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Family Meetings</h3>
-              <p className="text-gray-600 font-light">
-                Guided discussion frameworks to help your family communicate and implement changes effectively.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-      
-      {/* Task Weighting System */}
-      <section className="py-20 bg-black text-white">
-        <div className="max-w-4xl mx-auto px-6">
-          <h2 className="text-3xl font-light mb-2 text-center">The Allie Task Weighting System</h2>
-          <p className="text-center text-gray-400 mb-12 max-w-2xl mx-auto font-light">
-            Our revolutionary approach uses mathematical modeling to accurately measure family workload distribution
-          </p>
-          
-          <div className="grid md:grid-cols-2 gap-12">
-            <div>
-              <h3 className="text-xl font-medium mb-6 flex items-center">
-                <Target className="text-green-500 mr-2" size={24} />
-                The 7 Factors
-              </h3>
-              
-              <div className="space-y-4">
-                <div className="flex items-start">
-                  <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0">
-                    <span className="text-yellow-500 font-medium">1</span>
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Time-Based Weighting</h4>
-                    <p className="text-sm text-gray-400 font-light">Measures both direct time investment and ongoing mental load</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start">
-                  <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0">
-                    <span className="text-yellow-500 font-medium">2</span>
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Frequency Factor</h4>
-                    <p className="text-sm text-gray-400 font-light">Accounts for how often a task recurs, from daily to quarterly</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start">
-                  <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0">
-                    <span className="text-yellow-500 font-medium">3</span>
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Invisibility Multiplier</h4>
-                    <p className="text-sm text-gray-400 font-light">Captures how easily work goes unnoticed by other family members</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start">
-                  <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0">
-                    <span className="text-yellow-500 font-medium">4</span>
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Emotional Labor Index</h4>
-                    <p className="text-sm text-gray-400 font-light">Measures psychological and emotional toll beyond time investment</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start">
-                  <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0">
-                    <span className="text-yellow-500 font-medium">5</span>
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Research-Backed Impact</h4>
-                    <p className="text-sm text-gray-400 font-light">Based on empirical studies linking specific tasks to relationship strain</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start">
-                  <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0">
-                    <span className="text-yellow-500 font-medium">6</span>
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Child Development Impact</h4>
-                    <p className="text-sm text-gray-400 font-light">Factors in how task distribution influences children's future attitudes</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start">
-                  <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0">
-                    <span className="text-yellow-500 font-medium">7</span>
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Priority-Based Personalization</h4>
-                    <p className="text-sm text-gray-400 font-light">Adapts weighting based on your family's specific priorities</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-      
       {/* The Problem & Solution */}
       <section className="py-20 bg-white">
         <div className="max-w-4xl mx-auto px-6">
           <div className="mb-16">
-            <h2 className="text-3xl font-bold mb-8 text-center">The Problem We're Solving</h2>
+            <h2 className="text-3xl font-bold mb-8 text-center">The Problems We're Solving</h2>
             
-            <div className="grid md:grid-cols-2 gap-8">
+            <div className="grid md:grid-cols-3 gap-8">
               <div className="bg-gray-50 p-8 rounded-lg">
                 <h3 className="text-xl font-medium mb-4 flex items-center">
                   <Heart className="text-red-500 mr-3" size={24} />
@@ -665,10 +594,6 @@ const LandingPage = () => {
                   <li className="flex items-start">
                     <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-red-500" />
                     <span className="font-light">Reduced career advancement for the overloaded parent</span>
-                  </li>
-                  <li className="flex items-start">
-                    <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-red-500" />
-                    <span className="font-light">Children developing limited views of gender roles</span>
                   </li>
                 </ul>
               </div>
@@ -694,12 +619,112 @@ const LandingPage = () => {
                     <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-purple-500" />
                     <span className="font-light">The compounding effect of imbalance over time</span>
                   </li>
+                </ul>
+              </div>
+              
+              <div className="bg-gray-50 p-8 rounded-lg">
+                <h3 className="text-xl font-medium mb-4 flex items-center">
+                  <Search className="text-blue-500 mr-3" size={24} />
+                  The Information Overload
+                </h3>
+                <p className="text-gray-700 mb-4 font-light">
+                  Parents struggle with information management:
+                </p>
+                <ul className="space-y-2 text-gray-700">
                   <li className="flex items-start">
-                    <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-purple-500" />
-                    <span className="font-light">Child development impacts of parental workload models</span>
+                    <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-blue-500" />
+                    <span className="font-light">Remembering thousands of critical details</span>
+                  </li>
+                  <li className="flex items-start">
+                    <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-blue-500" />
+                    <span className="font-light">Information scattered across emails, texts, and papers</span>
+                  </li>
+                  <li className="flex items-start">
+                    <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-blue-500" />
+                    <span className="font-light">No system for capturing and retrieving knowledge</span>
                   </li>
                 </ul>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      {/* Features Section */}
+      <section className="py-20 bg-gray-50">
+        <div className="max-w-6xl mx-auto px-6">
+          <h2 className="text-3xl font-bold text-center mb-12">How Allie Helps Families</h2>
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="bg-white p-6 rounded-lg shadow-md">
+              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-4">
+                <Command className="text-purple-600" size={24} />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Family Command Center</h3>
+              <p className="text-gray-600 font-light">
+                Centralized hub integrating calendar, documents, child tracking, and family balance analytics in one intelligent system.
+              </p>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg shadow-md">
+              <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mb-4">
+                <FileText className="text-amber-600" size={24} />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Family Memory</h3>
+              <p className="text-gray-600 font-light">
+                Capture everything through photos, voice, or text. Allie remembers doctor's advice, school requirements, and every important detail.
+              </p>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg shadow-md">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                <MessageSquare className="text-blue-600" size={24} />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Allie AI Assistant</h3>
+              <p className="text-gray-600 font-light">
+                An intelligent AI that understands your family's context, with enhanced natural language understanding for all your needs.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      {/* Results Section */}
+      <section className="py-20 bg-white">
+        <div className="max-w-4xl mx-auto px-6">
+          <h2 className="text-3xl font-bold mb-8 text-center">The Results Families Experience</h2>
+          
+          <div className="grid md:grid-cols-3 gap-6 mb-12">
+            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm text-center">
+              <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
+                <Brain className="text-blue-600" size={24} />
+              </div>
+              <h3 className="text-lg font-medium mb-2">Reduced Mental Load</h3>
+              <p className="text-2xl font-light text-blue-600 mb-1">87%</p>
+              <p className="text-gray-600 text-sm">
+                of parents report less "mental clutter" and anxiety
+              </p>
+            </div>
+            
+            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm text-center">
+              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+                <Clock className="text-green-600" size={24} />
+              </div>
+              <h3 className="text-lg font-medium mb-2">Time Savings</h3>
+              <p className="text-2xl font-light text-green-600 mb-1">4.8 hrs</p>
+              <p className="text-gray-600 text-sm">
+                average weekly time saved from information management
+              </p>
+            </div>
+            
+            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm text-center">
+              <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4">
+                <Heart className="text-purple-600" size={24} />
+              </div>
+              <h3 className="text-lg font-medium mb-2">Stronger Relationships</h3>
+              <p className="text-2xl font-light text-purple-600 mb-1">92%</p>
+              <p className="text-gray-600 text-sm">
+                reduction in conflicts related to household responsibilities
+              </p>
             </div>
           </div>
         </div>
@@ -710,12 +735,20 @@ const LandingPage = () => {
         <div className="max-w-4xl mx-auto px-6 text-center">
           <h2 className="text-3xl font-light mb-4">Ready to create a more balanced family life?</h2>
           <p className="text-xl mb-8 font-light">Join thousands of families who are transforming their relationships through better balance.</p>
-          <button 
-            onClick={() => navigate('/onboarding')}
-            className="px-8 py-4 bg-white text-black rounded-md text-lg font-medium hover:bg-gray-100"
-          >
-            Get Started
-          </button>
+          <div className="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-6">
+            <button 
+              onClick={() => navigate('/onboarding')}
+              className="px-8 py-4 bg-white text-black rounded-md text-lg font-medium hover:bg-gray-100"
+            >
+              Get Started
+            </button>
+            <button 
+              onClick={() => navigate('/mini-survey')}
+              className="px-8 py-4 border border-white text-white rounded-md font-light hover:bg-white hover:bg-opacity-10"
+            >
+              Try Our Mini Assessment
+            </button>
+          </div>
         </div>
       </section>
       
@@ -729,22 +762,25 @@ const LandingPage = () => {
             </div>
             
             <div>
-  <h3 className="text-gray-800 font-medium mb-4">Product</h3>
-  <ul className="space-y-2">
-    <li>
-      <button onClick={() => navigate('/how-it-works')} className="text-gray-600 hover:text-gray-900 font-light">How It Works</button>
-    </li>
-    <li>
-      <button onClick={() => navigate('/relationship-features')} className="text-gray-600 hover:text-gray-900 font-light">Relationship Features</button>
-    </li>
-    <li>
-      <button onClick={() => navigate('/ai-assistant')} className="text-gray-600 hover:text-gray-900 font-light">AI Assistant</button>
-    </li>
-    <li>
-      <button onClick={() => navigate('/mini-survey')} className="text-gray-600 hover:text-gray-900 font-light">Mini Assessment</button>
-    </li>
-  </ul>
-</div>
+              <h3 className="text-gray-800 font-medium mb-4">Product</h3>
+              <ul className="space-y-2">
+                <li>
+                  <button onClick={() => navigate('/how-it-works')} className="text-gray-600 hover:text-gray-900 font-light">How It Works</button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/family-command-center')} className="text-gray-600 hover:text-gray-900 font-light">Family Command Center</button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/ai-assistant')} className="text-gray-600 hover:text-gray-900 font-light">AI Assistant</button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/family-memory')} className="text-gray-600 hover:text-gray-900 font-light">Family Memory</button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/mini-survey')} className="text-gray-600 hover:text-gray-900 font-light">Mini Assessment</button>
+                </li>
+              </ul>
+            </div>
             
             <div>
               <h3 className="text-gray-800 font-medium mb-4">Company</h3>
@@ -757,8 +793,6 @@ const LandingPage = () => {
                 </li>
               </ul>
             </div>
-            
-            
           </div>
           <div className="mt-8 pt-8 border-t text-center text-gray-500 text-sm">
             <p>© 2025 Allie. All rights reserved.</p>

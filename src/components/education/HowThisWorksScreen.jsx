@@ -3,15 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Brain, Scale, ChevronRight, Clock, CheckCircle2, BarChart3, 
   Users, CalculatorIcon, Lightbulb, EqualIcon, FunctionSquare, 
-  Puzzle, Zap, Star, Sparkles, HeartPulse, Sigma, LineChart
+  Puzzle, Zap, Star, Sparkles, HeartPulse, Sigma, LineChart,
+  Command, Database, FileText, MessageSquare, Calendar, Heart,
+  Shield, Activity, Search, Upload, Download, Book, Target,
+  Layers, ArrowRight
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-
-
 const HowThisWorksScreen = () => {
   const { currentUser } = useAuth();
-
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -25,36 +25,42 @@ const HowThisWorksScreen = () => {
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <h1 className="text-3xl font-light cursor-pointer" onClick={() => navigate('/')}>Allie</h1>
           <nav className="hidden md:flex space-x-8">
-  <button 
-    onClick={() => navigate('/how-it-works')}
-    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-  >
-    How It Works
-  </button>
-  <button
-    onClick={() => navigate('/about-us')}
-    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-  >
-    About Us
-  </button>
-  <button 
-    onClick={() => navigate('/relationship-features')}
-    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-  >
-    Relationship Features
-  </button>
-  <button 
-    onClick={() => navigate('/ai-assistant')}
-    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-  >
-    AI Assistant
-  </button>
-  <button 
-    onClick={() => navigate('/blog')}
-    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
-  >
-    Blog
-  </button>
+            <button 
+              onClick={() => navigate('/how-it-works')}
+              className="text-black font-medium border-b-2 border-black"
+            >
+              How It Works
+            </button>
+            <button
+              onClick={() => navigate('/about-us')}
+              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+            >
+              About Us
+            </button>
+            <button 
+              onClick={() => navigate('/family-command-center')}
+              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+            >
+              Family Command Center
+            </button>
+            <button 
+              onClick={() => navigate('/ai-assistant')}
+              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+            >
+              AI Assistant
+            </button>
+            <button 
+              onClick={() => navigate('/family-memory')}
+              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+            >
+              Family Memory
+            </button>
+            <button 
+              onClick={() => navigate('/blog')}
+              className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+            >
+              Blog
+            </button>
             {currentUser ? (
               <button 
                 onClick={() => navigate('/login', { state: { directAccess: true, fromLanding: true } })}
@@ -106,65 +112,145 @@ const HowThisWorksScreen = () => {
         </div>
       </div>
 
-      {/* The Problem & Solution */}
+      {/* The Allie Ecosystem */}
       <div className="py-20 bg-white" id="science">
         <div className="max-w-4xl mx-auto px-6">
-          <div className="mb-16">
-            <h2 className="text-3xl font-light mb-8 text-center">The Problem We're Solving</h2>
+          <h2 className="text-3xl font-light mb-8 text-center">The Allie Ecosystem</h2>
+          <p className="text-center text-gray-600 mb-12 max-w-3xl mx-auto">
+            Allie combines advanced mathematics, behavioral science, and AI to help families achieve balance in four integrated areas:
+          </p>
+          
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <div className="bg-white border border-gray-100 p-6 rounded-lg shadow-sm text-center">
+              <div className="w-16 h-16 mx-auto rounded-full bg-pink-100 flex items-center justify-center mb-4">
+                <Scale className="text-pink-600" size={28} />
+              </div>
+              <h3 className="font-medium text-lg mb-2">Family Workload Distribution</h3>
+              <p className="text-gray-600 text-sm">
+                Measuring and balancing the mental load and physical tasks across parents
+              </p>
+            </div>
             
-            <div className="grid md:grid-cols-2 gap-8">
-              <div className="bg-gray-50 p-8 rounded-lg">
+            <div className="bg-white border border-gray-100 p-6 rounded-lg shadow-sm text-center">
+              <div className="w-16 h-16 mx-auto rounded-full bg-amber-100 flex items-center justify-center mb-4">
+                <FileText className="text-amber-600" size={28} />
+              </div>
+              <h3 className="font-medium text-lg mb-2">Family Memory System</h3>
+              <p className="text-gray-600 text-sm">
+                Capturing and retrieving all family information when needed
+              </p>
+            </div>
+            
+            <div className="bg-white border border-gray-100 p-6 rounded-lg shadow-sm text-center">
+              <div className="w-16 h-16 mx-auto rounded-full bg-purple-100 flex items-center justify-center mb-4">
+                <Command className="text-purple-600" size={28} />
+              </div>
+              <h3 className="font-medium text-lg mb-2">Family Command Center</h3>
+              <p className="text-gray-600 text-sm">
+                Centralizing scheduling, documents, and family management
+              </p>
+            </div>
+            
+            <div className="bg-white border border-gray-100 p-6 rounded-lg shadow-sm text-center">
+              <div className="w-16 h-16 mx-auto rounded-full bg-green-100 flex items-center justify-center mb-4">
+                <Activity className="text-green-600" size={28} />
+              </div>
+              <h3 className="font-medium text-lg mb-2">Child Development Tracking</h3>
+              <p className="text-gray-600 text-sm">
+                Monitoring growth, health, education, and milestones
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* The Problem & Solution */}
+      <div className="py-20 bg-gray-50">
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="mb-16">
+            <h2 className="text-3xl font-light mb-8 text-center">The Problems We're Solving</h2>
+            
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="bg-white p-8 rounded-lg shadow-sm">
                 <h3 className="text-xl font-medium mb-4 flex items-center">
                   <HeartPulse className="text-red-500 mr-3" size={24} />
                   Family Imbalance Crisis
                 </h3>
-                <p className="text-gray-700 mb-4">
+                <p className="text-gray-700 mb-4 font-light">
                   Research shows that imbalanced family workloads lead to:
                 </p>
                 <ul className="space-y-2 text-gray-700">
                   <li className="flex items-start">
                     <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-red-500" />
-                    <span>33% higher parental burnout rates</span>
+                    <span className="font-light">33% higher parental burnout rates</span>
                   </li>
                   <li className="flex items-start">
                     <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-red-500" />
-                    <span>42% more relationship conflicts</span>
+                    <span className="font-light">42% more relationship conflicts</span>
                   </li>
                   <li className="flex items-start">
                     <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-red-500" />
-                    <span>Reduced career advancement for the overloaded parent</span>
+                    <span className="font-light">Reduced career advancement for the overloaded parent</span>
                   </li>
                   <li className="flex items-start">
                     <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-red-500" />
-                    <span>Children developing limited views of gender roles</span>
+                    <span className="font-light">Children developing limited views of gender roles</span>
                   </li>
                 </ul>
               </div>
               
-              <div className="bg-gray-50 p-8 rounded-lg">
+              <div className="bg-white p-8 rounded-lg shadow-sm">
                 <h3 className="text-xl font-medium mb-4 flex items-center">
-                  <Lightbulb className="text-yellow-500 mr-3" size={24} />
+                  <Brain className="text-purple-500 mr-3" size={24} />
                   The Hidden Mental Load
                 </h3>
-                <p className="text-gray-700 mb-4">
+                <p className="text-gray-700 mb-4 font-light">
                   Traditional approaches to balance fail because they ignore:
                 </p>
                 <ul className="space-y-2 text-gray-700">
                   <li className="flex items-start">
-                    <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-yellow-500" />
-                    <span>Invisible cognitive work of planning and organizing</span>
+                    <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-purple-500" />
+                    <span className="font-light">Invisible cognitive work of planning and organizing</span>
                   </li>
                   <li className="flex items-start">
-                    <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-yellow-500" />
-                    <span>Emotional labor of anticipating family needs</span>
+                    <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-purple-500" />
+                    <span className="font-light">Emotional labor of anticipating family needs</span>
                   </li>
                   <li className="flex items-start">
-                    <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-yellow-500" />
-                    <span>The compounding effect of imbalance over time</span>
+                    <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-purple-500" />
+                    <span className="font-light">The compounding effect of imbalance over time</span>
                   </li>
                   <li className="flex items-start">
-                    <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-yellow-500" />
-                    <span>Child development impacts of parental workload models</span>
+                    <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-purple-500" />
+                    <span className="font-light">Child development impacts of parental workload models</span>
+                  </li>
+                </ul>
+              </div>
+              
+              <div className="bg-white p-8 rounded-lg shadow-sm">
+                <h3 className="text-xl font-medium mb-4 flex items-center">
+                  <Search className="text-blue-500 mr-3" size={24} />
+                  The Information Overload
+                </h3>
+                <p className="text-gray-700 mb-4 font-light">
+                  Parents struggle with information management:
+                </p>
+                <ul className="space-y-2 text-gray-700">
+                  <li className="flex items-start">
+                    <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-blue-500" />
+                    <span className="font-light">Remembering thousands of critical details</span>
+                  </li>
+                  <li className="flex items-start">
+                    <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-blue-500" />
+                    <span className="font-light">Information scattered across emails, texts, and papers</span>
+                  </li>
+                  <li className="flex items-start">
+                    <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-blue-500" />
+                    <span className="font-light">No system for capturing and retrieving knowledge</span>
+                  </li>
+                  <li className="flex items-start">
+                    <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-blue-500" />
+                    <span className="font-light">Mental burden of being the family's memory</span>
                   </li>
                 </ul>
               </div>
@@ -261,7 +347,7 @@ const HowThisWorksScreen = () => {
             
             <div>
               <h3 className="text-xl font-medium mb-6 flex items-center">
-                <Puzzle className="text-green-500 mr-2" size={24} />
+                <Target className="text-green-500 mr-2" size={24} />
                 The 7 Factors
               </h3>
               
@@ -338,27 +424,279 @@ const HowThisWorksScreen = () => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Family Memory Intelligence */}
+      <div className="py-20 bg-white">
+        <div className="max-w-4xl mx-auto px-6">
+          <h2 className="text-3xl font-light mb-8 text-center">Family Memory Intelligence</h2>
+          <p className="text-center text-gray-600 mb-12 max-w-3xl mx-auto">
+            Allie becomes your family's institutional memory, remembering everything so you don't have to.
+          </p>
           
-          <div className="mt-16 text-center">
-            <h3 className="text-xl font-medium mb-4">Why This Matters</h3>
-            <p className="text-gray-400 mb-6 max-w-2xl mx-auto">
-              By accurately measuring the invisible dimensions of household work, we can create truly balanced 
-              family dynamics that traditional "time-based" methods miss.
-            </p>
+          <div className="grid md:grid-cols-2 gap-12 mb-16">
+            <div>
+              <div className="bg-amber-100 w-12 h-12 flex items-center justify-center rounded-full mb-6">
+                <FileText className="text-amber-600" size={24} />
+              </div>
+              <h3 className="text-xl font-medium mb-4">Document Intelligence</h3>
+              <p className="text-gray-700 mb-6">
+                Never lose an important document again. Allie analyzes, stores, and recalls everything when you need it.
+              </p>
+              
+              <ul className="space-y-3">
+                <li className="flex items-start">
+                  <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center mr-2 flex-shrink-0 mt-0.5">
+                    <Upload className="text-amber-600" size={14} />
+                  </div>
+                  <p className="text-gray-700">
+                    <span className="font-medium">Multi-Source Capture</span> — Photos, uploads, scans, or text – easily save any document
+                  </p>
+                </li>
+                <li className="flex items-start">
+                  <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center mr-2 flex-shrink-0 mt-0.5">
+                    <Brain className="text-amber-600" size={14} />
+                  </div>
+                  <p className="text-gray-700">
+                    <span className="font-medium">Automatic Organization</span> — Documents are intelligently categorized and connected to relevant people and events
+                  </p>
+                </li>
+                <li className="flex items-start">
+                  <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center mr-2 flex-shrink-0 mt-0.5">
+                    <Search className="text-amber-600" size={14} />
+                  </div>
+                  <p className="text-gray-700">
+                    <span className="font-medium">Knowledge Extraction</span> — Key information is identified and stored for future reference
+                  </p>
+                </li>
+                <li className="flex items-start">
+                  <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center mr-2 flex-shrink-0 mt-0.5">
+                    <Download className="text-amber-600" size={14} />
+                  </div>
+                  <p className="text-gray-700">
+                    <span className="font-medium">Long-Term Recall</span> — Ask about specific information from years ago and get immediate answers
+                  </p>
+                </li>
+              </ul>
+            </div>
             
-            <a 
-              href="#parents"
-              className="px-6 py-3 bg-white text-black rounded-full inline-flex items-center font-medium hover:bg-gray-200"
-            >
-              <Zap className="mr-2" size={18} />
-              See How It Works for Your Family
-            </a>
+            <div className="bg-gray-50 p-6 rounded-lg shadow-sm">
+              <h4 className="font-medium mb-4">Document Intelligence in Action</h4>
+              <div className="space-y-3">
+                <div className="bg-white p-3 rounded border border-gray-200">
+                  <p className="font-medium text-sm mb-1">School Notice from Last Year</p>
+                  <div className="flex items-start">
+                    <div className="bg-amber-100 p-1 rounded mr-2">
+                      <MessageSquare size={14} className="text-amber-600" />
+                    </div>
+                    <p className="text-sm text-gray-600 italic">
+                      "Allie, what 5 vocabulary words did Emma's teacher want us to practice last spring?"
+                    </p>
+                  </div>
+                  <div className="mt-2 bg-gray-50 p-2 rounded text-sm">
+                    <p className="mb-1">Based on a note from Ms. Thompson on March 15 last year, Emma needed to practice these words:</p>
+                    <ol className="list-decimal pl-5 text-gray-700">
+                      <li>Perseverance</li>
+                      <li>Dedication</li>
+                      <li>Integrity</li>
+                      <li>Compassion</li>
+                      <li>Collaboration</li>
+                    </ol>
+                    <p className="mt-1 text-xs italic text-blue-600">Original document available</p>
+                  </div>
+                </div>
+                
+                <div className="bg-white p-3 rounded border border-gray-200">
+                  <p className="font-medium text-sm mb-1">Medical Information Recall</p>
+                  <div className="flex items-start">
+                    <div className="bg-amber-100 p-1 rounded mr-2">
+                      <MessageSquare size={14} className="text-amber-600" />
+                    </div>
+                    <p className="text-sm text-gray-600 italic">
+                      "What was the dosage for Jack's amoxicillin the last time he had an ear infection?"
+                    </p>
+                  </div>
+                  <div className="mt-2 bg-gray-50 p-2 rounded text-sm">
+                    <p>
+                      Dr. Chen prescribed 400mg (10ml) of amoxicillin twice daily for 10 days during Jack's last ear infection appointment on November 12. The prescription noted to take with food and complete the full course.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* For Parents Section */}
-      <div id="parents" className="py-20">
+      {/* Command Center Section */}
+      <div className="py-20 bg-gray-50">
+        <div className="max-w-4xl mx-auto px-6">
+          <h2 className="text-3xl font-light mb-8 text-center">Command Center Integration</h2>
+          <p className="text-center text-gray-600 mb-12 max-w-3xl mx-auto">
+            The Family Command Center unifies all aspects of family management into one intelligent hub.
+          </p>
+          
+          <div className="grid md:grid-cols-3 gap-6 mb-16">
+            <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4">
+                <Calendar className="text-blue-600" size={24} />
+              </div>
+              <h3 className="font-medium text-lg mb-2">Calendar Command</h3>
+              <p className="text-gray-600 text-sm mb-4">
+                The unified scheduling system that brings every family commitment into one intelligent view.
+              </p>
+              <ul className="text-sm space-y-2">
+                <li className="flex items-start">
+                  <CheckCircle2 size={16} className="text-blue-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-700">Universal event capture from text, screenshots, or images</span>
+                </li>
+                <li className="flex items-start">
+                  <CheckCircle2 size={16} className="text-blue-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-700">Smart scheduling suggestions for family meetings</span>
+                </li>
+                <li className="flex items-start">
+                  <CheckCircle2 size={16} className="text-blue-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-700">Family-wide visibility across all commitments</span>
+                </li>
+              </ul>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-4">
+                <Database className="text-amber-600" size={24} />
+              </div>
+              <h3 className="font-medium text-lg mb-2">Document Command</h3>
+              <p className="text-gray-600 text-sm mb-4">
+                The intelligent document system that captures, organizes, and recalls family information.
+              </p>
+              <ul className="text-sm space-y-2">
+                <li className="flex items-start">
+                  <CheckCircle2 size={16} className="text-amber-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-700">Multi-source document capture through various methods</span>
+                </li>
+                <li className="flex items-start">
+                  <CheckCircle2 size={16} className="text-amber-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-700">Intelligent categorization and connection to people</span>
+                </li>
+                <li className="flex items-start">
+                  <CheckCircle2 size={16} className="text-amber-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-700">Long-term information retrieval for past documents</span>
+                </li>
+              </ul>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-4">
+                <Activity className="text-green-600" size={24} />
+              </div>
+              <h3 className="font-medium text-lg mb-2">Child Development Command</h3>
+              <p className="text-gray-600 text-sm mb-4">
+                The comprehensive tracking system for your children's growth, health, and education.
+              </p>
+              <ul className="text-sm space-y-2">
+                <li className="flex items-start">
+                  <CheckCircle2 size={16} className="text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-700">Multi-dimensional tracking of growth and health</span>
+                </li>
+                <li className="flex items-start">
+                  <CheckCircle2 size={16} className="text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-700">Voice-enabled updates for quick recording</span>
+                </li>
+                <li className="flex items-start">
+                  <CheckCircle2 size={16} className="text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-700">AI-generated insights based on patterns</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+          
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="w-12 h-12 rounded-full bg-pink-100 flex items-center justify-center mb-4">
+                <Heart className="text-pink-600" size={24} />
+              </div>
+              <h3 className="font-medium text-lg mb-2">Relationship Command</h3>
+              <p className="text-gray-600 text-sm mb-4">
+                The balancing system for family workload distribution and relationship strength.
+              </p>
+              <ul className="text-sm space-y-2">
+                <li className="flex items-start">
+                  <CheckCircle2 size={16} className="text-pink-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-700">Workload balance analytics with detailed visualization</span>
+                </li>
+                <li className="flex items-start">
+                  <CheckCircle2 size={16} className="text-pink-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-700">Research-based strategies for relationship improvement</span>
+                </li>
+                <li className="flex items-start">
+                  <CheckCircle2 size={16} className="text-pink-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-700">Guided family meetings to strengthen connection</span>
+                </li>
+              </ul>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center mb-4">
+                <MessageSquare className="text-indigo-600" size={24} />
+              </div>
+              <h3 className="font-medium text-lg mb-2">Allie Chat Command</h3>
+              <p className="text-gray-600 text-sm mb-4">
+                The conversational interface that brings all commands together through natural language.
+              </p>
+              <ul className="text-sm space-y-2">
+                <li className="flex items-start">
+                  <CheckCircle2 size={16} className="text-indigo-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-700">Natural language understanding of family context</span>
+                </li>
+                <li className="flex items-start">
+                  <CheckCircle2 size={16} className="text-indigo-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-700">Multi-modal input support (text, voice, images)</span>
+                </li>
+                <li className="flex items-start">
+                  <CheckCircle2 size={16} className="text-indigo-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-700">Complete family memory and contextual awareness</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+          
+          <div className="bg-black text-white p-8 rounded-lg mt-8">
+            <div className="flex items-start">
+              <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mr-6 flex-shrink-0">
+                <Layers className="text-black" size={28} />
+              </div>
+              <div>
+                <h3 className="text-2xl font-light mb-4">How It All Works Together</h3>
+                <p className="text-gray-300 mb-4">
+                  The Command Center isn't just a collection of features – it's an integrated system where all components work together. When you add a doctor's appointment:
+                </p>
+                <ul className="space-y-2">
+                  <li className="flex items-start">
+                    <CheckCircle2 size={16} className="text-green-400 mr-2 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-300">Calendar Command adds it to the right person's schedule</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 size={16} className="text-green-400 mr-2 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-300">Document Command links relevant medical records</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 size={16} className="text-green-400 mr-2 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-300">Child Development Command tracks the health pattern</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 size={16} className="text-green-400 mr-2 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-300">Chat Command makes all of this accessible through conversation</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* For Parents */}
+      <div id="parents" className="py-20 bg-white">
         <div className="max-w-4xl mx-auto px-6">
           <div className="flex items-center mb-12">
             <div className="h-px bg-black flex-grow"></div>
@@ -480,62 +818,10 @@ const HowThisWorksScreen = () => {
               </div>
             </div>
           </div>
-          
-          <div className="bg-white border border-gray-100 p-8 rounded-lg shadow-sm">
-            <h3 className="text-xl font-medium mb-6 flex items-center">
-              <EqualIcon className="text-blue-500 mr-2" size={24} />
-              Advanced Analytics Dashboard
-            </h3>
-            
-            <div className="md:flex items-center">
-              <div className="md:w-1/2 mb-6 md:mb-0 md:pr-8">
-                <p className="text-gray-700 mb-6">
-                  Our family dashboard uses visualizations to reveal hidden patterns in your workload distribution:
-                </p>
-                
-                <ul className="space-y-3">
-                  <li className="flex items-start">
-                    <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center mr-2 flex-shrink-0">
-                      <span className="text-amber-600 font-bold text-sm">1</span>
-                    </div>
-                    <span className="text-gray-700">Multi-perspective radar charts showing each family member's perception</span>
-                  </li>
-                  
-                  <li className="flex items-start">
-                    <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center mr-2 flex-shrink-0">
-                      <span className="text-green-600 font-bold text-sm">2</span>
-                    </div>
-                    <span className="text-gray-700">Category-specific balance scores across all task domains</span>
-                  </li>
-                  
-                  <li className="flex items-start">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center mr-2 flex-shrink-0">
-                      <span className="text-blue-600 font-bold text-sm">3</span>
-                    </div>
-                    <span className="text-gray-700">Time-series tracking of balance improvement over weeks</span>
-                  </li>
-                  
-                  <li className="flex items-start">
-                    <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center mr-2 flex-shrink-0">
-                      <span className="text-purple-600 font-bold text-sm">4</span>
-                    </div>
-                    <span className="text-gray-700">Perception gap analysis between different family members</span>
-                  </li>
-                </ul>
-              </div>
-              
-              <div className="md:w-1/2 bg-gray-50 p-4 rounded-lg flex items-center justify-center">
-                <div className="text-center">
-                  <p className="text-gray-400 mb-2">Dashboard Visualization</p>
-                  <div className="text-sm text-gray-500">[Interactive dashboard preview coming soon]</div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
-
-      {/* For Kids Section */}
+      
+      {/* For Kids */}
       <div className="py-20 bg-gray-50">
         <div className="max-w-4xl mx-auto px-6">
           <div className="flex items-center mb-12">
@@ -619,143 +905,179 @@ const HowThisWorksScreen = () => {
               </ul>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* The Results */}
+      <div className="py-20 bg-white">
+        <div className="max-w-4xl mx-auto px-6">
+          <h2 className="text-3xl font-light mb-8 text-center">The Results</h2>
           
-          <div className="bg-black text-white p-8 rounded-lg mb-16">
-            <h3 className="text-xl font-medium mb-6 flex items-center">
-              <Star className="text-yellow-400 mr-2" size={24} />
-              Why Kids' Involvement Matters
-            </h3>
-            
-            <div className="grid md:grid-cols-2 gap-8">
-              <div>
-                <h4 className="font-medium mb-3 text-lg">Short-Term Benefits</h4>
-                <ul className="space-y-2">
-                  <li className="flex items-start">
-                    <CheckCircle2 size={18} className="text-green-400 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-gray-300">Reveals perception differences between parents and children</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 size={18} className="text-green-400 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-gray-300">Increases awareness of all family members' contributions</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 size={18} className="text-green-400 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-gray-300">Develops early understanding of fairness and balance</span>
-                  </li>
-                </ul>
+          <div className="grid md:grid-cols-3 gap-6 mb-12">
+            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm text-center">
+              <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
+                <Brain className="text-blue-600" size={24} />
               </div>
-              
-              <div>
-                <h4 className="font-medium mb-3 text-lg">Long-Term Effects</h4>
-                <ul className="space-y-2">
-                  <li className="flex items-start">
-                    <CheckCircle2 size={18} className="text-green-400 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-gray-300">Creates more positive gender role models</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 size={18} className="text-green-400 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-gray-300">Develops lifelong skills in equitable relationship building</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 size={18} className="text-green-400 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-gray-300">Fosters healthy expectations for their own future families</span>
-                  </li>
-                </ul>
-              </div>
+              <h3 className="text-lg font-medium mb-2">Reduced Mental Load</h3>
+              <p className="text-2xl font-light text-blue-600 mb-1">87%</p>
+              <p className="text-gray-600 text-sm">
+                of parents report less "mental clutter" and anxiety after using Allie
+              </p>
             </div>
             
-            <div className="mt-6 text-sm text-gray-400">
-              <p>
-                <strong>Research Finding:</strong> According to a 2022 Harvard study, children who observe balanced 
-                household responsibilities are 68% more likely to establish equitable relationships in adulthood.
+            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm text-center">
+              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+                <Clock className="text-green-600" size={24} />
+              </div>
+              <h3 className="text-lg font-medium mb-2">Time Savings</h3>
+              <p className="text-2xl font-light text-green-600 mb-1">4.8 hrs</p>
+              <p className="text-gray-600 text-sm">
+                average weekly time saved from searching for information
+              </p>
+            </div>
+            
+            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm text-center">
+              <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4">
+                <Heart className="text-purple-600" size={24} />
+              </div>
+              <h3 className="text-lg font-medium mb-2">Stronger Relationships</h3>
+              <p className="text-2xl font-light text-purple-600 mb-1">92%</p>
+              <p className="text-gray-600 text-sm">
+                reduction in conflicts related to household responsibilities
               </p>
             </div>
           </div>
           
-          <div className="text-center">
-            <h3 className="text-xl font-medium mb-4">The Full Family Experience</h3>
-            <p className="text-gray-700 mb-6 max-w-2xl mx-auto">
-              By bringing all family perspectives together, Allie creates a 360° view 
-              of your household workload that drives meaningful change.
+          <div className="bg-black text-white p-8 rounded-lg">
+            <h3 className="text-xl font-medium mb-6 text-center">The Allie Difference</h3>
+            <p className="text-gray-300 mb-6 text-center">
+              Unlike other family apps that focus only on scheduling or tasks, Allie provides a comprehensive solution that:
             </p>
             
-            <button 
-              onClick={() => navigate('/mini-survey')}
-              className="px-6 py-3 bg-black text-white rounded-full font-medium hover:bg-gray-900 mb-4"
-            >
-              Try Our Mini-Assessment
-            </button>
-            <p className="text-sm text-gray-500">
-              See how balanced your family is with our free 20-question survey
-            </p>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="flex items-start">
+                  <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0">
+                    <span className="text-white font-medium">1</span>
+                  </div>
+                  <div>
+                    <h4 className="font-medium">Measures What Matters</h4>
+                    <p className="text-sm text-gray-300">Quantifies both visible and invisible family work</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start">
+                  <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0">
+                    <span className="text-white font-medium">2</span>
+                  </div>
+                  <div>
+                    <h4 className="font-medium">Learns Your Family</h4>
+                    <p className="text-sm text-gray-300">Builds a unique understanding of your specific family patterns</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start">
+                  <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0">
+                    <span className="text-white font-medium">3</span>
+                  </div>
+                  <div>
+                    <h4 className="font-medium">Integrates Everything</h4>
+                    <p className="text-sm text-gray-300">Connects scheduling, documents, tracking, and balance</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="flex items-start">
+                  <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0">
+                    <span className="text-white font-medium">4</span>
+                  </div>
+                  <div>
+                    <h4 className="font-medium">Remembers It All</h4>
+                    <p className="text-sm text-gray-300">Serves as your family's institutional memory</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start">
+                  <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0">
+                    <span className="text-white font-medium">5</span>
+                  </div>
+                  <div>
+                    <h4 className="font-medium">Evolves Over Time</h4>
+                    <p className="text-sm text-gray-300">Continuously improves with more data about your family</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Ready to Start */}
-      <div className="bg-black py-16 text-white">
+      {/* CTA Section */}
+      <div className="py-16 bg-black text-white">
         <div className="max-w-4xl mx-auto px-6 text-center">
-          <h2 className="text-3xl font-light mb-6">Ready for a More Balanced Family Life?</h2>
-          <p className="text-xl opacity-80 mb-8 max-w-2xl mx-auto">
-            Join thousands of families who are discovering the power of data-driven balance.
+          <h2 className="text-3xl font-light mb-6">Join Our Family Balance Revolution</h2>
+          <p className="text-xl opacity-90 mb-8 max-w-2xl mx-auto">
+            Experience the benefits of a more harmonious, equitable family life with Allie.
           </p>
           <div className="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-6">
             <button 
-              onClick={() => navigate('/signup')}
+              onClick={() => navigate('/onboarding')}
               className="px-8 py-4 bg-white text-black rounded-md font-medium hover:bg-gray-100"
             >
-              Get Started
+              Create Your Family
             </button>
             <button 
-              onClick={() => navigate('/blog')}
-              className="px-8 py-4 border border-white text-white rounded-md font-medium hover:bg-white hover:bg-opacity-10"
+              onClick={() => navigate('/mini-survey')}
+              className="px-8 py-4 border border-white text-white rounded-md font-light hover:bg-white hover:bg-opacity-10"
             >
-              Read Success Stories
+              Try Our Mini Assessment
             </button>
           </div>
         </div>
       </div>
-
+      
       {/* Footer */}
       <footer className="px-6 py-12 bg-white border-t">
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
               <h2 className="text-2xl font-light mb-4">Allie</h2>
-              <p className="text-gray-600">Balancing family responsibilities together</p>
+              <p className="text-gray-600 font-light">Balancing family responsibilities together</p>
             </div>
             
             <div>
-  <h3 className="text-gray-800 font-medium mb-4">Product</h3>
-  <ul className="space-y-2">
-    <li>
-      <button onClick={() => navigate('/how-it-works')} className="text-gray-600 hover:text-gray-900 font-light">How It Works</button>
-    </li>
-    <li>
-      <button onClick={() => navigate('/relationship-features')} className="text-gray-600 hover:text-gray-900 font-light">Relationship Features</button>
-    </li>
-    <li>
-      <button onClick={() => navigate('/ai-assistant')} className="text-gray-600 hover:text-gray-900 font-light">AI Assistant</button>
-    </li>
-    <li>
-      <button onClick={() => navigate('/mini-survey')} className="text-gray-600 hover:text-gray-900 font-light">Mini Assessment</button>
-    </li>
-  </ul>
-</div>
+              <h3 className="text-gray-800 font-medium mb-4">Product</h3>
+              <ul className="space-y-2">
+                <li>
+                  <button onClick={() => navigate('/how-it-works')} className="text-gray-600 hover:text-gray-900 font-light">How It Works</button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/family-command-center')} className="text-gray-600 hover:text-gray-900 font-light">Family Command Center</button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/ai-assistant')} className="text-gray-600 hover:text-gray-900 font-light">AI Assistant</button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/family-memory')} className="text-gray-600 hover:text-gray-900 font-light">Family Memory</button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/mini-survey')} className="text-gray-600 hover:text-gray-900 font-light">Mini Assessment</button>
+                </li>
+              </ul>
+            </div>
             
             <div>
               <h3 className="text-gray-800 font-medium mb-4">Company</h3>
               <ul className="space-y-2">
                 <li>
-                  <button onClick={() => navigate('/about-us')} className="text-gray-600 hover:text-gray-900">About Us</button>
+                  <button onClick={() => navigate('/about-us')} className="text-gray-600 hover:text-gray-900 font-light">About Us</button>
                 </li>
                 <li>
-                  <button onClick={() => navigate('/blog')} className="text-gray-600 hover:text-gray-900">Blog</button>
+                  <button onClick={() => navigate('/blog')} className="text-gray-600 hover:text-gray-900 font-light">Blog</button>
                 </li>
               </ul>
             </div>
-            
-            
           </div>
           <div className="mt-8 pt-8 border-t text-center text-gray-500 text-sm">
             <p>© 2025 Allie. All rights reserved.</p>

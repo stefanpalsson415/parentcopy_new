@@ -25,36 +25,42 @@ const AIAssistantPage = () => {
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <h1 className="text-3xl font-light cursor-pointer" onClick={() => navigate('/')}>Allie</h1>
           <nav className="hidden md:flex space-x-8">
-            <button 
-              onClick={() => navigate('/how-it-works')}
-              className="text-gray-800 hover:text-gray-600"
-            >
-              How It Works
-            </button>
-            <button
-              onClick={() => navigate('/about-us')}
-              className="text-gray-800 hover:text-gray-600"
-            >
-              About Us
-            </button>
-            <button 
-              onClick={() => navigate('/family-command-center')}
-              className="text-gray-800 hover:text-gray-600"
-            >
-              Family Command Center
-            </button>
-            <button 
-              onClick={() => navigate('/ai-assistant')}
-              className="text-black font-medium border-b-2 border-black"
-            >
-              AI Assistant
-            </button>
-            <button 
-              onClick={() => navigate('/blog')}
-              className="text-gray-800 hover:text-gray-600"
-            >
-              Blog
-            </button>
+  <button 
+    onClick={() => navigate('/how-it-works')}
+    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+  >
+    How It Works
+  </button>
+  <button
+    onClick={() => navigate('/about-us')}
+    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+  >
+    About Us
+  </button>
+  <button 
+    onClick={() => navigate('/family-command-center')}
+    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+  >
+    Family Command Center
+  </button>
+  <button 
+    onClick={() => navigate('/ai-assistant')}
+    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+  >
+    AI Assistant
+  </button>
+  <button 
+    onClick={() => navigate('/family-memory')}
+    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+  >
+    Family Memory
+  </button>
+  <button 
+    onClick={() => navigate('/blog')}
+    className="text-gray-800 hover:text-blue-600 hover:underline transition-colors"
+  >
+    Blog
+  </button>
             
             {currentUser ? (
               <button 

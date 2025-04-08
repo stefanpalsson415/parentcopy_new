@@ -4,7 +4,7 @@ import {
   Brain, MessageSquare, Calendar, Camera, Clock, Bell, 
   Search, ArrowRight, CheckCircle, Smartphone, Upload,
   AlertCircle, Bookmark, Star, Download, RefreshCw, 
-  Users, Heart, FileText, Image, Mic, Info
+  Users, Heart, FileText,BookOpen, Image, Mic, Info
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 

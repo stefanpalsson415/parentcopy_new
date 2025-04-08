@@ -67,8 +67,8 @@ function AppRoutes() {
         <Route path="/survey-dashboard" element={<FamilySurveyDashboard />} />
         
         <Route path="/how-it-works" element={<HowThisWorksScreen />} />
-        <Route path="/relationship-features" element={<RelationshipFeaturesPage />} />
-        <Route path="/ai-assistant" element={<AIAssistantPage />} />
+        <Route path="/family-command-center" element={<RelationshipFeaturesPage />} />
+                <Route path="/ai-assistant" element={<AIAssistantPage />} />
         <Route path="/about-us" element={<AboutUsPage />} />
         <Route path="/family-memory" element={<FamilyMemory />} />
         <Route path="/product-overview" element={<ProductOverviewPage />} />
