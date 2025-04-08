@@ -570,7 +570,7 @@ const checkMessageHistoryForEvents = () => {
     }
   };
   
-  // Replace the existing handleImageProcessForEvent function (around line 471) with this enhanced version
+  // Update this function in src/components/chat/AllieChat.jsx
 const handleImageProcessForEvent = async (file) => {
   try {
     setLoading(true);
@@ -585,6 +585,11 @@ const handleImageProcessForEvent = async (file) => {
     };
     
     setMessages(prev => [...prev, processingMessage]);
+    
+    // Check if file is an image
+    if (!file.type.startsWith('image/')) {
+      throw new Error("File must be an image");
+    }
     
     // Get family context for better parsing
     const familyContext = {
@@ -643,6 +648,71 @@ const handleImageProcessForEvent = async (file) => {
     return false;
   } finally {
     setLoading(false);
+  }
+};
+
+// Also update the handleDrop function to better handle documents
+const handleDrop = (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  setIsDragging(false);
+  setDragCounter(0);
+  
+  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    const droppedFile = e.dataTransfer.files[0];
+    
+    // Check if it's an image
+    if (droppedFile.type.startsWith('image/')) {
+      // Create a preview URL
+      const previewUrl = URL.createObjectURL(droppedFile);
+      setImageFile(droppedFile);
+      setImagePreview(previewUrl);
+      
+      // If we have a profile upload target, process the image
+      if (profileUploadTarget) {
+        handleImageFileFromMessage(droppedFile, profileUploadTarget.id);
+      } else {
+        // Try to parse the image for event information
+        handleImageProcessForEvent(droppedFile);
+      }
+    } else if (droppedFile.type === 'application/pdf' || 
+               droppedFile.type.includes('text') || 
+               droppedFile.type.includes('document')) {
+      // Handle document files - let the user know we're analyzing it
+      const processingMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I see you've shared a document. I'm analyzing it to see if it contains any useful information...`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, processingMessage]);
+      
+      // For now, provide a helpful response since we can't fully process documents yet
+      setTimeout(() => {
+        const responseMessage = {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `I've looked at your document. If this contains event information, you can also type a brief description of the event and I'll help you add it to your calendar.`,
+          timestamp: new Date().toISOString()
+        };
+        
+        setMessages(prev => [...prev, responseMessage]);
+      }, 1500);
+    } else {
+      // Unsupported file type
+      const errorMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `Sorry, I can't process this type of file (${droppedFile.type}). I can work with images, PDFs, and text documents.`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+    }
   }
 };
   
@@ -1315,26 +1385,43 @@ const handleDrop = (e) => {
       
       {/* Full chat interface (shown when open) */}
       {isOpen && (
-        <div 
-        ref={chatContainerRef}
-        className="bg-white shadow-xl rounded-t-lg mx-4 flex flex-col transition-all duration-300 font-roboto relative overflow-hidden"
-        style={{ 
-          height: `${chatHeight}vh`, 
-          width: `${chatWidth}rem`, 
-          maxWidth: '95vw',
-          boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.1)'
-          }}
-        >
-          
-    <div
-      
-    >
+        // In src/components/chat/AllieChat.jsx
+
+// First, find the main chat container div (around line 570)
+// The ref={chatContainerRef} div should have these event handlers added:
+
+<div 
+  ref={chatContainerRef}
+  className="bg-white shadow-xl rounded-t-lg mx-4 flex flex-col transition-all duration-300 font-roboto relative overflow-hidden"
+  style={{ 
+    height: `${chatHeight}vh`, 
+    width: `${chatWidth}rem`, 
+    maxWidth: '95vw',
+    boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.1)'
+  }}
+  onDragEnter={handleDragEnter}
+  onDragOver={handleDragOver}
+  onDragLeave={handleDragLeave}
+  onDrop={handleDrop}
+>
+  {/* Drag overlay - add this right after the opening div tag */}
+  {isDragging && (
+    <div className="absolute inset-0 bg-blue-500 bg-opacity-80 flex items-center justify-center z-50 backdrop-blur-sm">
+      <div className="bg-white p-6 rounded-lg shadow-lg text-center">
+        <Upload size={32} className="mx-auto text-blue-500 mb-2" />
+        <p className="text-lg font-medium">Drop files here</p>
+        <p className="text-sm text-gray-500 mt-1">Images & documents accepted</p>
+      </div>
+    </div>
+  )}
+  
+  {/* Rest of the chat content */}
       <div className="bg-white p-4 rounded-lg shadow-lg text-center">
         <Upload size={32} className="mx-auto text-blue-500 mb-2" />
         <p className="text-sm font-medium">Drop files here</p>
         <p className="text-xs text-gray-500 mt-1">Images & documents accepted</p>
       </div>
-    </div>
+    
   
           {/* Chat header */}
           <div className="p-3 border-b flex items-center justify-between">
@@ -1595,39 +1682,52 @@ const handleDrop = (e) => {
             <div ref={messagesEndRef} />
           </div>
           
-          {/* NLU insights panel */}
-          {showInsights && (detectedIntent || (extractedEntities && Object.keys(extractedEntities).length > 0)) && (
-            <div className="border-t p-2 bg-gray-50 text-xs overflow-y-auto max-h-40">
-              {detectedIntent && (
-                <div className="mb-2">
-                  <span className="font-medium">Intent:</span>
-                  <span className="ml-1 font-mono">{detectedIntent}</span>
-                </div>
-              )}
-              
-              {extractedEntities && Object.keys(extractedEntities).length > 0 && (
-                <div>
-                  <span className="font-medium">Entities:</span>
-                  <div className="bg-white p-1 rounded border mt-1 overflow-x-auto">
-                    <pre className="text-xs">{JSON.stringify(extractedEntities, null, 2)}</pre>
-                  </div>
-                </div>
-              )}
-              
-              {conversationContext && conversationContext.length > 0 && (
-                <div className="mt-2">
-                  <span className="font-medium">Recent Context:</span>
-                  <ul className="list-disc list-inside pl-2 mt-1">
-                    {conversationContext.slice(0, 3).map((topic, idx) => (
-                      <li key={idx} className="truncate">
-                        {topic.query || "Previous topic"}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
+          // Update the NLU insights panel in src/components/chat/AllieChat.jsx
+{/* NLU insights panel */}
+{showInsights && (
+  <div className="border-t p-2 bg-gray-50 text-xs overflow-y-auto max-h-40">
+    {detectedIntent ? (
+      <div className="mb-2">
+        <span className="font-medium">Intent:</span>
+        <span className="ml-1 font-mono">{detectedIntent}</span>
+      </div>
+    ) : (
+      <div className="mb-2 text-gray-500">No intent detected yet. Send a message to see intent analysis.</div>
+    )}
+    
+    {extractedEntities && Object.keys(extractedEntities).length > 0 ? (
+      <div>
+        <span className="font-medium">Entities:</span>
+        <div className="bg-white p-1 rounded border mt-1 overflow-x-auto">
+          <pre className="text-xs">{JSON.stringify(extractedEntities, null, 2)}</pre>
+        </div>
+      </div>
+    ) : (
+      <div className="mb-2 text-gray-500">No entities detected in recent messages.</div>
+    )}
+    
+    {conversationContext && conversationContext.length > 0 ? (
+      <div className="mt-2">
+        <span className="font-medium">Recent Context:</span>
+        <ul className="list-disc list-inside pl-2 mt-1">
+          {conversationContext.slice(0, 3).map((topic, idx) => (
+            <li key={idx} className="truncate">
+              {topic.query || "Previous topic"}
+            </li>
+          ))}
+        </ul>
+      </div>
+    ) : (
+      <div className="mt-2 text-gray-500">No conversation context available yet.</div>
+    )}
+    
+    <div className="mt-3 pt-2 border-t border-gray-200">
+      <span className="text-xs text-gray-500">
+        This panel shows Allie's understanding of your messages through natural language processing.
+      </span>
+    </div>
+  </div>
+)}
           
           {/* Prompt chips */}
           <div className="px-3 py-2 flex flex-wrap gap-2">
