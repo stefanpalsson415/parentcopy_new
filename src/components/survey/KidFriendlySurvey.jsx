@@ -191,12 +191,38 @@ useEffect(() => {
 
 
   
-  // Redirect if no user is selected
-  useEffect(() => {
-    if (!selectedUser) {
-      navigate('/');
-    }
-  }, [selectedUser, navigate]);
+  // Redirect if no user is selected - with delay to allow context to initialize
+useEffect(() => {
+  const storedUserId = localStorage.getItem('selectedUserId');
+  
+  // If there's no stored ID, redirect immediately
+  if (!storedUserId) {
+    console.log("No selectedUserId in localStorage, redirecting to login");
+    navigate('/login');
+    return;
+  }
+  
+  // If selectedUser is null but we have a storedId, give it time to load
+  if (!selectedUser) {
+    console.log("No selectedUser in context yet, waiting before redirect check...");
+    
+    // Wait for context to update before deciding to redirect
+    const timer = setTimeout(() => {
+      if (!selectedUser) {
+        console.log("Still no selectedUser after delay, redirecting to login");
+        navigate('/login');
+      }
+    }, 1000); // Allow 1 second for context to initialize
+    
+    return () => clearTimeout(timer);
+  }
+  
+  // Extra validation - make sure it's a child
+  if (selectedUser && selectedUser.role !== 'child') {
+    console.log("Selected user is not a child, redirecting to adult survey");
+    navigate('/survey');
+  }
+}, [selectedUser, navigate]);
   
   // Enable AllieChat after component mounts
   useEffect(() => {

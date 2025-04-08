@@ -17,22 +17,30 @@ const FamilySurveyDashboard = () => {
   const handleSelectUser = (member) => {
     console.log("Selecting member in dashboard:", member);
     
-    // IMPORTANT: Store the selected user ID first
-    localStorage.setItem('selectedUserId', member.id);
+    // For children, use a special approach to ensure proper routing
+    if (member.role === 'child') {
+      // IMPORTANT: Set localStorage FIRST
+      localStorage.setItem('selectedUserId', member.id);
+      
+      // Update context
+      selectFamilyMember(member);
+      
+      // Use a stronger approach for kid survey navigation
+      console.log(`Navigating to kid survey for child: ${member.name}`);
+      setTimeout(() => {
+        window.location.href = '/kid-survey'; // Use direct location change instead of navigate
+      }, 50);
+      return;
+    }
     
-    // First select the family member in context
+    // For adults, use the normal approach
+    localStorage.setItem('selectedUserId', member.id);
     selectFamilyMember(member);
     
-    // Give the context time to update before navigating
+    // Navigate after a short delay to allow context to update
     setTimeout(() => {
-      // Navigate to the appropriate survey type based on role
-      if (member.role === 'child') {
-        console.log(`Navigating to kid survey for child: ${member.name}`);
-        navigate('/kid-survey');
-      } else {
-        console.log(`Navigating to adult survey for: ${member.name}`);
-        navigate('/survey');
-      }
+      console.log(`Navigating to adult survey for: ${member.name}`);
+      navigate('/survey');
     }, 100);
   };
   

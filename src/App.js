@@ -75,10 +75,11 @@ function AppRoutes() {
         <Route path="/blog" element={<BlogHomePage />} />
         <Route path="/blog/:slug" element={<BlogArticlePage />} />
 
-        <Route path="/survey" element={
-  selectedUser?.role === 'child' 
-    ? <KidFriendlySurvey surveyType="initial" /> 
-    : <SurveyScreen mode="initial" />
+        <Route path="/survey" element={<SurveyScreen mode="initial" />} />
+        
+{/* Add a dedicated route for kid-survey with better path protection */}
+<Route path="/kid-survey" element={
+  localStorage.getItem('selectedUserId') ? <KidFriendlySurvey surveyType="initial" /> : <Navigate to="/login" />
 } />
         <Route path="/mini-survey" element={<MiniSurvey />} />
         <Route path="/mini-results" element={<MiniResultsScreen />} />

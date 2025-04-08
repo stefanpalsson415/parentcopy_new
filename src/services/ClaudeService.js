@@ -4,11 +4,19 @@ import { auth } from './firebase';
 
 class ClaudeService {
   constructor() {
-    this.proxyUrl = 'http://localhost:3001/api/claude';
-    this.model = this.model = 'claude-3-opus-20240229'; // Using a more cost-effective model
+    // Determine if we're in production or development
+    const isProduction = window.location.hostname === 'checkallie.com' || 
+                         window.location.hostname === 'www.checkallie.com';
+    
+    // Set the appropriate API URL based on environment
+    this.proxyUrl = isProduction 
+      ? 'https://checkallie.com/api/claude'
+      : 'http://localhost:3001/api/claude';
+      
+    this.model = 'claude-3-opus-20240229'; // Using a more cost-effective model
     this.mockMode = false; // Explicitly disable mock mode
     
-    console.log("Claude service initialized to use local proxy server");
+    console.log(`Claude service initialized to use ${isProduction ? 'production' : 'local'} proxy server at ${this.proxyUrl}`);
   }
   
   async generateResponse(messages, context, options = {}) {

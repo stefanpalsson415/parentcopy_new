@@ -652,6 +652,7 @@ const handleImageProcessForEvent = async (file) => {
 };
 
 // Add these drag event handlers before the return statement (around line 670)
+// NEW CODE - Improved drag handlers
 const handleDragEnter = (e) => {
   e.preventDefault();
   e.stopPropagation();
@@ -665,6 +666,8 @@ const handleDragLeave = (e) => {
   e.preventDefault();
   e.stopPropagation();
   setDragCounter(prev => prev - 1);
+  // Only set isDragging to false when the counter reaches 0
+  // This prevents the overlay from flickering when dragging over child elements
   if (dragCounter - 1 === 0) {
     setIsDragging(false);
   }
@@ -673,11 +676,9 @@ const handleDragLeave = (e) => {
 const handleDragOver = (e) => {
   e.preventDefault();
   e.stopPropagation();
-  if (!isDragging) {
-    setIsDragging(true);
-  }
+  // Always set this to true for consistent behavior
+  setIsDragging(true);
 };
-
 // Also update the handleDrop function to better handle documents
 const handleDrop = (e) => {
   e.preventDefault();
@@ -1417,6 +1418,7 @@ const handleDrop = (e) => {
 // First, find the main chat container div (around line 570)
 // The ref={chatContainerRef} div should have these event handlers added:
 
+// NEW CODE - Remove the permanent drop box
 <div 
   ref={chatContainerRef}
   className="bg-white shadow-xl rounded-t-lg mx-4 flex flex-col transition-all duration-300 font-roboto relative overflow-hidden"
@@ -1431,7 +1433,7 @@ const handleDrop = (e) => {
   onDragLeave={handleDragLeave}
   onDrop={handleDrop}
 >
-  {/* Drag overlay - add this right after the opening div tag */}
+  {/* Drag overlay - shows only when dragging files */}
   {isDragging && (
     <div className="absolute inset-0 bg-blue-500 bg-opacity-80 flex items-center justify-center z-50 backdrop-blur-sm">
       <div className="bg-white p-6 rounded-lg shadow-lg text-center">
@@ -1443,12 +1445,7 @@ const handleDrop = (e) => {
   )}
   
   {/* Rest of the chat content */}
-      <div className="bg-white p-4 rounded-lg shadow-lg text-center">
-        <Upload size={32} className="mx-auto text-blue-500 mb-2" />
-        <p className="text-sm font-medium">Drop files here</p>
-        <p className="text-xs text-gray-500 mt-1">Images & documents accepted</p>
-      </div>
-    
+  {/* Removed the permanent drop box that was here */}    
   
           {/* Chat header */}
           <div className="p-3 border-b flex items-center justify-between">
