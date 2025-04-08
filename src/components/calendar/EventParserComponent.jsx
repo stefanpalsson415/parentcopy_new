@@ -5,9 +5,9 @@ import { useFamily } from '../../contexts/FamilyContext';
 import EventParserService from '../../services/EventParserService';
 import EventConfirmationCard from './EventConfirmationCard';
 
-const EventParserComponent = () => {
+const EventParserComponent = ({ initialText = '', onParseSuccess = null, onClose = null }) => {
   const { familyId, familyMembers, selectedUser } = useFamily();
-  const [inputText, setInputText] = useState('');
+  const [inputText, setInputText] = useState(initialText);
   const [isProcessing, setIsProcessing] = useState(false);
   const [parsedEvent, setParsedEvent] = useState(null);
   const [error, setError] = useState(null);
@@ -20,6 +20,20 @@ const EventParserComponent = () => {
   const fileInputRef = useRef(null);
   const recognition = useRef(null);
   const textareaRef = useRef(null);
+  
+  // Initialize with the provided text if any
+  useEffect(() => {
+    if (initialText && initialText.trim() !== '') {
+      setInputText(initialText);
+      
+      // If initial text is provided, automatically start parsing
+      if (initialText.trim().length > 10) {
+        setTimeout(() => {
+          handleTextParse();
+        }, 500);
+      }
+    }
+  }, [initialText]);
   
   // Initialize speech recognition
   useEffect(() => {
@@ -35,6 +49,7 @@ const EventParserComponent = () => {
           .map(result => result.transcript)
           .join('');
         
+        setTranscription(transcript);
         setInputText(transcript);
       };
       
@@ -189,9 +204,28 @@ const EventParserComponent = () => {
   };
   
   // Handle event confirmation
-  const handleEventConfirm = () => {
+  const handleEventConfirm = (confirmedEvent) => {
+    // Call the onParseSuccess callback if provided
+    if (onParseSuccess && typeof onParseSuccess === 'function') {
+      onParseSuccess(confirmedEvent);
+    }
+    
     resetForm();
-    // Show success message or redirect to calendar
+    
+    // Close the component if close handler is provided
+    if (onClose && typeof onClose === 'function') {
+      onClose();
+    }
+  };
+  
+  // Handle cancel
+  const handleCancel = () => {
+    resetForm();
+    
+    // Close the component if close handler is provided
+    if (onClose && typeof onClose === 'function') {
+      onClose();
+    }
   };
   
   // Examples of invitations to help users
@@ -203,6 +237,10 @@ const EventParserComponent = () => {
     {
       language: 'Swedish',
       text: "Hej! Välkommen på kalas för Anna som fyller 6 år den 12/4 kl. 14.00. Vi firar på Laserdome, Instrumentvägen 25. Hälsningar från familjen Andersson"
+    },
+    {
+      language: 'English (Forwarded Invitation)',
+      text: "Hey Stefan - I want to invite Tegner to a birthday party!! He is invited to John's 9th birthday party!! The party is at Skrappen on April 10th. The party starts at 4pm. The party is a dress up party with the theme of cowboys!"
     }
   ];
   
@@ -213,12 +251,24 @@ const EventParserComponent = () => {
           <Calendar size={20} className="mr-2" />
           Add Event from Message
         </h3>
-        <button 
-          onClick={() => setShowInstructions(!showInstructions)}
-          className="p-1 rounded-full hover:bg-gray-100"
-        >
-          <Info size={18} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setShowInstructions(!showInstructions)}
+            className="p-1 rounded-full hover:bg-gray-100"
+            title="Show instructions"
+          >
+            <Info size={18} />
+          </button>
+          {onClose && (
+            <button 
+              onClick={handleCancel}
+              className="p-1 rounded-full hover:bg-gray-100"
+              title="Close"
+            >
+              <X size={18} />
+            </button>
+          )}
+        </div>
       </div>
       
       {showInstructions && (
@@ -373,7 +423,7 @@ const EventParserComponent = () => {
           event={parsedEvent} 
           onConfirm={handleEventConfirm}
           onEdit={handleEventEdit}
-          onCancel={resetForm}
+          onCancel={handleCancel}
           familyId={familyId}
         />
       )}

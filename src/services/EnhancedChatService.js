@@ -482,9 +482,12 @@ class EnhancedChatService {
     const intent = this.nlu.detectIntent(text);
     const isCalendarIntent = ['calendar.add', 'calendar.schedule', 'calendar.remind', 'calendar.check', 'date.query'].includes(intent);
     
+    // Enhanced detection with keywords for invitations and parties
     if (!isCalendarIntent) {
-      // Double-check with keyword matching as fallback
-      const calendarKeywords = ['calendar', 'schedule', 'appointment', 'meeting', 'remind me', 'add to', 'book a', 'set up'];
+      const calendarKeywords = [
+        'calendar', 'schedule', 'appointment', 'meeting', 'remind me', 'add to', 'book a', 'set up',
+        'birthday', 'party', 'invite', 'invitation', 'celebrating', 'event'
+      ];
       const hasKeyword = calendarKeywords.some(keyword => text.toLowerCase().includes(keyword));
       
       if (!hasKeyword) return null;

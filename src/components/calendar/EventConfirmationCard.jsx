@@ -38,8 +38,8 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
       setSaving(true);
       setError(null);
       
-      if (!editedEvent.childId || !editedEvent.title) {
-        setError("Please select a child and provide an event title");
+      if (!editedEvent.childId && !editedEvent.title) {
+        setError("Please provide an event title or select a child");
         setSaving(false);
         return;
       }
@@ -77,7 +77,7 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
       let calendarEvent = {
         summary: finalEvent.title,
         title: finalEvent.title, // Include both for compatibility
-        description: finalEvent.description || `Event for ${finalEvent.childName}`,
+        description: finalEvent.description || `Event for ${finalEvent.childName || 'family'}`,
         location: finalEvent.location || '',
         start: {
           dateTime: new Date(finalEvent.dateTime).toISOString(),
@@ -120,8 +120,8 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
               ...calendarEvent,
               childId: siblingId,
               childName: sibling.name,
-              summary: calendarEvent.summary.replace(finalEvent.childName, sibling.name),
-              title: calendarEvent.title.replace(finalEvent.childName, sibling.name),
+              summary: calendarEvent.summary.replace(finalEvent.childName || '', sibling.name),
+              title: calendarEvent.title.replace(finalEvent.childName || '', sibling.name),
               // Don't include siblingIds in the sibling's own event
               siblingIds: undefined,
               siblingNames: undefined
@@ -165,7 +165,7 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
     setIsEditing(true);
   };
   
-  // Simplified update handler without references to undefined variables
+  // Update handler
   const handleUpdate = async () => {
     try {
       setPendingAction('update');
@@ -372,7 +372,7 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
           
           {/* Parent Selection */}
           <div className="bg-gray-50 p-4 rounded-lg border">
-            <div className="font-medium mb-2">Who will take {editedEvent.childName}?</div>
+            <div className="font-medium mb-2">Who will take {editedEvent.childName || 'the child'}?</div>
             
             <div className="flex flex-wrap gap-2">
               {parents.map(parent => (
