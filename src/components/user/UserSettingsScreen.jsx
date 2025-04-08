@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { X, Upload, Camera, User, Users, Home } from 'lucide-react';
+// src/components/user/UserSettingsScreen.jsx
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Upload, Mic, Camera, User, Users, Home } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import DatabaseService from '../../services/DatabaseService';
 import CalendarService from '../../services/CalendarService';
-import { Calendar, Download, ChevronDown, ChevronUp, Settings, Globe, Check, Apple } from 'lucide-react';
+import EmailIngestService from '../../services/EmailIngestService';
+import { Calendar, Download, ChevronDown, ChevronUp, Settings, Globe, Check, Apple, Mail, Copy, Clock, AlertTriangle } from 'lucide-react';
 
 const UserSettingsScreen = ({ onClose }) => {
   const { 
@@ -26,6 +28,15 @@ const UserSettingsScreen = ({ onClose }) => {
   const [uploadError, setUploadError] = useState(null);
   const [settingsTab, setSettingsTab] = useState('profile'); // 'profile', 'family', 'app', or 'calendar'
   const [uploadForMember, setUploadForMember] = useState(null);
+  const [familyEmail, setFamilyEmail] = useState('');
+  const [emailCopied, setEmailCopied] = useState(false);
+  const [emailSettings, setEmailSettings] = useState({
+    enabled: true,
+    sendConfirmations: true,
+    allowAutoCreateEvents: true
+  });
+  const [emailHistory, setEmailHistory] = useState([]);
+  const [loadingEmail, setLoadingEmail] = useState(true);
 
   // Handler for family name update
   const handleFamilyNameUpdate = async () => {
@@ -40,6 +51,29 @@ const UserSettingsScreen = ({ onClose }) => {
       alert("Failed to update family name. Please try again.");
     }
   };
+  
+  // Load email settings
+  useEffect(() => {
+    if (familyId) {
+      setLoadingEmail(true);
+      
+      Promise.all([
+        EmailIngestService.getPersonalizedEmailAddress(familyId),
+        EmailIngestService.getEmailSettings(familyId),
+        EmailIngestService.getEmailHistory(familyId, 5)
+      ])
+        .then(([email, settings, history]) => {
+          setFamilyEmail(email);
+          setEmailSettings(settings);
+          setEmailHistory(history);
+          setLoadingEmail(false);
+        })
+        .catch(error => {
+          console.error("Error loading email settings:", error);
+          setLoadingEmail(false);
+        });
+    }
+  }, [familyId]);
   
   // Handle image upload
   const handleImageUpload = async (e) => {
@@ -96,6 +130,50 @@ const UserSettingsScreen = ({ onClose }) => {
       reader.onload = () => resolve(reader.result);
       reader.onerror = () => reject(new Error("Failed to read file"));
       reader.readAsDataURL(file);
+    });
+  };
+
+  // Handle copying email to clipboard
+  const handleCopyEmail = () => {
+    navigator.clipboard.writeText(familyEmail)
+      .then(() => {
+        setEmailCopied(true);
+        setTimeout(() => setEmailCopied(false), 2000);
+      })
+      .catch(error => {
+        console.error("Error copying to clipboard:", error);
+      });
+  };
+  
+  // Handle toggling email settings
+  const handleToggleSetting = (setting) => {
+    const updatedSettings = {
+      ...emailSettings,
+      [setting]: !emailSettings[setting]
+    };
+    
+    setEmailSettings(updatedSettings);
+    
+    // Save settings
+    EmailIngestService.updateEmailSettings(familyId, updatedSettings)
+      .catch(error => {
+        console.error("Error updating email settings:", error);
+        // Revert on error
+        setEmailSettings(emailSettings);
+      });
+  };
+  
+  // Format date for display
+  const formatDate = (timestamp) => {
+    if (!timestamp) return 'Unknown';
+    
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
   
@@ -216,6 +294,167 @@ const UserSettingsScreen = ({ onClose }) => {
               </p>
             </div>
           </div>
+        </div>
+        
+        {/* Email-to-Calendar Section */}
+        <div className="bg-white p-4 rounded-lg border">
+          <h4 className="font-medium mb-3 flex items-center">
+            <Mail size={16} className="mr-2" />
+            Email-to-Calendar
+          </h4>
+          
+          <p className="text-sm text-gray-600 mb-3">
+            Forward event invitations to your family's email address, and Allie will automatically add them to your calendar.
+          </p>
+          
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-1">Your Family Email Address</label>
+            <div className="flex">
+              <div className="flex-grow bg-gray-50 border rounded-l p-2 text-sm truncate">
+                {loadingEmail ? 'Loading...' : familyEmail}
+              </div>
+              <button
+                onClick={handleCopyEmail}
+                className="bg-black text-white px-3 py-2 rounded-r flex items-center text-sm"
+              >
+                {emailCopied ? (
+                  <>
+                    <Check size={14} className="mr-1" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy size={14} className="mr-1" />
+                    Copy
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+          
+          <div className="mt-3 bg-blue-50 p-3 rounded-md text-sm">
+            <h5 className="font-medium text-blue-800 mb-1">About Your Family Email</h5>
+            <p className="text-blue-700 text-xs">
+              This is your family's unique Allie email address at checkallie.com. Simply forward event invitations or send emails with event details to this address, and Allie will automatically add them to your family calendar.
+            </p>
+            <p className="text-blue-700 text-xs mt-1">
+              Try it now: Forward a birthday invitation, play date, or appointment email to this address!
+            </p>
+          </div>
+          
+          <div className="space-y-3 mt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium text-sm">Email-to-Calendar</div>
+                <div className="text-xs text-gray-500">Allow creating events from emails</div>
+              </div>
+              <div className="relative inline-block w-10 mr-2 align-middle select-none">
+                <input
+                  type="checkbox"
+                  name="enable"
+                  id="enable"
+                  checked={emailSettings.enabled}
+                  onChange={() => handleToggleSetting('enabled')}
+                  className="checked:bg-black outline-none focus:outline-none right-4 checked:right-0 duration-200 ease-in absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"
+                />
+                <label
+                  htmlFor="enable"
+                  className={`block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer ${
+                    emailSettings.enabled ? 'bg-black' : ''
+                  }`}
+                ></label>
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium text-sm">Email Confirmations</div>
+                <div className="text-xs text-gray-500">Send confirmation after processing</div>
+              </div>
+              <div className="relative inline-block w-10 mr-2 align-middle select-none">
+                <input
+                  type="checkbox"
+                  name="confirm"
+                  id="confirm"
+                  checked={emailSettings.sendConfirmations}
+                  onChange={() => handleToggleSetting('sendConfirmations')}
+                  className="checked:bg-black outline-none focus:outline-none right-4 checked:right-0 duration-200 ease-in absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"
+                />
+                <label
+                  htmlFor="confirm"
+                  className={`block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer ${
+                    emailSettings.sendConfirmations ? 'bg-black' : ''
+                  }`}
+                ></label>
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium text-sm">Auto-Create Events</div>
+                <div className="text-xs text-gray-500">Create events without confirmation</div>
+              </div>
+              <div className="relative inline-block w-10 mr-2 align-middle select-none">
+                <input
+                  type="checkbox"
+                  name="auto"
+                  id="auto"
+                  checked={emailSettings.allowAutoCreateEvents}
+                  onChange={() => handleToggleSetting('allowAutoCreateEvents')}
+                  className="checked:bg-black outline-none focus:outline-none right-4 checked:right-0 duration-200 ease-in absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"
+                />
+                <label
+                  htmlFor="auto"
+                  className={`block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer ${
+                    emailSettings.allowAutoCreateEvents ? 'bg-black' : ''
+                  }`}
+                ></label>
+              </div>
+            </div>
+          </div>
+          
+          {/* Email History */}
+          {!loadingEmail && emailHistory.length > 0 && (
+            <div className="mt-4">
+              <h5 className="text-sm font-medium mb-2 flex items-center">
+                <Clock size={14} className="mr-1" />
+                Recent Email History
+              </h5>
+              <div className="border rounded overflow-hidden">
+                {emailHistory.map((item, index) => (
+                  <div 
+                    key={item.id}
+                    className={`text-sm p-2 flex items-start ${
+                      index !== emailHistory.length - 1 ? 'border-b' : ''
+                    }`}
+                  >
+                    <div className={`w-2 h-2 rounded-full mt-1.5 mr-2 flex-shrink-0 ${
+                      item.processingResult?.eventCreated 
+                        ? 'bg-green-500' 
+                        : 'bg-yellow-500'
+                    }`}></div>
+                    <div className="flex-grow">
+                      <div className="font-medium truncate">{item.subject}</div>
+                      <div className="text-xs text-gray-500 flex justify-between">
+                        <span>{item.from}</span>
+                        <span>{formatDate(item.processedAt || item.receivedAt)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {!loadingEmail && emailHistory.length === 0 && (
+            <div className="text-center p-4 border rounded-md bg-gray-50 mt-4">
+              <Mail size={24} className="mx-auto text-gray-400 mb-2" />
+              <p className="text-sm text-gray-500">No email history yet</p>
+              <p className="text-xs text-gray-400">
+                Send an email to your family address to get started
+              </p>
+            </div>
+          )}
         </div>
         
         {/* ICS Download Settings */}

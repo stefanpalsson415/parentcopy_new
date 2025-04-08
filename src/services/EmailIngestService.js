@@ -442,13 +442,13 @@ class EmailIngestService {
         .replace(/\s+/g, '-')
         .replace(/[^a-z0-9-]/g, '');
       
-      // Generate personalized email
-      return `${safeFamilyName}-${familyId.substring(0, 6)}@allie-assistant.com`;
+      // Generate personalized email with checkallie.com domain
+      return `${safeFamilyName}-${familyId.substring(0, 6)}@checkallie.com`;
     } catch (error) {
       console.error("Error getting personalized email address:", error);
       
-      // Fallback to generic format
-      return `family-${familyId.substring(0, 8)}@allie-assistant.com`;
+      // Fallback to generic format with correct domain
+      return `family-${familyId.substring(0, 8)}@checkallie.com`;
     }
   }
 

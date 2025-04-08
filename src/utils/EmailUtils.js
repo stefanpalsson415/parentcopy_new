@@ -21,7 +21,6 @@ export const sendEmailNotification = async (to, subject, body, options = {}) => 
       }
       
       // In production, call your email service API
-      // This would typically be a call to SendGrid, Mailgun, AWS SES, etc.
       const response = await fetch('/api/send-email', {
         method: 'POST',
         headers: {
@@ -31,8 +30,8 @@ export const sendEmailNotification = async (to, subject, body, options = {}) => 
           to,
           subject,
           html: body,
-          from: options.from || 'Allie <noreply@allie-assistant.com>',
-          replyTo: options.replyTo || 'events@allie-assistant.com',
+          from: options.from || 'Allie <noreply@checkallie.com>',
+          replyTo: options.replyTo || 'events@checkallie.com',
           ...options
         })
       });
@@ -152,7 +151,12 @@ export const sendEmailNotification = async (to, subject, body, options = {}) => 
     // Extract username and domain
     const [username, domain] = baseEmail.split('@');
     
-    // Create reply address with thread ID
+    // Create reply address with thread ID (using checkallie.com)
+    if (domain !== 'checkallie.com') {
+      return `${username}+thread-${threadId}@checkallie.com`;
+    }
+    
+    // Already using the right domain
     return `${username}+thread-${threadId}@${domain}`;
   };
   
