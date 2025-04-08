@@ -29,6 +29,8 @@ import { useAuth } from './contexts/AuthContext';
 import FloatingCalendarWidget from './components/calendar/FloatingCalendarWidget';
 import EmailOptIn from './components/marketing/EmailOptIn';
 import ClaudeDebugger from './components/debug/ClaudeDebugger';
+import './styles/atomicHabits.css';
+
 
 
 // App Routes Component - Used after context providers are set up

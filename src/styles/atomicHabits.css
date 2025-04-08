@@ -1,0 +1,218 @@
+/* Atomic Habits CSS Styles */
+
+/* Habit Card Hover Effects */
+.habit-card {
+    transition: all 0.2s ease-in-out;
+  }
+  
+  .habit-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  }
+  
+  /* Streak Badge Pulsing Animation */
+  .streak-badge {
+    animation: pulse 2s infinite;
+  }
+  
+  @keyframes pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4);
+    }
+    70% {
+      box-shadow: 0 0 0 10px rgba(251, 191, 36, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(251, 191, 36, 0);
+    }
+  }
+  
+  /* Completion Button Animation */
+  .completion-button {
+    transition: all 0.2s ease;
+  }
+  
+  .completion-button:hover {
+    transform: scale(1.1);
+  }
+  
+  .completion-button:active {
+    transform: scale(0.95);
+  }
+  
+  /* Celebration Animation */
+  .celebration-animation {
+    animation: slideInRight 0.5s forwards, fadeOut 0.5s 4.5s forwards;
+  }
+  
+  @keyframes slideInRight {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  
+  /* Progress Bar Animation */
+  .progress-bar-fill {
+    transition: width 1s ease-in-out;
+  }
+  
+  /* Identity Badge Highlight */
+  .identity-badge {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .identity-badge:after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg, 
+      rgba(255, 255, 255, 0) 0%, 
+      rgba(255, 255, 255, 0.2) 50%, 
+      rgba(255, 255, 255, 0) 100%
+    );
+    animation: shine 3s infinite;
+  }
+  
+  @keyframes shine {
+    to {
+      left: 100%;
+    }
+  }
+  
+  /* Habit Stack Transition */
+  .habit-stack {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+  }
+  
+  .habit-stack.open {
+    max-height: 500px;
+  }
+  
+  /* Confetti Animation Enhancement */
+  .confetti-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9999;
+  }
+  
+  /* Reflection Modal Fade In */
+  .modal-container {
+    animation: fadeIn 0.2s ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  
+  /* Camera Capture Button Animation */
+  .capture-button {
+    transition: all 0.2s ease;
+  }
+  
+  .capture-button:active {
+    transform: scale(0.9);
+    background-color: #e5e5e5;
+  }
+  
+  /* Atomic Step Highlight */
+  .atomic-step {
+    transition: all 0.2s ease;
+  }
+  
+  .atomic-step:hover {
+    background-color: #f3f4f6;
+    transform: translateX(5px);
+  }
+  
+  /* Habit Toggle Animation */
+  .habit-toggle {
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+  
+  .habit-toggle.active {
+    transform: rotate(180deg);
+  }
+  
+  /* Week Progress Animation */
+  .week-progress-container {
+    position: relative;
+  }
+  
+  .week-progress-bar {
+    transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .week-progress-indicator {
+    position: absolute;
+    top: -10px;
+    transform: translateX(-50%);
+    transition: left 1s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Family streak counter animation */
+  .streak-counter {
+    position: relative;
+  }
+  
+  .streak-counter.incremented:after {
+    content: '+1';
+    position: absolute;
+    top: -15px;
+    right: -5px;
+    background-color: #10b981;
+    color: white;
+    border-radius: 9999px;
+    padding: 2px 5px;
+    font-size: 10px;
+    opacity: 0;
+    animation: counterPop 1.5s ease-out forwards;
+  }
+  
+  @keyframes counterPop {
+    0% {
+      opacity: 0;
+      transform: scale(0) translateY(0);
+    }
+    20% {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+    80% {
+      opacity: 1;
+      transform: scale(1) translateY(-10px);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1) translateY(-20px);
+    }
+  }
