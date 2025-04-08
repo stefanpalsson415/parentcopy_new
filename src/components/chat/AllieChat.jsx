@@ -27,8 +27,8 @@ const AllieChat = () => {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
-  const [chatHeight, setChatHeight] = useState(68); // Default height (in rems)
-  const [chatWidth, setChatWidth] = useState(96); // Default width (in rems) for desktop
+  const [chatHeight, setChatHeight] = useState(45); // Default height (in rems)
+const [chatWidth, setChatWidth] = useState(60); // Default width (in rems) for desktop
   const [promptChips, setPromptChips] = useState([]);
   
   // Enhanced state variables
@@ -143,14 +143,14 @@ const AllieChat = () => {
       
       if (resizeType === 'width' || resizeType === 'both') {
         // Calculate new width as percentage of viewport width
-        const newWidthPx = startResizeDims.width + deltaX;
+        const newWidthPx = startResizeDims.width - deltaX; // Reversed direction
         const newWidthRem = Math.max(40, Math.min(120, newWidthPx / 16));
         setChatWidth(newWidthRem);
       }
       
       if (resizeType === 'height' || resizeType === 'both') {
         // Calculate new height as percentage of viewport height
-        const newHeightPx = startResizeDims.height + deltaY;
+        const newHeightPx = startResizeDims.height - deltaY; // Reversed direction
         // Convert to vh (viewport height percentage)
         const viewportHeight = window.innerHeight;
         const newHeightRem = Math.max(40, Math.min(90, (newHeightPx / viewportHeight) * 100));
@@ -1510,13 +1510,13 @@ const AllieChat = () => {
           </div>
           
           {/* Resize handles */}
-          <div 
-            className="absolute top-0 right-0 w-5 h-5 cursor-nwse-resize" 
-            onMouseDown={(e) => handleStartResize(e, 'both')}
-            title="Resize chat"
-          >
-            <div className="w-3 h-3 border-t-2 border-r-2 border-gray-400 absolute top-1 right-1"></div>
-          </div>
+<div 
+  className="absolute top-0 left-0 w-5 h-5 cursor-nwse-resize" 
+  onMouseDown={(e) => handleStartResize(e, 'both')}
+  title="Resize chat"
+>
+  <div className="w-3 h-3 border-t-2 border-l-2 border-gray-400 absolute top-1 left-1"></div>
+</div>
           
           <div 
             className="absolute top-0 right-0 bottom-0 w-2 cursor-ew-resize"
