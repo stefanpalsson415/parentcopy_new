@@ -18,7 +18,8 @@ import {
   limit, 
   serverTimestamp,
   arrayUnion,
-  increment
+  increment,
+  Timestamp
 } from 'firebase/firestore';
 
 class EnhancedChatService {
@@ -30,7 +31,7 @@ class EnhancedChatService {
   }
   
   // Load messages for a family with enhanced caching
-  async loadMessages(familyId, limit = 50) {
+  async loadMessages(familyId, limit = 100) {
     try {
       if (!familyId) {
         console.warn("No familyId provided to loadMessages");
@@ -233,13 +234,14 @@ class EnhancedChatService {
   }
   
   // Save user feedback on AI responses
-  async saveUserFeedback(messageId, feedback, correction, familyId) {
+  async saveUserFeedback(messageId, feedback, correction, familyId, feedbackType) {
     try {
       // Record the feedback
       await setDoc(doc(db, "chatFeedback", messageId), {
         messageId,
         feedback, // 'helpful', 'unhelpful', 'confusing', etc.
         correction, // user-provided correction if any
+        feedbackType, // specific type of feedback (incorrect, confusing, better)
         familyId,
         timestamp: serverTimestamp()
       });
@@ -274,6 +276,205 @@ class EnhancedChatService {
       return false;
     }
   }
+
+  // Look up calendar events based on query text
+  async lookupCalendarEvent(text, familyId, userId) {
+    try {
+      console.log("Looking up calendar events for query:", text);
+      
+      if (!userId || !familyId) {
+        return { success: false, message: "Cannot lookup calendar events without user and family ID" };
+      }
+      
+      // Extract relevant entities from the query
+      const entities = this.nlu.extractEntities(text);
+      
+      // Extract event type or category to narrow search
+      let eventType = null;
+      if (text.toLowerCase().includes('dentist') || text.toLowerCase().includes('doctor')) {
+        eventType = 'appointment';
+      } else if (text.toLowerCase().includes('birthday')) {
+        eventType = 'birthday';
+      } else if (text.toLowerCase().includes('music') || text.toLowerCase().includes('lesson')) {
+        eventType = 'lesson';
+      } else if (text.toLowerCase().includes('sports') || text.toLowerCase().includes('practice')) {
+        eventType = 'sports';
+      }
+      
+      // Extract names of people mentioned
+      let personName = null;
+      if (entities.people && entities.people.length > 0) {
+        personName = entities.people[0].name;
+      }
+      
+      // Extract dates if any
+      let dateRange = {
+        start: null,
+        end: null
+      };
+      
+      if (entities.dates && entities.dates.length > 0) {
+        // Specific date mentioned
+        dateRange.start = new Date(entities.dates[0].date);
+        dateRange.end = new Date(entities.dates[0].date);
+        dateRange.end.setHours(23, 59, 59);
+      } else if (text.toLowerCase().includes('next')) {
+        // Look for "next" events in the future
+        dateRange.start = new Date();
+        dateRange.end = new Date();
+        dateRange.end.setMonth(dateRange.end.getMonth() + 3); // Look ahead 3 months
+      } else if (text.toLowerCase().includes('today')) {
+        // Today's events
+        dateRange.start = new Date();
+        dateRange.start.setHours(0, 0, 0, 0);
+        dateRange.end = new Date();
+        dateRange.end.setHours(23, 59, 59, 999);
+      } else if (text.toLowerCase().includes('tomorrow')) {
+        // Tomorrow's events
+        dateRange.start = new Date();
+        dateRange.start.setDate(dateRange.start.getDate() + 1);
+        dateRange.start.setHours(0, 0, 0, 0);
+        dateRange.end = new Date(dateRange.start);
+        dateRange.end.setHours(23, 59, 59, 999);
+      } else if (text.toLowerCase().includes('this week')) {
+        // This week's events
+        dateRange.start = new Date();
+        dateRange.end = new Date();
+        // Set to end of week (Sunday)
+        const daysToSunday = 7 - dateRange.end.getDay();
+        dateRange.end.setDate(dateRange.end.getDate() + daysToSunday);
+        dateRange.end.setHours(23, 59, 59, 999);
+      } else {
+        // Default: look from now to 30 days ahead
+        dateRange.start = new Date();
+        dateRange.end = new Date();
+        dateRange.end.setDate(dateRange.end.getDate() + 30);
+      }
+      
+      console.log("Search parameters:", {
+        eventType,
+        personName,
+        dateRange: {
+          start: dateRange.start?.toISOString(),
+          end: dateRange.end?.toISOString()
+        }
+      });
+      
+      // Query Firestore for matching events
+      let eventsQuery = query(
+        collection(db, "calendar_events"),
+        where("userId", "==", userId),
+        where("familyId", "==", familyId)
+      );
+      
+      // Get all matching events
+      const querySnapshot = await getDocs(eventsQuery);
+      let matchingEvents = [];
+      
+      querySnapshot.forEach(doc => {
+        const event = { id: doc.id, ...doc.data() };
+        
+        // Convert Firestore timestamps to Dates
+        let eventStart = null;
+        if (event.start) {
+          if (event.start.dateTime) {
+            eventStart = new Date(event.start.dateTime);
+          } else if (event.start instanceof Timestamp) {
+            eventStart = event.start.toDate();
+          }
+        }
+        
+        // Skip if the event has no valid start date or is outside our date range
+        if (!eventStart || eventStart < dateRange.start || eventStart > dateRange.end) {
+          return;
+        }
+        
+        // Filter by event type if specified
+        if (eventType && event.eventType && !event.eventType.toLowerCase().includes(eventType.toLowerCase()) &&
+            !event.category?.toLowerCase().includes(eventType.toLowerCase())) {
+          // See if we can match by title
+          if (!event.title?.toLowerCase().includes(eventType.toLowerCase()) && 
+              !event.summary?.toLowerCase().includes(eventType.toLowerCase())) {
+            return;
+          }
+        }
+        
+        // Filter by person name if specified
+        if (personName) {
+          const matchesPerson = 
+            event.childName?.toLowerCase().includes(personName.toLowerCase()) ||
+            event.summary?.toLowerCase().includes(personName.toLowerCase()) ||
+            event.title?.toLowerCase().includes(personName.toLowerCase()) ||
+            event.description?.toLowerCase().includes(personName.toLowerCase()) ||
+            event.extraDetails?.birthdayChildName?.toLowerCase().includes(personName.toLowerCase());
+            
+          if (!matchesPerson) {
+            return;
+          }
+        }
+        
+        // Add the event with its formatted date
+        matchingEvents.push({
+          ...event,
+          formattedDate: eventStart.toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'long', 
+            day: 'numeric',
+            year: 'numeric'
+          }),
+          formattedTime: eventStart.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit'
+          })
+        });
+      });
+      
+      // Sort by date (closest first)
+      matchingEvents.sort((a, b) => {
+        const dateA = new Date(a.start.dateTime);
+        const dateB = new Date(b.start.dateTime);
+        return dateA - dateB;
+      });
+      
+      console.log(`Found ${matchingEvents.length} matching events`);
+      
+      // Generate a response based on the results
+      if (matchingEvents.length === 0) {
+        return {
+          success: true,
+          message: personName 
+            ? `I couldn't find any ${eventType || 'upcoming'} events for ${personName} in your calendar.`
+            : `I couldn't find any ${eventType || 'upcoming'} events in your calendar.`
+        };
+      } else if (matchingEvents.length === 1) {
+        const event = matchingEvents[0];
+        return {
+          success: true,
+          message: event.childName
+            ? `${event.childName}'s ${event.eventType || 'event'} "${event.summary || event.title}" is scheduled for ${event.formattedDate} at ${event.formattedTime}${event.location ? ` at ${event.location}` : ''}.`
+            : `"${event.summary || event.title}" is scheduled for ${event.formattedDate} at ${event.formattedTime}${event.location ? ` at ${event.location}` : ''}.`,
+          event
+        };
+      } else {
+        // Multiple events found
+        const eventList = matchingEvents.slice(0, 3).map(e => 
+          `${e.childName ? `${e.childName}'s ` : ''}${e.eventType || 'event'} "${e.summary || e.title}" on ${e.formattedDate} at ${e.formattedTime}`
+        ).join('\n- ');
+        
+        return {
+          success: true,
+          message: `I found ${matchingEvents.length} matching events. Here are the next ${Math.min(3, matchingEvents.length)}:\n- ${eventList}`,
+          events: matchingEvents.slice(0, 3)
+        };
+      }
+    } catch (error) {
+      console.error("Error looking up calendar events:", error);
+      return { 
+        success: false, 
+        message: "I'm sorry, I had trouble looking up calendar events. Please try again or check your calendar directly."
+      };
+    }
+  }
   
   // Enhanced calendar request handling with improved entity extraction
   async handleCalendarRequest(text, familyContext, userId) {
@@ -296,8 +497,17 @@ class EnhancedChatService {
     
     try {
       console.log("Processing calendar request:", text);
+
+      // First check if this is a lookup query rather than event creation
+      if (intent === 'calendar.check' || text.toLowerCase().includes('when is') || text.toLowerCase().includes('what time is')) {
+        // This looks like a query about existing events
+        const lookupResult = await this.lookupCalendarEvent(text, familyContext.familyId, userId);
+        if (lookupResult.success) {
+          return lookupResult.message;
+        }
+      }
       
-      // Use NLU to extract event details
+      // If not a lookup query, proceed with event creation
       const eventDetails = this.nlu.extractEventDetails(text, familyContext.familyMembers);
       console.log("Extracted event details:", eventDetails);
       
