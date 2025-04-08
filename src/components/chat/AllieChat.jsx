@@ -1316,22 +1316,18 @@ const handleDrop = (e) => {
       {/* Full chat interface (shown when open) */}
       {isOpen && (
         <div 
-          ref={chatContainerRef}
-          className="bg-white shadow-lg rounded-t-lg mx-4 flex flex-col transition-all duration-300 font-roboto relative"
-          style={{ 
-            height: `${chatHeight}vh`, 
-            width: `${chatWidth}rem`, 
-            maxWidth: '95vw'
+        ref={chatContainerRef}
+        className="bg-white shadow-xl rounded-t-lg mx-4 flex flex-col transition-all duration-300 font-roboto relative overflow-hidden"
+        style={{ 
+          height: `${chatHeight}vh`, 
+          width: `${chatWidth}rem`, 
+          maxWidth: '95vw',
+          boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.1)'
           }}
         >
-          {/* Add the drag overlay */}
-  {isDragging && (
+          
     <div
-      className="absolute inset-0 bg-blue-500 bg-opacity-10 border-2 border-blue-500 border-dashed rounded-t-lg z-50 flex items-center justify-center"
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
+      
     >
       <div className="bg-white p-4 rounded-lg shadow-lg text-center">
         <Upload size={32} className="mx-auto text-blue-500 mb-2" />
@@ -1339,7 +1335,7 @@ const handleDrop = (e) => {
         <p className="text-xs text-gray-500 mt-1">Images & documents accepted</p>
       </div>
     </div>
-  )}
+  
           {/* Chat header */}
           <div className="p-3 border-b flex items-center justify-between">
             <div className="flex items-center">
@@ -1417,10 +1413,11 @@ const handleDrop = (e) => {
     )}
     
     <div className={`max-w-[80%] p-3 rounded-lg ${
-      msg.sender === 'allie' 
-        ? 'bg-white border border-gray-200 shadow-sm' 
-        : 'bg-blue-600 text-white'
-    }`}>
+  msg.sender === 'allie' 
+    ? 'bg-white border border-gray-100 shadow-sm' 
+    : 'bg-blue-600 text-white'
+} transition-all duration-200 hover:shadow-md`}>
+    
       <div className="flex justify-between items-start">
         {!msg.sender !== 'allie' && (
           <div className="font-medium text-xs mb-1">{msg.userName}</div>

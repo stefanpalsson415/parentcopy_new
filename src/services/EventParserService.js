@@ -138,6 +138,284 @@ const eventDetails = {
     }
   }
   
+  // Add this improved method to EventParserService.js (around line 140)
+
+/**
+ * Enhanced OCR processing function that extracts text from images with better accuracy
+ * @param {string} imageUrl - URL of the image to process
+ * @returns {Promise<string>} Extracted text from the image
+ */
+async performEnhancedOCR(imageUrl) {
+  try {
+    console.log("Starting enhanced OCR processing for image:", imageUrl);
+    
+    // First try calling our OCR API endpoint
+    const response = await fetch(this.ocrApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ imageUrl, enhancedMode: true })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn(`OCR API returned ${response.status}: ${errorText}`);
+      throw new Error(`OCR API error: ${errorText}`);
+    }
+    
+    const result = await response.json();
+    
+    if (!result.text) {
+      console.warn("OCR API returned empty text");
+      throw new Error("No text detected in image");
+    }
+    
+    console.log("OCR successful, processing extracted text");
+    
+    // Post-process the extracted text to improve quality
+    const processedText = this.postProcessOCRText(result.text);
+    
+    return processedText;
+  } catch (error) {
+    console.error("Enhanced OCR processing failed:", error);
+    throw error;
+  }
+}
+
+/**
+ * Post-process OCR text to improve quality
+ * @param {string} text - Raw OCR text
+ * @returns {string} Processed text
+ */
+postProcessOCRText(text) {
+  // Replace common OCR errors
+  let processed = text
+    .replace(/(\d)l(\d)/g, '$1/$2') // Fix common "1" instead of "/" error in dates
+    .replace(/(\d)I(\d)/g, '$1/$2')
+    .replace(/\bI\b/g, '1')         // Fix standalone "I" as "1"
+    .replace(/\bO\b/g, '0')         // Fix standalone "O" as "0"
+    .replace(/(\d)O/g, '$10')       // Fix "O" as "0" after numbers
+    .replace(/\bAM\b/g, 'AM')       // Correct time notation
+    .replace(/\bPM\b/g, 'PM')
+    .replace(/\bam\b/g, 'am')
+    .replace(/\bpm\b/g, 'pm');
+    
+  // Try to normalize line breaks (invitations often have weird formatting)
+  processed = processed
+    .replace(/([.:!?])\s*\n/g, '$1 ')  // Remove line breaks after punctuation
+    .replace(/(\d)\s*\n\s*(\d)/g, '$1$2')  // Join split numbers
+    .replace(/([A-Za-z])-\s*\n\s*([A-Za-z])/g, '$1$2')  // Join hyphenated words
+    .replace(/\n{3,}/g, '\n\n');  // Normalize multiple line breaks
+    
+  console.log("Post-processed OCR text:", processed);
+  return processed;
+}
+
+/**
+ * Process an image to extract event details with improved reliability
+ * @param {File} imageFile - The image file to process
+ * @param {Object} familyContext - Family context for better parsing
+ * @returns {Promise<Object|null>} Extracted event details or null if unsuccessful
+ */
+async parseEventImage(imageFile, familyContext) {
+  try {
+    console.log("Starting enhanced event parsing from image");
+    
+    // 1. Upload the image to storage for OCR processing
+    const imageUrl = await this.uploadImageForOCR(imageFile);
+    console.log("Image uploaded successfully, URL:", imageUrl);
+    
+    // 2. Extract text using enhanced OCR
+    let extractedText;
+    try {
+      extractedText = await this.performEnhancedOCR(imageUrl);
+      console.log("OCR extracted text length:", extractedText.length);
+    } catch (ocrError) {
+      console.error("OCR failed, falling back to basic extraction:", ocrError);
+      // Fallback to basic OCR if enhanced fails
+      extractedText = await this.performOCR(imageUrl);
+    }
+    
+    // Early exit if we couldn't extract text
+    if (!extractedText || extractedText.trim().length < 10) {
+      console.warn("Insufficient text extracted from image");
+      return null;
+    }
+    
+    // 3. Try to determine if this is an invitation (especially for events/birthdays)
+    const isInvitation = this.isLikelyInvitation(extractedText);
+    
+    // 4. Parse the extracted text using the appropriate strategy
+    let eventDetails;
+    if (isInvitation) {
+      console.log("Detected likely invitation, using invitation parsing strategy");
+      eventDetails = await this.parseInvitationText(extractedText, familyContext);
+    } else {
+      console.log("Using standard event parsing for extracted text");
+      eventDetails = await this.parseEventText(extractedText, familyContext);
+    }
+    
+    // 5. Add confidence level based on the quality of extraction
+    if (eventDetails) {
+      eventDetails.extractionConfidence = this.calculateExtractionConfidence(eventDetails);
+      eventDetails.originalText = extractedText;
+      eventDetails.parsedFromImage = true;
+    }
+    
+    return eventDetails;
+  } catch (error) {
+    console.error("Error parsing event from image:", error);
+    throw error;
+  }
+}
+
+/**
+ * Determine if text is likely an invitation
+ * @param {string} text - The text to analyze
+ * @returns {boolean} True if the text appears to be an invitation
+ */
+isLikelyInvitation(text) {
+  const invitationKeywords = [
+    'invite', 'invitation', 'invited', 'join us', 'celebrate', 'celebration',
+    'birthday', 'party', 'rsvp', 'please join', 'honor', 'pleasure', 'attending',
+    'cordially', 'occasion'
+  ];
+  
+  const textLower = text.toLowerCase();
+  const matchCount = invitationKeywords.filter(keyword => textLower.includes(keyword)).length;
+  
+  // If we match multiple invitation keywords, it's likely an invitation
+  return matchCount >= 2;
+}
+
+/**
+ * Parse text specifically as an invitation with specialized extraction
+ * @param {string} text - The invitation text
+ * @param {Object} familyContext - Family context for better parsing
+ * @returns {Promise<Object|null>} Extracted event details
+ */
+async parseInvitationText(text, familyContext) {
+  try {
+    console.log("Parsing invitation text");
+    
+    // Use our regular parsing as a base
+    const baseDetails = await this.parseEventText(text, familyContext);
+    
+    // Enhanced extraction specifically for invitations
+    const invitationSpecificFields = {
+      rsvpBy: this.extractRSVPDeadline(text),
+      hostContact: this.extractHostContact(text),
+      giftInfo: this.extractGiftInformation(text)
+    };
+    
+    // Merge the information
+    const enhancedDetails = {
+      ...baseDetails,
+      ...invitationSpecificFields,
+      isInvitation: true
+    };
+    
+    return enhancedDetails;
+  } catch (error) {
+    console.error("Error parsing invitation text:", error);
+    // Fall back to standard parsing
+    return this.parseEventText(text, familyContext);
+  }
+}
+
+/**
+ * Extract RSVP deadline from invitation text
+ * @param {string} text - The invitation text
+ * @returns {string|null} RSVP deadline or null if not found
+ */
+extractRSVPDeadline(text) {
+  const rsvpPatterns = [
+    /rsvp\s+by\s+([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i,
+    /please\s+respond\s+by\s+([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i,
+    /respond\s+by\s+([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i,
+    /rsvp\s+([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i
+  ];
+  
+  for (const pattern of rsvpPatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Extract host contact information from invitation text
+ * @param {string} text - The invitation text
+ * @returns {Object|null} Host contact info or null if not found
+ */
+extractHostContact(text) {
+  // Phone pattern
+  const phonePattern = /(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})/;
+  const phoneMatch = text.match(phonePattern);
+  
+  // Email pattern
+  const emailPattern = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/;
+  const emailMatch = text.match(emailPattern);
+  
+  if (phoneMatch || emailMatch) {
+    return {
+      phone: phoneMatch ? phoneMatch[1] : null,
+      email: emailMatch ? emailMatch[1] : null
+    };
+  }
+  
+  return null;
+}
+
+/**
+ * Extract gift information from invitation text
+ * @param {string} text - The invitation text
+ * @returns {string|null} Gift information or null if not found
+ */
+extractGiftInformation(text) {
+  const giftPatterns = [
+    /gifts?:?\s+([^\.]+\.)/i,
+    /presents?:?\s+([^\.]+\.)/i,
+    /registry:?\s+([^\.]+\.)/i,
+    /(?:no\s+gifts|no\s+presents)/i
+  ];
+  
+  for (const pattern of giftPatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      return match[0];
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Calculate confidence level in extraction based on available details
+ * @param {Object} eventDetails - The extracted event details
+ * @returns {number} Confidence score from 0-1
+ */
+calculateExtractionConfidence(eventDetails) {
+  let score = 0;
+  let totalFactors = 0;
+  
+  // Add points for each successfully extracted piece of information
+  if (eventDetails.eventType) { score += 0.2; totalFactors += 0.2; }
+  if (eventDetails.title) { score += 0.2; totalFactors += 0.2; }
+  if (eventDetails.dateTime || eventDetails.startDate) { score += 0.3; totalFactors += 0.3; }
+  if (eventDetails.location) { score += 0.15; totalFactors += 0.15; }
+  if (eventDetails.hostParent || eventDetails.extraDetails?.birthdayChildName) { score += 0.15; totalFactors += 0.15; }
+  
+  // Calculate final score (normalize if needed)
+  return totalFactors > 0 ? score / totalFactors : 0;
+}
+
+
+
   /**
    * Call OCR API to extract text from image
    * @param {string} imageUrl - URL of the image to process
@@ -174,6 +452,10 @@ const eventDetails = {
     }
   }
   
+
+
+
+
   /* Helper methods */
   
   detectRegion(text) {
