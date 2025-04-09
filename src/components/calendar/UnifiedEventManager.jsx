@@ -1,30 +1,55 @@
-// Add this component to src/components/calendar/UnifiedEventManager.jsx
 import React, { useState, useEffect } from 'react';
-import { Calendar, User, Users, Clock, MapPin, Tag, X, Check } from 'lucide-react';
+import { Calendar, User, Users, Clock, MapPin, Tag, X, Check, AlertCircle, Info } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import CalendarService from '../../services/CalendarService';
 import UserAvatar from '../common/UserAvatar';
 
-const UnifiedEventManager = ({ 
+/**
+ * Enhanced Event Manager - Universal component for creating and editing calendar events
+ * 
+ * @param {Object} props
+ * @param {Object} props.initialEvent - Optional initial event data for editing
+ * @param {string} props.initialChildId - Optional child ID to pre-select
+ * @param {Function} props.onSave - Callback when event is saved
+ * @param {Function} props.onCancel - Callback when operation is cancelled
+ * @param {string} props.eventType - Default event type (general, appointment, activity, task, birthday, etc.)
+ * @param {Date} props.selectedDate - Optional pre-selected date
+ * @param {boolean} props.isCompact - Optional flag for compact mode
+ * @param {string} props.mode - 'create' or 'edit'
+ */
+const EnhancedEventManager = ({ 
   initialEvent = null, 
   initialChildId = null,
   onSave = null, 
   onCancel = null,
-  eventType = 'general' // general, appointment, activity, task
+  eventType = 'general',
+  selectedDate = null,
+  isCompact = false,
+  mode = 'create'
 }) => {
   const { familyMembers, familyId } = useFamily();
   const { currentUser } = useAuth();
-  const [event, setEvent] = useState(
-    initialEvent || {
+  
+  // Create default event with proper structure
+  const createDefaultEvent = () => {
+    const date = selectedDate ? new Date(selectedDate) : new Date();
+    // Round to nearest half hour
+    date.setMinutes(Math.round(date.getMinutes() / 30) * 30, 0, 0);
+    
+    const endDate = new Date(date);
+    endDate.setHours(endDate.getHours() + 1);
+    
+    return {
       title: '',
       description: '',
       location: '',
-      dateTime: new Date().toISOString(),
-      endDateTime: new Date(new Date().getTime() + 60 * 60 * 1000).toISOString(),
+      dateTime: date.toISOString(),
+      endDateTime: endDate.toISOString(),
       childId: initialChildId || '',
       childName: '',
       attendingParentId: '',
+      eventType: eventType,
       category: eventType,
       isRecurring: false,
       recurrence: {
@@ -32,8 +57,10 @@ const UnifiedEventManager = ({
         days: [],
         endDate: ''
       }
-    }
-  );
+    };
+  };
+  
+  const [event, setEvent] = useState(initialEvent || createDefaultEvent());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
@@ -51,6 +78,7 @@ const UnifiedEventManager = ({
     }
   }, [event.childId, children]);
   
+  // Handle event saving
   const handleSave = async () => {
     try {
       setLoading(true);
@@ -74,7 +102,7 @@ const UnifiedEventManager = ({
         ...event,
         userId: currentUser.uid,
         familyId,
-        source: 'manual',
+        source: 'unified-manager',
         start: {
           dateTime: new Date(event.dateTime).toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -87,7 +115,9 @@ const UnifiedEventManager = ({
         }
       };
       
-      // If this is a recurring event, handle it specially
+      let result;
+      
+      // Handle recurring events if applicable
       if (event.isRecurring && event.recurrence.days.length > 0) {
         // Create multiple events for each day of the week
         const results = [];
@@ -101,7 +131,11 @@ const UnifiedEventManager = ({
             }
           };
           
-          const result = await CalendarService.addEvent(dayEvent, currentUser.uid);
+          if (mode === 'edit' && event.firestoreId) {
+            result = await CalendarService.updateEvent(event.firestoreId, dayEvent, currentUser.uid);
+          } else {
+            result = await CalendarService.addEvent(dayEvent, currentUser.uid);
+          }
           results.push(result);
         }
         
@@ -113,7 +147,11 @@ const UnifiedEventManager = ({
         }, 1500);
       } else {
         // Single event
-        const result = await CalendarService.addEvent(calendarEvent, currentUser.uid);
+        if (mode === 'edit' && event.firestoreId) {
+          result = await CalendarService.updateEvent(event.firestoreId, calendarEvent, currentUser.uid);
+        } else {
+          result = await CalendarService.addEvent(calendarEvent, currentUser.uid);
+        }
         
         if (result.success) {
           // Show success animation
@@ -123,18 +161,19 @@ const UnifiedEventManager = ({
             if (onSave) onSave(result);
           }, 1500);
         } else {
-          setError(result.error || "Failed to add event to calendar");
+          setError(result.error || "Failed to process event");
         }
       }
       
       setLoading(false);
     } catch (error) {
-      console.error("Error saving event:", error);
+      console.error("Error processing event:", error);
       setError(error.message || "An error occurred while saving");
       setLoading(false);
     }
   };
   
+  // Toggle a day in recurring settings
   const toggleRecurringDay = (day) => {
     setEvent(prev => {
       const days = [...(prev.recurrence?.days || [])];
@@ -158,16 +197,23 @@ const UnifiedEventManager = ({
     });
   };
   
+  // Handle form cancellation
+  const handleCancel = () => {
+    if (onCancel) {
+      onCancel();
+    }
+  };
+  
   return (
-    <div className="bg-white rounded-lg shadow-md p-4 max-w-2xl mx-auto font-roboto">
+    <div className={`bg-white rounded-lg shadow-md ${isCompact ? 'p-3' : 'p-4'} max-w-2xl mx-auto font-roboto`}>
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-medium flex items-center">
           <Calendar size={20} className="mr-2" />
-          {initialEvent ? 'Edit Event' : 'Add New Event'}
+          {mode === 'edit' ? 'Edit Event' : 'Add New Event'}
         </h3>
         {onCancel && (
           <button 
-            onClick={onCancel}
+            onClick={handleCancel}
             className="text-gray-500 hover:text-gray-700"
           >
             <X size={20} />
@@ -184,7 +230,7 @@ const UnifiedEventManager = ({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setEvent(prev => ({ ...prev, category: 'general' }))}
+              onClick={() => setEvent(prev => ({ ...prev, category: 'general', eventType: 'general' }))}
               className={`px-3 py-1 text-sm rounded-full ${
                 event.category === 'general' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
               }`}
@@ -193,7 +239,7 @@ const UnifiedEventManager = ({
             </button>
             <button
               type="button"
-              onClick={() => setEvent(prev => ({ ...prev, category: 'appointment' }))}
+              onClick={() => setEvent(prev => ({ ...prev, category: 'appointment', eventType: 'appointment' }))}
               className={`px-3 py-1 text-sm rounded-full ${
                 event.category === 'appointment' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
               }`}
@@ -202,7 +248,7 @@ const UnifiedEventManager = ({
             </button>
             <button
               type="button"
-              onClick={() => setEvent(prev => ({ ...prev, category: 'activity' }))}
+              onClick={() => setEvent(prev => ({ ...prev, category: 'activity', eventType: 'activity' }))}
               className={`px-3 py-1 text-sm rounded-full ${
                 event.category === 'activity' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
               }`}
@@ -211,12 +257,21 @@ const UnifiedEventManager = ({
             </button>
             <button
               type="button"
-              onClick={() => setEvent(prev => ({ ...prev, category: 'birthday' }))}
+              onClick={() => setEvent(prev => ({ ...prev, category: 'birthday', eventType: 'birthday' }))}
               className={`px-3 py-1 text-sm rounded-full ${
                 event.category === 'birthday' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
               }`}
             >
               Birthday
+            </button>
+            <button
+              type="button"
+              onClick={() => setEvent(prev => ({ ...prev, category: 'meeting', eventType: 'meeting' }))}
+              className={`px-3 py-1 text-sm rounded-full ${
+                event.category === 'meeting' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800'
+              }`}
+            >
+              Meeting
             </button>
           </div>
         </div>
@@ -231,7 +286,13 @@ const UnifiedEventManager = ({
             value={event.title}
             onChange={(e) => setEvent(prev => ({ ...prev, title: e.target.value }))}
             className="w-full border rounded-md p-2 text-sm"
-            placeholder="e.g., Soccer Practice, Dentist Appointment"
+            placeholder={`e.g., ${
+              event.category === 'birthday' ? "Emma's 7th Birthday Party" :
+              event.category === 'appointment' ? "Dentist Appointment" :
+              event.category === 'activity' ? "Soccer Practice" :
+              event.category === 'meeting' ? "Family Meeting" :
+              "Trip to the Park"
+            }`}
           />
         </div>
         
@@ -266,6 +327,37 @@ const UnifiedEventManager = ({
                 const [hours, minutes] = e.target.value.split(':');
                 date.setHours(parseInt(hours), parseInt(minutes));
                 setEvent(prev => ({ ...prev, dateTime: date.toISOString() }));
+              }}
+              className="w-full border rounded-md p-2 text-sm"
+            />
+          </div>
+        </div>
+        
+        {/* End time */}
+        <div>
+          <label className="block text-sm font-medium mb-1 text-gray-700">
+            End Time
+          </label>
+          <div className="grid grid-cols-2 gap-4">
+            <input
+              type="date"
+              value={event.endDateTime ? new Date(event.endDateTime).toISOString().split('T')[0] : ''}
+              onChange={(e) => {
+                const date = new Date(event.endDateTime || new Date(event.dateTime).getTime() + 3600000);
+                const newDate = new Date(e.target.value);
+                date.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+                setEvent(prev => ({ ...prev, endDateTime: date.toISOString() }));
+              }}
+              className="w-full border rounded-md p-2 text-sm"
+            />
+            <input
+              type="time"
+              value={event.endDateTime ? new Date(event.endDateTime).toTimeString().slice(0, 5) : ''}
+              onChange={(e) => {
+                const date = new Date(event.endDateTime || new Date(event.dateTime).getTime() + 3600000);
+                const [hours, minutes] = e.target.value.split(':');
+                date.setHours(parseInt(hours), parseInt(minutes));
+                setEvent(prev => ({ ...prev, endDateTime: date.toISOString() }));
               }}
               className="w-full border rounded-md p-2 text-sm"
             />
@@ -318,6 +410,115 @@ const UnifiedEventManager = ({
             ))}
           </div>
         </div>
+        
+        {/* Attending Parent */}
+        {event.childId && (
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700">
+              Who will attend with {event.childName}?
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {parents.map(parent => (
+                <button
+                  key={parent.id}
+                  type="button"
+                  onClick={() => setEvent(prev => ({ 
+                    ...prev, 
+                    attendingParentId: parent.id
+                  }))}
+                  className={`flex items-center px-3 py-1 rounded-full text-sm ${
+                    event.attendingParentId === parent.id 
+                      ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                      : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                  }`}
+                >
+                  <UserAvatar user={parent} size={20} className="mr-1" />
+                  {parent.name}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setEvent(prev => ({ 
+                  ...prev, 
+                  attendingParentId: 'both'
+                }))}
+                className={`flex items-center px-3 py-1 rounded-full text-sm ${
+                  event.attendingParentId === 'both'
+                    ? 'bg-purple-100 text-purple-800 border border-purple-200' 
+                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                }`}
+              >
+                <Users size={16} className="mr-1" />
+                Both Parents
+              </button>
+              <button
+                type="button"
+                onClick={() => setEvent(prev => ({ 
+                  ...prev, 
+                  attendingParentId: 'undecided'
+                }))}
+                className={`flex items-center px-3 py-1 rounded-full text-sm ${
+                  event.attendingParentId === 'undecided'
+                    ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' 
+                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                }`}
+              >
+                <Clock size={16} className="mr-1" />
+                Decide Later
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {/* Include Siblings */}
+        {event.childId && children.filter(c => c.id !== event.childId).length > 0 && (
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700">
+              Include Siblings?
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {children
+                .filter(c => c.id !== event.childId)
+                .map(sibling => (
+                  <button
+                    key={sibling.id}
+                    type="button"
+                    onClick={() => {
+                      setEvent(prev => {
+                        const siblingIds = prev.siblingIds || [];
+                        const siblingNames = prev.siblingNames || [];
+                        
+                        if (siblingIds.includes(sibling.id)) {
+                          return {
+                            ...prev,
+                            siblingIds: siblingIds.filter(id => id !== sibling.id),
+                            siblingNames: siblingNames.filter(name => name !== sibling.name)
+                          };
+                        } else {
+                          return {
+                            ...prev,
+                            siblingIds: [...siblingIds, sibling.id],
+                            siblingNames: [...siblingNames, sibling.name]
+                          };
+                        }
+                      });
+                    }}
+                    className={`flex items-center px-3 py-1 rounded-full text-sm ${
+                      event.siblingIds?.includes(sibling.id)
+                        ? 'bg-green-100 text-green-800 border border-green-200' 
+                        : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                    }`}
+                  >
+                    <UserAvatar user={sibling} size={20} className="mr-1" />
+                    {sibling.name}
+                    {event.siblingIds?.includes(sibling.id) && (
+                      <Check size={12} className="ml-1" />
+                    )}
+                  </button>
+                ))}
+            </div>
+          </div>
+        )}
         
         {/* Recurring Event Toggle */}
         <div>
@@ -383,6 +584,56 @@ const UnifiedEventManager = ({
           </div>
         )}
         
+        {/* Birthday specific fields */}
+        {event.category === 'birthday' && (
+          <div className="p-3 bg-purple-50 rounded-md">
+            <label className="block text-sm font-medium mb-2 text-purple-800">
+              Birthday Details
+            </label>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1 text-purple-800">
+                  Birthday Child's Name
+                </label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md p-2 text-sm"
+                  placeholder="e.g., Emma"
+                  value={event.extraDetails?.birthdayChildName || ''}
+                  onChange={(e) => setEvent(prev => ({
+                    ...prev,
+                    extraDetails: {
+                      ...prev.extraDetails,
+                      birthdayChildName: e.target.value
+                    }
+                  }))}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-medium mb-1 text-purple-800">
+                  Age
+                </label>
+                <input
+                  type="number"
+                  className="w-full border rounded-md p-2 text-sm"
+                  placeholder="e.g., 7"
+                  min="1"
+                  value={event.extraDetails?.birthdayChildAge || ''}
+                  onChange={(e) => setEvent(prev => ({
+                    ...prev,
+                    extraDetails: {
+                      ...prev.extraDetails,
+                      birthdayChildAge: e.target.value ? parseInt(e.target.value) : ''
+                    }
+                  }))}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* Description */}
         <div>
           <label className="block text-sm font-medium mb-1 text-gray-700">
@@ -397,9 +648,30 @@ const UnifiedEventManager = ({
           ></textarea>
         </div>
         
+        {/* Notes */}
+        <div>
+          <label className="block text-sm font-medium mb-1 text-gray-700">
+            Notes
+          </label>
+          <textarea
+            value={event.extraDetails?.notes || ''}
+            onChange={(e) => setEvent(prev => ({ 
+              ...prev, 
+              extraDetails: {
+                ...prev.extraDetails,
+                notes: e.target.value
+              }
+            }))}
+            className="w-full border rounded-md p-2 text-sm"
+            rows="2"
+            placeholder="Any special instructions or reminders"
+          ></textarea>
+        </div>
+        
         {/* Error Display */}
         {error && (
-          <div className="p-3 bg-red-50 border border-red-100 rounded-md">
+          <div className="p-3 bg-red-50 border border-red-100 rounded-md flex items-start">
+            <AlertCircle size={16} className="text-red-500 mt-0.5 mr-2 flex-shrink-0" />
             <p className="text-sm text-red-700">{error}</p>
           </div>
         )}
@@ -409,7 +681,7 @@ const UnifiedEventManager = ({
           {onCancel && (
             <button
               type="button"
-              onClick={onCancel}
+              onClick={handleCancel}
               className="px-4 py-2 border rounded-md text-sm mr-3 hover:bg-gray-50"
             >
               Cancel
@@ -430,7 +702,7 @@ const UnifiedEventManager = ({
             ) : (
               <>
                 <Calendar size={16} className="mr-2" />
-                Add to Calendar
+                {mode === 'edit' ? 'Update Event' : 'Add to Calendar'}
               </>
             )}
           </button>
@@ -445,8 +717,12 @@ const UnifiedEventManager = ({
               <div className="w-16 h-16 mx-auto flex items-center justify-center rounded-full bg-green-100 mb-3">
                 <Check size={32} className="text-green-600" />
               </div>
-              <h3 className="text-lg font-medium">Event Added!</h3>
-              <p className="text-sm text-gray-500 mt-1">Successfully added to your calendar</p>
+              <h3 className="text-lg font-medium">
+                {mode === 'edit' ? 'Event Updated!' : 'Event Added!'}
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Successfully {mode === 'edit' ? 'updated in' : 'added to'} your calendar
+              </p>
             </div>
           </div>
         </div>
@@ -455,4 +731,4 @@ const UnifiedEventManager = ({
   );
 };
 
-export default UnifiedEventManager;
+export default EnhancedEventManager;
