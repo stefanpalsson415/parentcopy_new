@@ -21,7 +21,7 @@ class ClaudeService {
       this.proxyUrl = '/api/claude';
     }
       
-    this.model = 'claude-3-sonnet-20240229'; // More reliable model
+    this.model = 'claude-3-7-sonnet-20250219'; // Latest model
     this.mockMode = false; // Explicitly disable mock mode
     
     console.log(`Claude service initialized to use ${isProduction ? 'production' : isLocalhost ? 'local' : 'unknown'} proxy server at ${this.proxyUrl}`);
@@ -50,6 +50,31 @@ class ClaudeService {
     }
   }
   
+// In ClaudeService.js
+async testProxyConnection() {
+  try {
+    console.log("Testing proxy connection at:", this.proxyUrl);
+    
+    const response = await fetch(`${this.proxyUrl}/test`, {
+      method: 'GET'
+    });
+    
+    console.log("Proxy test response status:", response.status);
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log("Proxy test response data:", data);
+      return true;
+    } else {
+      console.error("Proxy test failed:", await response.text());
+      return false;
+    }
+  } catch (error) {
+    console.error("Error testing proxy connection:", error);
+    return false;
+  }
+}
+
   async generateResponse(messages, context, options = {}) {
     try {
       // Format system prompt with family context

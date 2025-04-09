@@ -34,7 +34,7 @@ app.post('/api/claude', async (req, res) => {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
+        'anthropic-version': '2023-06-01' // Make sure this version is correct
       }
     });
     
@@ -52,4 +52,20 @@ app.post('/api/claude', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Simple Claude proxy running on http://localhost:${PORT}`);
   console.log(`API key environment variable ${process.env.REACT_APP_CLAUDE_API_KEY ? 'is set' : 'is NOT set'}`);
+});
+
+// Add this to simple-proxy.js
+app.get('/api/claude/test', (req, res) => {
+  console.log('Received test request to Claude proxy');
+  
+  // Check if API key is set
+  const apiKey = process.env.REACT_APP_CLAUDE_API_KEY;
+  const keyStatus = apiKey ? 'API key is set' : 'No API key found';
+  
+  res.json({
+    status: 'ok',
+    message: 'Claude proxy is running',
+    keyStatus: keyStatus,
+    timestamp: new Date().toISOString()
+  });
 });

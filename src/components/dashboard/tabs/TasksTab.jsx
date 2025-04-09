@@ -174,20 +174,31 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     checkMeetingRequirements();
   }, [familyId, currentWeek, habits, kidHabits, getWeekStatus]);
 
-  // Trigger Allie Chat component
   const triggerAllieChat = (message) => {
+    // Log the attempt
+    console.log("Attempting to trigger Allie chat with message:", message);
+    
     // Set the message in state
     setAllieInputValue(message);
     
     // Find the global chat button element and click it
     const chatButton = document.getElementById('chat-button');
     if (chatButton) {
+      console.log("Chat button found, attempting to open chat");
+      
       // Check if chat is already open
       const chatContainer = document.querySelector('[role="dialog"]');
       if (!chatContainer) {
         // Click to open chat
         const buttonElement = chatButton.querySelector('button');
-        if (buttonElement) buttonElement.click();
+        if (buttonElement) {
+          console.log("Clicking chat button");
+          buttonElement.click();
+        } else {
+          console.warn("Chat button element not found");
+        }
+      } else {
+        console.log("Chat is already open");
       }
       
       // Set timeout to allow chat to open
@@ -195,16 +206,25 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
         // Find the textarea input in the chat
         const chatInput = document.querySelector('textarea[placeholder="Message Allie..."]');
         if (chatInput) {
+          console.log("Chat input found, setting message");
           // Set the value and dispatch input event
           chatInput.value = message;
           chatInput.dispatchEvent(new Event('input', { bubbles: true }));
           
           // Find and click the send button
           const sendButton = chatInput.closest('div').querySelector('button[title="Send message"]');
-          if (sendButton) sendButton.click();
+          if (sendButton) {
+            console.log("Clicking send button");
+            sendButton.click();
+          } else {
+            console.warn("Send button not found");
+          }
+        } else {
+          console.warn("Chat input not found after timeout");
         }
       }, 500);
     } else {
+      console.warn("Chat button with ID 'chat-button' not found in the DOM");
       // If chat button not found, show a message
       createCelebration("Chat not available", false, "Please try again in a moment");
     }

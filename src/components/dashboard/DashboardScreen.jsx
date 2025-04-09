@@ -200,6 +200,24 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
     loadDashboardData();
   }, [familyId, currentWeek]);
 
+// In DashboardScreen.jsx - Add this to the useEffect that loads the dashboard
+useEffect(() => {
+  // Add this inside your existing useEffect
+  const testClaudeConnection = async () => {
+    try {
+      const ClaudeService = (await import('../services/ClaudeService')).default;
+      console.log("Testing Claude API connection...");
+      const result = await ClaudeService.testConnection();
+      console.log("Claude API connection test result:", result);
+    } catch (error) {
+      console.error("Error testing Claude connection:", error);
+    }
+  };
+  
+  testClaudeConnection();
+}, []);
+
+
   // Load AllieAIService
   useEffect(() => {
     // Dynamically import the service to avoid circular dependencies
