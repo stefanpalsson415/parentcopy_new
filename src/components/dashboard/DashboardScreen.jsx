@@ -19,6 +19,8 @@ import DashboardTutorial from '../onboarding/DashboardTutorial';
 import ErrorBoundary from '../common/ErrorBoundary';
 import ChildrenTrackingTab from './tabs/ChildrenTrackingTab';
 import SurveyScreen from '../survey/SurveyScreen';
+import ClaudeService from '../../services/ClaudeService';
+
 
 
 const DashboardScreen = ({ onOpenFamilyMeeting }) => {
@@ -205,7 +207,7 @@ useEffect(() => {
   // Add this inside your existing useEffect
   const testClaudeConnection = async () => {
     try {
-      const ClaudeService = (await import('../services/ClaudeService')).default;
+      const ClaudeService = (await import('../services/ClaudeService,js')).default;
       console.log("Testing Claude API connection...");
       const result = await ClaudeService.testConnection();
       console.log("Claude API connection test result:", result);

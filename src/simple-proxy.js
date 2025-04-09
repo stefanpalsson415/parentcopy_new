@@ -6,6 +6,7 @@ const dotenv = require('dotenv');
 const app = express();
 const PORT = 3001;
 
+
 // Load environment variables from .env file
 dotenv.config();
 
@@ -53,6 +54,8 @@ app.listen(PORT, () => {
   console.log(`Simple Claude proxy running on http://localhost:${PORT}`);
   console.log(`API key environment variable ${process.env.REACT_APP_CLAUDE_API_KEY ? 'is set' : 'is NOT set'}`);
 });
+
+
 
 // Add this to simple-proxy.js
 app.get('/api/claude/test', (req, res) => {
