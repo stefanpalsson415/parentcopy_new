@@ -207,7 +207,7 @@ useEffect(() => {
   // Add this inside your existing useEffect
   const testClaudeConnection = async () => {
     try {
-      const ClaudeService = (await import('../services/ClaudeService,js')).default;
+      const ClaudeService = (await import('../../services/ClaudeService.js')).default;
       console.log("Testing Claude API connection...");
       const result = await ClaudeService.testConnection();
       console.log("Claude API connection test result:", result);

@@ -357,7 +357,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     };
     
     loadHabits();
-  }, [familyId, currentWeek, selectedUser, loadCurrentWeekTasks]);
+  }, [familyId, currentWeek, selectedUser]);
   
   // Load streak data from database
   const loadStreakData = async () => {
