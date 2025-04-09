@@ -1107,6 +1107,13 @@ async isInitialOnboardingPhase(familyId) {
 // Modify the getAIResponse function in EnhancedChatService.js (around line 920)
 // Add this code after the initial checks and before calling the specialized handlers
 
+// Extract intent and entities from the message first
+const intent = this.nlu.detectIntent(text);
+const entities = this.nlu.extractEntities(text);
+
+console.log("Detected intent:", intent);
+console.log("Extracted entities:", entities);
+
 // Check if we're in the onboarding phase
 const isOnboarding = await this.isInitialOnboardingPhase(familyId);
 
@@ -1146,17 +1153,11 @@ Would you like to know more about one of these topics?`;
     return onboardingResponse;
   }
 }
-
       // Add a start timestamp for performance tracking
       const startTime = Date.now();
       console.log(`Starting AI response generation at ${new Date().toISOString()}`);
       
-      // Extract intent and entities from the message
-      const intent = this.nlu.detectIntent(text);
-      const entities = this.nlu.extractEntities(text);
-      
-      console.log("Detected intent:", intent);
-      console.log("Extracted entities:", entities);
+  
       
       // Update conversation context
       this.updateConversationContext(familyId, {

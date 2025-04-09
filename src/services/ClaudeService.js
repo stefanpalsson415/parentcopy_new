@@ -22,7 +22,7 @@ this.proxyUrl = `http://localhost:${port === '3000' ? '3001' : port}/api/claude`
     }
       
     this.model = 'claude-3-7-sonnet-20250219'; // Latest model
-    this.mockMode = false; // Explicitly disable mock mode
+this.mockMode = false; // Explicitly disable mock mode
     
     console.log(`Claude service initialized to use ${isProduction ? 'production' : isLocalhost ? 'local' : 'unknown'} proxy server at ${this.proxyUrl}`);
   }

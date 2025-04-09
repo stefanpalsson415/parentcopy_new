@@ -30,12 +30,12 @@ app.post('/api/claude', async (req, res) => {
     
     console.log('Making real API call to Claude with API key from .env file');
     
-    // Make the actual API call to Claude
     const response = await axios.post('https://api.anthropic.com/v1/messages', req.body, {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01' // Make sure this version is correct
+        'anthropic-version': '2023-06-01',
+        'x-api-key': apiKey
       }
     });
     

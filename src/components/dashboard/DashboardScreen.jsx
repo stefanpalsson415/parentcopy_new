@@ -429,6 +429,23 @@ useEffect(() => {
               <LogOut size={14} className="mr-1" />
               Switch User
             </button>
+            <button 
+  onClick={async () => {
+    try {
+      const ClaudeService = (await import('../../services/ClaudeService')).default;
+      console.log("Testing proxy connection directly...");
+      const result = await ClaudeService.testProxyConnection();
+      console.log("Proxy test result:", result);
+      alert("Proxy test result: " + (result ? "Success" : "Failed"));
+    } catch (error) {
+      console.error("Error testing proxy:", error);
+      alert("Error testing proxy: " + error.message);
+    }
+  }}
+  className="ml-2 px-2 py-1 bg-red-600 text-white text-xs rounded"
+>
+  Test Proxy
+</button>
           </div>
         </div>
       </div>
