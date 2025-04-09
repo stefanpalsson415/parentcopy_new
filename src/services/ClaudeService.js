@@ -14,7 +14,7 @@ class ClaudeService {
       this.proxyUrl = 'https://checkallie.com/api/claude';
     } else if (isLocalhost) {
       // For local development, use the port-specific proxy
-      const port = window.location.port === '3000' ? '3001' : '3001';
+      const port = window.location.port === '3001';
       this.proxyUrl = `http://localhost:${port}/api/claude`;
     } else {
       // Fallback for any other environment
