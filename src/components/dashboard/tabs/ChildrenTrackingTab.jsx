@@ -18,7 +18,8 @@ import DatabaseService from '../../../services/DatabaseService';
 import CalendarService from '../../../services/CalendarService';
 import AllieAIService from '../../../services/AllieAIService';
 import UserAvatar from '../../common/UserAvatar';
-
+import UnifiedEventManager from '../../calendar/UnifiedEventManager';
+import DocumentLibrary from '../../document/DocumentLibrary';
 
 
 const ChildrenTrackingTab = () => {
@@ -61,6 +62,7 @@ const ChildrenTrackingTab = () => {
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [documents, setDocuments] = useState([]);
+  const [activeComponent, setActiveComponent] = useState(null);
   
   // Refs
   const searchInputRef = useRef(null);
@@ -2666,7 +2668,7 @@ const renderRoutinesSection = () => {
   onClick={() => setActiveComponent({
     type: 'documentLibrary',
     props: {
-      initialChildId: child.id,
+      initialChildId: activeChild,
       initialCategory: 'medical',
       onClose: () => setActiveComponent(null)
     }
