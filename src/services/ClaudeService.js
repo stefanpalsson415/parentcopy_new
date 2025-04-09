@@ -4,19 +4,50 @@ import { auth } from './firebase';
 
 class ClaudeService {
   constructor() {
-    // Determine if we're in production or development
-    const isProduction = window.location.hostname === 'checkallie.com' || 
-                         window.location.hostname === 'www.checkallie.com';
+    // Determine environment type
+    const hostname = window.location.hostname;
+    const isProduction = hostname === 'checkallie.com' || hostname === 'www.checkallie.com';
+    const isLocalhost = hostname === 'localhost' || hostname.includes('127.0.0.1');
     
     // Set the appropriate API URL based on environment
-    this.proxyUrl = isProduction 
-      ? 'https://checkallie.com/api/claude'
-      : 'http://localhost:3001/api/claude';
+    if (isProduction) {
+      this.proxyUrl = 'https://checkallie.com/api/claude';
+    } else if (isLocalhost) {
+      // For local development, use the port-specific proxy
+      const port = window.location.port === '3000' ? '3001' : '3001';
+      this.proxyUrl = `http://localhost:${port}/api/claude`;
+    } else {
+      // Fallback for any other environment
+      this.proxyUrl = '/api/claude';
+    }
       
-    this.model = 'claude-3-opus-20240229'; // Using a more cost-effective model
+    this.model = 'claude-3-sonnet-20240229'; // More reliable model
     this.mockMode = false; // Explicitly disable mock mode
     
-    console.log(`Claude service initialized to use ${isProduction ? 'production' : 'local'} proxy server at ${this.proxyUrl}`);
+    console.log(`Claude service initialized to use ${isProduction ? 'production' : isLocalhost ? 'local' : 'unknown'} proxy server at ${this.proxyUrl}`);
+  }
+  
+  // Add a test method to verify connectivity
+  async testConnection() {
+    try {
+      const response = await fetch(`${this.proxyUrl}/test`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        console.log("Claude API connection successful");
+        return true;
+      } else {
+        console.warn(`Claude API connection failed with status: ${response.status}`);
+        return false;
+      }
+    } catch (error) {
+      console.error("Claude API connectivity test failed:", error);
+      return false;
+    }
   }
   
   async generateResponse(messages, context, options = {}) {
