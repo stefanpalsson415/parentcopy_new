@@ -174,61 +174,119 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     checkMeetingRequirements();
   }, [familyId, currentWeek, habits, kidHabits, getWeekStatus]);
 
-  const triggerAllieChat = (message) => {
-    // Log the attempt
-    console.log("Attempting to trigger Allie chat with message:", message);
-    
-    // Set the message in state
-    setAllieInputValue(message);
-    
-    // Find the global chat button element and click it
-    const chatButton = document.getElementById('chat-button');
-    if (chatButton) {
-      console.log("Chat button found, attempting to open chat");
-      
-      // Check if chat is already open
-      const chatContainer = document.querySelector('[role="dialog"]');
-      if (!chatContainer) {
-        // Click to open chat
-        const buttonElement = chatButton.querySelector('button');
-        if (buttonElement) {
-          console.log("Clicking chat button");
-          buttonElement.click();
-        } else {
-          console.warn("Chat button element not found");
-        }
-      } else {
-        console.log("Chat is already open");
-      }
-      
-      // Set timeout to allow chat to open
-      setTimeout(() => {
-        // Find the textarea input in the chat
-        const chatInput = document.querySelector('textarea[placeholder="Message Allie..."]');
-        if (chatInput) {
-          console.log("Chat input found, setting message");
-          // Set the value and dispatch input event
-          chatInput.value = message;
-          chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-          
-          // Find and click the send button
-          const sendButton = chatInput.closest('div').querySelector('button[title="Send message"]');
+  // Enhanced triggerAllieChat function
+const triggerAllieChat = (message) => {
+  // Log the attempt
+  console.log("Attempting to trigger Allie chat with message:", message);
+  
+  // Set the message in state
+  setAllieInputValue(message);
+  
+  // First try to find the global chat button element
+  const chatButton = document.getElementById('chat-button');
+  if (!chatButton) {
+    console.warn("Chat button with ID 'chat-button' not found in the DOM");
+    createCelebration("Chat not available", false, "Please try again in a moment");
+    return;
+  }
+  
+  // Check if chat is already open
+  let chatContainer = document.querySelector('.bg-white.shadow-xl.rounded-t-lg');
+  let isOpen = chatContainer !== null;
+  
+  const processChat = () => {
+    // Set timeout to allow DOM to update
+    setTimeout(() => {
+      // Find the textarea input in the chat with more robust selectors
+      const chatInput = document.querySelector('textarea[placeholder*="Message Allie"]') || 
+                       document.querySelector('textarea.w-full.border.rounded-l-md');
+                       
+      if (chatInput) {
+        console.log("Chat input found, setting message");
+        
+        // Set the value 
+        chatInput.value = message;
+        
+        // Properly trigger input events for React state to update
+        const inputEvent = new Event('input', { bubbles: true });
+        chatInput.dispatchEvent(inputEvent);
+        
+        // Also trigger change event
+        const changeEvent = new Event('change', { bubbles: true });
+        chatInput.dispatchEvent(changeEvent);
+        
+        // Force React to update the state by focusing and then typing a space
+        chatInput.focus();
+        
+        // Wait a short time for React to update
+        setTimeout(() => {
+          // Find and click the send button with more robust selectors
+          const sendButton = document.querySelector('button[title="Send message"]') || 
+                            document.querySelector('button.bg-blue-600.text-white.p-3.rounded-r-md');
+                            
           if (sendButton) {
             console.log("Clicking send button");
             sendButton.click();
           } else {
-            console.warn("Send button not found");
+            console.warn("Send button not found, trying alternative approach");
+            
+            // Try alternative - simulate Enter key
+            const keyEvent = new KeyboardEvent('keypress', {
+              key: 'Enter',
+              code: 'Enter',
+              which: 13,
+              keyCode: 13,
+              bubbles: true
+            });
+            chatInput.dispatchEvent(keyEvent);
           }
-        } else {
-          console.warn("Chat input not found after timeout");
+        }, 100);
+      } else {
+        console.warn("Chat input not found after timeout");
+        createCelebration("Chat input not found", false, "Please try opening chat manually");
+      }
+    }, 300);
+  };
+  
+  // If chat is not open, click to open it first
+  if (!isOpen) {
+    // Find the button inside the chat-button container
+    const buttons = chatButton.querySelectorAll('button');
+    const divs = chatButton.querySelectorAll('div');
+    
+    // Try to find the right element to click
+    let elementToClick = null;
+    
+    if (buttons.length > 0) {
+      elementToClick = buttons[0];
+    } else if (divs.length > 0) {
+      // If no button, try to find a clickable div
+      for (const div of divs) {
+        if (div.className.includes('cursor-pointer') || 
+            window.getComputedStyle(div).cursor === 'pointer') {
+          elementToClick = div;
+          break;
         }
+      }
+    }
+    
+    if (elementToClick) {
+      console.log("Clicking to open chat");
+      elementToClick.click();
+      
+      // Wait for chat to open then process
+      setTimeout(() => {
+        processChat();
       }, 500);
     } else {
-      console.warn("Chat button with ID 'chat-button' not found in the DOM");
-      // If chat button not found, show a message
-      createCelebration("Chat not available", false, "Please try again in a moment");
+      console.warn("No clickable element found in chat button");
+      createCelebration("Chat button not clickable", false, "Please open chat manually");
     }
-  };
+  } else {
+    // Chat is already open, proceed with filling it
+    processChat();
+  }
+};
 
   // Load habits for the current week
   useEffect(() => {
@@ -455,6 +513,97 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     setDaysRemaining(daysLeft);
   };
   
+// Update cycle due date with calendar integration
+const updateCycleDueDate = async (newDate) => {
+  if (!familyId) return false;
+  
+  try {
+    // Format the date for display
+    const formattedDate = newDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    // Update survey schedule in database
+    await updateSurveySchedule(currentWeek, newDate);
+    
+    // Create or update calendar event
+    const eventTitle = `Family Cycle ${currentWeek} Due`;
+    
+    // Check if event already exists
+    const existingEvents = await CalendarService.getEventsForUser(
+      selectedUser.id,
+      new Date(new Date().setDate(new Date().getDate() - 30)), // 30 days ago
+      new Date(new Date().setDate(new Date().getDate() + 60))  // 60 days ahead
+    );
+    
+    // Find existing cycle due date event
+    const existingEvent = existingEvents.find(e => 
+      (e.summary === eventTitle || e.title === eventTitle) && 
+      e.familyId === familyId
+    );
+    
+    if (existingEvent) {
+      // Update existing event
+      const updatedEvent = {
+        ...existingEvent,
+        start: {
+          dateTime: newDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(), // 1 hour duration
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        }
+      };
+      
+      await CalendarService.updateEvent(existingEvent.id, updatedEvent, selectedUser.id);
+    } else {
+      // Create new event
+      const event = {
+        summary: eventTitle,
+        description: `Due date for completing Cycle ${currentWeek} activities including surveys and tasks.`,
+        start: {
+          dateTime: newDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(), // 1 hour duration
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        reminders: {
+          useDefault: false,
+          overrides: [
+            { method: 'popup', minutes: 1440 }, // 1 day before
+            { method: 'popup', minutes: 60 }    // 1 hour before
+          ]
+        },
+        // Add metadata
+        familyId: familyId,
+        cycleNumber: currentWeek,
+        eventType: 'cycle-due-date'
+      };
+      
+      await CalendarService.addEvent(event, selectedUser.id);
+    }
+    
+    // Show success message
+    createCelebration(`Cycle ${currentWeek} due date updated to ${formattedDate}`, false);
+    
+    // Update progress calculation
+    calculateWeekProgress();
+    
+    return true;
+  } catch (error) {
+    console.error("Error updating cycle due date:", error);
+    createCelebration("Error", false, "Failed to update due date. Please try again.");
+    return false;
+  }
+};
+
+
+
   // Handle marking a habit as complete
   const completeHabit = async (habitId) => {
     if (!selectedUser || !familyId) return;
@@ -901,137 +1050,253 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     }
   };
   
-  // Schedule a habit to calendar with confirmed details
-  const confirmScheduleToCalendar = async () => {
-    if (!scheduleDetails || !selectedUser) return;
+// Edit existing habit schedule
+const editHabitSchedule = async (habit) => {
+  if (!habit || !selectedUser) return;
+  
+  try {
+    // Check if we have an event ID to edit
+    if (!habit.scheduledEventId) {
+      prepareHabitSchedule(habit);
+      return;
+    }
     
-    try {
-      const habit = scheduleDetails.habit;
+    // Try to get the event details from the calendar
+    const eventsQuery = query(
+      collection(db, "calendar_events"),
+      where("id", "==", habit.scheduledEventId)
+    );
+    
+    const querySnapshot = await getDocs(eventsQuery);
+    
+    if (querySnapshot.empty) {
+      // If event not found, start fresh
+      prepareHabitSchedule(habit);
+      return;
+    }
+    
+    // Get the existing event
+    const eventDoc = querySnapshot.docs[0];
+    const eventData = eventDoc.data();
+    
+    // Parse the start time
+    let startTime = new Date();
+    if (eventData.start && eventData.start.dateTime) {
+      startTime = new Date(eventData.start.dateTime);
+    } else if (habit.scheduledTime) {
+      startTime = new Date(habit.scheduledTime);
+    }
+    
+    // Calculate end time (30 min after start)
+    const endTime = new Date(startTime.getTime() + 30 * 60000);
+    
+    // Setup schedule details with existing values
+    const details = {
+      habit: habit,
+      startTime: startTime,
+      endTime: endTime,
+      recurrence: habit.scheduledRecurrence || 21,
+      reminderMinutes: 10
+    };
+    
+    // Show schedule confirmation dialog with pre-filled values
+    setScheduleDetails(details);
+    setShowScheduleConfirm(true);
+  } catch (error) {
+    console.error("Error editing habit schedule:", error);
+    createCelebration("Schedule Error", false, "There was an error editing this habit's schedule. Please try again.");
+  }
+};
+
+
+  // Enhanced function to confirm schedule to calendar
+const confirmScheduleToCalendar = async () => {
+  if (!scheduleDetails || !selectedUser) return;
+  
+  try {
+    const habit = scheduleDetails.habit;
+    
+    // Create an event to repeat daily with proper recurrence
+    const event = {
+      summary: `Habit: ${habit.title}`,
+      description: `${habit.description}\n\nCue: ${habit.cue || habit.stackTrigger || "After breakfast"}\nAction: ${habit.action}\nReward: ${habit.reward}`,
+      start: {
+        dateTime: scheduleDetails.startTime.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: scheduleDetails.endTime.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      recurrence: [`RRULE:FREQ=DAILY;COUNT=${scheduleDetails.recurrence}`], // Repeat for specified days
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'popup', minutes: scheduleDetails.reminderMinutes }
+        ]
+      },
+      // Add metadata for Allie
+      taskId: habit.id,
+      familyId: familyId,
+      eventType: 'habit',
+      isRecurring: true
+    };
+    
+    // Add to calendar
+    const result = await CalendarService.addEvent(event, selectedUser.id);
+    
+    if (result.success) {
+      // Update habit state to show as scheduled
+      const updatedHabits = habits.map(h => {
+        if (h.id === habit.id) {
+          return {
+            ...h,
+            isScheduled: true,
+            scheduledEventId: result.eventId,
+            scheduledTime: scheduleDetails.startTime.toISOString(),
+            scheduledRecurrence: scheduleDetails.recurrence
+          };
+        }
+        return h;
+      });
       
-      // Create an event to repeat daily
-      const event = {
-        summary: `Habit: ${habit.title}`,
-        description: `${habit.description}\n\nCue: ${habit.cue || habit.stackTrigger || "After breakfast"}\nAction: ${habit.action}\nReward: ${habit.reward}`,
-        start: {
-          dateTime: scheduleDetails.startTime.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        end: {
-          dateTime: scheduleDetails.endTime.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        recurrence: [`RRULE:FREQ=DAILY;COUNT=${scheduleDetails.recurrence}`], // Repeat for specified days
-        reminders: {
-          useDefault: false,
-          overrides: [
-            { method: 'popup', minutes: scheduleDetails.reminderMinutes }
-          ]
-        },
-        // Add metadata for Allie
-        taskId: habit.id,
-        familyId: familyId
-      };
+      setHabits(updatedHabits);
       
-      // Add to calendar
-      const result = await CalendarService.addEvent(event, selectedUser.id);
+      // Save the scheduled state to database
+      await DatabaseService.saveFamilyData(
+        { tasks: updatedHabits.filter(h => h.id === habit.id) }, 
+        familyId
+      );
       
-      if (result.success) {
-        // Create a comment in the habit about scheduling
-        await addTaskComment(
-          habit.id, 
-          `I've scheduled this habit for ${scheduleDetails.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} every day for the next ${scheduleDetails.recurrence} days.`
-        );
-        
-        // Update the UI
-        createCelebration(`Habit scheduled for ${scheduleDetails.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`, false);
-        
-        // Close the confirmation dialog
-        setShowScheduleConfirm(false);
-        setScheduleDetails(null);
-        
-        return true;
-      } else {
-        throw new Error("Failed to schedule habit");
-      }
-    } catch (error) {
-      console.error("Error scheduling habit:", error);
-      createCelebration("Schedule Error", false, "There was an error scheduling this habit. Please try again.");
+      // Create a comment in the habit about scheduling
+      await addTaskComment(
+        habit.id, 
+        `I've scheduled this habit for ${scheduleDetails.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} every day for the next ${scheduleDetails.recurrence} days.`
+      );
+      
+      // Update the UI
+      createCelebration(`Habit scheduled for ${scheduleDetails.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`, false);
       
       // Close the confirmation dialog
       setShowScheduleConfirm(false);
       setScheduleDetails(null);
       
-      return false;
+      return true;
+    } else {
+      throw new Error("Failed to schedule habit");
     }
-  };
+  } catch (error) {
+    console.error("Error scheduling habit:", error);
+    createCelebration("Schedule Error", false, "There was an error scheduling this habit. Please try again.");
+    
+    // Close the confirmation dialog
+    setShowScheduleConfirm(false);
+    setScheduleDetails(null);
+    
+    return false;
+  }
+};
   
-  // Create a new habit using Allie AI
-  const createNewHabit = async () => {
+  // Create a new habit using Allie AI - fixed version
+const createNewHabit = async () => {
+  try {
+    setAllieIsThinking(true);
+    
+    // Default habit parts in case AI fails
+    let parts = ["Balance Habit", "A small habit to improve family balance", "After breakfast", "Review family calendar", "Feel organized and prepared", "I am someone who values organization and preparation"];
+    
     try {
-      setAllieIsThinking(true);
+      // First try to load AllieAIService dynamically in case it's not initialized
+      const AllieAIServiceModule = await import('../../services/AllieAIService');
+      const AllieAIService = AllieAIServiceModule.default;
       
       // Generate a new habit with Allie
       const habitPrompt = `Create a simple atomic habit for ${selectedUser.name} that helps with family balance. Focus on a small, easy action with a clear cue and reward. Use the format: Title | Description | Cue | Action | Reward | Identity Statement. Make it very specific and actionable.`;
       
-      const response = await AllieAIService.safeRequest(async () => {
-        return await AllieAIService.generateDashboardInsights(familyId, currentWeek);
-      }, { title: "Create Habit", description: habitPrompt });
+      const response = await AllieAIService.generateResponse(
+        [{ role: 'user', content: habitPrompt }],
+        { familyId, userName: selectedUser.name }
+      );
       
-      // Extract parts from response or use fallback
-      let parts = ["Balance Habit", "A small habit to improve family balance", "After breakfast", "Review family calendar", "Feel organized and prepared", "I am someone who values organization and preparation"];
-      
+      // Try to extract parts from the response
       if (response && typeof response === 'string') {
-        const extractedParts = response.split('|').map(part => part.trim());
-        if (extractedParts.length >= 6) {
-          parts = extractedParts;
+        // Look for pipe-separated format in the response
+        const pipeRegex = /(.+?)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(.+)/;
+        const matches = response.match(pipeRegex);
+        
+        if (matches && matches.length >= 7) {
+          // Use extracted parts
+          parts = [
+            matches[1].trim(),
+            matches[2].trim(),
+            matches[3].trim(),
+            matches[4].trim(),
+            matches[5].trim(),
+            matches[6].trim()
+          ];
         } else {
-          console.warn("AI response did not contain proper habit format, using fallback");
+          // Try alternative format with newlines or sections
+          const lines = response.split(/\n+/).filter(line => line.trim().length > 0);
+          
+          if (lines.length >= 6) {
+            // Use first 6 lines as parts
+            parts = lines.slice(0, 6).map(line => {
+              // Remove labels like "Title:" if present
+              return line.replace(/^(Title|Description|Cue|Action|Reward|Identity)[:;]\s*/i, '').trim();
+            });
+          }
         }
-      } else if (response && response.insights && response.insights.length > 0) {
-        // Try to extract from insights format
-        const insight = response.insights[0];
-        parts = [
-          insight.title || "Balance Habit",
-          insight.description || "A small habit to improve family balance",
-          "After breakfast", 
-          insight.actionItem || "Take a small action for balance",
-          "Feel accomplished",
-          `I am someone who values ${insight.category?.toLowerCase() || 'family balance'}`
-        ];
+      }
+    } catch (aiError) {
+      console.error("AI error in habit creation:", aiError);
+      // Continue with default parts
+    }
+    
+    const [title, description, cue, action, reward, identity] = parts;
+    
+    // Create the habit subtasks
+    const subTasks = [
+      { title: cue, description: "This is your trigger" },
+      { title: action, description: "This is the habit action" },
+      { title: reward, description: "This is your reward" }
+    ];
+    
+    // Create the habit in the database
+    const habitData = {
+      title: `${title}`,
+      description: description,
+      focusArea: title.split(' ')[0] + " " + title.split(' ')[1],
+      assignedTo: selectedUser.roleType || selectedUser.role,
+      assignedToName: selectedUser.name,
+      completed: false,
+      category: identity.includes("parent") ? "Parental Tasks" : "Household Tasks",
+      comments: [],
+      subTasks: subTasks,
+      createdAt: serverTimestamp(),
+      familyId: familyId,
+      aiInsight: `This habit helps build your identity as ${identity}`
+    };
+    
+    // Add the habit to the database with better error handling
+    try {
+      // Try to add directly to the main tasks collection first
+      const tasksRef = collection(db, "families");
+      const familyDocRef = doc(tasksRef, familyId);
+      
+      // Get the current tasks array
+      const familyDoc = await getDoc(familyDocRef);
+      if (!familyDoc.exists()) {
+        throw new Error("Family document not found");
       }
       
-      const [title, description, cue, action, reward, identity] = parts;
+      const currentTasks = familyDoc.data().tasks || [];
       
-      // Create the habit subtasks
-      const subTasks = [
-        { title: cue, description: "This is your trigger" },
-        { title: action, description: "This is the habit action" },
-        { title: reward, description: "This is your reward" }
-      ];
+      // Generate a unique task ID
+      const taskId = `habit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       
-      // Create the habit in the database
-      const habitData = {
-        title: `${title}`,
-        description: description,
-        focusArea: title.split(' ')[0] + " " + title.split(' ')[1],
-        assignedTo: selectedUser.roleType || selectedUser.role,
-        assignedToName: selectedUser.name,
-        completed: false,
-        category: identity.includes("parent") ? "Parental Tasks" : "Household Tasks",
-        comments: [],
-        subTasks: subTasks,
-        createdAt: serverTimestamp(),
-        familyId: familyId,
-        aiInsight: `This habit helps build your identity as ${identity}`
-      };
-      
-      // Add the habit to the database
-      const habitRef = collection(db, "families", familyId, "habits");
-      const newHabitRef = await addDoc(habitRef, habitData);
-      
-      // Update the local state
+      // Create the new habit with the ID
       const newHabit = {
-        id: newHabitRef.id,
+        id: taskId,
         title: title,
         description: description,
         cue: cue,
@@ -1051,104 +1316,151 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
         imageUrl: null,
         lastCompleted: null,
         isPartOfStack: false,
-        atomicSteps: subTasks.map((st, idx) => ({
-          id: `${newHabitRef.id}-step-${idx + 1}`,
+        subTasks: subTasks.map((st, idx) => ({
+          id: `${taskId}-step-${idx + 1}`,
           title: st.title,
           description: st.description,
           completed: false
         }))
       };
       
+      // Update the tasks array
+      await updateDoc(familyDocRef, {
+        tasks: [...currentTasks, newHabit]
+      });
+      
+      // Update the local state
       setHabits(prev => [newHabit, ...prev]);
       setShowAddHabit(false);
       createCelebration("New habit created!", false);
-      
+    } catch (dbError) {
+      console.error("Database error creating habit:", dbError);
+      throw dbError;
+    }
+    
+    setAllieIsThinking(false);
+    return true;
+  } catch (error) {
+    console.error("Error creating new habit:", error);
+    setAllieIsThinking(false);
+    createCelebration("Error", false, "Could not create habit. Please try again later.");
+    return false;
+  }
+};
+  
+  // Fixed createKidHabit function
+const createKidHabit = async () => {
+  try {
+    setAllieIsThinking(true);
+    
+    // Find a child from the family
+    const children = familyMembers.filter(m => m.role === 'child');
+    
+    if (children.length === 0) {
+      createCelebration("No Children", false, "No children found in family");
       setAllieIsThinking(false);
-      return true;
-    } catch (error) {
-      console.error("Error creating new habit:", error);
-      setAllieIsThinking(false);
-      createCelebration("Error", false, "Could not create habit. Please try again later.");
       return false;
     }
-  };
-  
-  // Create a new habit for a kid
-  const createKidHabit = async () => {
+    
+    const child = children[0];
+    
+    // Fallback values in case AI fails
+    let title = `${child.name}'s Helper Task`;
+    let description = `A fun way for ${child.name} to help the family`;
+    let cue = "After breakfast";
+    let action = "Put away my dishes";
+    let reward = "High five from parents";
+    let identity = "a helpful family member";
+    
     try {
-      setAllieIsThinking(true);
+      // First try to load AllieAIService dynamically in case it's not initialized
+      const AllieAIServiceModule = await import('../../services/AllieAIService');
+      const AllieAIService = AllieAIServiceModule.default;
       
-      // Find a child from the family
-      const children = familyMembers.filter(m => m.role === 'child');
+      // Generate a kid-friendly habit prompt
+      const kidHabitPrompt = `Create a simple, fun helper task for a ${child.age || 8}-year-old child named ${child.name} that helps reduce parental load. It should be age-appropriate, fun, and help parents with daily tasks. Format the response as: Title | Description | Cue | Action | Reward | Identity.`;
       
-      if (children.length === 0) {
-        createCelebration("No Children", false, "No children found in family");
-        setAllieIsThinking(false);
-        return false;
+      // Try ClaudeService directly if available
+      let response;
+      try {
+        const ClaudeServiceModule = await import('../../services/ClaudeService');
+        const ClaudeService = ClaudeServiceModule.default;
+        
+        response = await ClaudeService.generateResponse(
+          [{ role: 'user', content: kidHabitPrompt }],
+          { familyId, childName: child.name, childAge: child.age || 8 }
+        );
+      } catch (claudeError) {
+        console.error("Claude error, falling back to AllieAIService:", claudeError);
+        
+        // Fallback to AllieAIService
+        response = await AllieAIService.generateResponse(
+          [{ role: 'user', content: kidHabitPrompt }],
+          { familyId, childName: child.name, childAge: child.age || 8 }
+        );
       }
       
-      const child = children[0];
-      
-      // Generate a kid-friendly habit with Allie
-      const kidHabitPrompt = `Create a simple, fun helper task for a ${child.age || 8}-year-old child named ${child.name} that helps reduce parental load. It should be age-appropriate, fun, and help parents with daily tasks.`;
-      
-      // Safely request from AllieAIService with proper error handling
-      const response = await AllieAIService.safeRequest(async () => {
-        return await AllieAIService.generateDashboardInsights(familyId, currentWeek);
-      }, { title: "Kid Helper", description: kidHabitPrompt });
-      
-      // Fallback values in case AI fails
-      let title = `${child.name}'s Helper Task`;
-      let description = `A fun way for ${child.name} to help the family`;
-      let cue = "After breakfast";
-      let action = "Put away my dishes";
-      let reward = "High five from parents";
-      let identity = "a helpful family member";
-      
-      // Try to extract structured data from AI response
-      if (response && response.insights && response.insights.length > 0) {
-        const insight = response.insights[0];
-        title = insight.title || title;
-        description = insight.description || description;
-        action = insight.actionItem || action;
-      } else if (response && typeof response === 'string') {
-        // Try to parse from string format
-        const parts = response.split('|').map(part => part.trim());
-        if (parts.length >= 6) {
-          [title, description, cue, action, reward, identity] = parts;
+      if (response && typeof response === 'string') {
+        // Try to extract parts from the response
+        // First look for pipe-separated format
+        const pipeRegex = /(.+?)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(.+)/;
+        const matches = response.match(pipeRegex);
+        
+        if (matches && matches.length >= 7) {
+          // Use extracted parts
+          title = matches[1].trim();
+          description = matches[2].trim();
+          cue = matches[3].trim();
+          action = matches[4].trim();
+          reward = matches[5].trim();
+          identity = matches[6].trim();
+        } else {
+          // Try alternative format with sections
+          const titleMatch = response.match(/Title:?\s*([^\n]+)/i);
+          const descMatch = response.match(/Description:?\s*([^\n]+)/i);
+          const cueMatch = response.match(/Cue:?\s*([^\n]+)/i);
+          const actionMatch = response.match(/Action:?\s*([^\n]+)/i);
+          const rewardMatch = response.match(/Reward:?\s*([^\n]+)/i);
+          const identityMatch = response.match(/Identity:?\s*([^\n]+)/i);
+          
+          if (titleMatch) title = titleMatch[1].trim();
+          if (descMatch) description = descMatch[1].trim();
+          if (cueMatch) cue = cueMatch[1].trim();
+          if (actionMatch) action = actionMatch[1].trim();
+          if (rewardMatch) reward = rewardMatch[1].trim();
+          if (identityMatch) identity = identityMatch[1].trim();
         }
       }
+    } catch (aiError) {
+      console.error("AI error in kid habit creation:", aiError);
+      // Continue with default values
+    }
+    
+    // Create the habit subtasks
+    const subTasks = [
+      { title: cue, description: "This is when to do it" },
+      { title: action, description: "This is what to do" },
+      { title: reward, description: "This is your reward" }
+    ];
+    
+    try {
+      // Create the habit in the tasks array of the family document
+      const familyRef = doc(db, "families", familyId);
+      const familyDoc = await getDoc(familyRef);
       
-      // Create the habit subtasks
-      const subTasks = [
-        { title: cue, description: "This is when to do it" },
-        { title: action, description: "This is what to do" },
-        { title: reward, description: "This is your reward" }
-      ];
+      if (!familyDoc.exists()) {
+        throw new Error("Family document not found");
+      }
       
-      // Create the habit in the database
-      const habitData = {
-        title: `${title}`,
-        description: description,
-        focusArea: "Kid Helper",
-        assignedTo: "Kid",
-        assignedToName: child.name,
-        completed: false,
-        category: "Kid Helper",
-        comments: [],
-        subTasks: subTasks,
-        createdAt: serverTimestamp(),
-        familyId: familyId,
-        aiInsight: `This habit helps ${child.name} build their identity as ${identity}`
-      };
+      // Get current tasks
+      const currentTasks = familyDoc.data().tasks || [];
       
-      // Add the habit to the database
-      const habitRef = collection(db, "families", familyId, "habits");
-      const newHabitRef = await addDoc(habitRef, habitData);
+      // Generate a unique ID
+      const taskId = `kid-habit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       
-      // Update the local state
+      // Create the new kid habit with the ID
       const newHabit = {
-        id: newHabitRef.id,
+        id: taskId,
         title: title,
         description: description,
         cue: cue,
@@ -1168,27 +1480,39 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
         imageUrl: null,
         lastCompleted: null,
         isPartOfStack: false,
-        atomicSteps: subTasks.map((st, idx) => ({
-          id: `${newHabitRef.id}-step-${idx + 1}`,
+        isChildTask: true,
+        subTasks: subTasks.map((st, idx) => ({
+          id: `${taskId}-step-${idx + 1}`,
           title: st.title,
           description: st.description,
           completed: false
         }))
       };
       
+      // Update the tasks array in Firestore
+      await updateDoc(familyRef, {
+        tasks: [...currentTasks, newHabit]
+      });
+      
+      // Update the local state
       setKidHabits(prev => [newHabit, ...prev]);
+      
       setShowAddHabit(false);
       createCelebration(`New helper habit for ${child.name}!`, true);
       
       setAllieIsThinking(false);
       return true;
-    } catch (error) {
-      console.error("Error creating kid habit:", error);
-      setAllieIsThinking(false);
-      createCelebration("Error", false, "Could not create kid habit. Please try again later.");
-      return false;
+    } catch (dbError) {
+      console.error("Database error creating kid habit:", dbError);
+      throw dbError;
     }
-  };
+  } catch (error) {
+    console.error("Error creating kid habit:", error);
+    setAllieIsThinking(false);
+    createCelebration("Error", false, "Could not create kid habit. Please try again later.");
+    return false;
+  }
+};
   
   // Filter habits for the current user or "Everyone"
   const userHabits = habits.filter(habit => 
@@ -1248,20 +1572,96 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
       </div>
       
       {/* Week progress bar and next survey indicator */}
-      <div className="p-4 border-b">
-        <div className="flex justify-between items-center mb-2">
-          <div className="text-sm">
-            Cycle {currentWeek} Progress
-            <span className="ml-1 text-xs text-gray-500">(flexible timeframe)</span>
-          </div>
-          <div className="text-sm">{daysRemaining} day{daysRemaining !== 1 ? 's' : ''} left in week</div>
-        </div>
-        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-black transition-all duration-500 ease-out"
-            style={{ width: `${weekProgress}%` }}
-          ></div>
-        </div>
+<div className="p-4 border-b">
+  <div className="flex justify-between items-center mb-2">
+    <div className="text-sm flex items-center">
+      <span>Cycle {currentWeek} Progress</span>
+      <div className="ml-2 text-xs text-gray-500 hover:text-gray-700 cursor-help" title="The cycle timeline is flexible. You can adjust the due date based on your family's schedule.">
+        <Info size={12} />
+      </div>
+    </div>
+    
+    <div className="flex items-center">
+      <span className="text-sm mr-2">{daysRemaining} day{daysRemaining !== 1 ? 's' : ''} left</span>
+      <button 
+        onClick={() => {
+          // Create date picker dialog
+          const datePicker = document.createElement('input');
+          datePicker.type = 'date';
+          
+          // Set min date to today
+          const today = new Date();
+          datePicker.min = today.toISOString().split('T')[0];
+          
+          // Set default value to current due date or 7 days from now
+          const defaultDate = surveyDue || new Date(today.setDate(today.getDate() + 7));
+          datePicker.value = defaultDate.toISOString().split('T')[0];
+          
+          // Style so it's invisible and hide it
+          datePicker.style.position = 'absolute';
+          datePicker.style.top = '-100px';
+          document.body.appendChild(datePicker);
+          
+          // Add change handler
+          datePicker.addEventListener('change', (e) => {
+            const newDate = new Date(e.target.value);
+            updateCycleDueDate(newDate);
+            document.body.removeChild(datePicker);
+          });
+          
+          // Add cancel handler
+          datePicker.addEventListener('blur', () => {
+            setTimeout(() => {
+              if (document.body.contains(datePicker)) {
+                document.body.removeChild(datePicker);
+              }
+            }, 300);
+          });
+          
+          // Show the date picker
+          datePicker.click();
+        }}
+        className="text-xs flex items-center text-blue-600 hover:text-blue-800 px-2 py-1 rounded-md border border-blue-200 hover:bg-blue-50"
+      >
+        <Calendar size={12} className="mr-1" />
+        Change Due Date
+      </button>
+    </div>
+  </div>
+  
+  {/* Progress bar */}
+  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+    <div 
+      className="h-full bg-black transition-all duration-500 ease-out"
+      style={{ width: `${weekProgress}%` }}
+    ></div>
+  </div>
+  
+  {/* Due date and schedule */}
+  <div className="mt-4 flex justify-between items-center">
+    <div className="flex items-center">
+      <Calendar size={16} className="text-blue-600 mr-2" />
+      <div>
+        <p className="text-sm font-medium">Cycle {currentWeek} Due Date</p>
+        <p className="text-xs text-gray-600">{surveyDue ? formatDate(surveyDue) : 'Not scheduled yet'}</p>
+      </div>
+    </div>
+    
+    <div>
+      {daysUntilSurvey <= 0 ? (
+        <button 
+          onClick={onStartWeeklyCheckIn}
+          className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+        >
+          Take Now
+        </button>
+      ) : (
+        <span className="text-sm text-gray-600">
+          in {daysUntilSurvey} day{daysUntilSurvey !== 1 ? 's' : ''}
+        </span>
+      )}
+    </div>
+  </div>
         
         {/* Next survey reminder */}
         {daysUntilSurvey !== null && (
@@ -1390,7 +1790,37 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
           )}
         </div>
       )}
-      
+      {/* Habit explanation */}
+<div className="bg-gray-50 p-4 rounded-lg mb-4 text-sm">
+  <h4 className="font-medium mb-2 flex items-center">
+    <Info size={16} className="mr-2 text-blue-500" />
+    How Habits Work
+  </h4>
+  <p className="mb-2">
+    Habits are small, consistent actions that help balance family responsibilities. 
+    Each habit follows the Atomic Habit formula:
+  </p>
+  <div className="grid grid-cols-4 gap-2 mb-2">
+    <div className="bg-blue-50 p-2 rounded-lg text-blue-800 text-xs">
+      <strong>Cue:</strong> The trigger for your habit
+    </div>
+    <div className="bg-green-50 p-2 rounded-lg text-green-800 text-xs">
+      <strong>Routine:</strong> The action itself
+    </div>
+    <div className="bg-amber-50 p-2 rounded-lg text-amber-800 text-xs">
+      <strong>Reward:</strong> The benefit you receive
+    </div>
+    <div className="bg-purple-50 p-2 rounded-lg text-purple-800 text-xs">
+      <strong>Identity:</strong> Who you become
+    </div>
+  </div>
+  <p>
+    Mark habits complete each day to build your streak. Schedule them for reminders.
+    Small consistent actions lead to meaningful change in family balance.
+  </p>
+</div>
+
+
       {/* Current habits section */}
       <div className="p-4">
         <div className="flex justify-between items-center mb-4">
@@ -1525,12 +1955,16 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                         Details
                       </button>
                       <button
-                        onClick={() => prepareHabitSchedule(habit)}
-                        className="text-xs flex items-center text-gray-600 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-100"
-                      >
-                        <Calendar size={12} className="mr-1" />
-                        Schedule
-                      </button>
+  onClick={() => habit.isScheduled ? editHabitSchedule(habit) : prepareHabitSchedule(habit)}
+  className={`text-xs flex items-center px-2 py-1 rounded ${
+    habit.isScheduled 
+      ? 'text-green-600 hover:text-green-800 hover:bg-green-50' 
+      : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+  }`}
+>
+  <Calendar size={12} className="mr-1" />
+  {habit.isScheduled ? 'Scheduled' : 'Schedule'}
+</button>
                       <button
                         onClick={() => {
                           setSelectedHabit(habit);
