@@ -441,6 +441,12 @@ const InitialSurveyTab = () => {
     const memberQuestions = personalizedQuestions[selectedMember] || [];
     setCurrentQuestionIndex(memberQuestions.length - 1);
   };
+
+  
+
+
+
+
   
   // Get responses for the current question - IMPROVED LOGIC
 const getResponsesForCurrentQuestion = () => {
@@ -468,8 +474,7 @@ const getResponsesForCurrentQuestion = () => {
         found = true;
       }
       
-      // 2. Format: just questionId (legacy)
-      if (!found && surveyResponses[questionId] && member.id === selectedMember) {
+      if (!found && surveyResponses[questionId]) {
         responses[member.id] = surveyResponses[questionId];
         found = true;
       }
