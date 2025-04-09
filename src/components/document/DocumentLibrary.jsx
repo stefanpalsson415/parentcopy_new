@@ -14,7 +14,7 @@ import {
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import UserAvatar from '../common/UserAvatar';
 
-const DocumentLibrary = ({ initialChildId = null, initialCategory = null }) => {
+const DocumentLibrary = ({ initialChildId = null, initialCategory = null,onClose }) => {
   const { familyMembers, familyId } = useFamily();
   const { currentUser } = useAuth();
   const [documents, setDocuments] = useState([]);
@@ -406,7 +406,7 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null }) => {
     <h2 className="text-lg font-medium">Document Library</h2>
     <div className="flex space-x-2">
       <button
-        onClick={props.onClose}
+        onClick={onClose}
         className="p-2 rounded-md hover:bg-gray-100"
         title="Close"
       >
@@ -917,7 +917,8 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null }) => {
             </div>
           </div>
         </div>
-      )}
+      )}>
+      </div>
     </div>
   );
 };

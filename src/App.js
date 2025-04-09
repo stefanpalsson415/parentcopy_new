@@ -33,6 +33,7 @@ import './styles/atomicHabits.css';
 
 
 
+
 // App Routes Component - Used after context providers are set up
 function AppRoutes() {
   const { selectedUser } = useFamily();

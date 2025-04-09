@@ -645,6 +645,28 @@ class DatabaseService {
     }
   }
 
+// Save document metadata to Firestore
+async saveDocument(documentData) {
+  try {
+    if (!documentData.familyId) {
+      throw new Error("No family ID provided for document");
+    }
+    
+    const docRef = await addDoc(collection(this.db, "familyDocuments"), {
+      ...documentData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    
+    console.log("Document saved with ID:", docRef.id);
+    return { success: true, documentId: docRef.id };
+  } catch (error) {
+    console.error("Error saving document:", error);
+    throw error;
+  }
+}
+
+
   // Save family meeting notes
   async saveFamilyMeetingNotes(familyId, weekNumber, notes) {
     try {

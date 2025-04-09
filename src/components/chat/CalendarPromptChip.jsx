@@ -2,7 +2,6 @@
 import React, { useState } from 'react';
 import { Calendar, ChevronDown, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import CalendarOperations from '../utils/CalendarOperations';
 
 const CalendarPromptChip = ({ onClick, onSelectDate }) => {
   const { currentUser } = useAuth();
