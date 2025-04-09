@@ -35,6 +35,8 @@ const EventConfirmationCard = ({ event, onConfirm, onEdit, onCancel, familyId })
   
   // src/components/calendar/EventConfirmationCard.jsx - Replace the handleSave function
 
+// src/components/calendar/EventConfirmationCard.jsx - Update the handleSave function
+
 const handleSave = async () => {
   try {
     setSaving(true);
@@ -103,7 +105,9 @@ const handleSave = async () => {
       siblingNames: finalEvent.siblingNames,
       source: finalEvent.source,
       // Add original text for reference/debugging
-      originalText: finalEvent.originalText
+      originalText: finalEvent.originalText,
+      // Include host information if available
+      hostParent: finalEvent.hostParent || ''
     };
     
     // Clean the object - remove any undefined values
@@ -117,7 +121,7 @@ const handleSave = async () => {
     // If siblings are selected, create separate events for them too
     if (selectedSiblings && selectedSiblings.length > 0 && result.success) {
       for (const siblingId of selectedSiblings) {
-        const sibling = children.find(c => c.id === siblingId);
+        const sibling = children.find(c => c.id === sibId);
         if (sibling) {
           let siblingEvent = {
             ...calendarEvent,
@@ -125,8 +129,9 @@ const handleSave = async () => {
             childName: sibling.name,
             summary: calendarEvent.summary.replace(finalEvent.childName || '', sibling.name),
             title: calendarEvent.title.replace(finalEvent.childName || '', sibling.name),
-            // Store reference to main event
+            // Store reference to main event using the universalId
             linkedToEventId: result.firestoreId,
+            universalId: result.universalId + `-sibling-${siblingId}`,
             // Don't include siblingIds in the sibling's own event
             siblingIds: undefined,
             siblingNames: undefined
@@ -152,11 +157,12 @@ const handleSave = async () => {
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
-        // Return the final event including the Firestore ID
+        // Return the final event including the universalId
         onConfirm({
           ...finalEvent,
           firestoreId: result.firestoreId,
-          id: result.eventId || result.firestoreId
+          universalId: result.universalId,
+          id: result.eventId || result.firestoreId || result.universalId
         });
       }, 1500);
     } else {

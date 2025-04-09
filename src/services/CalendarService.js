@@ -157,11 +157,16 @@ class CalendarService {
 
   // src/services/CalendarService.js - Replace the addEvent method with this improved version
 
+// src/services/CalendarService.js - Replace the addEvent method with this improved version
+
 async addEvent(event, userId) {
   try {
     if (!userId) {
       throw new Error("User ID is required to add events");
     }
+    
+    // Generate a universal ID for the event that will be used across all components
+    const universalId = `event-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
     
     // Log the incoming event for debugging
     console.log("Adding calendar event:", {
@@ -169,6 +174,7 @@ async addEvent(event, userId) {
       hasStart: !!event.start,
       hasDate: !!(event.start?.dateTime || event.start?.date),
       childName: event.childName || 'None',
+      universalId,
       userId
     });
     
@@ -180,8 +186,11 @@ async addEvent(event, userId) {
     // Standardize event format - this ensures a consistent structure
     const standardizedEvent = {
       ...event,
+      // Use universal ID as the primary identifier
+      universalId,
+      // Ensure both summary and title are set for compatibility
       summary: event.summary || event.title,
-      title: event.title || event.summary, // Ensure both are set for compatibility
+      title: event.title || event.summary, 
       description: event.description || '',
       // Ensure start and end dates are properly formatted
       start: event.start || {
@@ -192,13 +201,22 @@ async addEvent(event, userId) {
         dateTime: new Date(new Date().getTime() + 60*60000).toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       },
+      // Preserve all metadata including attendees
+      childId: event.childId || null,
+      childName: event.childName || null,
+      attendingParentId: event.attendingParentId || null,
+      siblingIds: event.siblingIds || [],
+      siblingNames: event.siblingNames || [],
+      eventType: event.eventType || 'general',
+      extraDetails: event.extraDetails || {},
       // Always include these fields
       userId,
+      familyId: event.familyId || null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       source: event.source || 'manual',
-      // Standardize the unique identifier
-      eventId: event.eventId || `event-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+      // Include the original text if available (for later reference)
+      originalText: event.originalText || ''
     };
     
     // Check if a similar event already exists to prevent duplicates
@@ -232,25 +250,48 @@ async addEvent(event, userId) {
       }
     }
     
-    // Save event to Firestore in the single calendar_events collection
+    // Save event to Firestore in the calendar_events collection
     const eventRef = collection(db, "calendar_events");
     const docRef = await addDoc(eventRef, standardizedEvent);
-    console.log("Event saved to Firestore with ID:", docRef.id);
+    
+    // Update the document with its own ID for easy reference
+    await updateDoc(docRef, {
+      firestoreId: docRef.id,
+      // Include universalId again to ensure it's set
+      universalId: universalId
+    });
+    
+    console.log("Event saved to Firestore with ID:", docRef.id, "and universalId:", universalId);
     
     // Dispatch events - this is crucial for keeping the UI in sync
     if (typeof window !== 'undefined') {
+      // Ensure we use a consistent event structure with the universalId
+      const eventDetail = {
+        eventId: docRef.id,
+        universalId: universalId,
+        title: standardizedEvent.summary,
+        eventType: standardizedEvent.eventType,
+        childId: standardizedEvent.childId,
+        childName: standardizedEvent.childName,
+        attendees: standardizedEvent.siblingIds 
+          ? [...(standardizedEvent.siblingIds || []), standardizedEvent.childId].filter(Boolean)
+          : [standardizedEvent.childId].filter(Boolean),
+        dateTime: standardizedEvent.start.dateTime
+      };
+      
       // Force refresh all calendar views
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
         // Also dispatch specific event type for more targeted refreshes
         window.dispatchEvent(new CustomEvent('calendar-event-added', {
-          detail: { 
-            eventId: docRef.id,
-            eventType: standardizedEvent.eventType,
-            childId: standardizedEvent.childId,
-            childName: standardizedEvent.childName
-          }
+          detail: eventDetail
         }));
+        
+        if (standardizedEvent.childId) {
+          window.dispatchEvent(new CustomEvent('calendar-child-event-added', {
+            detail: eventDetail
+          }));
+        }
       }, 300);
     }
     
@@ -260,12 +301,275 @@ async addEvent(event, userId) {
     return {
       success: true,
       eventId: docRef.id,
-      firestoreId: docRef.id  // Always include the Firestore ID as the universal ID
+      universalId: universalId,
+      firestoreId: docRef.id  // Include the Firestore ID for backward compatibility
     };
   } catch (error) {
     console.error("Error adding event to calendar:", error);
     this.showNotification("Failed to add event to calendar", "error");
     return { success: false, error: error.message || "Unknown error" };
+  }
+}
+
+// Replace the updateEvent method with this enhanced version
+async updateEvent(eventId, updateData, userId) {
+  try {
+    if (!eventId || !userId) {
+      throw new Error("Event ID and User ID are required to update events");
+    }
+    
+    console.log("Updating calendar event:", { eventId, updateFields: Object.keys(updateData) });
+    
+    // First, get the existing event to merge data properly
+    const docRef = doc(db, "calendar_events", eventId);
+    const eventDoc = await getDoc(docRef);
+    
+    if (!eventDoc.exists()) {
+      throw new Error(`Event with ID ${eventId} not found`);
+    }
+    
+    const existingEvent = eventDoc.data();
+    
+    // Standardize the update data
+    const updates = {
+      ...updateData,
+      updatedAt: serverTimestamp()
+    };
+    
+    // If there are changes to title/summary, ensure both fields are updated
+    if (updates.title && !updates.summary) {
+      updates.summary = updates.title;
+    } else if (updates.summary && !updates.title) {
+      updates.title = updates.summary;
+    }
+    
+    // Preserve important metadata if not being explicitly updated
+    const keysToPreserve = [
+      'childId', 'childName', 'attendingParentId', 'siblingIds', 
+      'siblingNames', 'eventType', 'extraDetails', 'familyId',
+      'universalId', 'source'
+    ];
+    
+    keysToPreserve.forEach(key => {
+      if (existingEvent[key] && !updates[key]) {
+        updates[key] = existingEvent[key];
+      }
+    });
+    
+    // Update in Firestore
+    await updateDoc(docRef, updates);
+    
+    // Dispatch events for UI refresh - include all important details
+    if (typeof window !== 'undefined') {
+      const eventDetail = {
+        eventId: eventId,
+        universalId: existingEvent.universalId || eventId,
+        title: updates.title || existingEvent.title,
+        childId: updates.childId || existingEvent.childId,
+        childName: updates.childName || existingEvent.childName,
+        // Include all attendees for proper UI updates
+        attendees: [
+          ...(updates.siblingIds || existingEvent.siblingIds || []),
+          updates.childId || existingEvent.childId
+        ].filter(Boolean)
+      };
+      
+      window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+      window.dispatchEvent(new CustomEvent('calendar-event-updated', {
+        detail: eventDetail
+      }));
+    }
+    
+    this.showNotification("Event updated successfully", "success");
+    
+    return {
+      success: true,
+      eventId,
+      universalId: existingEvent.universalId || eventId
+    };
+  } catch (error) {
+    console.error("Error updating event:", error);
+    this.showNotification("Failed to update event", "error");
+    return { success: false, error: error.message || "Unknown error" };
+  }
+}
+
+// Replace the deleteEvent method with this enhanced version
+async deleteEvent(eventId, userId) {
+  try {
+    if (!eventId || !userId) {
+      throw new Error("Event ID and User ID are required to delete events");
+    }
+    
+    console.log("Deleting calendar event:", { eventId });
+    
+    // First, get the event to retrieve its universalId and other details
+    const docRef = doc(db, "calendar_events", eventId);
+    const eventDoc = await getDoc(docRef);
+    
+    if (!eventDoc.exists()) {
+      throw new Error(`Event with ID ${eventId} not found`);
+    }
+    
+    const eventData = eventDoc.data();
+    const universalId = eventData.universalId || eventId;
+    
+    // Delete from Firestore
+    await deleteDoc(docRef);
+    
+    // Check for and delete any linked events (for siblings)
+    if (eventData.linkedToEventId || eventData.childId) {
+      try {
+        // Query for linked events
+        const linkedEventsQuery = query(
+          collection(db, "calendar_events"),
+          where("linkedToEventId", "==", eventId)
+        );
+        
+        const querySnapshot = await getDocs(linkedEventsQuery);
+        
+        // Delete all linked events
+        const deletionPromises = [];
+        querySnapshot.forEach((doc) => {
+          deletionPromises.push(deleteDoc(doc.ref));
+        });
+        
+        if (deletionPromises.length > 0) {
+          await Promise.all(deletionPromises);
+          console.log(`Deleted ${deletionPromises.length} linked events`);
+        }
+      } catch (linkedError) {
+        console.warn("Error cleaning up linked events:", linkedError);
+        // Continue with main deletion even if linked cleanup fails
+      }
+    }
+    
+    // Dispatch events for UI refresh
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+      window.dispatchEvent(new CustomEvent('calendar-event-deleted', {
+        detail: { 
+          eventId, 
+          universalId,
+          childId: eventData.childId,
+          childName: eventData.childName
+        }
+      }));
+    }
+    
+    this.showNotification("Event deleted from calendar", "success");
+    
+    return {
+      success: true,
+      universalId
+    };
+  } catch (error) {
+    console.error("Error deleting event:", error);
+    this.showNotification("Failed to delete event", "error");
+    return { success: false, error: error.message || "Unknown error" };
+  }
+}
+
+// Replace getEventsForUser method to properly handle rich event data
+async getEventsForUser(userId, timeMin, timeMax) {
+  try {
+    if (!userId) {
+      throw new Error("User ID is required to get events");
+    }
+    
+    // Default to 30 days range if not provided
+    if (!timeMin) {
+      timeMin = new Date();
+      timeMin.setDate(timeMin.getDate() - 30);
+    }
+    
+    if (!timeMax) {
+      timeMax = new Date();
+      timeMax.setDate(timeMax.getDate() + 60); // Show events two months ahead
+    }
+    
+    // Get all events from calendar service
+    const eventsQuery = query(
+      collection(db, "calendar_events"),
+      where("userId", "==", userId)
+    );
+    
+    const querySnapshot = await getDocs(eventsQuery);
+    const events = [];
+    
+    querySnapshot.forEach((doc) => {
+      const eventData = doc.data();
+      
+      // Get the start and end times - handle different formats
+      let startTime = null;
+      if (eventData.start?.dateTime) {
+        startTime = new Date(eventData.start.dateTime);
+      } else if (eventData.start?.date) {
+        startTime = new Date(eventData.start.date);
+      } else if (eventData.date) {
+        startTime = new Date(eventData.date);
+      } else if (eventData.dateTime) {
+        startTime = new Date(eventData.dateTime);
+      }
+      
+      // Skip events without valid dates
+      if (!startTime) {
+        console.warn(`Event ${doc.id} has no valid start date, skipping`);
+        return;
+      }
+      
+      // Filter by date range
+      if (startTime >= timeMin && startTime <= timeMax) {
+        events.push({
+          id: doc.id,
+          universalId: eventData.universalId || doc.id,
+          title: eventData.summary || eventData.title || 'Untitled Event',
+          summary: eventData.summary || eventData.title || 'Untitled Event',
+          description: eventData.description || '',
+          date: eventData.start?.dateTime || eventData.start?.date || eventData.date || eventData.dateTime,
+          dateObj: startTime,
+          time: startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+          
+          // Include all metadata
+          category: eventData.category || 'calendar',
+          eventType: eventData.eventType || 'general',
+          location: eventData.location || '',
+          
+          // Child and attendee information
+          childId: eventData.childId || null,
+          childName: eventData.childName || null,
+          attendingParentId: eventData.attendingParentId || null,
+          siblingIds: eventData.siblingIds || [],
+          siblingNames: eventData.siblingNames || [],
+          attendees: eventData.attendees || [],
+          
+          // Include extra details
+          extraDetails: eventData.extraDetails || {},
+          
+          // Important IDs for CRUD operations
+          firestoreId: doc.id,
+          universalId: eventData.universalId || doc.id,
+          
+          // Source information
+          source: eventData.source || 'manual',
+          
+          // End date/time
+          dateEndObj: eventData.end?.dateTime ? new Date(eventData.end.dateTime) : null,
+          
+          // Linkage
+          linkedEntity: eventData.linkedEntity || null,
+          linkedToEventId: eventData.linkedToEventId || null
+        });
+      }
+    });
+    
+    console.log(`Found ${events.length} events for user ${userId}`);
+    
+    // Sort by date
+    return events.sort((a, b) => a.dateObj - b.dateObj);
+  } catch (error) {
+    console.error("Error getting events:", error);
+    return [];
   }
 }
 

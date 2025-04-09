@@ -85,6 +85,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     addTaskComment,
     updateTaskCompletion,
     updateSubtaskCompletion,
+    updateSurveySchedule,
     loadCurrentWeekTasks,
     getWeekHistoryData,
     getWeekStatus,

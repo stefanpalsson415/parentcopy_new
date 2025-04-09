@@ -61,6 +61,9 @@ const FloatingCalendarWidget = () => {
 // Replace the buildEventCache and eventExists functions with these consistent versions:
 
 // Function to fetch all event IDs and cache them to prevent duplicates
+// src/components/calendar/FloatingCalendarWidget.jsx - Replace the buildEventCache and eventExists functions
+
+// Function to fetch all event IDs and cache them to prevent duplicates
 const buildEventCache = async () => {
   try {
     if (!currentUser?.uid || !familyId) return;
@@ -120,7 +123,6 @@ const eventExists = (event) => {
   return eventCache.has(signature);
 };
 
-
 // Use effect for initializing event cache
 useEffect(() => {
   if (isOpen && currentUser?.uid) {
@@ -148,7 +150,41 @@ useEffect(() => {
 }, []);
 
 
+// src/components/calendar/FloatingCalendarWidget.jsx - Add enhanced event listener code
 
+// Add this useEffect hook in FloatingCalendarWidget.jsx
+useEffect(() => {
+  // Function to reload events with enhanced logging
+  const refreshEvents = (e) => {
+    console.log("Calendar event refresh triggered", e?.type || 'manual refresh', e?.detail || {});
+    
+    // Clear event cache to ensure fresh data
+    setEventCache(new Set());
+    
+    // Force immediate refresh
+    setLastRefresh(Date.now());
+    
+    // Rebuild event cache after a brief delay to ensure Firestore has updated
+    setTimeout(() => {
+      buildEventCache();
+    }, 500);
+  };
+  
+  // Set up event listeners for all event types
+  window.addEventListener('calendar-event-added', refreshEvents);
+  window.addEventListener('calendar-child-event-added', refreshEvents); // Added this listener
+  window.addEventListener('force-calendar-refresh', refreshEvents);
+  
+  // Log that we've set up the listeners
+  console.log("Calendar event listeners initialized");
+  
+  // Clean up
+  return () => {
+    window.removeEventListener('calendar-event-added', refreshEvents);
+    window.removeEventListener('calendar-child-event-added', refreshEvents); // Added this cleanup
+    window.removeEventListener('force-calendar-refresh', refreshEvents);
+  };
+}, []);
 
 // Enhanced initialization to handle calendar-related errors cleanly
 useEffect(() => {
@@ -1232,6 +1268,9 @@ const loadAllEvents = async () => {
   // src/components/calendar/FloatingCalendarWidget.jsx - Replace the getEventAttendees function
 
 // Get the attendees avatars for an event - Enhanced to include all event participant types
+// src/components/calendar/FloatingCalendarWidget.jsx - Replace the getEventAttendees function
+
+// Get the attendees avatars for an event - Enhanced to include all event participant types
 const getEventAttendees = (event) => {
   let attendees = [];
   
@@ -1291,7 +1330,7 @@ const getEventAttendees = (event) => {
     });
   }
   
-  // For tasks
+  // For assigned tasks
   if (event.assignedToName) {
     const member = familyMembers.find(m => m.name === event.assignedToName || m.roleType === event.assignedTo);
     if (member) {
@@ -1430,56 +1469,33 @@ const getEventAttendees = (event) => {
     setShowEventDetails(false);
   };
   
-  // Delete event from calendar - Enhanced with error handling
-  // src/components/calendar/FloatingCalendarWidget.jsx - Replace the deleteEvent function
+
+
+// Delete event from calendar - Enhanced with error handling
+// src/components/calendar/FloatingCalendarWidget.jsx - Replace the deleteEvent function
 
 // Delete event from calendar - Enhanced with error handling
 const deleteEvent = async (event) => {
   try {
     setPendingAction('delete');
     
-    if (!event || !event.firestoreId) {
-      // Try to use Firestore ID or fall back to event ID
-      const eventId = event.id || event.eventId;
-      
-      if (!eventId) {
-        CalendarService.showNotification("Cannot delete this event - no valid ID found", "error");
-        setPendingAction(null);
-        return;
-      }
-      
-      // If we have an ID but no firestoreId, try to find the event
-      try {
-        const eventsQuery = query(
-          collection(db, "calendar_events"),
-          where("eventId", "==", eventId)
-        );
-        
-        const querySnapshot = await getDocs(eventsQuery);
-        if (!querySnapshot.empty) {
-          const docId = querySnapshot.docs[0].id;
-          // Update the event object with the found Firestore ID
-          event.firestoreId = docId;
-        } else {
-          throw new Error("Event not found in database");
-        }
-      } catch (findError) {
-        console.error("Error finding event to delete:", findError);
-        CalendarService.showNotification("Cannot locate this event in the database", "error");
-        setPendingAction(null);
-        return;
-      }
+    if (!event) {
+      CalendarService.showNotification("No event selected to delete", "error");
+      setPendingAction(null);
+      return;
     }
     
-    // Now we should have a firestoreId to delete
-    if (!event.firestoreId) {
+    // Use Firestore ID if available, or universal ID, or regular ID
+    const eventId = event.firestoreId || event.universalId || event.id;
+    
+    if (!eventId) {
       CalendarService.showNotification("Cannot delete this event - no valid ID found", "error");
       setPendingAction(null);
       return;
     }
     
-    // Delete using CalendarService
-    const result = await CalendarService.deleteEvent(event.firestoreId, currentUser?.uid);
+    // Delete using CalendarService, which now handles linked events properly
+    const result = await CalendarService.deleteEvent(eventId, currentUser?.uid);
     
     if (result.success) {
       // Update local state
@@ -1491,15 +1507,19 @@ const deleteEvent = async (event) => {
       
       // Remove from all events array
       setAllEvents(prev => prev.filter(e => 
-        e.firestoreId !== event.firestoreId && e.id !== event.id
+        e.firestoreId !== eventId && 
+        e.universalId !== (event.universalId || eventId) && 
+        e.id !== eventId
       ));
       
       // Close the details modal
       setShowEventDetails(false);
       
-      // Refresh events
-      setLastRefresh(Date.now());
-      await buildEventCache();
+      // Refresh events to ensure UI is in sync
+      setTimeout(() => {
+        setLastRefresh(Date.now());
+        buildEventCache();
+      }, 300);
     } else {
       CalendarService.showNotification(result.error || "Failed to delete event", "error");
     }
@@ -1893,7 +1913,8 @@ const deleteEvent = async (event) => {
                               {event.location && ` - ${event.location}`}
                             </p>
                             
-                            // src/components/calendar/FloatingCalendarWidget.jsx - Replace the rendering of attendee avatars in both event list sections
+
+                            // src/components/calendar/FloatingCalendarWidget.jsx - Replace the rendering of attendee avatars in event list
 
 {/* Enhanced attendee avatars with better styling and info */}
 <div className="flex -space-x-2 ml-2 items-center">
@@ -2331,6 +2352,8 @@ const deleteEvent = async (event) => {
       >
         <Calendar size={24} />
       </button>
+
+      // src/components/calendar/FloatingCalendarWidget.jsx - Replace the event details modal content 
 
       // src/components/calendar/FloatingCalendarWidget.jsx - Replace the event details modal content 
 

@@ -745,219 +745,147 @@ const handleDrop = (e) => {
 };
   
   // In AllieChat.jsx - Update the addEventToCalendar function
-  const addEventToCalendar = async (eventDetails) => {
-    try {
-      if (!eventDetails || !selectedUser) return false;
-      
-      // Ensure we have a valid Date object
-      const startDate = eventDetails.dateTime ? 
-        (eventDetails.dateTime instanceof Date ? 
-          eventDetails.dateTime : 
-          new Date(eventDetails.dateTime)) : 
-        new Date();
-        
-      // Log the date conversion for debugging
-      console.log("Event date conversion:", {
-        original: eventDetails.dateTime,
-        converted: startDate,
-        iso: startDate.toISOString()
-      });
-      
-      const endDate = new Date(startDate);
-      endDate.setHours(startDate.getHours() + 1); // Default 1 hour event
-      
-      // Determine event title
-      let eventTitle = eventDetails.title || 'New Event';
-      
-      // Add more context to title based on event type
-      if (eventDetails.eventType === 'birthday' && eventDetails.extraDetails?.birthdayChildName) {
-        const childAge = eventDetails.extraDetails.birthdayChildAge 
-          ? ` (${eventDetails.extraDetails.birthdayChildAge})` 
-          : '';
-        eventTitle = `${eventDetails.extraDetails.birthdayChildName}'s Birthday${childAge}`;
-      } else if (eventDetails.childName) {
-        eventTitle = `${eventTitle} - ${eventDetails.childName}`;
-      }
-      
-// Add these drag event handlers before the return statement (around line 670)
-const handleDragEnter = (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  setDragCounter(prev => prev + 1);
-  if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
-    setIsDragging(true);
-  }
-};
-
-const handleDragLeave = (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  setDragCounter(prev => prev - 1);
-  if (dragCounter - 1 === 0) {
-    setIsDragging(false);
-  }
-};
-
-const handleDragOver = (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  if (!isDragging) {
-    setIsDragging(true);
-  }
-};
-
-const handleDrop = (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  setIsDragging(false);
-  setDragCounter(0);
+  // src/components/chat/AllieChat.jsx - Update the addEventToCalendar function
   
-  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-    const droppedFile = e.dataTransfer.files[0];
+const addEventToCalendar = async (eventDetails) => {
+  try {
+    if (!eventDetails || !selectedUser) return false;
     
-    // Check if it's an image
-    if (droppedFile.type.startsWith('image/')) {
-      // Create a preview URL
-      const previewUrl = URL.createObjectURL(droppedFile);
-      setImageFile(droppedFile);
-      setImagePreview(previewUrl);
+    // Ensure we have a valid Date object
+    const startDate = eventDetails.dateTime ? 
+      (eventDetails.dateTime instanceof Date ? 
+        eventDetails.dateTime : 
+        new Date(eventDetails.dateTime)) : 
+      new Date();
       
-      // If we have a profile upload target, process the image
-      if (profileUploadTarget) {
-        handleImageFileFromMessage(droppedFile, profileUploadTarget.id);
-      } else if (showEventParser) {
-        // If we're in event parsing mode, try to extract event details
-        handleImageProcessForEvent(droppedFile);
-      } else {
-        // Try to parse the image for event information
-        handleImageProcessForEvent(droppedFile);
-      }
-    } else if (droppedFile.type === 'application/pdf' || 
-               droppedFile.type.includes('text') || 
-               droppedFile.type.includes('document')) {
-      // Handle document files - let the user know we're analyzing it
-      const processingMessage = {
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: `I see you've shared a document. I'm analyzing it to see if it contains any useful information...`,
-        timestamp: new Date().toISOString()
-      };
-      
-      setMessages(prev => [...prev, processingMessage]);
-      
-      // Set a timeout to simulate processing (in production this would be replaced with actual document processing)
-      setTimeout(() => {
-        const responseMessage = {
-          familyId,
-          sender: 'allie',
-          userName: 'Allie',
-          text: `I've looked at your document. If this contains event information, you can also type a brief description of the event and I'll help you add it to your calendar.`,
-          timestamp: new Date().toISOString()
-        };
-        
-        setMessages(prev => [...prev, responseMessage]);
-      }, 1500);
-    } else {
-      // Unsupported file type
-      const errorMessage = {
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: `Sorry, I can't process this type of file (${droppedFile.type}). I can work with images, PDFs, and text documents.`,
-        timestamp: new Date().toISOString()
-      };
-      
-      setMessages(prev => [...prev, errorMessage]);
+    // Log the date conversion for debugging
+    console.log("Event date conversion:", {
+      original: eventDetails.dateTime,
+      converted: startDate,
+      iso: startDate.toISOString()
+    });
+    
+    const endDate = new Date(startDate);
+    endDate.setHours(startDate.getHours() + 1); // Default 1 hour event
+    
+    // Determine event title
+    let eventTitle = eventDetails.title || 'New Event';
+    
+    // Add more context to title based on event type
+    if (eventDetails.eventType === 'birthday' && eventDetails.extraDetails?.birthdayChildName) {
+      const childAge = eventDetails.extraDetails.birthdayChildAge 
+        ? ` (${eventDetails.extraDetails.birthdayChildAge})` 
+        : '';
+      eventTitle = `${eventDetails.extraDetails.birthdayChildName}'s Birthday${childAge}`;
+    } else if (eventDetails.childName) {
+      eventTitle = `${eventTitle} - ${eventDetails.childName}`;
     }
-  }
-};
-
-
-
-      // Create event object with explicit structure
-      const event = {
-        summary: eventTitle,
-        title: eventTitle, // Include both for compatibility
-        description: eventDetails.extraDetails?.notes || `Added from Allie chat`,
-        location: eventDetails.location || '',
-        start: {
-          dateTime: startDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        end: {
-          dateTime: endDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        reminders: {
-          useDefault: true
-        },
-        // Add additional metadata
-        familyId: familyId,
-        eventType: eventDetails.eventType || 'general',
-        childId: eventDetails.childId,
-        childName: eventDetails.childName,
-        extraDetails: eventDetails.extraDetails || {}
+    
+    // Create event object with explicit structure
+    const event = {
+      summary: eventTitle,
+      title: eventTitle, // Include both for compatibility
+      description: eventDetails.extraDetails?.notes || `Added from Allie chat`,
+      location: eventDetails.location || '',
+      start: {
+        dateTime: startDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: endDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      reminders: {
+        useDefault: true
+      },
+      // Add additional metadata
+      familyId: familyId,
+      eventType: eventDetails.eventType || 'general',
+      childId: eventDetails.childId,
+      childName: eventDetails.childName,
+      extraDetails: eventDetails.extraDetails || {},
+      // Include attendee information if available
+      attendingParentId: eventDetails.attendingParentId || null,
+      // Include sibling information if available
+      siblingIds: eventDetails.siblingIds || [],
+      siblingNames: eventDetails.siblingNames || [],
+      // Track source of event creation
+      source: 'chat',
+      // Include original text for reference
+      originalText: eventDetails.originalText || ''
+    };
+    
+    console.log("Adding event to calendar:", event);
+    
+    // Add event to calendar
+    const result = await CalendarService.addEvent(event, selectedUser.id);
+    
+    if (result.success) {
+      // Success message
+      const successMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `Great! I've added "${eventTitle}" to your calendar for ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.${eventDetails.location ? ` Location: ${eventDetails.location}.` : ''}`,
+        timestamp: new Date().toISOString()
       };
       
-      console.log("Adding event to calendar:", event);
+      setMessages(prev => [...prev, successMessage]);
       
-      // Add event to calendar
-      const result = await CalendarService.addEvent(event, selectedUser.id);
-      
-      if (result.success) {
-        // Success message
-        const successMessage = {
-          familyId,
-          sender: 'allie',
-          userName: 'Allie',
-          text: `Great! I've added "${eventTitle}" to your calendar for ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.${eventDetails.location ? ` Location: ${eventDetails.location}.` : ''}`,
-          timestamp: new Date().toISOString()
+      // Force calendar refresh with multiple events to ensure it's caught
+      if (typeof window !== 'undefined') {
+        // Create event detail with important metadata
+        const eventDetail = {
+          eventId: result.eventId || result.firestoreId,
+          universalId: result.universalId,
+          title: eventTitle,
+          time: startDate.toISOString(),
+          childId: eventDetails.childId,
+          childName: eventDetails.childName
         };
         
-        setMessages(prev => [...prev, successMessage]);
+        // First dispatch the standard event
+        const calendarEvent = new CustomEvent('calendar-event-added', {
+          detail: eventDetail
+        });
+        window.dispatchEvent(calendarEvent);
         
-        // Force calendar refresh with multiple events to ensure it's caught
-        if (typeof window !== 'undefined') {
-          // First dispatch the standard event
-          const calendarEvent = new CustomEvent('calendar-event-added', {
-            detail: { 
-              eventId: result.eventId,
-              title: eventTitle,
-              time: startDate.toISOString()
-            }
-          });
-          window.dispatchEvent(calendarEvent);
-          
-          // Then dispatch the force refresh event with a slight delay
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-          }, 300);
+        // Additional event for child-specific handling
+        if (eventDetails.childId) {
+          window.dispatchEvent(new CustomEvent('calendar-child-event-added', {
+            detail: eventDetail
+          }));
         }
         
-        return true;
-      } else {
-        throw new Error("Failed to add event to calendar");
+        // Then dispatch the force refresh event with a slight delay
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        }, 300);
       }
-    } catch (error) {
-      console.error("Error adding event to calendar:", error);
       
-      // Error message
-      const errorMessage = {
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: `I'm sorry, I couldn't add the event to your calendar. Please try again or add it manually through the calendar page.`,
-        timestamp: new Date().toISOString()
-      };
-      
-      setMessages(prev => [...prev, errorMessage]);
-      return false;
-    } finally {
-      setDetectedEventDetails(null);
-      setShowEventConfirmation(false);
+      return true;
+    } else {
+      throw new Error("Failed to add event to calendar");
     }
-  };
+  } catch (error) {
+    console.error("Error adding event to calendar:", error);
+    
+    // Error message
+    const errorMessage = {
+      familyId,
+      sender: 'allie',
+      userName: 'Allie',
+      text: `I'm sorry, I couldn't add the event to your calendar. Please try again or add it manually through the calendar page.`,
+      timestamp: new Date().toISOString()
+    };
+    
+    setMessages(prev => [...prev, errorMessage]);
+    return false;
+  } finally {
+    setDetectedEventDetails(null);
+    setShowEventConfirmation(false);
+  }
+};
   
   const handleSend = async () => {
     if (input.trim() && canUseChat && selectedUser && familyId) {
