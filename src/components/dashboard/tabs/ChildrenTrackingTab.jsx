@@ -17,6 +17,8 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import DatabaseService from '../../../services/DatabaseService';
 import CalendarService from '../../../services/CalendarService';
 import AllieAIService from '../../../services/AllieAIService';
+import UserAvatar from '../../common/UserAvatar';
+
 
 
 const ChildrenTrackingTab = () => {
@@ -1564,13 +1566,8 @@ if (appointmentDate > new Date() && !formData.completed) {
             <div key={child.id} className={`bg-white rounded-lg shadow ${viewMode === 'card' ? 'p-4' : 'p-4'}`}>
               <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center">
-                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
-                    <img 
-                      src={child.profilePicture || '/api/placeholder/40/40'} 
-                      alt={child.name} 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
+                <UserAvatar user={child} size={40} className="mr-3" />
+
                   <div>
                     <h4 className="font-medium font-roboto text-lg">{child.name}'s Health</h4>
                     <p className="text-sm text-gray-500 font-roboto">
@@ -2187,6 +2184,7 @@ if (appointmentDate > new Date() && !formData.completed) {
   // Render routines section
   // The routines section should look like this - modify the renderRoutinesSection function:
 
+// In ChildrenTrackingTab.jsx - Find the renderRoutinesSection function and update
 const renderRoutinesSection = () => {
   if (!expandedSections.routines) {
     return null;
@@ -2207,7 +2205,7 @@ const renderRoutinesSection = () => {
   return (
     <div className="space-y-6 p-4 bg-white rounded-lg">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-medium font-roboto">Daily Routines & Activities</h3>
+        <h3 className="text-lg font-medium font-roboto">Activities & Events</h3>
         <div className="flex space-x-2">
           <button
             className="p-2 rounded-md hover:bg-gray-100"
@@ -2220,18 +2218,29 @@ const renderRoutinesSection = () => {
             className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
             onClick={() => {
               if (activeChild) {
-                openModal('routine', {
-                  title: '',
-                  days: [],
-                  startTime: '08:00',
-                  endTime: '',
-                  notes: '',
-                  childId: activeChild
+                // Use the UnifiedEventManager instead of separate modal
+                // This shows how we would integrate the new component
+                setActiveComponent({
+                  type: 'eventManager',
+                  props: {
+                    initialChildId: activeChild,
+                    eventType: 'activity',
+                    onSave: (result) => {
+                      setActiveComponent(null);
+                      if (result.success) {
+                        setAllieMessage({
+                          type: 'success',
+                          text: 'Activity added successfully!'
+                        });
+                      }
+                    },
+                    onCancel: () => setActiveComponent(null)
+                  }
                 });
               } else {
                 setAllieMessage({
                   type: 'warning',
-                  text: 'Please select a child first before adding a routine.'
+                  text: 'Please select a child first before adding an activity.'
                 });
               }
             }}
@@ -2246,39 +2255,44 @@ const renderRoutinesSection = () => {
           <div key={child.id} className="bg-white rounded-lg shadow p-4">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center">
-                <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
-                  <img 
-                    src={child.profilePicture || '/api/placeholder/40/40'} 
-                    alt={child.name} 
-                    className="w-full h-full object-cover"
-                  />
-                </div>
+                <UserAvatar user={child} size={40} className="mr-3" />
                 <div>
-                  <h4 className="font-medium font-roboto text-lg">{child.name}'s Routines</h4>
+                  <h4 className="font-medium font-roboto text-lg">{child.name}'s Activities</h4>
                   <p className="text-sm text-gray-500 font-roboto">
-                    {childrenData[child.id]?.routines?.length || 0} routines
+                    {childrenData[child.id]?.routines?.length || 0} activities
                   </p>
                 </div>
               </div>
               <div className="flex space-x-2">
                 <button 
                   className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
-                  onClick={() => openModal('routine', {
-                    title: '',
-                    days: [],
-                    startTime: '08:00',
-                    endTime: '',
-                    notes: '',
-                    childId: child.id
-                  })}
+                  onClick={() => {
+                    setActiveComponent({
+                      type: 'eventManager',
+                      props: {
+                        initialChildId: child.id,
+                        eventType: 'activity',
+                        onSave: (result) => {
+                          setActiveComponent(null);
+                          if (result.success) {
+                            setAllieMessage({
+                              type: 'success',
+                              text: 'Activity added successfully!'
+                            });
+                          }
+                        },
+                        onCancel: () => setActiveComponent(null)
+                      }
+                    });
+                  }}
                 >
                   <PlusCircle size={14} className="mr-1" />
-                  Add Routine
+                  Add Activity
                 </button>
               </div>
             </div>
             
-            {/* Routines list */}
+            {/* Activities list */}
             <div className="space-y-3 mt-4">
               {childrenData[child.id]?.routines?.length > 0 ? (
                 childrenData[child.id].routines.map(routine => (
@@ -2294,7 +2308,36 @@ const renderRoutinesSection = () => {
                       <div className="flex space-x-2">
                         <button 
                           className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                          onClick={() => openModal('routine', {...routine, childId: child.id})}
+                          onClick={() => {
+                            setActiveComponent({
+                              type: 'eventManager',
+                              props: {
+                                initialEvent: {
+                                  ...routine,
+                                  childId: child.id,
+                                  childName: child.name,
+                                  category: 'activity',
+                                  isRecurring: routine.days.length > 0,
+                                  recurrence: {
+                                    frequency: 'weekly',
+                                    days: routine.days,
+                                    endDate: ''
+                                  }
+                                },
+                                eventType: 'activity',
+                                onSave: (result) => {
+                                  setActiveComponent(null);
+                                  if (result.success) {
+                                    setAllieMessage({
+                                      type: 'success',
+                                      text: 'Activity updated successfully!'
+                                    });
+                                  }
+                                },
+                                onCancel: () => setActiveComponent(null)
+                              }
+                            });
+                          }}
                         >
                           <Edit size={16} />
                         </button>
@@ -2313,19 +2356,30 @@ const renderRoutinesSection = () => {
                 ))
               ) : (
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-500 font-roboto">No routines added yet</p>
+                  <p className="text-sm text-gray-500 font-roboto">No activities added yet</p>
                   <button 
                     className="mt-2 px-3 py-1 bg-blue-500 text-white rounded-md text-sm font-roboto"
-                    onClick={() => openModal('routine', {
-                      title: '',
-                      days: [],
-                      startTime: '08:00',
-                      endTime: '',
-                      notes: '',
-                      childId: child.id
-                    })}
+                    onClick={() => {
+                      setActiveComponent({
+                        type: 'eventManager',
+                        props: {
+                          initialChildId: child.id,
+                          eventType: 'activity',
+                          onSave: (result) => {
+                            setActiveComponent(null);
+                            if (result.success) {
+                              setAllieMessage({
+                                type: 'success',
+                                text: 'Activity added successfully!'
+                              });
+                            }
+                          },
+                          onCancel: () => setActiveComponent(null)
+                        }
+                      });
+                    }}
                   >
-                    Add First Routine
+                    Add First Activity
                   </button>
                 </div>
               )}
@@ -2594,7 +2648,34 @@ const renderRoutinesSection = () => {
                 </div>
               )}
             </div>
-            
+{/* Render dynamic components */}
+{activeComponent && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    {activeComponent.type === 'eventManager' && (
+      <UnifiedEventManager {...activeComponent.props} />
+    )}
+    {activeComponent.type === 'documentLibrary' && (
+      <DocumentLibrary {...activeComponent.props} />
+    )}
+    {/* Add more component types as needed */}
+  </div>
+)}
+
+<button
+  className="px-3 py-1 border border-black text-black rounded-md text-sm hover:bg-gray-50 font-roboto flex items-center"
+  onClick={() => setActiveComponent({
+    type: 'documentLibrary',
+    props: {
+      initialChildId: child.id,
+      initialCategory: 'medical',
+      onClose: () => setActiveComponent(null)
+    }
+  })}
+>
+  <FileText size={14} className="mr-1" />
+  Documents
+</button>
+
             {/* Growth section */}
             <div className="bg-white rounded-lg shadow">
               <div 
