@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Filter, Info, ChevronDown, ChevronUp, Lightbulb, ArrowRight, Edit, AlertTriangle, ArrowLeft, ArrowUp, ArrowDown, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Filter, Info, ChevronDown, ChevronUp, Lightbulb, ArrowRight, Edit, AlertTriangle, ArrowLeft, ArrowUp, ArrowDown, ChevronsLeft, ChevronsRight, User } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { useSurvey } from '../../../contexts/SurveyContext';
 import { 
@@ -442,48 +442,74 @@ const InitialSurveyTab = () => {
     setCurrentQuestionIndex(memberQuestions.length - 1);
   };
   
-  // Get responses for the current question
-  const getResponsesForCurrentQuestion = () => {
-    if (!selectedMember) return {};
+  // Get responses for the current question - IMPROVED LOGIC
+const getResponsesForCurrentQuestion = () => {
+  if (!selectedMember) return {};
+  
+  const memberQuestions = personalizedQuestions[selectedMember] || [];
+  const questionId = memberQuestions[currentQuestionIndex]?.id;
+  if (!questionId) return {};
+  
+  const responses = {};
+  
+  familyMembers.forEach(member => {
+    // Only include responses for the questions that were in this member's set
+    const memberSet = personalizedQuestions[member.id] || [];
+    const isInMemberSet = memberSet.some(q => q.id === questionId);
     
-    const memberQuestions = personalizedQuestions[selectedMember] || [];
-    const questionId = memberQuestions[currentQuestionIndex]?.id;
-    if (!questionId) return {};
-    
-    const responses = {};
-    
-    familyMembers.forEach(member => {
-      // Only include responses for the questions that were in this member's set
-      const memberSet = personalizedQuestions[member.id] || [];
-      const isInMemberSet = memberSet.some(q => q.id === questionId);
+    if (isInMemberSet) {
+      // Try multiple possible formats for response keys
+      let found = false;
       
-      if (isInMemberSet) {
-        // Look for responses with various formats
-        // Format: memberId-questionId
-        const directKey = `${member.id}-${questionId}`;
-        if (surveyResponses[directKey]) {
-          responses[member.id] = surveyResponses[directKey];
-          return;
+      // 1. Format: memberId-questionId
+      const directKey = `${member.id}-${questionId}`;
+      if (surveyResponses[directKey]) {
+        responses[member.id] = surveyResponses[directKey];
+        found = true;
+      }
+      
+      // 2. Format: just questionId (legacy)
+      if (!found && surveyResponses[questionId] && member.id === selectedMember) {
+        responses[member.id] = surveyResponses[questionId];
+        found = true;
+      }
+      
+      // 3. Format: memberId_questionId
+      if (!found) {
+        const altKey = `${member.id}_${questionId}`;
+        if (surveyResponses[altKey]) {
+          responses[member.id] = surveyResponses[altKey];
+          found = true;
         }
-        
-        // Format: just questionId (legacy)
-        if (surveyResponses[questionId] && member.id === selectedMember) {
-          responses[member.id] = surveyResponses[questionId];
-          return;
-        }
-        
-        // Check other possible formats for this question ID
+      }
+      
+      // 4. Search for keys containing both memberId and questionId in some form
+      if (!found) {
         Object.entries(surveyResponses).forEach(([key, value]) => {
           // If the key contains both the member ID and question ID in some format
           if (key.includes(member.id) && key.includes(questionId)) {
             responses[member.id] = value;
+            found = true;
           }
         });
       }
-    });
-    
-    return responses;
-  };
+      
+      // 5. Check if the key is prefixed with week information
+      if (!found) {
+        const weekPrefixes = ['week-1-', 'weekly-1-', 'week1-'];
+        weekPrefixes.forEach(prefix => {
+          const weekKey = `${prefix}${member.id}-${questionId}`;
+          if (surveyResponses[weekKey]) {
+            responses[member.id] = surveyResponses[weekKey];
+            found = true;
+          }
+        });
+      }
+    }
+  });
+  
+  return responses;
+};
   
   // Handle opening feedback panel for a question
   const handleOpenFeedback = (question) => {
@@ -726,342 +752,464 @@ const InitialSurveyTab = () => {
         )}
       </div>
       
-      {/* Survey Responses Explorer - Completely Redesigned */}
-      <div className="bg-white rounded-lg shadow">
-        <div 
-          className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50"
-          onClick={() => toggleSection('responses')}
-        >
-          <h3 className="text-lg font-semibold">Survey Response Explorer</h3>
-          {expandedSections.responses ? (
-            <ChevronUp size={20} className="text-gray-500" />
-          ) : (
-            <ChevronDown size={20} className="text-gray-500" />
-          )}
+      {/* Survey Responses Explorer - Redesigned with insights */}
+<div className="bg-white rounded-lg shadow">
+  <div 
+    className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50"
+    onClick={() => toggleSection('responses')}
+  >
+    <h3 className="text-lg font-semibold">Survey Response Explorer</h3>
+    {expandedSections.responses ? (
+      <ChevronUp size={20} className="text-gray-500" />
+    ) : (
+      <ChevronDown size={20} className="text-gray-500" />
+    )}
+  </div>
+  
+  {expandedSections.responses && (
+    <div className="p-6 pt-0">
+      <div className="p-4 mb-4 bg-blue-50 rounded-lg border border-blue-100 text-sm text-blue-800">
+        <div className="flex items-start">
+          <Lightbulb size={20} className="text-blue-600 mr-2 flex-shrink-0" />
+          <div>
+            <p className="font-medium mb-1">About Personalized Questions</p>
+            <p>Allie selects 72 questions for each family member based on your family's structure and needs. Questions marked as "not applicable" are removed from future surveys. You can review and adjust question feedback here.</p>
+          </div>
         </div>
-        
-        {expandedSections.responses && (
-          <div className="p-6 pt-0">
-            <div className="p-4 mb-4 bg-blue-50 rounded-lg border border-blue-100 text-sm text-blue-800">
-              <div className="flex items-start">
-                <Lightbulb size={20} className="text-blue-600 mr-2 flex-shrink-0" />
-                <div>
-                  <p className="font-medium mb-1">About Personalized Questions</p>
-                  <p>Allie selects 72 questions for each family member based on your family's structure and needs. Questions marked as "not applicable" are removed from future surveys. You can review and adjust question feedback here.</p>
-                </div>
-              </div>
-            </div>
-            
-            <p className="text-sm text-gray-600 mb-4">
-              Explore how each family member responded to the initial survey questions
-            </p>
-            
-            {/* Family Member Selection - Enhanced with colored initials */}
-            <div className="flex flex-wrap gap-4 mb-6 justify-center">
-              {familyMembers.map(member => {
-                const memberQuestions = personalizedQuestions[member.id] || [];
-                return (
-                  <div 
-                    key={member.id}
-                    className={`flex flex-col items-center cursor-pointer transition-all p-2 rounded-lg ${
-                      selectedMember === member.id ? 'bg-gray-100 ring-2 ring-blue-300' : 'hover:bg-gray-50'
-                    }`}
-                    onClick={() => {
-                      setSelectedMember(member.id);
-                      setCurrentQuestionIndex(0);
-                    }}
-                  >
-                    <div className={`w-16 h-16 rounded-full overflow-hidden border-2 ${
-                      selectedMember === member.id ? 'border-blue-500' : 'border-gray-200'
-                    }`}>
-                      {isValidImageUrl(member.profilePicture) ? (
-                        <img 
-                          src={member.profilePicture}
-                          alt={member.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        // Colored placeholder for profile
-                        <div className={`w-full h-full flex items-center justify-center text-white ${getMemberColor(member)}`}>
-                          <span className="text-xl font-medium">
-                            {member.name ? member.name.charAt(0).toUpperCase() : '?'}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="mt-2 text-center">
-                      <p className="font-medium">{member.name}</p>
-                      <p className="text-xs text-gray-500 capitalize">{member.role}</p>
-                      <p className="text-xs text-blue-600">{memberQuestions.length} Questions</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            
-            {selectedMember ? (
-              <div>
-                {/* Member info banner */}
-                <div className="mb-6 p-4 bg-gray-50 rounded-lg border flex flex-col md:flex-row md:items-center justify-between">
-                  <div className="flex items-center mb-4 md:mb-0">
-                    <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-gray-300 mr-4">
-                      {isValidImageUrl(familyMembers.find(m => m.id === selectedMember)?.profilePicture) ? (
-                        <img 
-                          src={familyMembers.find(m => m.id === selectedMember)?.profilePicture} 
-                          alt={familyMembers.find(m => m.id === selectedMember)?.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className={`w-full h-full flex items-center justify-center text-white ${getMemberColor(familyMembers.find(m => m.id === selectedMember))}`}>
-                          <span className="text-xl font-medium">
-                            {familyMembers.find(m => m.id === selectedMember)?.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <div className="font-medium text-lg">{familyMembers.find(m => m.id === selectedMember)?.name}</div>
-                      <div className="text-sm text-gray-500 capitalize">{familyMembers.find(m => m.id === selectedMember)?.role}</div>
-                    </div>
-                  </div>
-                  
-                  {/* Category filter */}
-                  <div className="flex items-center">
-                    <Filter size={16} className="text-gray-500 mr-2" />
-                    <span className="text-sm mr-2">Filter by category:</span>
-                    <select
-                      className="border rounded p-1 text-sm"
-                      value={categoryFilter}
-                      onChange={(e) => setCategoryFilter(e.target.value)}
-                    >
-                      <option value="all">All Categories</option>
-                      <option value="Visible Household Tasks">Visible Household</option>
-                      <option value="Invisible Household Tasks">Invisible Household</option>
-                      <option value="Visible Parental Tasks">Visible Parental</option>
-                      <option value="Invisible Parental Tasks">Invisible Parental</option>
-                    </select>
-                  </div>
-                </div>
-                
-                {currentQuestion ? (
-                  <div>
-                    {/* Question display panel - Enhanced with more context */}
-                    <div className="border rounded-lg overflow-hidden mb-6">
-                      {/* Question header */}
-                      <div className="flex items-center justify-between bg-gray-50 p-4 border-b">
-                        <div className="flex items-center">
-                          <div className="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center mr-3">
-                            Q
-                          </div>
-                          <div>
-                            <h4 className="font-medium">Question {currentQuestionIndex + 1} of {personalizedQuestions[selectedMember]?.length || 0}</h4>
-                            <span className="text-xs text-gray-500">
-                              {currentQuestion.category}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center">
-                          {/* Show question feedback status */}
-                          {questionFeedback[currentQuestion.id] ? (
-                            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full flex items-center mr-3">
-                              <Info size={12} className="mr-1" />
-                              Feedback Added
-                            </span>
-                          ) : null}
-                          
-                          {/* Edit feedback button */}
-                          <button 
-                            onClick={() => handleOpenFeedback(currentQuestion)}
-                            className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full flex items-center hover:bg-gray-200"
-                          >
-                            <Edit size={12} className="mr-1" />
-                            {questionFeedback[currentQuestion.id] ? 'Edit Feedback' : 'Add Feedback'}
-                          </button>
-                        </div>
-                      </div>
-                      
-                      {/* Question main content */}
-                      <div className="p-4">
-                        <p className="text-lg mb-4">{currentQuestion.text}</p>
-                        
-                        {/* Show weight information */}
-                        <div className="mb-4 bg-gray-50 p-3 rounded-lg text-sm">
-                          <div className="flex items-start">
-                            <div className="mr-2 text-gray-400 mt-0.5">
-                              <Lightbulb size={16} />
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-700">Question Weight: {currentQuestion.totalWeight}</p>
-                              <p className="text-gray-600 text-xs mt-1">{currentQuestion.weightExplanation}</p>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Display if question is excluded */}
-                        {excludedQuestions['family']?.includes(currentQuestion.id) ? (
-                          <div className="p-3 bg-amber-50 text-amber-700 text-sm rounded-lg flex items-center mb-4">
-                            <AlertTriangle size={16} className="mr-2 flex-shrink-0" />
-                            <span>This question has been marked as "Not Applicable" for your family</span>
-                          </div>
-                        ) : null}
-                        
-                        {/* Family member responses */}
-                        <div className="rounded-lg border mt-2">
-                          <div className="bg-gray-50 p-3 border-b">
-                            <h5 className="font-medium">Family Responses</h5>
-                          </div>
-                          
-                          <div className="p-4">
-                            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                              {familyMembers.map(member => {
-                                // Check if this question was in this member's personalized set
-                                const memberQuestions = personalizedQuestions[member.id] || [];
-                                const questionInMemberSet = memberQuestions.some(q => q.id === currentQuestion.id);
-                                
-                                // If not in set, don't show
-                                if (!questionInMemberSet) return null;
-                                
-                                return (
-                                  <div 
-                                    key={member.id}
-                                    className="border rounded-lg p-3 bg-white"
-                                  >
-                                    <div className="flex items-center mb-2">
-                                      <div className="w-8 h-8 rounded-full overflow-hidden mr-2">
-                                        {isValidImageUrl(member.profilePicture) ? (
-                                          <img 
-                                            src={member.profilePicture} 
-                                            alt={member.name}
-                                            className="w-full h-full object-cover"
-                                          />
-                                        ) : (
-                                          <div className={`w-full h-full flex items-center justify-center text-white ${getMemberColor(member)}`}>
-                                            <span className="text-sm font-medium">
-                                              {member.name.charAt(0).toUpperCase()}
-                                            </span>
-                                          </div>
-                                        )}
-                                      </div>
-                                      <div>
-                                        <h5 className="font-medium text-sm">{member.name}</h5>
-                                        <p className="text-xs text-gray-500 capitalize">{member.role}</p>
-                                      </div>
-                                    </div>
-                                    
-                                    <div className="flex items-center justify-between mt-1">
-                                      <p className="text-sm font-medium">Response:</p>
-                                      {currentResponses[member.id] ? (
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                          currentResponses[member.id] === 'Mama' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'
-                                        }`}>
-                                          {currentResponses[member.id]}
-                                        </span>
-                                      ) : (
-                                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">No response</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            
-                            {/* No responses message */}
-                            {Object.keys(currentResponses).length === 0 && (
-                              <div className="bg-gray-50 p-4 rounded-lg text-center text-gray-500 text-sm mt-2">
-                                <p>No family members have answered this question yet</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Improved navigation controls */}
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={firstQuestion}
-                          disabled={currentQuestionIndex === 0}
-                          className={`p-2 rounded ${
-                            currentQuestionIndex === 0 
-                              ? 'text-gray-300 cursor-not-allowed' 
-                              : 'text-gray-700 hover:bg-gray-100'
-                          }`}
-                          title="First Question"
-                        >
-                          <ChevronsLeft size={18} />
-                        </button>
-                        <button
-                          onClick={prevQuestion}
-                          disabled={currentQuestionIndex === 0}
-                          className={`p-2 rounded ${
-                            currentQuestionIndex === 0 
-                              ? 'text-gray-300 cursor-not-allowed' 
-                              : 'text-gray-700 hover:bg-gray-100'
-                          }`}
-                          title="Previous Question"
-                        >
-                          <ArrowLeft size={18} />
-                        </button>
-                      </div>
-                      
-                      <div className="text-sm text-gray-500">
-                        Question {currentQuestionIndex + 1} of {personalizedQuestions[selectedMember]?.length || 0}
-                      </div>
-                      
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={nextQuestion}
-                          disabled={currentQuestionIndex === (personalizedQuestions[selectedMember]?.length || 0) - 1}
-                          className={`p-2 rounded ${
-                            currentQuestionIndex === (personalizedQuestions[selectedMember]?.length || 0) - 1
-                              ? 'text-gray-300 cursor-not-allowed' 
-                              : 'text-gray-700 hover:bg-gray-100'
-                          }`}
-                          title="Next Question"
-                        >
-                          <ArrowRight size={18} />
-                        </button>
-                        <button
-                          onClick={lastQuestion}
-                          disabled={currentQuestionIndex === (personalizedQuestions[selectedMember]?.length || 0) - 1}
-                          className={`p-2 rounded ${
-                            currentQuestionIndex === (personalizedQuestions[selectedMember]?.length || 0) - 1
-                              ? 'text-gray-300 cursor-not-allowed' 
-                              : 'text-gray-700 hover:bg-gray-100'
-                          }`}
-                          title="Last Question"
-                        >
-                          <ChevronsRight size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+      </div>
+      
+      <p className="text-sm text-gray-600 mb-4">
+        Explore how each family member responded to the initial survey questions
+      </p>
+      
+      {/* Family Member Selection - Enhanced with colored initials */}
+      <div className="flex flex-wrap gap-4 mb-6 justify-center">
+        {familyMembers.map(member => {
+          const memberQuestions = personalizedQuestions[member.id] || [];
+          return (
+            <div 
+              key={member.id}
+              className={`flex flex-col items-center cursor-pointer transition-all p-2 rounded-lg ${
+                selectedMember === member.id ? 'bg-gray-100 ring-2 ring-blue-300' : 'hover:bg-gray-50'
+              }`}
+              onClick={() => {
+                setSelectedMember(member.id);
+                setCurrentQuestionIndex(0);
+              }}
+            >
+              <div className={`w-16 h-16 rounded-full overflow-hidden border-2 ${
+                selectedMember === member.id ? 'border-blue-500' : 'border-gray-200'
+              }`}>
+                {isValidImageUrl(member.profilePicture) ? (
+                  <img 
+                    src={member.profilePicture}
+                    alt={member.name}
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
-                  <div className="text-center py-6 bg-gray-50 rounded-lg">
-                    <p className="text-gray-500">No questions available for this family member.</p>
+                  // Colored placeholder with initial
+                  <div className={`w-full h-full flex items-center justify-center text-white ${getMemberColor(member)}`}>
+                    <span className="text-xl font-medium">
+                      {member.name ? member.name.charAt(0).toUpperCase() : '?'}
+                    </span>
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="text-center py-16 bg-gray-50 rounded-lg">
-                <div className="max-w-md mx-auto">
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <User size={24} className="text-blue-600" />
+              <div className="mt-2 text-center">
+                <p className="font-medium">{member.name}</p>
+                <p className="text-xs text-gray-500 capitalize">{member.role}</p>
+                <p className="text-xs text-blue-600">{memberQuestions.length} Questions</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      
+      {selectedMember ? (
+        <div>
+          {/* Member info banner */}
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg border flex flex-col md:flex-row md:items-center justify-between">
+            <div className="flex items-center mb-4 md:mb-0">
+              <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-gray-300 mr-4">
+                {isValidImageUrl(familyMembers.find(m => m.id === selectedMember)?.profilePicture) ? (
+                  <img 
+                    src={familyMembers.find(m => m.id === selectedMember)?.profilePicture} 
+                    alt={familyMembers.find(m => m.id === selectedMember)?.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className={`w-full h-full flex items-center justify-center text-white ${getMemberColor(familyMembers.find(m => m.id === selectedMember))}`}>
+                    <span className="text-xl font-medium">
+                      {familyMembers.find(m => m.id === selectedMember)?.name.charAt(0).toUpperCase()}
+                    </span>
                   </div>
-                  <h4 className="text-lg font-medium mb-2">Select a Family Member</h4>
-                  <p className="text-gray-500 mb-6">
-                    Choose a family member above to explore their personalized survey questions and responses
-                  </p>
-                  <p className="text-sm text-blue-600">
-                    Each family member receives 72 personalized questions based on your family's unique needs
-                  </p>
+                )}
+              </div>
+              <div>
+                <div className="font-medium text-lg">{familyMembers.find(m => m.id === selectedMember)?.name}</div>
+                <div className="text-sm text-gray-500 capitalize">{familyMembers.find(m => m.id === selectedMember)?.role}</div>
+              </div>
+            </div>
+            
+            {/* Category filter */}
+            <div className="flex items-center">
+              <Filter size={16} className="text-gray-500 mr-2" />
+              <span className="text-sm mr-2">Filter by category:</span>
+              <select
+                className="border rounded p-1 text-sm"
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+              >
+                <option value="all">All Categories</option>
+                <option value="Visible Household Tasks">Visible Household</option>
+                <option value="Invisible Household Tasks">Invisible Household</option>
+                <option value="Visible Parental Tasks">Visible Parental</option>
+                <option value="Invisible Parental Tasks">Invisible Parental</option>
+              </select>
+            </div>
+          </div>
+          
+          {currentQuestion ? (
+            <div>
+              {/* Question display panel - Enhanced with more context */}
+              <div className="border rounded-lg overflow-hidden mb-6">
+                {/* Question header */}
+                <div className="flex items-center justify-between bg-gray-50 p-4 border-b">
+                  <div className="flex items-center">
+                    <div className="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center mr-3">
+                      Q
+                    </div>
+                    <div>
+                      <h4 className="font-medium">Question {currentQuestionIndex + 1} of {personalizedQuestions[selectedMember]?.length || 0}</h4>
+                      <span className="text-xs text-gray-500">
+                        {currentQuestion.category}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center">
+                    {/* Show question feedback status */}
+                    {questionFeedback[currentQuestion.id] ? (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full flex items-center mr-3">
+                        <Info size={12} className="mr-1" />
+                        Feedback Added
+                      </span>
+                    ) : null}
+                    
+                    {/* Edit feedback button */}
+                    <button 
+                      onClick={() => handleOpenFeedback(currentQuestion)}
+                      className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full flex items-center hover:bg-gray-200"
+                    >
+                      <Edit size={12} className="mr-1" />
+                      {questionFeedback[currentQuestion.id] ? 'Edit Feedback' : 'Add Feedback'}
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Question main content */}
+                <div className="p-4">
+                  <p className="text-lg mb-4">{currentQuestion.text}</p>
+                  
+                  {/* Show weight information */}
+                  <div className="mb-4 bg-gray-50 p-3 rounded-lg text-sm">
+                    <div className="flex items-start">
+                      <div className="mr-2 text-gray-400 mt-0.5">
+                        <Lightbulb size={16} />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-700">Question Weight: {currentQuestion.totalWeight}</p>
+                        <p className="text-gray-600 text-xs mt-1">{currentQuestion.weightExplanation || "This question helps measure workload distribution in your family."}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Display if question is excluded */}
+                  {excludedQuestions['family']?.includes(currentQuestion.id) ? (
+                    <div className="p-3 bg-amber-50 text-amber-700 text-sm rounded-lg flex items-center mb-4">
+                      <AlertTriangle size={16} className="mr-2 flex-shrink-0" />
+                      <span>This question has been marked as "Not Applicable" for your family</span>
+                    </div>
+                  ) : null}
+                  
+                  {/* Family member responses - IMPROVED */}
+                  <div className="rounded-lg border mt-2">
+                    <div className="bg-gray-50 p-3 border-b flex justify-between items-center">
+                      <h5 className="font-medium">Family Responses</h5>
+                      <span className="text-xs text-gray-500">Question ID: {currentQuestion.id}</span>
+                    </div>
+                    
+                    <div className="p-4">
+                      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                        {familyMembers.map(member => {
+                          // Check if this question was in this member's personalized set
+                          const memberQuestions = personalizedQuestions[member.id] || [];
+                          const questionInMemberSet = memberQuestions.some(q => q.id === currentQuestion.id);
+                          
+                          // If not in set, don't show
+                          if (!questionInMemberSet) return null;
+                          
+                          // Search for response in multiple formats
+                          let response = null;
+                          
+                          // Format 1: Direct key with memberId-questionId
+                          const directKey = `${member.id}-${currentQuestion.id}`;
+                          if (surveyResponses[directKey]) {
+                            response = surveyResponses[directKey];
+                          }
+                          
+                          // Format 2: Just questionId (legacy format)
+                          else if (surveyResponses[currentQuestion.id] && member.id === selectedMember) {
+                            response = surveyResponses[currentQuestion.id];
+                          }
+                          
+                          // Format 3: Search for keys containing both memberId and questionId
+                          else {
+                            Object.entries(surveyResponses).forEach(([key, value]) => {
+                              if (key.includes(member.id) && key.includes(currentQuestion.id)) {
+                                response = value;
+                              }
+                            });
+                          }
+                          
+                          // Format 4: For initial survey data, key may just be the question ID
+                          if (!response && member.id === selectedMember) {
+                            if (surveyResponses[currentQuestion.id]) {
+                              response = surveyResponses[currentQuestion.id];
+                            }
+                          }
+                          
+                          // Try one more approach: For keys like "memberId_questionId"
+                          if (!response) {
+                            const altKey = `${member.id}_${currentQuestion.id}`;
+                            if (surveyResponses[altKey]) {
+                              response = surveyResponses[altKey];
+                            }
+                          }
+                          
+                          return (
+                            <div 
+                              key={member.id}
+                              className="border rounded-lg p-3 bg-white shadow-sm hover:shadow-md transition-shadow"
+                            >
+                              <div className="flex items-center mb-2">
+                                <div className="w-10 h-10 rounded-full overflow-hidden mr-2 flex-shrink-0">
+                                  {isValidImageUrl(member.profilePicture) ? (
+                                    <img 
+                                      src={member.profilePicture} 
+                                      alt={member.name}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className={`w-full h-full flex items-center justify-center text-white ${getMemberColor(member)}`}>
+                                      <span className="text-sm font-medium">
+                                        {member.name.charAt(0).toUpperCase()}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <h5 className="font-medium text-sm">{member.name}</h5>
+                                  <p className="text-xs text-gray-500 capitalize">{member.role}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center justify-between mt-1">
+                                <p className="text-sm font-medium">Response:</p>
+                                {response ? (
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    response === 'Mama' ? 'bg-purple-100 text-purple-700' : 
+                                    response === 'Papa' ? 'bg-green-100 text-green-700' : 
+                                    'bg-blue-100 text-blue-700'
+                                  }`}>
+                                    {response}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">No response</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* No responses message */}
+                      {!Object.values(currentResponses).some(r => r === 'Mama' || r === 'Papa') && (
+                        <div className="bg-gray-50 p-4 rounded-lg text-center text-gray-500 text-sm mt-4">
+                          <p>No responses recorded for this question yet</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Response Insights Section - NEW */}
+                  {Object.values(currentResponses).some(r => r) && (
+                    <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-100">
+                      <h5 className="font-medium mb-3 flex items-center">
+                        <Lightbulb size={18} className="text-purple-600 mr-2" />
+                        Response Insights
+                      </h5>
+                      
+                      {/* Count Mama/Papa responses */}
+                      {(() => {
+                        const responseCounts = Object.values(currentResponses).reduce((acc, response) => {
+                          if (response === 'Mama' || response === 'Papa') {
+                            acc[response] = (acc[response] || 0) + 1;
+                          }
+                          return acc;
+                        }, {});
+                        
+                        const mamaCount = responseCounts['Mama'] || 0;
+                        const papaCount = responseCounts['Papa'] || 0;
+                        const totalResponses = mamaCount + papaCount;
+                        
+                        if (totalResponses === 0) return null;
+                        
+                        const percentMama = totalResponses > 0 ? Math.round((mamaCount / totalResponses) * 100) : 0;
+                        const percentPapa = totalResponses > 0 ? Math.round((papaCount / totalResponses) * 100) : 0;
+                        
+                        let agreementText = '';
+                        if (totalResponses > 1) {
+                          if (mamaCount === totalResponses) {
+                            agreementText = "Everyone agrees that Mama handles this task.";
+                          } else if (papaCount === totalResponses) {
+                            agreementText = "Everyone agrees that Papa handles this task.";
+                          } else {
+                            agreementText = "There's disagreement about who handles this task.";
+                          }
+                        }
+                        
+                        return (
+                          <div>
+                            <div className="flex justify-between items-center mb-1 text-sm">
+                              <span className="text-purple-700">Mama ({percentMama}%)</span>
+                              <span className="text-green-700">Papa ({percentPapa}%)</span>
+                            </div>
+                            <div className="h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
+                              <div 
+                                className="h-full bg-purple-500" 
+                                style={{ width: `${percentMama}%` }} 
+                              />
+                            </div>
+                            <p className="text-sm text-gray-700 mt-2">
+                              {agreementText}
+                            </p>
+                            
+                            {/* Additional insights based on who responded what */}
+                            {Object.entries(currentResponses).length > 1 && (
+                              <div className="mt-3 text-sm">
+                                <p className="font-medium mb-1">Perception differences:</p>
+                                <ul className="list-disc pl-5 space-y-1 text-xs">
+                                  {Object.entries(currentResponses).map(([memberId, response]) => {
+                                    if (!response) return null;
+                                    const member = familyMembers.find(m => m.id === memberId);
+                                    if (!member) return null;
+                                    
+                                    return (
+                                      <li key={memberId} className="text-gray-700">
+                                        <span className="font-medium">{member.name}</span> 
+                                        {member.role === 'child' 
+                                          ? ` (child) sees that ${response} handles this task.` 
+                                          : ` (${member.roleType || 'parent'}) reports that ${response} handles this task.`}
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
+              
+              {/* Improved navigation controls */}
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={firstQuestion}
+                    disabled={currentQuestionIndex === 0}
+                    className={`p-2 rounded ${
+                      currentQuestionIndex === 0 
+                        ? 'text-gray-300 cursor-not-allowed' 
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                    title="First Question"
+                  >
+                    <ChevronsLeft size={18} />
+                  </button>
+                  <button
+                    onClick={prevQuestion}
+                    disabled={currentQuestionIndex === 0}
+                    className={`p-2 rounded ${
+                      currentQuestionIndex === 0 
+                        ? 'text-gray-300 cursor-not-allowed' 
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                    title="Previous Question"
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
+                </div>
+                
+                <div className="text-sm text-gray-500">
+                  Question {currentQuestionIndex + 1} of {personalizedQuestions[selectedMember]?.length || 0}
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={nextQuestion}
+                    disabled={currentQuestionIndex === (personalizedQuestions[selectedMember]?.length || 0) - 1}
+                    className={`p-2 rounded ${
+                      currentQuestionIndex === (personalizedQuestions[selectedMember]?.length || 0) - 1
+                        ? 'text-gray-300 cursor-not-allowed' 
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                    title="Next Question"
+                  >
+                    <ArrowRight size={18} />
+                  </button>
+                  <button
+                    onClick={lastQuestion}
+                    disabled={currentQuestionIndex === (personalizedQuestions[selectedMember]?.length || 0) - 1}
+                    className={`p-2 rounded ${
+                      currentQuestionIndex === (personalizedQuestions[selectedMember]?.length || 0) - 1
+                        ? 'text-gray-300 cursor-not-allowed' 
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                    title="Last Question"
+                  >
+                    <ChevronsRight size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-6 bg-gray-50 rounded-lg">
+              <p className="text-gray-500">No questions available for this family member.</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="text-center py-16 bg-gray-50 rounded-lg">
+          <div className="max-w-md mx-auto">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <User size={24} className="text-blue-600" />
+            </div>
+            <h4 className="text-lg font-medium mb-2">Select a Family Member</h4>
+            <p className="text-gray-500 mb-6">
+              Choose a family member above to explore their personalized survey questions and responses
+            </p>
+            <p className="text-sm text-blue-600">
+              Each family member receives 72 personalized questions based on your family's unique needs
+            </p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+    </div>
+  )}
+</div>
       
       {/* Category Breakdown Chart */}
       <div className="bg-white rounded-lg shadow p-6">
