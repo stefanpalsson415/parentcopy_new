@@ -401,16 +401,24 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null }) => {
     <div className="bg-white rounded-lg shadow-md font-roboto">
       {/* Header */}
       <div className="p-4 border-b">
-        <div className="flex justify-between items-center">
-          <h2 className="text-lg font-medium">Document Library</h2>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => setShowUploadModal(true)}
-              className="px-3 py-1 bg-black text-white rounded-md text-sm flex items-center hover:bg-gray-800"
-            >
-              <Upload size={14} className="mr-1" />
-              Upload
-            </button>
+      <div className="p-4 border-b">
+  <div className="flex justify-between items-center">
+    <h2 className="text-lg font-medium">Document Library</h2>
+    <div className="flex space-x-2">
+      <button
+        onClick={props.onClose}
+        className="p-2 rounded-md hover:bg-gray-100"
+        title="Close"
+      >
+        <X size={18} />
+      </button>
+      <button
+        onClick={() => setShowUploadModal(true)}
+        className="px-3 py-1 bg-black text-white rounded-md text-sm flex items-center hover:bg-gray-800"
+      >
+        <Upload size={14} className="mr-1" />
+        Upload
+      </button>
             <button
               onClick={() => createFolder(prompt('Enter folder name:'))}
               className="px-3 py-1 border border-gray-300 rounded-md text-sm flex items-center hover:bg-gray-50"

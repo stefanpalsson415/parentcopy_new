@@ -500,6 +500,9 @@ class AllieAIService {
     }
   }
 
+
+
+  
   /**
    * Process relationship feedback to improve AI recommendations
    * @param {string} familyId - Family ID
@@ -869,6 +872,9 @@ class AllieAIService {
     return categories;
   }
 
+
+
+  
   /**
    * Analyze task effectiveness
    * @param {Array} completedTasks - Array of completed tasks

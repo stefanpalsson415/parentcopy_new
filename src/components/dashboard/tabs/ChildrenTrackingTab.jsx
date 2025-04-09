@@ -1098,6 +1098,68 @@ if (appointmentDate > new Date() && !formData.completed) {
     return true;
   };
   
+// Add to ChildrenTrackingTab.jsx - New function to handle coach/teacher submission
+const handleCoachTeacherSubmit = async (coachData) => {
+  try {
+    if (!familyId) throw new Error("No family ID available");
+    
+    setLoadingSection("coach");
+    
+    const { id, name, activity, phone, email, notes } = coachData;
+    
+    // Format coach data
+    const coach = {
+      name,
+      activity,
+      phone: phone || "",
+      email: email || "",
+      notes: notes || "",
+      familyId,
+      updatedAt: serverTimestamp()
+    };
+    
+    let coachId;
+    
+    if (id) {
+      // Update existing coach
+      const coachRef = doc(db, "activityCoaches", id);
+      await updateDoc(coachRef, coach);
+      coachId = id;
+    } else {
+      // Create new coach
+      const coachRef = collection(db, "activityCoaches");
+      const docRef = await addDoc(coachRef, {
+        ...coach,
+        createdAt: serverTimestamp()
+      });
+      coachId = docRef.id;
+    }
+    
+    // Update state and close modal
+    setLoadingSection(null);
+    closeModal();
+    
+    setAllieMessage({
+      type: 'success',
+      text: `Coach/Teacher ${id ? 'updated' : 'created'} successfully!`
+    });
+    
+    return coachId;
+  } catch (error) {
+    console.error("Error saving coach/teacher:", error);
+    setLoadingSection(null);
+    
+    setAllieMessage({
+      type: 'error',
+      text: `Error ${modalData.id ? 'updating' : 'creating'} coach/teacher: ${error.message}`
+    });
+    
+    return null;
+  }
+};
+
+
+
   // Handle growth form submission
   const handleGrowthFormSubmit = async (formData) => {
     const { childId, id } = formData;
@@ -1813,13 +1875,8 @@ if (appointmentDate > new Date() && !formData.completed) {
             <div key={child.id} className={`bg-white rounded-lg shadow ${viewMode === 'card' ? 'p-4' : 'p-4'}`}>
               <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center">
-                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
-                    <img 
-                      src={child.profilePicture || '/api/placeholder/40/40'} 
-                      alt={child.name} 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
+                <UserAvatar user={child} size={40} className="mr-3" />
+
                   <div>
                     <h4 className="font-medium font-roboto text-lg">{child.name}'s Growth</h4>
                     <p className="text-sm text-gray-500 font-roboto">
@@ -2294,6 +2351,113 @@ const renderRoutinesSection = () => {
               </div>
             </div>
             
+            {activeModal === 'coach' && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+      <div className="p-4 border-b flex justify-between items-center">
+        <h3 className="text-lg font-medium font-roboto">
+          {modalData.id ? 'Edit' : 'Add'} Coach or Teacher
+        </h3>
+        <button className="text-gray-500 hover:text-gray-700" onClick={closeModal}>
+          <X size={20} />
+        </button>
+      </div>
+      
+      <div className="p-4">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+              Name
+            </label>
+            <input
+              type="text"
+              value={modalData.name || ''}
+              onChange={e => setModalData({...modalData, name: e.target.value})}
+              className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+              placeholder="e.g., Coach Smith, Ms. Johnson"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+              Activity/Subject
+            </label>
+            <input
+              type="text"
+              value={modalData.activity || ''}
+              onChange={e => setModalData({...modalData, activity: e.target.value})}
+              className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+              placeholder="e.g., Soccer, Math, Piano"
+            />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                Phone
+              </label>
+              <input
+                type="tel"
+                value={modalData.phone || ''}
+                onChange={e => setModalData({...modalData, phone: e.target.value})}
+                className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                placeholder="e.g., 555-555-5555"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                Email
+              </label>
+              <input
+                type="email"
+                value={modalData.email || ''}
+                onChange={e => setModalData({...modalData, email: e.target.value})}
+                className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                placeholder="e.g., coach@example.com"
+              />
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+              Notes
+            </label>
+            <textarea
+              value={modalData.notes || ''}
+              onChange={e => setModalData({...modalData, notes: e.target.value})}
+              className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+              rows={2}
+              placeholder="Additional notes about this coach/teacher"
+            />
+          </div>
+        </div>
+      </div>
+      
+      <div className="p-4 border-t flex justify-end space-x-3">
+        <button
+          type="button"
+          onClick={closeModal}
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 font-roboto"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => handleCoachTeacherSubmit(modalData)}
+          disabled={loadingSection === 'coach'}
+          className={`px-4 py-2 text-sm font-medium rounded-md font-roboto ${
+            loadingSection === 'coach'
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-black text-white hover:bg-gray-800'
+          }`}
+        >
+          {loadingSection === 'coach' ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
             {/* Activities list */}
             <div className="space-y-3 mt-4">
               {childrenData[child.id]?.routines?.length > 0 ? (
@@ -2496,6 +2660,20 @@ const renderRoutinesSection = () => {
                   <Mic size={16} className="mr-1" />
                   Voice Input
                 </button>
+                <button
+  className="px-3 py-1 border border-black text-black rounded-md text-sm hover:bg-gray-50 font-roboto flex items-center"
+  onClick={() => setActiveComponent({
+    type: 'documentLibrary',
+    props: {
+      initialChildId: activeChild,
+      initialCategory: 'medical',
+      onClose: () => setActiveComponent(null)
+    }
+  })}
+>
+  <FileText size={14} className="mr-1" />
+  Documents
+</button>
               </div>
             </div>
             
@@ -2663,20 +2841,7 @@ const renderRoutinesSection = () => {
   </div>
 )}
 
-<button
-  className="px-3 py-1 border border-black text-black rounded-md text-sm hover:bg-gray-50 font-roboto flex items-center"
-  onClick={() => setActiveComponent({
-    type: 'documentLibrary',
-    props: {
-      initialChildId: activeChild,
-      initialCategory: 'medical',
-      onClose: () => setActiveComponent(null)
-    }
-  })}
->
-  <FileText size={14} className="mr-1" />
-  Documents
-</button>
+
 
             {/* Growth section */}
             <div className="bg-white rounded-lg shadow">
