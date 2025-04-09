@@ -1914,7 +1914,6 @@ const deleteEvent = async (event) => {
                             </p>
                             
 
-                            // src/components/calendar/FloatingCalendarWidget.jsx - Replace the rendering of attendee avatars in event list
 
 {/* Enhanced attendee avatars with better styling and info */}
 <div className="flex -space-x-2 ml-2 items-center">
@@ -2351,11 +2350,7 @@ const deleteEvent = async (event) => {
         className="bg-black text-white p-3 rounded-full hover:bg-gray-800 shadow-lg"
       >
         <Calendar size={24} />
-      </button>
-
-      // src/components/calendar/FloatingCalendarWidget.jsx - Replace the event details modal content 
-
-      // src/components/calendar/FloatingCalendarWidget.jsx - Replace the event details modal content 
+      </button> 
 
 {/* Event Details Modal - Enhanced with complete metadata */}
 {showEventDetails && selectedEvent && (

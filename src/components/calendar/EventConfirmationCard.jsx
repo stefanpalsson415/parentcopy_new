@@ -121,7 +121,7 @@ const handleSave = async () => {
     // If siblings are selected, create separate events for them too
     if (selectedSiblings && selectedSiblings.length > 0 && result.success) {
       for (const siblingId of selectedSiblings) {
-        const sibling = children.find(c => c.id === sibId);
+        const sibling = children.find(c => c.id === siblingId);
         if (sibling) {
           let siblingEvent = {
             ...calendarEvent,
