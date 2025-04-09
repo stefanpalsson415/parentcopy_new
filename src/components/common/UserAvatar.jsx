@@ -1,7 +1,9 @@
-// Add this component to src/components/common/UserAvatar.jsx
-import React from 'react';
+// src/components/common/UserAvatar.jsx
+import React, { useState } from 'react';
 
 const UserAvatar = ({ user, size = 40, className = "" }) => {
+  const [imageError, setImageError] = useState(false);
+  
   // Generate consistent color based on user ID or name
   const generateColor = (str) => {
     const colors = [
@@ -28,35 +30,40 @@ const UserAvatar = ({ user, size = 40, className = "" }) => {
   };
   
   // Check if user has a profile picture
-  const hasProfilePic = user && user.profilePicture && !user.profilePicture.includes('/api/placeholder');
+  const hasProfilePic = user && user.profilePicture && 
+                       !user.profilePicture.includes('/api/placeholder') && 
+                       !imageError;
+  
+  // Set styles as inline for consistent sizing
+  const avatarStyle = {
+    width: `${size}px`,
+    height: `${size}px`,
+    fontSize: `${size/2.5}px` // Scale font size based on avatar size
+  };
   
   if (hasProfilePic) {
     return (
       <div 
-        className={`w-${size/4} h-${size/4} rounded-full overflow-hidden ${className}`}
-        style={{ width: `${size}px`, height: `${size}px` }}
+        className={`rounded-full overflow-hidden ${className}`}
+        style={avatarStyle}
       >
         <img 
           src={user.profilePicture} 
           alt={user.name || 'User'} 
           className="w-full h-full object-cover"
-          onError={(e) => {
-            e.target.style.display = 'none';
-            e.target.parentNode.classList.add(generateColor(user.id || user.name || 'user'));
-            e.target.parentNode.setAttribute('data-initials', getInitials(user.name));
-          }}
+          onError={() => setImageError(true)}
         />
       </div>
     );
   } else {
     // Fallback to colored circle with initials
-    const colorClass = generateColor(user.id || user.name || 'user');
+    const colorClass = generateColor(user?.id || user?.name || 'user');
     return (
       <div 
-        className={`w-${size/4} h-${size/4} rounded-full flex items-center justify-center text-white font-medium ${colorClass} ${className}`}
-        style={{ width: `${size}px`, height: `${size}px` }}
+        className={`rounded-full flex items-center justify-center text-white font-medium ${colorClass} ${className}`}
+        style={avatarStyle}
       >
-        {getInitials(user.name)}
+        {getInitials(user?.name || '?')}
       </div>
     );
   }

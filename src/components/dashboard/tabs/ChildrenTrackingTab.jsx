@@ -2596,16 +2596,20 @@ const renderRoutinesSection = () => {
                   <h4 className="font-medium text-sm font-roboto mb-1">{insight.title}</h4>
                   <p className="text-sm font-roboto">{insight.content}</p>
                   
-                  {insight.childId && (
-                    <div className="mt-2 flex items-center">
-                      <img 
-                        src={getChildProfilePicture(insight.childId)} 
-                        alt={getChildName(insight.childId)} 
-                        className="w-5 h-5 rounded-full mr-1"
-                      />
-                      <span className="text-xs font-roboto">{getChildName(insight.childId)}</span>
-                    </div>
-                  )}
+{insight.childId && (
+  <div className="mt-2 flex items-center">
+    <UserAvatar 
+      user={{
+        id: insight.childId,
+        name: getChildName(insight.childId),
+        profilePicture: getChildProfilePicture(insight.childId)
+      }}
+      size={20}
+      className="mr-1"
+    />
+    <span className="text-xs font-roboto">{getChildName(insight.childId)}</span>
+  </div>
+)}
                 </div>
               </div>
             </div>
@@ -2691,28 +2695,26 @@ const renderRoutinesSection = () => {
                 All Children
               </button>
               {familyMembers
-                .filter(member => member.role === 'child')
-                .map(child => (
-                  <button
-                    key={child.id}
-                    className={`px-3 py-2 rounded-md text-sm font-roboto flex items-center whitespace-nowrap ${
-                      activeChild === child.id
-                        ? 'bg-black text-white'
-                        : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                    }`}
-                    onClick={() => setActiveChild(child.id)}
-                  >
-                    <div className="w-5 h-5 rounded-full overflow-hidden mr-1">
-                      <img 
-                        src={child.profilePicture || '/api/placeholder/20/20'} 
-                        alt={child.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    {child.name}
-                    {child.age && <span className="ml-1 text-xs">({child.age})</span>}
-                  </button>
-                ))}
+  .filter(member => member.role === 'child')
+  .map(child => (
+    <button
+      key={child.id}
+      className={`px-3 py-2 rounded-md text-sm font-roboto flex items-center whitespace-nowrap ${
+        activeChild === child.id
+          ? 'bg-black text-white'
+          : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+      }`}
+      onClick={() => setActiveChild(child.id)}
+    >
+      <UserAvatar 
+        user={child}
+        size={20}
+        className="mr-1"
+      />
+      {child.name}
+      {child.age && <span className="ml-1 text-xs">({child.age})</span>}
+    </button>
+  ))}
             </div>
           </div>
           

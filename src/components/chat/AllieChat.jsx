@@ -15,6 +15,7 @@ import CalendarService from '../../services/CalendarService';
 import EventParserService from '../../services/EventParserService';
 import EventConfirmationCard from '../calendar/EventConfirmationCard';
 
+
 const AllieChat = () => {
   const { familyId, selectedUser, familyMembers, updateMemberProfile, familyName, currentWeek, completedWeeks } = useFamily();
   const [messages, setMessages] = useState([]);
@@ -32,6 +33,8 @@ const [chatWidth, setChatWidth] = useState(60); // Default width (in rems) for d
   const [promptChips, setPromptChips] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
 const [dragCounter, setDragCounter] = useState(0);
+const childEventDetector = useRef(null);
+const childTrackingService = useRef(null);
   
   // Enhanced state variables
   const [showInsights, setShowInsights] = useState(false);
@@ -371,7 +374,12 @@ const [dragCounter, setDragCounter] = useState(0);
   };
 
 
-  // Process message for events - enhanced to detect invitations and trigger event parser
+ // In src/components/chat/AllieChat.jsx
+// Update the processMessageForEvents function to better detect medical-related content
+
+// Update this function in src/components/chat/AllieChat.jsx
+// Enhanced processMessageForEvents function
+
 const processMessageForEvents = async (text) => {
   try {
     // Only try to parse events if we have family context
@@ -380,6 +388,12 @@ const processMessageForEvents = async (text) => {
     // Get basic NLU analysis
     const intent = nlu.current.detectIntent(text);
     const entities = nlu.current.extractEntities(text);
+    
+    // Create child event detector if we don't have one
+    if (!childEventDetector.current) {
+      const ChildEventDetection = (await import('../services/EnhancedChildEventDetection')).default;
+      childEventDetector.current = new ChildEventDetection();
+    }
     
     // Enhanced detection for calendar-related content
     const isCalendarRelated = 
@@ -391,6 +405,67 @@ const processMessageForEvents = async (text) => {
       text.toLowerCase().includes('appointment') ||
       text.toLowerCase().includes('event') ||
       text.toLowerCase().includes('schedule');
+    
+    // NEW: Check for child-specific events like activities and medical appointments
+    const childrenList = familyMembers.filter(m => m.role === 'child');
+    
+    // Try to detect child activity
+    const activityEvent = childEventDetector.current.detectActivity(text, childrenList);
+    if (activityEvent && activityEvent.childId) {
+      // We found an activity for a specific child
+      console.log("Detected child activity:", activityEvent);
+      
+      // Add needed metadata
+      activityEvent.userId = selectedUser.id;
+      activityEvent.familyId = familyId;
+      activityEvent.creationSource = 'chat';
+      
+      // Set it as the parsed event
+      setParsedEventDetails(activityEvent);
+      setShowEventParser(true);
+      setEventParsingSource('text');
+      
+      // Add a helper message about what we found
+      const helperMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I noticed you're planning ${activityEvent.activityName} for ${activityEvent.childName}. I've extracted the details for you to review and can add this to both your calendar and ${activityEvent.childName}'s activity tracking.`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, helperMessage]);
+      return true;
+    }
+    
+    // Try to detect medical appointment
+    const medicalEvent = childEventDetector.current.detectMedicalAppointment(text, childrenList);
+    if (medicalEvent && medicalEvent.childId) {
+      // We found a medical appointment for a specific child
+      console.log("Detected medical appointment:", medicalEvent);
+      
+      // Add needed metadata
+      medicalEvent.userId = selectedUser.id;
+      medicalEvent.familyId = familyId;
+      medicalEvent.creationSource = 'chat';
+      
+      // Set it as the parsed event
+      setParsedEventDetails(medicalEvent);
+      setShowEventParser(true);
+      setEventParsingSource('text');
+      
+      // Add a helper message about what we found
+      const helperMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I noticed you're scheduling a ${medicalEvent.title} for ${medicalEvent.childName}. I've extracted the details for you to review and can add this to both your calendar and ${medicalEvent.childName}'s medical records.`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, helperMessage]);
+      return true;
+    }
     
     // Determine if this is a query about existing events
     const isCalendarQuery = 
@@ -447,6 +522,10 @@ const processMessageForEvents = async (text) => {
           // We successfully parsed an event
           // Add source tracking for learning feedback
           eventDetails.creationSource = 'text';
+          // Add user and family IDs
+          eventDetails.userId = selectedUser.id;
+          eventDetails.familyId = familyId;
+          
           setParsedEventDetails(eventDetails);
           setShowEventParser(true);
           setEventParsingSource('text');
@@ -476,8 +555,103 @@ const processMessageForEvents = async (text) => {
   }
 };
   
-// Add this new helper function to AllieChat.jsx
+// Add this helper function to src/components/chat/AllieChat.jsx
 
+// UPDATED addChildEventToTracking function to remove setError call
+
+// Add child event to both calendar and child tracking
+const addChildEventToTracking = async (eventDetails) => {
+  try {
+    if (!eventDetails || !selectedUser) return false;
+    
+    // Ensure we have required details
+    if (!eventDetails.childId || !eventDetails.trackingType) {
+      // Add error message directly instead of using setError
+      setMessages(prev => [...prev, {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I couldn't add this event because some required information is missing. Please make sure you've selected a child and event type.`,
+        timestamp: new Date().toISOString()
+      }]);
+      return false;
+    }
+    
+    // Make sure we have the ChildTrackingService
+    if (!childTrackingService.current) {
+      const ChildTracking = (await import('../services/ChildTrackingService')).default;
+      childTrackingService.current = ChildTracking;
+    }
+    
+    // Determine if this is a medical appointment or activity
+    let result;
+    let eventType;
+    
+    if (eventDetails.trackingType === 'medical') {
+      // It's a medical appointment
+      result = await childTrackingService.current.addMedicalAppointment(
+        familyId,
+        eventDetails.childId,
+        eventDetails,
+        true // Add to calendar too
+      );
+      eventType = "medical appointment";
+    } else {
+      // It's an activity
+      result = await childTrackingService.current.addActivity(
+        familyId,
+        eventDetails.childId,
+        eventDetails,
+        true // Add to calendar too
+      );
+      eventType = "activity";
+    }
+    
+    if (result.success) {
+      // Success message
+      const successMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `Great! I've added the ${eventType} "${eventDetails.title}" for ${eventDetails.childName} on ${new Date(eventDetails.dateTime).toLocaleDateString()} at ${new Date(eventDetails.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}. This has been added to both your family calendar and ${eventDetails.childName}'s ${eventDetails.trackingType === 'medical' ? 'medical records' : 'activities'}.`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, successMessage]);
+      
+      // Force calendar refresh
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        
+        // Dispatch child tracking update event
+        window.dispatchEvent(new CustomEvent('child-tracking-updated', {
+          detail: { 
+            childId: eventDetails.childId,
+            type: eventDetails.trackingType
+          }
+        }));
+      }
+      
+      return true;
+    } else {
+      throw new Error(result.error || "Failed to add event to tracking");
+    }
+  } catch (error) {
+    console.error("Error adding child event to tracking:", error);
+    
+    // Error message
+    const errorMessage = {
+      familyId,
+      sender: 'allie',
+      userName: 'Allie',
+      text: `I'm sorry, I couldn't add this event to tracking. ${error.message || "Please try again or add it manually through the Children tab."}`,
+      timestamp: new Date().toISOString()
+    };
+    
+    setMessages(prev => [...prev, errorMessage]);
+    return false;
+  }
+};
 // Check message history for potential calendar events
 const checkMessageHistoryForEvents = () => {
   // Only check if no event parser is already showing
@@ -1878,56 +2052,69 @@ const addEventToCalendar = async (eventDetails) => {
               </div>
             )}
             
-            {/* Event Parser UI */}
-            {showEventParser && (
-              <div className="bg-blue-50 p-3 rounded-lg ml-4">
-                <div className="mb-2 text-sm font-medium flex items-center">
-                  <Calendar size={14} className="mr-1 text-blue-600" />
-                  <span>Let's add this event to your calendar</span>
-                </div>
-                
-                <EventConfirmationCard 
-                  event={parsedEventDetails || detectedEventDetails}
-                  onConfirm={(event) => {
-                    // Add success message
-                    setMessages(prev => [...prev, {
-                      familyId,
-                      sender: 'allie',
-                      userName: 'Allie',
-                      text: `I've added "${event.title}" to your calendar on ${new Date(event.dateTime || event.startDate).toLocaleDateString()} at ${new Date(event.dateTime || event.startDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.`,
-                      timestamp: new Date().toISOString()
-                    }]);
-                    
-                    // Close event parser
-                    setShowEventParser(false);
-                    setParsedEventDetails(null);
-                    setDetectedEventDetails(null);
-                  }}
-                  onEdit={(updatedEvent) => {
-                    if (parsedEventDetails) {
-                      setParsedEventDetails(updatedEvent);
-                    } else {
-                      setDetectedEventDetails(updatedEvent);
-                    }
-                  }}
-                  onCancel={() => {
-                    setShowEventParser(false);
-                    setParsedEventDetails(null);
-                    setDetectedEventDetails(null);
-                    
-                    // Add message that user cancelled
-                    setMessages(prev => [...prev, {
-                      familyId,
-                      sender: 'allie',
-                      userName: 'Allie',
-                      text: `No problem! I won't add that event to your calendar. Is there anything else I can help with?`,
-                      timestamp: new Date().toISOString()
-                    }]);
-                  }}
-                  familyId={familyId}
-                />
-              </div>
-            )}
+            
+
+{/* Event Parser UI */}
+{showEventParser && (
+  <div className="bg-blue-50 p-3 rounded-lg ml-4">
+    <div className="mb-2 text-sm font-medium flex items-center">
+      <Calendar size={14} className="mr-1 text-blue-600" />
+      <span>Let's add this event to your {parsedEventDetails?.trackingType ? `calendar and ${parsedEventDetails.childName}'s records` : 'calendar'}</span>
+    </div>
+    
+    <EventConfirmationCard 
+      event={parsedEventDetails || detectedEventDetails}
+      onConfirm={(event) => {
+        // Check if this is a child tracking event
+        if (event.trackingType === 'medical' || event.trackingType === 'activity') {
+          // Add to both calendar and child tracking
+          addChildEventToTracking(event).then(() => {
+            // Close event parser
+            setShowEventParser(false);
+            setParsedEventDetails(null);
+            setDetectedEventDetails(null);
+          });
+        } else {
+          // Regular calendar event - add success message
+          setMessages(prev => [...prev, {
+            familyId,
+            sender: 'allie',
+            userName: 'Allie',
+            text: `I've added "${event.title}" to your calendar on ${new Date(event.dateTime || event.startDate).toLocaleDateString()} at ${new Date(event.dateTime || event.startDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.`,
+            timestamp: new Date().toISOString()
+          }]);
+          
+          // Close event parser
+          setShowEventParser(false);
+          setParsedEventDetails(null);
+          setDetectedEventDetails(null);
+        }
+      }}
+      onEdit={(updatedEvent) => {
+        if (parsedEventDetails) {
+          setParsedEventDetails(updatedEvent);
+        } else {
+          setDetectedEventDetails(updatedEvent);
+        }
+      }}
+      onCancel={() => {
+        setShowEventParser(false);
+        setParsedEventDetails(null);
+        setDetectedEventDetails(null);
+        
+        // Add message that user cancelled
+        setMessages(prev => [...prev, {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `No problem! I won't add that event to your calendar. Is there anything else I can help with?`,
+          timestamp: new Date().toISOString()
+        }]);
+      }}
+      familyId={familyId}
+    />
+  </div>
+)}
             
             {/* Profile upload UI */}
             {showProfileUploadHelp && profileUploadTarget && (
