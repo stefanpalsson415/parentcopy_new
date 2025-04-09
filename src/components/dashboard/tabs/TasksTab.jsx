@@ -3,7 +3,8 @@ import {
   Calendar, CheckCircle, X, Plus, Award, Flame, 
   Zap, Star, ArrowRight, MessageSquare, Clock, 
   Heart, ArrowUp, Camera, Share2, Upload, Check,
-  Info, ChevronDown, ChevronUp, Edit, AlertCircle
+  Info, ChevronDown, ChevronUp, Edit, AlertCircle,
+  User, Settings
 } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { useSurvey } from '../../../contexts/SurveyContext';
@@ -47,6 +48,31 @@ const daysSince = (dateString) => {
   return diffDays;
 };
 
+// Helper to generate avatar colors based on name
+const getAvatarColor = (name) => {
+  if (!name) return '#000000';
+  
+  // Simple hash function to get consistent colors
+  const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  
+  // Predefined colors for better aesthetics
+  const colors = [
+    '#FF5733', '#33A8FF', '#33FF57', '#B533FF', '#FF33E9',
+    '#FFD133', '#3346FF', '#FF336E', '#33FFD1', '#A2FF33'
+  ];
+  
+  return colors[hash % colors.length];
+};
+
+// Helper to get initials from name
+const getInitials = (name) => {
+  if (!name) return '?';
+  
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+};
+
 const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   const { 
     selectedUser, 
@@ -55,6 +81,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     completedWeeks,
     familyId,
     familyName,
+    familyPicture,
     addTaskComment,
     updateTaskCompletion,
     updateSubtaskCompletion,
@@ -88,6 +115,15 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   const [surveyDue, setSurveyDue] = useState(null);
   const [daysUntilSurvey, setDaysUntilSurvey] = useState(null);
   const [allieIsThinking, setAllieIsThinking] = useState(false);
+  const [showScheduleConfirm, setShowScheduleConfirm] = useState(false);
+  const [scheduleDetails, setScheduleDetails] = useState(null);
+  const [weekStatus, setWeekStatus] = useState({});
+  const [canScheduleMeeting, setCanScheduleMeeting] = useState(false);
+  const [meetingRequirements, setMeetingRequirements] = useState({
+    tasksCompleted: false,
+    surveysCompleted: false,
+    relationshipCheckinCompleted: false
+  });
   
   // Dates for weekly rhythm
   const [weekProgress, setWeekProgress] = useState(0);
@@ -100,8 +136,47 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   // Video ref for camera
   const videoRef = useRef(null);
   
+  // Check if family meeting can be scheduled
+  useEffect(() => {
+    if (!familyId || !currentWeek) return;
+    
+    const checkMeetingRequirements = async () => {
+      try {
+        // Get week status
+        const status = await getWeekStatus(currentWeek);
+        setWeekStatus(status);
+        
+        // Check task completion
+        const tasks = habits.concat(kidHabits);
+        const tasksCompleted = tasks.every(t => t.completed);
+        
+        // Check survey completion
+        const surveysCompleted = status.surveysCompleted || false;
+        
+        // Check relationship check-in completion
+        const relationshipCheckinCompleted = status.relationshipCheckinCompleted || false;
+        
+        // Update requirements
+        setMeetingRequirements({
+          tasksCompleted,
+          surveysCompleted,
+          relationshipCheckinCompleted
+        });
+        
+        // Determine if meeting can be scheduled
+        // For more flexibility, allow scheduling if any ONE requirement is met
+        setCanScheduleMeeting(tasksCompleted || surveysCompleted || relationshipCheckinCompleted);
+      } catch (error) {
+        console.error("Error checking meeting requirements:", error);
+      }
+    };
+    
+    checkMeetingRequirements();
+  }, [familyId, currentWeek, habits, kidHabits, getWeekStatus]);
+
   // Trigger Allie Chat component
   const triggerAllieChat = (message) => {
+    // Set the message in state
     setAllieInputValue(message);
     
     // Find the global chat button element and click it
@@ -129,6 +204,9 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
           if (sendButton) sendButton.click();
         }
       }, 500);
+    } else {
+      // If chat button not found, show a message
+      createCelebration("Chat not available", false, "Please try again in a moment");
     }
   };
 
@@ -161,8 +239,8 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
             // Check if this is a kid-focused habit
             const isKidHabit = 
               task.category === 'Kid Helper' || 
-              task.title.includes('Kid') || 
-              task.title.includes('Child');
+              task.title && task.title.includes('Kid') || 
+              task.title && task.title.includes('Child');
               
             if (!isForSelectedUser && !isKidHabit) {
               return;
@@ -177,13 +255,20 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
             const totalSubtasks = task.subTasks?.length || 1;
             const progress = task.completed ? 100 : Math.round((completedSubtasks / totalSubtasks) * 100);
             
+            // Clean up insight text if it contains undefined variables
+            let insightText = task.insight || task.aiInsight || "";
+            if (insightText.includes("undefined%")) {
+              // Replace with generic insight
+              insightText = `This task was selected based on survey analysis from Week ${currentWeek}.`;
+            }
+            
             // Create the habit object
             const habitObj = {
               id: task.id,
-              title: task.title.replace(/Week \d+: /g, ''),
-              description: task.description.replace(/for this week/g, 'consistently'),
+              title: task.title ? task.title.replace(/Week \d+: /g, '') : "Task",
+              description: task.description ? task.description.replace(/for this week/g, 'consistently') : "Description unavailable",
               cue: task.subTasks?.[0]?.title || "After breakfast",
-              action: task.subTasks?.[1]?.title || task.title,
+              action: task.subTasks?.[1]?.title || task.title || "Complete task",
               reward: task.subTasks?.[2]?.title || "Feel accomplished and balanced",
               identity: task.focusArea 
                 ? `I am someone who values ${task.focusArea.toLowerCase()}` 
@@ -192,7 +277,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
               assignedTo: task.assignedTo,
               assignedToName: task.assignedToName,
               category: task.category,
-              insight: task.insight || task.aiInsight,
+              insight: insightText,
               completed: task.completed,
               comments: task.comments || [],
               streak: streak,
@@ -252,7 +337,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     };
     
     loadHabits();
-  }, [familyId, currentWeek, selectedUser]);
+  }, [familyId, currentWeek, selectedUser, loadCurrentWeekTasks]);
   
   // Load streak data from database
   const loadStreakData = async () => {
@@ -495,17 +580,33 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     try {
       // First, update streak document
       const streakRef = doc(db, "families", familyId, "habitStreaks", habitId);
-      await updateDoc(streakRef, {
-        currentStreak: newStreak,
-        lastUpdated: new Date().toISOString()
-      });
+      try {
+        await updateDoc(streakRef, {
+          currentStreak: newStreak,
+          lastUpdated: new Date().toISOString()
+        });
+      } catch (error) {
+        // If document doesn't exist, create it
+        await setDoc(streakRef, {
+          currentStreak: newStreak,
+          lastUpdated: new Date().toISOString()
+        });
+      }
       
       // Then, update record if this is a new record
       const recordRef = doc(db, "families", familyId, "habitStreaks", `${habitId}_record`);
-      await updateDoc(recordRef, {
-        value: newRecord,
-        lastUpdated: new Date().toISOString()
-      });
+      try {
+        await updateDoc(recordRef, {
+          value: newRecord,
+          lastUpdated: new Date().toISOString()
+        });
+      } catch (error) {
+        // If document doesn't exist, create it
+        await setDoc(recordRef, {
+          value: newRecord,
+          lastUpdated: new Date().toISOString()
+        });
+      }
       
       // Update local streaks state
       setStreaks(prev => ({
@@ -515,24 +616,6 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
       }));
     } catch (error) {
       console.error("Error updating streak:", error);
-      // If documents don't exist yet, create them
-      try {
-        // Create streak document
-        const streakRef = doc(db, "families", familyId, "habitStreaks", habitId);
-        await setDoc(streakRef, {
-          currentStreak: newStreak,
-          lastUpdated: new Date().toISOString()
-        });
-        
-        // Create record document
-        const recordRef = doc(db, "families", familyId, "habitStreaks", `${habitId}_record`);
-        await setDoc(recordRef, {
-          value: newRecord,
-          lastUpdated: new Date().toISOString()
-        });
-      } catch (innerError) {
-        console.error("Error creating streak documents:", innerError);
-      }
     }
   };
   
@@ -558,11 +641,11 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   };
   
   // Create a celebration notification
-  const createCelebration = (habitTitle, isKid = false) => {
+  const createCelebration = (habitTitle, isKid = false, customMessage = null) => {
     const newCelebration = {
       id: Date.now(),
       title: habitTitle,
-      message: generateCelebrationMessage(habitTitle, isKid),
+      message: customMessage || generateCelebrationMessage(habitTitle, isKid),
       isKid,
       timestamp: new Date().toISOString()
     };
@@ -757,8 +840,8 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     }, 'image/jpeg');
   };
   
-  // Schedule a habit to calendar
-  const scheduleHabitToCalendar = async (habit) => {
+  // Prepare habit schedule details
+  const prepareHabitSchedule = (habit) => {
     if (!habit || !selectedUser) return;
     
     try {
@@ -780,23 +863,48 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
       const [hours, minutes] = defaultTime.split(':');
       startTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
       
+      // Create the schedule details
+      const details = {
+        habit: habit,
+        startTime: startTime,
+        endTime: new Date(startTime.getTime() + 30 * 60000),
+        recurrence: '21', // Default: repeat for 21 days
+        reminderMinutes: 10 // Default: 10 minutes before
+      };
+      
+      // Show schedule confirmation dialog
+      setScheduleDetails(details);
+      setShowScheduleConfirm(true);
+    } catch (error) {
+      console.error("Error preparing habit schedule:", error);
+      createCelebration("Schedule Error", false, "There was an error scheduling this habit. Please try again.");
+    }
+  };
+  
+  // Schedule a habit to calendar with confirmed details
+  const confirmScheduleToCalendar = async () => {
+    if (!scheduleDetails || !selectedUser) return;
+    
+    try {
+      const habit = scheduleDetails.habit;
+      
       // Create an event to repeat daily
       const event = {
         summary: `Habit: ${habit.title}`,
-        description: `${habit.description}\n\nCue: ${cue}\nAction: ${habit.action}\nReward: ${habit.reward}`,
+        description: `${habit.description}\n\nCue: ${habit.cue || habit.stackTrigger || "After breakfast"}\nAction: ${habit.action}\nReward: ${habit.reward}`,
         start: {
-          dateTime: startTime.toISOString(),
+          dateTime: scheduleDetails.startTime.toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
         },
         end: {
-          dateTime: new Date(startTime.getTime() + 30 * 60000).toISOString(),
+          dateTime: scheduleDetails.endTime.toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
         },
-        recurrence: ['RRULE:FREQ=DAILY;COUNT=21'], // Repeat for 21 days (the time needed to form a habit)
+        recurrence: [`RRULE:FREQ=DAILY;COUNT=${scheduleDetails.recurrence}`], // Repeat for specified days
         reminders: {
           useDefault: false,
           overrides: [
-            { method: 'popup', minutes: 10 }
+            { method: 'popup', minutes: scheduleDetails.reminderMinutes }
           ]
         },
         // Add metadata for Allie
@@ -811,18 +919,28 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
         // Create a comment in the habit about scheduling
         await addTaskComment(
           habit.id, 
-          `I've scheduled this habit for ${startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} every day for the next 21 days.`
+          `I've scheduled this habit for ${scheduleDetails.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} every day for the next ${scheduleDetails.recurrence} days.`
         );
         
         // Update the UI
-        createCelebration(`Habit scheduled for ${startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`, false);
+        createCelebration(`Habit scheduled for ${scheduleDetails.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`, false);
+        
+        // Close the confirmation dialog
+        setShowScheduleConfirm(false);
+        setScheduleDetails(null);
+        
         return true;
       } else {
         throw new Error("Failed to schedule habit");
       }
     } catch (error) {
       console.error("Error scheduling habit:", error);
-      alert("There was an error scheduling this habit. Please try again.");
+      createCelebration("Schedule Error", false, "There was an error scheduling this habit. Please try again.");
+      
+      // Close the confirmation dialog
+      setShowScheduleConfirm(false);
+      setScheduleDetails(null);
+      
       return false;
     }
   };
@@ -835,13 +953,31 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
       // Generate a new habit with Allie
       const habitPrompt = `Create a simple atomic habit for ${selectedUser.name} that helps with family balance. Focus on a small, easy action with a clear cue and reward. Use the format: Title | Description | Cue | Action | Reward | Identity Statement. Make it very specific and actionable.`;
       
-      const response = await AllieAIService.generateContent(habitPrompt, familyId);
+      const response = await AllieAIService.safeRequest(async () => {
+        return await AllieAIService.generateDashboardInsights(familyId, currentWeek);
+      }, { title: "Create Habit", description: habitPrompt });
       
-      // Extract parts
-      const parts = response.split('|').map(part => part.trim());
+      // Extract parts from response or use fallback
+      let parts = ["Balance Habit", "A small habit to improve family balance", "After breakfast", "Review family calendar", "Feel organized and prepared", "I am someone who values organization and preparation"];
       
-      if (parts.length < 6) {
-        throw new Error("Invalid habit format from Allie");
+      if (response && typeof response === 'string') {
+        const extractedParts = response.split('|').map(part => part.trim());
+        if (extractedParts.length >= 6) {
+          parts = extractedParts;
+        } else {
+          console.warn("AI response did not contain proper habit format, using fallback");
+        }
+      } else if (response && response.insights && response.insights.length > 0) {
+        // Try to extract from insights format
+        const insight = response.insights[0];
+        parts = [
+          insight.title || "Balance Habit",
+          insight.description || "A small habit to improve family balance",
+          "After breakfast", 
+          insight.actionItem || "Take a small action for balance",
+          "Feel accomplished",
+          `I am someone who values ${insight.category?.toLowerCase() || 'family balance'}`
+        ];
       }
       
       const [title, description, cue, action, reward, identity] = parts;
@@ -912,6 +1048,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     } catch (error) {
       console.error("Error creating new habit:", error);
       setAllieIsThinking(false);
+      createCelebration("Error", false, "Could not create habit. Please try again later.");
       return false;
     }
   };
@@ -925,7 +1062,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
       const children = familyMembers.filter(m => m.role === 'child');
       
       if (children.length === 0) {
-        alert("No children found in family");
+        createCelebration("No Children", false, "No children found in family");
         setAllieIsThinking(false);
         return false;
       }
@@ -933,18 +1070,34 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
       const child = children[0];
       
       // Generate a kid-friendly habit with Allie
-      const kidHabitPrompt = `Create a simple, fun helper task for a ${child.age || 8}-year-old child named ${child.name} that helps reduce parental load. It should be age-appropriate, fun, and help parents with daily tasks. Use the format: Title | Description | Cue | Action | Reward | Identity Statement. Make it very specific, actionable, and appealing to children.`;
+      const kidHabitPrompt = `Create a simple, fun helper task for a ${child.age || 8}-year-old child named ${child.name} that helps reduce parental load. It should be age-appropriate, fun, and help parents with daily tasks.`;
       
-      const response = await AllieAIService.generateContent(kidHabitPrompt, familyId);
+      // Safely request from AllieAIService with proper error handling
+      const response = await AllieAIService.safeRequest(async () => {
+        return await AllieAIService.generateDashboardInsights(familyId, currentWeek);
+      }, { title: "Kid Helper", description: kidHabitPrompt });
       
-      // Extract parts
-      const parts = response.split('|').map(part => part.trim());
+      // Fallback values in case AI fails
+      let title = `${child.name}'s Helper Task`;
+      let description = `A fun way for ${child.name} to help the family`;
+      let cue = "After breakfast";
+      let action = "Put away my dishes";
+      let reward = "High five from parents";
+      let identity = "a helpful family member";
       
-      if (parts.length < 6) {
-        throw new Error("Invalid habit format from Allie");
+      // Try to extract structured data from AI response
+      if (response && response.insights && response.insights.length > 0) {
+        const insight = response.insights[0];
+        title = insight.title || title;
+        description = insight.description || description;
+        action = insight.actionItem || action;
+      } else if (response && typeof response === 'string') {
+        // Try to parse from string format
+        const parts = response.split('|').map(part => part.trim());
+        if (parts.length >= 6) {
+          [title, description, cue, action, reward, identity] = parts;
+        }
       }
-      
-      const [title, description, cue, action, reward, identity] = parts;
       
       // Create the habit subtasks
       const subTasks = [
@@ -1012,6 +1165,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     } catch (error) {
       console.error("Error creating kid habit:", error);
       setAllieIsThinking(false);
+      createCelebration("Error", false, "Could not create kid habit. Please try again later.");
       return false;
     }
   };
@@ -1025,11 +1179,35 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden font-roboto">
-      {/* Header with streak information */}
+      {/* Header with streak information and family avatar */}
       <div className="bg-black text-white p-4 flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-medium">Atomic Habits Builder</h2>
-          <p className="text-sm text-gray-300 mt-1">Small changes, big results</p>
+        <div className="flex items-center">
+          {/* Family avatar */}
+          <div className="mr-4 hidden md:block">
+            {familyPicture ? (
+              <div className="w-12 h-12 rounded-lg overflow-hidden border-2 border-white shadow-lg">
+                <img 
+                  src={familyPicture} 
+                  alt={`${familyName || 'Family'}`} 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            ) : (
+              <div 
+                className="w-12 h-12 rounded-lg overflow-hidden border-2 border-white shadow-lg flex items-center justify-center"
+                style={{ backgroundColor: getAvatarColor(familyName) }}
+              >
+                <span className="text-lg font-bold text-white">
+                  {getInitials(familyName)}
+                </span>
+              </div>
+            )}
+          </div>
+          
+          <div>
+            <h2 className="text-xl font-medium">Atomic Habits Builder</h2>
+            <p className="text-sm text-gray-300 mt-1">Small changes, big results</p>
+          </div>
         </div>
         <div className="flex items-center">
           <div className="bg-white bg-opacity-10 rounded-lg px-3 py-2 mr-3 text-center">
@@ -1052,8 +1230,11 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
       {/* Week progress bar and next survey indicator */}
       <div className="p-4 border-b">
         <div className="flex justify-between items-center mb-2">
-          <div className="text-sm">Week {currentWeek} Progress</div>
-          <div className="text-sm">{daysRemaining} day{daysRemaining !== 1 ? 's' : ''} left</div>
+          <div className="text-sm">
+            Cycle {currentWeek} Progress
+            <span className="ml-1 text-xs text-gray-500">(flexible timeframe)</span>
+          </div>
+          <div className="text-sm">{daysRemaining} day{daysRemaining !== 1 ? 's' : ''} left in week</div>
         </div>
         <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
           <div 
@@ -1068,7 +1249,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
             <div className="flex items-center">
               <Calendar size={16} className="text-blue-600 mr-2" />
               <div>
-                <p className="text-sm font-medium">Next Survey Due</p>
+                <p className="text-sm font-medium">Next Cycle Survey</p>
                 <p className="text-xs text-gray-600">{surveyDue ? formatDate(surveyDue) : 'Not scheduled'}</p>
               </div>
             </div>
@@ -1089,6 +1270,51 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
             </div>
           </div>
         )}
+        
+        {/* Family meeting button - conditionally shown based on requirements */}
+        <div className="mt-4 border-t pt-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center">
+              <Calendar size={16} className="text-green-600 mr-2" />
+              <div>
+                <p className="text-sm font-medium">Family Meeting</p>
+                <p className="text-xs text-gray-600">
+                  {canScheduleMeeting 
+                    ? "Ready to schedule!" 
+                    : "Complete tasks and surveys first"}
+                </p>
+              </div>
+            </div>
+            
+            <button 
+              onClick={onOpenFamilyMeeting}
+              className={`px-3 py-1 text-sm rounded-md ${
+                canScheduleMeeting 
+                  ? "bg-green-600 text-white hover:bg-green-700" 
+                  : "bg-gray-200 text-gray-500 cursor-not-allowed"
+              }`}
+              disabled={!canScheduleMeeting}
+            >
+              Schedule Meeting
+            </button>
+          </div>
+          
+          {/* Meeting requirements status indicators */}
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            <div className={`text-xs ${meetingRequirements.tasksCompleted ? "text-green-600" : "text-gray-500"} flex items-center`}>
+              <div className={`w-3 h-3 rounded-full mr-1 ${meetingRequirements.tasksCompleted ? "bg-green-500" : "bg-gray-300"}`}></div>
+              Tasks Completed
+            </div>
+            <div className={`text-xs ${meetingRequirements.surveysCompleted ? "text-green-600" : "text-gray-500"} flex items-center`}>
+              <div className={`w-3 h-3 rounded-full mr-1 ${meetingRequirements.surveysCompleted ? "bg-green-500" : "bg-gray-300"}`}></div>
+              Surveys Done
+            </div>
+            <div className={`text-xs ${meetingRequirements.relationshipCheckinCompleted ? "text-green-600" : "text-gray-500"} flex items-center`}>
+              <div className={`w-3 h-3 rounded-full mr-1 ${meetingRequirements.relationshipCheckinCompleted ? "bg-green-500" : "bg-gray-300"}`}></div>
+              Relationship Check
+            </div>
+          </div>
+        </div>
       </div>
       
       {/* Habit stacking section */}
@@ -1279,7 +1505,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                         Details
                       </button>
                       <button
-                        onClick={() => scheduleHabitToCalendar(habit)}
+                        onClick={() => prepareHabitSchedule(habit)}
                         className="text-xs flex items-center text-gray-600 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-100"
                       >
                         <Calendar size={12} className="mr-1" />
@@ -1429,25 +1655,6 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
         )}
       </div>
       
-      {/* Family meeting reminder */}
-      <div className="mt-4 p-4 border-t bg-blue-50">
-        <div className="flex items-start">
-          <Calendar size={20} className="text-blue-600 mt-1 mr-3" />
-          <div>
-            <h3 className="font-medium text-blue-800">Family Meeting</h3>
-            <p className="text-sm text-blue-600 mt-1">
-              Schedule your weekly family meeting to review habit progress and celebrate wins
-            </p>
-            <button 
-              onClick={onOpenFamilyMeeting}
-              className="mt-3 px-4 py-2 bg-blue-600 text-white rounded flex items-center hover:bg-blue-700"
-            >
-              Schedule Meeting
-            </button>
-          </div>
-        </div>
-      </div>
-      
       {/* Allie chat integration */}
       <div className="mt-4 p-4 border-t">
         <div className="flex items-start">
@@ -1548,10 +1755,10 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                 <div className="text-sm font-medium mb-2">Previous Reflections:</div>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {selectedHabit.comments.map(comment => (
-                    <div key={comment.id} className="p-2 bg-gray-50 rounded">
+                    <div key={comment.id || Date.now()} className="p-2 bg-gray-50 rounded">
                       <div className="text-xs text-gray-500">{formatDate(comment.timestamp)}</div>
                       <div className="text-sm mt-1">
-                        {comment.text.startsWith('[IMAGE]') ? (
+                        {comment.text && comment.text.startsWith('[IMAGE]') ? (
                           <img 
                             src={comment.text.replace('[IMAGE] ', '')} 
                             alt="Habit" 
@@ -1657,7 +1864,10 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                   {selectedHabit.insight}
                 </div>
                 <button
-                  onClick={() => triggerAllieChat(`Tell me more about how "${selectedHabit.title}" helps with family balance.`)}
+                  onClick={() => {
+                    triggerAllieChat(`Tell me more about how "${selectedHabit.title}" helps with family balance.`);
+                    setShowHabitDetail(null);
+                  }}
                   className="text-xs text-blue-700 mt-2 flex items-center"
                 >
                   <MessageSquare size={12} className="mr-1" />
@@ -1675,6 +1885,130 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
               >
                 <CheckCircle size={16} className="mr-2" />
                 Save Reflection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Schedule confirmation modal */}
+      {showScheduleConfirm && scheduleDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="font-medium text-lg">Schedule Habit</h3>
+              <button 
+                onClick={() => {
+                  setShowScheduleConfirm(false);
+                  setScheduleDetails(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <div className="text-sm font-medium mb-1">Habit:</div>
+              <div className="p-2 bg-gray-50 rounded text-sm">
+                {scheduleDetails.habit.title}
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <div className="text-sm font-medium mb-1">Schedule Time:</div>
+              <input
+                type="time"
+                className="w-full p-2 border rounded"
+                value={scheduleDetails.startTime.toTimeString().substr(0, 5)}
+                onChange={(e) => {
+                  const [hours, minutes] = e.target.value.split(':');
+                  const newStartTime = new Date(scheduleDetails.startTime);
+                  newStartTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                  
+                  const newEndTime = new Date(newStartTime);
+                  newEndTime.setMinutes(newStartTime.getMinutes() + 30);
+                  
+                  setScheduleDetails({
+                    ...scheduleDetails,
+                    startTime: newStartTime,
+                    endTime: newEndTime
+                  });
+                }}
+              />
+            </div>
+            
+            <div className="mb-4">
+              <div className="text-sm font-medium mb-1">Repeat for:</div>
+              <div className="flex items-center">
+                <input
+                  type="number"
+                  className="w-20 p-2 border rounded mr-2"
+                  value={scheduleDetails.recurrence}
+                  onChange={(e) => {
+                    setScheduleDetails({
+                      ...scheduleDetails,
+                      recurrence: Math.max(1, parseInt(e.target.value) || 1)
+                    });
+                  }}
+                  min="1"
+                  max="90"
+                />
+                <span className="text-sm text-gray-600">days</span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Experts recommend at least 21 days to form a habit
+              </p>
+            </div>
+            
+            <div className="mb-6">
+              <div className="text-sm font-medium mb-1">Reminder:</div>
+              <select
+                className="w-full p-2 border rounded"
+                value={scheduleDetails.reminderMinutes}
+                onChange={(e) => {
+                  setScheduleDetails({
+                    ...scheduleDetails,
+                    reminderMinutes: parseInt(e.target.value)
+                  });
+                }}
+              >
+                <option value="5">5 minutes before</option>
+                <option value="10">10 minutes before</option>
+                <option value="15">15 minutes before</option>
+                <option value="30">30 minutes before</option>
+                <option value="60">1 hour before</option>
+              </select>
+            </div>
+            
+            <div className="bg-blue-50 p-3 rounded-lg mb-4 text-sm text-blue-800">
+              <div className="flex items-center mb-1">
+                <Info size={14} className="mr-1 text-blue-600" />
+                <div className="font-medium">Scheduling Details:</div>
+              </div>
+              <p>
+                This will add a calendar reminder for "{scheduleDetails.habit.title}" 
+                at {scheduleDetails.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} 
+                every day for the next {scheduleDetails.recurrence} days.
+              </p>
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowScheduleConfirm(false);
+                  setScheduleDetails(null);
+                }}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmScheduleToCalendar}
+                className="px-4 py-2 bg-black text-white rounded-lg flex items-center"
+              >
+                <Calendar size={16} className="mr-2" />
+                Add to Calendar
               </button>
             </div>
           </div>
@@ -1717,84 +2051,6 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
             >
               <div className="w-14 h-14 rounded-full border-4 border-black"></div>
             </button>
-          </div>
-        </div>
-      )}
-      
-      {/* Allie coaching modal */}
-      {showAllieCoaching && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="font-medium text-lg">Allie Habit Coaching</h3>
-              <button 
-                onClick={() => setShowAllieCoaching(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="mb-4 p-4 bg-blue-50 rounded-lg text-sm">
-              <p>
-                To build effective habits, focus on:
-              </p>
-              <ul className="mt-2 space-y-1 pl-4 list-disc">
-                <li>Establishing a clear cue (e.g., "After breakfast")</li>
-                <li>Making the habit very small and easy to start</li>
-                <li>Creating immediate satisfaction after completion</li>
-                <li>Tracking your progress visually</li>
-              </ul>
-            </div>
-            
-            <div className="text-sm text-gray-600 mb-4">
-              What specific habit would you like to discuss with Allie?
-            </div>
-            
-            <div className="space-y-2">
-              <button
-                onClick={() => {
-                  setShowAllieCoaching(false);
-                  triggerAllieChat("How can I build a habit of planning meals ahead of time to reduce stress?");
-                }}
-                className="w-full p-2 text-left text-sm border rounded hover:bg-gray-50"
-              >
-                How to build a habit of meal planning
-              </button>
-              
-              <button
-                onClick={() => {
-                  setShowAllieCoaching(false);
-                  triggerAllieChat("What's a good habit stack I can create for my morning routine to help with family balance?");
-                }}
-                className="w-full p-2 text-left text-sm border rounded hover:bg-gray-50"
-              >
-                Creating a morning habit stack
-              </button>
-              
-              <button
-                onClick={() => {
-                  setShowAllieCoaching(false);
-                  triggerAllieChat("How can I help my kids develop good habits to help around the house?");
-                }}
-                className="w-full p-2 text-left text-sm border rounded hover:bg-gray-50"
-              >
-                Helping kids develop helper habits
-              </button>
-            </div>
-            
-            <div className="mt-4">
-              <button
-                onClick={() => {
-                  setShowAllieCoaching(false);
-                  triggerAllieChat("I want to learn more about building effective habits based on the Atomic Habits principles.");
-                }}
-                className="px-4 py-2 bg-black text-white rounded-lg flex items-center mx-auto"
-              >
-                <MessageSquare size={16} className="mr-2" />
-                Chat with Allie
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -1861,9 +2117,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
             
             <div className="flex space-x-3">
               <button
-                onClick={() => {
-                  createNewHabit();
-                }}
+                onClick={createNewHabit}
                 className="flex-1 px-4 py-2 bg-black text-white rounded-lg flex items-center justify-center"
                 disabled={allieIsThinking}
               >
