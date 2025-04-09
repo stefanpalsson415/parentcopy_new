@@ -577,7 +577,7 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null }) => {
                       >
                         <Eye size={16} />
                       </button>
-                      
+                      <a
                         href={document.fileUrl}
                         download={document.fileName}
                         className="p-1 text-green-600 hover:bg-green-50 rounded"
@@ -613,7 +613,7 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null }) => {
                       >
                         <Eye size={16} />
                       </button>
-                      
+                      <a
                         href={document.fileUrl}
                         download={document.fileName}
                         className="p-1 text-green-600 hover:bg-green-50 rounded"
@@ -685,7 +685,7 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null }) => {
                 <div className="p-8 text-center">
                   <FileText size={64} className="mx-auto mb-4 text-gray-400" />
                   <p className="mb-2">Cannot preview this file type</p>
-                  
+                  <a
                     href={selectedDocument.fileUrl}
                     download={selectedDocument.fileName}
                     className="px-4 py-2 bg-blue-600 text-white rounded-md inline-flex items-center hover:bg-blue-700"
