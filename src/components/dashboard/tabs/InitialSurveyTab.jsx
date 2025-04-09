@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Filter, Info, ChevronDown, ChevronUp, Lightbulb, User, ArrowRight, Edit, Save, X, AlertTriangle } from 'lucide-react';
+import { Filter, Info, ChevronDown, ChevronUp, Lightbulb, ArrowRight, Edit, AlertTriangle, ArrowLeft, ArrowUp, ArrowDown, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { useSurvey } from '../../../contexts/SurveyContext';
 import { 
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, 
-  Radar, Legend, ResponsiveContainer 
+  Radar, Legend, ResponsiveContainer, 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell
 } from 'recharts';
 import QuestionFeedbackService from '../../../services/QuestionFeedbackService';
 import QuestionFeedbackPanel from '../../survey/QuestionFeedbackPanel';
@@ -19,11 +20,13 @@ const InitialSurveyTab = () => {
   const { 
     fullQuestionSet,
     getPersonalizedInitialQuestions, 
-    selectPersonalizedInitialQuestions
+    selectPersonalizedInitialQuestions,
+    getQuestionsByCategory
   } = useSurvey();
   
   // State for filters and expanded sections
   const [radarFilter, setRadarFilter] = useState('all'); // 'all', 'parents', 'children'
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [expandedSections, setExpandedSections] = useState({
     categories: true,
     insights: true,
@@ -36,6 +39,49 @@ const InitialSurveyTab = () => {
   const [excludedQuestions, setExcludedQuestions] = useState({});
   const [selectedQuestion, setSelectedQuestion] = useState(null);
   const [showFeedbackPanel, setShowFeedbackPanel] = useState(false);
+  const [questionFeedback, setQuestionFeedback] = useState({});
+  const [familyResponseStats, setFamilyResponseStats] = useState({
+    total: 0,
+    completed: 0,
+    categories: {},
+    mamaPercent: 50,
+    papaPercent: 50
+  });
+  
+  // Profile colors for avatar placeholders - same as in FamilySelectionScreen
+  const profileColors = [
+    'bg-purple-500', 'bg-blue-500', 'bg-pink-500', 'bg-green-500', 
+    'bg-amber-500', 'bg-cyan-500', 'bg-red-500', 'bg-indigo-500',
+  ];
+  
+  // Get consistent color for a member based on their id
+  const getMemberColor = (member) => {
+    if (!member || !member.id) return profileColors[0];
+    
+    // Use a simple hash of the member's id to pick a color consistently
+    const hashCode = member.id.split('').reduce(
+      (acc, char) => acc + char.charCodeAt(0), 0
+    );
+    
+    return profileColors[hashCode % profileColors.length];
+  };
+  
+  // Check if image URL is valid
+  const isValidImageUrl = (url) => {
+    // Check if url is defined and not empty
+    if (!url || url === '') return false;
+    
+    // Explicit check for problematic cases
+    const invalidPatterns = ['undefined', 'null', 'Tegner', 'Profile', 'broken', 'placeholder'];
+    if (invalidPatterns.some(pattern => url.includes(pattern))) return false;
+    
+    // If it's a data URL, it's likely valid
+    if (url.startsWith('data:image/')) return true;
+    
+    // If it has a common image extension, it's likely valid
+    const validExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+    return validExtensions.some(ext => url.toLowerCase().includes(ext));
+  };
   
   // Toggle section expansion
   const toggleSection = (section) => {
@@ -98,6 +144,19 @@ const InitialSurveyTab = () => {
         
         setPersonalizedQuestions(memberQuestions);
         setExcludedQuestions(excludedQuestionsMap);
+        
+        // Load feedback for all questions
+        const allFeedback = await QuestionFeedbackService.getAllFamilyFeedback(familyId);
+        if (allFeedback) {
+          const feedbackMap = {};
+          allFeedback.forEach(item => {
+            feedbackMap[item.questionId] = item;
+          });
+          setQuestionFeedback(feedbackMap);
+        }
+        
+        // Calculate family response statistics
+        calculateFamilyResponseStats();
       } catch (error) {
         console.error("Error loading personalized questions:", error);
       } finally {
@@ -106,110 +165,251 @@ const InitialSurveyTab = () => {
     };
     
     loadPersonalizedData();
-  }, [familyId, familyMembers, fullQuestionSet, selectPersonalizedInitialQuestions]);
+  }, [familyId, familyMembers, fullQuestionSet, selectPersonalizedInitialQuestions, surveyResponses]);
   
-  // Sample radar chart data based on family's task distribution
-  const getRadarData = (filter) => {
-    // This function calculates radar data from actual survey responses
-    // Based on the filter, we'd show different data views
-    // For simplicity, we're using the same implementation from before
-    switch(filter) {
-      case 'parents':
-        return [
-          {
-            category: "Visible Household",
-            mama: 68,
-            papa: 32
-          },
-          {
-            category: "Invisible Household",
-            mama: 80,
-            papa: 20
-          },
-          {
-            category: "Visible Parental",
-            mama: 58,
-            papa: 42
-          },
-          {
-            category: "Invisible Parental",
-            mama: 75,
-            papa: 25
-          }
-        ];
-      case 'children':
-        return [
-          {
-            category: "Visible Household",
-            mama: 62,
-            papa: 38
-          },
-          {
-            category: "Invisible Household",
-            mama: 70,
-            papa: 30
-          },
-          {
-            category: "Visible Parental",
-            mama: 50,
-            papa: 50
-          },
-          {
-            category: "Invisible Parental",
-            mama: 65,
-            papa: 35
-          }
-        ];
-      case 'all':
-      default:
-        return [
-          {
-            category: "Visible Household",
-            mama: 65,
-            papa: 35
-          },
-          {
-            category: "Invisible Household",
-            mama: 75,
-            papa: 25
-          },
-          {
-            category: "Visible Parental",
-            mama: 55,
-            papa: 45
-          },
-          {
-            category: "Invisible Parental",
-            mama: 70,
-            papa: 30
-          }
-        ];
+  // Calculate family response statistics
+  const calculateFamilyResponseStats = () => {
+    // Skip if no survey responses
+    if (!surveyResponses || Object.keys(surveyResponses).length === 0) return;
+    
+    const categories = [
+      "Visible Household Tasks",
+      "Invisible Household Tasks", 
+      "Visible Parental Tasks",
+      "Invisible Parental Tasks"
+    ];
+    
+    // Count responses by category and parent
+    const stats = {
+      total: 0,
+      completed: 0,
+      mamaCount: 0,
+      papaCount: 0,
+      categories: {}
+    };
+    
+    // Initialize category stats
+    categories.forEach(category => {
+      stats.categories[category] = {
+        total: 0,
+        mama: 0,
+        papa: 0
+      };
+    });
+    
+    // Analyze responses
+    Object.entries(surveyResponses).forEach(([key, response]) => {
+      // Only count initial survey responses (not weekly ones)
+      if (key.includes('week-') || key.includes('weekly-')) return;
+      
+      // Skip non Mama/Papa responses
+      if (response !== 'Mama' && response !== 'Papa') return;
+      
+      // Extract question ID
+      const questionId = key.includes('-') ? key.split('-').pop() : key;
+      
+      // Find the question in the full set
+      const question = fullQuestionSet.find(q => q.id === questionId);
+      if (!question) return;
+      
+      // Update overall counts
+      stats.total++;
+      stats.completed++;
+      
+      if (response === 'Mama') {
+        stats.mamaCount++;
+      } else if (response === 'Papa') {
+        stats.papaCount++;
+      }
+      
+      // Update category counts
+      if (question.category && stats.categories[question.category]) {
+        stats.categories[question.category].total++;
+        
+        if (response === 'Mama') {
+          stats.categories[question.category].mama++;
+        } else if (response === 'Papa') {
+          stats.categories[question.category].papa++;
+        }
+      }
+    });
+    
+    // Calculate percentages
+    if (stats.completed > 0) {
+      stats.mamaPercent = Math.round((stats.mamaCount / stats.completed) * 100);
+      stats.papaPercent = Math.round((stats.papaCount / stats.completed) * 100);
+      
+      // Calculate percentages for each category
+      categories.forEach(category => {
+        const catStats = stats.categories[category];
+        if (catStats.total > 0) {
+          catStats.mamaPercent = Math.round((catStats.mama / catStats.total) * 100);
+          catStats.papaPercent = Math.round((catStats.papa / catStats.total) * 100);
+        } else {
+          catStats.mamaPercent = 50;
+          catStats.papaPercent = 50;
+        }
+      });
+    } else {
+      stats.mamaPercent = 50;
+      stats.papaPercent = 50;
     }
+    
+    setFamilyResponseStats(stats);
   };
   
-  // Get key insights based on data
-  const getKeyInsights = () => {
-    // This would be generated based on actual data analysis
-    return [
-      {
-        type: 'challenge',
-        title: 'Mental Load Imbalance',
-        description: 'There\'s a significant 75/25 imbalance in Invisible Household Tasks, with Mama carrying most of the mental load.',
-        icon: <Info size={20} className="text-amber-600" />
-      },
-      {
-        type: 'insight',
-        title: 'Children See More Balance',
-        description: 'Children perceive the workload as more balanced than the parents do themselves, especially for Visible Parental Tasks.',
-        icon: <Lightbulb size={20} className="text-blue-600" />
-      },
-      {
-        type: 'actionable',
-        title: 'Starting Point',
-        description: 'The biggest opportunity is sharing the mental load of household management and planning.',
-        icon: <ArrowRight size={20} className="text-purple-600" />
-      }
+  // Get radar chart data based on actual survey responses
+  const getRadarData = (filter) => {
+    // Use real data from family response stats
+    const categories = [
+      "Visible Household Tasks",
+      "Invisible Household Tasks",
+      "Visible Parental Tasks",
+      "Invisible Parental Tasks"
     ];
+    
+    // Return formatted data for the radar chart
+    return categories.map(category => {
+      const categoryStats = familyResponseStats.categories[category] || {
+        mamaPercent: 50,
+        papaPercent: 50,
+        total: 0
+      };
+      
+      return {
+        category: category.replace(" Tasks", ""),
+        mama: categoryStats.mamaPercent || 50,
+        papa: categoryStats.papaPercent || 50,
+        total: categoryStats.total || 0
+      };
+    });
+  };
+  
+  // Get key insights based on actual data
+  const getKeyInsights = () => {
+    const categories = [
+      "Visible Household Tasks",
+      "Invisible Household Tasks",
+      "Visible Parental Tasks",
+      "Invisible Parental Tasks"
+    ];
+    
+    // Check if we have enough responses for meaningful insights
+    if (familyResponseStats.completed < 10) {
+      return [{
+        type: 'info',
+        title: 'More Responses Needed',
+        description: 'Complete more survey questions to generate meaningful insights about your family workload balance.',
+        icon: <Info size={20} className="text-blue-600" />
+      }];
+    }
+    
+    // Find most imbalanced category
+    const categoryStats = categories.map(category => {
+      const stats = familyResponseStats.categories[category] || { 
+        mamaPercent: 50, 
+        papaPercent: 50,
+        total: 0
+      };
+      
+      return {
+        category,
+        imbalance: Math.abs(stats.mamaPercent - 50),
+        mamaPercent: stats.mamaPercent || 50,
+        papaPercent: stats.papaPercent || 50,
+        total: stats.total || 0
+      };
+    });
+    
+    categoryStats.sort((a, b) => b.imbalance - a.imbalance);
+    
+    // Generate insights based on data
+    const insights = [];
+    
+    // Most imbalanced category
+    if (categoryStats[0].imbalance > 10 && categoryStats[0].total > 2) {
+      insights.push({
+        type: 'challenge',
+        title: `${categoryStats[0].category} Imbalance`,
+        description: `There's a significant ${categoryStats[0].imbalance.toFixed(0)}% imbalance in ${categoryStats[0].category}, with ${categoryStats[0].mamaPercent > 50 ? 'Mama' : 'Papa'} carrying most of the workload.`,
+        icon: <AlertTriangle size={20} className="text-amber-600" />
+      });
+    }
+    
+    // Compare parent vs. child perception if available
+    if (familyMembers.some(m => m.role === 'child')) {
+      insights.push({
+        type: 'insight',
+        title: 'Different Perspectives',
+        description: 'Children often perceive workload differently than parents. Compare responses to identify perception gaps in your family.',
+        icon: <Lightbulb size={20} className="text-blue-600" />
+      });
+    }
+    
+    // Invisible vs. visible work
+    const invisibleCategories = ["Invisible Household Tasks", "Invisible Parental Tasks"];
+    const visibleCategories = ["Visible Household Tasks", "Visible Parental Tasks"];
+    
+    const invisibleStats = invisibleCategories.reduce((acc, category) => {
+      const stats = familyResponseStats.categories[category] || { 
+        mama: 0, 
+        papa: 0, 
+        total: 0 
+      };
+      
+      return {
+        mama: acc.mama + stats.mama,
+        papa: acc.papa + stats.papa,
+        total: acc.total + stats.total
+      };
+    }, { mama: 0, papa: 0, total: 0 });
+    
+    const visibleStats = visibleCategories.reduce((acc, category) => {
+      const stats = familyResponseStats.categories[category] || { 
+        mama: 0, 
+        papa: 0, 
+        total: 0 
+      };
+      
+      return {
+        mama: acc.mama + stats.mama,
+        papa: acc.papa + stats.papa,
+        total: acc.total + stats.total
+      };
+    }, { mama: 0, papa: 0, total: 0 });
+    
+    // Calculate percentages
+    const invisibleMamaPercent = invisibleStats.total > 0 
+      ? Math.round((invisibleStats.mama / invisibleStats.total) * 100) 
+      : 50;
+      
+    const visibleMamaPercent = visibleStats.total > 0 
+      ? Math.round((visibleStats.mama / visibleStats.total) * 100) 
+      : 50;
+    
+    // Add insight on invisible vs. visible work
+    if (Math.abs(invisibleMamaPercent - visibleMamaPercent) > 10) {
+      const higherInvisible = invisibleMamaPercent > visibleMamaPercent;
+      
+      insights.push({
+        type: 'actionable',
+        title: 'Invisible Work Gap',
+        description: `${higherInvisible ? 'Mama' : 'Papa'} handles significantly more invisible work (${higherInvisible ? invisibleMamaPercent : 100-invisibleMamaPercent}%) compared to visible tasks (${higherInvisible ? visibleMamaPercent : 100-visibleMamaPercent}%). Invisible work often creates mental load that goes unrecognized.`,
+        icon: <ArrowRight size={20} className="text-purple-600" />
+      });
+    }
+    
+    // Add general insight if we don't have enough specific ones
+    if (insights.length < 2) {
+      insights.push({
+        type: 'insight',
+        title: 'Starting Point',
+        description: `Your family's overall workload is currently split ${familyResponseStats.mamaPercent}% Mama / ${familyResponseStats.papaPercent}% Papa based on survey responses.`,
+        icon: <Info size={20} className="text-blue-600" />
+      });
+    }
+    
+    return insights;
   };
   
   // Navigate to next question
@@ -229,6 +429,19 @@ const InitialSurveyTab = () => {
     }
   };
   
+  // Navigate to first question
+  const firstQuestion = () => {
+    setCurrentQuestionIndex(0);
+  };
+  
+  // Navigate to last question
+  const lastQuestion = () => {
+    if (!selectedMember) return;
+    
+    const memberQuestions = personalizedQuestions[selectedMember] || [];
+    setCurrentQuestionIndex(memberQuestions.length - 1);
+  };
+  
   // Get responses for the current question
   const getResponsesForCurrentQuestion = () => {
     if (!selectedMember) return {};
@@ -245,11 +458,27 @@ const InitialSurveyTab = () => {
       const isInMemberSet = memberSet.some(q => q.id === questionId);
       
       if (isInMemberSet) {
-        // Look for actual response from survey data
-        const memberResponse = surveyResponses[`${member.id}-${questionId}`];
-        if (memberResponse) {
-          responses[member.id] = memberResponse;
+        // Look for responses with various formats
+        // Format: memberId-questionId
+        const directKey = `${member.id}-${questionId}`;
+        if (surveyResponses[directKey]) {
+          responses[member.id] = surveyResponses[directKey];
+          return;
         }
+        
+        // Format: just questionId (legacy)
+        if (surveyResponses[questionId] && member.id === selectedMember) {
+          responses[member.id] = surveyResponses[questionId];
+          return;
+        }
+        
+        // Check other possible formats for this question ID
+        Object.entries(surveyResponses).forEach(([key, value]) => {
+          // If the key contains both the member ID and question ID in some format
+          if (key.includes(member.id) && key.includes(questionId)) {
+            responses[member.id] = value;
+          }
+        });
       }
     });
     
@@ -266,8 +495,7 @@ const InitialSurveyTab = () => {
   const handleFeedbackSubmitted = async (feedbackType) => {
     setShowFeedbackPanel(false);
     
-    // If feedback indicates question is now applicable or not applicable
-    // reload the personalized questions to reflect changes
+    // Reload the personalized questions to reflect changes
     const loadPersonalizedData = async () => {
       try {
         // Get updated excluded questions
@@ -300,6 +528,16 @@ const InitialSurveyTab = () => {
         // Update states
         setExcludedQuestions(updatedExcluded);
         setPersonalizedQuestions(updatedQuestions);
+        
+        // Reload feedback data
+        const allFeedback = await QuestionFeedbackService.getAllFamilyFeedback(familyId);
+        if (allFeedback) {
+          const feedbackMap = {};
+          allFeedback.forEach(item => {
+            feedbackMap[item.questionId] = item;
+          });
+          setQuestionFeedback(feedbackMap);
+        }
       } catch (error) {
         console.error("Error updating questions after feedback:", error);
       }
@@ -403,8 +641,39 @@ const InitialSurveyTab = () => {
               </ResponsiveContainer>
             </div>
               
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {getRadarData(radarFilter).map((category, index) => (
+                <div key={index} className="text-xs text-gray-500 flex justify-between items-center bg-gray-50 p-1 rounded">
+                  <span>{category.category}</span>
+                  <div className="flex items-center">
+                    <span className="bg-blue-50 text-blue-700 px-1 rounded">
+                      {category.total || 0} Qs
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+              
             <div className="mt-4 text-sm text-center text-gray-500">
               The chart shows what percentage of tasks in each category are handled by Mama vs Papa.
+            </div>
+            
+            {/* Overall balance bar display */}
+            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+              <h4 className="font-medium mb-2">Overall Workload Distribution</h4>
+              <div className="flex justify-between mb-1">
+                <span>Mama ({familyResponseStats.mamaPercent}%)</span>
+                <span>Papa ({familyResponseStats.papaPercent}%)</span>
+              </div>
+              <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-purple-500" 
+                  style={{ width: `${familyResponseStats.mamaPercent}%` }} 
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Based on {familyResponseStats.completed} survey responses across {familyMembers.length} family members
+              </p>
             </div>
           </div>
         )}
@@ -457,7 +726,7 @@ const InitialSurveyTab = () => {
         )}
       </div>
       
-      {/* Survey Responses Explorer */}
+      {/* Survey Responses Explorer - Completely Redesigned */}
       <div className="bg-white rounded-lg shadow">
         <div 
           className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50"
@@ -487,161 +756,285 @@ const InitialSurveyTab = () => {
               Explore how each family member responded to the initial survey questions
             </p>
             
-            {/* Family Member Selection */}
-            <div className="flex items-center overflow-x-auto mb-6 pb-2">
-              <span className="text-sm font-medium mr-3">View Responses:</span>
-              <div className="flex space-x-3">
-                {familyMembers.map(member => (
+            {/* Family Member Selection - Enhanced with colored initials */}
+            <div className="flex flex-wrap gap-4 mb-6 justify-center">
+              {familyMembers.map(member => {
+                const memberQuestions = personalizedQuestions[member.id] || [];
+                return (
                   <div 
                     key={member.id}
-                    className={`flex flex-col items-center cursor-pointer transition-all ${
-                      selectedMember === member.id ? 'opacity-100 scale-110' : 'opacity-70 hover:opacity-90'
+                    className={`flex flex-col items-center cursor-pointer transition-all p-2 rounded-lg ${
+                      selectedMember === member.id ? 'bg-gray-100 ring-2 ring-blue-300' : 'hover:bg-gray-50'
                     }`}
                     onClick={() => {
                       setSelectedMember(member.id);
                       setCurrentQuestionIndex(0);
                     }}
                   >
-                    <div className={`w-12 h-12 rounded-full overflow-hidden border-2 ${
-                      selectedMember === member.id ? 'border-blue-500' : 'border-transparent'
+                    <div className={`w-16 h-16 rounded-full overflow-hidden border-2 ${
+                      selectedMember === member.id ? 'border-blue-500' : 'border-gray-200'
                     }`}>
-                      <img 
-                        src={member.profilePicture || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48Y2lyY2xlIGN4PSIxMjgiIGN5PSIxMjgiIHI9IjEyOCIgZmlsbD0iI2ZkZTY4YSIvPjxjaXJjbGUgY3g9IjEyOCIgY3k9IjkwIiByPSI0MCIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yMTUsMTcyLjVjMCwzNS05NSwzNS05NSwzNXMtOTUsMC05NS0zNWMwLTIzLjMsOTUtMTAsOTUtMTBTMjE1LDE0OS4yLDIxNSwxNzIuNVoiIGZpbGw9IiNmZmYiLz48L3N2Zz4='} 
-                        alt={member.name}
-                        className="w-full h-full object-cover"
-                      />
+                      {isValidImageUrl(member.profilePicture) ? (
+                        <img 
+                          src={member.profilePicture}
+                          alt={member.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        // Colored placeholder for profile
+                        <div className={`w-full h-full flex items-center justify-center text-white ${getMemberColor(member)}`}>
+                          <span className="text-xl font-medium">
+                            {member.name ? member.name.charAt(0).toUpperCase() : '?'}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                    <span className="text-xs mt-1">{member.name}</span>
-                    <span className="text-xs text-blue-600 font-semibold">{personalizedQuestions[member.id]?.length || 0} Questions</span>
+                    <div className="mt-2 text-center">
+                      <p className="font-medium">{member.name}</p>
+                      <p className="text-xs text-gray-500 capitalize">{member.role}</p>
+                      <p className="text-xs text-blue-600">{memberQuestions.length} Questions</p>
+                    </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
             
             {selectedMember ? (
-              <>
+              <div>
                 {/* Member info banner */}
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg border flex items-center justify-between">
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 rounded-full overflow-hidden border mr-3">
-                      <img 
-                        src={familyMembers.find(m => m.id === selectedMember)?.profilePicture || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48Y2lyY2xlIGN4PSIxMjgiIGN5PSIxMjgiIHI9IjEyOCIgZmlsbD0iI2ZkZTY4YSIvPjxjaXJjbGUgY3g9IjEyOCIgY3k9IjkwIiByPSI0MCIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yMTUsMTcyLjVjMCwzNS05NSwzNS05NSwzNXMtOTUsMC05NS0zNWMwLTIzLjMsOTUtMTAsOTUtMTBTMjE1LDE0OS4yLDIxNSwxNzIuNVoiIGZpbGw9IiNmZmYiLz48L3N2Zz4='} 
-                        alt={familyMembers.find(m => m.id === selectedMember)?.name}
-                        className="w-full h-full object-cover"
-                      />
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg border flex flex-col md:flex-row md:items-center justify-between">
+                  <div className="flex items-center mb-4 md:mb-0">
+                    <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-gray-300 mr-4">
+                      {isValidImageUrl(familyMembers.find(m => m.id === selectedMember)?.profilePicture) ? (
+                        <img 
+                          src={familyMembers.find(m => m.id === selectedMember)?.profilePicture} 
+                          alt={familyMembers.find(m => m.id === selectedMember)?.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className={`w-full h-full flex items-center justify-center text-white ${getMemberColor(familyMembers.find(m => m.id === selectedMember))}`}>
+                          <span className="text-xl font-medium">
+                            {familyMembers.find(m => m.id === selectedMember)?.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div>
-                      <div className="font-medium">{familyMembers.find(m => m.id === selectedMember)?.name}</div>
-                      <div className="text-xs text-gray-500">{familyMembers.find(m => m.id === selectedMember)?.role === 'parent' ? 'Parent' : 'Child'}</div>
+                      <div className="font-medium text-lg">{familyMembers.find(m => m.id === selectedMember)?.name}</div>
+                      <div className="text-sm text-gray-500 capitalize">{familyMembers.find(m => m.id === selectedMember)?.role}</div>
                     </div>
                   </div>
-                  <div className="text-sm">
-                    <span className="text-blue-600 font-semibold">{personalizedQuestions[selectedMember]?.length || 0}</span> Personalized Questions
+                  
+                  {/* Category filter */}
+                  <div className="flex items-center">
+                    <Filter size={16} className="text-gray-500 mr-2" />
+                    <span className="text-sm mr-2">Filter by category:</span>
+                    <select
+                      className="border rounded p-1 text-sm"
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
+                    >
+                      <option value="all">All Categories</option>
+                      <option value="Visible Household Tasks">Visible Household</option>
+                      <option value="Invisible Household Tasks">Invisible Household</option>
+                      <option value="Visible Parental Tasks">Visible Parental</option>
+                      <option value="Invisible Parental Tasks">Invisible Parental</option>
+                    </select>
                   </div>
                 </div>
                 
-                {/* Question display section */}
                 {currentQuestion ? (
                   <div>
-                    {/* Current Question Display */}
-                    <div className="border rounded-lg p-4 mb-4 bg-white">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="font-medium">Question {currentQuestionIndex + 1} of {personalizedQuestions[selectedMember]?.length || 0}</h4>
-                        <button 
-                          onClick={() => handleOpenFeedback(currentQuestion)}
-                          className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full flex items-center hover:bg-gray-200"
-                        >
-                          <Edit size={12} className="mr-1" />
-                          Edit Feedback
-                        </button>
-                      </div>
-                      <p className="text-lg mb-2">{currentQuestion.text}</p>
-                      <div className="flex justify-between items-center">
-                        <p className="text-sm text-gray-500">{currentQuestion.category}</p>
-                        {excludedQuestions['family']?.includes(currentQuestion.id) ? (
-                          <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full flex items-center">
-                            <AlertTriangle size={12} className="mr-1" />
-                            Marked Not Applicable
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                    
-                    {/* Family responses grid */}
-                    <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mb-6">
-                      {familyMembers.map(member => {
-                        // Check if this question was in this member's personalized set
-                        const memberQuestions = personalizedQuestions[member.id] || [];
-                        const questionInMemberSet = memberQuestions.some(q => q.id === currentQuestion.id);
-                        
-                        // If not in set, don't show
-                        if (!questionInMemberSet) return null;
-                        
-                        return (
-                          <div 
-                            key={member.id}
-                            className="border rounded-lg p-4 bg-white"
+                    {/* Question display panel - Enhanced with more context */}
+                    <div className="border rounded-lg overflow-hidden mb-6">
+                      {/* Question header */}
+                      <div className="flex items-center justify-between bg-gray-50 p-4 border-b">
+                        <div className="flex items-center">
+                          <div className="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center mr-3">
+                            Q
+                          </div>
+                          <div>
+                            <h4 className="font-medium">Question {currentQuestionIndex + 1} of {personalizedQuestions[selectedMember]?.length || 0}</h4>
+                            <span className="text-xs text-gray-500">
+                              {currentQuestion.category}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center">
+                          {/* Show question feedback status */}
+                          {questionFeedback[currentQuestion.id] ? (
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full flex items-center mr-3">
+                              <Info size={12} className="mr-1" />
+                              Feedback Added
+                            </span>
+                          ) : null}
+                          
+                          {/* Edit feedback button */}
+                          <button 
+                            onClick={() => handleOpenFeedback(currentQuestion)}
+                            className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full flex items-center hover:bg-gray-200"
                           >
-                            <div className="flex items-center mb-3">
-                              <div className="w-8 h-8 rounded-full overflow-hidden mr-2">
-                                <img 
-                                  src={member.profilePicture} 
-                                  alt={member.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              </div>
-                              <div>
-                                <h5 className="font-medium text-sm">{member.name}</h5>
-                                <p className="text-xs text-gray-500 capitalize">{member.role}</p>
-                              </div>
+                            <Edit size={12} className="mr-1" />
+                            {questionFeedback[currentQuestion.id] ? 'Edit Feedback' : 'Add Feedback'}
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* Question main content */}
+                      <div className="p-4">
+                        <p className="text-lg mb-4">{currentQuestion.text}</p>
+                        
+                        {/* Show weight information */}
+                        <div className="mb-4 bg-gray-50 p-3 rounded-lg text-sm">
+                          <div className="flex items-start">
+                            <div className="mr-2 text-gray-400 mt-0.5">
+                              <Lightbulb size={16} />
                             </div>
-                            
-                            <div className="flex items-center justify-between">
-                              <p className="text-sm font-medium">Response:</p>
-                              {currentResponses[member.id] ? (
-                                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                  currentResponses[member.id] === 'Mama' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'
-                                }`}>
-                                  {currentResponses[member.id]}
-                                </span>
-                              ) : (
-                                <span className="text-xs text-gray-500">No response</span>
-                              )}
+                            <div>
+                              <p className="font-medium text-gray-700">Question Weight: {currentQuestion.totalWeight}</p>
+                              <p className="text-gray-600 text-xs mt-1">{currentQuestion.weightExplanation}</p>
                             </div>
                           </div>
-                        );
-                      })}
+                        </div>
+                        
+                        {/* Display if question is excluded */}
+                        {excludedQuestions['family']?.includes(currentQuestion.id) ? (
+                          <div className="p-3 bg-amber-50 text-amber-700 text-sm rounded-lg flex items-center mb-4">
+                            <AlertTriangle size={16} className="mr-2 flex-shrink-0" />
+                            <span>This question has been marked as "Not Applicable" for your family</span>
+                          </div>
+                        ) : null}
+                        
+                        {/* Family member responses */}
+                        <div className="rounded-lg border mt-2">
+                          <div className="bg-gray-50 p-3 border-b">
+                            <h5 className="font-medium">Family Responses</h5>
+                          </div>
+                          
+                          <div className="p-4">
+                            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                              {familyMembers.map(member => {
+                                // Check if this question was in this member's personalized set
+                                const memberQuestions = personalizedQuestions[member.id] || [];
+                                const questionInMemberSet = memberQuestions.some(q => q.id === currentQuestion.id);
+                                
+                                // If not in set, don't show
+                                if (!questionInMemberSet) return null;
+                                
+                                return (
+                                  <div 
+                                    key={member.id}
+                                    className="border rounded-lg p-3 bg-white"
+                                  >
+                                    <div className="flex items-center mb-2">
+                                      <div className="w-8 h-8 rounded-full overflow-hidden mr-2">
+                                        {isValidImageUrl(member.profilePicture) ? (
+                                          <img 
+                                            src={member.profilePicture} 
+                                            alt={member.name}
+                                            className="w-full h-full object-cover"
+                                          />
+                                        ) : (
+                                          <div className={`w-full h-full flex items-center justify-center text-white ${getMemberColor(member)}`}>
+                                            <span className="text-sm font-medium">
+                                              {member.name.charAt(0).toUpperCase()}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div>
+                                        <h5 className="font-medium text-sm">{member.name}</h5>
+                                        <p className="text-xs text-gray-500 capitalize">{member.role}</p>
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center justify-between mt-1">
+                                      <p className="text-sm font-medium">Response:</p>
+                                      {currentResponses[member.id] ? (
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                          currentResponses[member.id] === 'Mama' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'
+                                        }`}>
+                                          {currentResponses[member.id]}
+                                        </span>
+                                      ) : (
+                                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">No response</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            
+                            {/* No responses message */}
+                            {Object.keys(currentResponses).length === 0 && (
+                              <div className="bg-gray-50 p-4 rounded-lg text-center text-gray-500 text-sm mt-2">
+                                <p>No family members have answered this question yet</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     
-                    {/* Navigation */}
-                    <div className="flex justify-between">
-                      <button
-                        onClick={prevQuestion}
-                        disabled={currentQuestionIndex === 0}
-                        className={`px-4 py-2 rounded ${
-                          currentQuestionIndex === 0 
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                            : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-                        }`}
-                      >
-                        Previous Question
-                      </button>
+                    {/* Improved navigation controls */}
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={firstQuestion}
+                          disabled={currentQuestionIndex === 0}
+                          className={`p-2 rounded ${
+                            currentQuestionIndex === 0 
+                              ? 'text-gray-300 cursor-not-allowed' 
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                          title="First Question"
+                        >
+                          <ChevronsLeft size={18} />
+                        </button>
+                        <button
+                          onClick={prevQuestion}
+                          disabled={currentQuestionIndex === 0}
+                          className={`p-2 rounded ${
+                            currentQuestionIndex === 0 
+                              ? 'text-gray-300 cursor-not-allowed' 
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                          title="Previous Question"
+                        >
+                          <ArrowLeft size={18} />
+                        </button>
+                      </div>
                       
                       <div className="text-sm text-gray-500">
                         Question {currentQuestionIndex + 1} of {personalizedQuestions[selectedMember]?.length || 0}
                       </div>
                       
-                      <button
-                        onClick={nextQuestion}
-                        disabled={currentQuestionIndex === (personalizedQuestions[selectedMember]?.length || 0) - 1}
-                        className={`px-4 py-2 rounded ${
-                          currentQuestionIndex === (personalizedQuestions[selectedMember]?.length || 0) - 1
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                            : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-                        }`}
-                      >
-                        Next Question
-                      </button>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={nextQuestion}
+                          disabled={currentQuestionIndex === (personalizedQuestions[selectedMember]?.length || 0) - 1}
+                          className={`p-2 rounded ${
+                            currentQuestionIndex === (personalizedQuestions[selectedMember]?.length || 0) - 1
+                              ? 'text-gray-300 cursor-not-allowed' 
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                          title="Next Question"
+                        >
+                          <ArrowRight size={18} />
+                        </button>
+                        <button
+                          onClick={lastQuestion}
+                          disabled={currentQuestionIndex === (personalizedQuestions[selectedMember]?.length || 0) - 1}
+                          className={`p-2 rounded ${
+                            currentQuestionIndex === (personalizedQuestions[selectedMember]?.length || 0) - 1
+                              ? 'text-gray-300 cursor-not-allowed' 
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                          title="Last Question"
+                        >
+                          <ChevronsRight size={18} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -649,14 +1042,52 @@ const InitialSurveyTab = () => {
                     <p className="text-gray-500">No questions available for this family member.</p>
                   </div>
                 )}
-              </>
+              </div>
             ) : (
-              <div className="text-center py-6 bg-gray-50 rounded-lg">
-                <p className="text-gray-500">Select a family member to view their survey questions and responses.</p>
+              <div className="text-center py-16 bg-gray-50 rounded-lg">
+                <div className="max-w-md mx-auto">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <User size={24} className="text-blue-600" />
+                  </div>
+                  <h4 className="text-lg font-medium mb-2">Select a Family Member</h4>
+                  <p className="text-gray-500 mb-6">
+                    Choose a family member above to explore their personalized survey questions and responses
+                  </p>
+                  <p className="text-sm text-blue-600">
+                    Each family member receives 72 personalized questions based on your family's unique needs
+                  </p>
+                </div>
               </div>
             )}
           </div>
         )}
+      </div>
+      
+      {/* Category Breakdown Chart */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold mb-4">Task Category Breakdown</h3>
+        <div className="h-72">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={getRadarData(radarFilter)}
+              margin={{ top: 20, right: 30, left: 0, bottom: 20 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="category" />
+              <YAxis domain={[0, 100]} />
+              <Tooltip 
+                formatter={(value, name) => [`${value}%`, name === 'mama' ? 'Mama' : 'Papa']}
+                labelFormatter={(label) => `${label} Tasks`}
+              />
+              <Legend />
+              <Bar dataKey="mama" name="Mama" fill={MAMA_COLOR} />
+              <Bar dataKey="papa" name="Papa" fill={PAPA_COLOR} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <p className="text-sm text-center text-gray-500 mt-2">
+          Distribution of tasks by category showing percentage handled by each parent
+        </p>
       </div>
       
       {/* Question Feedback Modal */}
@@ -667,6 +1098,7 @@ const InitialSurveyTab = () => {
             questionText={selectedQuestion.text}
             category={selectedQuestion.category}
             familyId={familyId}
+            existingFeedback={questionFeedback[selectedQuestion.id]}
             onSave={handleFeedbackSubmitted}
             onCancel={() => setShowFeedbackPanel(false)}
           />

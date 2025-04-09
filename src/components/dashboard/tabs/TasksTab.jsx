@@ -4,7 +4,7 @@ import {
   Zap, Star, ArrowRight, MessageSquare, Clock, 
   Heart, ArrowUp, Camera, Share2, Upload, Check,
   Info, ChevronDown, ChevronUp, Edit, AlertCircle,
-  User, Settings
+  User, Settings, ArrowUpRight
 } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { useSurvey } from '../../../contexts/SurveyContext';
@@ -17,6 +17,8 @@ import { storage } from '../../../services/firebase';
 import { doc, collection, addDoc, getDocs, query, where, updateDoc, increment, serverTimestamp, getDoc, setDoc  } from 'firebase/firestore';
 import { db } from '../../../services/firebase';
 import confetti from 'canvas-confetti';
+import HabitProgressTracker from '../../habits/HabitProgressTracker';
+
 
 // Helper function to format dates consistently
 const formatDate = (date) => {
@@ -873,40 +875,56 @@ const updateCycleDueDate = async (newDate) => {
   };
   
   // Save reflection after completing a habit
-  const saveReflection = async () => {
-    if (!reflection.trim() || !selectedHabit) return;
-    
-    try {
-      // Save the comment
-      await addTaskComment(selectedHabit.id, reflection);
+  // Save reflection after completing a habit
+const saveReflection = async () => {
+  if (!reflection.trim() || !selectedHabit) return;
+  
+  try {
+    // Check if this is a scheduling comment that already exists
+    if (reflection.includes("scheduled this habit for")) {
+      const existingComments = selectedHabit.comments || [];
+      const schedulingCommentExists = existingComments.some(comment => 
+        comment.text && comment.text.includes("scheduled this habit for")
+      );
       
-      // Add to local state
-      const updatedHabits = habits.map(h => {
-        if (h.id === selectedHabit.id) {
-          return {
-            ...h,
-            comments: [...(h.comments || []), {
-              id: Date.now(),
-              userId: selectedUser.id,
-              userName: selectedUser.name,
-              text: reflection,
-              timestamp: new Date().toISOString()
-            }]
-          };
-        }
-        return h;
-      });
-      
-      setHabits(updatedHabits);
-      setReflection('');
-      setShowHabitDetail(null);
-      
-      // Show success message
-      createCelebration("Reflection Saved", false);
-    } catch (error) {
-      console.error("Error saving reflection:", error);
+      if (schedulingCommentExists) {
+        // Don't save duplicate scheduling comments
+        setReflection('');
+        setShowHabitDetail(null);
+        return;
+      }
     }
-  };
+    
+    // Save the comment
+    await addTaskComment(selectedHabit.id, reflection);
+    
+    // Add to local state
+    const updatedHabits = habits.map(h => {
+      if (h.id === selectedHabit.id) {
+        return {
+          ...h,
+          comments: [...(h.comments || []), {
+            id: Date.now(),
+            userId: selectedUser.id,
+            userName: selectedUser.name,
+            text: reflection,
+            timestamp: new Date().toISOString()
+          }]
+        };
+      }
+      return h;
+    });
+    
+    setHabits(updatedHabits);
+    setReflection('');
+    setShowHabitDetail(null);
+    
+    // Show success message
+    createCelebration("Reflection Saved", false);
+  } catch (error) {
+    console.error("Error saving reflection:", error);
+  }
+};
   
   // Handle photo upload for habit completion
   const handlePhotoUpload = async (file) => {
@@ -1110,17 +1128,18 @@ const editHabitSchedule = async (habit) => {
 };
 
 
-  // Enhanced function to confirm schedule to calendar
+ // Enhanced function to confirm schedule to calendar
 const confirmScheduleToCalendar = async () => {
-  if (!scheduleDetails || !selectedUser) return;
-  
   try {
-    const habit = scheduleDetails.habit;
+    if (!scheduleDetails || !selectedUser) return;
+    
+    // Create unique universal ID for this habit event
+    const universalId = `habit-${scheduleDetails.habit.id}-${Date.now()}`;
     
     // Create an event to repeat daily with proper recurrence
     const event = {
-      summary: `Habit: ${habit.title}`,
-      description: `${habit.description}\n\nCue: ${habit.cue || habit.stackTrigger || "After breakfast"}\nAction: ${habit.action}\nReward: ${habit.reward}`,
+      summary: `Habit: ${scheduleDetails.habit.title}`,
+      description: `${scheduleDetails.habit.description}\n\nCue: ${scheduleDetails.habit.cue || scheduleDetails.habit.stackTrigger || "After breakfast"}\nAction: ${scheduleDetails.habit.action}\nReward: ${scheduleDetails.habit.reward}`,
       start: {
         dateTime: scheduleDetails.startTime.toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -1137,10 +1156,18 @@ const confirmScheduleToCalendar = async () => {
         ]
       },
       // Add metadata for Allie
-      taskId: habit.id,
+      taskId: scheduleDetails.habit.id,
       familyId: familyId,
       eventType: 'habit',
-      isRecurring: true
+      isRecurring: true,
+      universalId: universalId,
+      taskType: 'habit',
+      category: 'habit',
+      // Link back to the original habit
+      linkedEntity: {
+        type: 'habit',
+        id: scheduleDetails.habit.id
+      }
     };
     
     // Add to calendar
@@ -1149,13 +1176,14 @@ const confirmScheduleToCalendar = async () => {
     if (result.success) {
       // Update habit state to show as scheduled
       const updatedHabits = habits.map(h => {
-        if (h.id === habit.id) {
+        if (h.id === scheduleDetails.habit.id) {
           return {
             ...h,
             isScheduled: true,
-            scheduledEventId: result.eventId,
+            scheduledEventId: result.eventId || result.firestoreId || result.universalId,
             scheduledTime: scheduleDetails.startTime.toISOString(),
-            scheduledRecurrence: scheduleDetails.recurrence
+            scheduledRecurrence: scheduleDetails.recurrence,
+            universalId: universalId // Store the universalId for consistent reference
           };
         }
         return h;
@@ -1165,15 +1193,22 @@ const confirmScheduleToCalendar = async () => {
       
       // Save the scheduled state to database
       await DatabaseService.saveFamilyData(
-        { tasks: updatedHabits.filter(h => h.id === habit.id) }, 
+        { tasks: updatedHabits.filter(h => h.id === scheduleDetails.habit.id) }, 
         familyId
       );
       
-      // Create a comment in the habit about scheduling
-      await addTaskComment(
-        habit.id, 
-        `I've scheduled this habit for ${scheduleDetails.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} every day for the next ${scheduleDetails.recurrence} days.`
+      // Create a comment in the habit about scheduling - CHECK FIRST to avoid duplicate messages
+      const existingComments = scheduleDetails.habit.comments || [];
+      const schedulingCommentExists = existingComments.some(comment => 
+        comment.text && comment.text.includes("scheduled this habit for")
       );
+      
+      if (!schedulingCommentExists) {
+        await addTaskComment(
+          scheduleDetails.habit.id, 
+          `I've scheduled this habit for ${scheduleDetails.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} every day for the next ${scheduleDetails.recurrence} days.`
+        );
+      }
       
       // Update the UI
       createCelebration(`Habit scheduled for ${scheduleDetails.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`, false);
@@ -1181,6 +1216,11 @@ const confirmScheduleToCalendar = async () => {
       // Close the confirmation dialog
       setShowScheduleConfirm(false);
       setScheduleDetails(null);
+      
+      // Force refresh the calendar widget
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+      }
       
       return true;
     } else {
@@ -1585,48 +1625,62 @@ const createKidHabit = async () => {
     <div className="flex items-center">
       <span className="text-sm mr-2">{daysRemaining} day{daysRemaining !== 1 ? 's' : ''} left</span>
       <button 
-        onClick={() => {
-          // Create date picker dialog
-          const datePicker = document.createElement('input');
-          datePicker.type = 'date';
-          
-          // Set min date to today
-          const today = new Date();
-          datePicker.min = today.toISOString().split('T')[0];
-          
-          // Set default value to current due date or 7 days from now
-          const defaultDate = surveyDue || new Date(today.setDate(today.getDate() + 7));
-          datePicker.value = defaultDate.toISOString().split('T')[0];
-          
-          // Style so it's invisible and hide it
-          datePicker.style.position = 'absolute';
-          datePicker.style.top = '-100px';
-          document.body.appendChild(datePicker);
-          
-          // Add change handler
-          datePicker.addEventListener('change', (e) => {
-            const newDate = new Date(e.target.value);
-            updateCycleDueDate(newDate);
-            document.body.removeChild(datePicker);
+  onClick={() => {
+    // Create a date 7 days from now for default
+    const today = new Date();
+    const defaultDate = surveyDue || new Date(today.setDate(today.getDate() + 7));
+    
+    // Create a proper datepicker dialog
+    const dateStr = window.prompt(
+      "Enter new due date (YYYY-MM-DD):", 
+      defaultDate.toISOString().split('T')[0]
+    );
+    
+    if (dateStr) {
+      try {
+        const newDate = new Date(dateStr);
+        
+        // Validate the date is not in the past
+        const currentDate = new Date();
+        currentDate.setHours(0, 0, 0, 0);
+        
+        if (isNaN(newDate.getTime())) {
+          throw new Error("Invalid date format");
+        }
+        
+        if (newDate < currentDate) {
+          alert("Please select a date in the future");
+          return;
+        }
+        
+        // Set time to noon to avoid timezone issues
+        newDate.setHours(12, 0, 0, 0);
+        
+        // Update cycle due date and refresh
+        updateCycleDueDate(newDate)
+          .then(success => {
+            if (success) {
+              // Show success message
+              alert(`Cycle ${currentWeek} due date updated to ${newDate.toLocaleDateString()}`);
+              
+              // Reload the page to see changes
+              window.location.reload();
+            }
+          })
+          .catch(err => {
+            console.error("Error updating due date:", err);
+            alert("Could not update due date: " + err.message);
           });
-          
-          // Add cancel handler
-          datePicker.addEventListener('blur', () => {
-            setTimeout(() => {
-              if (document.body.contains(datePicker)) {
-                document.body.removeChild(datePicker);
-              }
-            }, 300);
-          });
-          
-          // Show the date picker
-          datePicker.click();
-        }}
-        className="text-xs flex items-center text-blue-600 hover:text-blue-800 px-2 py-1 rounded-md border border-blue-200 hover:bg-blue-50"
-      >
-        <Calendar size={12} className="mr-1" />
-        Change Due Date
-      </button>
+      } catch (error) {
+        alert("Please enter a valid date in YYYY-MM-DD format");
+      }
+    }
+  }}
+  className="text-xs flex items-center text-blue-600 hover:text-blue-800 px-2 py-1 rounded-md border border-blue-200 hover:bg-blue-50"
+>
+  <Calendar size={12} className="mr-1" />
+  Change Due Date
+</button>
     </div>
   </div>
   
@@ -1945,17 +1999,17 @@ const createKidHabit = async () => {
                         : 'Complete this habit to build your streak'}
                     </div>
                     <div className="flex space-x-2">
-                      <button
-                        onClick={() => {
-                          setSelectedHabit(habit);
-                          setShowHabitDetail(habit.id);
-                        }}
-                        className="text-xs flex items-center text-gray-600 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-100"
-                      >
-                        <Info size={12} className="mr-1" />
-                        Details
-                      </button>
-                      <button
+                    <button
+  onClick={() => {
+    setSelectedHabit(habit);
+    setShowHabitDetail(habit.id);
+  }}
+  className="text-xs flex items-center text-gray-600 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-100"
+>
+  <Info size={12} className="mr-1" />
+  Details
+</button>
+<button
   onClick={() => habit.isScheduled ? editHabitSchedule(habit) : prepareHabitSchedule(habit)}
   className={`text-xs flex items-center px-2 py-1 rounded ${
     habit.isScheduled 
@@ -2183,6 +2237,48 @@ const createKidHabit = async () => {
               </div>
             )}
             
+{/* Then in the habit detail modal, after the "Success content for completed habits" section */}
+{/* Add this after the "Identity statement" section */}
+<HabitProgressTracker 
+  streak={selectedHabit.streak} 
+  record={selectedHabit.record} 
+  goalDays={selectedHabit.scheduledRecurrence || 21} 
+  habit={selectedHabit} 
+/>
+
+{/* Images Gallery - Add this after "Previous reflections/comments" section */}
+<div className="mb-4">
+  <div className="text-sm font-medium mb-2">Habit Images:</div>
+  <div className="flex flex-wrap gap-2">
+    {selectedHabit.comments && selectedHabit.comments
+      .filter(comment => comment.text && comment.text.includes('[IMAGE]'))
+      .map((comment, idx) => {
+        const imageUrl = comment.text.replace('[IMAGE] ', '');
+        return (
+          <div key={idx} className="relative group">
+            <img 
+              src={imageUrl} 
+              alt="Habit photo" 
+              className="w-20 h-20 object-cover rounded-lg border" 
+            />
+            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity rounded-lg flex items-center justify-center">
+              <button 
+                onClick={() => window.open(imageUrl, '_blank')}
+                className="opacity-0 group-hover:opacity-100 p-1 bg-white rounded-full"
+              >
+                <ArrowUpRight size={14} />
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    {selectedHabit.comments && 
+     !selectedHabit.comments.some(c => c.text && c.text.includes('[IMAGE]')) && (
+      <p className="text-sm text-gray-500">No images yet. Add photos to track your progress!</p>
+    )}
+  </div>
+</div>
+
             {/* Identity statement */}
             <div className="mb-4 p-3 bg-black text-white rounded-lg">
               <div className="text-xs text-gray-300 mb-1">Identity:</div>
