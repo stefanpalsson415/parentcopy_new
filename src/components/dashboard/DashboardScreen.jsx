@@ -20,6 +20,8 @@ import ChildrenTrackingTab from './tabs/ChildrenTrackingTab';
 import SurveyScreen from '../survey/SurveyScreen';
 //import ClaudeService from '../../services/ClaudeService';
 import { FloatingCalendar } from '../calendar/index';
+import UserAvatar from '../common/UserAvatar';
+
 
 
 
@@ -415,43 +417,46 @@ useEffect(() => {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
-      <div className="fixed top-0 left-0 right-0 z-20 bg-black text-white p-4 shadow-md" style={{ height: headerHeight }}>
-        <div className="container mx-auto flex justify-between items-center">
-          <div className="flex items-center">
-            {/* Family photo */}
-            <div className="mr-4 hidden md:block">
-              <div className="w-12 h-12 rounded-lg overflow-hidden border-2 border-white shadow-lg">
-                <img 
-                  src={familyPicture || '/api/placeholder/150/150'}
-                  alt={`${familyName || 'Family'} Photo`}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
-            <div className="flex flex-col">
-              <h1 className="text-xl font-bold font-roboto">Allie</h1>
-              <p className="text-sm font-roboto">Balance family responsibilities together</p>
-              <p className="text-xs text-gray-300 font-roboto">The {familyName ? familyName.split(' ')[0] : ''} Family</p>
-            </div>
-          </div>
-          <div className="flex items-center">
-            <div 
-              className="w-8 h-8 rounded-full overflow-hidden mr-2 cursor-pointer border-2 border-white"
-              onClick={toggleSettings}
-            >
-              <img 
-                src={selectedUser.profilePicture}
-                alt={selectedUser.name}
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <span className="mr-3 font-roboto">{selectedUser.name}</span>
-            <button 
-              onClick={handleLogout}
-              className="flex items-center text-sm bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded font-roboto"
-            >
-              <LogOut size={14} className="mr-1" />
-              Switch User
+<div className="fixed top-0 left-0 right-0 z-20 bg-black text-white p-4 shadow-md" style={{ height: headerHeight }}>
+  <div className="container mx-auto flex justify-between items-center">
+    <div className="flex items-center">
+      {/* Family photo - UPDATED to use UserAvatar */}
+      <div className="mr-4 hidden md:block">
+        <UserAvatar 
+          user={{ 
+            name: familyName || 'Family', 
+            profilePicture: familyPicture,
+            id: familyId 
+          }} 
+          size={48} 
+          className="border-2 border-white shadow-lg rounded-lg"
+        />
+      </div>
+      <div className="flex flex-col">
+        <h1 className="text-xl font-bold font-roboto">Allie</h1>
+        <p className="text-sm font-roboto">Balance family responsibilities together</p>
+        <p className="text-xs text-gray-300 font-roboto">The {familyName ? familyName.split(' ')[0] : ''} Family</p>
+      </div>
+    </div>
+    <div className="flex items-center">
+      {/* User avatar - UPDATED to use UserAvatar */}
+      <div 
+        onClick={toggleSettings}
+        className="cursor-pointer mr-2"
+      >
+        <UserAvatar 
+          user={selectedUser} 
+          size={32} 
+          className="border-2 border-white"
+        />
+      </div>
+      <span className="mr-3 font-roboto">{selectedUser.name}</span>
+      <button 
+        onClick={handleLogout}
+        className="flex items-center text-sm bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded font-roboto"
+      >
+        <LogOut size={14} className="mr-1" />
+        Switch User
             </button>
             <button 
               onClick={async () => {

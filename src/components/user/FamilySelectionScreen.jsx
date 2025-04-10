@@ -7,7 +7,7 @@ import { useSurvey } from '../../contexts/SurveyContext';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../services/firebase';
 import DatabaseService from '../../services/DatabaseService';
-import AllieChat from '../chat/AllieChat'; // Import AllieChat component
+import AllieChat from '../chat/AllieChat.jsx'; 
 
 // Array of vibrant colors for profile placeholders
 const profileColors = [
