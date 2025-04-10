@@ -18,7 +18,7 @@ import { doc, collection, addDoc, getDocs, query, where, updateDoc, increment, s
 import { db } from '../../../services/firebase';
 import confetti from 'canvas-confetti';
 import HabitProgressTracker from '../../habits/HabitProgressTracker';
-import { EventManager as EnhancedEventManager } from '../../components/calendar';
+import { EventManager as EnhancedEventManager } from '../../../components/calendar';
 
 
 
@@ -119,7 +119,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   const [showKidSection, setShowKidSection] = useState(true);
   const [allieInputValue, setAllieInputValue] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
-const [datePickerDate, setDatePickerDate] = useState(null);
+  const [datePickerDate, setDatePickerDate] = useState(null);
   const [showDatePickerModal, setShowDatePickerModal] = useState(false);
   const [surveyDue, setSurveyDue] = useState(null);
   const [daysUntilSurvey, setDaysUntilSurvey] = useState(null);
