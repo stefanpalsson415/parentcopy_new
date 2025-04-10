@@ -313,6 +313,9 @@ const SharedTodoList = ({ familyId, familyMembers }) => {
     }
   };
   
+
+
+  
   // Add a due date via calendar integration
   const openCalendarForTodo = (todo) => {
     setSelectedTodoForCalendar(todo);
@@ -817,6 +820,9 @@ const CycleManager = ({ cycle }) => {
   const [cycleData, setCycleData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  
+
   
   // UI state for the different components
   const [showAssessment, setShowAssessment] = useState(false);
@@ -1384,6 +1390,8 @@ const RelationshipTab = () => {
   const [hasError, setHasError] = useState(null);
   const [selectedHistoryCycle, setSelectedHistoryCycle] = useState(null);
   const [hasEnoughDataForCharts, setHasEnoughDataForCharts] = useState(false);
+  const [cycleHistory, setCycleHistory] = useState([]);
+
   
   // Refs for scrolling
   const toolsRef = useRef(null);
