@@ -18,8 +18,7 @@ import DashboardTutorial from '../onboarding/DashboardTutorial';
 import ErrorBoundary from '../common/ErrorBoundary';
 import ChildrenTrackingTab from './tabs/ChildrenTrackingTab';
 import SurveyScreen from '../survey/SurveyScreen';
-import ClaudeService from '../../services/ClaudeService';
-// Import from new calendar library instead of direct import
+//import ClaudeService from '../../services/ClaudeService';
 import { FloatingCalendar } from '../calendar';
 
 const DashboardScreen = ({ onOpenFamilyMeeting }) => {
@@ -54,7 +53,7 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
     dashboard: 0
   });
 
-  const [allieAIService, setAllieAIService] = useState(null);
+  //const [allieAIService, setAllieAIService] = useState(null);
 
   // Calculate notifications
   useEffect(() => {
@@ -203,13 +202,21 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
 
   // In DashboardScreen.jsx - Add this to the useEffect that loads the dashboard
   useEffect(() => {
-    // Add this inside your existing useEffect
+    // Modified to use dynamic import with proper error handling
     const testClaudeConnection = async () => {
       try {
-        const ClaudeService = (await import('../../services/ClaudeService.js')).default;
+        // Use dynamic import to avoid circular dependencies
+        const ClaudeModule = await import('../../services/ClaudeService.js');
+        const ClaudeService = ClaudeModule.default;
+        
         console.log("Testing Claude API connection...");
-        const result = await ClaudeService.testConnection();
-        console.log("Claude API connection test result:", result);
+        // Only call testConnection if it exists
+        if (ClaudeService && typeof ClaudeService.testConnection === 'function') {
+          const result = await ClaudeService.testConnection();
+          console.log("Claude API connection test result:", result);
+        } else {
+          console.log("Claude service loaded but testConnection method not found");
+        }
       } catch (error) {
         console.error("Error testing Claude connection:", error);
       }
@@ -218,28 +225,36 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
     testClaudeConnection();
   }, []);
 
-  // Load AllieAIService
-  useEffect(() => {
-    // Dynamically import the service to avoid circular dependencies
-    import('../../services/AllieAIService').then(module => {
-      setAllieAIService(module.default);
+  // Load AI insights directly without maintaining service reference in state
+useEffect(() => {
+  const loadAIInsights = async () => {
+    if (!familyId || !currentWeek) return;
+    
+    try {
+      // Use dynamic import instead of maintaining service in state
+      const module = await import('../../services/AllieAIService');
+      const AllieAIService = module.default;
       console.log("AllieAIService loaded successfully");
       
-      // If family data is available, try to load AI insights right away
-      if (familyId && currentWeek && module.default) {
-        module.default.generateDashboardInsights(familyId, currentWeek)
-          .then(aiInsights => {
-            if (aiInsights && aiInsights.length > 0) {
-              setInsights(aiInsights);
-              console.log("AI insights loaded:", aiInsights);
-            }
-          })
-          .catch(err => console.error("Error loading initial AI insights:", err));
+      // Generate dashboard insights
+      const insights = await AllieAIService.generateDashboardInsights(familyId, currentWeek);
+      
+      if (insights) {
+        // Handle both array format and object with insights property
+        if (Array.isArray(insights)) {
+          setAiInsights(insights);
+        } else if (insights.insights && Array.isArray(insights.insights)) {
+          setAiInsights(insights.insights);
+        }
+        console.log("AI insights loaded successfully");
       }
-    }).catch(error => {
-      console.error("Failed to load AI service:", error);
-    });
-  }, [familyId, currentWeek]);
+    } catch (error) {
+      console.error("Error loading AI insights:", error);
+    }
+  };
+  
+  loadAIInsights();
+}, [familyId, currentWeek]);
   
   // Redirect if no user is selected after loading attempt completes
   // Redirect if no user is selected or initial survey incomplete
