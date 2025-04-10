@@ -3,6 +3,8 @@ import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Calendar, Plus, Heart, Star, X, Clock, CheckCircle, Trash2, Edit, Users, AlertCircle } from 'lucide-react';
 import EnhancedEventManager from '../calendar/EnhancedEventManager';
+import { db } from '../../services/firebase';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 
 const DateNightPlanner = ({ onAddToCalendar }) => {
   const { familyId, familyMembers, selectedUser } = useFamily();
@@ -18,52 +20,40 @@ const DateNightPlanner = ({ onAddToCalendar }) => {
   const [calendarSuccess, setCalendarSuccess] = useState(false);
   
   // Load date night data
-  useEffect(() => {
-    const loadDateNightData = async () => {
-      if (!familyId) return;
-      
-      try {
-        // In a real implementation, this would load from database
-        // For now, using mock data
-        const today = new Date();
-        const nextWeek = new Date(today);
-        nextWeek.setDate(today.getDate() + 7);
-        
-        const mockDateNights = [
-          { 
-            id: '1', 
-            title: 'Dinner at Giovanni\'s',
-            description: 'That Italian place we\'ve been wanting to try',
-            date: nextWeek.toISOString().split('T')[0],
-            time: '19:00',
-            category: 'dining',
-            completed: false,
-            participants: familyMembers
-              .filter(m => m.role === 'parent')
-              .map(m => ({ id: m.id, name: m.name }))
-          },
-          { 
-            id: '2', 
-            title: 'Movie Night',
-            description: 'Watch that new movie that just came out',
-            date: '2023-10-15', // Past date
-            time: '20:00',
-            category: 'entertainment',
-            completed: true,
-            participants: familyMembers.map(m => ({ id: m.id, name: m.name }))
-          }
-        ];
-        
-        setDateNights(mockDateNights);
-        setLoading(false);
-      } catch (error) {
-        console.error("Error loading date night data:", error);
-        setLoading(false);
-      }
-    };
+useEffect(() => {
+  const loadDateNightData = async () => {
+    if (!familyId) return;
     
-    loadDateNightData();
-  }, [familyId, familyMembers]);
+    try {
+      // Load real data from Firebase
+      const dateNightsRef = collection(db, "dateNights");
+      const q = query(
+        dateNightsRef, 
+        where("familyId", "==", familyId),
+        orderBy("date", "desc")
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const loadedDateNights = [];
+      
+      querySnapshot.forEach((doc) => {
+        loadedDateNights.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      
+      setDateNights(loadedDateNights);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error loading date night data:", error);
+      setDateNights([]);
+      setLoading(false);
+    }
+  };
+  
+  loadDateNightData();
+}, [familyId]);
   
   // Toggle date night completion
   const toggleCompletion = (index) => {

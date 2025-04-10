@@ -3,6 +3,8 @@ import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Clock, CheckCircle, Calendar, MessageCircle, Bell, X, Smile, AlertCircle } from 'lucide-react';
 import EnhancedEventManager from '../calendar/EnhancedEventManager';
+import { db } from '../../services/firebase';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 
 const DailyCheckInTool = ({ onAddToCalendar }) => {
   const { familyId, saveFamilyData } = useFamily();
@@ -18,27 +20,39 @@ const DailyCheckInTool = ({ onAddToCalendar }) => {
   const [calendarSuccess, setCalendarSuccess] = useState(false);
   
   // Load check-in data
-  useEffect(() => {
-    const loadCheckInData = async () => {
-      if (!familyId) return;
-      
-      try {
-        // In a real implementation, this would load from database
-        // For now, using mock data
-        const mockHistory = [
-          { date: new Date(Date.now() - 86400000).toISOString(), completed: true, topic: 'Highlights of the day' },
-          { date: new Date(Date.now() - 172800000).toISOString(), completed: true, topic: 'Upcoming week plans' },
-          { date: new Date(Date.now() - 259200000).toISOString(), completed: false }
-        ];
-        
-        setCheckInHistory(mockHistory);
-      } catch (error) {
-        console.error("Error loading check-in data:", error);
-      }
-    };
+useEffect(() => {
+  const loadCheckInData = async () => {
+    if (!familyId) return;
     
-    loadCheckInData();
-  }, [familyId]);
+    try {
+      // Load real data from Firebase
+      const dailyCheckInsRef = collection(db, "dailyCheckIns");
+      const q = query(
+        dailyCheckInsRef, 
+        where("familyId", "==", familyId),
+        orderBy("date", "desc")
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const loadedCheckIns = [];
+      
+      querySnapshot.forEach((doc) => {
+        loadedCheckIns.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      
+      setCheckInHistory(loadedCheckIns);
+    } catch (error) {
+      console.error("Error loading check-in data:", error);
+      // Initialize with empty array instead of mock data
+      setCheckInHistory([]);
+    }
+  };
+  
+  loadCheckInData();
+}, [familyId]);
   
   // Mock function to save reminder settings
   const saveReminderSettings = async () => {

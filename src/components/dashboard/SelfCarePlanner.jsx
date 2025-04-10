@@ -3,6 +3,10 @@ import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Calendar, Plus, Heart, Clock, X, CheckCircle, Trash2, Edit, RefreshCw, User } from 'lucide-react';
 import EnhancedEventManager from '../calendar/EnhancedEventManager';
+import { db } from '../../services/firebase';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+
+
 
 const SelfCarePlanner = ({ onAddToCalendar }) => {
   const { familyId, familyMembers } = useFamily();
@@ -15,31 +19,38 @@ const SelfCarePlanner = ({ onAddToCalendar }) => {
   const [calendarError, setCalendarError] = useState(null);
   
   // Load self-care data
-  useEffect(() => {
-    // Mock data for demonstration - would be loaded from database in production
-    const mockActivities = [
-      { 
-        id: '1', 
-        title: 'Morning Yoga',
-        description: 'Early morning yoga session for mental clarity',
-        forParent: 'Mama',
-        date: new Date().toISOString().split('T')[0],
-        duration: 45,
-        completed: false
-      },
-      { 
-        id: '2', 
-        title: 'Evening Reading',
-        description: 'Quiet time with a book after kids are in bed',
-        forParent: 'Papa',
-        date: new Date().toISOString().split('T')[0],
-        duration: 30,
-        completed: true
-      }
-    ];
+useEffect(() => {
+  const loadSelfCareData = async () => {
+    if (!familyId) return;
     
-    setSelfCareActivities(mockActivities);
-  }, [familyId]);
+    try {
+      // Load real data from Firebase
+      const selfCareRef = collection(db, "selfCareActivities");
+      const q = query(
+        selfCareRef, 
+        where("familyId", "==", familyId),
+        orderBy("date", "desc")
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const loadedActivities = [];
+      
+      querySnapshot.forEach((doc) => {
+        loadedActivities.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      
+      setSelfCareActivities(loadedActivities);
+    } catch (error) {
+      console.error("Error loading self-care data:", error);
+      setSelfCareActivities([]);
+    }
+  };
+  
+  loadSelfCareData();
+}, [familyId]);
   
   // Toggle activity completion
   const toggleCompletion = (index) => {
