@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef,PlusCircle } from 'react';
 import { Calendar } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -13,6 +13,7 @@ import CalendarFilters from './CalendarFilters';
 import EventsList from './EventsList';
 import EventDetails from './EventDetails';
 import EnhancedEventManager from './EnhancedEventManager';
+
 
 /**
  * RevisedFloatingCalendarWidget - A comprehensive floating calendar with filtering, 
@@ -45,6 +46,8 @@ const RevisedFloatingCalendarWidget = () => {
   const [selectedMember, setSelectedMember] = useState('all');
   const [lastRefresh, setLastRefresh] = useState(Date.now());
   const [loading, setLoading] = useState(false);
+  const [showEventManager, setShowEventManager] = useState(false);
+
   
   // Event collections
   const [allEvents, setAllEvents] = useState([]);
@@ -231,64 +234,108 @@ const RevisedFloatingCalendarWidget = () => {
     return key.toLowerCase().replace(/\s+/g, '-');
   };
   
-  // Load all calendar events
-  const loadAllEvents = async () => {
-    try {
-      setLoading(true);
-      console.log("Loading all calendar events...");
-      
-      // Get children data from Firebase
-      const childrenData = await loadChildrenEvents();
-      
-      // Get family meeting data
-      const familyMeetings = getUpcomingMeetings();
-      
-      // Get relationship events
-      const relationshipEvents = await loadRelationshipEvents();
-      
-      // Get task events
-      const taskEvents = await loadTaskEvents();
-      
-      // Get general calendar events
-      const generalEvents = await loadGeneralCalendarEvents();
-      
-      // Track already added events
-      const addedEventsMap = {};
-      generalEvents.forEach(event => {
-        const eventKey = getEventKey(event);
-        if (eventKey) {
-          addedEventsMap[eventKey] = true;
-        }
-      });
-      setAddedEvents(addedEventsMap);
-      
-      // Combine all events
-      const combined = [
-        ...childrenData.childrenEvents || [],
-        ...childrenData.childrenAppointments || [],
-        ...childrenData.childrenActivities || [],
-        ...familyMeetings,
-        ...relationshipEvents,
-        ...taskEvents,
-        ...generalEvents
-      ];
-      
-      // Process attendees for each event
-      const processedEvents = combined.map(event => ({
-        ...event,
-        attendees: getEventAttendees(event)
-      }));
-      
-      // Set all events
-      setAllEvents(processedEvents);
+  // In src/components/calendar/RevisedFloatingCalendarWidget.jsx
+// Enhance the loadAllEvents function:
+
+// Load all calendar events
+const loadAllEvents = async () => {
+  try {
+    setLoading(true);
+    console.log("Loading all calendar events...");
+    
+    // Ensure we have the current user ID
+    if (!currentUser?.uid) {
+      console.warn("No user ID available, cannot load events");
       setLoading(false);
-      
-      console.log(`Final combined events: ${processedEvents.length}`);
-    } catch (error) {
-      console.error("Error loading events:", error);
-      setLoading(false);
+      return;
     }
-  };
+    
+    // Get general calendar events first
+    const generalEvents = await loadGeneralCalendarEvents();
+    console.log(`Loaded ${generalEvents.length} general calendar events`);
+    
+    // Process events to ensure they all have dateObj
+    const processedGeneralEvents = generalEvents.map(event => {
+      let dateObj = null;
+      
+      // Try to get a valid date from various possible fields
+      if (event.start?.dateTime) {
+        dateObj = new Date(event.start.dateTime);
+      } else if (event.start?.date) {
+        dateObj = new Date(event.start.date);
+      } else if (event.dateTime) {
+        dateObj = new Date(event.dateTime);
+      } else if (event.date) {
+        dateObj = new Date(event.date);
+      }
+      
+      // Skip events with invalid dates
+      if (!dateObj || isNaN(dateObj.getTime())) {
+        console.warn("Event has invalid date, using current date as fallback:", event.title || event.summary);
+        dateObj = new Date();
+      }
+      
+      return {
+        ...event,
+        dateObj,
+        // Add missing title/summary if needed
+        title: event.title || event.summary || "Untitled Event",
+        summary: event.summary || event.title || "Untitled Event"
+      };
+    });
+    
+    // Get children data from Firebase
+    const childrenData = await loadChildrenEvents();
+    
+    // Get family meeting data
+    const familyMeetings = getUpcomingMeetings();
+    
+    // Get relationship events
+    const relationshipEvents = await loadRelationshipEvents();
+    
+    // Get task events
+    const taskEvents = await loadTaskEvents();
+    
+    // Track already added events
+    const addedEventsMap = {};
+    processedGeneralEvents.forEach(event => {
+      const eventKey = getEventKey(event);
+      if (eventKey) {
+        addedEventsMap[eventKey] = true;
+      }
+    });
+    setAddedEvents(addedEventsMap);
+    
+    // Combine all events
+    const combined = [
+      ...processedGeneralEvents,
+      ...childrenData.childrenEvents || [],
+      ...childrenData.childrenAppointments || [],
+      ...childrenData.childrenActivities || [],
+      ...familyMeetings,
+      ...relationshipEvents,
+      ...taskEvents
+    ];
+    
+    // Process attendees for each event
+    const processedEvents = combined.map(event => ({
+      ...event,
+      attendees: getEventAttendees(event)
+    }));
+    
+    // Set all events
+    setAllEvents(processedEvents);
+    setLoading(false);
+    
+    console.log(`Final combined events: ${processedEvents.length}`);
+    
+    // Rebuild the event cache
+    setTimeout(() => buildEventCache(), 300);
+  } catch (error) {
+    console.error("Error loading events:", error);
+    setLoading(false);
+  }
+};
   
   // Load general calendar events from Firestore
   const loadGeneralCalendarEvents = async () => {
@@ -470,44 +517,69 @@ const RevisedFloatingCalendarWidget = () => {
     return attendees;
   };
   
-  // Get events for the currently selected date, filtered by view and member
-  const getEventsForSelectedDate = () => {
-    if (!selectedDate) return [];
+  // In src/components/calendar/RevisedFloatingCalendarWidget.jsx
+// Replace the getEventsForSelectedDate function with this improved version:
+
+// Get events for the currently selected date, filtered by view and member
+const getEventsForSelectedDate = () => {
+  if (!selectedDate) return [];
+  
+  return allEvents.filter(event => {
+    // Ensure we have a valid date object
+    let eventDate = null;
     
-    return allEvents.filter(event => {
-      // Check date match
-      const eventDate = event.dateObj;
-      const dateMatch = eventDate &&
-                         eventDate.getDate() === selectedDate.getDate() &&
-                         eventDate.getMonth() === selectedDate.getMonth() &&
-                         eventDate.getFullYear() === selectedDate.getFullYear();
-      
-      // Check member filter
-      if (selectedMember !== 'all') {
-        // For child events
-        if (event.childName && selectedMember !== event.childId && selectedMember !== event.childName) {
-          return false;
-        }
-        
-        // For parent-assigned tasks
-        if (event.assignedTo && selectedMember !== event.assignedTo && 
-            event.assignedToName && selectedMember !== event.assignedToName) {
-          return false;
-        }
-        
-        // For family events, check attendees
-        const hasSelectedMember = event.attendees?.some(
-          attendee => attendee.id === selectedMember || attendee.name === selectedMember
-        );
-        
-        if (!hasSelectedMember && !event.childName && !event.assignedTo) {
-          return false;
-        }
+    if (event.dateObj instanceof Date && !isNaN(event.dateObj)) {
+      eventDate = event.dateObj;
+    } else if (event.start?.dateTime) {
+      eventDate = new Date(event.start.dateTime);
+    } else if (event.start?.date) {
+      eventDate = new Date(event.start.date);
+    } else if (event.dateTime) {
+      eventDate = new Date(event.dateTime);
+    } else if (event.date) {
+      eventDate = new Date(event.date);
+    }
+    
+    // Skip events with invalid dates
+    if (!eventDate || isNaN(eventDate.getTime())) {
+      console.log("Skipping event with invalid date:", event.title || event.summary);
+      return false;
+    }
+    
+    // Check date match - only compare year, month, day (not time)
+    const dateMatch = eventDate.getDate() === selectedDate.getDate() &&
+                     eventDate.getMonth() === selectedDate.getMonth() &&
+                     eventDate.getFullYear() === selectedDate.getFullYear();
+    
+    // If date doesn't match, return false immediately
+    if (!dateMatch) return false;
+    
+    // Check member filter
+    if (selectedMember !== 'all') {
+      // For child events
+      if (event.childName && selectedMember !== event.childId && selectedMember !== event.childName) {
+        return false;
       }
       
-      return dateMatch;
-    });
-  };
+      // For parent-assigned tasks
+      if (event.assignedTo && selectedMember !== event.assignedTo && 
+          event.assignedToName && selectedMember !== event.assignedToName) {
+        return false;
+      }
+      
+      // For family events, check attendees
+      const hasSelectedMember = event.attendees?.some(
+        attendee => attendee.id === selectedMember || attendee.name === selectedMember
+      );
+      
+      if (!hasSelectedMember && !event.childName && !event.assignedTo) {
+        return false;
+      }
+    }
+    
+    return true;
+  });
+};
   
   // Filter events based on the current view type
   const filterEventsByView = (events) => {
@@ -1045,6 +1117,41 @@ const eventDates = allEvents
             familyMembers={familyMembers}
             onResetFilters={handleResetFilters}
           />
+          {/* Add Event Button */}
+<div className="mb-4 mt-1">
+  <button
+    onClick={() => {
+      // Create a state variable for this at the top of the component
+      setShowEventManager(true);
+    }}
+    className="w-full py-2 px-3 bg-black text-white rounded text-sm hover:bg-gray-800 transition-colors flex items-center justify-center"
+  >
+    <PlusCircle size={16} className="mr-2" />
+    Add New Event
+  </button>
+</div>
+
+{/* Then add at the bottom of the component, just before the final closing div: */}
+{/* Event Manager Modal */}
+{showEventManager && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <EnhancedEventManager
+        selectedDate={selectedDate}
+        onSave={(result) => {
+          setShowEventManager(false);
+          // Refresh events after saving
+          setLastRefresh(Date.now());
+          // Show success notification
+          if (result?.success) {
+            CalendarService.showNotification("Event added successfully", "success");
+          }
+        }}
+        onCancel={() => setShowEventManager(false)}
+      />
+    </div>
+  </div>
+)}
           
           {/* Selected Date Events Component */}
           <EventsList

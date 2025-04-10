@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { 
   X, Check, Edit, Trash2, Calendar, Clock, MapPin, User, Users, Info, AlertCircle 
 } from 'lucide-react';
+import UserAvatar from '../common/UserAvatar'; // Add this import
 
 /**
  * Component to display and edit event details
@@ -191,12 +192,15 @@ const EventDetails = ({
                   <div className="flex items-center">
                     {event.childId && familyMembers.find(m => m.id === event.childId) && (
                       <div className="w-6 h-6 rounded-full overflow-hidden mr-2">
-                        <img 
-                          src={getUserAvatar(event.childId)}
-                          alt={event.childName}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
+                      <UserAvatar
+                        user={{
+                          id: event.childId,
+                          name: event.childName,
+                          profilePicture: event.childId && familyMembers.find(m => m.id === event.childId)?.profilePicture
+                        }}
+                        size={24}
+                      />
+                    </div>
                     )}
                     <span className="text-sm text-gray-600 font-roboto">{event.childName || 'Unknown child'}</span>
                   </div>
@@ -245,12 +249,15 @@ const EventDetails = ({
                       <>
                         {familyMembers.find(m => m.id === event.attendingParentId) && (
                           <div className="w-6 h-6 rounded-full overflow-hidden mr-2">
-                            <img 
-                              src={getUserAvatar(event.attendingParentId)}
-                              alt={familyMembers.find(m => m.id === event.attendingParentId)?.name}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
+                          <UserAvatar
+                            user={{
+                              id: event.childId,
+                              name: event.childName,
+                              profilePicture: event.childId && familyMembers.find(m => m.id === event.childId)?.profilePicture
+                            }}
+                            size={24}
+                          />
+                        </div>
                         )}
                         <span className="text-sm text-gray-600 font-roboto">
                           {familyMembers.find(m => m.id === event.attendingParentId)?.name || 

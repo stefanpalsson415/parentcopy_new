@@ -230,20 +230,43 @@ async addEvent(event, userId) {
       
       querySnapshot.forEach((doc) => {
         const existingEvent = doc.data();
-        if (existingEvent.summary === standardizedEvent.summary) {
-          const existingDate = new Date(existingEvent.start.dateTime || existingEvent.start.date);
-          const newDate = new Date(standardizedEvent.start.dateTime || standardizedEvent.start.date);
+        // Only consider it a duplicate if ALL of these match:
+        // 1. Exact same title
+        // 2. Same date (ignoring time)
+        // 3. Same child (if applicable)
+        if (existingEvent.summary === standardizedEvent.summary || 
+            existingEvent.title === standardizedEvent.title) {
           
-          // Compare dates (ignoring time precision issues)
-          if (Math.abs(existingDate - newDate) < 3600000) { // Within 1 hour
-            console.log("Found duplicate event, skipping creation");
-            isDuplicate = true;
+          const existingDate = new Date(existingEvent.start?.dateTime || existingEvent.start?.date || existingEvent.dateTime || new Date());
+          const newDate = new Date(standardizedEvent.start?.dateTime || standardizedEvent.start?.date || standardizedEvent.dateTime || new Date());
+          
+          // Compare only the date part (not time)
+          const sameDate = existingDate.getFullYear() === newDate.getFullYear() &&
+                           existingDate.getMonth() === newDate.getMonth() &&
+                           existingDate.getDate() === newDate.getDate();
+                           
+          // Compare child if present
+          const sameChild = (!existingEvent.childId && !standardizedEvent.childId) ||
+                            (existingEvent.childId === standardizedEvent.childId);
+          
+          // Only mark as duplicate if title, date AND child match
+          if (sameDate && sameChild) {
+            console.log("Found potential duplicate event, checking time...");
+            
+            // If times are different (more than 15 minutes), it's not a duplicate
+            const timeDiffMinutes = Math.abs(existingDate - newDate) / (1000 * 60);
+            if (timeDiffMinutes < 15) {
+              console.log("Duplicate confirmed - same time or very close");
+              isDuplicate = true;
+            } else {
+              console.log("Not a duplicate - different times");
+            }
           }
         }
       });
       
       if (isDuplicate) {
-        this.showNotification("This event already exists in your calendar", "info");
+        this.showNotification("Similar event already exists in your calendar", "info");
         return { success: true, isDuplicate: true };
       }
     }

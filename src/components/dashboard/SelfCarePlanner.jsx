@@ -1,22 +1,18 @@
-// src/components/dashboard/SelfCarePlanner.jsx
 import React, { useState, useEffect } from 'react';
 import { useFamily } from '../../contexts/FamilyContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Calendar, Plus, Heart, Clock, X, CheckCircle, Trash2, Edit, RefreshCw, User } from 'lucide-react';
+import EnhancedEventManager from '../calendar/EnhancedEventManager';
 
-const SelfCarePlanner = () => {
+const SelfCarePlanner = ({ onAddToCalendar }) => {
   const { familyId, familyMembers } = useFamily();
+  const { currentUser } = useAuth();
   
   const [selfCareActivities, setSelfCareActivities] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newActivity, setNewActivity] = useState({
-    title: '',
-    description: '',
-    forParent: 'Mama', // Default to Mama
-    date: '',
-    duration: 60,
-    completed: false
-  });
   const [editIndex, setEditIndex] = useState(null);
+  const [calendarSuccess, setCalendarSuccess] = useState(false);
+  const [calendarError, setCalendarError] = useState(null);
   
   // Load self-care data
   useEffect(() => {
@@ -45,36 +41,6 @@ const SelfCarePlanner = () => {
     setSelfCareActivities(mockActivities);
   }, [familyId]);
   
-  // Add new self-care activity
-  const addActivity = () => {
-    if (!newActivity.title || !newActivity.date) return;
-    
-    const activity = {
-      id: Date.now().toString(),
-      ...newActivity
-    };
-    
-    const updatedActivities = editIndex !== null 
-      ? selfCareActivities.map((a, i) => i === editIndex ? activity : a)
-      : [...selfCareActivities, activity];
-    
-    setSelfCareActivities(updatedActivities);
-    
-    // Reset form
-    setNewActivity({
-      title: '',
-      description: '',
-      forParent: 'Mama',
-      date: '',
-      duration: 60,
-      completed: false
-    });
-    setShowAddModal(false);
-    setEditIndex(null);
-    
-    // In a real implementation, save to database
-  };
-  
   // Toggle activity completion
   const toggleCompletion = (index) => {
     const updatedActivities = [...selfCareActivities];
@@ -87,17 +53,6 @@ const SelfCarePlanner = () => {
   
   // Edit activity
   const editActivity = (index) => {
-    const activity = selfCareActivities[index];
-    
-    setNewActivity({
-      title: activity.title,
-      description: activity.description,
-      forParent: activity.forParent,
-      date: activity.date,
-      duration: activity.duration,
-      completed: activity.completed
-    });
-    
     setEditIndex(index);
     setShowAddModal(true);
   };
@@ -162,6 +117,75 @@ const SelfCarePlanner = () => {
     };
   };
   
+  // Handle calendar event save
+  const handleEventSave = async (eventResult) => {
+    try {
+      setCalendarError(null);
+      
+      if (eventResult && eventResult.success) {
+        // If editing, update the existing activity
+        if (editIndex !== null) {
+          const updatedActivities = [...selfCareActivities];
+          updatedActivities[editIndex] = {
+            ...updatedActivities[editIndex],
+            inCalendar: true
+          };
+          setSelfCareActivities(updatedActivities);
+        } else {
+          // Add new activity
+          const newActivity = {
+            id: Date.now().toString(),
+            title: eventResult.title || 'Self-Care Activity',
+            description: eventResult.description || '',
+            forParent: eventResult.forParent || 'Mama',
+            date: new Date(eventResult.dateTime || Date.now()).toISOString().split('T')[0],
+            duration: eventResult.duration || 60,
+            completed: false,
+            inCalendar: true
+          };
+          
+          setSelfCareActivities([...selfCareActivities, newActivity]);
+        }
+        
+        setCalendarSuccess(true);
+        setTimeout(() => setCalendarSuccess(false), 3000);
+        setShowAddModal(false);
+        setEditIndex(null);
+        
+        // Also call the provided onAddToCalendar if it exists
+        if (onAddToCalendar && typeof onAddToCalendar === 'function') {
+          await onAddToCalendar(eventResult);
+        }
+      } else {
+        throw new Error("Failed to add to calendar");
+      }
+    } catch (error) {
+      console.error('Error adding to calendar:', error);
+      setCalendarError('Failed to add to calendar. Please try again.');
+      setTimeout(() => setCalendarError(null), 5000);
+    }
+  };
+  
+  // Get event data for EnhancedEventManager when editing
+  const getEventDataForEditing = () => {
+    if (editIndex === null) return null;
+    
+    const activity = selfCareActivities[editIndex];
+    
+    return {
+      title: activity.title,
+      description: activity.description || 'Self-care time',
+      category: 'self-care',
+      eventType: 'self-care',
+      dateTime: new Date(`${activity.date}T10:00:00`).toISOString(), // Default to 10 AM if no time
+      duration: activity.duration || 60,
+      forParent: activity.forParent,
+      attendingParentId: activity.forParent === 'Mama' ? 
+        familyMembers.find(m => m.roleType === 'Mama')?.id : 
+        familyMembers.find(m => m.roleType === 'Papa')?.id
+    };
+  };
+  
   const stats = getBalanceStats();
   
   return (
@@ -172,14 +196,6 @@ const SelfCarePlanner = () => {
           
           <button 
             onClick={() => {
-              setNewActivity({
-                title: '',
-                description: '',
-                forParent: 'Mama',
-                date: '',
-                duration: 60,
-                completed: false
-              });
               setEditIndex(null);
               setShowAddModal(true);
             }}
@@ -193,6 +209,26 @@ const SelfCarePlanner = () => {
         <p className="text-sm text-gray-600 mb-4 font-roboto">
           Research shows that prioritizing regular self-care improves relationship health and reduces family stress.
         </p>
+        
+        {/* Success message */}
+        {calendarSuccess && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start">
+            <CheckCircle size={16} className="text-green-600 mr-2 mt-1 flex-shrink-0" />
+            <p className="text-sm text-green-800 font-roboto">
+              Success! Your self-care activity has been added to the calendar.
+            </p>
+          </div>
+        )}
+        
+        {/* Error message */}
+        {calendarError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start">
+            <X size={16} className="text-red-600 mr-2 mt-1 flex-shrink-0" />
+            <p className="text-sm text-red-800 font-roboto">
+              {calendarError}
+            </p>
+          </div>
+        )}
         
         {/* Stats Dashboard */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -285,6 +321,10 @@ const SelfCarePlanner = () => {
                             <Clock size={12} className="ml-3 mr-1 text-gray-500" />
                             <span className="text-gray-600">{activity.duration} minutes</span>
                             <span className="ml-3 px-2 py-0.5 rounded-full text-xs font-roboto bg-gray-100">{activity.forParent}</span>
+                            
+                            {activity.inCalendar && (
+                              <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-roboto bg-black text-white">In Calendar</span>
+                            )}
                           </div>
                         </div>
                         
@@ -333,10 +373,10 @@ const SelfCarePlanner = () => {
         </div>
       </div>
       
-      {/* Add/Edit Modal */}
+      {/* Add/Edit Modal with EnhancedEventManager */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
+          <div className="bg-white rounded-lg max-w-lg w-full p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold font-roboto">
                 {editIndex !== null ? 'Edit Self-Care Activity' : 'Add Self-Care Activity'}
@@ -346,119 +386,24 @@ const SelfCarePlanner = () => {
               </button>
             </div>
             
-            <div className="space-y-4 mb-4">
-              {/* Parent selection */}
-              <div>
-                <label className="block text-sm font-medium mb-1 font-roboto">For:</label>
-                <div className="flex space-x-4">
-                  <button 
-                    className={`flex-1 py-2 px-3 rounded border font-roboto ${
-                      newActivity.forParent === 'Mama' 
-                      ? 'bg-purple-100 border-purple-300 text-purple-800' 
-                      : 'bg-white border-gray-300'
-                    }`}
-                    onClick={() => setNewActivity({...newActivity, forParent: 'Mama'})}
-                  >
-                    Mama
-                  </button>
-                  <button 
-                    className={`flex-1 py-2 px-3 rounded border font-roboto ${
-                      newActivity.forParent === 'Papa' 
-                      ? 'bg-blue-100 border-blue-300 text-blue-800' 
-                      : 'bg-white border-gray-300'
-                    }`}
-                    onClick={() => setNewActivity({...newActivity, forParent: 'Papa'})}
-                  >
-                    Papa
-                  </button>
-                </div>
-              </div>
-              
-              {/* Date and Duration */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1 font-roboto">Date:</label>
-                  <input
-                    type="date"
-                    value={newActivity.date}
-                    onChange={(e) => setNewActivity({...newActivity, date: e.target.value})}
-                    className="w-full border rounded p-2 text-sm font-roboto"
-                    min={new Date().toISOString().split('T')[0]}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 font-roboto">Duration (minutes):</label>
-                  <input
-                    type="number"
-                    value={newActivity.duration}
-                    onChange={(e) => setNewActivity({...newActivity, duration: parseInt(e.target.value) || 30})}
-                    className="w-full border rounded p-2 text-sm font-roboto"
-                    min="5"
-                    max="240"
-                  />
-                </div>
-              </div>
-              
-              {/* Title */}
-              <div>
-                <label className="block text-sm font-medium mb-1 font-roboto">Activity:</label>
-                <input
-                  type="text"
-                  value={newActivity.title}
-                  onChange={(e) => setNewActivity({...newActivity, title: e.target.value})}
-                  className="w-full border rounded p-2 text-sm font-roboto"
-                  placeholder="What self-care activity?"
-                />
-              </div>
-              
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium mb-1 font-roboto">Description (optional):</label>
-                <textarea
-                  value={newActivity.description}
-                  onChange={(e) => setNewActivity({...newActivity, description: e.target.value})}
-                  className="w-full border rounded p-2 text-sm h-20 font-roboto"
-                  placeholder="Any additional details..."
-                ></textarea>
-              </div>
-              
-              {/* Activity Ideas */}
-              <div>
-                <label className="block text-sm font-medium mb-1 font-roboto">Activity Ideas:</label>
-                <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                  {getActivitySuggestions(newActivity.forParent).map((suggestion, i) => (
-                    <div 
-                      key={i}
-                      className="p-2 bg-gray-50 rounded text-sm cursor-pointer hover:bg-gray-100 flex items-center font-roboto"
-                      onClick={() => setNewActivity({...newActivity, title: suggestion})}
-                    >
-                      <Heart size={14} className="text-pink-500 mr-2 flex-shrink-0" />
-                      {suggestion}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex space-x-3 justify-end">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 border rounded font-roboto"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={addActivity}
-                disabled={!newActivity.title || !newActivity.date}
-                className={`px-4 py-2 rounded font-roboto ${
-                  newActivity.title && newActivity.date 
-                    ? 'bg-black text-white' 
-                    : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                {editIndex !== null ? 'Update' : 'Add Activity'}
-              </button>
-            </div>
+            <EnhancedEventManager
+              initialEvent={editIndex !== null ? getEventDataForEditing() : {
+                title: '',
+                description: '',
+                category: 'self-care',
+                eventType: 'self-care',
+                duration: 60 // Default 60 minutes
+              }}
+              onSave={handleEventSave}
+              onCancel={() => {
+                setShowAddModal(false);
+                setEditIndex(null);
+              }}
+              eventType="self-care"
+              selectedDate={new Date()}
+              isCompact={true}
+              mode={editIndex !== null ? 'edit' : 'create'}
+            />
           </div>
         </div>
       )}

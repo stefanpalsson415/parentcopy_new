@@ -1,27 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useFamily } from '../../contexts/FamilyContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Calendar, Plus, Heart, Star, X, Clock, CheckCircle, Trash2, Edit, Users, AlertCircle } from 'lucide-react';
-import CalendarService from '../../services/CalendarService';
+import EnhancedEventManager from '../calendar/EnhancedEventManager';
 
-const EnhancedDateNightPlanner = () => {
+const DateNightPlanner = ({ onAddToCalendar }) => {
   const { familyId, familyMembers, selectedUser } = useFamily();
+  const { currentUser } = useAuth();
   
   const [dateNights, setDateNights] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [ideaCategory, setIdeaCategory] = useState('all');
-  const [newDateNight, setNewDateNight] = useState({
-    title: '',
-    description: '',
-    date: '',
-    time: '19:00',
-    category: 'dining',
-    completed: false,
-    participants: []
-  });
+  const [selectedDateIdea, setSelectedDateIdea] = useState(null);
   const [editIndex, setEditIndex] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isAddingToCalendar, setIsAddingToCalendar] = useState(false);
   const [calendarError, setCalendarError] = useState(null);
+  const [calendarSuccess, setCalendarSuccess] = useState(false);
   
   // Load date night data
   useEffect(() => {
@@ -71,41 +65,6 @@ const EnhancedDateNightPlanner = () => {
     loadDateNightData();
   }, [familyId, familyMembers]);
   
-  // Add new date night
-  const addDateNight = () => {
-    if (!newDateNight.title || !newDateNight.date) return;
-    
-    const dateNight = {
-      id: Date.now().toString(),
-      ...newDateNight
-    };
-    
-    const updatedDateNights = editIndex !== null 
-      ? dateNights.map((d, i) => i === editIndex ? dateNight : d)
-      : [...dateNights, dateNight];
-    
-    // Sort by date
-    updatedDateNights.sort((a, b) => new Date(a.date) - new Date(b.date));
-    
-    setDateNights(updatedDateNights);
-    
-    // Reset form
-    setNewDateNight({
-      title: '',
-      description: '',
-      date: '',
-      time: '19:00',
-      category: 'dining',
-      completed: false,
-      participants: []
-    });
-    setShowAddModal(false);
-    setEditIndex(null);
-    
-    // In a real implementation, save to database
-    // await saveFamilyData({ dateNights: updatedDateNights }, familyId);
-  };
-  
   // Toggle date night completion
   const toggleCompletion = (index) => {
     const updatedDateNights = [...dateNights];
@@ -119,18 +78,6 @@ const EnhancedDateNightPlanner = () => {
   
   // Edit date night
   const editDateNight = (index) => {
-    const dateNight = dateNights[index];
-    
-    setNewDateNight({
-      title: dateNight.title,
-      description: dateNight.description,
-      date: dateNight.date,
-      time: dateNight.time,
-      category: dateNight.category,
-      completed: dateNight.completed,
-      participants: dateNight.participants || []
-    });
-    
     setEditIndex(index);
     setShowAddModal(true);
   };
@@ -147,74 +94,32 @@ const EnhancedDateNightPlanner = () => {
     // await saveFamilyData({ dateNights: updatedDateNights }, familyId);
   };
   
-  // Format date for display
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  };
-  
-  // Toggle participant selection
-  const toggleParticipant = (memberId) => {
-    const isSelected = newDateNight.participants.some(p => p.id === memberId);
-    
-    if (isSelected) {
-      // Remove participant
-      setNewDateNight({
-        ...newDateNight,
-        participants: newDateNight.participants.filter(p => p.id !== memberId)
-      });
-    } else {
-      // Add participant
-      const member = familyMembers.find(m => m.id === memberId);
-      if (member) {
-        setNewDateNight({
-          ...newDateNight,
-          participants: [...newDateNight.participants, { id: member.id, name: member.name }]
-        });
-      }
-    }
-  };
-  
-  // Add to calendar
-  const addToCalendar = async (dateNight) => {
-    setIsAddingToCalendar(true);
-    setCalendarError(null);
-    
+  // Handle calendar event save
+  const handleEventSave = async (eventResult) => {
     try {
-      // Create date objects
-      const startDate = new Date(`${dateNight.date}T${dateNight.time || '19:00'}`);
-      const endDate = new Date(startDate);
-      endDate.setHours(endDate.getHours() + 2); // Default 2 hour duration
+      setCalendarError(null);
       
-      // Create participants string
-      const participantsStr = dateNight.participants && dateNight.participants.length > 0
-        ? `with ${dateNight.participants.map(p => p.name).join(', ')}`
-        : '';
-      
-      // Create event object
-      const event = {
-        summary: `Date Night: ${dateNight.title}`,
-        description: `${dateNight.description || 'Quality time together'} ${participantsStr}`,
-        location: '',
-        start: {
-          dateTime: startDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        end: {
-          dateTime: endDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        category: 'relationship'
-      };
-      
-      // Add to calendar
-      const result = await CalendarService.addEvent(event, selectedUser?.id);
-      
-      if (result.success) {
-        // Close modal
-        setShowAddModal(false);
+      if (eventResult && eventResult.success) {
+        // Add to date nights list
+        if (selectedDateIdea) {
+          const newDateNight = {
+            id: Date.now().toString(),
+            title: selectedDateIdea,
+            description: '',
+            date: new Date(eventResult.dateTime || Date.now()).toISOString().split('T')[0],
+            time: new Date(eventResult.dateTime || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+            category: ideaCategory !== 'all' ? ideaCategory : 'entertainment',
+            completed: false,
+            participants: familyMembers
+              .filter(m => m.role === 'parent')
+              .map(m => ({ id: m.id, name: m.name })),
+            inCalendar: true
+          };
+          
+          setDateNights([...dateNights, newDateNight]);
+        }
         
-        // Add to date night
+        // If editing, update the existing date night
         if (editIndex !== null) {
           const updatedDateNights = [...dateNights];
           updatedDateNights[editIndex] = {
@@ -222,18 +127,32 @@ const EnhancedDateNightPlanner = () => {
             inCalendar: true
           };
           setDateNights(updatedDateNights);
-        } else {
-          addDateNight();
+        }
+        
+        setCalendarSuccess(true);
+        setTimeout(() => setCalendarSuccess(false), 3000);
+        setShowAddModal(false);
+        setEditIndex(null);
+        setSelectedDateIdea(null);
+        
+        // Also call the provided onAddToCalendar if it exists
+        if (onAddToCalendar && typeof onAddToCalendar === 'function') {
+          await onAddToCalendar(eventResult);
         }
       } else {
-        setCalendarError("Failed to add to calendar. Please try again.");
+        throw new Error("Failed to add to calendar");
       }
     } catch (error) {
-      console.error("Error adding to calendar:", error);
-      setCalendarError("Error adding to calendar: " + (error.message || "Unknown error"));
-    } finally {
-      setIsAddingToCalendar(false);
+      console.error('Error adding to calendar:', error);
+      setCalendarError('Failed to add to calendar. Please try again.');
+      setTimeout(() => setCalendarError(null), 5000);
     }
+  };
+  
+  // Format date for display
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   };
   
   // Get date ideas by category
@@ -326,6 +245,28 @@ const EnhancedDateNightPlanner = () => {
     );
   }
   
+  // Get event data for EnhancedEventManager when editing
+  const getEventDataForEditing = () => {
+    if (editIndex === null) return null;
+    
+    const dateNight = dateNights[editIndex];
+    const startDate = new Date(`${dateNight.date}T${dateNight.time || '19:00'}`);
+    
+    return {
+      title: `Date Night: ${dateNight.title}`,
+      description: dateNight.description || 'Quality time together',
+      location: '',
+      dateTime: startDate.toISOString(),
+      category: 'relationship',
+      eventType: 'date-night',
+      duration: 120, // Default 2 hour duration
+      childId: null,
+      childName: null,
+      attendingParentId: 'both',
+      participants: dateNight.participants
+    };
+  };
+  
   return (
     <div className="bg-white rounded-lg shadow">
       <div className="p-6">
@@ -334,16 +275,8 @@ const EnhancedDateNightPlanner = () => {
           
           <button 
             onClick={() => {
-              setNewDateNight({
-                title: '',
-                description: '',
-                date: '',
-                time: '19:00',
-                category: 'dining',
-                completed: false,
-                participants: []
-              });
               setEditIndex(null);
+              setSelectedDateIdea(null);
               setShowAddModal(true);
             }}
             className="px-3 py-1 bg-black text-white rounded-full flex items-center text-sm font-roboto"
@@ -356,6 +289,26 @@ const EnhancedDateNightPlanner = () => {
         <p className="text-sm text-gray-600 mb-4 font-roboto">
           Regular date nights are essential for maintaining a healthy relationship and reconnecting with your loved ones.
         </p>
+        
+        {/* Success message */}
+        {calendarSuccess && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start">
+            <CheckCircle size={16} className="text-green-600 mr-2 mt-1 flex-shrink-0" />
+            <p className="text-sm text-green-800 font-roboto">
+              Success! Your date night has been added to the calendar.
+            </p>
+          </div>
+        )}
+        
+        {/* Error message */}
+        {calendarError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start">
+            <AlertCircle size={16} className="text-red-600 mr-2 mt-1 flex-shrink-0" />
+            <p className="text-sm text-red-800 font-roboto">
+              {calendarError}
+            </p>
+          </div>
+        )}
         
         {/* Next Date Night */}
         {nextDateNight ? (
@@ -556,117 +509,25 @@ const EnhancedDateNightPlanner = () => {
         </div>
       </div>
       
-      {/* Add/Edit Modal */}
+      {/* Date Ideas and Calendar Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
+          <div className="bg-white rounded-lg max-w-lg w-full p-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold font-roboto">
-                {editIndex !== null ? 'Edit Date Night' : 'Plan a Date Night'}
-              </h3>
+              <h3 className="text-lg font-bold font-roboto">{editIndex !== null ? 'Edit Date Night' : 'Plan a Date Night'}</h3>
               <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
             </div>
             
-            <div className="space-y-4 mb-4">
-              {/* Date and Time */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1 font-roboto">Date:</label>
-                  <input
-                    type="date"
-                    value={newDateNight.date}
-                    onChange={(e) => setNewDateNight({...newDateNight, date: e.target.value})}
-                    className="w-full border rounded p-2 text-sm font-roboto"
-                    min={new Date().toISOString().split('T')[0]}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 font-roboto">Time:</label>
-                  <input
-                    type="time"
-                    value={newDateNight.time}
-                    onChange={(e) => setNewDateNight({...newDateNight, time: e.target.value})}
-                    className="w-full border rounded p-2 text-sm font-roboto"
-                  />
-                </div>
-              </div>
-              
-              {/* Category */}
-              <div>
-                <label className="block text-sm font-medium mb-1 font-roboto">Category:</label>
-                <select
-                  value={newDateNight.category}
-                  onChange={(e) => setNewDateNight({...newDateNight, category: e.target.value})}
-                  className="w-full border rounded p-2 text-sm font-roboto"
-                >
-                  <option value="dining">Dining</option>
-                  <option value="adventure">Adventure</option>
-                  <option value="entertainment">Entertainment</option>
-                  <option value="family">Family Activity</option>
-                  <option value="budget">Budget-Friendly</option>
-                </select>
-              </div>
-              
-              {/* Title */}
-              <div>
-                <label className="block text-sm font-medium mb-1 font-roboto">Title:</label>
-                <input
-                  type="text"
-                  value={newDateNight.title}
-                  onChange={(e) => setNewDateNight({...newDateNight, title: e.target.value})}
-                  className="w-full border rounded p-2 text-sm font-roboto"
-                  placeholder="What's your plan?"
-                />
-              </div>
-              
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium mb-1 font-roboto">Description (optional):</label>
-                <textarea
-                  value={newDateNight.description}
-                  onChange={(e) => setNewDateNight({...newDateNight, description: e.target.value})}
-                  className="w-full border rounded p-2 text-sm h-20 font-roboto"
-                  placeholder="Any additional details..."
-                ></textarea>
-              </div>
-              
-              {/* Participants */}
-              <div>
-                <label className="block text-sm font-medium mb-1 font-roboto">Participants:</label>
-                <div className="space-y-2 max-h-40 overflow-y-auto border rounded p-2">
-                  {familyMembers.map(member => (
-                    <div 
-                      key={member.id}
-                      className="flex items-center p-2 hover:bg-gray-50 rounded"
-                    >
-                      <input
-                        type="checkbox"
-                        id={`participant-${member.id}`}
-                        checked={newDateNight.participants.some(p => p.id === member.id)}
-                        onChange={() => toggleParticipant(member.id)}
-                        className="mr-2"
-                      />
-                      <label 
-                        htmlFor={`participant-${member.id}`}
-                        className="text-sm font-roboto cursor-pointer flex-1"
-                      >
-                        {member.name} {member.role === 'parent' ? '(Parent)' : '(Child)'}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              {/* Date Ideas */}
-              <div>
-                <div className="flex justify-between items-center">
-                  <label className="block text-sm font-medium font-roboto">Need inspiration?</label>
+            {editIndex === null && !selectedDateIdea && (
+              <>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium mb-2 font-roboto">Choose a date idea:</label>
                   <select
                     value={ideaCategory}
                     onChange={(e) => setIdeaCategory(e.target.value)}
-                    className="text-xs border rounded p-1 font-roboto"
+                    className="w-full border rounded p-2 text-sm font-roboto mb-3"
                   >
                     <option value="all">All Ideas</option>
                     <option value="dining">Dining</option>
@@ -675,67 +536,55 @@ const EnhancedDateNightPlanner = () => {
                     <option value="family">Family</option>
                     <option value="budget">Budget-Friendly</option>
                   </select>
+                  
+                  <div className="max-h-60 overflow-y-auto border rounded p-2">
+                    {getDateIdeas(ideaCategory).map((idea, i) => (
+                      <div 
+                        key={i}
+                        className="p-2 rounded cursor-pointer hover:bg-gray-100 mb-1 flex items-center"
+                        onClick={() => setSelectedDateIdea(idea)}
+                      >
+                        <Star size={14} className="text-yellow-500 mr-2" />
+                        <span className="text-sm font-roboto">{idea}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                  {getDateIdeas(ideaCategory).map((idea, i) => (
-                    <div 
-                      key={i}
-                      className="p-2 bg-gray-50 rounded text-sm cursor-pointer hover:bg-gray-100 flex items-center font-roboto"
-                      onClick={() => setNewDateNight({...newDateNight, title: idea})}
-                    >
-                      <Star size={14} className="text-yellow-500 mr-2 flex-shrink-0" />
-                      {idea}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              {/* Calendar error message */}
-              {calendarError && (
-                <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm font-roboto flex items-start">
-                  <AlertCircle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
-                  <span>{calendarError}</span>
-                </div>
-              )}
-            </div>
-            
-            <div className="flex space-x-3 justify-end">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 border rounded font-roboto"
-              >
-                Cancel
-              </button>
-              <div className="flex space-x-3">
-                <button
-                  onClick={addDateNight}
-                  disabled={!newDateNight.title || !newDateNight.date}
-                  className={`px-4 py-2 rounded font-roboto ${
-                    newDateNight.title && newDateNight.date 
-                      ? 'bg-black text-white' 
-                      : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  {editIndex !== null ? 'Update' : 'Schedule'}
-                </button>
-                {newDateNight.title && newDateNight.date && (
+                
+                <div className="mt-4 text-center">
                   <button
-                    onClick={() => addToCalendar(newDateNight)}
-                    disabled={isAddingToCalendar}
-                    className={`px-4 py-2 border rounded font-roboto flex items-center ${
-                      isAddingToCalendar ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
+                    onClick={() => setSelectedDateIdea("Custom Date Night")}
+                    className="text-blue-600 hover:text-blue-800 text-sm underline font-roboto"
                   >
-                    {isAddingToCalendar ? (
-                      <div className="w-4 h-4 border-2 border-t-transparent border-black rounded-full animate-spin mr-2"></div>
-                    ) : (
-                      <Calendar size={16} className="mr-2" />
-                    )}
-                    Add to Calendar
+                    Create a custom date night instead
                   </button>
-                )}
-              </div>
-            </div>
+                </div>
+              </>
+            )}
+            
+            {(selectedDateIdea || editIndex !== null) && (
+              <EnhancedEventManager
+                initialEvent={editIndex !== null ? getEventDataForEditing() : {
+                  title: `Date Night: ${selectedDateIdea}`,
+                  description: 'Quality time together',
+                  category: 'relationship',
+                  eventType: 'date-night',
+                  duration: 120, // 2 hours
+                  attendingParentId: 'both'
+                }}
+                onSave={handleEventSave}
+                onCancel={() => {
+                  setSelectedDateIdea(null);
+                  if (editIndex !== null) {
+                    setEditIndex(null);
+                  }
+                }}
+                eventType="date-night"
+                selectedDate={new Date()}
+                isCompact={true}
+                mode={editIndex !== null ? 'edit' : 'create'}
+              />
+            )}
           </div>
         </div>
       )}
@@ -743,4 +592,4 @@ const EnhancedDateNightPlanner = () => {
   );
 };
 
-export default EnhancedDateNightPlanner;
+export default DateNightPlanner;

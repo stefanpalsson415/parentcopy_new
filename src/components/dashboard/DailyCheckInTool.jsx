@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useFamily } from '../../contexts/FamilyContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Clock, CheckCircle, Calendar, MessageCircle, Bell, X, Smile, AlertCircle } from 'lucide-react';
-import CalendarService from '../../services/CalendarService';
+import EnhancedEventManager from '../calendar/EnhancedEventManager';
 
-const DailyCheckInTool = () => {
+const DailyCheckInTool = ({ onAddToCalendar }) => {
   const { familyId, saveFamilyData } = useFamily();
+  const { currentUser } = useAuth();
   
   const [checkInHistory, setCheckInHistory] = useState([]);
   const [reminderTime, setReminderTime] = useState('19:00'); // Default to 7 PM
   const [remindersEnabled, setRemindersEnabled] = useState(false);
   const [showTopicModal, setShowTopicModal] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState(null);
-  const [isAddingToCalendar, setIsAddingToCalendar] = useState(false);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [calendarError, setCalendarError] = useState(null);
   const [calendarSuccess, setCalendarSuccess] = useState(false);
   
@@ -89,42 +91,25 @@ const DailyCheckInTool = () => {
     // await saveFamilyData({ dailyCheckIns: [...checkInHistory, newCheckIn] }, familyId);
   };
   
-  // Add check-in to calendar
-  const addToCalendar = async () => {
+  // Open calendar event manager
+  const openCalendarManager = () => {
+    setShowCalendarModal(true);
+  };
+  
+  // Handle calendar event save
+  const handleEventSave = async (eventResult) => {
     try {
-      setIsAddingToCalendar(true);
       setCalendarError(null);
       
-      // Create date object for today at the specified time
-      const today = new Date();
-      const [hours, minutes] = reminderTime.split(':').map(Number);
-      today.setHours(hours, minutes, 0, 0);
-      
-      // Create end time (15 minutes after start)
-      const endTime = new Date(today);
-      endTime.setMinutes(endTime.getMinutes() + 15);
-      
-      // Create the calendar event
-      const event = {
-        summary: 'Daily Couple Check-in',
-        description: 'Take 5-10 minutes to connect with your partner',
-        start: {
-          dateTime: today.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        end: {
-          dateTime: endTime.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        recurrence: ['RRULE:FREQ=DAILY']
-      };
-      
-      // Use CalendarService directly
-      const result = await CalendarService.addEvent(event);
-      
-      if (result.success) {
+      if (eventResult && eventResult.success) {
         setCalendarSuccess(true);
         setTimeout(() => setCalendarSuccess(false), 3000);
+        setShowCalendarModal(false);
+        
+        // Also call the provided onAddToCalendar if it exists
+        if (onAddToCalendar && typeof onAddToCalendar === 'function') {
+          await onAddToCalendar(eventResult);
+        }
       } else {
         throw new Error("Failed to add to calendar");
       }
@@ -132,8 +117,6 @@ const DailyCheckInTool = () => {
       console.error('Error adding to calendar:', error);
       setCalendarError('Failed to add to calendar. Please try again.');
       setTimeout(() => setCalendarError(null), 5000);
-    } finally {
-      setIsAddingToCalendar(false);
     }
   };
   
@@ -291,21 +274,11 @@ const DailyCheckInTool = () => {
               </button>
               
               <button 
-                onClick={addToCalendar}
-                disabled={isAddingToCalendar}
+                onClick={openCalendarManager}
                 className="px-3 py-1 border border-black text-sm rounded font-roboto flex items-center"
               >
-                {isAddingToCalendar ? (
-                  <>
-                    <div className="w-3 h-3 border-2 border-t-transparent border-black rounded-full animate-spin mr-1"></div>
-                    Adding...
-                  </>
-                ) : (
-                  <>
-                    <Calendar size={14} className="mr-1" />
-                    Add to Calendar
-                  </>
-                )}
+                <Calendar size={14} className="mr-1" />
+                Add to Calendar
               </button>
             </div>
           </div>
@@ -411,6 +384,51 @@ const DailyCheckInTool = () => {
                 Log Check-in
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Calendar Event Manager Modal */}
+      {showCalendarModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-lg w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold font-roboto">Add Check-in to Calendar</h3>
+              <button 
+                onClick={() => setShowCalendarModal(false)} 
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <EnhancedEventManager
+              initialEvent={{
+                title: 'Daily Couple Check-in',
+                description: 'Take 5-10 minutes to connect with your partner',
+                category: 'relationship',
+                eventType: 'check-in',
+                dateTime: (() => {
+                  const date = new Date();
+                  const [hours, minutes] = reminderTime.split(':').map(Number);
+                  date.setHours(hours, minutes, 0, 0);
+                  return date.toISOString();
+                })(),
+                duration: 15, // 15 minutes
+                location: 'Home',
+                isRecurring: true,
+                recurrence: {
+                  frequency: 'daily',
+                  days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+                  endDate: ''
+                }
+              }}
+              onSave={handleEventSave}
+              onCancel={() => setShowCalendarModal(false)}
+              eventType="check-in"
+              isCompact={true}
+              mode="create"
+            />
           </div>
         </div>
       )}

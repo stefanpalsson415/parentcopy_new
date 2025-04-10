@@ -1,5 +1,7 @@
 import React from 'react';
 import { AlertCircle, Activity, BookOpen, Bell, Users, Heart, Clock, Calendar, Check, Edit, Trash2 } from 'lucide-react';
+import UserAvatar from '../common/UserAvatar'; // Add this import
+
 
 /**
  * Event list component to display calendar events
@@ -91,13 +93,12 @@ const EventsList = ({
         {attendees.slice(0, max).map((attendee, i) => (
           <div 
             key={i} 
-            className="w-6 h-6 rounded-full overflow-hidden border border-white shadow-sm bg-white"
+            className="w-6 h-6 rounded-full overflow-hidden border border-white shadow-sm"
             title={attendee.name}
           >
-            <img 
-              src={attendee.profilePicture || `/api/placeholder/24/24`} 
-              alt={attendee.name}
-              className="w-full h-full object-cover"
+            <UserAvatar 
+              user={attendee}
+              size={24}
             />
           </div>
         ))}

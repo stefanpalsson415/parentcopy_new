@@ -4,7 +4,7 @@ import {
   Users, Heart, Calendar, ChevronDown, ChevronUp, MessageCircle, 
   Brain, Info, CheckCircle, Lightbulb, Target, AlertCircle, 
   Bell, Award, X, RefreshCw, Clock, ArrowRight, Shield, Save, Plus, Star, Link,
-  Trash2, Edit, CheckSquare, Square, DragHandleDots2, Tag, MoreHorizontal, Calendar as CalendarIcon
+  Trash2, Edit, CheckSquare, Square, GripVertical, Tag, MoreHorizontal, Calendar as CalendarIcon
 } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -57,6 +57,8 @@ const SharedTodoList = ({ familyId, familyMembers }) => {
   const [editingTodoText, setEditingTodoText] = useState('');
   const [editingTodoCategory, setEditingTodoCategory] = useState('');
   const { currentUser } = useAuth();
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+const [todoToDelete, setTodoToDelete] = useState(null);
   
   const inputRef = useRef(null);
   
@@ -248,8 +250,52 @@ const SharedTodoList = ({ familyId, familyMembers }) => {
   
   // Delete todo
   const deleteTodo = async (todoId) => {
-    if (!confirm("Are you sure you want to delete this task?")) return;
+    // Replace the deleteTodo function
+const deleteTodo = async (todoId) => {
+  setTodoToDelete(todoId);
+  setShowDeleteConfirmation(true);
+};
+
+// Add this function to handle the actual deletion
+const confirmDeleteTodo = async () => {
+  try {
+    // Delete from Firestore
+    await deleteDoc(doc(db, "relationshipTodos", todoToDelete));
     
+    // Update state
+    setTodos(prev => prev.filter(todo => todo.id !== todoToDelete));
+    
+    // Reset states
+    setTodoToDelete(null);
+    setShowDeleteConfirmation(false);
+  } catch (error) {
+    console.error("Error deleting todo:", error);
+  }
+};
+
+// Add this JSX for the confirmation dialog before the closing </div> of the component
+{showDeleteConfirmation && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+      <h3 className="text-lg font-medium mb-4">Delete Task</h3>
+      <p className="mb-6">Are you sure you want to delete this task?</p>
+      <div className="flex justify-end space-x-3">
+        <button
+          onClick={() => setShowDeleteConfirmation(false)}
+          className="px-4 py-2 border rounded-md"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={confirmDeleteTodo}
+          className="px-4 py-2 bg-red-600 text-white rounded-md"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+)}    
     try {
       // Delete from Firestore
       await deleteDoc(doc(db, "relationshipTodos", todoId));
@@ -545,7 +591,8 @@ const SharedTodoList = ({ familyId, familyMembers }) => {
                             {...provided.dragHandleProps}
                             className="cursor-move flex-shrink-0 text-gray-400 p-1 self-center"
                           >
-                            <DragHandleDots2 size={16} />
+                            <GripVertical size={16} />
+
                           </div>
                           
                           {/* Checkbox */}
