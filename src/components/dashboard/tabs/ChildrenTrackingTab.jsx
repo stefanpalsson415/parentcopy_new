@@ -18,7 +18,7 @@ import DatabaseService from '../../../services/DatabaseService';
 import CalendarService from '../../../services/CalendarService';
 import AllieAIService from '../../../services/AllieAIService';
 import UserAvatar from '../../common/UserAvatar';
-import UnifiedEventManager from '../../calendar/UnifiedEventManager';
+import UnifiedEventManager from '../../calendar/EnhancedEventManager';
 import DocumentLibrary from '../../document/DocumentLibrary';
 
 

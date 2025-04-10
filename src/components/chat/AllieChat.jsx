@@ -13,7 +13,7 @@ import DatabaseService from '../../services/DatabaseService';
 import { useLocation } from 'react-router-dom';
 import CalendarService from '../../services/CalendarService';
 import EventParserService from '../../services/EventParserService';
-import EventConfirmationCard from '../calendar/EventConfirmationCard';
+import { EventParser } from '../calendar';
 
 
 const AllieChat = () => {
@@ -2062,9 +2062,9 @@ const addEventToCalendar = async (eventDetails) => {
       <span>Let's add this event to your {parsedEventDetails?.trackingType ? `calendar and ${parsedEventDetails.childName}'s records` : 'calendar'}</span>
     </div>
     
-    <EventConfirmationCard 
-      event={parsedEventDetails || detectedEventDetails}
-      onConfirm={(event) => {
+    <EventParser 
+  initialEvent={parsedEventDetails || detectedEventDetails}
+  onParseSuccess={(event) => {
         // Check if this is a child tracking event
         if (event.trackingType === 'medical' || event.trackingType === 'activity') {
           // Add to both calendar and child tracking
