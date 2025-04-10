@@ -534,7 +534,7 @@ const completeCouplesMeeting = async (cycleNumber, meetingData) => {
   }
 };
 
-// Calculate combined metrics from both parents' assessments
+/// Calculate combined metrics from both parents' assessments
 const calculateCombinedMetrics = (cycleData) => {
   const metrics = {
     satisfaction: 0,
@@ -607,7 +607,121 @@ const contextValue = {
   completeCouplesMeeting
 };
 
+// Handle incomplete assessments (in FamilyContext.js)
+const checkAndCleanupIncompleteAssessments = async (familyId, cycleNumber) => {
+  try {
+    const docRef = doc(db, "relationshipCycles", `${familyId}-cycle${cycleNumber}`);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      const cycleData = docSnap.data();
+      const assessments = cycleData.assessments || {};
+      const parentIds = Object.keys(assessments);
+      
+      // Check for partial completions
+      const incompleteAssessments = parentIds.filter(id => {
+        const assessment = assessments[id] || {};
+        // If started more than 24 hours ago but not completed
+        return assessment.startDate && !assessment.completed && 
+               (new Date() - new Date(assessment.startDate)) > 24 * 60 * 60 * 1000;
+      });
+      
+      // Reset incomplete assessments to allow restart
+      if (incompleteAssessments.length > 0) {
+        const updates = {};
+        incompleteAssessments.forEach(id => {
+          updates[`assessments.${id}`] = {
+            startDate: null,
+            completed: false,
+            responses: {}
+          };
+        });
+        
+        await updateDoc(docRef, updates);
+        console.log(`Reset ${incompleteAssessments.length} incomplete assessments`);
+      }
+    }
+  } catch (error) {
+    console.error("Error cleaning up assessments:", error);
+  }
+};
 
+// Handle meeting reschedule
+const rescheduleMeeting = async (familyId, cycleNumber, newDate) => {
+  try {
+    const docRef = doc(db, "relationshipCycles", `${familyId}-cycle${cycleNumber}`);
+    
+    // Update the meeting date
+    await updateDoc(docRef, {
+      "meeting.scheduledDate": newDate.toISOString(),
+      "meeting.rescheduled": true,
+      "meeting.rescheduleCount": increment(1)
+    });
+    
+    // Update the calendar event
+    if (cycleData?.meeting?.calendarEventId) {
+      try {
+        // Get the original event
+        const event = await CalendarService.getEvent(cycleData.meeting.calendarEventId);
+        
+        // Update the event times
+        const endTime = new Date(newDate);
+        endTime.setHours(endTime.getHours() + 1);
+        
+        event.start.dateTime = newDate.toISOString();
+        event.end.dateTime = endTime.toISOString();
+        
+        // Update the event
+        await CalendarService.updateEvent(cycleData.meeting.calendarEventId, event);
+      } catch (calendarError) {
+        console.error("Error updating calendar event:", calendarError);
+        // Create a new event if update fails
+        createNewMeetingEvent(familyId, cycleNumber, newDate);
+      }
+    } else {
+      createNewMeetingEvent(familyId, cycleNumber, newDate);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error rescheduling meeting:", error);
+    throw error;
+  }
+};
+
+// Helper to create a new meeting event
+const createNewMeetingEvent = async (familyId, cycleNumber, meetingDate) => {
+  try {
+    const event = {
+      summary: `Couple's Meeting - Cycle ${cycleNumber}`,
+      description: "Relationship strengthening discussion based on your individual assessments.",
+      start: {
+        dateTime: meetingDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: new Date(meetingDate.getTime() + 60 * 60 * 1000).toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      colorId: '11' // Red
+    };
+    
+    const result = await CalendarService.addEvent(event);
+    
+    if (result.success) {
+      // Update the cycle data with the new event ID
+      const docRef = doc(db, "relationshipCycles", `${familyId}-cycle${cycleNumber}`);
+      await updateDoc(docRef, {
+        "meeting.calendarEventId": result.eventId
+      });
+    }
+    
+    return result;
+  } catch (error) {
+    console.error("Error creating meeting event:", error);
+    throw error;
+  }
+};
 
 // Get relationship strategies (MOVED OUTSIDE getRelationshipTrendData)
 const getRelationshipStrategies = async () => {

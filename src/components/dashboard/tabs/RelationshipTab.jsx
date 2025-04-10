@@ -866,6 +866,35 @@ const CycleManager = ({ cycle }) => {
     loadCycleData();
   }, [cycle, familyId, getRelationshipCycleData]);
   
+// Inside the CycleManager component in RelationshipTab.jsx
+
+// Handle meeting scheduling
+const handleScheduleMeeting = async (event) => {
+  try {
+    // Format the data for the calendar
+    const meetingDate = new Date(event.start.dateTime);
+    
+    // Call the context function
+    await scheduleCouplesMeeting(cycle, meetingDate);
+    
+    // Update local state
+    setCycleData(prev => ({
+      ...prev,
+      meeting: {
+        ...prev.meeting,
+        scheduled: true,
+        scheduledDate: meetingDate.toISOString()
+      }
+    }));
+    
+    setShowScheduleModal(false);
+  } catch (error) {
+    console.error("Error scheduling meeting:", error);
+    setError("Failed to schedule the meeting. Please try again.");
+  }
+};
+
+
   // Handle assessment completion
   const handleAssessmentSubmit = async (responses) => {
     try {
