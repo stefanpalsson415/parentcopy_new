@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar, User, Users, Clock, MapPin, Tag, X, Check, AlertCircle, Info } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  FileText, Image, FileIcon, Calendar, User, Users, Clock, MapPin, Tag, X, Check, AlertCircle, Info 
+} from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../../services/firebase';
 import CalendarService from '../../services/CalendarService';
 import UserAvatar from '../common/UserAvatar';
 

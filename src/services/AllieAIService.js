@@ -2,6 +2,7 @@
 // Consolidated AI service combining EnhancedAIService and AllieAIEngineService
 
 import ClaudeService from './ClaudeService';
+import CalendarService from './CalendarService';
 import { db } from './firebase';
 import { 
   collection, 
@@ -16,7 +17,8 @@ import {
   orderBy,
   increment,
   serverTimestamp,
-  limit
+  limit,
+  addDoc
 } from 'firebase/firestore';
 
 /**
