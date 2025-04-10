@@ -744,6 +744,188 @@ async processActivityFromChat(message, familyId, childId = null) {
     }
   }
 
+
+// Add this function to src/services/AllieAIService.js
+
+/**
+ * Generate couples meeting agenda based on both partners' assessments and prework
+ * @param {string} familyId - Family ID
+ * @param {number} cycleNumber - Cycle number
+ * @param {object} cycleData - Cycle data with assessments and prework
+ * @returns {Promise<object>} Generated meeting agenda
+ */
+async generateCouplesMeetingAgenda(familyId, cycleNumber, cycleData) {
+  try {
+    if (!familyId || !cycleData) {
+      console.warn("Missing required parameters in generateCouplesMeetingAgenda");
+      return this.getFallbackMeetingAgenda(cycleNumber);
+    }
+    
+    // Prepare data for Claude analysis
+    const assessmentData = cycleData.assessments || {};
+    const preworkData = cycleData.prework || {};
+    
+    // Get parent IDs
+    const parentIds = Object.keys(assessmentData);
+    if (parentIds.length < 2) {
+      console.warn("Need at least two parents' data to generate meaningful agenda");
+      return this.getFallbackMeetingAgenda(cycleNumber);
+    }
+    
+    // Prepare structured data for prompt
+    const parent1 = {
+      id: parentIds[0],
+      assessment: assessmentData[parentIds[0]]?.responses || {},
+      prework: preworkData[parentIds[0]] || {}
+    };
+    
+    const parent2 = {
+      id: parentIds[1],
+      assessment: assessmentData[parentIds[1]]?.responses || {},
+      prework: preworkData[parentIds[1]] || {}
+    };
+    
+    // Create prompt for Claude
+    const systemPrompt = `You are Allie's relationship expert AI. Analyze both partners' relationship assessments and prework to create a personalized meeting agenda.
+
+    Your agenda should include:
+    1. A welcoming introduction that acknowledges their commitment
+    2. Areas of alignment where both partners agree
+    3. Areas of misalignment that need discussion
+    4. Specific discussion questions for each topic
+    5. Suggested action items based on their identified challenges
+    6. A structured closing that encourages commitment to action
+    
+    The agenda should be deeply personalized to their specific situation and should highlight patterns in their responses.
+    
+    Your response should be in valid JSON format with this structure:
+    {
+      "title": "string (Personalized title for the meeting)",
+      "introduction": "string (Welcoming paragraph)",
+      "topics": [
+        {
+          "title": "string (Topic title)",
+          "description": "string (Why this topic matters)",
+          "alignment": "string (Where partners align or differ)",
+          "questions": ["string (Discussion question)", "string (Discussion question)"],
+          "suggestedActions": ["string (Action item)", "string (Action item)"]
+        }
+      ],
+      "closingReflection": "string (Final thoughts and next steps)"
+    }`;
+    
+    const userMessage = `Generate a personalized couple's meeting agenda for Cycle ${cycleNumber} based on this data:
+    
+    Partner 1 Assessment:
+    ${JSON.stringify(parent1.assessment)}
+    
+    Partner 1 Prework:
+    ${JSON.stringify(parent1.prework)}
+    
+    Partner 2 Assessment:
+    ${JSON.stringify(parent2.assessment)}
+    
+    Partner 2 Prework:
+    ${JSON.stringify(parent2.prework)}`;
+    
+    // Call Claude API with timeout handling
+    let claudeResponse = null;
+    try {
+      claudeResponse = await Promise.race([
+        ClaudeService.generateResponse(
+          [{ role: 'user', content: userMessage }],
+          { system: systemPrompt }
+        ),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Claude API timeout")), 15000)
+        )
+      ]);
+    } catch (timeoutError) {
+      console.error("Claude API timed out:", timeoutError);
+      return this.getFallbackMeetingAgenda(cycleNumber);
+    }
+    
+    if (!claudeResponse) {
+      console.warn("Empty response from Claude API");
+      return this.getFallbackMeetingAgenda(cycleNumber);
+    }
+    
+    // Parse JSON response with enhanced error handling
+    const responseData = this.safelyParseJSON(claudeResponse, this.getFallbackMeetingAgenda(cycleNumber));
+    
+    // Validate structure
+    if (!responseData.title || !responseData.topics || !Array.isArray(responseData.topics)) {
+      console.warn("Invalid meeting agenda structure returned");
+      return this.getFallbackMeetingAgenda(cycleNumber);
+    }
+    
+    return responseData;
+  } catch (error) {
+    console.error("Error generating couples meeting agenda:", error);
+    return this.getFallbackMeetingAgenda(cycleNumber);
+  }
+}
+
+/**
+ * Get fallback meeting agenda if AI generation fails
+ * @param {number} cycleNumber - Cycle number
+ * @returns {object} Fallback meeting agenda
+ */
+getFallbackMeetingAgenda(cycleNumber) {
+  return {
+    title: `Cycle ${cycleNumber}: Strengthening Your Partnership`,
+    introduction: "Welcome to your couple's meeting! This is a time to connect, understand each other better, and work together on strengthening your relationship. Today's discussion will focus on celebrating what's working well and addressing areas where you can grow together.",
+    topics: [
+      {
+        title: "Communication Patterns",
+        description: "How you communicate affects every aspect of your relationship and family dynamics.",
+        alignment: "You may have different communication styles that can complement each other when understood.",
+        questions: [
+          "When do you feel most heard and understood by your partner?",
+          "What communication challenges come up most frequently?",
+          "How can you signal to each other when you need more support?"
+        ],
+        suggestedActions: [
+          "Practice active listening by summarizing what your partner says before responding",
+          "Establish a regular check-in routine that works with your schedule"
+        ]
+      },
+      {
+        title: "Workload Balance",
+        description: "Balancing family responsibilities affects relationship satisfaction.",
+        alignment: "Finding a fair division of visible and invisible work benefits both partners.",
+        questions: [
+          "Which responsibilities feel imbalanced right now?",
+          "What tasks do you notice your partner handling that you appreciate?",
+          "How can you better support each other with family responsibilities?"
+        ],
+        suggestedActions: [
+          "Identify one 'invisible' task your partner does and offer to share it",
+          "Create a shared system for tracking household responsibilities"
+        ]
+      },
+      {
+        title: "Quality Time & Connection",
+        description: "Making time for connection strengthens your partnership amid family demands.",
+        alignment: "Both partners benefit from dedicated time together.",
+        questions: [
+          "What type of quality time makes you feel most connected?",
+          "How can you create more meaningful moments together?",
+          "What obstacles prevent you from having regular quality time?"
+        ],
+        suggestedActions: [
+          "Schedule a weekly date night (even at home)",
+          "Create a 'no phones' policy during certain times"
+        ]
+      }
+    ],
+    closingReflection: "As you finish this meeting, take a moment to appreciate the commitment you're both showing to your relationship. Choose 1-2 actions to focus on before your next meeting, and remember that small, consistent efforts create significant positive change over time."
+  };
+}
+
+
+
+
   /**
    * Generate dashboard insights for family balance
    * @param {string} familyId - Family ID

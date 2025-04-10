@@ -314,6 +314,301 @@ const getRelationshipTrendData = () => {
   return trendData;
 };
 
+
+// Add these functions to src/contexts/FamilyContext.js
+
+// New function to get relationship cycle data
+const getRelationshipCycleData = async (cycleNumber) => {
+  try {
+    if (!familyId) throw new Error("No family ID available");
+    
+    // Get cycle data from Firestore
+    const cycleDocRef = doc(db, "relationshipCycles", `${familyId}-cycle${cycleNumber}`);
+    const cycleSnap = await getDoc(cycleDocRef);
+    
+    if (cycleSnap.exists()) {
+      return cycleSnap.data();
+    } else {
+      // Initialize with empty structure if it doesn't exist
+      return {
+        cycleNumber,
+        status: "in_progress",
+        startDate: new Date().toISOString(),
+        assessments: {},
+        prework: {},
+        meeting: {
+          scheduled: false,
+          completed: false
+        }
+      };
+    }
+  } catch (error) {
+    console.error("Error getting relationship cycle data:", error);
+    return null;
+  }
+};
+
+// Complete individual assessment
+const completeRelationshipAssessment = async (cycleNumber, responses) => {
+  try {
+    if (!familyId || !currentUser) throw new Error("No family ID or user available");
+    
+    // Get existing cycle data
+    const cycleData = await getRelationshipCycleData(cycleNumber) || {
+      cycleNumber,
+      status: "in_progress",
+      startDate: new Date().toISOString(),
+      assessments: {},
+      prework: {},
+      meeting: {
+        scheduled: false,
+        completed: false
+      }
+    };
+    
+    // Add/update assessment for current user
+    cycleData.assessments[currentUser.uid] = {
+      completed: true,
+      completedDate: new Date().toISOString(),
+      responses: responses
+    };
+    
+    // Check if both parents have completed
+    const parentMembers = familyMembers.filter(m => m.role === 'parent');
+    const bothParentsCompleted = parentMembers.every(parent => 
+      cycleData.assessments[parent.id]?.completed
+    );
+    
+    if (bothParentsCompleted) {
+      cycleData.assessmentsCompleted = true;
+      cycleData.assessmentsCompletedDate = new Date().toISOString();
+    }
+    
+    // Save to Firestore
+    const cycleDocRef = doc(db, "relationshipCycles", `${familyId}-cycle${cycleNumber}`);
+    await setDoc(cycleDocRef, cycleData, { merge: true });
+    
+    return true;
+  } catch (error) {
+    console.error("Error completing relationship assessment:", error);
+    setError(error.message);
+    throw error;
+  }
+};
+
+// Complete relationship prework
+const completeRelationshipPrework = async (cycleNumber, preworkData) => {
+  try {
+    if (!familyId || !currentUser) throw new Error("No family ID or user available");
+    
+    // Get existing cycle data
+    const cycleData = await getRelationshipCycleData(cycleNumber);
+    if (!cycleData) throw new Error("Cycle data not found");
+    
+    // Add/update prework for current user
+    cycleData.prework[currentUser.uid] = {
+      completed: true,
+      completedDate: new Date().toISOString(),
+      strengths: preworkData.strengths || [],
+      challenges: preworkData.challenges || [],
+      goals: preworkData.goals || []
+    };
+    
+    // Check if both parents have completed
+    const parentMembers = familyMembers.filter(m => m.role === 'parent');
+    const bothParentsCompleted = parentMembers.every(parent => 
+      cycleData.prework[parent.id]?.completed
+    );
+    
+    if (bothParentsCompleted) {
+      cycleData.preworkCompleted = true;
+      cycleData.preworkCompletedDate = new Date().toISOString();
+      
+      // Generate AI agenda when both parents complete prework
+      try {
+        const agenda = await generateCouplesMeetingAgenda(familyId, cycleNumber, cycleData);
+        if (agenda) {
+          cycleData.meeting.agenda = agenda;
+        }
+      } catch (aiError) {
+        console.error("Error generating meeting agenda:", aiError);
+        // Don't block completion if AI fails
+      }
+    }
+    
+    // Save to Firestore
+    const cycleDocRef = doc(db, "relationshipCycles", `${familyId}-cycle${cycleNumber}`);
+    await setDoc(cycleDocRef, cycleData, { merge: true });
+    
+    return true;
+  } catch (error) {
+    console.error("Error completing relationship prework:", error);
+    setError(error.message);
+    throw error;
+  }
+};
+
+// Schedule couples meeting
+const scheduleCouplesMeeting = async (cycleNumber, date) => {
+  try {
+    if (!familyId || !currentUser) throw new Error("No family ID or user available");
+    
+    // Get existing cycle data
+    const cycleData = await getRelationshipCycleData(cycleNumber);
+    if (!cycleData) throw new Error("Cycle data not found");
+    
+    // Update meeting information
+    cycleData.meeting.scheduled = true;
+    cycleData.meeting.scheduledDate = date.toISOString();
+    
+    // Save to Firestore
+    const cycleDocRef = doc(db, "relationshipCycles", `${familyId}-cycle${cycleNumber}`);
+    await setDoc(cycleDocRef, cycleData, { merge: true });
+    
+    // Create calendar event
+    try {
+      const calendarEvent = {
+        title: `Couple's Meeting - Cycle ${cycleNumber}`,
+        description: "Relationship strengthening discussion based on your individual assessments.",
+        startDate: date,
+        endDate: new Date(date.getTime() + 60 * 60 * 1000), // 1 hour meeting
+        eventType: 'couple-meeting',
+        category: 'relationship'
+      };
+      
+      // Use CalendarService to add event
+      await CalendarService.addEvent(calendarEvent, currentUser.uid);
+    } catch (calendarError) {
+      console.error("Error adding meeting to calendar:", calendarError);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error scheduling couples meeting:", error);
+    setError(error.message);
+    throw error;
+  }
+};
+
+// Complete couples meeting
+const completeCouplesMeeting = async (cycleNumber, meetingData) => {
+  try {
+    if (!familyId || !currentUser) throw new Error("No family ID or user available");
+    
+    // Get existing cycle data
+    const cycleData = await getRelationshipCycleData(cycleNumber);
+    if (!cycleData) throw new Error("Cycle data not found");
+    
+    // Update meeting information
+    cycleData.meeting.completed = true;
+    cycleData.meeting.completedDate = new Date().toISOString();
+    cycleData.meeting.notes = meetingData.notes || {};
+    cycleData.meeting.actionItems = meetingData.actionItems || [];
+    cycleData.meeting.nextMeeting = meetingData.nextMeeting;
+    
+    // Calculate metrics based on both assessments
+    cycleData.metrics = calculateCombinedMetrics(cycleData);
+    
+    // Update cycle status
+    cycleData.status = "completed";
+    cycleData.endDate = new Date().toISOString();
+    
+    // Save to Firestore
+    const cycleDocRef = doc(db, "relationshipCycles", `${familyId}-cycle${cycleNumber}`);
+    await setDoc(cycleDocRef, cycleData, { merge: true });
+    
+    // If next meeting date is set, schedule it
+    if (meetingData.nextMeeting) {
+      try {
+        await scheduleCouplesMeeting(cycleNumber + 1, new Date(meetingData.nextMeeting));
+      } catch (scheduleError) {
+        console.error("Error scheduling next meeting:", scheduleError);
+      }
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error completing couples meeting:", error);
+    setError(error.message);
+    throw error;
+  }
+};
+
+// Calculate combined metrics from both parents' assessments
+const calculateCombinedMetrics = (cycleData) => {
+  const metrics = {
+    satisfaction: 0,
+    communication: 0,
+    connection: 0,
+    workload: 0
+  };
+  
+  // Extract user IDs with completed assessments
+  const userIds = Object.keys(cycleData.assessments).filter(
+    userId => cycleData.assessments[userId].completed
+  );
+  
+  if (userIds.length === 0) return metrics;
+  
+  // Calculate metrics for each category by averaging responses
+  userIds.forEach(userId => {
+    const responses = cycleData.assessments[userId].responses;
+    
+    // Group responses by category
+    const categoryScores = {
+      satisfaction: [],
+      communication: [],
+      connection: [],
+      workload: []
+    };
+    
+    // Map responses to categories (assuming response values are 1-5)
+    Object.entries(responses).forEach(([questionId, value]) => {
+      // Only include numerical scores
+      if (typeof value !== 'number') return;
+      
+      if (questionId.includes('satisfaction') || questionId.includes('happy')) {
+        categoryScores.satisfaction.push(value);
+      } else if (questionId.includes('communication') || questionId.includes('listen')) {
+        categoryScores.communication.push(value);
+      } else if (questionId.includes('connection') || questionId.includes('intimacy')) {
+        categoryScores.connection.push(value);
+      } else if (questionId.includes('workload') || questionId.includes('balance')) {
+        categoryScores.workload.push(value);
+      }
+    });
+    
+    // Calculate averages for this user
+    Object.keys(categoryScores).forEach(category => {
+      const scores = categoryScores[category];
+      if (scores.length > 0) {
+        // Add user's average to the running sum
+        metrics[category] += scores.reduce((sum, score) => sum + score, 0) / scores.length / userIds.length;
+      }
+    });
+  });
+  
+  // Ensure all metrics are within 1-5 range
+  Object.keys(metrics).forEach(key => {
+    if (metrics[key] === 0) metrics[key] = 3; // Default if no data
+    metrics[key] = Math.min(5, Math.max(1, metrics[key]));
+  });
+  
+  return metrics;
+};
+
+// Don't forget to add these to the context value export
+const contextValue = {
+  // ...existing context values
+  getRelationshipCycleData,
+  completeRelationshipAssessment,
+  completeRelationshipPrework,
+  scheduleCouplesMeeting,
+  completeCouplesMeeting
+};
+
+
+
 // Get relationship strategies (MOVED OUTSIDE getRelationshipTrendData)
 const getRelationshipStrategies = async () => {
   try {
