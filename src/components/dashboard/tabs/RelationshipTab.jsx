@@ -23,6 +23,8 @@ import EnhancedEventManager from '../../calendar/EnhancedEventManager';
 import RelationshipAssessment from '../../relationship/RelationshipAssessment';
 import RelationshipPrework from '../../relationship/RelationshipPrework';
 import CouplesMeeting from '../../relationship/CouplesMeeting';
+import UserAvatar from '../../common/UserAvatar';
+
 
 // Lazy load heavy components to improve initial load performance
 const DailyCheckInTool = lazy(() => import('../DailyCheckInTool'));
@@ -1107,10 +1109,60 @@ useEffect(() => {
       </div>
       
       {/* Progress Indicator with Parent Profiles */}
-  <div className="mt-8 mb-8">
-    <div className="flex justify-between mb-4">
+<div className="mt-8 mb-8">
+  {/* Progress Bar */}
+  <div className="relative mb-12">
+    <div className="h-2 bg-gray-200 rounded-full w-full relative">
+      <div className={`absolute left-0 h-2 rounded-full transition-all duration-500 ${
+        meetingComplete ? 'w-full bg-gradient-to-r from-green-400 to-green-500' :
+        preworkComplete ? 'w-2/3 bg-gradient-to-r from-purple-500 to-pink-500' :
+        myAssessmentComplete && partnerAssessmentComplete ? 'w-1/3 bg-gradient-to-r from-blue-400 to-purple-500' :
+        'w-0'
+      }`}></div>
+    </div>
+    
+    {/* Step Number Markers */}
+    <div className="absolute top-0 left-0 transform -translate-y-1/2 w-full">
+      <div className="flex justify-between">
+        {/* Step 1 */}
+        <div className="relative flex flex-col items-center">
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md z-10 ${
+            myAssessmentComplete || partnerAssessmentComplete 
+              ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
+              : 'bg-gray-300 text-gray-700'
+          }`}>
+            1
+          </div>
+        </div>
+        
+        {/* Step 2 */}
+        <div className="relative flex flex-col items-center">
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md z-10 ${
+            preworkComplete 
+              ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
+              : 'bg-gray-300 text-gray-700'
+          }`}>
+            2
+          </div>
+        </div>
+        
+        {/* Step 3 */}
+        <div className="relative flex flex-col items-center">
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md z-10 ${
+            meetingComplete 
+              ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
+              : 'bg-gray-300 text-gray-700'
+          }`}>
+            3
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    {/* Step Labels */}
+    <div className="flex justify-between absolute w-full mt-2">
       <div className="text-center w-1/3">
-        <div className={`text-sm font-medium ${
+        <div className={`text-sm font-medium mt-6 ${
           myAssessmentComplete || partnerAssessmentComplete ? 'text-purple-600' : 'text-gray-500'
         }`}>
           STEP 1
@@ -1118,100 +1170,56 @@ useEffect(() => {
         <div className="text-xs text-gray-600">Assessments</div>
       </div>
       <div className="text-center w-1/3">
-        <div className={`text-sm font-medium ${preworkComplete ? 'text-purple-600' : 'text-gray-500'}`}>
+        <div className={`text-sm font-medium mt-6 ${preworkComplete ? 'text-purple-600' : 'text-gray-500'}`}>
           STEP 2
         </div>
         <div className="text-xs text-gray-600">Pre-Meeting Work</div>
       </div>
       <div className="text-center w-1/3">
-        <div className={`text-sm font-medium ${meetingComplete ? 'text-purple-600' : 'text-gray-500'}`}>
+        <div className={`text-sm font-medium mt-6 ${meetingComplete ? 'text-purple-600' : 'text-gray-500'}`}>
           STEP 3
         </div>
         <div className="text-xs text-gray-600">Couple Meeting</div>
       </div>
     </div>
-
-    {/* Progress Timeline */}
-    <div className="relative">
-      {/* Progress Bar */}
-      <div className="h-2 bg-gray-200 rounded-full w-full mb-10 relative">
-        <div className={`absolute left-0 h-2 rounded-full transition-all duration-500 ${
-          meetingComplete ? 'w-full bg-gradient-to-r from-green-400 to-green-500' :
-          preworkComplete ? 'w-2/3 bg-gradient-to-r from-purple-500 to-pink-500' :
-          myAssessmentComplete && partnerAssessmentComplete ? 'w-1/3 bg-gradient-to-r from-blue-400 to-purple-500' :
-          'w-0'
-        }`}></div>
-      </div>
+  </div>
+  
+  {/* Parent Profile Pictures */}
+  <div className="flex justify-center gap-4 mt-8">
+    {familyMembers.filter(m => m.role === 'parent').map((parent, index) => {
+      const isCurrentUser = currentUser && parent.id === currentUser.uid;
+      const hasCompleted = isCurrentUser ? myAssessmentComplete : partnerAssessmentComplete;
       
-      {/* Step Markers with Parent Profiles */}
-      <div className="absolute top-0 left-0 transform -translate-y-1/2 w-full">
-        <div className="flex justify-between">
-          {/* Step 1: Assessments */}
-          <div className="relative flex flex-col items-center">
-            <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center shadow-md z-10">
-              1
-            </div>
+      // Calculate step position based on completion
+      let stepPosition = 1;
+      if (hasCompleted) {
+        if (preworkComplete) stepPosition = 2;
+        if (meetingComplete) stepPosition = 3;
+      }
+      
+      return (
+        <div key={parent.id} className="flex flex-col items-center">
+          <div className="relative">
+            {/* Use UserAvatar component instead of custom implementation */}
+            <UserAvatar 
+              user={parent} 
+              size={40}
+              className={`border-2 ${hasCompleted ? 'border-green-500' : 'border-gray-300'}`}
+            />
             
-            {/* Parent Profile Pictures */}
-            <div className="mt-3 flex">
-              {/* Find parent profiles from familyMembers */}
-              {familyMembers.filter(m => m.role === 'parent').map((parent, index) => {
-                const isCurrentUser = currentUser && parent.id === currentUser.uid;
-                const hasCompleted = isCurrentUser ? myAssessmentComplete : partnerAssessmentComplete;
-                
-                // Calculate position based on completion
-                let translateClass = '';
-                if (hasCompleted) {
-                  if (preworkComplete) {
-                    translateClass = 'translate-x-full';
-                  } else {
-                    // Move to step 2
-                    translateClass = 'translate-x-16';
-                  }
-                  
-                  if (meetingComplete) {
-                    translateClass = 'translate-x-32';
-                  }
-                }
-                
-                // Responsive positioning
-                translateClass = translateClass.replace('translate-x-16', 'translate-x-[110%] sm:translate-x-[150%] md:translate-x-[200%]')
-                  .replace('translate-x-32', 'translate-x-[220%] sm:translate-x-[300%] md:translate-x-[400%]')
-                  .replace('translate-x-full', 'translate-x-[110%] sm:translate-x-[150%] md:translate-x-[200%]');
-                
-                return (
-                  <div 
-                    key={parent.id}
-                    className={`transform transition-all duration-700 ${translateClass} ${index === 0 ? '-ml-2' : 'ml-2'}`}
-                  >
-                    <div className={`flex flex-col items-center ${hasCompleted ? 'opacity-100' : 'opacity-70'}`}>
-                      <div className={`w-10 h-10 rounded-full overflow-hidden border-2 ${
-                        hasCompleted ? 'border-green-500' : 'border-gray-300'
-                      } z-20 bg-white`}>
-                        {parent.profilePicture ? (
-                          <img 
-                            src={parent.profilePicture} 
-                            alt={parent.name} 
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gray-200 text-gray-600">
-                            {parent.name?.charAt(0) || '?'}
-                          </div>
-                        )}
-                      </div>
-                      <span className="text-xs mt-1 whitespace-nowrap">{parent.name}</span>
-                      {hasCompleted && (
-                        <span className="absolute top-0 right-0 transform translate-x-1/4 -translate-y-1/4">
-                          <CheckCircle size={12} className="text-green-500 bg-white rounded-full" />
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            {hasCompleted && (
+              <span className="absolute -top-1 -right-1">
+                <CheckCircle size={16} className="text-green-500 bg-white rounded-full" />
+              </span>
+            )}
           </div>
+          <span className="text-xs mt-1 font-medium">{parent.name}</span>
+          <span className="text-xs text-gray-500">Step {stepPosition}</span>
+        </div>
+      );
+    })}
+  </div>
+</div>
           
           {/* Step 2: Pre-Meeting Work */}
           <div className="relative flex flex-col items-center">
@@ -1230,10 +1238,7 @@ useEffect(() => {
               3
             </div>
           </div>
-        </div>
-      </div>
-    </div>
-  </div>
+  
       
         {/* Action Buttons - Shows different options based on progress */}
 <div className="flex flex-wrap justify-center mt-4 gap-4">
