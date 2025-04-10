@@ -1184,41 +1184,48 @@ Would you like to know more about one of these topics?`;
         }
         
         // Handle specialized requests with custom handlers
-        
-        // 1. Calendar requests
-        const calendarResponse = await this.handleCalendarRequest(text, familyData, userId);
-        if (calendarResponse) {
-          console.log("Handled as calendar request");
-          return calendarResponse;
-        }
-        
-        // 2. Relationship events
-        const relationshipResponse = await this.handleRelationshipRequest(text, familyData, userId);
-        if (relationshipResponse) {
-          console.log("Handled as relationship request");
-          return relationshipResponse;
-        }
-        
-        // 3. Child tracking requests
-        const childTrackingResponse = await this.handleChildTrackingRequest(text, familyData);
-        if (childTrackingResponse) {
-          console.log("Handled as child tracking request");
-          return childTrackingResponse;
-        }
-        
-        // 4. Task-related requests
-        const taskResponse = await this.handleTaskRequest(text, familyData);
-        if (taskResponse) {
-          console.log("Handled as task request");
-          return taskResponse;
-        }
-        
-        // 5. Survey-based insights for direct questions
-        const surveyResponse = await this.handleSurveyQuestion(text, familyData);
-        if (surveyResponse) {
-          console.log("Handled as survey question");
-          return surveyResponse;
-        }
+
+// 1. Calendar requests
+const calendarResponse = await this.handleCalendarRequest(text, familyData, userId);
+if (calendarResponse) {
+  console.log("Handled as calendar request");
+  return calendarResponse;
+}
+
+// 2. Relationship events
+const relationshipResponse = await this.handleRelationshipRequest(text, familyData, userId);
+if (relationshipResponse) {
+  console.log("Handled as relationship request");
+  return relationshipResponse;
+}
+
+// 3. Child tracking requests
+const childTrackingResponse = await this.handleChildTrackingRequest(text, familyData);
+if (childTrackingResponse) {
+  console.log("Handled as child tracking request");
+  return childTrackingResponse;
+}
+
+// 4. Healthcare provider requests
+const providerResponse = await this.handleProviderRequest(text, familyData);
+if (providerResponse) {
+  console.log("Handled as healthcare provider request");
+  return providerResponse;
+}
+
+// 5. Task-related requests
+const taskResponse = await this.handleTaskRequest(text, familyData);
+if (taskResponse) {
+  console.log("Handled as task request");
+  return taskResponse;
+}
+
+// 6. Survey-based insights for direct questions
+const surveyResponse = await this.handleSurveyQuestion(text, familyData);
+if (surveyResponse) {
+  console.log("Handled as survey question");
+  return surveyResponse;
+}
         
         // Add knowledge base to context
         familyData.knowledgeBase = knowledgeBase;
@@ -1395,6 +1402,48 @@ Would you like to know more about one of these topics?`;
     }
   }
   
+// Handle healthcare provider-related requests
+async handleProviderRequest(text, familyContext) {
+  try {
+    // Check if this is a provider-related request
+    const intent = this.nlu.detectIntent(text);
+    const isProviderIntent = [
+      'healthcare.provider',
+      'healthcare.doctor',
+      'healthcare.add_provider'
+    ].includes(intent);
+    
+    if (!isProviderIntent) {
+      const providerKeywords = [
+        'add doctor', 'new doctor', 'healthcare provider', 
+        'add provider', 'doctor for', 'pediatrician', 
+        'family doctor', 'our doctor', 'children\'s doctor'
+      ];
+      const hasProviderKeyword = providerKeywords.some(keyword => 
+        text.toLowerCase().includes(keyword)
+      );
+      
+      if (!hasProviderKeyword) return null;
+    }
+    
+    // Get AllieAI service to process the provider
+    const AllieAIService = (await import('./AllieAIService')).default;
+    
+    // Process the provider request
+    const result = await AllieAIService.processProviderFromChat(text, familyContext.familyId);
+    
+    if (result.success) {
+      return `Great! I've added ${result.providerDetails.name} to your healthcare providers. ${result.providerDetails.specialty ? `Specialty: ${result.providerDetails.specialty}.` : ''} ${result.providerDetails.email ? `Contact: ${result.providerDetails.email}` : ''} You can see all your healthcare providers in the Children Tracking tab under Medical & Health section.`;
+    } else {
+      throw new Error(result.error || "Failed to add healthcare provider");
+    }
+  } catch (error) {
+    console.error("Error handling provider request:", error);
+    return `I'm sorry, I couldn't add the healthcare provider. ${error.message}. You can add healthcare providers manually in the Children Tracking tab under Medical & Health section.`;
+  }
+}
+
+
   // Get family context for AI response with enhanced caching
   async getFamilyContext(familyId) {
     try {

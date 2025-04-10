@@ -391,8 +391,32 @@ const processMessageForEvents = async (text) => {
     
     // Create child event detector if we don't have one
     if (!childEventDetector.current) {
-      const ChildEventDetection = (await import('../services/EnhancedChildEventDetection')).default;
+      const ChildEventDetection = (await import('../../services/EnhancedChildEventDetection')).default;
       childEventDetector.current = new ChildEventDetection();
+    }
+    
+    // Check for provider-specific requests first (doctors, specialists)
+    const isProviderRequest = 
+      text.toLowerCase().includes('doctor') || 
+      text.toLowerCase().includes('provider') ||
+      text.toLowerCase().includes('pediatrician') ||
+      text.toLowerCase().includes('dentist') ||
+      (text.toLowerCase().includes('add') && 
+       (text.toLowerCase().includes('medical') || 
+        text.toLowerCase().includes('healthcare')));
+    
+    if (isProviderRequest) {
+      // Don't try to handle as an event, let the provider-specific handler take care of it
+      const childrenMentioned = familyMembers
+        .filter(m => m.role === 'child')
+        .some(child => text.toLowerCase().includes(child.name.toLowerCase()));
+      
+      // Only return true if it's clearly a provider request with children mentioned
+      if (childrenMentioned) {
+        console.log("Detected provider request with children mentioned, skipping event parsing");
+        // Don't handle here, let EnhancedChatService handle it
+        return false;
+      }
     }
     
     // Enhanced detection for calendar-related content
@@ -406,7 +430,7 @@ const processMessageForEvents = async (text) => {
       text.toLowerCase().includes('event') ||
       text.toLowerCase().includes('schedule');
     
-    // NEW: Check for child-specific events like activities and medical appointments
+    // Check for child-specific events like activities and medical appointments
     const childrenList = familyMembers.filter(m => m.role === 'child');
     
     // Try to detect child activity
@@ -449,6 +473,12 @@ const processMessageForEvents = async (text) => {
       medicalEvent.familyId = familyId;
       medicalEvent.creationSource = 'chat';
       
+      // Check if a doctor/provider name is mentioned
+      const doctorNameMatch = text.match(/(?:doctor|dr\.?)\s+([a-z]+)/i);
+      if (doctorNameMatch && doctorNameMatch[1]) {
+        medicalEvent.doctor = doctorNameMatch[1];
+      }
+      
       // Set it as the parsed event
       setParsedEventDetails(medicalEvent);
       setShowEventParser(true);
@@ -466,6 +496,8 @@ const processMessageForEvents = async (text) => {
       setMessages(prev => [...prev, helperMessage]);
       return true;
     }
+    
+    
     
     // Determine if this is a query about existing events
     const isCalendarQuery = 

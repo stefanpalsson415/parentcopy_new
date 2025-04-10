@@ -101,78 +101,116 @@ class EnhancedChildEventDetection {
     }
   
     /**
-     * Detect if message contains medical appointment references
-     * @param {string} text - Message text
-     * @param {Array} children - Array of children objects
-     * @returns {Object|null} - Medical appointment details if detected
-     */
-    detectMedicalAppointment(text, children = []) {
-      const lowerText = text.toLowerCase();
-      
-      // Check if the message contains medical appointment indicators
-      const hasMedicalTerms = [
-        'doctor', 'appointment', 'check-up', 'checkup', 'pediatrician', 
-        'dentist', 'orthodontist', 'eye doctor', 'optometrist', 'ophthalmologist',
-        'therapy', 'therapist', 'vaccination', 'shot', 'booster', 'physical'
-      ].some(term => lowerText.includes(term));
-      
-      if (!hasMedicalTerms) return null;
-      
-      // Determine type of medical appointment
-      let appointmentType = 'general';
-      let appointmentName = null;
-      
-      for (const [type, keywords] of Object.entries(this.medicalTypes)) {
-        for (const keyword of keywords) {
-          if (lowerText.includes(keyword)) {
-            appointmentType = type;
-            appointmentName = `${keyword.charAt(0).toUpperCase() + keyword.slice(1)} Appointment`;
-            break;
-          }
-        }
-        if (appointmentName) break;
+ * Detect if message contains medical appointment references
+ * @param {string} text - Message text
+ * @param {Array} children - Array of children objects
+ * @returns {Object|null} - Medical appointment details if detected
+ */
+detectMedicalAppointment(text, children = []) {
+  const lowerText = text.toLowerCase();
+  
+  // Check if the message contains medical appointment indicators
+  const hasMedicalTerms = [
+    'doctor', 'appointment', 'check-up', 'checkup', 'pediatrician', 
+    'dentist', 'orthodontist', 'eye doctor', 'optometrist', 'ophthalmologist',
+    'therapy', 'therapist', 'vaccination', 'shot', 'booster', 'physical',
+    'medical', 'hospital', 'clinic', 'health center', 'healthcare'
+  ].some(term => lowerText.includes(term));
+  
+  if (!hasMedicalTerms) return null;
+  
+  // Determine type of medical appointment
+  let appointmentType = 'general';
+  let appointmentName = null;
+  
+  for (const [type, keywords] of Object.entries(this.medicalTypes)) {
+    for (const keyword of keywords) {
+      if (lowerText.includes(keyword)) {
+        appointmentType = type;
+        appointmentName = `${keyword.charAt(0).toUpperCase() + keyword.slice(1)} Appointment`;
+        break;
       }
-      
-      if (!appointmentName) {
-        appointmentName = "Doctor's Appointment";
-      }
-      
-      // Now try to identify which child this is for
-      let childId = null;
-      let childName = null;
-      
-      // Check if any child name is mentioned in the text
-      for (const child of children) {
-        if (lowerText.includes(child.name.toLowerCase())) {
-          childId = child.id;
-          childName = child.name;
-          break;
-        }
-      }
-      
-      // If no child was found but there's only one child, assume it's for them
-      if (!childId && children.length === 1) {
-        childId = children[0].id;
-        childName = children[0].name;
-      }
-      
-      // Extract date and time
-      const dateTimeInfo = this.extractDateAndTime(text);
-      
-      // Return structured medical appointment data
-      return {
-        eventType: 'appointment',
-        appointmentType: appointmentType,
-        title: appointmentName,
-        childId,
-        childName,
-        dateTime: dateTimeInfo.dateTime,
-        duration: dateTimeInfo.duration || 30, // Default to 30 minutes
-        location: this.extractLocation(text),
-        notes: this.extractNotes(text),
-        trackingType: 'medical'
-      };
     }
+    if (appointmentName) break;
+  }
+  
+  if (!appointmentName) {
+    appointmentName = "Doctor's Appointment";
+  }
+  
+  // Now try to identify which child this is for
+  let childId = null;
+  let childName = null;
+  
+  // Check if any child name is mentioned in the text
+  for (const child of children) {
+    if (lowerText.includes(child.name.toLowerCase())) {
+      childId = child.id;
+      childName = child.name;
+      break;
+    }
+  }
+  
+  // If no child was found but there's only one child, assume it's for them
+  if (!childId && children.length === 1) {
+    childId = children[0].id;
+    childName = children[0].name;
+  }
+  
+  // Extract date and time
+  const dateTimeInfo = this.extractDateAndTime(text);
+  
+  // Extract doctor information
+  let doctor = null;
+  let providerEmail = null;
+  let providerPhone = null;
+  
+  // Look for doctor name patterns
+  const doctorPatterns = [
+    /(?:doctor|dr\.?)\s+([a-z]+)/i,
+    /(?:with|see)\s+(?:doctor|dr\.?)\s+([a-z]+)/i,
+    /(?:doctor|dr\.?|provider)(?:'s)?\s+name\s+is\s+([a-z]+)/i
+  ];
+  
+  for (const pattern of doctorPatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      doctor = match[1];
+      break;
+    }
+  }
+  
+  // Look for email
+  const emailMatch = text.match(/([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i);
+  if (emailMatch && emailMatch[1]) {
+    providerEmail = emailMatch[1];
+  }
+  
+  // Look for phone number
+  const phoneMatch = text.match(/(\+?[\d\s()-]{10,})/);
+  if (phoneMatch && phoneMatch[1]) {
+    providerPhone = phoneMatch[1].replace(/\s+/g, '');
+  }
+  
+  // Return structured medical appointment data with enhanced provider info
+  return {
+    eventType: 'appointment',
+    appointmentType: appointmentType,
+    title: appointmentName,
+    childId,
+    childName,
+    dateTime: dateTimeInfo.dateTime,
+    duration: dateTimeInfo.duration || 30, // Default to 30 minutes
+    location: this.extractLocation(text),
+    notes: this.extractNotes(text),
+    trackingType: 'medical',
+    doctor: doctor, // Add doctor name
+    providerEmail: providerEmail, // Add provider email
+    providerPhone: providerPhone, // Add provider phone
+    // Add a flag to indicate this might need provider creation
+    hasProviderInfo: !!(doctor || providerEmail || providerPhone)
+  };
+}
   
     /**
      * Extract date and time information from text

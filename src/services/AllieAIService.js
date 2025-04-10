@@ -215,6 +215,145 @@ class AllieAIService {
 
 // Add to src/services/AllieAIService.js
 // New method to handle medical appointments from chat
+// Handle adding a healthcare provider from chat
+async processProviderFromChat(message, familyId) {
+  try {
+    if (!familyId) return { success: false, error: "Family ID is required" };
+    
+    // Extract provider details from message
+    const providerDetails = await this.extractProviderDetails(message);
+    
+    // Create provider in the database
+    const providerId = await this.createOrFindProvider(
+      familyId, 
+      providerDetails.name,
+      providerDetails.specialty,
+      providerDetails.email,
+      providerDetails.phone,
+      providerDetails.address,
+      providerDetails.notes
+    );
+    
+    if (providerId) {
+      return { 
+        success: true, 
+        providerId: providerId,
+        providerDetails: providerDetails,
+        message: `Successfully added Dr. ${providerDetails.name} to your healthcare providers.`
+      };
+    } else {
+      return { 
+        success: false, 
+        error: "Failed to create healthcare provider" 
+      };
+    }
+  } catch (error) {
+    console.error("Error processing provider from chat:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Helper method to extract provider details
+async extractProviderDetails(message) {
+  // Use Claude API to extract structured data
+  const systemPrompt = `You are an AI that extracts healthcare provider information from text.
+  Extract the following details in a structured JSON format:
+  - name: Provider's name (e.g., Dr. Smith)
+  - specialty: Provider's specialty (e.g., pediatrician, dentist, general)
+  - email: Provider's email if mentioned
+  - phone: Provider's phone if mentioned
+  - address: Provider's address or location
+  - notes: Any additional information
+  
+  If information isn't available, use null for that field.`;
+  
+  const userMessage = `Extract healthcare provider details from this message: "${message}"`;
+  
+  const response = await ClaudeService.generateResponse(
+    [{ role: 'user', content: userMessage }],
+    { system: systemPrompt }
+  );
+  
+  try {
+    const details = JSON.parse(response);
+    return {
+      name: details.name || "Unknown Provider",
+      specialty: details.specialty || "General",
+      email: details.email || "",
+      phone: details.phone || "",
+      address: details.address || "",
+      notes: details.notes || ""
+    };
+  } catch (error) {
+    console.error("Error parsing provider details:", error);
+    // Extract basic information if parsing fails
+    const nameMatch = message.match(/(?:doctor|dr\.?)\s+([a-z]+)/i);
+    const name = nameMatch ? nameMatch[1] : "Unknown Provider";
+    
+    return {
+      name: name,
+      specialty: message.includes("pediatrician") ? "Pediatrician" : 
+                message.includes("dentist") ? "Dentist" : "General",
+      email: "",
+      phone: "",
+      address: "",
+      notes: message // Use original message as notes
+    };
+  }
+}
+
+// Enhanced version of createOrFindProvider to include more details
+async createOrFindProvider(familyId, name, specialty, email, phone, address = "", notes = "") {
+  try {
+    // Check if provider already exists
+    const providersRef = collection(db, "healthcareProviders");
+    const q = query(
+      providersRef, 
+      where("familyId", "==", familyId),
+      where("name", "==", name)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      // Update existing provider with any new info
+      const providerDoc = querySnapshot.docs[0];
+      const providerId = providerDoc.id;
+      const existingData = providerDoc.data();
+      
+      // Update with new data if provided
+      await updateDoc(doc(db, "healthcareProviders", providerId), {
+        specialty: specialty || existingData.specialty,
+        email: email || existingData.email,
+        phone: phone || existingData.phone,
+        address: address || existingData.address,
+        notes: notes || existingData.notes,
+        updatedAt: serverTimestamp()
+      });
+      
+      return providerId;
+    }
+    
+    // Create new provider
+    const providerData = {
+      name,
+      specialty: specialty || "General Practitioner",
+      email: email || "",
+      phone: phone || "",
+      address: address || "",
+      notes: notes || "",
+      familyId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    
+    const docRef = await addDoc(providersRef, providerData);
+    return docRef.id;
+  } catch (error) {
+    console.error("Error creating/finding provider:", error);
+    return null;
+  }
+}
+
 
 async processAppointmentFromChat(message, familyId, childId = null) {
   try {
