@@ -26,12 +26,10 @@ import OnboardingFlow from './components/onboarding/OnboardingFlow';
 import RelationshipFeaturesPage from './components/marketing/RelationshipFeaturesPage';
 import AIAssistantPage from './components/marketing/AIAssistantPage';
 import { useAuth } from './contexts/AuthContext';
-import FloatingCalendarWidget from './components/calendar/FloatingCalendarWidget';
+import { FloatingCalendar } from './components/calendar'; // Updated import
 import EmailOptIn from './components/marketing/EmailOptIn';
 import ClaudeDebugger from './components/debug/ClaudeDebugger';
 import './styles/atomicHabits.css';
-
-
 
 
 // App Routes Component - Used after context providers are set up
@@ -48,16 +46,8 @@ function AppRoutes() {
     }
   }, []);
 
-
-
-
   // Determine if calendar widget should be shown
   const showCalendarWidget = !!currentUser && !!selectedUser && window.location.pathname === '/dashboard';
-
-// Add this after the imports
-
-
-
 
   return (
     <>
@@ -71,7 +61,7 @@ function AppRoutes() {
         
         <Route path="/how-it-works" element={<HowThisWorksScreen />} />
         <Route path="/family-command-center" element={<RelationshipFeaturesPage />} />
-                <Route path="/ai-assistant" element={<AIAssistantPage />} />
+        <Route path="/ai-assistant" element={<AIAssistantPage />} />
         <Route path="/about-us" element={<AboutUsPage />} />
         <Route path="/family-memory" element={<FamilyMemory />} />
         <Route path="/product-overview" element={<ProductOverviewPage />} />
@@ -80,10 +70,10 @@ function AppRoutes() {
 
         <Route path="/survey" element={<SurveyScreen mode="initial" />} />
         
-{/* Add a dedicated route for kid-survey with better path protection */}
-<Route path="/kid-survey" element={
-  localStorage.getItem('selectedUserId') ? <KidFriendlySurvey surveyType="initial" /> : <Navigate to="/login" />
-} />
+        {/* Add a dedicated route for kid-survey with better path protection */}
+        <Route path="/kid-survey" element={
+          localStorage.getItem('selectedUserId') ? <KidFriendlySurvey surveyType="initial" /> : <Navigate to="/login" />
+        } />
         <Route path="/mini-survey" element={<MiniSurvey />} />
         <Route path="/mini-results" element={<MiniResultsScreen />} />
         <Route path="/payment" element={<PaymentScreen />} />
@@ -92,22 +82,22 @@ function AppRoutes() {
         
         {/* Route for weekly check-in - directs kids to kid-friendly version */}
         <Route path="/weekly-check-in" element={
-  selectedUser?.role === 'child' 
-    ? <KidFriendlySurvey surveyType="weekly" /> 
-    : <SurveyScreen mode="weekly" />
-} />
+          selectedUser?.role === 'child' 
+            ? <KidFriendlySurvey surveyType="weekly" /> 
+            : <SurveyScreen mode="weekly" />
+        } />
         
         <Route path="/loading" element={<LoadingScreen />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
       
       {/* Show calendar widget only on dashboard when user is logged in */}
-      {showCalendarWidget && <FloatingCalendarWidget />}
+      {showCalendarWidget && <FloatingCalendar />}
     </>
   );
 }
 
-/// In src/App.js - around line 290-330
+// Error Boundary Component
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -198,11 +188,11 @@ function App() {
       <ErrorBoundary>
         <AuthProvider>
           <FamilyProvider>
-          <SurveyProvider>
-  <div className="App">
-    <AppRoutes />
-  </div>
-</SurveyProvider>
+            <SurveyProvider>
+              <div className="App">
+                <AppRoutes />
+              </div>
+            </SurveyProvider>
           </FamilyProvider>
         </AuthProvider>
       </ErrorBoundary>

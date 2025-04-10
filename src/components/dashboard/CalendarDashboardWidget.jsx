@@ -3,6 +3,7 @@ import { Calendar, PlusCircle, ChevronLeft, ChevronRight, ArrowUpRight } from 'l
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import CalendarService from '../../services/CalendarService';
+import { EventManager } from '../../components/calendar';
 
 const CalendarDashboardWidget = () => {
   const { currentUser } = useAuth();

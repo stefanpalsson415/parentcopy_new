@@ -14,14 +14,13 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AllieChat from '../chat/AllieChat';
 import RelationshipMeetingScreen from '../meeting/RelationshipMeetingScreen';
-import FloatingCalendarWidget from '../calendar/FloatingCalendarWidget';
 import DashboardTutorial from '../onboarding/DashboardTutorial';
 import ErrorBoundary from '../common/ErrorBoundary';
 import ChildrenTrackingTab from './tabs/ChildrenTrackingTab';
 import SurveyScreen from '../survey/SurveyScreen';
 import ClaudeService from '../../services/ClaudeService';
-
-
+// Import from new calendar library instead of direct import
+import { FloatingCalendar } from '../calendar';
 
 const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const navigate = useNavigate();
@@ -202,23 +201,22 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
     loadDashboardData();
   }, [familyId, currentWeek]);
 
-// In DashboardScreen.jsx - Add this to the useEffect that loads the dashboard
-useEffect(() => {
-  // Add this inside your existing useEffect
-  const testClaudeConnection = async () => {
-    try {
-      const ClaudeService = (await import('../../services/ClaudeService.js')).default;
-      console.log("Testing Claude API connection...");
-      const result = await ClaudeService.testConnection();
-      console.log("Claude API connection test result:", result);
-    } catch (error) {
-      console.error("Error testing Claude connection:", error);
-    }
-  };
-  
-  testClaudeConnection();
-}, []);
-
+  // In DashboardScreen.jsx - Add this to the useEffect that loads the dashboard
+  useEffect(() => {
+    // Add this inside your existing useEffect
+    const testClaudeConnection = async () => {
+      try {
+        const ClaudeService = (await import('../../services/ClaudeService.js')).default;
+        console.log("Testing Claude API connection...");
+        const result = await ClaudeService.testConnection();
+        console.log("Claude API connection test result:", result);
+      } catch (error) {
+        console.error("Error testing Claude connection:", error);
+      }
+    };
+    
+    testClaudeConnection();
+  }, []);
 
   // Load AllieAIService
   useEffect(() => {
@@ -239,7 +237,7 @@ useEffect(() => {
           .catch(err => console.error("Error loading initial AI insights:", err));
       }
     }).catch(error => {
-      console.error("Failed to load AI  service:", error);
+      console.error("Failed to load AI service:", error);
     });
   }, [familyId, currentWeek]);
   
@@ -430,22 +428,22 @@ useEffect(() => {
               Switch User
             </button>
             <button 
-  onClick={async () => {
-    try {
-      const ClaudeService = (await import('../../services/ClaudeService')).default;
-      console.log("Testing proxy connection directly...");
-      const result = await ClaudeService.testProxyConnection();
-      console.log("Proxy test result:", result);
-      alert("Proxy test result: " + (result ? "Success" : "Failed"));
-    } catch (error) {
-      console.error("Error testing proxy:", error);
-      alert("Error testing proxy: " + error.message);
-    }
-  }}
-  className="ml-2 px-2 py-1 bg-red-600 text-white text-xs rounded"
->
-  Test Proxy
-</button>
+              onClick={async () => {
+                try {
+                  const ClaudeService = (await import('../../services/ClaudeService')).default;
+                  console.log("Testing proxy connection directly...");
+                  const result = await ClaudeService.testProxyConnection();
+                  console.log("Proxy test result:", result);
+                  alert("Proxy test result: " + (result ? "Success" : "Failed"));
+                } catch (error) {
+                  console.error("Error testing proxy:", error);
+                  alert("Error testing proxy: " + error.message);
+                }
+              }}
+              className="ml-2 px-2 py-1 bg-red-600 text-white text-xs rounded"
+            >
+              Test Proxy
+            </button>
           </div>
         </div>
       </div>
@@ -553,9 +551,8 @@ useEffect(() => {
         <AllieChat />
       </div>
       
-      {/* Floating Calendar Widget */}
-      <FloatingCalendarWidget />
-
+      {/* Calendar widget is now being rendered by App.js using the new component */}
+      
       {/* Tutorial */}
       {showTutorial && (
         <DashboardTutorial 

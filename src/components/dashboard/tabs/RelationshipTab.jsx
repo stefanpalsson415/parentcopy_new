@@ -1,9 +1,9 @@
+// src/components/dashboard/tabs/RelationshipTab.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
-  Users, Heart, Calendar, ChevronDown, ChevronUp, Clock, 
-  MessageCircle, Brain, Info, CheckCircle, Lightbulb, Target,
-  AlertCircle, Bell, Award, X, RefreshCw, ArrowRight,
-  Shield, Save, Plus, Star
+  Users, Heart, Calendar, ChevronDown, ChevronUp, MessageCircle, 
+  Brain, Info, CheckCircle, Lightbulb, Target, AlertCircle, 
+  Bell, Award, X, RefreshCw, Clock, ArrowRight, Shield, Save, Plus, Star, Link
 } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -15,14 +15,16 @@ import SelfCarePlanner from '../SelfCarePlanner';
 import CoupleRelationshipChart from '../CoupleRelationshipChart';
 import RelationshipProgressChart from '../RelationshipProgressChart';
 import AIRelationshipInsights from '../AIRelationshipInsights';
+import EnhancedRelationshipCycleHistory from '../../relationship/EnhancedRelationshipCycleHistory';
 import { db } from '../../../services/firebase';
 import { 
   doc, setDoc, getDoc, serverTimestamp, 
   updateDoc, collection, query, where, getDocs,
-  arrayUnion, Timestamp
+  arrayUnion, Timestamp 
 } from 'firebase/firestore';
 import CalendarService from '../../../services/CalendarService';
 import AllieAIService from '../../../services/AllieAIService';
+import RelationshipCalendarIntegration from '../../../services/RelationshipCalendarIntegration';
 
 // Helper to format date consistently throughout the component
 const formatDate = (dateString) => {
@@ -279,7 +281,7 @@ const RelationshipQuestionnaire = ({ questions, onSubmit, cycle, previousData, o
   }
   
   // Handle different types of responses
-  const handleResponseChange = (questionId, value, type = 'scale') => {
+  const handleResponseChange = (questionId, value) => {
     setResponses(prev => ({
       ...prev,
       [questionId]: value
@@ -372,7 +374,7 @@ const RelationshipQuestionnaire = ({ questions, onSubmit, cycle, previousData, o
         className="w-full p-3 border rounded min-h-[100px] font-roboto"
         placeholder="Share your thoughts here..."
         value={responses[question.id] || ''}
-        onChange={(e) => handleResponseChange(question.id, e.target.value, 'text')}
+        onChange={(e) => handleResponseChange(question.id, e.target.value)}
       ></textarea>
     </div>
   );
@@ -395,7 +397,7 @@ const RelationshipQuestionnaire = ({ questions, onSubmit, cycle, previousData, o
                   ? 'border-black bg-gray-50'
                   : 'hover:bg-gray-50'
               }`}
-              onClick={() => handleResponseChange(question.id, option, 'select')}
+              onClick={() => handleResponseChange(question.id, option)}
             >
               <div className="flex items-center">
                 <div className={`w-4 h-4 rounded-full border ${
@@ -562,170 +564,6 @@ const RelationshipQuestionnaire = ({ questions, onSubmit, cycle, previousData, o
 };
 
 /**
- * Component to display relationship cycle history
- */
-const RelationshipCycleHistory = ({ history, onSelectCycle }) => {
-  // Get color for metric value
-  const getMetricColor = (value) => {
-    if (!value) return 'text-gray-500';
-    if (value >= 4.5) return 'text-green-600';
-    if (value >= 4) return 'text-green-500';
-    if (value >= 3.5) return 'text-blue-500';
-    if (value >= 3) return 'text-yellow-500';
-    if (value >= 2) return 'text-orange-500';
-    return 'text-red-500';
-  };
-
-  // Helper to render trend indicator
-  const renderTrendIndicator = (value, prevValue) => {
-    if (!prevValue) return null;
-    
-    const change = value - prevValue;
-    const isImproved = change > 0;
-    
-    return (
-      <span className={`text-xs ${isImproved ? 'text-green-500' : 'text-red-500'}`}>
-        {isImproved ? '↑' : '↓'} {Math.abs(change).toFixed(1)}
-      </span>
-    );
-  };
-
-  return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h4 className="font-medium font-roboto flex items-center">
-          <Calendar size={20} className="mr-2 text-gray-600" />
-          <span>Relationship Cycle History</span>
-        </h4>
-      </div>
-      
-      {history.length === 0 ? (
-        <div className="text-center p-6 bg-gray-50 rounded-lg">
-          <p className="text-gray-500 font-roboto">No relationship history yet. Complete your first cycle to start tracking progress.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {history.slice(0, 3).map((cycle, index) => {
-            const prevCycle = index < history.length - 1 ? history[index + 1] : null;
-            
-            return (
-              <div key={index} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors cursor-pointer" 
-                  onClick={() => onSelectCycle(cycle.cycle)}>
-                <div className="flex justify-between items-center mb-2">
-                  <h5 className="font-medium font-roboto">Cycle {cycle.cycle}</h5>
-                  <span className="text-sm text-gray-500 font-roboto">
-                    {formatDate(cycle.date)}
-                  </span>
-                </div>
-                
-                {cycle.data?.metrics && (
-                  <div className="grid grid-cols-4 gap-2 mb-3">
-                    <div className="text-center">
-                      <div className="flex items-center justify-center">
-                        <div className={`text-lg font-bold ${getMetricColor(cycle.data.metrics.satisfaction)}`}>
-                          {cycle.data.metrics.satisfaction?.toFixed(1) || "3.0"}
-                        </div>
-                        {prevCycle && prevCycle.data?.metrics && (
-                          <div className="ml-1">
-                            {renderTrendIndicator(
-                              cycle.data.metrics.satisfaction, 
-                              prevCycle.data.metrics.satisfaction
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-600 font-roboto">Satisfaction</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="flex items-center justify-center">
-                        <div className={`text-lg font-bold ${getMetricColor(cycle.data.metrics.communication)}`}>
-                          {cycle.data.metrics.communication?.toFixed(1) || "3.0"}
-                        </div>
-                        {prevCycle && prevCycle.data?.metrics && (
-                          <div className="ml-1">
-                            {renderTrendIndicator(
-                              cycle.data.metrics.communication, 
-                              prevCycle.data.metrics.communication
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-600 font-roboto">Communication</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="flex items-center justify-center">
-                        <div className={`text-lg font-bold ${getMetricColor(cycle.data.metrics.connection)}`}>
-                          {cycle.data.metrics.connection?.toFixed(1) || "3.0"}
-                        </div>
-                        {prevCycle && prevCycle.data?.metrics && (
-                          <div className="ml-1">
-                            {renderTrendIndicator(
-                              cycle.data.metrics.connection, 
-                              prevCycle.data.metrics.connection
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-600 font-roboto">Connection</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="flex items-center justify-center">
-                        <div className={`text-lg font-bold ${getMetricColor(cycle.data.metrics.workload)}`}>
-                          {cycle.data.metrics.workload?.toFixed(1) || "3.0"}
-                        </div>
-                        {prevCycle && prevCycle.data?.metrics && (
-                          <div className="ml-1">
-                            {renderTrendIndicator(
-                              cycle.data.metrics.workload, 
-                              prevCycle.data.metrics.workload
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-600 font-roboto">Workload</div>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="flex items-center justify-between">
-                  <div className="flex flex-wrap gap-2">
-                    {cycle.data?.meeting?.completedAt && (
-                      <span className="inline-flex items-center text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-roboto">
-                        <CheckCircle size={12} className="mr-1" />
-                        Meeting Completed
-                      </span>
-                    )}
-                    
-                    {cycle.data?.questionnaireCompleted && (
-                      <span className="inline-flex items-center text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-roboto">
-                        <CheckCircle size={12} className="mr-1" />
-                        Assessment Completed
-                      </span>
-                    )}
-                  </div>
-                  
-                  <button className="text-blue-500 text-sm flex items-center hover:underline font-roboto">
-                    Details <ArrowRight size={14} className="ml-1" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-          
-          {history.length > 3 && (
-            <div className="text-center">
-              <button className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm font-roboto">
-                Show More History
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-/**
  * Modal to display relationship templates
  */
 const TemplateModal = ({ id, title, description, steps, onClose, onNavigate }) => {
@@ -786,125 +624,6 @@ const TemplateModal = ({ id, title, description, steps, onClose, onNavigate }) =
 };
 
 /**
- * Modal to display cycle details
- */
-const CycleDetailsModal = ({ cycle, onClose }) => {
-  if (!cycle) return null;
-  
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-4 border-b flex justify-between items-center">
-          <h3 className="text-lg font-bold font-roboto">Cycle {cycle.cycle} Details</h3>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-gray-100 rounded"
-          >
-            <X size={20} />
-          </button>
-        </div>
-        
-        <div className="p-6 space-y-6">
-          <div className="flex items-center justify-between">
-            <h4 className="font-medium font-roboto">Completed on {formatDate(cycle.date)}</h4>
-            
-            <div className="flex space-x-2">
-              {cycle.data?.metrics && (
-                <span className="inline-flex items-center bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-roboto">
-                  <Award size={12} className="mr-1" />
-                  {cycle.data.metrics.overall?.toFixed(1) || "3.0"}/5 Overall
-                </span>
-              )}
-            </div>
-          </div>
-          
-          {cycle.data?.metrics && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-lg">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-pink-500">{cycle.data.metrics.satisfaction?.toFixed(1) || "3.0"}</div>
-                <div className="text-sm text-gray-600 font-roboto">Satisfaction</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-500">{cycle.data.metrics.communication?.toFixed(1) || "3.0"}</div>
-                <div className="text-sm text-gray-600 font-roboto">Communication</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-purple-500">{cycle.data.metrics.connection?.toFixed(1) || "3.0"}</div>
-                <div className="text-sm text-gray-600 font-roboto">Connection</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-500">{cycle.data.metrics.workload?.toFixed(1) || "3.0"}</div>
-                <div className="text-sm text-gray-600 font-roboto">Workload</div>
-              </div>
-            </div>
-          )}
-          
-          {/* Meeting Notes */}
-          {cycle.data?.meeting && (
-            <div>
-              <h4 className="font-medium mb-2 font-roboto">Meeting Notes</h4>
-              
-              {cycle.data.meeting.topicResponses && Object.keys(cycle.data.meeting.topicResponses).length > 0 ? (
-                <div className="space-y-3">
-                  {Object.entries(cycle.data.meeting.topicResponses).map(([topic, response], index) => (
-                    <div key={index} className="p-3 border rounded-lg">
-                      <h5 className="text-sm font-medium mb-1 font-roboto">{topic}</h5>
-                      <p className="text-sm text-gray-600 font-roboto whitespace-pre-wrap">{response}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-500 font-roboto">No detailed meeting notes available.</p>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Questionnaire Responses */}
-          {cycle.data?.questionnaireResponses && Object.keys(cycle.data.questionnaireResponses).length > 0 && (
-            <div>
-              <h4 className="font-medium mb-2 font-roboto">Assessment Responses</h4>
-              
-              <div className="space-y-3">
-                {Object.entries(cycle.data.questionnaireResponses)
-                  .slice(0, 5) // Show only the first 5 for brevity
-                  .map(([questionId, response], index) => (
-                    <div key={index} className="p-3 border rounded-lg">
-                      <div className="flex items-center">
-                        <div className="flex-1">
-                          <h5 className="text-sm font-medium font-roboto">Question {index + 1}</h5>
-                        </div>
-                        <div className="ml-2">
-                          <div className="flex items-center bg-blue-100 px-2 py-1 rounded-full">
-                            <span className="text-sm font-medium font-roboto">
-                              {typeof response === 'number' 
-                                ? `${response}/5` 
-                                : response?.length > 20 
-                                  ? 'Text response' 
-                                  : response}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                
-                {Object.keys(cycle.data.questionnaireResponses).length > 5 && (
-                  <p className="text-sm text-center text-gray-500 font-roboto">
-                    + {Object.keys(cycle.data.questionnaireResponses).length - 5} more responses
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-/**
  * Main RelationshipTab Component
  */
 const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
@@ -933,7 +652,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
   const [expandedSections, setExpandedSections] = useState({
     insights: true,
     tools: true,
-    charts: true,
+    charts: false,
     history: true,
     resources: false
   });
@@ -948,6 +667,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
   const [templateToShow, setTemplateToShow] = useState(null);
   const [hasError, setHasError] = useState(null);
   const [selectedHistoryCycle, setSelectedHistoryCycle] = useState(null);
+  const [hasEnoughDataForCharts, setHasEnoughDataForCharts] = useState(false);
   
   // Refs for scrolling
   const toolsRef = useRef(null);
@@ -1056,6 +776,9 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
       history.sort((a, b) => b.cycle - a.cycle);
       setCycleHistory(history);
       
+      // Check if we have enough data for charts (at least 2 check-ins)
+      setHasEnoughDataForCharts(history.length >= 2);
+      
     } catch (error) {
       console.error("Error loading cycle history:", error);
     }
@@ -1112,7 +835,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
       setShowQuestionnaire(false);
       
       // Add to calendar
-      addQuestionnaireToCalendar();
+      await addQuestionnaireToCalendar();
       
       // Refresh cycle history
       await loadCycleHistory();
@@ -1184,25 +907,56 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
     try {
       if (!currentUser || !familyId) return;
       
-      // Create calendar event
-      const event = {
-        summary: `Relationship Assessment (Cycle ${currentCycle})`,
-        description: `Completed the relationship health assessment for cycle ${currentCycle}`,
-        start: {
-          dateTime: new Date().toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        end: {
-          dateTime: new Date(new Date().getTime() + 30*60000).toISOString(), // 30 min after
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        }
-      };
-      
-      // Add to calendar
-      await CalendarService.addEvent(event, currentUser.uid);
-      
+      return await RelationshipCalendarIntegration.addCheckInToCalendar(
+        currentUser.uid,
+        currentCycle,
+        getCoupleCheckInData(currentCycle)
+      );
     } catch (error) {
       console.error("Error adding questionnaire to calendar:", error);
+    }
+  };
+  
+  // Add relationship meeting to calendar
+  const addMeetingToCalendar = async (meetingDate = null) => {
+    try {
+      if (!currentUser || !familyId) return;
+      
+      return await RelationshipCalendarIntegration.addRelationshipMeetingToCalendar(
+        currentUser.uid,
+        currentCycle,
+        meetingDate
+      );
+    } catch (error) {
+      console.error("Error adding meeting to calendar:", error);
+    }
+  };
+  
+  // Add date night to calendar
+  const addDateNightToCalendar = async (dateNightData) => {
+    try {
+      if (!currentUser || !familyId) return;
+      
+      return await RelationshipCalendarIntegration.addDateNightToCalendar(
+        currentUser.uid,
+        dateNightData
+      );
+    } catch (error) {
+      console.error("Error adding date night to calendar:", error);
+    }
+  };
+  
+  // Add self-care activity to calendar
+  const addSelfCareToCalendar = async (selfCareData) => {
+    try {
+      if (!currentUser || !familyId) return;
+      
+      return await RelationshipCalendarIntegration.addSelfCareToCalendar(
+        currentUser.uid,
+        selfCareData
+      );
+    } catch (error) {
+      console.error("Error adding self-care to calendar:", error);
     }
   };
   
@@ -1327,6 +1081,123 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
     }
   };
   
+  // Modal to display cycle details
+  const CycleDetailsModal = ({ cycle, onClose }) => {
+    if (!cycle) return null;
+    
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-4 border-b flex justify-between items-center">
+            <h3 className="text-lg font-bold font-roboto">Cycle {cycle.cycle} Details</h3>
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-gray-100 rounded"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          
+          <div className="p-6 space-y-6">
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium font-roboto">Completed on {formatDate(cycle.date)}</h4>
+              
+              <div className="flex space-x-2">
+                {cycle.data?.metrics && (
+                  <span className="inline-flex items-center bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-roboto">
+                    <Award size={12} className="mr-1" />
+                    {cycle.data.metrics.overall?.toFixed(1) || "3.0"}/5 Overall
+                  </span>
+                )}
+              </div>
+            </div>
+            
+            {cycle.data?.metrics && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-lg">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-pink-500">{cycle.data.metrics.satisfaction?.toFixed(1) || "3.0"}</div>
+                  <div className="text-sm text-gray-600 font-roboto">Satisfaction</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-500">{cycle.data.metrics.communication?.toFixed(1) || "3.0"}</div>
+                  <div className="text-sm text-gray-600 font-roboto">Communication</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-purple-500">{cycle.data.metrics.connection?.toFixed(1) || "3.0"}</div>
+                  <div className="text-sm text-gray-600 font-roboto">Connection</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-500">{cycle.data.metrics.workload?.toFixed(1) || "3.0"}</div>
+                  <div className="text-sm text-gray-600 font-roboto">Workload</div>
+                </div>
+              </div>
+            )}
+            
+            {/* Meeting Notes */}
+            {cycle.data?.meeting && (
+              <div>
+                <h4 className="font-medium mb-2 font-roboto">Meeting Notes</h4>
+                
+                {cycle.data.meeting.topicResponses && Object.keys(cycle.data.meeting.topicResponses).length > 0 ? (
+                  <div className="space-y-3">
+                    {Object.entries(cycle.data.meeting.topicResponses).map(([topic, response], index) => (
+                      <div key={index} className="p-3 border rounded-lg">
+                        <h5 className="text-sm font-medium mb-1 font-roboto">{topic}</h5>
+                        <p className="text-sm text-gray-600 font-roboto whitespace-pre-wrap">{response}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-500 font-roboto">No detailed meeting notes available.</p>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Questionnaire Responses */}
+            {cycle.data?.questionnaireResponses && Object.keys(cycle.data.questionnaireResponses).length > 0 && (
+              <div>
+                <h4 className="font-medium mb-2 font-roboto">Assessment Responses</h4>
+                
+                <div className="space-y-3">
+                  {Object.entries(cycle.data.questionnaireResponses)
+                    .slice(0, 5) // Show only the first 5 for brevity
+                    .map(([questionId, response], index) => (
+                      <div key={index} className="p-3 border rounded-lg">
+                        <div className="flex items-center">
+                          <div className="flex-1">
+                            <h5 className="text-sm font-medium font-roboto">Question {index + 1}</h5>
+                          </div>
+                          <div className="ml-2">
+                            <div className="flex items-center bg-blue-100 px-2 py-1 rounded-full">
+                              <span className="text-sm font-medium font-roboto">
+                                {typeof response === 'number' 
+                                  ? `${response}/5` 
+                                  : response?.length > 20 
+                                    ? 'Text response' 
+                                    : response}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  
+                  {Object.keys(cycle.data.questionnaireResponses).length > 5 && (
+                    <p className="text-sm text-center text-gray-500 font-roboto">
+                      + {Object.keys(cycle.data.questionnaireResponses).length - 5} more responses
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Check if user is a parent
   const isParent = selectedUser && selectedUser.role === 'parent';
 
@@ -1471,8 +1342,42 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
       )}
       {expandedSections.charts && (
         <div id="relationship-charts" ref={chartsRef} className="space-y-6">
-          <CoupleRelationshipChart />
-          <RelationshipProgressChart />
+          {hasEnoughDataForCharts ? (
+            <>
+              <CoupleRelationshipChart />
+              <RelationshipProgressChart />
+            </>
+          ) : (
+            <div className="bg-white rounded-lg shadow p-6 text-center">
+              <Target size={48} className="mx-auto text-gray-400 mb-3" />
+              <h4 className="text-lg font-medium mb-2 font-roboto">Chart Data Not Available Yet</h4>
+              <p className="text-gray-600 mb-4 font-roboto">
+                Complete at least two couple check-ins to see your relationship trends. 
+                This will help you track progress over time.
+              </p>
+              <button
+                onClick={handleStartQuestionnaire}
+                disabled={questionnaireCompleted}
+                className={`px-4 py-2 rounded font-roboto inline-flex items-center ${
+                  questionnaireCompleted
+                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    : 'bg-black text-white hover:bg-gray-800'
+                }`}
+              >
+                {questionnaireCompleted ? (
+                  <>
+                    <CheckCircle size={16} className="mr-2" />
+                    Assessment Completed
+                  </>
+                ) : (
+                  <>
+                    <Shield size={16} className="mr-2" />
+                    Start Assessment
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1487,13 +1392,39 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
       {expandedSections.tools && (
         <div id="relationship-tools" ref={toolsRef} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <DailyCheckInTool />
-            <GratitudeTracker />
+            <DailyCheckInTool 
+              onAddToCalendar={event => RelationshipCalendarIntegration.addCheckInToCalendar(
+                currentUser?.uid, 
+                currentCycle,
+                event
+              )}
+            />
+            <GratitudeTracker 
+              onAddToCalendar={event => RelationshipCalendarIntegration.addSelfCareToCalendar(
+                currentUser?.uid,
+                {
+                  ...event,
+                  title: "Gratitude Practice",
+                  category: "self-care"
+                }
+              )}
+              enableTexting={true}
+            />
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <DateNightPlanner />
-            <SelfCarePlanner />
+            <DateNightPlanner 
+              onAddToCalendar={dateNight => RelationshipCalendarIntegration.addDateNightToCalendar(
+                currentUser?.uid,
+                dateNight
+              )}
+            />
+            <SelfCarePlanner 
+              onAddToCalendar={activity => RelationshipCalendarIntegration.addSelfCareToCalendar(
+                currentUser?.uid,
+                activity
+              )}
+            />
           </div>
         </div>
       )}
@@ -1507,9 +1438,9 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
         <Calendar size={20} className="mr-2 text-gray-600" />
       )}
       {expandedSections.history && (
-        <RelationshipCycleHistory 
-          history={cycleHistory} 
-          onSelectCycle={handleSelectHistoryCycle}
+        <EnhancedRelationshipCycleHistory 
+          onSelectCycle={handleSelectHistoryCycle} 
+          compact={false}
         />
       )}
 
@@ -1587,6 +1518,29 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
                       <p className="text-xs text-gray-600 font-roboto">John & Julie Gottman</p>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Link to Allie Chat */}
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+              <div className="flex items-start">
+                <MessageCircle size={20} className="text-blue-500 mr-2 mt-1" />
+                <div>
+                  <h5 className="font-medium mb-1 font-roboto">Ask Allie</h5>
+                  <p className="text-sm text-gray-600 font-roboto">
+                    Need relationship advice? Ask Allie for tips, schedule date nights, or set up couple check-ins directly in the chat.
+                  </p>
+                  <button 
+                    onClick={() => {
+                      // Dispatch event to open Allie chat
+                      window.dispatchEvent(new CustomEvent('open-allie-chat'));
+                    }}
+                    className="mt-2 px-4 py-2 bg-black text-white rounded text-sm flex items-center justify-center w-auto inline-block"
+                  >
+                    <MessageCircle size={16} className="mr-2" />
+                    Chat with Allie
+                  </button>
                 </div>
               </div>
             </div>
