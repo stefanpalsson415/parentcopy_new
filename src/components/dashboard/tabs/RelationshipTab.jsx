@@ -1108,7 +1108,7 @@ useEffect(() => {
         </div>
       </div>
       
-      {/* Progress Indicator with Parent Profiles */}
+{/* Progress Indicator with Parent Profiles */}
 <div className="mt-8 mb-8">
   {/* Progress Bar */}
   <div className="relative mb-12">
@@ -1200,7 +1200,6 @@ useEffect(() => {
       return (
         <div key={parent.id} className="flex flex-col items-center">
           <div className="relative">
-            {/* Use UserAvatar component instead of custom implementation */}
             <UserAvatar 
               user={parent} 
               size={40}
@@ -1221,25 +1220,8 @@ useEffect(() => {
   </div>
 </div>
           
-          {/* Step 2: Pre-Meeting Work */}
-          <div className="relative flex flex-col items-center">
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-              preworkComplete ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 'bg-gray-300'
-            } shadow-md z-10`}>
-              2
-            </div>
-          </div>
-          
-          {/* Step 3: Couple Meeting */}
-          <div className="relative flex flex-col items-center">
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-              meetingComplete ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 'bg-gray-300'
-            } shadow-md z-10`}>
-              3
-            </div>
-          </div>
   
-      
+
         {/* Action Buttons - Shows different options based on progress */}
 <div className="flex flex-wrap justify-center mt-4 gap-4">
   {/* Step 1: Assessment */}
