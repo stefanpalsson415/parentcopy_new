@@ -20,6 +20,7 @@ import confetti from 'canvas-confetti';
 import HabitProgressTracker from '../../habits/HabitProgressTracker';
 
 
+
 // Helper function to format dates consistently
 const formatDate = (date) => {
   if (!date) return "Not scheduled yet";
@@ -115,6 +116,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   const [habitStackVisible, setHabitStackVisible] = useState(false);
   const [showKidSection, setShowKidSection] = useState(true);
   const [allieInputValue, setAllieInputValue] = useState('');
+  const [showDatePickerModal, setShowDatePickerModal] = useState(false);
   const [surveyDue, setSurveyDue] = useState(null);
   const [daysUntilSurvey, setDaysUntilSurvey] = useState(null);
   const [allieIsThinking, setAllieIsThinking] = useState(false);
@@ -182,8 +184,18 @@ const triggerAllieChat = (message) => {
   // Log the attempt
   console.log("Attempting to trigger Allie chat with message:", message);
   
-  // Set the message in state
-  setAllieInputValue(message);
+  // Try a custom event approach first
+  if (typeof window !== 'undefined') {
+    try {
+      const customEvent = new CustomEvent('allie-chat-message', {
+        detail: { message }
+      });
+      window.dispatchEvent(customEvent);
+      console.log("Dispatched custom event for chat message");
+    } catch (e) {
+      console.warn("Custom event dispatch failed:", e);
+    }
+  }
   
   // First try to find the global chat button element
   const chatButton = document.getElementById('chat-button');
@@ -200,93 +212,165 @@ const triggerAllieChat = (message) => {
   const processChat = () => {
     // Set timeout to allow DOM to update
     setTimeout(() => {
-      // Find the textarea input in the chat with more robust selectors
-      const chatInput = document.querySelector('textarea[placeholder*="Message Allie"]') || 
-                       document.querySelector('textarea.w-full.border.rounded-l-md');
+      // Find the textarea input using various methods
+      const possibleInputs = [
+        document.querySelector('textarea[placeholder*="Message Allie"]'),
+        document.querySelector('textarea.w-full.border.rounded-l-md'),
+        document.querySelector('textarea'),
+        document.querySelector('[role="textbox"]'),
+        document.querySelector('input[type="text"]')
+      ].filter(Boolean);
+      
+      const chatInput = possibleInputs[0];
+      
+      console.log("Possible chat inputs found:", possibleInputs.length);
                        
       if (chatInput) {
         console.log("Chat input found, setting message");
         
-        // Set the value 
+        // Clear any existing content first
+        chatInput.value = "";
+        
+        // Try multiple methods to set the value
         chatInput.value = message;
         
-        // Properly trigger input events for React state to update
-        const inputEvent = new Event('input', { bubbles: true });
-        chatInput.dispatchEvent(inputEvent);
+        // Try to set value directly with property descriptor
+        try {
+          // Get the property descriptor for the input value
+          const descriptor = Object.getOwnPropertyDescriptor(
+            HTMLTextAreaElement.prototype, 'value'
+          );
+          
+          // Use the setter directly
+          if (descriptor && descriptor.set) {
+            descriptor.set.call(chatInput, message);
+          }
+        } catch (e) {
+          console.warn("Property descriptor approach failed:", e);
+        }
         
-        // Also trigger change event
-        const changeEvent = new Event('change', { bubbles: true });
-        chatInput.dispatchEvent(changeEvent);
+        // Trigger all possible events
+        ['input', 'change', 'keydown', 'focus'].forEach(eventType => {
+          try {
+            const event = new Event(eventType, { bubbles: true });
+            chatInput.dispatchEvent(event);
+          } catch (e) {
+            console.warn(`Failed to dispatch ${eventType} event:`, e);
+          }
+        });
         
-        // Force React to update the state by focusing and then typing a space
+        // Ensure focus
         chatInput.focus();
         
-        // Wait a short time for React to update
+        // Log the final value
+        console.log("Final input value:", chatInput.value);
+        
+        // Wait for React to update then find and click the send button
         setTimeout(() => {
-          // Find and click the send button with more robust selectors
-          const sendButton = document.querySelector('button[title="Send message"]') || 
-                            document.querySelector('button.bg-blue-600.text-white.p-3.rounded-r-md');
-                            
+          // Try multiple selector approaches to find the send button
+          const sendButtonCandidates = [
+            document.querySelector('button[title="Send message"]'),
+            document.querySelector('button.bg-blue-600.text-white.p-3.rounded-r-md'),
+            document.querySelector('button svg[data-icon="paper-airplane"]')?.closest('button'),
+            document.querySelector('button[type="submit"]'),
+            document.querySelector('button[aria-label*="send" i]'),
+            // Try to find any button that looks like a send button
+            ...Array.from(document.querySelectorAll('button')).filter(btn => 
+              btn.innerHTML.includes('paper-airplane') || 
+              btn.textContent.toLowerCase().includes('send') ||
+              btn.classList.contains('bg-blue-600')
+            )
+          ].filter(Boolean);
+          
+          console.log("Send button candidates:", sendButtonCandidates.length);
+          
+          const sendButton = sendButtonCandidates[0];
+          
           if (sendButton) {
-            console.log("Clicking send button");
+            console.log("Clicking send button:", sendButton);
             sendButton.click();
           } else {
-            console.warn("Send button not found, trying alternative approach");
+            console.warn("Send button not found, trying Enter key simulation");
             
-            // Try alternative - simulate Enter key
-            const keyEvent = new KeyboardEvent('keypress', {
-              key: 'Enter',
-              code: 'Enter',
-              which: 13,
-              keyCode: 13,
-              bubbles: true
+            // Try simulating Enter key press
+            ['keydown', 'keypress', 'keyup'].forEach(eventType => {
+              const keyEvent = new KeyboardEvent(eventType, {
+                key: 'Enter',
+                code: 'Enter',
+                which: 13,
+                keyCode: 13,
+                bubbles: true,
+                cancelable: true
+              });
+              chatInput.dispatchEvent(keyEvent);
             });
-            chatInput.dispatchEvent(keyEvent);
           }
-        }, 100);
+        }, 300);
       } else {
-        console.warn("Chat input not found after timeout");
-        createCelebration("Chat input not found", false, "Please try opening chat manually");
+        console.warn("Chat input not found. Available elements:", 
+          document.querySelectorAll('textarea').length, 
+          document.querySelectorAll('input').length);
+        createCelebration("Chat input not found", false, "Please open chat manually");
       }
-    }, 300);
+    }, 500);
   };
   
-  // If chat is not open, click to open it first
+  // If chat is not open, open it first
   if (!isOpen) {
-    // Find the button inside the chat-button container
-    const buttons = chatButton.querySelectorAll('button');
-    const divs = chatButton.querySelectorAll('div');
+    // Try different methods to click the chat button
+    let clicked = false;
     
-    // Try to find the right element to click
-    let elementToClick = null;
+    // Method 1: Direct click
+    try {
+      chatButton.click();
+      clicked = true;
+      console.log("Direct click on chat button successful");
+    } catch (e) {
+      console.warn("Direct click failed:", e);
+    }
     
-    if (buttons.length > 0) {
-      elementToClick = buttons[0];
-    } else if (divs.length > 0) {
-      // If no button, try to find a clickable div
-      for (const div of divs) {
-        if (div.className.includes('cursor-pointer') || 
-            window.getComputedStyle(div).cursor === 'pointer') {
-          elementToClick = div;
-          break;
+    // Method 2: Try to find and click the first button inside
+    if (!clicked) {
+      const buttons = chatButton.querySelectorAll('button');
+      if (buttons.length > 0) {
+        try {
+          buttons[0].click();
+          clicked = true;
+          console.log("Clicked first button in chat button");
+        } catch (e) {
+          console.warn("Button click failed:", e);
         }
       }
     }
     
-    if (elementToClick) {
-      console.log("Clicking to open chat");
-      elementToClick.click();
-      
+    // Method 3: Find a clickable div
+    if (!clicked) {
+      const divs = chatButton.querySelectorAll('div');
+      for (const div of divs) {
+        if (div.className.includes('cursor-pointer') || 
+            window.getComputedStyle(div).cursor === 'pointer') {
+          try {
+            div.click();
+            clicked = true;
+            console.log("Clicked div in chat button");
+            break;
+          } catch (e) {
+            console.warn("Div click failed:", e);
+          }
+        }
+      }
+    }
+    
+    if (clicked) {
       // Wait for chat to open then process
-      setTimeout(() => {
-        processChat();
-      }, 500);
+      setTimeout(processChat, 1000); // Increased timeout for chat to fully open
     } else {
-      console.warn("No clickable element found in chat button");
-      createCelebration("Chat button not clickable", false, "Please open chat manually");
+      console.warn("Failed to click chat button");
+      createCelebration("Couldn't open chat", false, "Please open chat manually and type: " + message);
     }
   } else {
     // Chat is already open, proceed with filling it
+    console.log("Chat already open, processing message");
     processChat();
   }
 };
@@ -1626,55 +1710,11 @@ const createKidHabit = async () => {
       <span className="text-sm mr-2">{daysRemaining} day{daysRemaining !== 1 ? 's' : ''} left</span>
       <button 
   onClick={() => {
-    // Create a date 7 days from now for default
+    // Set default date
     const today = new Date();
     const defaultDate = surveyDue || new Date(today.setDate(today.getDate() + 7));
-    
-    // Create a proper datepicker dialog
-    const dateStr = window.prompt(
-      "Enter new due date (YYYY-MM-DD):", 
-      defaultDate.toISOString().split('T')[0]
-    );
-    
-    if (dateStr) {
-      try {
-        const newDate = new Date(dateStr);
-        
-        // Validate the date is not in the past
-        const currentDate = new Date();
-        currentDate.setHours(0, 0, 0, 0);
-        
-        if (isNaN(newDate.getTime())) {
-          throw new Error("Invalid date format");
-        }
-        
-        if (newDate < currentDate) {
-          alert("Please select a date in the future");
-          return;
-        }
-        
-        // Set time to noon to avoid timezone issues
-        newDate.setHours(12, 0, 0, 0);
-        
-        // Update cycle due date and refresh
-        updateCycleDueDate(newDate)
-          .then(success => {
-            if (success) {
-              // Show success message
-              alert(`Cycle ${currentWeek} due date updated to ${newDate.toLocaleDateString()}`);
-              
-              // Reload the page to see changes
-              window.location.reload();
-            }
-          })
-          .catch(err => {
-            console.error("Error updating due date:", err);
-            alert("Could not update due date: " + err.message);
-          });
-      } catch (error) {
-        alert("Please enter a valid date in YYYY-MM-DD format");
-      }
-    }
+    setDatePickerDate(defaultDate);
+    setShowDatePicker(true);
   }}
   className="text-xs flex items-center text-blue-600 hover:text-blue-800 px-2 py-1 rounded-md border border-blue-200 hover:bg-blue-50"
 >
@@ -1716,6 +1756,32 @@ const createKidHabit = async () => {
         </span>
       )}
     </div>
+    {showDatePicker && (
+  <EnhancedEventManager
+    initialEvent={{
+      title: `Cycle ${currentWeek} Due Date`,
+      description: `Due date for completing Cycle ${currentWeek} activities including surveys and tasks.`,
+      dateTime: datePickerDate ? datePickerDate.toISOString() : new Date().toISOString(),
+      category: 'cycle-due-date',
+      eventType: 'cycle-due-date',
+      cycleNumber: currentWeek
+    }}
+    onSave={async (event) => {
+      setShowDatePicker(false);
+      const newDate = new Date(event.dateTime);
+      const success = await updateCycleDueDate(newDate);
+      if (success) {
+        // Show success message without reloading the page
+        createCelebration(`Cycle ${currentWeek} due date updated to ${newDate.toLocaleDateString()}`, false);
+      }
+    }}
+    onCancel={() => setShowDatePicker(false)}
+    eventType="cycle-due-date"
+    selectedDate={datePickerDate}
+    isCompact={true}
+    mode="create"
+  />
+)}
   </div>
         
         {/* Next survey reminder */}
