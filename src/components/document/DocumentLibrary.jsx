@@ -1,4 +1,4 @@
-// Add this component to src/components/document/DocumentLibrary.jsx
+// src/components/document/DocumentLibrary.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   FileText, Image, FileIcon, Paperclip, Search, Filter, Upload, 
@@ -14,7 +14,7 @@ import {
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import UserAvatar from '../common/UserAvatar';
 
-const DocumentLibrary = ({ initialChildId = null, initialCategory = null,onClose }) => {
+const DocumentLibrary = ({ initialChildId = null, initialCategory = null, onClose }) => {
   const { familyMembers, familyId } = useFamily();
   const { currentUser } = useAuth();
   const [documents, setDocuments] = useState([]);
@@ -401,24 +401,23 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null,onClose
     <div className="bg-white rounded-lg shadow-md font-roboto">
       {/* Header */}
       <div className="p-4 border-b">
-      <div className="p-4 border-b">
-  <div className="flex justify-between items-center">
-    <h2 className="text-lg font-medium">Document Library</h2>
-    <div className="flex space-x-2">
-      <button
-        onClick={onClose}
-        className="p-2 rounded-md hover:bg-gray-100"
-        title="Close"
-      >
-        <X size={18} />
-      </button>
-      <button
-        onClick={() => setShowUploadModal(true)}
-        className="px-3 py-1 bg-black text-white rounded-md text-sm flex items-center hover:bg-gray-800"
-      >
-        <Upload size={14} className="mr-1" />
-        Upload
-      </button>
+        <div className="flex justify-between items-center">
+          <h2 className="text-lg font-medium">Document Library</h2>
+          <div className="flex space-x-2">
+            <button
+              onClick={onClose}
+              className="p-2 rounded-md hover:bg-gray-100"
+              title="Close"
+            >
+              <X size={18} />
+            </button>
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="px-3 py-1 bg-black text-white rounded-md text-sm flex items-center hover:bg-gray-800"
+            >
+              <Upload size={14} className="mr-1" />
+              Upload
+            </button>
             <button
               onClick={() => createFolder(prompt('Enter folder name:'))}
               className="px-3 py-1 border border-gray-300 rounded-md text-sm flex items-center hover:bg-gray-50"
@@ -663,152 +662,181 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null,onClose
       </div>
       
       {/* Document Preview Modal */}
-{selectedDocument && (
-  <div className="absolute inset-0 bg-white flex flex-col rounded-lg shadow-lg overflow-hidden z-30">
-    <div className="p-4 border-b flex justify-between items-center bg-gray-50 sticky top-0">
-      <h3 className="font-medium truncate">{selectedDocument.title}</h3>
-      <button
-        onClick={() => setSelectedDocument(null)}
-        className="text-gray-500 hover:text-gray-700"
-      >
-        <X size={20} />
-      </button>
-    </div>
-    
-    <div className="flex-1 overflow-auto p-4">
-      {selectedDocument.fileType?.startsWith('image/') ? (
-        <img 
-          src={selectedDocument.fileUrl} 
-          alt={selectedDocument.title}
-          className="max-w-full max-h-[70vh] mx-auto"
-        />
-      ) : selectedDocument.fileType === 'application/pdf' ? (
-        <iframe
-          src={`${selectedDocument.fileUrl}#toolbar=0`}
-          title={selectedDocument.title}
-          className="w-full h-[70vh]"
-        />
-      ) : (
-        <div className="p-8 text-center">
-          <FileText size={64} className="mx-auto mb-4 text-gray-400" />
-          <p className="mb-2">Cannot preview this file type</p>
+      {selectedDocument && (
+        <div className="absolute inset-0 bg-white flex flex-col rounded-lg shadow-lg overflow-hidden z-30">
+          <div className="p-4 border-b flex justify-between items-center bg-gray-50 sticky top-0">
+            <h3 className="font-medium truncate">{selectedDocument.title}</h3>
+            <button
+              onClick={() => setSelectedDocument(null)}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <X size={20} />
+            </button>
+          </div>
           
-            href={selectedDocument.fileUrl}
-            download={selectedDocument.fileName}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md inline-flex items-center hover:bg-blue-700"
-          >
-            <Download size={16} className="mr-2" />
-            Download File
-          </a>
+          <div className="flex-1 overflow-auto p-4">
+            {selectedDocument.fileType?.startsWith('image/') ? (
+              <img 
+                src={selectedDocument.fileUrl} 
+                alt={selectedDocument.title}
+                className="max-w-full max-h-[70vh] mx-auto"
+              />
+            ) : selectedDocument.fileType === 'application/pdf' ? (
+              <iframe
+                src={`${selectedDocument.fileUrl}#toolbar=0`}
+                title={selectedDocument.title}
+                className="w-full h-[70vh]"
+              />
+            ) : (
+              <div className="p-8 text-center">
+                <FileText size={64} className="mx-auto mb-4 text-gray-400" />
+                <p className="mb-2">Cannot preview this file type</p>
+                <a
+                  href={selectedDocument.fileUrl}
+                  download={selectedDocument.fileName}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md inline-flex items-center hover:bg-blue-700"
+                >
+                  <Download size={16} className="mr-2" />
+                  Download File
+                </a>
+              </div>
+            )}
+          </div>
+          
+          <div className="p-4 border-t bg-gray-50 sticky bottom-0">
+            {/* Same content as before */}
+            <div className="flex flex-wrap gap-4">
+              <div>
+                <p className="text-xs text-gray-500">File Name</p>
+                <p className="text-sm">{selectedDocument.fileName}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Size</p>
+                <p className="text-sm">{formatFileSize(selectedDocument.fileSize)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Uploaded</p>
+                <p className="text-sm">{formatDate(selectedDocument.uploadedAt)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Category</p>
+                <p className="text-sm capitalize">{selectedDocument.category}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Child</p>
+                <p className="text-sm">{getChildName(selectedDocument.childId)}</p>
+              </div>
+            </div>
+            
+            {selectedDocument.description && (
+              <div className="mt-3">
+                <p className="text-xs text-gray-500">Description</p>
+                <p className="text-sm">{selectedDocument.description}</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
-    </div>
-    
-    <div className="p-4 border-t bg-gray-50 sticky bottom-0">
-      {/* Same content as before */}
-      <div className="flex flex-wrap gap-4">
-        <div>
-          <p className="text-xs text-gray-500">File Name</p>
-          <p className="text-sm">{selectedDocument.fileName}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-500">Size</p>
-          <p className="text-sm">{formatFileSize(selectedDocument.fileSize)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-500">Uploaded</p>
-          <p className="text-sm">{formatDate(selectedDocument.uploadedAt)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-500">Category</p>
-          <p className="text-sm capitalize">{selectedDocument.category}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-500">Child</p>
-          <p className="text-sm">{getChildName(selectedDocument.childId)}</p>
-        </div>
-      </div>
       
-      {selectedDocument.description && (
-        <div className="mt-3">
-          <p className="text-xs text-gray-500">Description</p>
-          <p className="text-sm">{selectedDocument.description}</p>
-        </div>
-      )}
-    </div>
-  </div>
-)}
-
-{/* Upload Modal */}
-{showUploadModal && (
-  <div className="absolute inset-0 bg-white flex flex-col rounded-lg shadow-lg overflow-hidden z-30">
-    <div className="p-4 border-b flex justify-between items-center bg-gray-50 sticky top-0">
-      <h3 className="font-medium">Upload Document</h3>
-      <button
-        onClick={() => {
-          setShowUploadModal(false);
-          setUploadData({
-            title: '',
-            description: '',
-            category: initialCategory || 'medical',
-            childId: initialChildId || '',
-            files: []
-          });
-        }}
-        className="text-gray-500 hover:text-gray-700"
-      >
-        <X size={20} />
-      </button>
-    </div>
-    
-    <div className="flex-1 overflow-auto p-4">
-      <div className="space-y-4">
-        {/* Same content as before */}
-        <div>
-          <label className="block text-sm font-medium mb-1">Title*</label>
-          <input
-            type="text"
-            value={uploadData.title}
-            onChange={(e) => setUploadData(prev => ({ ...prev, title: e.target.value }))}
-            className="w-full border rounded-md p-2 text-sm"
-            placeholder="e.g., Medical Report, School Certificate"
-          />
-        </div>
-        
-        {/* Rest of the form fields */}
-        {/* ... */}
-      </div>
-    </div>
-    
-    <div className="p-4 border-t flex justify-end bg-gray-50 sticky bottom-0">
-      <button
-        onClick={() => {
-          setShowUploadModal(false);
-          setUploadData({
-            title: '',
-            description: '',
-            category: initialCategory || 'medical',
-            childId: initialChildId || '',
-            files: []
-          });
-        }}
-        className="px-4 py-2 border rounded-md text-sm mr-3"
-      >
-        Cancel
-      </button>
-      <button
-        onClick={handleUpload}
-        disabled={uploading || uploadData.files.length === 0}
-        className="px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 disabled:bg-gray-400"
-      >
-        {uploading ? 'Uploading...' : 'Upload Document'}
-      </button>
-    </div>
-  </div>
-)}                
+      {/* Upload Modal */}
+      {showUploadModal && (
+        <div className="absolute inset-0 bg-white flex flex-col rounded-lg shadow-lg overflow-hidden z-30">
+          <div className="p-4 border-b flex justify-between items-center bg-gray-50 sticky top-0">
+            <h3 className="font-medium">Upload Document</h3>
+            <button
+              onClick={() => {
+                setShowUploadModal(false);
+                setUploadData({
+                  title: '',
+                  description: '',
+                  category: initialCategory || 'medical',
+                  childId: initialChildId || '',
+                  files: []
+                });
+              }}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          
+          <div className="flex-1 overflow-auto p-4">
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Title*</label>
+                <input
+                  type="text"
+                  value={uploadData.title}
+                  onChange={(e) => setUploadData(prev => ({ ...prev, title: e.target.value }))}
+                  className="w-full border rounded-md p-2 text-sm"
+                  placeholder="e.g., Medical Report, School Certificate"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Description</label>
+                <textarea
+                  value={uploadData.description}
+                  onChange={(e) => setUploadData(prev => ({ ...prev, description: e.target.value }))}
+                  className="w-full border rounded-md p-2 text-sm"
+                  rows="3"
+                  placeholder="Add any details about this document"
+                ></textarea>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Category</label>
+                <select
+                  value={uploadData.category}
+                  onChange={(e) => setUploadData(prev => ({ ...prev, category: e.target.value }))}
+                  className="w-full border rounded-md p-2 text-sm"
+                >
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.label}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">For Child*</label>
+                <select
+                  value={uploadData.childId}
+                  onChange={(e) => setUploadData(prev => ({ ...prev, childId: e.target.value }))}
+                  className="w-full border rounded-md p-2 text-sm"
+                >
+                  <option value="">-- Select Child --</option>
+                  {children.map(child => (
+                    <option key={child.id} value={child.id}>{child.name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Files*</label>
+                <div className="border-2 border-dashed border-gray-300 rounded-md p-4 text-center">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileSelection}
+                    multiple
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-4 py-2 bg-gray-100 rounded-md text-sm hover:bg-gray-200"
+                  >
+                    <Paperclip size={14} className="inline mr-1" />
+                    Select Files
+                  </button>
+                  <p className="mt-2 text-xs text-gray-500">
+                    or drag and drop files here
+                  </p>
+                </div>
+                
                 {/* Selected Files */}
                 {uploadData.files.length > 0 && (
-                  <div className="border rounded-md p-3">
+                  <div className="border rounded-md p-3 mt-2">
                     <p className="text-sm font-medium mb-2">Selected Files ({uploadData.files.length})</p>
                     <div className="space-y-2 max-h-40 overflow-y-auto">
                       {uploadData.files.map((file, index) => (
@@ -839,14 +867,14 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null,onClose
                 )}
                 
                 {error && (
-                  <div className="p-3 bg-red-50 text-red-700 text-sm rounded-md">
+                  <div className="p-3 bg-red-50 text-red-700 text-sm rounded-md mt-2">
                     {error}
                   </div>
                 )}
                 
                 {/* Upload Progress */}
                 {uploading && (
-                  <div>
+                  <div className="mt-2">
                     <div className="flex justify-between text-sm mb-1">
                       <span>Uploading...</span>
                       <span>{uploadProgress}%</span>
@@ -861,35 +889,34 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null,onClose
                 )}
               </div>
             </div>
-            
-            <div className="p-4 border-t flex justify-end">
-              <button
-                onClick={() => {
-                  setShowUploadModal(false);
-                  setUploadData({
-                    title: '',
-                    description: '',
-                    category: initialCategory || 'medical',
-                    childId: initialChildId || '',
-                    files: []
-                  });
-                }}
-                className="px-4 py-2 border rounded-md text-sm mr-3"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleUpload}
-                disabled={uploading || uploadData.files.length === 0}
-                className="px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 disabled:bg-gray-400"
-              >
-                {uploading ? 'Uploading...' : 'Upload Document'}
-              </button>
-            </div>
+          </div>
+          
+          <div className="p-4 border-t flex justify-end">
+            <button
+              onClick={() => {
+                setShowUploadModal(false);
+                setUploadData({
+                  title: '',
+                  description: '',
+                  category: initialCategory || 'medical',
+                  childId: initialChildId || '',
+                  files: []
+                });
+              }}
+              className="px-4 py-2 border rounded-md text-sm mr-3"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleUpload}
+              disabled={uploading || uploadData.files.length === 0}
+              className="px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 disabled:bg-gray-400"
+            >
+              {uploading ? 'Uploading...' : 'Upload Document'}
+            </button>
           </div>
         </div>
-      )}>
-      </div>
+      )}
     </div>
   );
 };
