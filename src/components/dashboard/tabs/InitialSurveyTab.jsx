@@ -448,7 +448,7 @@ const InitialSurveyTab = () => {
 
 
   
-  // Get responses for the current question - IMPROVED LOGIC
+  // Enhanced function to get responses for the current question from ALL family members
 const getResponsesForCurrentQuestion = () => {
   if (!selectedMember) return {};
   
@@ -458,60 +458,75 @@ const getResponsesForCurrentQuestion = () => {
   
   const responses = {};
   
+  // First, look for any direct matches with just the question ID (common for initial survey)
+  if (surveyResponses[questionId]) {
+    // If there's a direct response to this question ID, find which member it belongs to
+    // This is often the case for the initially selected member
+    if (selectedUser) {
+      responses[selectedUser.id] = surveyResponses[questionId];
+    }
+  }
+  
+  // Check ALL possible response formats for EACH family member
   familyMembers.forEach(member => {
-    // Only include responses for the questions that were in this member's set
+    // Skip if we already found a response for this member
+    if (responses[member.id]) return;
+    
+    // Check if this question was in this member's personalized set
     const memberSet = personalizedQuestions[member.id] || [];
     const isInMemberSet = memberSet.some(q => q.id === questionId);
     
     if (isInMemberSet) {
-      // Try multiple possible formats for response keys
-      let found = false;
+      const possibleKeyFormats = [
+        // Basic formats
+        `${member.id}-${questionId}`,
+        `${questionId}-${member.id}`,
+        `${member.id}_${questionId}`,
+        `${questionId}_${member.id}`,
+        // Just the question ID (if this member is currently selected)
+        ...(member.id === selectedMember ? [questionId] : []),
+        // With various prefixes that might be used
+        `initial-${member.id}-${questionId}`,
+        `week-1-${member.id}-${questionId}`,
+        `weekly-1-${member.id}-${questionId}`,
+        `week1-${member.id}-${questionId}`
+      ];
       
-      // 1. Format: memberId-questionId
-      const directKey = `${member.id}-${questionId}`;
-      if (surveyResponses[directKey]) {
-        responses[member.id] = surveyResponses[directKey];
-        found = true;
-      }
-      
-      if (!found && surveyResponses[questionId]) {
-        responses[member.id] = surveyResponses[questionId];
-        found = true;
-      }
-      
-      // 3. Format: memberId_questionId
-      if (!found) {
-        const altKey = `${member.id}_${questionId}`;
-        if (surveyResponses[altKey]) {
-          responses[member.id] = surveyResponses[altKey];
-          found = true;
+      // Check each possible format
+      for (const keyFormat of possibleKeyFormats) {
+        if (surveyResponses[keyFormat]) {
+          responses[member.id] = surveyResponses[keyFormat];
+          break;
         }
       }
       
-      // 4. Search for keys containing both memberId and questionId in some form
-      if (!found) {
+      // If still not found, do a more comprehensive search through all survey responses
+      if (!responses[member.id]) {
+        // Look for any key that contains both the member ID and question ID
         Object.entries(surveyResponses).forEach(([key, value]) => {
-          // If the key contains both the member ID and question ID in some format
-          if (key.includes(member.id) && key.includes(questionId)) {
+          if (key.includes(member.id) && key.includes(questionId) && 
+              (value === 'Mama' || value === 'Papa')) {
             responses[member.id] = value;
-            found = true;
-          }
-        });
-      }
-      
-      // 5. Check if the key is prefixed with week information
-      if (!found) {
-        const weekPrefixes = ['week-1-', 'weekly-1-', 'week1-'];
-        weekPrefixes.forEach(prefix => {
-          const weekKey = `${prefix}${member.id}-${questionId}`;
-          if (surveyResponses[weekKey]) {
-            responses[member.id] = surveyResponses[weekKey];
-            found = true;
           }
         });
       }
     }
   });
+  
+  // Last attempt - scan through all responses for any potential matches
+  // This is a fallback for unusual key formats
+  if (Object.keys(responses).length < familyMembers.length) {
+    Object.entries(surveyResponses).forEach(([key, value]) => {
+      if (key.includes(questionId) && (value === 'Mama' || value === 'Papa')) {
+        // Try to determine which member this belongs to
+        familyMembers.forEach(member => {
+          if (!responses[member.id] && key.includes(member.id)) {
+            responses[member.id] = value;
+          }
+        });
+      }
+    });
+  }
   
   return responses;
 };

@@ -21,6 +21,8 @@ import SurveyScreen from '../survey/SurveyScreen';
 //import ClaudeService from '../../services/ClaudeService';
 import { FloatingCalendar } from '../calendar';
 
+
+
 const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,6 +40,8 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   
   const { loadFamilyData, currentUser } = useAuth();
   
+
+  const [aiInsights, setAiInsights] = useState([]);
   const [activeTab, setActiveTab] = useState('tasks');
   const [showTutorial, setShowTutorial] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -163,42 +167,49 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
     loadFamilyFromAllSources();
   }, [selectedUser, familyMembers, location, loadFamilyData, familyId, currentWeek]);
 
-  useEffect(() => {
-    const loadDashboardData = async () => {
-      try {
-        // If we need to load family data, do it here
-        if (familyId) {
-          console.log(`Loading dashboard data for family: ${familyId}`);
-          
-          // Any other data loading you need to do...
-          
-          // Load AI insights if service is available
-          if (currentWeek && allieAIService) {
-            try {
-              console.log("Loading AI insights...");
-              const aiInsights = await allieAIService.generateDashboardInsights(
-                familyId,
-                currentWeek
-              );
+  const loadDashboardData = async () => {
+    try {
+      // If we need to load family data, do it here
+      if (familyId) {
+        console.log(`Loading dashboard data for family: ${familyId}`);
+        
+        // Any other data loading you need to do...
+        
+        // Load AI insights using dynamic import
+        if (currentWeek) {
+          try {
+            console.log("Loading AI insights...");
+            // Dynamically import to avoid circular dependencies
+            const module = await import('../../services/AllieAIService');
+            const AllieAIService = module.default;
+            
+            const aiInsights = await AllieAIService.generateDashboardInsights(
+              familyId,
+              currentWeek
+            );
+            
+            // Handle both array format and object with insights property
+            if (Array.isArray(aiInsights)) {
               setInsights(aiInsights);
-              console.log("AI insights loaded:", aiInsights);
-            } catch (insightError) {
-              console.error("Error loading AI insights:", insightError);
-              // Failure to load insights shouldn't block the whole dashboard
+            } else if (aiInsights && aiInsights.insights && Array.isArray(aiInsights.insights)) {
+              setInsights(aiInsights.insights);
             }
-          } else {
-            console.log("Skipping AI insights - service not loaded yet or missing data");
+            
+            console.log("AI insights loaded:", aiInsights);
+          } catch (insightError) {
+            console.error("Error loading AI insights:", insightError);
+            // Failure to load insights shouldn't block the whole dashboard
           }
         } else {
-          console.warn("No family ID available, can't load dashboard data");
+          console.log("Skipping AI insights - missing currentWeek data");
         }
-      } catch (error) {
-        console.error("Error loading dashboard data:", error);
+      } else {
+        console.warn("No family ID available, can't load dashboard data");
       }
-    };
-    
-    loadDashboardData();
-  }, [familyId, currentWeek]);
+    } catch (error) {
+      console.error("Error loading dashboard data:", error);
+    }
+  };
 
   // In DashboardScreen.jsx - Add this to the useEffect that loads the dashboard
   useEffect(() => {
