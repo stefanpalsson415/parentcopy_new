@@ -462,8 +462,11 @@ const getResponsesForCurrentQuestion = () => {
   if (surveyResponses[questionId]) {
     // If there's a direct response to this question ID, find which member it belongs to
     // This is often the case for the initially selected member
-    if (selectedUser) {
-      responses[selectedUser.id] = surveyResponses[questionId];
+    if (selectedMember) {
+      const selectedFamilyMember = familyMembers.find(m => m.id === selectedMember);
+      if (selectedFamilyMember) {
+        responses[selectedMember] = surveyResponses[questionId];
+      }
     }
   }
   

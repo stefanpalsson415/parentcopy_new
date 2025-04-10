@@ -978,27 +978,28 @@ const RevisedFloatingCalendarWidget = () => {
   }
   
   // Event date objects for calendar highlighting
-  const eventDates = allEvents
-    .filter(event => {
-      // Apply member filter
-      if (selectedMember !== 'all') {
-        // For child events
-        if (event.childName && selectedMember !== event.childId && selectedMember !== event.childName) {
-          return false;
-        }
-        // For tasks
-        if (event.assignedTo && selectedMember !== event.assignedTo && 
-            event.assignedToName && selectedMember !== event.assignedToName) {
-          return false;
-        }
-        // For other events, check attendees
-        if (!event.attendees?.some(a => a.id === selectedMember || a.name === selectedMember)) {
-          return false;
-        }
-      }
-      return true;
-    })
-    .map(event => event.dateObj);
+const eventDates = allEvents
+.filter(event => {
+  // Apply member filter
+  if (selectedMember !== 'all') {
+    // For child events
+    if (event.childName && selectedMember !== event.childId && selectedMember !== event.childName) {
+      return false;
+    }
+    // For tasks
+    if (event.assignedTo && selectedMember !== event.assignedTo && 
+        event.assignedToName && selectedMember !== event.assignedToName) {
+      return false;
+    }
+    // For other events, check attendees
+    if (!event.attendees?.some(a => a.id === selectedMember || a.name === selectedMember)) {
+      return false;
+    }
+  }
+  // Make sure the event has a valid dateObj before including it
+  return event.dateObj instanceof Date && !isNaN(event.dateObj);
+})
+.map(event => event.dateObj);
   
   return (
     <div className="fixed bottom-4 left-4 z-40">

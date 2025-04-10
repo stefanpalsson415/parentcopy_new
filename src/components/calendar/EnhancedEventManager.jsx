@@ -64,6 +64,8 @@ const EnhancedEventManager = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   
   const children = familyMembers.filter(m => m.role === 'child');
   const parents = familyMembers.filter(m => m.role === 'parent');
@@ -77,6 +79,46 @@ const EnhancedEventManager = ({
       }
     }
   }, [event.childId, children]);
+  
+
+// Add a function to search for addresses
+const searchAddress = async (query) => {
+  if (!query || query.length < 3) {
+    setAddressSuggestions([]);
+    return;
+  }
+  
+  setIsSearchingAddress(true);
+  
+  try {
+    // This is a placeholder for an actual address lookup API
+    // In a real implementation, you'd call a service like Google Places API or similar
+    // For demo purposes, we'll simulate results
+    const simulatedResults = [
+      { id: 1, address: `${query}, Stockholm, Sweden` },
+      { id: 2, address: `${query}, Gothenburg, Sweden` },
+      { id: 3, address: `${query} Street, Uppsala, Sweden` }
+    ];
+    
+    // Simulate API call delay
+    setTimeout(() => {
+      setAddressSuggestions(simulatedResults);
+      setIsSearchingAddress(false);
+    }, 500);
+    
+    // In a real implementation:
+    // const response = await fetch(`https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&types=address&key=YOUR_API_KEY`);
+    // const data = await response.json();
+    // setAddressSuggestions(data.predictions);
+    // setIsSearchingAddress(false);
+  } catch (error) {
+    console.error("Error searching for address:", error);
+    setIsSearchingAddress(false);
+    setAddressSuggestions([]);
+  }
+};
+
+
   
   // Handle event saving
   const handleSave = async () => {
@@ -205,8 +247,8 @@ const EnhancedEventManager = ({
   };
   
   return (
-    <div className={`bg-white rounded-lg shadow-md ${isCompact ? 'p-3' : 'p-4'} max-w-2xl mx-auto font-roboto`}>
-      <div className="flex justify-between items-center mb-4">
+<div className={`bg-white rounded-lg shadow-md ${isCompact ? 'p-3' : 'p-4'} max-w-2xl mx-auto font-roboto max-h-[calc(100vh-40px)] overflow-y-auto`}>
+<div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-medium flex items-center">
           <Calendar size={20} className="mr-2" />
           {mode === 'edit' ? 'Edit Event' : 'Add New Event'}
@@ -296,91 +338,143 @@ const EnhancedEventManager = ({
           />
         </div>
         
-        {/* Date and Time */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700">
-              Date*
-            </label>
-            <input
-              type="date"
-              value={event.dateTime ? new Date(event.dateTime).toISOString().split('T')[0] : ''}
-              onChange={(e) => {
-                const date = new Date(event.dateTime || new Date());
-                const newDate = new Date(e.target.value);
-                date.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
-                setEvent(prev => ({ ...prev, dateTime: date.toISOString() }));
-              }}
-              className="w-full border rounded-md p-2 text-sm"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700">
-              Time
-            </label>
-            <input
-              type="time"
-              value={event.dateTime ? new Date(event.dateTime).toTimeString().slice(0, 5) : ''}
-              onChange={(e) => {
-                const date = new Date(event.dateTime || new Date());
-                const [hours, minutes] = e.target.value.split(':');
-                date.setHours(parseInt(hours), parseInt(minutes));
-                setEvent(prev => ({ ...prev, dateTime: date.toISOString() }));
-              }}
-              className="w-full border rounded-md p-2 text-sm"
-            />
-          </div>
-        </div>
+  <div>
+    <label className="block text-sm font-medium mb-1 text-gray-700">
+      Date*
+    </label>
+    <input
+      type="date"
+      value={event.dateTime ? new Date(event.dateTime).toISOString().split('T')[0] : ''}
+      onChange={(e) => {
+        const date = new Date(event.dateTime || new Date());
+        const newDate = new Date(e.target.value);
+        date.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
         
-        {/* End time */}
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">
-            End Time
-          </label>
-          <div className="grid grid-cols-2 gap-4">
-            <input
-              type="date"
-              value={event.endDateTime ? new Date(event.endDateTime).toISOString().split('T')[0] : ''}
-              onChange={(e) => {
-                const date = new Date(event.endDateTime || new Date(event.dateTime).getTime() + 3600000);
-                const newDate = new Date(e.target.value);
-                date.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
-                setEvent(prev => ({ ...prev, endDateTime: date.toISOString() }));
-              }}
-              className="w-full border rounded-md p-2 text-sm"
-            />
-            <input
-              type="time"
-              value={event.endDateTime ? new Date(event.endDateTime).toTimeString().slice(0, 5) : ''}
-              onChange={(e) => {
-                const date = new Date(event.endDateTime || new Date(event.dateTime).getTime() + 3600000);
-                const [hours, minutes] = e.target.value.split(':');
-                date.setHours(parseInt(hours), parseInt(minutes));
-                setEvent(prev => ({ ...prev, endDateTime: date.toISOString() }));
-              }}
-              className="w-full border rounded-md p-2 text-sm"
-            />
-          </div>
-        </div>
+        // Also update end time to match start date
+        let endDate = event.endDateTime ? new Date(event.endDateTime) : new Date(date);
+        endDate.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+        
+        setEvent(prev => ({ 
+          ...prev, 
+          dateTime: date.toISOString(),
+          endDateTime: endDate.toISOString()
+        }));
+      }}
+      className="w-full border rounded-md p-2 text-sm"
+    />
+  </div>
+  
+  <div>
+    <label className="block text-sm font-medium mb-1 text-gray-700">
+      Time
+    </label>
+    <input
+      type="time"
+      value={event.dateTime ? new Date(event.dateTime).toTimeString().slice(0, 5) : ''}
+      onChange={(e) => {
+        const date = new Date(event.dateTime || new Date());
+        const [hours, minutes] = e.target.value.split(':');
+        date.setHours(hours, minutes);
+        
+        // Also update end time based on duration
+        const endDate = new Date(date);
+        endDate.setMinutes(date.getMinutes() + (event.duration || 30));
+        
+        setEvent(prev => ({ 
+          ...prev, 
+          dateTime: date.toISOString(),
+          endDateTime: endDate.toISOString() 
+        }));
+      }}
+      className="w-full border rounded-md p-2 text-sm"
+    />
+  </div>
+</div>
+
+{/* Duration */}
+<div>
+  <label className="block text-sm font-medium mb-1 text-gray-700">
+    Duration
+  </label>
+  <select
+    value={event.duration || 30}
+    onChange={(e) => {
+      const duration = parseInt(e.target.value);
+      
+      // Update end time based on start time + duration
+      const startDate = new Date(event.dateTime);
+      const endDate = new Date(startDate);
+      endDate.setMinutes(startDate.getMinutes() + duration);
+      
+      setEvent(prev => ({ 
+        ...prev, 
+        duration: duration,
+        endDateTime: endDate.toISOString()
+      }));
+    }}
+    className="w-full border rounded-md p-2 text-sm"
+  >
+    <option value="30">30 minutes</option>
+    <option value="60">1 hour</option>
+    <option value="90">1.5 hours</option>
+    <option value="120">2 hours</option>
+    <option value="150">2.5 hours</option>
+    <option value="180">3 hours</option>
+    <option value="240">4 hours</option>
+    <option value="300">5 hours</option>
+    <option value="480">8 hours (full day)</option>
+  </select>
+</div>
+
         
         {/* Location */}
         <div>
           <label className="block text-sm font-medium mb-1 text-gray-700">
             Location
           </label>
-          <div className="flex items-center border rounded-md overflow-hidden">
-            <div className="p-2 text-gray-400">
-              <MapPin size={16} />
-            </div>
-            <input
-              type="text"
-              value={event.location || ''}
-              onChange={(e) => setEvent(prev => ({ ...prev, location: e.target.value }))}
-              className="w-full p-2 text-sm border-0 focus:ring-0"
-              placeholder="Where is this event happening?"
-            />
-          </div>
+          <div className="relative">
+  <div className="flex items-center border rounded-md overflow-hidden">
+    <div className="p-2 text-gray-400">
+      <MapPin size={16} />
+    </div>
+    <input
+      type="text"
+      value={event.location || ''}
+      onChange={(e) => {
+        setEvent(prev => ({ ...prev, location: e.target.value }));
+        searchAddress(e.target.value);
+      }}
+      className="w-full p-2 text-sm border-0 focus:ring-0"
+      placeholder="Where is this event happening?"
+    />
+    {isSearchingAddress && (
+      <div className="p-2 text-gray-400 animate-spin">
+        <div className="w-4 h-4 border-2 border-t-transparent border-gray-500 rounded-full"></div>
+      </div>
+    )}
+  </div>
+  
+  {/* Address suggestions dropdown */}
+  {addressSuggestions.length > 0 && (
+    <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border">
+      <ul className="max-h-60 overflow-auto py-1">
+        {addressSuggestions.map(suggestion => (
+          <li
+            key={suggestion.id}
+            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+            onClick={() => {
+              setEvent(prev => ({ ...prev, location: suggestion.address }));
+              setAddressSuggestions([]);
+            }}
+          >
+            {suggestion.address}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )}
+</div>
         </div>
         
         {/* Child Selection */}

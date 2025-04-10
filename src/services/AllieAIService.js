@@ -211,6 +211,300 @@ class AllieAIService {
     }
   }
 
+// Add to src/services/AllieAIService.js
+// New method to handle medical appointments from chat
+
+async processAppointmentFromChat(message, familyId, childId = null) {
+  try {
+    if (!familyId) return { success: false, error: "Family ID is required" };
+    
+    // Extract appointment details from message
+    const appointmentDetails = await this.extractAppointmentDetails(message);
+    
+    // If no child ID is provided, try to identify from the message
+    if (!childId) {
+      const familyContext = await this.getFamilyContext(familyId);
+      
+      // Look for child names in the message
+      const childrenMatches = familyContext.children
+        .filter(child => message.toLowerCase().includes(child.name.toLowerCase()));
+      
+      if (childrenMatches.length > 0) {
+        childId = childrenMatches[0].id;
+        appointmentDetails.childId = childId;
+        appointmentDetails.childName = childrenMatches[0].name;
+      } else if (familyContext.children.length === 1) {
+        // If only one child, assume it's for them
+        childId = familyContext.children[0].id;
+        appointmentDetails.childId = childId;
+        appointmentDetails.childName = familyContext.children[0].name;
+      } else {
+        return { 
+          success: false, 
+          error: "Couldn't determine which child this appointment is for" 
+        };
+      }
+    }
+    
+    // Check if we need to create a healthcare provider
+    let providerId = null;
+    if (appointmentDetails.providerName) {
+      providerId = await this.createOrFindProvider(
+        familyId, 
+        appointmentDetails.providerName,
+        appointmentDetails.providerSpecialty,
+        appointmentDetails.providerEmail,
+        appointmentDetails.providerPhone
+      );
+      
+      if (providerId) {
+        appointmentDetails.providerId = providerId;
+      }
+    }
+    
+    // Create appointment in the database
+    const result = await this.saveAppointmentToDatabase(familyId, childId, appointmentDetails);
+    
+    // Also add to calendar
+    if (result.success) {
+      await this.addAppointmentToCalendar(appointmentDetails);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error("Error processing appointment from chat:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Helper method to extract appointment details
+async extractAppointmentDetails(message) {
+  // Use Claude API to extract structured data
+  const systemPrompt = `You are an AI that extracts medical appointment information from text.
+  Extract the following details in a structured JSON format:
+  - appointmentType: Type of appointment (e.g., checkup, dental, specialist)
+  - date: Appointment date (in YYYY-MM-DD format, use today's date if not specified)
+  - time: Appointment time (in HH:MM format, use 10:00 as default)
+  - providerName: Doctor or provider name
+  - providerSpecialty: Specialty of the provider
+  - providerEmail: Provider's email if mentioned
+  - providerPhone: Provider's phone if mentioned
+  - location: Location or address
+  - notes: Any additional information
+  
+  If information isn't available, use null for that field.`;
+  
+  const userMessage = `Extract appointment details from this message: "${message}"`;
+  
+  const response = await ClaudeService.generateResponse(
+    [{ role: 'user', content: userMessage }],
+    { system: systemPrompt }
+  );
+  
+  try {
+    const details = JSON.parse(response);
+    // Set default date and time if not provided
+    if (!details.date) {
+      details.date = new Date().toISOString().split('T')[0];
+    }
+    if (!details.time) {
+      details.time = "10:00";
+    }
+    return details;
+  } catch (error) {
+    console.error("Error parsing appointment details:", error);
+    // Return basic structure if parsing fails
+    return {
+      appointmentType: "checkup",
+      date: new Date().toISOString().split('T')[0],
+      time: "10:00",
+      providerName: null,
+      providerSpecialty: null,
+      providerEmail: null,
+      providerPhone: null,
+      location: null,
+      notes: message // Use original message as notes
+    };
+  }
+}
+
+// Helper to create or find a healthcare provider
+async createOrFindProvider(familyId, name, specialty, email, phone) {
+  try {
+    // Check if provider already exists
+    const providersRef = collection(db, "healthcareProviders");
+    const q = query(
+      providersRef, 
+      where("familyId", "==", familyId),
+      where("name", "==", name)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      // Return existing provider
+      return querySnapshot.docs[0].id;
+    }
+    
+    // Create new provider
+    const providerData = {
+      name,
+      specialty: specialty || "General Practitioner",
+      email: email || "",
+      phone: phone || "",
+      address: "",
+      notes: "",
+      familyId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    
+    const docRef = await addDoc(providersRef, providerData);
+    return docRef.id;
+  } catch (error) {
+    console.error("Error creating/finding provider:", error);
+    return null;
+  }
+}
+
+// Save appointment to database
+async saveAppointmentToDatabase(familyId, childId, appointmentDetails) {
+  try {
+    // Format appointment data
+    const appointmentData = {
+      id: Date.now().toString(),
+      title: appointmentDetails.appointmentType || "Doctor's Appointment",
+      date: appointmentDetails.date,
+      time: appointmentDetails.time,
+      doctor: appointmentDetails.providerName || "",
+      providerId: appointmentDetails.providerId,
+      notes: appointmentDetails.notes || "",
+      location: appointmentDetails.location || "",
+      completed: false,
+      createdAt: new Date().toISOString()
+    };
+    
+    // If we have provider details, add them
+    if (appointmentDetails.providerId) {
+      try {
+        const providerRef = doc(db, "healthcareProviders", appointmentDetails.providerId);
+        const providerSnap = await getDoc(providerRef);
+        
+        if (providerSnap.exists()) {
+          const providerData = providerSnap.data();
+          appointmentData.providerDetails = {
+            id: appointmentDetails.providerId,
+            name: providerData.name,
+            specialty: providerData.specialty,
+            phone: providerData.phone,
+            email: providerData.email,
+            address: providerData.address
+          };
+        }
+      } catch (error) {
+        console.error("Error getting provider details:", error);
+      }
+    }
+    
+    // Update the child's records
+    const docRef = doc(db, "families", familyId);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      return { success: false, error: "Family not found" };
+    }
+    
+    const familyData = docSnap.data();
+    const childrenData = familyData.childrenData || {};
+    
+    // Make sure child exists in data structure
+    if (!childrenData[childId]) {
+      childrenData[childId] = {
+        medicalAppointments: [],
+        growthData: [],
+        routines: [],
+        clothesHandMeDowns: []
+      };
+    }
+    
+    // Add the appointment
+    if (!childrenData[childId].medicalAppointments) {
+      childrenData[childId].medicalAppointments = [];
+    }
+    
+    childrenData[childId].medicalAppointments.push(appointmentData);
+    
+    // Save to Firebase
+    await updateDoc(docRef, {
+      [`childrenData.${childId}.medicalAppointments`]: childrenData[childId].medicalAppointments
+    });
+    
+    return { 
+      success: true, 
+      appointmentId: appointmentData.id,
+      appointmentData: appointmentData
+    };
+  } catch (error) {
+    console.error("Error saving appointment to database:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Add appointment to calendar
+async addAppointmentToCalendar(appointmentDetails) {
+  try {
+    // Parse date and time
+    const appointmentDate = new Date(`${appointmentDetails.date}T${appointmentDetails.time}`);
+    
+    // End time is 30 minutes after start
+    const endDate = new Date(appointmentDate);
+    endDate.setMinutes(endDate.getMinutes() + 30);
+    
+    // Create event object for the calendar
+    const calendarEvent = {
+      summary: `${appointmentDetails.childName}'s ${appointmentDetails.appointmentType || "Doctor's Appointment"}`,
+      title: `${appointmentDetails.childName}'s ${appointmentDetails.appointmentType || "Doctor's Appointment"}`,
+      description: appointmentDetails.notes || `Medical appointment: ${appointmentDetails.appointmentType || "Doctor's Appointment"}`,
+      location: appointmentDetails.location || '',
+      start: {
+        dateTime: appointmentDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: endDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      childId: appointmentDetails.childId,
+      childName: appointmentDetails.childName,
+      category: 'medical',
+      eventType: 'appointment',
+      familyId: appointmentDetails.familyId,
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'popup', minutes: 24 * 60 }, // 1 day before
+          { method: 'popup', minutes: 60 } // 1 hour before
+        ]
+      },
+      // Add a unique identifier to prevent duplicates
+      uniqueId: `appointment-${appointmentDetails.childId}-${Date.now()}`
+    };
+    
+    // Add to calendar
+    await CalendarService.addEvent(calendarEvent, appointmentDetails.userId);
+    return true;
+  } catch (error) {
+    console.error("Error adding appointment to calendar:", error);
+    return false;
+  }
+}
+
+// Similar methods for activities
+async processActivityFromChat(message, familyId, childId = null) {
+  // Similar implementation to processAppointmentFromChat but for activities
+  // ...
+}
+
+
   /**
    * Generate personalized tasks based on survey data
    * @param {string} familyId - Family ID

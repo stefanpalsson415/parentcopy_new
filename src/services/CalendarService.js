@@ -155,9 +155,7 @@ class CalendarService {
 
 
 
-  // src/services/CalendarService.js - Replace the addEvent method with this improved version
 
-// src/services/CalendarService.js - Replace the addEvent method with this improved version
 
 async addEvent(event, userId) {
   try {
@@ -308,6 +306,131 @@ async addEvent(event, userId) {
     console.error("Error adding event to calendar:", error);
     this.showNotification("Failed to add event to calendar", "error");
     return { success: false, error: error.message || "Unknown error" };
+  }
+}
+
+// Add a new method to handle recurring events
+async createRecurringEvents(baseEvent, userId, universalId) {
+  try {
+    // Check for valid recurrence rule
+    if (!baseEvent.recurrence || !Array.isArray(baseEvent.recurrence) || baseEvent.recurrence.length === 0) {
+      return;
+    }
+    
+    const recurrenceRule = baseEvent.recurrence[0];
+    if (!recurrenceRule.startsWith('RRULE:')) {
+      return;
+    }
+    
+    // Parse the recurrence rule
+    const ruleString = recurrenceRule.substring(6); // Remove 'RRULE:' prefix
+    const ruleComponents = ruleString.split(';');
+    
+    const rules = {};
+    ruleComponents.forEach(component => {
+      const [key, value] = component.split('=');
+      rules[key] = value;
+    });
+    
+    // We currently only support weekly recurrence
+    if (rules.FREQ !== 'WEEKLY') {
+      return;
+    }
+    
+    // Get the day of week
+    let dayOfWeek = '';
+    if (rules.BYDAY) {
+      dayOfWeek = rules.BYDAY;
+    } else {
+      // Use the day from the base event
+      const baseDate = new Date(baseEvent.start.dateTime);
+      const days = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+      dayOfWeek = days[baseDate.getDay()];
+    }
+    
+    // Calculate end date (default to 10 occurrences if not specified)
+    let endDate = new Date();
+    endDate.setDate(endDate.getDate() + 70); // Default to 10 weeks
+    
+    if (rules.UNTIL) {
+      endDate = new Date(rules.UNTIL);
+    } else if (rules.COUNT) {
+      const count = parseInt(rules.COUNT);
+      const baseDate = new Date(baseEvent.start.dateTime);
+      endDate = new Date(baseDate);
+      endDate.setDate(baseDate.getDate() + (count * 7)); // count * 7 days
+    }
+    
+    // Create recurring events
+    const baseDate = new Date(baseEvent.start.dateTime);
+    const dayIndex = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].indexOf(dayOfWeek);
+    
+    // Adjust base date to match day of week if needed
+    const baseDayOfWeek = baseDate.getDay();
+    if (baseDayOfWeek !== dayIndex) {
+      // Find the next occurrence of the target day
+      const daysToAdd = (dayIndex - baseDayOfWeek + 7) % 7;
+      baseDate.setDate(baseDate.getDate() + daysToAdd);
+    }
+    
+    // Start from base date and create recurring events
+    const events = [];
+    const currentDate = new Date(baseDate);
+    
+    while (currentDate <= endDate) {
+      if (currentDate > baseDate) { // Skip the base event (already added)
+        const eventStartDate = new Date(currentDate);
+        const eventEndDate = new Date(currentDate);
+        
+        // Calculate end time based on base event duration
+        const baseStartTime = new Date(baseEvent.start.dateTime);
+        const baseEndTime = new Date(baseEvent.end.dateTime);
+        const durationMs = baseEndTime - baseStartTime;
+        
+        // Set the same time for the new event
+        eventStartDate.setHours(baseStartTime.getHours(), baseStartTime.getMinutes(), 0, 0);
+        eventEndDate.setTime(eventStartDate.getTime() + durationMs);
+        
+        // Create the event
+        const recurringEvent = {
+          ...baseEvent,
+          id: `${baseEvent.id}-${currentDate.toISOString().split('T')[0]}`,
+          start: {
+            dateTime: eventStartDate.toISOString(),
+            timeZone: baseEvent.start.timeZone
+          },
+          end: {
+            dateTime: eventEndDate.toISOString(),
+            timeZone: baseEvent.end.timeZone
+          },
+          universalId, // Link all recurring events
+          recurrenceId: baseEvent.id, // Reference the base event
+          recurringEventDate: currentDate.toISOString().split('T')[0] // Store the date of this occurrence
+        };
+        
+        // Remove recurrence rule from individual occurrences
+        delete recurringEvent.recurrence;
+        
+        // Add to Firestore
+        const eventsRef = collection(db, "calendarEvents");
+        await addDoc(eventsRef, {
+          ...recurringEvent,
+          userId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        
+        events.push(recurringEvent);
+      }
+      
+      // Move to next week
+      currentDate.setDate(currentDate.getDate() + 7);
+    }
+    
+    return events;
+  } catch (error) {
+    console.error("Error creating recurring events:", error);
+    return [];
   }
 }
 
