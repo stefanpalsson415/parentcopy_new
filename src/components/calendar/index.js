@@ -6,8 +6,8 @@
  */
 
 // Main calendar components
-import EnhancedEventManager from './EnhancedEventManager';
 import RevisedFloatingCalendarWidget from './RevisedFloatingCalendarWidget';
+import EnhancedEventManager from './EnhancedEventManager';
 
 // Sub-components
 import CalendarHeader from './CalendarHeader';
@@ -15,7 +15,7 @@ import CalendarGrid from './CalendarGrid';
 import CalendarFilters from './CalendarFilters';
 import EventsList from './EventsList';
 import EventDetails from './EventDetails';
-import MergedEventParser from './MergedEventParser'; // Combined parser & confirmation
+import MergedEventParser from './MergedEventParser'; 
 
 // Integration components
 import CalendarIntegrationButton from './CalendarIntegrationButton';
@@ -41,4 +41,4 @@ export {
 };
 
 // Default export the most commonly used component
-export default EnhancedEventManager;
+export default RevisedFloatingCalendarWidget;

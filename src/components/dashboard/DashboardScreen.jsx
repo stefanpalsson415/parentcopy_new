@@ -19,7 +19,7 @@ import ErrorBoundary from '../common/ErrorBoundary';
 import ChildrenTrackingTab from './tabs/ChildrenTrackingTab';
 import SurveyScreen from '../survey/SurveyScreen';
 //import ClaudeService from '../../services/ClaudeService';
-import { FloatingCalendar } from '../calendar/index';
+import FloatingCalendar from '../calendar';
 import UserAvatar from '../common/UserAvatar';
 
 
