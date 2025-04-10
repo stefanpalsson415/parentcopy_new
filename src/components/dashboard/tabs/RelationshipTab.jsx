@@ -1110,8 +1110,32 @@ useEffect(() => {
       
 {/* Progress Indicator with Parent Profiles */}
 <div className="mt-8 mb-8">
+  {/* Step Labels MOVED ABOVE the progress bar */}
+  <div className="flex justify-between mb-2">
+    <div className="text-center w-1/3">
+      <div className={`text-sm font-medium ${
+        myAssessmentComplete || partnerAssessmentComplete ? 'text-purple-600' : 'text-gray-500'
+      }`}>
+        STEP 1
+      </div>
+      <div className="text-xs text-gray-600">Assessments</div>
+    </div>
+    <div className="text-center w-1/3">
+      <div className={`text-sm font-medium ${preworkComplete ? 'text-purple-600' : 'text-gray-500'}`}>
+        STEP 2
+      </div>
+      <div className="text-xs text-gray-600">Pre-Meeting Work</div>
+    </div>
+    <div className="text-center w-1/3">
+      <div className={`text-sm font-medium ${meetingComplete ? 'text-purple-600' : 'text-gray-500'}`}>
+        STEP 3
+      </div>
+      <div className="text-xs text-gray-600">Couple Meeting</div>
+    </div>
+  </div>
+
   {/* Progress Bar */}
-  <div className="relative mb-12">
+  <div className="relative mb-10">
     <div className="h-2 bg-gray-200 rounded-full w-full relative">
       <div className={`absolute left-0 h-2 rounded-full transition-all duration-500 ${
         meetingComplete ? 'w-full bg-gradient-to-r from-green-400 to-green-500' :
@@ -1158,39 +1182,15 @@ useEffect(() => {
         </div>
       </div>
     </div>
-    
-    {/* Step Labels */}
-    <div className="flex justify-between absolute w-full mt-2">
-      <div className="text-center w-1/3">
-        <div className={`text-sm font-medium mt-6 ${
-          myAssessmentComplete || partnerAssessmentComplete ? 'text-purple-600' : 'text-gray-500'
-        }`}>
-          STEP 1
-        </div>
-        <div className="text-xs text-gray-600">Assessments</div>
-      </div>
-      <div className="text-center w-1/3">
-        <div className={`text-sm font-medium mt-6 ${preworkComplete ? 'text-purple-600' : 'text-gray-500'}`}>
-          STEP 2
-        </div>
-        <div className="text-xs text-gray-600">Pre-Meeting Work</div>
-      </div>
-      <div className="text-center w-1/3">
-        <div className={`text-sm font-medium mt-6 ${meetingComplete ? 'text-purple-600' : 'text-gray-500'}`}>
-          STEP 3
-        </div>
-        <div className="text-xs text-gray-600">Couple Meeting</div>
-      </div>
-    </div>
   </div>
   
-  {/* Parent Profile Pictures */}
-  <div className="flex justify-center gap-4 mt-8">
+  {/* Parent Profile Pictures - Moved down and fixed position calculation */}
+  <div className="flex justify-center gap-4">
     {familyMembers.filter(m => m.role === 'parent').map((parent, index) => {
       const isCurrentUser = currentUser && parent.id === currentUser.uid;
       const hasCompleted = isCurrentUser ? myAssessmentComplete : partnerAssessmentComplete;
       
-      // Calculate step position based on completion
+      // Always show at step 1 before completing assessment
       let stepPosition = 1;
       if (hasCompleted) {
         if (preworkComplete) stepPosition = 2;
@@ -1218,8 +1218,7 @@ useEffect(() => {
       );
     })}
   </div>
-</div>
-          
+</div>          
   
 
         {/* Action Buttons - Shows different options based on progress */}
