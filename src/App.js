@@ -26,7 +26,7 @@ import OnboardingFlow from './components/onboarding/OnboardingFlow';
 import RelationshipFeaturesPage from './components/marketing/RelationshipFeaturesPage';
 import AIAssistantPage from './components/marketing/AIAssistantPage';
 import { useAuth } from './contexts/AuthContext';
-import { FloatingCalendar } from './components/calendar'; // Updated import
+import RevisedFloatingCalendarWidget from './components/calendar/RevisedFloatingCalendarWidget';
 import EmailOptIn from './components/marketing/EmailOptIn';
 import ClaudeDebugger from './components/debug/ClaudeDebugger';
 import './styles/atomicHabits.css';
@@ -92,7 +92,7 @@ function AppRoutes() {
       </Routes>
       
       {/* Show calendar widget only on dashboard when user is logged in */}
-      {showCalendarWidget && <FloatingCalendar />}
+      {showCalendarWidget && <RevisedFloatingCalendarWidget />}
     </>
   );
 }
