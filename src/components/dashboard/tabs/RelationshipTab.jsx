@@ -804,7 +804,7 @@ const confirmDeleteTodo = async () => {
 };
 
 /**
- * Component to track and manage relationship cycles
+ * Enhanced component to track and manage relationship cycles
  */
 const CycleManager = ({ cycle, cycleData, onStartQuestionnaire, onStartMeeting }) => {
   const [cycleProgress, setCycleProgress] = useState({
@@ -828,25 +828,46 @@ const CycleManager = ({ cycle, cycleData, onStartQuestionnaire, onStartMeeting }
         <div>
           <h3 className="text-lg font-bold font-roboto">Relationship Cycle {cycle}</h3>
           <p className="text-sm text-gray-600 font-roboto mt-1">
-            Complete check-ins, meetings, and activities to strengthen your relationship
+            Complete check-ins, meetings, and activities to strengthen your relationship and build a balanced family life.
           </p>
         </div>
-        <div className="bg-black text-white px-4 py-1 rounded-full text-sm font-roboto">
+        <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-1.5 rounded-full text-sm font-roboto shadow-md">
           Current Cycle
         </div>
       </div>
       
-      <div className="relative mt-8 mb-6">
-        {/* Cycle Progress Bar */}
-        <div className="h-2 bg-gray-200 rounded-full w-full mb-8 relative">
-          {/* Progress Indicators */}
+      <div className="mt-8 mb-6">
+        {/* Progress bar with text ABOVE it */}
+        <div className="flex justify-between mb-2">
+          <div className="text-center w-1/3">
+            <div className={`text-sm font-medium ${cycleProgress.questionnaire ? 'text-purple-600' : 'text-gray-500'}`}>
+              STEP 1
+            </div>
+            <div className="text-xs text-gray-600">Assessment</div>
+          </div>
+          <div className="text-center w-1/3">
+            <div className={`text-sm font-medium ${cycleProgress.meeting ? 'text-purple-600' : 'text-gray-500'}`}>
+              STEP 2
+            </div>
+            <div className="text-xs text-gray-600">Couple Meeting</div>
+          </div>
+          <div className="text-center w-1/3">
+            <div className={`text-sm font-medium ${cycleProgress.results ? 'text-purple-600' : 'text-gray-500'}`}>
+              STEP 3
+            </div>
+            <div className="text-xs text-gray-600">Results</div>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="h-2 bg-gray-200 rounded-full w-full mb-2 relative">
           <div className={`absolute left-0 h-2 rounded-full transition-all duration-500 ${
             cycleProgress.questionnaire && cycleProgress.meeting && cycleProgress.results 
-              ? 'w-full bg-green-500'
+              ? 'w-full bg-gradient-to-r from-green-400 to-green-500'
               : cycleProgress.questionnaire && cycleProgress.meeting
-                ? 'w-2/3 bg-blue-500'
+                ? 'w-2/3 bg-gradient-to-r from-purple-500 to-pink-500'
                 : cycleProgress.questionnaire
-                  ? 'w-1/3 bg-blue-300'
+                  ? 'w-1/3 bg-gradient-to-r from-blue-400 to-purple-500'
                   : 'w-0'
           }`}></div>
           
@@ -854,42 +875,39 @@ const CycleManager = ({ cycle, cycleData, onStartQuestionnaire, onStartMeeting }
           <div className="absolute top-0 left-0 transform -translate-y-1/2 w-full">
             <div className="flex justify-between">
               <div className="relative">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  cycleProgress.questionnaire ? 'bg-green-500 text-white' : 'bg-gray-300'
-                }`}>
-                  {cycleProgress.questionnaire ? <CheckCircle size={16} /> : '1'}
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                  cycleProgress.questionnaire ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 'bg-gray-300'
+                } shadow-md`}>
+                  {cycleProgress.questionnaire ? <CheckCircle size={14} /> : '1'}
                 </div>
-                <div className="text-xs mt-1 text-center font-roboto w-20 -ml-6">Assessment</div>
               </div>
               
               <div className="relative">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  cycleProgress.meeting ? 'bg-green-500 text-white' : 'bg-gray-300'
-                }`}>
-                  {cycleProgress.meeting ? <CheckCircle size={16} /> : '2'}
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                  cycleProgress.meeting ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 'bg-gray-300'
+                } shadow-md`}>
+                  {cycleProgress.meeting ? <CheckCircle size={14} /> : '2'}
                 </div>
-                <div className="text-xs mt-1 text-center font-roboto w-20 -ml-6">Couple Meeting</div>
               </div>
               
               <div className="relative">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  cycleProgress.results ? 'bg-green-500 text-white' : 'bg-gray-300'
-                }`}>
-                  {cycleProgress.results ? <CheckCircle size={16} /> : '3'}
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                  cycleProgress.results ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 'bg-gray-300'
+                } shadow-md`}>
+                  {cycleProgress.results ? <CheckCircle size={14} /> : '3'}
                 </div>
-                <div className="text-xs mt-1 text-center font-roboto w-20 -ml-6">Results</div>
               </div>
             </div>
           </div>
         </div>
       
         {/* Action Buttons */}
-        <div className="flex justify-center mt-6 space-x-4">
+        <div className="flex justify-center mt-10 space-x-4">
           <button 
-            className={`px-4 py-2 rounded font-roboto flex items-center ${
+            className={`px-4 py-2.5 rounded-lg font-medium font-roboto flex items-center shadow-md transition-all duration-300 ${
               cycleProgress.questionnaire 
                 ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
-                : 'bg-black text-white hover:bg-gray-800'
+                : 'bg-gradient-to-r from-purple-600 to-pink-500 text-white hover:shadow-lg'
             }`}
             onClick={onStartQuestionnaire}
             disabled={cycleProgress.questionnaire}
@@ -902,12 +920,12 @@ const CycleManager = ({ cycle, cycleData, onStartQuestionnaire, onStartMeeting }
           </button>
           
           <button 
-            className={`px-4 py-2 rounded font-roboto flex items-center ${
+            className={`px-4 py-2.5 rounded-lg font-medium font-roboto flex items-center shadow-md transition-all duration-300 ${
               !cycleProgress.questionnaire 
                 ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                 : cycleProgress.meeting
                   ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                  : 'bg-black text-white hover:bg-gray-800'
+                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
             }`}
             onClick={onStartMeeting}
             disabled={!cycleProgress.questionnaire || cycleProgress.meeting}
@@ -921,7 +939,7 @@ const CycleManager = ({ cycle, cycleData, onStartQuestionnaire, onStartMeeting }
           
           {cycleProgress.results && (
             <button 
-              className="px-4 py-2 bg-black text-white rounded font-roboto flex items-center hover:bg-gray-800"
+              className="px-4 py-2.5 bg-gradient-to-r from-green-400 to-green-500 text-white rounded-lg font-medium font-roboto flex items-center shadow-md hover:shadow-lg transition-all duration-300"
               onClick={() => {
                 document.getElementById('relationship-charts')?.scrollIntoView({ behavior: 'smooth' });
               }}
@@ -933,23 +951,34 @@ const CycleManager = ({ cycle, cycleData, onStartQuestionnaire, onStartMeeting }
         </div>
       </div>
       
-      {/* Metrics Display (only shown when results are available) */}
+      {/* Metrics Display */}
       {cycleProgress.results && cycleData?.metrics && (
-        <div className="grid grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg mt-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-pink-500">{cycleData.metrics.satisfaction?.toFixed(1) || "3.0"}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg mt-4">
+          <div className="text-center p-3 bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-300">
+            <div className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-500">
+              {cycleData.metrics.satisfaction?.toFixed(1) || "3.0"}
+            </div>
             <div className="text-xs text-gray-600 font-roboto">Satisfaction</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-blue-500">{cycleData.metrics.communication?.toFixed(1) || "3.0"}</div>
+          
+          <div className="text-center p-3 bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-300">
+            <div className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-purple-500">
+              {cycleData.metrics.communication?.toFixed(1) || "3.0"}
+            </div>
             <div className="text-xs text-gray-600 font-roboto">Communication</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-purple-500">{cycleData.metrics.connection?.toFixed(1) || "3.0"}</div>
+          
+          <div className="text-center p-3 bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-300">
+            <div className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-indigo-500">
+              {cycleData.metrics.connection?.toFixed(1) || "3.0"}
+            </div>
             <div className="text-xs text-gray-600 font-roboto">Connection</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-green-500">{cycleData.metrics.workload?.toFixed(1) || "3.0"}</div>
+          
+          <div className="text-center p-3 bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-300">
+            <div className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-green-500">
+              {cycleData.metrics.workload?.toFixed(1) || "3.0"}
+            </div>
             <div className="text-xs text-gray-600 font-roboto">Workload Balance</div>
           </div>
         </div>

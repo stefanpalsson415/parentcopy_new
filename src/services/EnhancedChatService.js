@@ -1081,6 +1081,86 @@ async isInitialOnboardingPhase(familyId) {
 }
 
 
+// Handle shared todo requests for the relationship tab
+async handleSharedTodoRequest(text, familyContext, userId) {
+  try {
+    // Check if this is a shared todo request
+    const isTodoRequest = (
+      text.toLowerCase().includes('add todo') ||
+      text.toLowerCase().includes('add a todo') ||
+      text.toLowerCase().includes('add shared todo') ||
+      text.toLowerCase().includes('add a task to our shared list') ||
+      text.toLowerCase().includes('add to shared todo') ||
+      text.toLowerCase().includes('add to our todo list')
+    );
+    
+    if (!isTodoRequest) return null;
+    
+    // Extract the todo content - everything after "add todo" or similar phrases
+    let todoText = '';
+    const todoMatches = [
+      text.match(/add (?:a |shared )?todo:?\s+(.*)/i),
+      text.match(/add (?:a |shared )?task to (?:our |the |shared )?(?:todo |to-do )?list:?\s+(.*)/i),
+      text.match(/add to (?:our |the |shared )?(?:todo |to-do )?list:?\s+(.*)/i)
+    ].filter(Boolean);
+    
+    if (todoMatches.length > 0 && todoMatches[0][1]) {
+      todoText = todoMatches[0][1].trim();
+    } else {
+      // Fallback - if no specific format found, use everything after "add todo"
+      const index = text.toLowerCase().indexOf('add todo');
+      if (index !== -1) {
+        todoText = text.substring(index + 8).trim();
+      }
+    }
+    
+    if (!todoText) {
+      return "I'd like to add a shared todo for you and your partner, but I need to know what the todo should be. Could you please provide more details?";
+    }
+    
+    // Determine task category based on content
+    let category = 'other';
+    if (todoText.toLowerCase().match(/clean|wash|fold|laundry|dishes|vacuum/)) {
+      category = 'household';
+    } else if (todoText.toLowerCase().match(/date|dinner|movie|together|relationship/)) {
+      category = 'relationship';
+    } else if (todoText.toLowerCase().match(/kid|child|school|homework|bedtime/)) {
+      category = 'parenting';
+    } else if (todoText.toLowerCase().match(/shop|buy|store|groceries|pick up/)) {
+      category = 'errands';
+    } else if (todoText.toLowerCase().match(/meet|call|email|work|job|office/)) {
+      category = 'work';
+    }
+    
+    // Create the todo
+    if (familyContext.familyId && userId) {
+      const todoData = {
+        text: todoText,
+        completed: false,
+        familyId: familyContext.familyId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: userId,
+        assignedTo: null, // Not assigned to any parent initially
+        category: category,
+        position: 0, // Will be at the top of the list
+        notes: 'Added via Allie Chat'
+      };
+      
+      // Add to Firestore
+      const docRef = await addDoc(collection(db, "relationshipTodos"), todoData);
+      
+      return `Perfect! I've added "${todoText}" to your shared todo list. You and your partner can find it in the Relationship tab under "Shared To-Do List". You can assign it to either of you, add it to your calendar, or make other changes there.`;
+    } else {
+      return "I'd like to add this to your shared todo list, but I need you to be logged in first. Please make sure you're logged in and try again.";
+    }
+  } catch (error) {
+    console.error("Error handling shared todo request:", error);
+    return "I tried to add this to your shared todo list, but encountered an error. You can add it directly in the Relationship tab under 'Shared To-Do List'.";
+  }
+}
+
+
   // Get AI response to a message with enhanced NLU
   async getAIResponse(text, familyId, previousMessages) {
     try {
@@ -1225,6 +1305,13 @@ const surveyResponse = await this.handleSurveyQuestion(text, familyData);
 if (surveyResponse) {
   console.log("Handled as survey question");
   return surveyResponse;
+}
+
+// 7. Shared todo list requests
+const sharedTodoResponse = await this.handleSharedTodoRequest(text, familyData, userId);
+if (sharedTodoResponse) {
+  console.log("Handled as shared todo request");
+  return sharedTodoResponse;
 }
         
         // Add knowledge base to context
