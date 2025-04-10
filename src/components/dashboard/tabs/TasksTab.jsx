@@ -18,6 +18,8 @@ import { doc, collection, addDoc, getDocs, query, where, updateDoc, increment, s
 import { db } from '../../../services/firebase';
 import confetti from 'canvas-confetti';
 import HabitProgressTracker from '../../habits/HabitProgressTracker';
+import { EventManager as EnhancedEventManager } from '../../components/calendar';
+
 
 
 
@@ -116,6 +118,8 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   const [habitStackVisible, setHabitStackVisible] = useState(false);
   const [showKidSection, setShowKidSection] = useState(true);
   const [allieInputValue, setAllieInputValue] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+const [datePickerDate, setDatePickerDate] = useState(null);
   const [showDatePickerModal, setShowDatePickerModal] = useState(false);
   const [surveyDue, setSurveyDue] = useState(null);
   const [daysUntilSurvey, setDaysUntilSurvey] = useState(null);
@@ -1113,45 +1117,45 @@ const saveReflection = async () => {
   };
   
   // Prepare habit schedule details
-  const prepareHabitSchedule = (habit) => {
-    if (!habit || !selectedUser) return;
+const prepareHabitSchedule = (habit) => {
+  if (!habit || !selectedUser) return;
+  
+  try {
+    // Calculate a good time for this habit based on cue
+    const timeMap = {
+      "After breakfast": "08:00",
+      "Before lunch": "11:30",
+      "After lunch": "13:30",
+      "Before dinner": "17:00",
+      "After dinner": "19:30",
+      "Before bed": "21:00"
+    };
     
-    try {
-      // Calculate a good time for this habit based on cue
-      const timeMap = {
-        "After breakfast": "08:00",
-        "Before lunch": "11:30",
-        "After lunch": "13:30",
-        "Before dinner": "17:00",
-        "After dinner": "19:30",
-        "Before bed": "21:00"
-      };
-      
-      const cue = habit.cue || habit.stackTrigger || "After breakfast";
-      const defaultTime = timeMap[cue] || "09:00";
-      
-      // Create a date for today at the default time
-      const startTime = new Date();
-      const [hours, minutes] = defaultTime.split(':');
-      startTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-      
-      // Create the schedule details
-      const details = {
-        habit: habit,
-        startTime: startTime,
-        endTime: new Date(startTime.getTime() + 30 * 60000),
-        recurrence: '21', // Default: repeat for 21 days
-        reminderMinutes: 10 // Default: 10 minutes before
-      };
-      
-      // Show schedule confirmation dialog
-      setScheduleDetails(details);
-      setShowScheduleConfirm(true);
-    } catch (error) {
-      console.error("Error preparing habit schedule:", error);
-      createCelebration("Schedule Error", false, "There was an error scheduling this habit. Please try again.");
-    }
-  };
+    const cue = habit.cue || habit.stackTrigger || "After breakfast";
+    const defaultTime = timeMap[cue] || "09:00";
+    
+    // Create a date for today at the default time
+    const startTime = new Date();
+    const [hours, minutes] = defaultTime.split(':');
+    startTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    
+    // Create the schedule details
+    const details = {
+      habit: habit,
+      startTime: startTime,
+      endTime: new Date(startTime.getTime() + 30 * 60000),
+      recurrence: '21', // Default: repeat for 21 days
+      reminderMinutes: 10 // Default: 10 minutes before
+    };
+    
+    // Show schedule confirmation dialog
+    setScheduleDetails(details);
+    setShowScheduleConfirm(true);
+  } catch (error) {
+    console.error("Error preparing habit schedule:", error);
+    createCelebration("Schedule Error", false, "There was an error scheduling this habit. Please try again.");
+  }
+};
   
 // Edit existing habit schedule
 const editHabitSchedule = async (habit) => {
@@ -2508,129 +2512,126 @@ const createKidHabit = async () => {
         </div>
       )}
       
-      {/* Schedule confirmation modal */}
-      {showScheduleConfirm && scheduleDetails && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="font-medium text-lg">Schedule Habit</h3>
-              <button 
-                onClick={() => {
-                  setShowScheduleConfirm(false);
-                  setScheduleDetails(null);
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="mb-4">
-              <div className="text-sm font-medium mb-1">Habit:</div>
-              <div className="p-2 bg-gray-50 rounded text-sm">
-                {scheduleDetails.habit.title}
-              </div>
-            </div>
-            
-            <div className="mb-4">
-              <div className="text-sm font-medium mb-1">Schedule Time:</div>
-              <input
-                type="time"
-                className="w-full p-2 border rounded"
-                value={scheduleDetails.startTime.toTimeString().substr(0, 5)}
-                onChange={(e) => {
-                  const [hours, minutes] = e.target.value.split(':');
-                  const newStartTime = new Date(scheduleDetails.startTime);
-                  newStartTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-                  
-                  const newEndTime = new Date(newStartTime);
-                  newEndTime.setMinutes(newStartTime.getMinutes() + 30);
-                  
-                  setScheduleDetails({
-                    ...scheduleDetails,
-                    startTime: newStartTime,
-                    endTime: newEndTime
-                  });
-                }}
-              />
-            </div>
-            
-            <div className="mb-4">
-              <div className="text-sm font-medium mb-1">Repeat for:</div>
-              <div className="flex items-center">
-                <input
-                  type="number"
-                  className="w-20 p-2 border rounded mr-2"
-                  value={scheduleDetails.recurrence}
-                  onChange={(e) => {
-                    setScheduleDetails({
-                      ...scheduleDetails,
-                      recurrence: Math.max(1, parseInt(e.target.value) || 1)
-                    });
-                  }}
-                  min="1"
-                  max="90"
-                />
-                <span className="text-sm text-gray-600">days</span>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Experts recommend at least 21 days to form a habit
-              </p>
-            </div>
-            
-            <div className="mb-6">
-              <div className="text-sm font-medium mb-1">Reminder:</div>
-              <select
-                className="w-full p-2 border rounded"
-                value={scheduleDetails.reminderMinutes}
-                onChange={(e) => {
-                  setScheduleDetails({
-                    ...scheduleDetails,
-                    reminderMinutes: parseInt(e.target.value)
-                  });
-                }}
-              >
-                <option value="5">5 minutes before</option>
-                <option value="10">10 minutes before</option>
-                <option value="15">15 minutes before</option>
-                <option value="30">30 minutes before</option>
-                <option value="60">1 hour before</option>
-              </select>
-            </div>
-            
-            <div className="bg-blue-50 p-3 rounded-lg mb-4 text-sm text-blue-800">
-              <div className="flex items-center mb-1">
-                <Info size={14} className="mr-1 text-blue-600" />
-                <div className="font-medium">Scheduling Details:</div>
-              </div>
-              <p>
-                This will add a calendar reminder for "{scheduleDetails.habit.title}" 
-                at {scheduleDetails.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} 
-                every day for the next {scheduleDetails.recurrence} days.
-              </p>
-            </div>
-            
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => {
-                  setShowScheduleConfirm(false);
-                  setScheduleDetails(null);
-                }}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmScheduleToCalendar}
-                className="px-4 py-2 bg-black text-white rounded-lg flex items-center"
-              >
-                <Calendar size={16} className="mr-2" />
-                Add to Calendar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Habit Scheduling with EnhancedEventManager */}
+{showScheduleConfirm && scheduleDetails && (
+  <EnhancedEventManager
+    initialEvent={{
+      title: `Habit: ${scheduleDetails.habit.title}`,
+      description: `${scheduleDetails.habit.description || ''}\n\nCue: ${scheduleDetails.habit.cue || scheduleDetails.habit.stackTrigger || "After breakfast"}\nAction: ${scheduleDetails.habit.action || scheduleDetails.habit.title}\nReward: ${scheduleDetails.habit.reward || "Feel accomplished"}`,
+      dateTime: scheduleDetails.startTime.toISOString(),
+      endDateTime: scheduleDetails.endTime.toISOString(),
+      location: '',
+      category: 'habit',
+      eventType: 'habit',
+      recurrence: {
+        frequency: 'daily',
+        days: [],
+        endDate: new Date(new Date().setDate(new Date().getDate() + (scheduleDetails.recurrence || 21))).toISOString().split('T')[0]
+      },
+      isRecurring: true,
+      extraDetails: {
+        habitId: scheduleDetails.habit.id,
+        reminderMinutes: scheduleDetails.reminderMinutes || 10,
+        recurrenceDays: scheduleDetails.recurrence || 21,
+        identity: scheduleDetails.habit.identity,
+        notes: `This is an atomic habit to help build the identity: ${scheduleDetails.habit.identity || "I am someone who values family balance"}`
+      }
+    }}
+    onSave={async (event) => {
+      setShowScheduleConfirm(false);
+      
+      // Convert the EnhancedEventManager event to our habit event format
+      const habitEvent = {
+        summary: event.title,
+        description: event.description,
+        start: {
+          dateTime: new Date(event.dateTime).toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: new Date(event.endDateTime).toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        recurrence: [`RRULE:FREQ=DAILY;COUNT=${event.extraDetails?.recurrenceDays || 21}`],
+        reminders: {
+          useDefault: false,
+          overrides: [
+            { method: 'popup', minutes: event.extraDetails?.reminderMinutes || 10 }
+          ]
+        },
+        // Add metadata for Allie
+        taskId: scheduleDetails.habit.id,
+        familyId: familyId,
+        eventType: 'habit',
+        isRecurring: true,
+        taskType: 'habit',
+        category: 'habit',
+        linkedEntity: {
+          type: 'habit',
+          id: scheduleDetails.habit.id
+        },
+        universalId: `habit-${scheduleDetails.habit.id}-${Date.now()}`
+      };
+      
+      // Add the event to calendar
+      const result = await CalendarService.addEvent(habitEvent, selectedUser.id);
+      
+      if (result.success) {
+        // Update habit state to show as scheduled
+        const updatedHabits = habits.map(h => {
+          if (h.id === scheduleDetails.habit.id) {
+            return {
+              ...h,
+              isScheduled: true,
+              scheduledEventId: result.eventId || result.firestoreId || result.universalId,
+              scheduledTime: new Date(event.dateTime).toISOString(),
+              scheduledRecurrence: event.extraDetails?.recurrenceDays || 21,
+              universalId: habitEvent.universalId
+            };
+          }
+          return h;
+        });
+        
+        setHabits(updatedHabits);
+        
+        // Save the scheduled state to database
+        await DatabaseService.saveFamilyData(
+          { tasks: updatedHabits.filter(h => h.id === scheduleDetails.habit.id) }, 
+          familyId
+        );
+        
+        // Create a comment in the habit about scheduling
+        const existingComments = scheduleDetails.habit.comments || [];
+        const schedulingCommentExists = existingComments.some(comment => 
+          comment.text && comment.text.includes("scheduled this habit for")
+        );
+        
+        if (!schedulingCommentExists) {
+          await addTaskComment(
+            scheduleDetails.habit.id, 
+            `I've scheduled this habit for ${new Date(event.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} every day for the next ${event.extraDetails?.recurrenceDays || 21} days.`
+          );
+        }
+        
+        // Update the UI
+        createCelebration(`Habit scheduled for ${new Date(event.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`, false);
+        
+        // Force refresh the calendar widget
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        }
+      }
+    }}
+    onCancel={() => {
+      setShowScheduleConfirm(false);
+      setScheduleDetails(null);
+    }}
+    eventType="habit"
+    selectedDate={scheduleDetails.startTime}
+    isCompact={true}
+    mode="create"
+  />
+)}
       
       {/* Camera capture modal */}
       {showCamera && (
