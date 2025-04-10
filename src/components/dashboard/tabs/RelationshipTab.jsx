@@ -34,6 +34,8 @@ const RelationshipProgressChart = lazy(() => import('../RelationshipProgressChar
 const AIRelationshipInsights = lazy(() => import('../AIRelationshipInsights'));
 const EnhancedRelationshipCycleHistory = lazy(() => import('../../relationship/EnhancedRelationshipCycleHistory'));
 
+
+
 // Helper to format date consistently throughout the component
 const formatDate = (dateString) => {
   if (!dateString) return 'Not scheduled';
@@ -63,6 +65,7 @@ const SharedTodoList = ({ familyId, familyMembers }) => {
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [todoToDelete, setTodoToDelete] = useState(null);
   
+  
   const inputRef = useRef(null);
   
   const categories = [
@@ -73,6 +76,9 @@ const SharedTodoList = ({ familyId, familyMembers }) => {
     { id: 'work', name: 'Work', color: 'bg-amber-100 text-amber-800' },
     { id: 'other', name: 'Other', color: 'bg-gray-100 text-gray-800' }
   ];
+  
+
+
   
   // Load todos from Firestore with real-time updates
   useEffect(() => {
@@ -964,7 +970,7 @@ const handleScheduleMeeting = async (event) => {
   };
   
   // Handle meeting scheduling
-  const handleScheduleMeeting = async (eventData) => {
+  const processScheduleMeeting = async (eventData) => {
     try {
       // Extract date from the event data
       const meetingDate = new Date(eventData.start.dateTime);

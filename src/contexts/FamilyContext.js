@@ -5,7 +5,8 @@ import DatabaseService from '../services/DatabaseService';
 import { calculateBalanceScores } from '../utils/TaskWeightCalculator';
 import { useSurvey } from './SurveyContext';
 import { db } from '../services/firebase';
-import { collection, doc, setDoc, getDoc, updateDoc, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
+import CalendarService from '../services/CalendarService';
+import { collection, doc, setDoc, getDoc, updateDoc, getDocs, query, where, increment, serverTimestamp } from 'firebase/firestore';
 import AllieAIService from '../services/AllieAIService'; // Updated import to use consolidated service
 
 
@@ -216,6 +217,33 @@ updateFavicon(familyPicture || getDefaultFavicon());
       throw error;
     }
   };
+
+
+  const generateCouplesMeetingAgenda = async (familyId, cycleNumber, cycleData) => {
+    try {
+      // Call AllieAIService to generate agenda
+      const agenda = await AllieAIService.generateCouplesMeetingAgenda(
+        familyId, cycleNumber, cycleData
+      );
+      return agenda;
+    } catch (error) {
+      console.error("Error generating couples meeting agenda:", error);
+      // Return a simple default agenda if generation fails
+      return {
+        title: `Cycle ${cycleNumber} Meeting`,
+        introduction: "Welcome to your relationship meeting.",
+        topics: [
+          {
+            title: "Communication",
+            description: "Discuss your communication patterns",
+            questions: ["What worked well this week?", "What could be improved?"]
+          }
+        ],
+        closingReflection: "Thank you for taking time to connect."
+      };
+    }
+  };
+
 
   // Update family name
   const updateFamilyName = async (newName) => {
@@ -651,6 +679,11 @@ const rescheduleMeeting = async (familyId, cycleNumber, newDate) => {
   try {
     const docRef = doc(db, "relationshipCycles", `${familyId}-cycle${cycleNumber}`);
     
+ // Get the cycle data first
+ const cycleSnap = await getDoc(docRef);
+ const cycleData = cycleSnap.exists() ? cycleSnap.data() : {};
+
+
     // Update the meeting date
     await updateDoc(docRef, {
       "meeting.scheduledDate": newDate.toISOString(),

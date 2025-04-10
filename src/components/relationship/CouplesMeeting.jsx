@@ -1,8 +1,9 @@
 // src/components/relationship/CouplesMeeting.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Users, Heart, Calendar, ChevronDown, ChevronUp, MessageCircle, 
-  CheckCircle, X, Edit, Calendar as CalendarIcon, Clock, Save
+    Users, Heart, Calendar, ChevronDown, ChevronUp, MessageCircle, 
+    CheckCircle, X, Edit, Calendar as CalendarIcon, Clock, Save,
+    Plus, AlertCircle, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 
