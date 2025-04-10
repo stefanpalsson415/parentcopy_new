@@ -376,10 +376,11 @@ const getRelationshipCycleData = async (cycleNumber) => {
   }
 };
 
-// Complete individual assessment
 const completeRelationshipAssessment = async (cycleNumber, responses) => {
   try {
-    if (!familyId || !currentUser) throw new Error("No family ID or user available");
+    if (!familyId) throw new Error("No family ID available");
+    if (!currentUser) throw new Error("User authentication required");
+    if (!currentUser.uid) throw new Error("Invalid user authentication");
     
     // Get existing cycle data
     const cycleData = await getRelationshipCycleData(cycleNumber) || {
@@ -399,8 +400,7 @@ const completeRelationshipAssessment = async (cycleNumber, responses) => {
       completed: true,
       completedDate: new Date().toISOString(),
       responses: responses
-    };
-    
+    };    
     // Check if both parents have completed
     const parentMembers = familyMembers.filter(m => m.role === 'parent');
     const bothParentsCompleted = parentMembers.every(parent => 
