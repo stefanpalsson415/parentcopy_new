@@ -883,8 +883,22 @@ const CycleManager = ({ cycle }) => {
     loadCycleData();
   }, [cycle, familyId, getRelationshipCycleData]);
   
-// Inside the CycleManager component in RelationshipTab.jsx
 
+
+// Add this useEffect to ensure we don't show auth errors unnecessarily
+useEffect(() => {
+  // Only show auth error if we're definitely not loading AND there's no user
+  if (!loading && !currentUser && familyId) {
+    console.log("Auth check - no currentUser but familyId exists:", familyId);
+    // Instead of showing error immediately, try to get user from context
+    if (familyMembers && familyMembers.length > 0 && familyMembers.some(m => m.role === 'parent')) {
+      console.log("Found family members, proceeding without currentUser");
+      // We have family data, so we can continue even without currentUser
+      return;
+    }
+    setError("Authentication required. Please sign in to continue.");
+  }
+}, [currentUser, loading, familyId, familyMembers]);
 
 
 
@@ -931,45 +945,47 @@ useEffect(() => {
 
 
 
-  // Handle assessment completion
-  const handleAssessmentSubmit = async (responses) => {
-    try {
-      if (!currentUser?.uid) {
-        setError("You need to be signed in to complete the assessment");
-        return false;
-      }
-      
-      await completeRelationshipAssessment(cycle, responses);
-  
-      
-      // Update local state
-      const updatedData = { ...cycleData };
-      if (!updatedData.assessments) updatedData.assessments = {};
-      
-      updatedData.assessments[currentUser.uid] = {
-        completed: true,
-        completedDate: new Date().toISOString(),
-        responses: responses
-      };
-      
-      const bothComplete = parentIds.every(id => 
-        updatedData.assessments[id]?.completed
-      );
-      
-      if (bothComplete) {
-        updatedData.assessmentsCompleted = true;
-        updatedData.assessmentsCompletedDate = new Date().toISOString();
-      }
-      
-      setCycleData(updatedData);
-      setShowAssessment(false);
-      
-      return true;
-    } catch (err) {
-      console.error("Error completing assessment:", err);
-      throw err;
+  // In src/components/dashboard/tabs/RelationshipTab.jsx
+// Replace the existing handleAssessmentSubmit function in CycleManager with:
+
+const handleAssessmentSubmit = async (responses) => {
+  try {
+    if (!currentUser?.uid) {
+      setError("You need to be signed in to complete the assessment");
+      return false;
     }
-  };
+    
+    await completeRelationshipAssessment(cycle, responses);
+
+    
+    // Update local state
+    const updatedData = { ...cycleData };
+    if (!updatedData.assessments) updatedData.assessments = {};
+    
+    updatedData.assessments[currentUser.uid] = {
+      completed: true,
+      completedDate: new Date().toISOString(),
+      responses: responses
+    };
+    
+    const bothComplete = parentIds.every(id => 
+      updatedData.assessments[id]?.completed
+    );
+    
+    if (bothComplete) {
+      updatedData.assessmentsCompleted = true;
+      updatedData.assessmentsCompletedDate = new Date().toISOString();
+    }
+    
+    setCycleData(updatedData);
+    setShowAssessment(false);
+    
+    return true;
+  } catch (err) {
+    console.error("Error completing assessment:", err);
+    throw err;
+  }
+};
   
   // Handle prework completion
   const handlePreworkSubmit = async (preworkData) => {
@@ -1185,39 +1201,39 @@ useEffect(() => {
   </div>
   
   {/* Parent Profile Pictures - Moved down and fixed position calculation */}
-  <div className="flex justify-center gap-4">
-    {familyMembers.filter(m => m.role === 'parent').map((parent, index) => {
-      const isCurrentUser = currentUser && parent.id === currentUser.uid;
-      const hasCompleted = isCurrentUser ? myAssessmentComplete : partnerAssessmentComplete;
-      
-      // Always show at step 1 before completing assessment
-      let stepPosition = 1;
-      if (hasCompleted) {
-        if (preworkComplete) stepPosition = 2;
-        if (meetingComplete) stepPosition = 3;
-      }
-      
-      return (
-        <div key={parent.id} className="flex flex-col items-center">
-          <div className="relative">
-            <UserAvatar 
-              user={parent} 
-              size={40}
-              className={`border-2 ${hasCompleted ? 'border-green-500' : 'border-gray-300'}`}
-            />
-            
-            {hasCompleted && (
-              <span className="absolute -top-1 -right-1">
-                <CheckCircle size={16} className="text-green-500 bg-white rounded-full" />
-              </span>
-            )}
-          </div>
-          <span className="text-xs mt-1 font-medium">{parent.name}</span>
-          <span className="text-xs text-gray-500">Step {stepPosition}</span>
+<div className="flex justify-center gap-4">
+  {familyMembers.filter(m => m.role === 'parent').map((parent, index) => {
+    const isCurrentUser = currentUser && parent.id === currentUser.uid;
+    const hasCompleted = isCurrentUser ? myAssessmentComplete : partnerAssessmentComplete;
+    
+    // Always show at step 1 before completing assessment
+    let stepPosition = 1;
+    if (hasCompleted) {
+      if (preworkComplete) stepPosition = 2;
+      if (meetingComplete) stepPosition = 3;
+    }
+    
+    return (
+      <div key={parent.id} className="flex flex-col items-center">
+        <div className="relative">
+          <UserAvatar 
+            user={parent} 
+            size={40}
+            className={`border-2 ${hasCompleted ? 'border-green-500' : 'border-gray-300'}`}
+          />
+          
+          {hasCompleted && (
+            <span className="absolute -top-1 -right-1">
+              <CheckCircle size={16} className="text-green-500 bg-white rounded-full" />
+            </span>
+          )}
         </div>
-      );
-    })}
-  </div>
+        <span className="text-xs mt-1 font-medium">{parent.name}</span>
+        <span className="text-xs text-gray-500">Step {stepPosition}</span>
+      </div>
+    );
+  })}
+</div>
 </div>          
   
 
