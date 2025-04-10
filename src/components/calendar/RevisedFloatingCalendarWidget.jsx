@@ -429,81 +429,70 @@ const loadAllEvents = async () => {
   };
   
   // Get attendees for an event
-  const getEventAttendees = (event) => {
-    let attendees = [];
-    
-    // For child events
-    if (event.childName) {
-      const child = familyMembers.find(m => m.id === event.childId || m.name === event.childName);
-      if (child) {
+const getEventAttendees = (event) => {
+  let attendees = [];
+  
+  // For child events
+  if (event.childName) {
+    const child = familyMembers.find(m => m.id === event.childId || m.name === event.childName);
+    if (child) {
+      attendees.push({
+        id: child.id,
+        name: child.name,
+        profilePicture: child.profilePicture,
+        role: 'child'
+      });
+    } else if (event.childName) {
+      attendees.push({
+        id: event.childId || `child-${event.childName}`,
+        name: event.childName,
+        profilePicture: null,
+        role: 'child'
+      });
+    }
+  }
+  
+  // For siblings
+  if (event.siblingIds && event.siblingIds.length > 0) {
+    event.siblingIds.forEach(sibId => {
+      const sibling = familyMembers.find(m => m.id === sibId);
+      if (sibling && !attendees.some(a => a.id === sibling.id)) {
         attendees.push({
-          id: child.id,
-          name: child.name,
-          profilePicture: child.profilePicture,
+          id: sibling.id,
+          name: sibling.name,
+          profilePicture: sibling.profilePicture,
           role: 'child'
         });
-      } else if (event.childName) {
+      }
+    });
+  } else if (event.siblingNames && event.siblingNames.length > 0) {
+    event.siblingNames.forEach(name => {
+      const sibling = familyMembers.find(m => m.role === 'child' && m.name === name);
+      if (sibling && !attendees.some(a => a.id === sibling.id)) {
         attendees.push({
-          id: event.childId || `child-${event.childName}`,
-          name: event.childName,
+          id: sibling.id,
+          name: sibling.name,
+          profilePicture: sibling.profilePicture,
+          role: 'child'
+        });
+      } else if (!attendees.some(a => a.name === name)) {
+        attendees.push({
+          id: `sibling-${name}`,
+          name: name,
           profilePicture: null,
           role: 'child'
         });
       }
-    }
-    
-    // For siblings
-    if (event.siblingIds && event.siblingIds.length > 0) {
-      event.siblingIds.forEach(sibId => {
-        const sibling = familyMembers.find(m => m.id === sibId);
-        if (sibling && !attendees.some(a => a.id === sibling.id)) {
-          attendees.push({
-            id: sibling.id,
-            name: sibling.name,
-            profilePicture: sibling.profilePicture,
-            role: 'child'
-          });
-        }
-      });
-    } else if (event.siblingNames && event.siblingNames.length > 0) {
-      event.siblingNames.forEach(name => {
-        const sibling = familyMembers.find(m => m.role === 'child' && m.name === name);
-        if (sibling && !attendees.some(a => a.id === sibling.id)) {
-          attendees.push({
-            id: sibling.id,
-            name: sibling.name,
-            profilePicture: sibling.profilePicture,
-            role: 'child'
-          });
-        } else if (!attendees.some(a => a.name === name)) {
-          attendees.push({
-            id: `sibling-${name}`,
-            name: name,
-            profilePicture: null,
-            role: 'child'
-          });
-        }
-      });
-    }
-    
-    // For attendingParent
-    if (event.attendingParentId) {
-      if (event.attendingParentId === 'both') {
-        // Add both parents
-        const parents = familyMembers.filter(m => m.role === 'parent');
-        parents.forEach(parent => {
-          if (!attendees.some(a => a.id === parent.id)) {
-            attendees.push({
-              id: parent.id,
-              name: parent.name,
-              profilePicture: parent.profilePicture,
-              role: 'parent'
-            });
-          }
-        });
-      } else if (event.attendingParentId !== 'undecided') {
-        const parent = familyMembers.find(m => m.id === event.attendingParentId);
-        if (parent && !attendees.some(a => a.id === parent.id)) {
+    });
+  }
+  
+  // For attendingParent
+  if (event.attendingParentId) {
+    if (event.attendingParentId === 'both') {
+      // Add both parents
+      const parents = familyMembers.filter(m => m.role === 'parent');
+      parents.forEach(parent => {
+        if (!attendees.some(a => a.id === parent.id)) {
           attendees.push({
             id: parent.id,
             name: parent.name,
@@ -511,11 +500,48 @@ const loadAllEvents = async () => {
             role: 'parent'
           });
         }
+      });
+    } else if (event.attendingParentId !== 'undecided') {
+      const parent = familyMembers.find(m => m.id === event.attendingParentId);
+      if (parent && !attendees.some(a => a.id === parent.id)) {
+        attendees.push({
+          id: parent.id,
+          name: parent.name,
+          profilePicture: parent.profilePicture,
+          role: 'parent'
+        });
       }
     }
+  }
+
+  // For host parent (if available)
+  if (event.hostParent) {
+    // Try to find a parent with this name
+    const hostParentName = event.hostParent;
+    const hostParent = familyMembers.find(m => 
+      m.role === 'parent' && m.name === hostParentName
+    );
     
-    return attendees;
-  };
+    if (hostParent && !attendees.some(a => a.id === hostParent.id)) {
+      attendees.push({
+        id: hostParent.id,
+        name: hostParent.name,
+        profilePicture: hostParent.profilePicture,
+        role: 'parent'
+      });
+    } else if (!attendees.some(a => a.name === hostParentName)) {
+      // If not found in family members, still add as generic attendee
+      attendees.push({
+        id: `host-${hostParentName}`,
+        name: hostParentName,
+        profilePicture: null,
+        role: 'host'
+      });
+    }
+  }
+  
+  return attendees;
+};
   
   // In src/components/calendar/RevisedFloatingCalendarWidget.jsx
 // Replace the getEventsForSelectedDate function with this improved version:
@@ -1167,53 +1193,7 @@ const eventDates = allEvents
             emptyMessage="No events scheduled for this date"
           />
           
-          {/* Upcoming Events Component */}
-          <EventsList
-            events={getUpcomingEvents()}
-            onEventClick={handleEventClick}
-            onEventAdd={handleEventAdd}
-            onEventEdit={handleEventEdit}
-            onEventDelete={handleDeleteEvent}
-            addedEvents={addedEvents}
-            showAddedMessage={showAddedMessage}
-            loading={loading}
-            title="Upcoming Events"
-            emptyMessage="No upcoming events"
-          />
           
-          {/* Tasks Component - Only show if view is all or tasks */}
-          {(view === 'all' || view === 'tasks') && (
-            <EventsList
-              events={getFilteredTasks().map(task => ({
-                id: `task-${task.id}`,
-                title: task.title,
-                description: task.description,
-                assignedTo: task.assignedTo,
-                assignedToName: task.assignedToName,
-                dateObj: new Date(selectedDate),
-                category: 'task',
-                eventType: 'task',
-                linkedEntity: {
-                  type: 'task',
-                  id: task.id
-                },
-                attendees: [{
-                  id: task.assignedTo,
-                  name: task.assignedToName,
-                  role: 'parent'
-                }]
-              }))}
-              onEventClick={handleEventClick}
-              onEventAdd={handleEventAdd}
-              onEventEdit={handleEventEdit}
-              onEventDelete={handleDeleteEvent}
-              addedEvents={addedEvents}
-              showAddedMessage={showAddedMessage}
-              loading={false}
-              title={`Add Tasks to Calendar (for ${selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`}
-              emptyMessage="No active tasks available"
-            />
-          )}
         </div>
         
         {/* Resize handles */}

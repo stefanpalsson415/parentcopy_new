@@ -26,46 +26,47 @@ const UpdatedGratitudeTracker = () => {
   const [sendingNotification, setSendingNotification] = useState(false);
   const [notificationSent, setNotificationSent] = useState(false);
   
-  // In the loadGratitudeData function
-const loadGratitudeData = async () => {
-  if (!familyId) return;
-  
-  setLoading(true);
-  setError(null);
-  
-  try {
-    // Array to store all gratitude data
-    const loadedGratitudes = [];
+  // src/components/dashboard/GratitudeTracker.jsx - Fix for the useEffect syntax error
+useEffect(() => {
+  const loadGratitudeData = async () => {
+    if (!familyId) return;
     
-    // Query Firebase for saved gratitudes
-    const gratitudesRef = collection(db, "gratitudes");
-    const q = query(gratitudesRef, where("familyId", "==", familyId));
-    const querySnapshot = await getDocs(q);
+    setLoading(true);
+    setError(null);
     
-    querySnapshot.forEach((doc) => {
-      loadedGratitudes.push({
-        id: doc.id,
-        ...doc.data()
+    try {
+      // Array to store all gratitude data
+      const loadedGratitudes = [];
+      
+      // Query Firebase for saved gratitudes
+      const gratitudesRef = collection(db, "gratitudes");
+      const q = query(gratitudesRef, where("familyId", "==", familyId));
+      const querySnapshot = await getDocs(q);
+      
+      querySnapshot.forEach((doc) => {
+        loadedGratitudes.push({
+          id: doc.id,
+          ...doc.data()
+        });
       });
-    });
-    
-    // Sort by date (newest first)
-    loadedGratitudes.sort((a, b) => new Date(b.date) - new Date(a.date));
-    setGratitudes(loadedGratitudes);
-    
-    // Calculate stats on real data
-    calculateStats(loadedGratitudes);
-    setLoading(false);
-  } catch (error) {
-    console.error("Error loading gratitude data:", error);
-    setGratitudes([]);
-    calculateStats([]);
-    setLoading(false);
-  }
-};
-    
-    loadGratitudeData();
-  }, [familyId, familyMembers]);
+      
+      // Sort by date (newest first)
+      loadedGratitudes.sort((a, b) => new Date(b.date) - new Date(a.date));
+      setGratitudes(loadedGratitudes);
+      
+      // Calculate stats on real data
+      calculateStats(loadedGratitudes);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error loading gratitude data:", error);
+      setGratitudes([]);
+      calculateStats([]);
+      setLoading(false);
+    }
+  };
+  
+  loadGratitudeData();
+}, [familyId, familyMembers]);
   
   // Calculate statistics
   const calculateStats = (gratitudesList) => {

@@ -86,7 +86,6 @@ const EventsList = ({
     });
   };
   
-  // Attendee display component
   const AttendeeAvatars = ({ attendees = [], max = 3 }) => {
     return (
       <div className="flex -space-x-2 ml-2 items-center">
@@ -197,16 +196,16 @@ const EventsList = ({
                     <p className="text-sm font-medium font-roboto">{event.title}</p>
                   </div>
                   <div className="flex justify-between items-center">
-                    <p className="text-xs text-gray-500 font-roboto">
-                      {event.time || event.dateObj?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                      {event.location && ` - ${event.location}`}
-                    </p>
-                    
-                    {/* Attendee avatars - assuming we pass attendees with the event */}
-                    {event.attendees && event.attendees.length > 0 && (
-                      <AttendeeAvatars attendees={event.attendees} />
-                    )}
-                  </div>
+  <p className="text-xs text-gray-500 font-roboto">
+    {event.time || event.dateObj?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+    {event.location && ` - ${event.location}`}
+  </p>
+  
+  {/* Always show attendee avatars if available */}
+  {event.attendees && event.attendees.length > 0 && (
+    <AttendeeAvatars attendees={event.attendees} />
+  )}
+</div>
                 </div>
                 
                 {/* Action buttons */}

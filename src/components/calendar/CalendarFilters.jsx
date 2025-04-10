@@ -1,5 +1,7 @@
 import React from 'react';
 import { Filter } from 'lucide-react';
+import UserAvatar from '../common/UserAvatar'; // Add this import
+
 
 /**
  * Calendar filters component for filtering events by type and family members
@@ -68,39 +70,35 @@ const CalendarFilters = ({
         
         {/* Parents */}
         {familyMembers.filter(m => m.role === 'parent').map(member => (
-          <button 
-            key={member.id}
-            className={`text-xs px-2 py-1 rounded-full flex items-center ${selectedMember === member.id ? 'bg-black text-white' : 'bg-gray-100'}`}
-            onClick={() => onMemberChange(member.id)}
-          >
-            <div className="w-4 h-4 rounded-full overflow-hidden mr-1">
-              <img 
-                src={member.profilePicture || `/api/placeholder/24/24`}
-                alt={member.name}
-                className="w-full h-full object-cover"
-              />
-            </div>
-            {member.name}
-          </button>
-        ))}
-        
-        {/* Children */}
-        {familyMembers.filter(m => m.role === 'child').map(member => (
-          <button 
-            key={member.id}
-            className={`text-xs px-2 py-1 rounded-full flex items-center ${selectedMember === member.id ? 'bg-black text-white' : 'bg-gray-100'}`}
-            onClick={() => onMemberChange(member.id)}
-          >
-            <div className="w-4 h-4 rounded-full overflow-hidden mr-1">
-              <img 
-                src={member.profilePicture || `/api/placeholder/24/24`}
-                alt={member.name}
-                className="w-full h-full object-cover"
-              />
-            </div>
-            {member.name}
-          </button>
-        ))}
+  <button 
+    key={member.id}
+    className={`text-xs px-2 py-1 rounded-full flex items-center ${selectedMember === member.id ? 'bg-black text-white' : 'bg-gray-100'}`}
+    onClick={() => onMemberChange(member.id)}
+  >
+    <UserAvatar 
+      user={member} 
+      size={16} 
+      className="mr-1" 
+    />
+    {member.name}
+  </button>
+))}
+
+{/* Children */}
+{familyMembers.filter(m => m.role === 'child').map(member => (
+  <button 
+    key={member.id}
+    className={`text-xs px-2 py-1 rounded-full flex items-center ${selectedMember === member.id ? 'bg-black text-white' : 'bg-gray-100'}`}
+    onClick={() => onMemberChange(member.id)}
+  >
+    <UserAvatar 
+      user={member} 
+      size={16} 
+      className="mr-1" 
+    />
+    {member.name}
+  </button>
+))}
       </div>
     </div>
   );
