@@ -15,11 +15,12 @@ import { db } from '../../../services/firebase';
 import { 
   doc, setDoc, getDoc, serverTimestamp, 
   updateDoc, collection, query, where, getDocs,
-  arrayUnion, Timestamp, addDoc, deleteDoc 
+  arrayUnion, Timestamp, addDoc, deleteDoc, onSnapshot 
 } from 'firebase/firestore';
 import CalendarService from '../../../services/CalendarService';
 import RelationshipCalendarIntegration from '../../../services/RelationshipCalendarIntegration';
 import EnhancedEventManager from '../../calendar/EnhancedEventManager';
+
 
 // Lazy load heavy components to improve initial load performance
 const DailyCheckInTool = lazy(() => import('../DailyCheckInTool'));
@@ -58,7 +59,7 @@ const SharedTodoList = ({ familyId, familyMembers }) => {
   const [editingTodoCategory, setEditingTodoCategory] = useState('');
   const { currentUser } = useAuth();
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-const [todoToDelete, setTodoToDelete] = useState(null);
+  const [todoToDelete, setTodoToDelete] = useState(null);
   
   const inputRef = useRef(null);
   
@@ -71,45 +72,44 @@ const [todoToDelete, setTodoToDelete] = useState(null);
     { id: 'other', name: 'Other', color: 'bg-gray-100 text-gray-800' }
   ];
   
-  // Load todos from Firestore
+  // Load todos from Firestore with real-time updates
   useEffect(() => {
-    const loadTodos = async () => {
-      if (!familyId) return;
-      
-      setLoading(true);
-      try {
-        const todosRef = collection(db, "relationshipTodos");
-        const q = query(todosRef, where("familyId", "==", familyId));
-        const querySnapshot = await getDocs(q);
-        
-        const loadedTodos = [];
-        querySnapshot.forEach((doc) => {
-          loadedTodos.push({
-            id: doc.id,
-            ...doc.data()
-          });
-        });
-        
-        // Sort by position first, then by most recently created
-        loadedTodos.sort((a, b) => {
-          if (a.position !== undefined && b.position !== undefined) {
-            return a.position - b.position;
-          }
-          // Fall back to creation time if position not available
-          return new Date(b.createdAt?.toDate()) - new Date(a.createdAt?.toDate());
-        });
-        
-        setTodos(loadedTodos);
-      } catch (error) {
-        console.error("Error loading todos:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (!familyId) return;
     
-    loadTodos();
-  }, [familyId]);
-  
+    setLoading(true);
+    
+    // Create a real-time listener for todos
+    const todosRef = collection(db, "relationshipTodos");
+    const q = query(todosRef, where("familyId", "==", familyId));
+    
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const loadedTodos = [];
+      querySnapshot.forEach((doc) => {
+        loadedTodos.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      
+      // Sort by position first, then by most recently created
+      loadedTodos.sort((a, b) => {
+        if (a.position !== undefined && b.position !== undefined) {
+          return a.position - b.position;
+        }
+        // Fall back to creation time if position not available
+        return new Date(b.createdAt?.toDate?.() || 0) - new Date(a.createdAt?.toDate?.() || 0);
+      });
+      
+      setTodos(loadedTodos);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error loading todos:", error);
+      setLoading(false);
+    });
+    
+    // Clean up listener when component unmounts
+    return () => unsubscribe();
+  }, [familyId]);  
   // Add new todo
   const addTodo = async () => {
     if (!newTodoText.trim() || !familyId) return;
@@ -806,7 +806,7 @@ const confirmDeleteTodo = async () => {
 /**
  * Enhanced component to track and manage relationship cycles
  */
-const CycleManager = ({ cycle, cycleData, onStartQuestionnaire, onStartMeeting }) => {
+const CycleManager = ({ cycle, cycleData, onStartQuestionnaire, onStartMeeting, setExpandedSections }) => {
   const [cycleProgress, setCycleProgress] = useState({
     questionnaire: false,
     meeting: false,
@@ -938,16 +938,21 @@ const CycleManager = ({ cycle, cycleData, onStartQuestionnaire, onStartMeeting }
           </button>
           
           {cycleProgress.results && (
-            <button 
-              className="px-4 py-2.5 bg-gradient-to-r from-green-400 to-green-500 text-white rounded-lg font-medium font-roboto flex items-center shadow-md hover:shadow-lg transition-all duration-300"
-              onClick={() => {
-                document.getElementById('relationship-charts')?.scrollIntoView({ behavior: 'smooth' });
-              }}
-            >
-              <Target size={16} className="mr-2" />
-              View Results
-            </button>
-          )}
+  <button 
+    className="px-4 py-2.5 bg-gradient-to-r from-green-400 to-green-500 text-white rounded-lg font-medium font-roboto flex items-center shadow-md hover:shadow-lg transition-all duration-300"
+    onClick={() => {
+      // First ensure charts section is expanded
+      setExpandedSections(prev => ({...prev, charts: true}));
+      // Use a small timeout to ensure DOM has updated before scrolling
+      setTimeout(() => {
+        document.getElementById('relationship-charts')?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }}
+  >
+    <Target size={16} className="mr-2" />
+    View Results
+  </button>
+)}
         </div>
       </div>
       
@@ -2057,11 +2062,12 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
 
         {/* Cycle Manager */}
         <CycleManager 
-          cycle={currentCycle}
-          cycleData={cycleData}
-          onStartQuestionnaire={handleStartQuestionnaire}
-          onStartMeeting={onOpenRelationshipMeeting}
-        />
+  cycle={currentCycle}
+  cycleData={cycleData}
+  onStartQuestionnaire={handleStartQuestionnaire}
+  onStartMeeting={onOpenRelationshipMeeting}
+  setExpandedSections={setExpandedSections}
+/>
       </div>
 
       {/* Relationship Health Questionnaire - Only show when needed */}
