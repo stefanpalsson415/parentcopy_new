@@ -914,10 +914,18 @@ const handleScheduleMeeting = async (event) => {
 };
 
 useEffect(() => {
-  if (!currentUser && !loading) {
+  // Only show auth error if we're definitely not loading AND there's no user
+  if (!loading && !currentUser && familyId) {
+    console.log("Auth check - no currentUser but familyId exists:", familyId);
+    // Instead of showing error immediately, try to get user from context
+    if (familyMembers && familyMembers.length > 0 && familyMembers.some(m => m.role === 'parent')) {
+      console.log("Found family members, proceeding without currentUser");
+      // We have family data, so we can continue even without currentUser
+      return;
+    }
     setError("Authentication required. Please sign in to continue.");
   }
-}, [currentUser, loading]);
+}, [currentUser, loading, familyId, familyMembers]);
 
 
 
