@@ -1,30 +1,35 @@
 // src/components/dashboard/tabs/RelationshipTab.jsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { 
   Users, Heart, Calendar, ChevronDown, ChevronUp, MessageCircle, 
   Brain, Info, CheckCircle, Lightbulb, Target, AlertCircle, 
-  Bell, Award, X, RefreshCw, Clock, ArrowRight, Shield, Save, Plus, Star, Link
+  Bell, Award, X, RefreshCw, Clock, ArrowRight, Shield, Save, Plus, Star, Link,
+  Trash2, Edit, CheckSquare, Square, DragHandleDots2, Tag, MoreHorizontal, Calendar as CalendarIcon
 } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useSurvey } from '../../../contexts/SurveyContext';
-import DailyCheckInTool from '../DailyCheckInTool';
-import GratitudeTracker from '../GratitudeTracker';
-import DateNightPlanner from '../DateNightPlanner';
-import SelfCarePlanner from '../SelfCarePlanner';
-import CoupleRelationshipChart from '../CoupleRelationshipChart';
-import RelationshipProgressChart from '../RelationshipProgressChart';
-import AIRelationshipInsights from '../AIRelationshipInsights';
-import EnhancedRelationshipCycleHistory from '../../relationship/EnhancedRelationshipCycleHistory';
+import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import confetti from 'canvas-confetti';
 import { db } from '../../../services/firebase';
 import { 
   doc, setDoc, getDoc, serverTimestamp, 
   updateDoc, collection, query, where, getDocs,
-  arrayUnion, Timestamp 
+  arrayUnion, Timestamp, addDoc, deleteDoc 
 } from 'firebase/firestore';
 import CalendarService from '../../../services/CalendarService';
-import AllieAIService from '../../../services/AllieAIService';
 import RelationshipCalendarIntegration from '../../../services/RelationshipCalendarIntegration';
+import EnhancedEventManager from '../../calendar/EnhancedEventManager';
+
+// Lazy load heavy components to improve initial load performance
+const DailyCheckInTool = lazy(() => import('../DailyCheckInTool'));
+const GratitudeTracker = lazy(() => import('../GratitudeTracker'));
+const DateNightPlanner = lazy(() => import('../DateNightPlanner'));
+const SelfCarePlanner = lazy(() => import('../SelfCarePlanner'));
+const CoupleRelationshipChart = lazy(() => import('../CoupleRelationshipChart'));
+const RelationshipProgressChart = lazy(() => import('../RelationshipProgressChart'));
+const AIRelationshipInsights = lazy(() => import('../AIRelationshipInsights'));
+const EnhancedRelationshipCycleHistory = lazy(() => import('../../relationship/EnhancedRelationshipCycleHistory'));
 
 // Helper to format date consistently throughout the component
 const formatDate = (dateString) => {
@@ -35,6 +40,720 @@ const formatDate = (dateString) => {
     month: 'long', 
     day: 'numeric'
   });
+};
+
+/**
+ * Shared Todo List Component for couples
+ */
+const SharedTodoList = ({ familyId, familyMembers }) => {
+  const [todos, setTodos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [newTodoText, setNewTodoText] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [editingTodo, setEditingTodo] = useState(null);
+  const [showAddCalendar, setShowAddCalendar] = useState(false);
+  const [selectedTodoForCalendar, setSelectedTodoForCalendar] = useState(null);
+  const [editingTodoText, setEditingTodoText] = useState('');
+  const [editingTodoCategory, setEditingTodoCategory] = useState('');
+  const { currentUser } = useAuth();
+  
+  const inputRef = useRef(null);
+  
+  const categories = [
+    { id: 'household', name: 'Household', color: 'bg-blue-100 text-blue-800' },
+    { id: 'relationship', name: 'Relationship', color: 'bg-pink-100 text-pink-800' },
+    { id: 'parenting', name: 'Parenting', color: 'bg-purple-100 text-purple-800' },
+    { id: 'errands', name: 'Errands', color: 'bg-green-100 text-green-800' },
+    { id: 'work', name: 'Work', color: 'bg-amber-100 text-amber-800' },
+    { id: 'other', name: 'Other', color: 'bg-gray-100 text-gray-800' }
+  ];
+  
+  // Load todos from Firestore
+  useEffect(() => {
+    const loadTodos = async () => {
+      if (!familyId) return;
+      
+      setLoading(true);
+      try {
+        const todosRef = collection(db, "relationshipTodos");
+        const q = query(todosRef, where("familyId", "==", familyId));
+        const querySnapshot = await getDocs(q);
+        
+        const loadedTodos = [];
+        querySnapshot.forEach((doc) => {
+          loadedTodos.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        });
+        
+        // Sort by position first, then by most recently created
+        loadedTodos.sort((a, b) => {
+          if (a.position !== undefined && b.position !== undefined) {
+            return a.position - b.position;
+          }
+          // Fall back to creation time if position not available
+          return new Date(b.createdAt?.toDate()) - new Date(a.createdAt?.toDate());
+        });
+        
+        setTodos(loadedTodos);
+      } catch (error) {
+        console.error("Error loading todos:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadTodos();
+  }, [familyId]);
+  
+  // Add new todo
+  const addTodo = async () => {
+    if (!newTodoText.trim() || !familyId) return;
+    
+    try {
+      const newTodo = {
+        text: newTodoText.trim(),
+        completed: false,
+        familyId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: currentUser.uid,
+        assignedTo: null, // Not assigned to any parent initially
+        category: 'other', // Default category
+        position: todos.length, // Add to the end of the list
+        notes: '',
+        dueDate: null
+      };
+      
+      // Add to Firestore
+      const docRef = await addDoc(collection(db, "relationshipTodos"), newTodo);
+      
+      // Update state with the new todo
+      setTodos(prev => [...prev, { 
+        id: docRef.id,
+        ...newTodo,
+        createdAt: new Date() // Local version needs a JS date object
+      }]);
+      
+      // Clear input
+      setNewTodoText('');
+      
+    } catch (error) {
+      console.error("Error adding todo:", error);
+    }
+  };
+  
+  // Toggle todo completion
+  const toggleTodo = async (todoId) => {
+    try {
+      const todoIndex = todos.findIndex(todo => todo.id === todoId);
+      if (todoIndex === -1) return;
+      
+      const updatedTodo = {...todos[todoIndex], completed: !todos[todoIndex].completed};
+      
+      // Update Firestore
+      const todoRef = doc(db, "relationshipTodos", todoId);
+      await updateDoc(todoRef, {
+        completed: updatedTodo.completed,
+        updatedAt: serverTimestamp()
+      });
+      
+      // Update state
+      const newTodos = [...todos];
+      newTodos[todoIndex] = updatedTodo;
+      setTodos(newTodos);
+      
+      // Trigger confetti animation if completed
+      if (updatedTodo.completed) {
+        const todoElement = document.getElementById(`todo-${todoId}`);
+        if (todoElement) {
+          const rect = todoElement.getBoundingClientRect();
+          const x = rect.left + rect.width / 2;
+          const y = rect.top + rect.height / 2;
+          
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { 
+              x: x / window.innerWidth, 
+              y: y / window.innerHeight 
+            },
+            colors: ['#4ade80', '#3b82f6', '#8b5cf6'],
+            zIndex: 9999
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error toggling todo:", error);
+    }
+  };
+  
+  // Start editing a todo
+  const startEditTodo = (todo) => {
+    setEditingTodo(todo.id);
+    setEditingTodoText(todo.text);
+    setEditingTodoCategory(todo.category);
+    
+    // Focus the input after a short delay to ensure it's rendered
+    setTimeout(() => {
+      const editInput = document.getElementById(`edit-todo-${todo.id}`);
+      if (editInput) editInput.focus();
+    }, 50);
+  };
+  
+  // Cancel editing
+  const cancelEdit = () => {
+    setEditingTodo(null);
+    setEditingTodoText('');
+    setEditingTodoCategory('');
+  };
+  
+  // Save edited todo
+  const saveEditedTodo = async (todoId) => {
+    if (!editingTodoText.trim()) return cancelEdit();
+    
+    try {
+      const todoIndex = todos.findIndex(todo => todo.id === todoId);
+      if (todoIndex === -1) return;
+      
+      const updatedTodo = {
+        ...todos[todoIndex],
+        text: editingTodoText.trim(),
+        category: editingTodoCategory || 'other',
+        updatedAt: new Date()
+      };
+      
+      // Update Firestore
+      const todoRef = doc(db, "relationshipTodos", todoId);
+      await updateDoc(todoRef, {
+        text: updatedTodo.text,
+        category: updatedTodo.category,
+        updatedAt: serverTimestamp()
+      });
+      
+      // Update state
+      const newTodos = [...todos];
+      newTodos[todoIndex] = updatedTodo;
+      setTodos(newTodos);
+      
+      // Reset editing state
+      cancelEdit();
+      
+    } catch (error) {
+      console.error("Error updating todo:", error);
+    }
+  };
+  
+  // Delete todo
+  const deleteTodo = async (todoId) => {
+    if (!confirm("Are you sure you want to delete this task?")) return;
+    
+    try {
+      // Delete from Firestore
+      await deleteDoc(doc(db, "relationshipTodos", todoId));
+      
+      // Update state
+      setTodos(prev => prev.filter(todo => todo.id !== todoId));
+    } catch (error) {
+      console.error("Error deleting todo:", error);
+    }
+  };
+  
+  // Reassign todo to a different parent
+  const reassignTodo = async (todoId, parentId) => {
+    try {
+      const todoIndex = todos.findIndex(todo => todo.id === todoId);
+      if (todoIndex === -1) return;
+      
+      // Find parent name
+      const parent = familyMembers.find(m => m.id === parentId);
+      
+      const updatedTodo = {
+        ...todos[todoIndex],
+        assignedTo: parentId,
+        assignedToName: parent?.name || 'Unknown'
+      };
+      
+      // Update Firestore
+      const todoRef = doc(db, "relationshipTodos", todoId);
+      await updateDoc(todoRef, {
+        assignedTo: updatedTodo.assignedTo,
+        assignedToName: updatedTodo.assignedToName,
+        updatedAt: serverTimestamp()
+      });
+      
+      // Update state
+      const newTodos = [...todos];
+      newTodos[todoIndex] = updatedTodo;
+      setTodos(newTodos);
+      
+    } catch (error) {
+      console.error("Error reassigning todo:", error);
+    }
+  };
+  
+  // Add a due date via calendar integration
+  const openCalendarForTodo = (todo) => {
+    setSelectedTodoForCalendar(todo);
+    setShowAddCalendar(true);
+  };
+  
+  // Handle todo drag and drop
+  const handleDragEnd = async (result) => {
+    // Drop outside a droppable area
+    if (!result.destination) return;
+    
+    const sourceIndex = result.source.index;
+    const destinationIndex = result.destination.index;
+    
+    // No change
+    if (sourceIndex === destinationIndex) return;
+    
+    try {
+      // Reorder the todos
+      const filteredTodos = filterTodos();
+      const draggedTodo = filteredTodos[sourceIndex];
+      
+      // Create new array with the moved todo
+      const newFilteredTodos = [...filteredTodos];
+      newFilteredTodos.splice(sourceIndex, 1);
+      newFilteredTodos.splice(destinationIndex, 0, draggedTodo);
+      
+      // Update the position of all todos in the filtered view
+      const updatedAllTodos = [...todos];
+      
+      // Update positions in the full list based on the new filtered order
+      filteredTodos.forEach((todo, oldIndex) => {
+        const newIndex = newFilteredTodos.findIndex(t => t.id === todo.id);
+        if (oldIndex !== newIndex) {
+          const fullListIndex = updatedAllTodos.findIndex(t => t.id === todo.id);
+          if (fullListIndex !== -1) {
+            updatedAllTodos[fullListIndex] = {
+              ...updatedAllTodos[fullListIndex],
+              position: newIndex
+            };
+          }
+        }
+      });
+      
+      // Update state immediately for better UX
+      setTodos(updatedAllTodos);
+      
+      // Batch update positions in Firestore
+      for (const todo of updatedAllTodos) {
+        if (todo.id === draggedTodo.id) {
+          const todoRef = doc(db, "relationshipTodos", todo.id);
+          await updateDoc(todoRef, { 
+            position: todo.position,
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+      
+    } catch (error) {
+      console.error("Error reordering todos:", error);
+    }
+  };
+  
+  // Handle successful calendar event addition
+  const handleCalendarEventAdded = (eventResult) => {
+    if (!eventResult || !eventResult.success || !selectedTodoForCalendar) return;
+    
+    // Update the todo with the due date and event ID
+    updateTodoDueDate(selectedTodoForCalendar.id, eventResult);
+    
+    // Reset state
+    setShowAddCalendar(false);
+    setSelectedTodoForCalendar(null);
+  };
+  
+  // Update todo with due date info
+  const updateTodoDueDate = async (todoId, eventResult) => {
+    try {
+      const todoIndex = todos.findIndex(todo => todo.id === todoId);
+      if (todoIndex === -1) return;
+      
+      const updatedTodo = {
+        ...todos[todoIndex],
+        dueDate: new Date().toISOString(),
+        eventId: eventResult.eventId,
+        universalId: eventResult.universalId || eventResult.eventId
+      };
+      
+      // Update Firestore
+      const todoRef = doc(db, "relationshipTodos", todoId);
+      await updateDoc(todoRef, {
+        dueDate: updatedTodo.dueDate,
+        eventId: updatedTodo.eventId,
+        universalId: updatedTodo.universalId,
+        updatedAt: serverTimestamp()
+      });
+      
+      // Update state
+      const newTodos = [...todos];
+      newTodos[todoIndex] = updatedTodo;
+      setTodos(newTodos);
+      
+    } catch (error) {
+      console.error("Error updating todo due date:", error);
+    }
+  };
+  
+  // Filter todos based on current filters
+  const filterTodos = () => {
+    return todos.filter(todo => {
+      // Filter by completion status
+      if (!showCompleted && todo.completed) return false;
+      
+      // Filter by category
+      if (categoryFilter !== 'all' && todo.category !== categoryFilter) return false;
+      
+      return true;
+    });
+  };
+  
+  // Get category display info
+  const getCategoryInfo = (categoryId) => {
+    const category = categories.find(c => c.id === categoryId) || categories.find(c => c.id === 'other');
+    return category;
+  };
+  
+  // Handle keypress in new todo input
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      addTodo();
+    }
+  };
+  
+  // Get parent name
+  const getParentName = (parentId) => {
+    const parent = familyMembers.find(m => m.id === parentId);
+    return parent?.name || 'Unassigned';
+  };
+  
+  // Filtered todos
+  const filteredTodos = filterTodos();
+  
+  return (
+    <div className="bg-white rounded-lg shadow p-6 mt-6">
+      <h3 className="text-lg font-bold flex items-center mb-4 font-roboto">
+        <CheckSquare size={20} className="mr-2 text-blue-600" />
+        Shared To-Do List
+      </h3>
+      
+      {/* Quick Add Task */}
+      <div className="flex items-center mb-4">
+        <input
+          ref={inputRef}
+          type="text"
+          value={newTodoText}
+          onChange={(e) => setNewTodoText(e.target.value)}
+          onKeyPress={handleKeyPress}
+          placeholder="Add a new task..."
+          className="flex-1 border rounded-l-md p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-roboto"
+        />
+        <button
+          onClick={addTodo}
+          className="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700 transition-colors font-roboto flex items-center"
+        >
+          <Plus size={16} className="mr-1" />
+          Add
+        </button>
+      </div>
+      
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <span className="text-sm text-gray-600 mr-1 font-roboto">Filter:</span>
+        
+        <button
+          onClick={() => setCategoryFilter('all')}
+          className={`text-xs px-3 py-1 rounded-full transition-colors font-roboto ${
+            categoryFilter === 'all' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'
+          }`}
+        >
+          All
+        </button>
+        
+        {categories.map(category => (
+          <button
+            key={category.id}
+            onClick={() => setCategoryFilter(category.id)}
+            className={`text-xs px-3 py-1 rounded-full transition-colors font-roboto ${
+              categoryFilter === category.id ? category.color : 'bg-gray-100 hover:bg-gray-200'
+            }`}
+          >
+            {category.name}
+          </button>
+        ))}
+        
+        <div className="ml-auto flex items-center">
+          <input
+            type="checkbox"
+            id="show-completed"
+            checked={showCompleted}
+            onChange={() => setShowCompleted(!showCompleted)}
+            className="mr-2"
+          />
+          <label htmlFor="show-completed" className="text-sm font-roboto">
+            Show completed
+          </label>
+        </div>
+      </div>
+      
+      {/* Todo List with Drag and Drop */}
+      {loading ? (
+        <div className="py-8 text-center">
+          <div className="w-8 h-8 border-2 border-t-transparent border-blue-500 rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-gray-500 font-roboto">Loading tasks...</p>
+        </div>
+      ) : filteredTodos.length === 0 ? (
+        <div className="py-8 text-center border-2 border-dashed rounded-lg">
+          <p className="text-gray-500 font-roboto">No tasks found</p>
+          <p className="text-sm text-gray-400 font-roboto mt-1">
+            {!showCompleted && todos.some(t => t.completed) ? 
+              'There are completed tasks. Check "Show completed" to view them.' : 
+              'Add your first task using the input above!'}
+          </p>
+        </div>
+      ) : (
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <Droppable droppableId="todos-list">
+            {(provided) => (
+              <div
+                {...provided.droppableProps}
+                ref={provided.innerRef}
+                className="space-y-2"
+              >
+                {filteredTodos.map((todo, index) => (
+                  <Draggable key={todo.id} draggableId={todo.id} index={index}>
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        className={`border rounded-lg p-3 ${
+                          todo.completed ? 'bg-gray-50' : 'bg-white'
+                        } ${
+                          snapshot.isDragging ? 'shadow-lg' : ''
+                        }`}
+                        id={`todo-${todo.id}`}
+                      >
+                        <div className="flex items-start gap-2">
+                          {/* Drag Handle */}
+                          <div
+                            {...provided.dragHandleProps}
+                            className="cursor-move flex-shrink-0 text-gray-400 p-1 self-center"
+                          >
+                            <DragHandleDots2 size={16} />
+                          </div>
+                          
+                          {/* Checkbox */}
+                          <button
+                            onClick={() => toggleTodo(todo.id)}
+                            className="flex-shrink-0 mt-0.5"
+                          >
+                            {todo.completed ? (
+                              <CheckSquare size={18} className="text-blue-500" />
+                            ) : (
+                              <Square size={18} className="text-gray-400" />
+                            )}
+                          </button>
+                          
+                          {/* Todo Content */}
+                          <div className="flex-1 min-w-0">
+                            {editingTodo === todo.id ? (
+                              <div className="space-y-2">
+                                <input
+                                  id={`edit-todo-${todo.id}`}
+                                  type="text"
+                                  value={editingTodoText}
+                                  onChange={(e) => setEditingTodoText(e.target.value)}
+                                  className="w-full border rounded p-1 text-sm"
+                                  onKeyPress={(e) => {
+                                    if (e.key === 'Enter') saveEditedTodo(todo.id);
+                                  }}
+                                />
+                                
+                                <select
+                                  value={editingTodoCategory}
+                                  onChange={(e) => setEditingTodoCategory(e.target.value)}
+                                  className="w-full border rounded p-1 text-sm"
+                                >
+                                  {categories.map(category => (
+                                    <option key={category.id} value={category.id}>
+                                      {category.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={cancelEdit}
+                                    className="px-2 py-1 text-xs border rounded"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={() => saveEditedTodo(todo.id)}
+                                    className="px-2 py-1 text-xs bg-blue-500 text-white rounded"
+                                  >
+                                    Save
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex items-center gap-2">
+                                  <p className={`text-sm break-words font-roboto ${
+                                    todo.completed ? 'text-gray-400 line-through' : ''
+                                  }`}>
+                                    {todo.text}
+                                  </p>
+                                </div>
+                                
+                                <div className="flex items-center flex-wrap gap-2 mt-2">
+                                  {/* Category Tag */}
+                                  <span className={`text-xs px-2 py-0.5 rounded-full flex items-center ${
+                                    getCategoryInfo(todo.category).color
+                                  }`}>
+                                    <Tag size={10} className="mr-1" />
+                                    {getCategoryInfo(todo.category).name}
+                                  </span>
+                                  
+                                  {/* Assigned To */}
+                                  {todo.assignedTo && (
+                                    <span className="text-xs px-2 py-0.5 bg-gray-100 rounded-full">
+                                      Assigned to: {getParentName(todo.assignedTo)}
+                                    </span>
+                                  )}
+                                  
+                                  {/* Due Date */}
+                                  {todo.dueDate && (
+                                    <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full flex items-center">
+                                      <CalendarIcon size={10} className="mr-1" />
+                                      Due: {new Date(todo.dueDate).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          
+                          {/* Actions - Only show when not editing */}
+                          {editingTodo !== todo.id && (
+                            <div className="flex items-center space-x-1">
+                              {/* Calendar Button */}
+                              <button
+                                onClick={() => openCalendarForTodo(todo)}
+                                className="p-1 hover:bg-gray-100 rounded text-gray-500"
+                                title="Add to calendar"
+                              >
+                                <CalendarIcon size={16} />
+                              </button>
+                              
+                              {/* Assign Menu */}
+                              <div className="relative group">
+                                <button
+                                  className="p-1 hover:bg-gray-100 rounded text-gray-500"
+                                  title="Assign task"
+                                >
+                                  <Users size={16} />
+                                </button>
+                                
+                                {/* Dropdown Menu */}
+                                <div className="absolute right-0 mt-1 hidden group-hover:block bg-white shadow-lg rounded-md border py-1 z-10 w-32">
+                                  {familyMembers
+                                    .filter(m => m.role === 'parent')
+                                    .map(parent => (
+                                      <button
+                                        key={parent.id}
+                                        onClick={() => reassignTodo(todo.id, parent.id)}
+                                        className={`w-full text-left px-3 py-1 text-sm hover:bg-gray-100 ${
+                                          todo.assignedTo === parent.id ? 'font-medium' : ''
+                                        }`}
+                                      >
+                                        {parent.name}
+                                      </button>
+                                    ))}
+                                  <button
+                                    onClick={() => reassignTodo(todo.id, null)}
+                                    className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100 border-t"
+                                  >
+                                    Unassign
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              {/* Edit Button */}
+                              <button
+                                onClick={() => startEditTodo(todo)}
+                                className="p-1 hover:bg-gray-100 rounded text-gray-500"
+                                title="Edit task"
+                              >
+                                <Edit size={16} />
+                              </button>
+                              
+                              {/* Delete Button */}
+                              <button
+                                onClick={() => deleteTodo(todo.id)}
+                                className="p-1 hover:bg-gray-100 rounded text-gray-500"
+                                title="Delete task"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
+        </DragDropContext>
+      )}
+      
+      {/* Calendar Modal */}
+      {showAddCalendar && selectedTodoForCalendar && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-4 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium">Add Task to Calendar</h3>
+              <button
+                onClick={() => {
+                  setShowAddCalendar(false);
+                  setSelectedTodoForCalendar(null);
+                }}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            <EnhancedEventManager
+              initialEvent={{
+                title: selectedTodoForCalendar.text,
+                description: `Todo: ${selectedTodoForCalendar.text}`,
+                category: 'task',
+                eventType: 'task',
+              }}
+              selectedDate={new Date()}
+              onSave={handleCalendarEventAdded}
+              onCancel={() => {
+                setShowAddCalendar(false);
+                setSelectedTodoForCalendar(null);
+              }}
+              isCompact={true}
+              mode="create"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 /**
@@ -654,7 +1373,8 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
     tools: true,
     charts: false,
     history: true,
-    resources: false
+    resources: false,
+    todos: true // New section for todos, expanded by default
   });
   
   const [relationshipQuestions, setRelationshipQuestions] = useState([]);
@@ -672,24 +1392,50 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
   // Refs for scrolling
   const toolsRef = useRef(null);
   const chartsRef = useRef(null);
+  const todosRef = useRef(null);
   
-  // Load relationship data
+  // Preload key data components to improve first-click performance
+  const preloadComponents = useCallback(async () => {
+    try {
+      // Preload components likely to be needed
+      const promises = [
+        import('../AIRelationshipInsights'),
+        import('../../relationship/EnhancedRelationshipCycleHistory')
+      ];
+      
+      // Start component preloading but don't wait for completion
+      Promise.all(promises).catch(e => console.warn("Component preloading incomplete:", e));
+    } catch (error) {
+      console.warn("Error preloading components:", error);
+    }
+  }, []);
+  
+  // Load relationship data with performance optimizations
   useEffect(() => {
     const loadRelationshipData = async () => {
       setIsLoadingData(true);
+      
       try {
-        if (!familyId) return;
+        if (!familyId) {
+          setIsLoadingData(false);
+          return;
+        }
         
-        // Load relationship strategies
-        const strategies = await getRelationshipStrategies();
+        // Start preloading components
+        preloadComponents();
         
-        // Get cycle check-in data
+        // Use Promise.all to parallelize data fetching
+        const [strategies, questionsByCategory] = await Promise.all([
+          getRelationshipStrategies(),
+          getQuestionsByCategory('Relationship Health')
+        ]);
+        
+        // Set relationship questions
+        setRelationshipQuestions(questionsByCategory || []);
+        
+        // Get couple check-in data
         const coupleData = getCoupleCheckInData(currentCycle);
         setCycleData(coupleData);
-        
-        // Load relationship questions
-        const questions = getQuestionsByCategory('Relationship Health') || [];
-        setRelationshipQuestions(questions);
         
         // Check if couple needs to complete questionnaire
         const needsToComplete = !coupleData || !coupleData.questionnaireCompleted;
@@ -699,22 +1445,11 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
         // Load previous cycle history
         await loadCycleHistory();
         
-        // Load AI insights
-        try {
-          const aiInsights = await AllieAIService.generateRelationshipInsights(
-            familyId,
-            currentCycle,
-            getRelationshipTrendData(),
-            strategies || [],
-            coupleData || {}
-          );
-          
-          if (aiInsights && aiInsights.length > 0) {
-            setInsights(aiInsights);
-          }
-        } catch (insightError) {
-          console.error("Error loading relationship insights:", insightError);
-        }
+        // Load AI insights without blocking initial UI rendering
+        setTimeout(() => {
+          loadAIInsights(familyId, currentCycle, strategies, coupleData)
+            .catch(error => console.error("Error loading relationship insights:", error));
+        }, 100);
         
         setIsLoadingData(false);
       } catch (error) {
@@ -725,7 +1460,33 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
     };
     
     loadRelationshipData();
-  }, [familyId, currentCycle, getCoupleCheckInData, getRelationshipStrategies, getRelationshipTrendData, getQuestionsByCategory]);
+  }, [familyId, currentCycle, getCoupleCheckInData, getRelationshipStrategies, getRelationshipTrendData, getQuestionsByCategory, preloadComponents]);
+  
+  // Separate function to load AI insights
+  const loadAIInsights = async (famId, cycle, strategies, checkInData) => {
+    try {
+      console.log("Loading AI insights...");
+      
+      // Dynamically import to avoid circular dependencies
+      const module = await import('../../../services/AllieAIService');
+      const AllieAIService = module.default;
+      
+      const aiInsights = await AllieAIService.generateRelationshipInsights(
+        famId,
+        cycle,
+        getRelationshipTrendData(),
+        strategies || [],
+        checkInData || {}
+      );
+      
+      if (aiInsights && aiInsights.length > 0) {
+        setInsights(aiInsights);
+      }
+    } catch (error) {
+      console.error("Error loading relationship insights:", error);
+      // Failure to load insights shouldn't block the whole tab
+    }
+  };
   
   // Load cycle history
   const loadCycleHistory = async () => {
@@ -790,13 +1551,6 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
       ...prev,
       [section]: !prev[section]
     }));
-  };
-  
-  // Handle relationship meeting
-  const handleOpenRelationshipMeeting = () => {
-    if (onOpenRelationshipMeeting) {
-      onOpenRelationshipMeeting();
-    }
   };
   
   // Start the questionnaire
@@ -914,49 +1668,6 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
       );
     } catch (error) {
       console.error("Error adding questionnaire to calendar:", error);
-    }
-  };
-  
-  // Add relationship meeting to calendar
-  const addMeetingToCalendar = async (meetingDate = null) => {
-    try {
-      if (!currentUser || !familyId) return;
-      
-      return await RelationshipCalendarIntegration.addRelationshipMeetingToCalendar(
-        currentUser.uid,
-        currentCycle,
-        meetingDate
-      );
-    } catch (error) {
-      console.error("Error adding meeting to calendar:", error);
-    }
-  };
-  
-  // Add date night to calendar
-  const addDateNightToCalendar = async (dateNightData) => {
-    try {
-      if (!currentUser || !familyId) return;
-      
-      return await RelationshipCalendarIntegration.addDateNightToCalendar(
-        currentUser.uid,
-        dateNightData
-      );
-    } catch (error) {
-      console.error("Error adding date night to calendar:", error);
-    }
-  };
-  
-  // Add self-care activity to calendar
-  const addSelfCareToCalendar = async (selfCareData) => {
-    try {
-      if (!currentUser || !familyId) return;
-      
-      return await RelationshipCalendarIntegration.addSelfCareToCalendar(
-        currentUser.uid,
-        selfCareData
-      );
-    } catch (error) {
-      console.error("Error adding self-care to calendar:", error);
     }
   };
   
@@ -1223,7 +1934,10 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
   if (isLoadingData) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin h-8 w-8 border-4 border-t-transparent border-black rounded-full"></div>
+        <div className="text-center">
+          <div className="animate-spin h-8 w-8 border-4 border-t-transparent border-black rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600 font-roboto">Loading relationship data...</p>
+        </div>
       </div>
     );
   }
@@ -1270,7 +1984,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
           cycle={currentCycle}
           cycleData={cycleData}
           onStartQuestionnaire={handleStartQuestionnaire}
-          onStartMeeting={handleOpenRelationshipMeeting}
+          onStartMeeting={onOpenRelationshipMeeting}
         />
       </div>
 
@@ -1283,6 +1997,24 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
           previousData={cycleData}
           onCancel={() => setShowQuestionnaire(false)}
         />
+      )}
+
+      {/* Shared To Do List Section */}
+      {renderSectionHeader(
+        "Shared To-Do List", 
+        "todos", 
+        "Manage tasks together with your partner",
+        "border-green-500", 
+        <CheckSquare size={20} className="mr-2 text-green-600" />
+      )}
+      
+      {expandedSections.todos && (
+        <div ref={todosRef}>
+          <SharedTodoList 
+            familyId={familyId}
+            familyMembers={familyMembers}
+          />
+        </div>
       )}
 
       {/* AI Insights Section */}
@@ -1300,7 +2032,7 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
               onClick={async () => {
                 try {
                   // Show loading message or spinner
-                  const aiInsights = await AllieAIService.generateRelationshipInsights(
+                  const aiInsights = await (await import('../../../services/AllieAIService')).default.generateRelationshipInsights(
                     familyId,
                     currentCycle,
                     getRelationshipTrendData(),
@@ -1322,10 +2054,16 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
             </button>
           </div>
           
-          <AIRelationshipInsights 
-            insights={insights}
-            onActionClick={showActionTemplate} 
-          />
+          <Suspense fallback={
+            <div className="p-6 flex justify-center">
+              <div className="w-6 h-6 border-2 border-t-transparent border-black rounded-full animate-spin"></div>
+            </div>
+          }>
+            <AIRelationshipInsights 
+              insights={insights}
+              onActionClick={showActionTemplate} 
+            />
+          </Suspense>
           
           {/* Template Modal */}
           {templateToShow && renderTemplate(templateToShow)}
@@ -1343,10 +2081,16 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
       {expandedSections.charts && (
         <div id="relationship-charts" ref={chartsRef} className="space-y-6">
           {hasEnoughDataForCharts ? (
-            <>
-              <CoupleRelationshipChart />
-              <RelationshipProgressChart />
-            </>
+            <Suspense fallback={
+              <div className="p-6 flex justify-center">
+                <div className="w-6 h-6 border-2 border-t-transparent border-black rounded-full animate-spin"></div>
+              </div>
+            }>
+              <>
+                <CoupleRelationshipChart />
+                <RelationshipProgressChart />
+              </>
+            </Suspense>
           ) : (
             <div className="bg-white rounded-lg shadow p-6 text-center">
               <Target size={48} className="mx-auto text-gray-400 mb-3" />
@@ -1392,39 +2136,65 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
       {expandedSections.tools && (
         <div id="relationship-tools" ref={toolsRef} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <DailyCheckInTool 
-              onAddToCalendar={event => RelationshipCalendarIntegration.addCheckInToCalendar(
-                currentUser?.uid, 
-                currentCycle,
-                event
-              )}
-            />
-            <GratitudeTracker 
-              onAddToCalendar={event => RelationshipCalendarIntegration.addSelfCareToCalendar(
-                currentUser?.uid,
-                {
-                  ...event,
-                  title: "Gratitude Practice",
-                  category: "self-care"
-                }
-              )}
-              enableTexting={true}
-            />
+            <Suspense fallback={
+              <div className="p-6 border rounded-lg flex justify-center">
+                <div className="w-6 h-6 border-2 border-t-transparent border-black rounded-full animate-spin"></div>
+              </div>
+            }>
+              <DailyCheckInTool 
+                onAddToCalendar={event => RelationshipCalendarIntegration.addCheckInToCalendar(
+                  currentUser?.uid, 
+                  currentCycle,
+                  event
+                )}
+              />
+            </Suspense>
+            
+            <Suspense fallback={
+              <div className="p-6 border rounded-lg flex justify-center">
+                <div className="w-6 h-6 border-2 border-t-transparent border-black rounded-full animate-spin"></div>
+              </div>
+            }>
+              <GratitudeTracker 
+                onAddToCalendar={event => RelationshipCalendarIntegration.addSelfCareToCalendar(
+                  currentUser?.uid,
+                  {
+                    ...event,
+                    title: "Gratitude Practice",
+                    category: "self-care"
+                  }
+                )}
+                enableTexting={true}
+              />
+            </Suspense>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <DateNightPlanner 
-              onAddToCalendar={dateNight => RelationshipCalendarIntegration.addDateNightToCalendar(
-                currentUser?.uid,
-                dateNight
-              )}
-            />
-            <SelfCarePlanner 
-              onAddToCalendar={activity => RelationshipCalendarIntegration.addSelfCareToCalendar(
-                currentUser?.uid,
-                activity
-              )}
-            />
+            <Suspense fallback={
+              <div className="p-6 border rounded-lg flex justify-center">
+                <div className="w-6 h-6 border-2 border-t-transparent border-black rounded-full animate-spin"></div>
+              </div>
+            }>
+              <DateNightPlanner 
+                onAddToCalendar={dateNight => RelationshipCalendarIntegration.addDateNightToCalendar(
+                  currentUser?.uid,
+                  dateNight
+                )}
+              />
+            </Suspense>
+            
+            <Suspense fallback={
+              <div className="p-6 border rounded-lg flex justify-center">
+                <div className="w-6 h-6 border-2 border-t-transparent border-black rounded-full animate-spin"></div>
+              </div>
+            }>
+              <SelfCarePlanner 
+                onAddToCalendar={activity => RelationshipCalendarIntegration.addSelfCareToCalendar(
+                  currentUser?.uid,
+                  activity
+                )}
+              />
+            </Suspense>
           </div>
         </div>
       )}
@@ -1438,10 +2208,16 @@ const RelationshipTab = ({ onOpenRelationshipMeeting }) => {
         <Calendar size={20} className="mr-2 text-gray-600" />
       )}
       {expandedSections.history && (
-        <EnhancedRelationshipCycleHistory 
-          onSelectCycle={handleSelectHistoryCycle} 
-          compact={false}
-        />
+        <Suspense fallback={
+          <div className="p-6 border rounded-lg flex justify-center">
+            <div className="w-6 h-6 border-2 border-t-transparent border-black rounded-full animate-spin"></div>
+          </div>
+        }>
+          <EnhancedRelationshipCycleHistory 
+            onSelectCycle={handleSelectHistoryCycle} 
+            compact={false}
+          />
+        </Suspense>
       )}
 
       {/* Research Section */}
