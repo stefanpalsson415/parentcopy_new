@@ -1037,8 +1037,7 @@ const ChildrenTrackingTab = () => {
       [`childrenData.${childId}.medicalAppointments`]: updatedData[childId].medicalAppointments
     });
     
-    // In ChildrenTrackingTab.jsx - replace the calendar event creation code (around line 2080-2130)
-// If the appointment has a future date, add it to the calendar
+    // If the appointment has a future date, add it to the calendar
 const appointmentDate = new Date(formData.date);
 if (appointmentDate > new Date() && !formData.completed) {
   try {
@@ -1087,7 +1086,26 @@ if (appointmentDate > new Date() && !formData.completed) {
     
     // Add to calendar using the standard addEvent method
     if (CalendarService) {
-      await CalendarService.addEvent(calendarEvent, currentUser?.uid);
+      const result = await CalendarService.addEvent(calendarEvent, currentUser?.uid);
+      
+      // If calendar event was created successfully, and we have an ID, store it with the appointment
+      if (result.success && (result.eventId || result.firestoreId)) {
+        const calendarId = result.eventId || result.firestoreId;
+        
+        // Find the appointment in the updated data and add the calendarId
+        const apptIndex = updatedData[childId].medicalAppointments.findIndex(
+          app => app.id === appointmentData.id
+        );
+        
+        if (apptIndex !== -1) {
+          updatedData[childId].medicalAppointments[apptIndex].calendarId = calendarId;
+          
+          // Update Firebase with the calendar reference
+          await updateDoc(docRef, {
+            [`childrenData.${childId}.medicalAppointments`]: updatedData[childId].medicalAppointments
+          });
+        }
+      }
     }
   } catch (calendarError) {
     console.error("Error adding to calendar:", calendarError);

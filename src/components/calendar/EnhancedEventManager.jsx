@@ -160,52 +160,125 @@ const searchAddress = async (query) => {
       let result;
       
       // Handle recurring events if applicable
-      if (event.isRecurring && event.recurrence.days.length > 0) {
-        // Create multiple events for each day of the week
-        const results = [];
-        
-        for (const day of event.recurrence.days) {
-          const dayEvent = { 
-            ...calendarEvent,
-            recurrence: {
-              ...event.recurrence,
-              currentDay: day
-            }
-          };
-          
-          if (mode === 'edit' && event.firestoreId) {
-            result = await CalendarService.updateEvent(event.firestoreId, dayEvent, currentUser.uid);
-          } else {
-            result = await CalendarService.addEvent(dayEvent, currentUser.uid);
-          }
-          results.push(result);
-        }
-        
-        // Show success animation
-        setSuccess(true);
-        setTimeout(() => {
-          setSuccess(false);
-          if (onSave) onSave(results);
-        }, 1500);
+
+// If this is an activity and for a child, also update the childrenData
+if (event.category === 'activity' && event.childId && mode === 'create' && result.success) {
+  try {
+    // Create the activity data structure
+    const activityData = {
+      id: result.firestoreId || result.eventId || `activity-${Date.now()}`,
+      title: event.title,
+      type: event.eventType || 'activity',
+      date: new Date(event.dateTime).toISOString(),
+      location: event.location || '',
+      duration: event.duration || 60,
+      days: event.isRecurring ? event.recurrence.days : [],
+      notes: event.description || event.extraDetails?.notes || '',
+      startTime: new Date(event.dateTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false}),
+      endTime: event.endDateTime ? new Date(event.endDateTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false}) : '',
+      calendarId: result.firestoreId || result.eventId,
+      isRecurring: event.isRecurring,
+      createdAt: new Date().toISOString()
+    };
+    
+    // Get a reference to the family document
+    const familyRef = doc(db, "families", familyId);
+    
+    // Get current child data
+    const familyDoc = await getDoc(familyRef);
+    if (familyDoc.exists()) {
+      const childrenData = familyDoc.data().childrenData || {};
+      const childData = childrenData[event.childId] || {};
+      
+      // Add or update activities array
+      const activities = childData.routines || [];
+      
+      // Check if activity already exists
+      const existingIndex = activities.findIndex(a => a.id === activityData.id);
+      
+      if (existingIndex !== -1) {
+        // Update existing activity
+        activities[existingIndex] = activityData;
       } else {
-        // Single event
-        if (mode === 'edit' && event.firestoreId) {
-          result = await CalendarService.updateEvent(event.firestoreId, calendarEvent, currentUser.uid);
-        } else {
-          result = await CalendarService.addEvent(calendarEvent, currentUser.uid);
-        }
-        
-        if (result.success) {
-          // Show success animation
-          setSuccess(true);
-          setTimeout(() => {
-            setSuccess(false);
-            if (onSave) onSave(result);
-          }, 1500);
-        } else {
-          setError(result.error || "Failed to process event");
-        }
+        // Add new activity
+        activities.push(activityData);
       }
+      
+      // Update the database
+      await updateDoc(familyRef, {
+        [`childrenData.${event.childId}.routines`]: activities
+      });
+      
+      console.log("Activity synchronized with child tracking data");
+    }
+  } catch (syncError) {
+    console.error("Error synchronizing activity:", syncError);
+    // Don't block the main success path
+  }
+}
+
+
+if (event.isRecurring && event.recurrence.days.length > 0) {
+  // Create multiple events for each day of the week
+  const results = [];
+  
+  for (const day of event.recurrence.days) {
+    // Calculate the next occurrence of this day
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayIndex = dayNames.indexOf(day);
+    if (dayIndex === -1) continue;
+    
+    const currentDay = new Date(event.dateTime).getDay(); // 0-6, Sunday-Saturday
+    let daysToAdd = (dayIndex - currentDay + 7) % 7;
+    if (daysToAdd === 0) daysToAdd = 7; // If same day, add a week
+    
+    // Create a new date for this day
+    const eventDate = new Date(event.dateTime);
+    eventDate.setDate(eventDate.getDate() + daysToAdd);
+    
+    // Create event for this specific day
+    const dayEvent = { 
+      ...calendarEvent,
+      title: `${calendarEvent.title} (${day})`,
+      start: {
+        dateTime: eventDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: new Date(eventDate.getTime() + event.duration * 60000 || 60 * 60000).toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      // Add a special flag to indicate this is part of a recurring series
+      isRecurringSeries: true,
+      recurrenceParent: event.isRecurring && event.firestoreId ? event.firestoreId : null,
+      recurrence: {
+        ...event.recurrence,
+        currentDay: day
+      }
+    };
+    
+    // Save to calendar
+    let dayResult;
+    if (mode === 'edit' && event.firestoreId && event.recurrence.currentDay === day) {
+      // Update existing event if this is the same day
+      dayResult = await CalendarService.updateEvent(event.firestoreId, dayEvent, currentUser.uid);
+    } else {
+      // Create new event
+      dayResult = await CalendarService.addEvent(dayEvent, currentUser.uid);
+    }
+    
+    results.push(dayResult);
+  }
+  
+  // Show success animation
+  setSuccess(true);
+  setTimeout(() => {
+    setSuccess(false);
+    if (onSave) onSave({success: true, recurringResults: results});
+  }, 1500);
+  setLoading(false);
+  return; // Stop execution since we've already handled saving
+}
       
       setLoading(false);
     } catch (error) {
@@ -247,21 +320,21 @@ const searchAddress = async (query) => {
   };
   
   return (
-<div className={`bg-white rounded-lg shadow-md ${isCompact ? 'p-3' : 'p-4'} max-w-2xl mx-auto font-roboto max-h-[calc(100vh-40px)] overflow-y-auto`}>
-<div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-medium flex items-center">
-          <Calendar size={20} className="mr-2" />
-          {mode === 'edit' ? 'Edit Event' : 'Add New Event'}
-        </h3>
-        {onCancel && (
-          <button 
-            onClick={handleCancel}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <X size={20} />
-          </button>
-        )}
-      </div>
+    <div className={`bg-white rounded-lg shadow-md ${isCompact ? 'p-3' : 'p-4'} max-w-2xl mx-auto font-roboto max-h-[90vh] overflow-y-auto`}>
+    <div className="flex justify-between items-center mb-4 sticky top-0 bg-white z-10 pb-2">
+            <h3 className="text-lg font-medium flex items-center">
+              <Calendar size={20} className="mr-2" />
+              {mode === 'edit' ? 'Edit Event' : 'Add New Event'}
+            </h3>
+            {onCancel && (
+              <button 
+                onClick={handleCancel}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={20} />
+              </button>
+            )}
+          </div>
       
       <div className="space-y-4">
         {/* Event Type */}
@@ -397,6 +470,33 @@ const searchAddress = async (query) => {
   <label className="block text-sm font-medium mb-1 text-gray-700">
     Duration
   </label>
+  <div className="grid grid-cols-4 gap-2">
+    {[30, 60, 90, 120].map(mins => (
+      <button
+        key={mins}
+        type="button"
+        onClick={() => {
+          // Update end time based on start time + duration
+          const startDate = new Date(event.dateTime);
+          const endDate = new Date(startDate);
+          endDate.setMinutes(startDate.getMinutes() + mins);
+          
+          setEvent(prev => ({ 
+            ...prev, 
+            duration: mins,
+            endDateTime: endDate.toISOString()
+          }));
+        }}
+        className={`py-2 px-3 text-sm rounded-md ${
+          event.duration === mins 
+            ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+            : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+        }`}
+      >
+        {mins >= 60 ? `${mins/60} ${mins === 60 ? 'hour' : 'hours'}` : `${mins} min`}
+      </button>
+    ))}
+  </div>
   <select
     value={event.duration || 30}
     onChange={(e) => {
@@ -413,7 +513,7 @@ const searchAddress = async (query) => {
         endDateTime: endDate.toISOString()
       }));
     }}
-    className="w-full border rounded-md p-2 text-sm"
+    className="w-full border rounded-md p-2 text-sm mt-2"
   >
     <option value="30">30 minutes</option>
     <option value="60">1 hour</option>
@@ -426,7 +526,6 @@ const searchAddress = async (query) => {
     <option value="480">8 hours (full day)</option>
   </select>
 </div>
-
         
         {/* Location */}
         <div>

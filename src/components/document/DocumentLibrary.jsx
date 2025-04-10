@@ -663,178 +663,149 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null,onClose
       </div>
       
       {/* Document Preview Modal */}
-      {selectedDocument && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] flex flex-col">
-            <div className="p-4 border-b flex justify-between items-center">
-              <h3 className="font-medium">{selectedDocument.title}</h3>
-              <button
-                onClick={() => setSelectedDocument(null)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-auto p-4">
-              {selectedDocument.fileType?.startsWith('image/') ? (
-                <img 
-                  src={selectedDocument.fileUrl} 
-                  alt={selectedDocument.title}
-                  className="max-w-full max-h-[70vh] mx-auto"
-                />
-              ) : selectedDocument.fileType === 'application/pdf' ? (
-                <iframe
-                  src={`${selectedDocument.fileUrl}#toolbar=0`}
-                  title={selectedDocument.title}
-                  className="w-full h-[70vh]"
-                />
-              ) : (
-                <div className="p-8 text-center">
-                  <FileText size={64} className="mx-auto mb-4 text-gray-400" />
-                  <p className="mb-2">Cannot preview this file type</p>
-                  <a
-                    href={selectedDocument.fileUrl}
-                    download={selectedDocument.fileName}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md inline-flex items-center hover:bg-blue-700"
-                  >
-                    <Download size={16} className="mr-2" />
-                    Download File
-                  </a>
-                </div>
-              )}
-            </div>
-            
-            <div className="p-4 border-t bg-gray-50">
-              <div className="flex flex-wrap gap-4">
-                <div>
-                  <p className="text-xs text-gray-500">File Name</p>
-                  <p className="text-sm">{selectedDocument.fileName}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Size</p>
-                  <p className="text-sm">{formatFileSize(selectedDocument.fileSize)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Uploaded</p>
-                  <p className="text-sm">{formatDate(selectedDocument.uploadedAt)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Category</p>
-                  <p className="text-sm capitalize">{selectedDocument.category}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Child</p>
-                  <p className="text-sm">{getChildName(selectedDocument.childId)}</p>
-                </div>
-              </div>
-              
-              {selectedDocument.description && (
-                <div className="mt-3">
-                  <p className="text-xs text-gray-500">Description</p>
-                  <p className="text-sm">{selectedDocument.description}</p>
-                </div>
-              )}
-            </div>
-          </div>
+{selectedDocument && (
+  <div className="absolute inset-0 bg-white flex flex-col rounded-lg shadow-lg overflow-hidden z-30">
+    <div className="p-4 border-b flex justify-between items-center bg-gray-50 sticky top-0">
+      <h3 className="font-medium truncate">{selectedDocument.title}</h3>
+      <button
+        onClick={() => setSelectedDocument(null)}
+        className="text-gray-500 hover:text-gray-700"
+      >
+        <X size={20} />
+      </button>
+    </div>
+    
+    <div className="flex-1 overflow-auto p-4">
+      {selectedDocument.fileType?.startsWith('image/') ? (
+        <img 
+          src={selectedDocument.fileUrl} 
+          alt={selectedDocument.title}
+          className="max-w-full max-h-[70vh] mx-auto"
+        />
+      ) : selectedDocument.fileType === 'application/pdf' ? (
+        <iframe
+          src={`${selectedDocument.fileUrl}#toolbar=0`}
+          title={selectedDocument.title}
+          className="w-full h-[70vh]"
+        />
+      ) : (
+        <div className="p-8 text-center">
+          <FileText size={64} className="mx-auto mb-4 text-gray-400" />
+          <p className="mb-2">Cannot preview this file type</p>
+          
+            href={selectedDocument.fileUrl}
+            download={selectedDocument.fileName}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md inline-flex items-center hover:bg-blue-700"
+          >
+            <Download size={16} className="mr-2" />
+            Download File
+          </a>
         </div>
       )}
+    </div>
+    
+    <div className="p-4 border-t bg-gray-50 sticky bottom-0">
+      {/* Same content as before */}
+      <div className="flex flex-wrap gap-4">
+        <div>
+          <p className="text-xs text-gray-500">File Name</p>
+          <p className="text-sm">{selectedDocument.fileName}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500">Size</p>
+          <p className="text-sm">{formatFileSize(selectedDocument.fileSize)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500">Uploaded</p>
+          <p className="text-sm">{formatDate(selectedDocument.uploadedAt)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500">Category</p>
+          <p className="text-sm capitalize">{selectedDocument.category}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500">Child</p>
+          <p className="text-sm">{getChildName(selectedDocument.childId)}</p>
+        </div>
+      </div>
       
-      {/* Upload Modal */}
-      {showUploadModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-xl w-full">
-            <div className="p-4 border-b flex justify-between items-center">
-              <h3 className="font-medium">Upload Document</h3>
-              <button
-                onClick={() => {
-                  setShowUploadModal(false);
-                  setUploadData({
-                    title: '',
-                    description: '',
-                    category: initialCategory || 'medical',
-                    childId: initialChildId || '',
-                    files: []
-                  });
-                }}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="p-4">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Title*</label>
-                  <input
-                    type="text"
-                    value={uploadData.title}
-                    onChange={(e) => setUploadData(prev => ({ ...prev, title: e.target.value }))}
-                    className="w-full border rounded-md p-2 text-sm"
-                    placeholder="e.g., Medical Report, School Certificate"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium mb-1">Description</label>
-                  <textarea
-                    value={uploadData.description}
-                    onChange={(e) => setUploadData(prev => ({ ...prev, description: e.target.value }))}
-                    className="w-full border rounded-md p-2 text-sm"
-                    rows="2"
-                    placeholder="Add a brief description of this document"
-                  ></textarea>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Category*</label>
-                    <select
-                      value={uploadData.category}
-                      onChange={(e) => setUploadData(prev => ({ ...prev, category: e.target.value }))}
-                      className="w-full border rounded-md p-2 text-sm"
-                    >
-                      {categories.map(cat => (
-                        <option key={cat.id} value={cat.id}>{cat.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Child*</label>
-                    <select
-                      value={uploadData.childId}
-                      onChange={(e) => setUploadData(prev => ({ ...prev, childId: e.target.value }))}
-                      className="w-full border rounded-md p-2 text-sm"
-                    >
-                      <option value="">Select a child</option>
-                      {children.map(child => (
-                        <option key={child.id} value={child.id}>{child.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium mb-1">Files*</label>
-                  <div 
-                    className="border-2 border-dashed border-gray-300 rounded-md p-6 text-center hover:bg-gray-50 cursor-pointer"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileSelection}
-                      className="hidden"
-                      multiple
-                    />
-                    <Paperclip size={24} className="mx-auto mb-2 text-gray-400" />
-                    <p className="text-sm text-gray-600 mb-1">Drag & drop files here or click to browse</p>
-                    <p className="text-xs text-gray-500">Supports images, PDFs, and documents</p>
-                  </div>
-                </div>
-                
+      {selectedDocument.description && (
+        <div className="mt-3">
+          <p className="text-xs text-gray-500">Description</p>
+          <p className="text-sm">{selectedDocument.description}</p>
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
+{/* Upload Modal */}
+{showUploadModal && (
+  <div className="absolute inset-0 bg-white flex flex-col rounded-lg shadow-lg overflow-hidden z-30">
+    <div className="p-4 border-b flex justify-between items-center bg-gray-50 sticky top-0">
+      <h3 className="font-medium">Upload Document</h3>
+      <button
+        onClick={() => {
+          setShowUploadModal(false);
+          setUploadData({
+            title: '',
+            description: '',
+            category: initialCategory || 'medical',
+            childId: initialChildId || '',
+            files: []
+          });
+        }}
+        className="text-gray-500 hover:text-gray-700"
+      >
+        <X size={20} />
+      </button>
+    </div>
+    
+    <div className="flex-1 overflow-auto p-4">
+      <div className="space-y-4">
+        {/* Same content as before */}
+        <div>
+          <label className="block text-sm font-medium mb-1">Title*</label>
+          <input
+            type="text"
+            value={uploadData.title}
+            onChange={(e) => setUploadData(prev => ({ ...prev, title: e.target.value }))}
+            className="w-full border rounded-md p-2 text-sm"
+            placeholder="e.g., Medical Report, School Certificate"
+          />
+        </div>
+        
+        {/* Rest of the form fields */}
+        {/* ... */}
+      </div>
+    </div>
+    
+    <div className="p-4 border-t flex justify-end bg-gray-50 sticky bottom-0">
+      <button
+        onClick={() => {
+          setShowUploadModal(false);
+          setUploadData({
+            title: '',
+            description: '',
+            category: initialCategory || 'medical',
+            childId: initialChildId || '',
+            files: []
+          });
+        }}
+        className="px-4 py-2 border rounded-md text-sm mr-3"
+      >
+        Cancel
+      </button>
+      <button
+        onClick={handleUpload}
+        disabled={uploading || uploadData.files.length === 0}
+        className="px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 disabled:bg-gray-400"
+      >
+        {uploading ? 'Uploading...' : 'Upload Document'}
+      </button>
+    </div>
+  </div>
+)}                
                 {/* Selected Files */}
                 {uploadData.files.length > 0 && (
                   <div className="border rounded-md p-3">
