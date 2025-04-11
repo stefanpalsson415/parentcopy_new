@@ -563,14 +563,14 @@ const createNewHabit = async (isRefresh = false) => {
     const reward = "Feel organized and prepared for the day";
     const identity = "I am someone who stays on top of family commitments";
     
+    // Create the habit subtasks
+    const subTasks = [
+      { title: cue, description: "This is your trigger" },
+      { title: action, description: "This is the habit action" },
+      { title: reward, description: "This is your reward" }
+    ];
+    
     try {
-      // Create the habit subtasks
-      const subTasks = [
-        { title: cue, description: "This is your trigger" },
-        { title: action, description: "This is the habit action" },
-        { title: reward, description: "This is your reward" }
-      ];
-      
       // Create the habit in the tasks array of the family document
       const familyRef = doc(db, "families", familyId);
       const familyDoc = await getDoc(familyRef);
