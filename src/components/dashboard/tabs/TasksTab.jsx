@@ -367,30 +367,57 @@ setHabits(finalHabits);
   };
   
   // Update cycle due date with calendar integration
-  const updateCycleDueDate = async (newDate) => {
-    if (!familyId) return false;
+const updateCycleDueDate = async (newDate, eventDetails = {}) => {
+  if (!familyId || !currentUser) return false;
+  
+  try {
+    setIsProcessing(true);
     
-    try {
-      // Format the date for display
-      const formattedDate = newDate.toLocaleDateString('en-US', {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric'
-      });
-      
-      // Update survey schedule in database
-      await updateSurveySchedule(currentWeek, newDate);
-      
-      // Update the UI
-      createCelebration(`Cycle ${currentWeek} due date updated to ${formattedDate}`, false);
-      
-      return true;
-    } catch (error) {
-      console.error("Error updating cycle due date:", error);
-      createCelebration("Error", false, "Failed to update due date. Please try again.");
-      return false;
+    // Format the date for display
+    const formattedDate = newDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    // Update survey schedule in database
+    await updateSurveySchedule(currentWeek, newDate);
+    
+    // Create or update the calendar event
+    const eventData = {
+      title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
+      description: eventDetails.description || `Due date for completing Cycle ${currentWeek} activities including surveys and tasks.`,
+      startDate: newDate,
+      endDate: new Date(new Date(newDate).getTime() + 60 * 60 * 1000), // 1 hour duration
+      location: eventDetails.location || '',
+      category: 'cycle-due-date',
+      eventType: 'cycle-due-date',
+      cycleNumber: currentWeek,
+      // Add any other fields from eventDetails
+      ...eventDetails
+    };
+    
+    // Use CalendarService to add/update the event
+    const result = await CalendarService.addEvent(eventData, currentUser.uid);
+    
+    if (!result.success) {
+      throw new Error(result.error || "Failed to add cycle date to calendar");
     }
-  };
+    
+    // Update the UI
+    setSurveyDue(newDate);
+    calculateNextSurveyDue();
+    createCelebration(`Cycle ${currentWeek} due date updated to ${formattedDate}`, true);
+    
+    setIsProcessing(false);
+    return true;
+  } catch (error) {
+    console.error("Error updating cycle due date:", error);
+    createCelebration("Error", false, "Failed to update due date. Please try again.");
+    setIsProcessing(false);
+    return false;
+  }
+};
   
   // Create a celebration notification
   const createCelebration = (habitTitle, success = true, customMessage = null) => {
@@ -892,16 +919,37 @@ const createNewHabit = async (isRefresh = false) => {
       </div>
       
       {/* Progress Steps */}
-      <div className="p-4 border-b">
-        <div className="flex justify-between mb-6 relative">
+<div className="p-4 border-b">
+  <div className="flex justify-between mb-6 relative">
+    {/* Define color styles for each step */}
+    {(() => {
+      // Define step colors - specific colors that correlate to the steps
+      const stepColors = {
+        1: { bg: 'bg-blue-500', text: 'text-blue-500', light: 'bg-blue-100' },
+        2: { bg: 'bg-green-500', text: 'text-green-500', light: 'bg-green-100' },
+        3: { bg: 'bg-purple-500', text: 'text-purple-500', light: 'bg-purple-100' }
+      };
+      
+      // Default color for inactive steps
+      const inactiveColor = { bg: 'bg-gray-200', text: 'text-gray-500', light: 'bg-gray-100' };
+      
+      // Get color for current step
+      const currentStepColor = stepColors[cycleStep] || stepColors[1];
+      
+      return (
+        <>
           {/* Step 1 */}
           <div className="flex flex-col items-center relative z-10">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-medium ${
-              cycleStep >= 1 ? 'bg-black text-white' : 'bg-gray-200 text-gray-500'
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-medium transition-colors duration-300 ${
+              cycleStep >= 1 
+                ? (cycleStep === 1 ? stepColors[1].bg + ' text-white' : 'bg-black text-white')
+                : inactiveColor.bg + ' ' + inactiveColor.text
             }`}>
               1
             </div>
-            <div className="text-xs mt-2 text-center">
+            <div className={`text-xs mt-2 text-center transition-colors duration-300 ${
+              cycleStep === 1 ? stepColors[1].text + ' font-medium' : ''
+            }`}>
               <div className="font-medium">STEP 1</div>
               <div>Habit Building</div>
             </div>
@@ -909,12 +957,16 @@ const createNewHabit = async (isRefresh = false) => {
           
           {/* Step 2 */}
           <div className="flex flex-col items-center relative z-10">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-medium ${
-              cycleStep >= 2 ? 'bg-black text-white' : 'bg-gray-200 text-gray-500'
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-medium transition-colors duration-300 ${
+              cycleStep >= 2 
+                ? (cycleStep === 2 ? stepColors[2].bg + ' text-white' : 'bg-black text-white')
+                : inactiveColor.bg + ' ' + inactiveColor.text
             }`}>
               2
             </div>
-            <div className="text-xs mt-2 text-center">
+            <div className={`text-xs mt-2 text-center transition-colors duration-300 ${
+              cycleStep === 2 ? stepColors[2].text + ' font-medium' : ''
+            }`}>
               <div className="font-medium">STEP 2</div>
               <div>Family Survey</div>
             </div>
@@ -922,69 +974,87 @@ const createNewHabit = async (isRefresh = false) => {
           
           {/* Step 3 */}
           <div className="flex flex-col items-center relative z-10">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-medium ${
-              cycleStep >= 3 ? 'bg-black text-white' : 'bg-gray-200 text-gray-500'
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-medium transition-colors duration-300 ${
+              cycleStep >= 3 
+                ? (cycleStep === 3 ? stepColors[3].bg + ' text-white' : 'bg-black text-white')
+                : inactiveColor.bg + ' ' + inactiveColor.text
             }`}>
               3
             </div>
-            <div className="text-xs mt-2 text-center">
+            <div className={`text-xs mt-2 text-center transition-colors duration-300 ${
+              cycleStep === 3 ? stepColors[3].text + ' font-medium' : ''
+            }`}>
               <div className="font-medium">STEP 3</div>
               <div>Family Meeting</div>
             </div>
           </div>
           
-          {/* Progress line */}
+          {/* Progress line - now with gradient colors */}
           <div className="absolute left-0 top-5 h-0.5 bg-gray-200 w-full -z-0"></div>
           <div 
-            className="absolute left-0 top-5 h-0.5 bg-black w-full -z-0 transition-transform duration-500" 
+            className={`absolute left-0 top-5 h-1 ${
+              cycleStep === 1 ? 'bg-blue-500' : 
+              cycleStep === 2 ? 'bg-gradient-to-r from-blue-500 to-green-500' :
+              cycleStep === 3 ? 'bg-gradient-to-r from-blue-500 via-green-500 to-purple-500' : 'bg-black'
+            } -z-0 transition-all duration-500 rounded-full`}
             style={{ 
-              transform: `scaleX(${(cycleStep - 1) / 2})`,
-              transformOrigin: 'left'
+              width: `${((cycleStep - 1) / 2) * 100}%`,
             }}
-          ></div>
-        </div>
-        
-        {/* Family Member Progress */}
-        <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-          {displayedMembers.map(member => {
-            const progress = memberProgress[member.id] || { step: 1, completedSurvey: false };
-            return (
-              <div key={member.id} className="flex flex-col items-center">
-                <div className="relative">
-                  <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-gray-200">
-                    {member.profilePicture ? (
-                      <img 
-                        src={member.profilePicture} 
-                        alt={member.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div 
-                        className="w-full h-full flex items-center justify-center text-white"
-                        style={{ backgroundColor: getAvatarColor(member.name) }}
-                      >
-                        {getInitials(member.name)}
-                      </div>
-                    )}
-                  </div>
-                  <div className={`absolute -right-1 -bottom-1 w-6 h-6 rounded-full flex items-center justify-center text-xs ${
-                    progress.step > 1 ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
-                  }`}>
-                    {member.role === 'child' ? '2' : progress.step}
-                  </div>
+          />
+        </>
+      );
+    })()}
+  </div>
+  
+  {/* Family Member Progress */}
+  <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+    {displayedMembers.map(member => {
+      const progress = memberProgress[member.id] || { step: 1, completedSurvey: false };
+      // Determine progress color based on step
+      const stepColorClass = 
+        progress.step === 1 ? 'bg-blue-500 text-white' :
+        progress.step === 2 ? 'bg-green-500 text-white' :
+        progress.step === 3 ? 'bg-purple-500 text-white' : 
+        'bg-gray-200 text-gray-500';
+      
+      return (
+        <div key={member.id} className="flex flex-col items-center">
+          <div className="relative">
+            <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-gray-200">
+              {member.profilePicture ? (
+                <img 
+                  src={member.profilePicture} 
+                  alt={member.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div 
+                  className="w-full h-full flex items-center justify-center text-white"
+                  style={{ backgroundColor: getAvatarColor(member.name) }}
+                >
+                  {getInitials(member.name)}
                 </div>
-                <div className="mt-2 text-center">
-                  <div className="text-sm font-medium">{member.name}</div>
-                  <div className="text-xs text-gray-500">
-                    {member.role === 'child' 
-                      ? 'Step 2: Survey' 
-                      : progress.completedSurvey ? 'Survey Done' : 'Step 1: Habits'}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+              )}
+            </div>
+            <div className={`absolute -right-1 -bottom-1 w-6 h-6 rounded-full flex items-center justify-center text-xs ${
+              member.role === 'child' ? 'bg-green-500 text-white' : stepColorClass
+            }`}>
+              {member.role === 'child' ? '2' : progress.step}
+            </div>
+          </div>
+          <div className="mt-2 text-center">
+            <div className="text-sm font-medium">{member.name}</div>
+            <div className="text-xs text-gray-500">
+              {member.role === 'child' 
+                ? 'Step 2: Survey' 
+                : progress.completedSurvey ? 'Survey Done' : 'Step 1: Habits'}
+            </div>
+          </div>
         </div>
+      );
+    })}
+  </div>
+</div>
         
         {/* Action Buttons */}
         <div className="mt-6 flex flex-wrap gap-3 justify-center">
@@ -1483,39 +1553,42 @@ const createNewHabit = async (isRefresh = false) => {
       
       {/* Calendar floating widget with embedded event editor */}
       {showCalendar && (
-        <FloatingCalendar
-          onClose={() => setShowCalendar(false)}
-          selectedDate={datePickerDate}
-          embeddedComponent={
-            <EnhancedEventManager
-              initialEvent={{
-                title: `Cycle ${currentWeek} Due Date`,
-                description: `Due date for completing Cycle ${currentWeek} activities including surveys and tasks.`,
-                dateTime: datePickerDate ? datePickerDate.toISOString() : new Date().toISOString(),
-                category: 'cycle-due-date',
-                eventType: 'cycle-due-date',
-                cycleNumber: currentWeek
-              }}
-              onSave={async (event) => {
-                setShowCalendar(false);
-                const newDate = new Date(event.dateTime);
-                const success = await updateCycleDueDate(newDate);
-                if (success) {
-                  // Update the UI with new date
-                  setSurveyDue(newDate);
-                  calculateNextSurveyDue();
-                }
-              }}
-              onCancel={() => setShowCalendar(false)}
-              eventType="cycle-due-date"
-              selectedDate={datePickerDate}
-              isCompact={true}
-              mode="create"
-            />
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <EnhancedEventManager
+        initialEvent={{
+          title: `Cycle ${currentWeek} Due Date`,
+          description: `Due date for completing Cycle ${currentWeek} activities including surveys and tasks.`,
+          dateTime: datePickerDate ? datePickerDate.toISOString() : new Date().toISOString(),
+          category: 'cycle-due-date',
+          eventType: 'cycle-due-date',
+          cycleNumber: currentWeek
+        }}
+        onSave={async (event) => {
+          const newDate = new Date(event.start?.dateTime || event.dateTime);
+          const success = await updateCycleDueDate(newDate, {
+            title: event.title || event.summary,
+            description: event.description,
+            location: event.location
+          });
+          
+          if (success) {
+            // Force refresh of calendar components
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+            }
+            setShowCalendar(false);
           }
-        />
-      )}
-      
+        }}
+        onCancel={() => setShowCalendar(false)}
+        eventType="cycle-due-date"
+        selectedDate={datePickerDate}
+        isCompact={false}
+        mode="create"
+      />
+    </div>
+  </div>
+)}      
       <style jsx="true">{`
         .animation-bounce-in {
           animation: bounceIn 0.5s;
