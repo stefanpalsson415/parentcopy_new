@@ -550,7 +550,9 @@ const recordHabitInstance = async (habitId) => {
   };
   
   // Create new habit
-  // Create new habit
+// Replace the createNewHabit function in TasksTab.jsx (around line 306-400)
+
+// Create new habit
 const createNewHabit = async (isRefresh = false) => {
   try {
     setAllieIsThinking(true);
@@ -674,152 +676,7 @@ const createNewHabit = async (isRefresh = false) => {
   }
 };
         
-        // Try to extract parts from the response
-        if (response && typeof response === 'string') {
-          // Look for pipe-separated format in the response
-          const pipeRegex = /(.+?)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(.+)/;
-          const matches = response.match(pipeRegex);
-          
-          if (matches && matches.length >= 7) {
-            // Use extracted parts
-            parts = [
-              matches[1].trim(),
-              matches[2].trim(),
-              matches[3].trim(),
-              matches[4].trim(),
-              matches[5].trim(),
-              matches[6].trim()
-            ];
-          } else {
-            // Try alternative format with newlines or sections
-            const lines = response.split(/\n+/).filter(line => line.trim().length > 0);
-            
-            if (lines.length >= 6) {
-              // Use first 6 lines as parts
-              parts = lines.slice(0, 6).map(line => {
-                // Remove labels like "Title:" if present
-                return line.replace(/^(Title|Description|Cue|Action|Reward|Identity)[:;]\s*/i, '').trim();
-              });
-            }
-          }
-        }
-      } catch (aiError) {
-        console.error("AI error in habit creation:", aiError);
-        // Continue with default parts
-      }
-      
-      const [title, description, cue, action, reward, identity] = parts;
-      
-      // Create the habit subtasks
-      const subTasks = [
-        { title: cue, description: "This is your trigger" },
-        { title: action, description: "This is the habit action" },
-        { title: reward, description: "This is your reward" }
-      ];
-      
-      try {
-        // Create the habit in the tasks array of the family document
-        const familyRef = doc(db, "families", familyId);
-        const familyDoc = await getDoc(familyRef);
-        
-        if (!familyDoc.exists()) {
-          throw new Error("Family document not found");
-        }
-        
-        // Get current tasks
-        const currentTasks = familyDoc.data().tasks || [];
-        
-        // If refreshing, first remove the initial habit
-        let updatedTasks = [...currentTasks];
-        if (isRefresh) {
-          // Find and remove the initial non-user-generated habit
-          const initialHabitIndex = habits.findIndex(h => !h.isUserGenerated);
-          if (initialHabitIndex >= 0) {
-            // Find the corresponding task in currentTasks
-            const initialTaskId = habits[initialHabitIndex].id;
-            updatedTasks = updatedTasks.filter(t => t.id !== initialTaskId);
-          }
-        }
-        
-        // Generate a unique ID
-        const taskId = `habit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-        
-        // Create the new habit with the ID
-        const newHabit = {
-          id: taskId,
-          title: title,
-          description: description,
-          cue: cue,
-          action: action,
-          reward: reward,
-          identity: identity,
-          assignedTo: selectedUser.roleType || selectedUser.role,
-          assignedToName: selectedUser.name,
-          category: identity.includes("parent") ? "Parental Tasks" : "Household Tasks",
-          insight: `This habit helps build your identity as ${identity}`,
-          completed: false,
-          comments: [],
-          streak: 0,
-          record: 0,
-          progress: 0,
-          lastCompleted: null,
-          isUserGenerated: !isRefresh, // If refreshing, this is the new initial habit
-          subTasks: subTasks.map((st, idx) => ({
-            id: `${taskId}-step-${idx + 1}`,
-            title: st.title,
-            description: st.description,
-            completed: false
-          }))
-        };
-        
-        // Update the tasks array
-        await updateDoc(familyRef, {
-          tasks: [...updatedTasks, newHabit]
-        });
-        
-        // Set up empty habit instances
-        await updateDoc(doc(db, "families", familyId, "habitInstances", taskId), {
-          instances: []
-        }, { merge: true });
-        
-        // Update the local state
-        if (isRefresh) {
-          // Replace the initial habit
-          setHabits(prev => {
-            const filtered = prev.filter(h => h.isUserGenerated);
-            return [{...newHabit, completionInstances: []}, ...filtered];
-          });
-          createCelebration("Habit refreshed!", true);
-        } else {
-          // Add to habits as user-generated
-          setHabits(prev => [
-            {...newHabit, completionInstances: []},
-            ...prev
-          ]);
-          createCelebration("New habit created!", true);
-        }
-        
-        // Update completedHabitInstances state
-        setCompletedHabitInstances(prev => ({
-          ...prev,
-          [taskId]: []
-        }));
-        
-        setShowAddHabit(false);
-      } catch (dbError) {
-        console.error("Database error creating habit:", dbError);
-        throw dbError;
-      }
-      
-      setAllieIsThinking(false);
-      return true;
-    } catch (error) {
-      console.error("Error creating new habit:", error);
-      setAllieIsThinking(false);
-      createCelebration("Error", false, "Could not create habit. Please try again later.");
-      return false;
-    }
-  };
+ 
   
   // Delete habit
   const deleteHabit = async (habitId) => {
