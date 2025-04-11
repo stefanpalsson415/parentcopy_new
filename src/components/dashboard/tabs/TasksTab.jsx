@@ -191,14 +191,21 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
             };
           }));
           
-          // Filter out null values and sort: uncompleted first
-          const filteredAdultHabits = formattedHabits.filter(Boolean).sort((a, b) => {
-            if (a.completed && !b.completed) return 1;
-            if (!a.completed && b.completed) return -1;
-            return 0;
-          });
-          
-          setHabits(filteredAdultHabits);
+          // Filter out null values
+const filteredAdultHabits = formattedHabits.filter(Boolean);
+      
+// Only show one system-generated habit plus any user-generated habits
+const systemHabit = filteredAdultHabits.find(h => !h.isUserGenerated);
+const userHabits = filteredAdultHabits.filter(h => h.isUserGenerated);
+      
+// Combine, putting uncompleted first
+const finalHabits = [systemHabit, ...userHabits].filter(Boolean).sort((a, b) => {
+  if (a.completed && !b.completed) return 1;
+  if (!a.completed && b.completed) return -1;
+  return 0;
+});
+
+setHabits(finalHabits);
           
           // Load family streaks
           await loadFamilyStreaks();
@@ -425,77 +432,86 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   };
   
   // Record a new habit completion instance
-  const recordHabitInstance = async (habitId) => {
-    if (!familyId || !selectedUser) return;
+const recordHabitInstance = async (habitId) => {
+  if (!familyId || !selectedUser) return;
+  
+  try {
+    setIsProcessing(true);
     
-    try {
-      setIsProcessing(true);
-      
-      // Create the new instance data
-      const newInstance = {
-        timestamp: new Date().toISOString(),
-        userId: selectedUser.id,
-        userName: selectedUser.name,
-        notes: ""
-      };
-      
-      // Get current instances
-      const currentInstances = completedHabitInstances[habitId] || [];
-      const updatedInstances = [...currentInstances, newInstance];
-      
-      // Update habit instances in database
-      await updateDoc(doc(db, "families", familyId, "habitInstances", habitId), {
-        instances: updatedInstances
-      }, { merge: true });
-      
-      // Update local state
-      setCompletedHabitInstances(prev => ({
-        ...prev,
-        [habitId]: updatedInstances
-      }));
-      
-      // Update the tracking count
-      const habit = habits.find(h => h.id === habitId);
-      if (habit) {
-        // Update the habit with new instance
-        const updatedHabits = habits.map(h => {
-          if (h.id === habitId) {
-            return {
-              ...h,
-              completionInstances: updatedInstances,
-              lastCompleted: newInstance.timestamp
-            };
-          }
-          return h;
-        });
-        
-        setHabits(updatedHabits);
-        
-        // Create celebration
-        createCelebration(habit.title, true);
-        
-        // Launch confetti if it's a milestone (e.g., 5th or 11th completion)
-        if (updatedInstances.length === 5 || updatedInstances.length === 11) {
-          launchConfetti();
+    // Create the new instance data
+    const newInstance = {
+      timestamp: new Date().toISOString(),
+      userId: selectedUser.id,
+      userName: selectedUser.name,
+      notes: ""
+    };
+    
+    // Get current instances
+    const currentInstances = completedHabitInstances[habitId] || [];
+    const updatedInstances = [...currentInstances, newInstance];
+    
+    // Update habit instances in database
+    await updateDoc(doc(db, "families", familyId, "habitInstances", habitId), {
+      instances: updatedInstances
+    }, { merge: true });
+    
+    // Update local state
+    setCompletedHabitInstances(prev => ({
+      ...prev,
+      [habitId]: updatedInstances
+    }));
+    
+    // Update the tracking count
+    const habit = habits.find(h => h.id === habitId);
+    if (habit) {
+      // Update the habit with new instance
+      const updatedHabits = habits.map(h => {
+        if (h.id === habitId) {
+          return {
+            ...h,
+            completionInstances: updatedInstances,
+            lastCompleted: newInstance.timestamp
+          };
         }
+        return h;
+      });
+      
+      setHabits(updatedHabits);
+      
+      // Create celebration
+      createCelebration(habit.title, true);
+      
+      // Milestone reached - exactly 5 completions
+      if (updatedInstances.length === 5) {
+        // Launch confetti
+        launchConfetti();
         
-        // Check if we now have enough completions to take the survey
-        if (updatedInstances.length >= 5 && !canTakeSurvey) {
-          setCanTakeSurvey(true);
-          
-          // If this is the first time reaching 5 completions, show a special celebration
-          createCelebration("Survey Unlocked!", true, "You've completed a habit 5 times - now you can take the cycle survey!");
-        }
+        // Enable survey
+        setCanTakeSurvey(true);
+        
+        // Show special celebration
+        createCelebration("Survey Unlocked!", true, "You've completed a habit 5 times!");
+        
+        // Auto-open the family meeting after a short delay
+        setTimeout(() => {
+          onStartWeeklyCheckIn();
+        }, 2000);
       }
-      
-      setIsProcessing(false);
-      return true;
-    } catch (error) {
-      console.error("Error recording habit instance:", error);
-      setIsProcessing(false);
-      return false;
+      // Other milestone - 11 completions (mastery)
+      else if (updatedInstances.length === 11) {
+        launchConfetti();
+        createCelebration("Habit Mastered!", true, "You've mastered this habit! Great job!");
+      }
     }
-  };
+    
+    setIsProcessing(false);
+    return true;
+  } catch (error) {
+    console.error("Error recording habit instance:", error);
+    setIsProcessing(false);
+    return false;
+  }
+};
   
   // Save reflection after completing a habit
   const saveReflection = async () => {
@@ -534,25 +550,129 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   };
   
   // Create new habit
-  const createNewHabit = async (isRefresh = false) => {
+  // Create new habit
+const createNewHabit = async (isRefresh = false) => {
+  try {
+    setAllieIsThinking(true);
+    
+    // Default habit parts - we'll use these directly for simplicity
+    const title = "Family Calendar Check-in";
+    const description = "Take a moment each day to review the family calendar";
+    const cue = "After breakfast";
+    const action = "Check the family calendar for today's events";
+    const reward = "Feel organized and prepared for the day";
+    const identity = "I am someone who stays on top of family commitments";
+    
     try {
-      setAllieIsThinking(true);
+      // Create the habit subtasks
+      const subTasks = [
+        { title: cue, description: "This is your trigger" },
+        { title: action, description: "This is the habit action" },
+        { title: reward, description: "This is your reward" }
+      ];
       
-      // Default habit parts in case AI fails
-      let parts = ["Balance Habit", "A small habit to improve family balance", "After breakfast", "Review family calendar", "Feel organized and prepared", "I am someone who values organization and preparation"];
+      // Create the habit in the tasks array of the family document
+      const familyRef = doc(db, "families", familyId);
+      const familyDoc = await getDoc(familyRef);
       
-      try {
-        // First try to load AllieAIService dynamically in case it's not initialized
-        const AllieAIServiceModule = await import('../../../services/AllieAIService');
-        const AllieAIService = AllieAIServiceModule.default;
-        
-        // Generate a new habit with Allie
-        const habitPrompt = `Create a simple atomic habit for ${selectedUser.name} that helps with family balance. Focus on a small, easy action with a clear cue and reward. Use the format: Title | Description | Cue | Action | Reward | Identity Statement. Make it very specific and actionable.`;
-        
-        const response = await AllieAIService.generateResponse(
-          [{ role: 'user', content: habitPrompt }],
-          { familyId, userName: selectedUser.name }
-        );
+      if (!familyDoc.exists()) {
+        throw new Error("Family document not found");
+      }
+      
+      // Get current tasks
+      const currentTasks = familyDoc.data().tasks || [];
+      
+      // If refreshing, first remove the initial habit
+      let updatedTasks = [...currentTasks];
+      if (isRefresh) {
+        // Find and remove the initial non-user-generated habit
+        const initialHabitIndex = habits.findIndex(h => !h.isUserGenerated);
+        if (initialHabitIndex >= 0) {
+          // Find the corresponding task in currentTasks
+          const initialTaskId = habits[initialHabitIndex].id;
+          updatedTasks = updatedTasks.filter(t => t.id !== initialTaskId);
+        }
+      }
+      
+      // Generate a unique ID
+      const taskId = `habit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      
+      // Create the new habit with the ID
+      const newHabit = {
+        id: taskId,
+        title: title,
+        description: description,
+        cue: cue,
+        action: action,
+        reward: reward,
+        identity: identity,
+        assignedTo: selectedUser.roleType || selectedUser.role,
+        assignedToName: selectedUser.name,
+        category: identity.includes("parent") ? "Parental Tasks" : "Household Tasks",
+        insight: `This habit helps build your identity as ${identity}`,
+        completed: false,
+        comments: [],
+        streak: 0,
+        record: 0,
+        progress: 0,
+        lastCompleted: null,
+        isUserGenerated: !isRefresh, // If refreshing, this is the new initial habit
+        subTasks: subTasks.map((st, idx) => ({
+          id: `${taskId}-step-${idx + 1}`,
+          title: st.title,
+          description: st.description,
+          completed: false
+        }))
+      };
+      
+      // Update the tasks array
+      await updateDoc(familyRef, {
+        tasks: [...updatedTasks, newHabit]
+      });
+      
+      // Set up empty habit instances
+      await updateDoc(doc(db, "families", familyId, "habitInstances", taskId), {
+        instances: []
+      }, { merge: true });
+      
+      // Update the local state
+      if (isRefresh) {
+        // Replace the initial habit
+        setHabits(prev => {
+          const filtered = prev.filter(h => h.isUserGenerated);
+          return [{...newHabit, completionInstances: []}, ...filtered];
+        });
+        createCelebration("Habit refreshed!", true);
+      } else {
+        // Add to habits as user-generated
+        setHabits(prev => [
+          {...newHabit, completionInstances: []},
+          ...prev
+        ]);
+        createCelebration("New habit created!", true);
+      }
+      
+      // Update completedHabitInstances state
+      setCompletedHabitInstances(prev => ({
+        ...prev,
+        [taskId]: []
+      }));
+      
+      setShowAddHabit(false);
+    } catch (dbError) {
+      console.error("Database error creating habit:", dbError);
+      throw dbError;
+    }
+    
+    setAllieIsThinking(false);
+    return true;
+  } catch (error) {
+    console.error("Error creating new habit:", error);
+    setAllieIsThinking(false);
+    createCelebration("Error", false, "Could not create habit. Please try again later.");
+    return false;
+  }
+};
         
         // Try to extract parts from the response
         if (response && typeof response === 'string') {
@@ -1162,17 +1282,17 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                     
                     {/* Action buttons */}
                     <div className="mt-4 flex justify-between items-center">
-                      <div className="space-x-2">
-                        {habit.isUserGenerated && (
-                          <button
-                            onClick={() => deleteHabit(habit.id)}
-                            className="text-xs flex items-center text-red-600 hover:text-red-800 px-2 py-1 rounded hover:bg-gray-100"
-                          >
-                            <Trash size={12} className="mr-1" />
-                            Delete
-                          </button>
-                        )}
-                      </div>
+                    <div className="space-x-2">
+  {habit.isUserGenerated && (
+    <button
+      onClick={() => deleteHabit(habit.id)}
+      className="text-xs flex items-center bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-md"
+    >
+      <Trash size={14} className="mr-1" />
+      Delete Habit
+    </button>
+  )}
+</div>
                       
                       <button
                         onClick={() => {
@@ -1236,161 +1356,78 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
         ))}
       </div>
       
-      {/* Habit detail/reflection modal */}
-      {showHabitDetail && selectedHabit && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
-          <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="font-medium text-lg">{selectedHabit.title}</h3>
-              <button 
-                onClick={() => setShowHabitDetail(null)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            {/* Identity statement */}
-            <div className="mb-4 p-3 bg-black text-white rounded-lg">
-              <div className="text-xs text-gray-300 mb-1">Identity:</div>
-              <div>{selectedHabit.identity}</div>
-            </div>
-            
-            {/* Completion history */}
-            <div className="mb-4">
-              <div className="text-sm font-medium mb-2">Completion History:</div>
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {selectedHabit.completionInstances && selectedHabit.completionInstances.length > 0 ? (
-                  selectedHabit.completionInstances.map((instance, index) => (
-                    <div key={index} className="p-2 bg-gray-50 rounded flex justify-between items-center">
-                      <div>
-                        <div className="text-xs text-gray-500">
-                          {formatDate(instance.timestamp)} 
-                        </div>
-                        <div className="text-sm">
-                          Completion #{index + 1}
-                        </div>
-                      </div>
-                      <div className="text-xs px-2 py-1 bg-black text-white rounded-full">
-                        {index === 4 ? "Survey Unlocked" : 
-                         index === 10 ? "Habit Mastered!" : 
-                         `${index + 1}/11`}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-sm text-gray-500 p-2">
-                    No completions recorded yet
-                  </div>
-                )}
+      {/* Simplified habit detail/log modal */}
+{showHabitDetail && selectedHabit && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
+    <div className="bg-white rounded-lg max-w-md w-full p-6">
+      <div className="flex justify-between items-start mb-4">
+        <h3 className="font-medium text-lg">{selectedHabit.title}</h3>
+        <button 
+          onClick={() => setShowHabitDetail(null)}
+          className="text-gray-400 hover:text-gray-600"
+        >
+          <X size={20} />
+        </button>
+      </div>
+      
+      {/* Identity statement */}
+      <div className="mb-4 p-3 bg-black text-white rounded-lg">
+        <div className="text-xs text-gray-300 mb-1">Identity:</div>
+        <div>{selectedHabit.identity}</div>
+      </div>
+      
+      {/* Simple steps */}
+      <div className="mb-4">
+        <div className="space-y-2">
+          {selectedHabit.atomicSteps.map((step, idx) => (
+            <div key={idx} className="flex items-center p-2 bg-gray-50 rounded">
+              <div className="w-6 h-6 rounded-full bg-gray-200 text-gray-700 mr-2 flex items-center justify-center text-xs">
+                {idx + 1}
               </div>
+              <div className="text-sm">{step.title}</div>
             </div>
-            
-            {/* Atomic steps */}
-            <div className="mb-4">
-              <div className="text-sm font-medium mb-2">Atomic Steps:</div>
-              <div className="space-y-2">
-                {selectedHabit.atomicSteps.map((step, idx) => (
-                  <div key={idx} className="flex items-center p-2 bg-gray-50 rounded">
-                    <div className="w-6 h-6 rounded-full bg-gray-200 text-gray-700 mr-2 flex items-center justify-center text-xs">
-                      {idx + 1}
-                    </div>
-                    <div className="text-sm">{step.title}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            {/* Previous reflections/comments */}
-            {selectedHabit.comments && selectedHabit.comments.length > 0 && (
-              <div className="mb-4">
-                <div className="text-sm font-medium mb-2">Previous Reflections:</div>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {selectedHabit.comments.map(comment => (
-                    <div key={comment.id || Date.now()} className="p-2 bg-gray-50 rounded">
-                      <div className="text-xs text-gray-500">{formatDate(comment.timestamp)}</div>
-                      <div className="text-sm mt-1">{comment.text}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {/* Capture your learning */}
-            <div className="mb-4">
-              <div className="text-sm font-medium mb-2">Capture Your Learning:</div>
-              <textarea
-                className="w-full border rounded-lg p-3 text-sm"
-                rows="3"
-                placeholder="What did you learn from this habit today? How did it make you feel?"
-                value={reflection}
-                onChange={(e) => setReflection(e.target.value)}
-              ></textarea>
-            </div>
-            
-            {/* Habit insights */}
-            {selectedHabit.insight && (
-              <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-                <div className="text-xs text-blue-700 font-medium mb-1">
-                  <div className="flex items-center">
-                    <Info size={14} className="mr-1" />
-                    Allie's Insight:
-                  </div>
-                </div>
-                <div className="text-sm text-blue-800">
-                  {selectedHabit.insight}
-                </div>
-                <button
-                  onClick={() => {
-                    triggerAllieChat(`Tell me more about how "${selectedHabit.title}" helps with family balance.`);
-                    setShowHabitDetail(null);
-                  }}
-                  className="text-xs text-blue-700 mt-2 flex items-center"
-                >
-                  <MessageSquare size={12} className="mr-1" />
-                  Ask Allie for more insights
-                </button>
-              </div>
-            )}
-            
-            {/* Actions */}
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => {
-                  setShowHabitDetail(null);
-                  // Only try to record if there's a habit selected
-                  if (selectedHabit) {
-                    recordHabitInstance(selectedHabit.id);
-                  }
-                }}
-                className="px-4 py-2 bg-black text-white rounded-lg flex items-center"
-                disabled={isProcessing}
-              >
-                {isProcessing ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle size={16} className="mr-2" />
-                    Complete Habit
-                  </>
-                )}
-              </button>
-              
-              <button
-                onClick={saveReflection}
-                disabled={!reflection.trim()}
-                className="px-4 py-2 border border-black rounded-lg flex items-center disabled:border-gray-300 disabled:text-gray-300 disabled:cursor-not-allowed"
-              >
-                <Check size={16} className="mr-2" />
-                Save Reflection
-              </button>
-            </div>
-          </div>
+          ))}
         </div>
-      )}
+      </div>
+      
+      {/* Progress indicator */}
+      <div className="mb-4 p-3 bg-blue-50 rounded-lg text-center">
+        <p className="text-sm text-blue-800">
+          You've completed this habit {selectedHabit.completionInstances?.length || 0} times.
+          {selectedHabit.completionInstances?.length >= 5 ? 
+            " Survey is unlocked!" : 
+            ` Complete ${5 - (selectedHabit.completionInstances?.length || 0)} more times to unlock the survey.`}
+        </p>
+      </div>
+      
+      {/* Log habit button - centered and prominent */}
+      <div className="flex justify-center">
+        <button
+          onClick={() => {
+            setShowHabitDetail(null);
+            if (selectedHabit) {
+              recordHabitInstance(selectedHabit.id);
+            }
+          }}
+          className="px-6 py-3 bg-black text-white rounded-lg text-lg flex items-center font-medium"
+          disabled={isProcessing}
+        >
+          {isProcessing ? (
+            <>
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+              Processing...
+            </>
+          ) : (
+            <>
+              <CheckCircle size={20} className="mr-2" />
+              Log Habit Completion
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
       
       {/* Add new habit modal */}
       {showAddHabit && (
