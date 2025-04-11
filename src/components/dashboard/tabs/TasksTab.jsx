@@ -1053,7 +1053,7 @@ const createNewHabit = async (isRefresh = false) => {
         </div>
       );
     })}
-  </div>
+  
 </div>
         
         {/* Action Buttons */}
