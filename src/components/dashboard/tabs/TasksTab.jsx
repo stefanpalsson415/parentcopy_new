@@ -9,7 +9,7 @@ import { useFamily } from '../../../contexts/FamilyContext';
 import { useSurvey } from '../../../contexts/SurveyContext';
 import DatabaseService from '../../../services/DatabaseService';
 import AllieAIService from '../../../services/AllieAIService';
-import { doc, getDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, increment, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../../../services/firebase';
 import confetti from 'canvas-confetti';
 import { EventManager as EnhancedEventManager, FloatingCalendar } from '../../../components/calendar';
@@ -431,55 +431,133 @@ setHabits(finalHabits);
     });
   };
   
-  // Record a new habit completion instance
-const recordHabitInstance = async (habitId) => {
+  // Replace the recordHabitInstance function with this updated version
+const recordHabitInstance = async (habitId, reflectionNote = "") => {
   if (!familyId || !selectedUser) return;
   
   try {
     setIsProcessing(true);
+    console.log(`Recording habit instance for habit ${habitId}`);
     
     // Create the new instance data
     const newInstance = {
       timestamp: new Date().toISOString(),
       userId: selectedUser.id,
       userName: selectedUser.name,
-      notes: ""
+      notes: reflectionNote || ""
     };
     
     // Get current instances
     const currentInstances = completedHabitInstances[habitId] || [];
     const updatedInstances = [...currentInstances, newInstance];
     
-    // Update habit instances in database
-    await updateDoc(doc(db, "families", familyId, "habitInstances", habitId), {
-      instances: updatedInstances
-    }, { merge: true });
+    console.log(`Current instances: ${currentInstances.length}, Updated: ${updatedInstances.length}`);
     
-    // Update local state
-    setCompletedHabitInstances(prev => ({
-      ...prev,
-      [habitId]: updatedInstances
-    }));
+    // Create a reference to the habit instances document
+    const habitInstanceRef = doc(db, "families", familyId, "habitInstances", habitId);
     
-    // Update the tracking count
+    try {
+      // First, check if the document exists
+      const docSnap = await getDoc(habitInstanceRef);
+      
+      if (docSnap.exists()) {
+        // Update existing document
+        await updateDoc(habitInstanceRef, {
+          instances: updatedInstances
+        });
+      } else {
+        // Create new document
+        await setDoc(habitInstanceRef, {
+          instances: updatedInstances
+        });
+      }
+      
+      console.log("Database updated successfully");
+      
+      // Also update the task's completion status if this is the first completion
+      if (currentInstances.length === 0) {
+        try {
+          const familyRef = doc(db, "families", familyId);
+          const familyDoc = await getDoc(familyRef);
+          
+          if (familyDoc.exists()) {
+            const tasks = familyDoc.data().tasks || [];
+            const updatedTasks = tasks.map(task => {
+              if (task.id === habitId) {
+                // Update the first subtask as completed
+                const updatedSubTasks = task.subTasks?.map((st, idx) => 
+                  idx === 0 ? {...st, completed: true} : st
+                ) || [];
+                
+                return {
+                  ...task,
+                  subTasks: updatedSubTasks,
+                  lastCompleted: newInstance.timestamp
+                };
+              }
+              return task;
+            });
+            
+            await updateDoc(familyRef, {
+              tasks: updatedTasks
+            });
+            
+            console.log("Task updated with completion status");
+          }
+        } catch (taskError) {
+          console.error("Error updating task:", taskError);
+        }
+      }
+    } catch (dbError) {
+      console.error("Database error:", dbError);
+      createCelebration("Error", false, "Failed to save your habit completion.");
+      setIsProcessing(false);
+      return false;
+    }
+    
+    // Update local state with deep cloning to ensure re-render
+    setCompletedHabitInstances(prev => {
+      const newState = {...prev};
+      newState[habitId] = updatedInstances;
+      return newState;
+    });
+    
+    // Update the tracking count in habits state
     const habit = habits.find(h => h.id === habitId);
     if (habit) {
-      // Update the habit with new instance
+      // Create a fresh copy of the habits array
       const updatedHabits = habits.map(h => {
         if (h.id === habitId) {
           return {
             ...h,
             completionInstances: updatedInstances,
-            lastCompleted: newInstance.timestamp
+            lastCompleted: newInstance.timestamp,
+            // Also increment streak
+            streak: h.streak + 1,
+            record: Math.max(h.streak + 1, h.record || 0)
           };
         }
         return h;
       });
       
+      // Set the updated habits
       setHabits(updatedHabits);
       
       // Create celebration
       createCelebration(habit.title, true);
+      
+      // Also update the habit streaks in the database
+      try {
+        const familyRef = doc(db, "families", familyId);
+        await updateDoc(familyRef, {
+          [`habitStreaks.${habitId}`]: increment(1),
+          [`habitStreaks.${habitId}_record`]: (habit.streak + 1 > (habit.record || 0)) ? habit.streak + 1 : increment(0)
+        });
+        
+        console.log("Habit streaks updated in database");
+      } catch (streakError) {
+        console.error("Error updating habit streaks:", streakError);
+      }
       
       // Milestone reached - exactly 5 completions
       if (updatedInstances.length === 5) {
@@ -504,10 +582,14 @@ const recordHabitInstance = async (habitId) => {
       }
     }
     
+    // Reset reflection
+    setReflection('');
+    
     setIsProcessing(false);
     return true;
   } catch (error) {
     console.error("Error recording habit instance:", error);
+    createCelebration("Error", false, "Failed to record habit completion.");
     setIsProcessing(false);
     return false;
   }
@@ -1213,10 +1295,10 @@ const createNewHabit = async (isRefresh = false) => {
         ))}
       </div>
       
-      {/* Simplified habit detail/log modal */}
+      {/* Habit detail/log modal - Replace the current showHabitDetail modal with this */}
 {showHabitDetail && selectedHabit && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
-    <div className="bg-white rounded-lg max-w-md w-full p-6">
+    <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
       <div className="flex justify-between items-start mb-4">
         <h3 className="font-medium text-lg">{selectedHabit.title}</h3>
         <button 
@@ -1257,13 +1339,45 @@ const createNewHabit = async (isRefresh = false) => {
         </p>
       </div>
       
+      {/* Reflection input */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-1 text-gray-700">
+          Reflection (optional):
+        </label>
+        <textarea
+          value={reflection}
+          onChange={(e) => setReflection(e.target.value)}
+          className="w-full border rounded-md p-2 text-sm"
+          rows="3"
+          placeholder="Add any thoughts or reflections about this habit..."
+        ></textarea>
+      </div>
+      
+      {/* Previous completions */}
+      {selectedHabit.completionInstances?.length > 0 && (
+        <div className="mb-4">
+          <h4 className="text-sm font-medium mb-2">Previous completions:</h4>
+          <div className="max-h-32 overflow-y-auto">
+            {selectedHabit.completionInstances.map((instance, idx) => (
+              <div key={idx} className="text-xs p-2 bg-gray-50 mb-1 rounded">
+                <div className="flex justify-between">
+                  <span>{new Date(instance.timestamp).toLocaleDateString()}</span>
+                  <span className="text-gray-500">{instance.userName}</span>
+                </div>
+                {instance.notes && <p className="mt-1 text-gray-600">{instance.notes}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
       {/* Log habit button - centered and prominent */}
       <div className="flex justify-center">
         <button
           onClick={() => {
-            setShowHabitDetail(null);
             if (selectedHabit) {
-              recordHabitInstance(selectedHabit.id);
+              recordHabitInstance(selectedHabit.id, reflection);
+              setShowHabitDetail(null);
             }
           }}
           className="px-6 py-3 bg-black text-white rounded-lg text-lg flex items-center font-medium"
