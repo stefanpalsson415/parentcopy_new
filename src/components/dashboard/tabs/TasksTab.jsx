@@ -12,7 +12,7 @@ import AllieAIService from '../../../services/AllieAIService';
 import { doc, getDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../services/firebase';
 import confetti from 'canvas-confetti';
-import { EventManager as EnhancedEventManager } from '../../../components/calendar';
+import { EventManager as EnhancedEventManager, FloatingCalendar } from '../../../components/calendar';
 
 // Helper function to format dates consistently
 const formatDate = (date) => {
@@ -99,12 +99,13 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   const [showHabitDetail, setShowHabitDetail] = useState(null);
   const [selectedHabit, setSelectedHabit] = useState(null);
   const [reflection, setReflection] = useState('');
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
   const [datePickerDate, setDatePickerDate] = useState(null);
   const [familyStreak, setFamilyStreak] = useState(0);
   const [longestStreak, setLongestStreak] = useState(0);
   const [surveyDue, setSurveyDue] = useState(null);
   const [daysUntilSurvey, setDaysUntilSurvey] = useState(null);
+  const [showEditEvent, setShowEditEvent] = useState(false);
   
   // Cycle progress tracking
   const [cycleStep, setCycleStep] = useState(1);
@@ -385,12 +386,12 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   };
   
   // Create a celebration notification
-  const createCelebration = (habitTitle, customMessage = null) => {
+  const createCelebration = (habitTitle, success = true, customMessage = null) => {
     const newCelebration = {
       id: Date.now(),
       title: habitTitle,
       message: customMessage || generateCelebrationMessage(habitTitle),
-      timestamp: new Date().toISOString()
+      success: success
     };
     
     setCelebrations(prev => [newCelebration, ...prev]);
@@ -471,7 +472,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
         setHabits(updatedHabits);
         
         // Create celebration
-        createCelebration(habit.title);
+        createCelebration(habit.title, true);
         
         // Launch confetti if it's a milestone (e.g., 5th or 11th completion)
         if (updatedInstances.length === 5 || updatedInstances.length === 11) {
@@ -483,7 +484,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
           setCanTakeSurvey(true);
           
           // If this is the first time reaching 5 completions, show a special celebration
-          createCelebration("Survey Unlocked!", "You've completed a habit 5 times - now you can take the cycle survey!");
+          createCelebration("Survey Unlocked!", true, "You've completed a habit 5 times - now you can take the cycle survey!");
         }
       }
       
@@ -526,7 +527,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
       setShowHabitDetail(null);
       
       // Show success message
-      createCelebration("Reflection Saved");
+      createCelebration("Reflection Saved", true);
     } catch (error) {
       console.error("Error saving reflection:", error);
     }
@@ -668,14 +669,14 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
             const filtered = prev.filter(h => h.isUserGenerated);
             return [{...newHabit, completionInstances: []}, ...filtered];
           });
-          createCelebration("Habit refreshed!");
+          createCelebration("Habit refreshed!", true);
         } else {
           // Add to habits as user-generated
           setHabits(prev => [
             {...newHabit, completionInstances: []},
             ...prev
           ]);
-          createCelebration("New habit created!");
+          createCelebration("New habit created!", true);
         }
         
         // Update completedHabitInstances state
@@ -695,7 +696,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     } catch (error) {
       console.error("Error creating new habit:", error);
       setAllieIsThinking(false);
-      createCelebration("Error", "Could not create habit. Please try again later.");
+      createCelebration("Error", false, "Could not create habit. Please try again later.");
       return false;
     }
   };
@@ -740,15 +741,20 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
         });
         
         // Show success notification
-        createCelebration("Habit deleted");
+        createCelebration("Habit deleted", true);
       }
     } catch (error) {
       console.error("Error deleting habit:", error);
-      createCelebration("Error", "Failed to delete the habit");
+      createCelebration("Error", false, "Failed to delete the habit");
       
       // Reload habits to restore state
       loadCurrentWeekTasks();
     }
+  };
+  
+  // Check if habit has any completions
+  const hasCompletedInstances = (habitId) => {
+    return (completedHabitInstances[habitId]?.length || 0) > 0;
   };
 
   // Start the survey
@@ -759,7 +765,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     if (hasEnoughCompletions) {
       onStartWeeklyCheckIn();
     } else {
-      createCelebration("Not Ready Yet", "Complete a habit at least 5 times to unlock the survey.");
+      createCelebration("Not Ready Yet", false, "Complete a habit at least 5 times to unlock the survey.");
     }
   };
   
@@ -789,9 +795,12 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
         }
       }, 500);
     } else {
-      createCelebration("Chat Not Available", "Please try asking Allie directly through the chat button.");
+      createCelebration("Chat Not Available", false, "Please try asking Allie directly through the chat button.");
     }
   };
+  
+  // Filter for all family members (both adults and children)
+  const displayedMembers = familyMembers.filter(m => m.role === 'parent' || m.role === 'child');
   
   // Filter habits for the current user
   const userHabits = habits.filter(habit => 
@@ -812,16 +821,13 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
             </p>
           </div>
           <div className="flex items-center">
-            <div className="bg-white bg-opacity-10 rounded-lg px-3 py-2 mr-3 text-center">
+            <div className="bg-white bg-opacity-10 rounded-lg px-3 py-2 text-center">
               <div className="flex items-center">
                 <Flame className="text-orange-400 mr-1" size={18} />
                 <span className="text-lg font-bold">{familyStreak}</span>
               </div>
               <p className="text-xs">Streak</p>
             </div>
-            <button className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md">
-              Current Cycle
-            </button>
           </div>
         </div>
       </div>
@@ -881,7 +887,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
         
         {/* Family Member Progress */}
         <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-          {familyMembers.filter(m => m.role === 'parent').map(member => {
+          {displayedMembers.map(member => {
             const progress = memberProgress[member.id] || { step: 1, completedSurvey: false };
             return (
               <div key={member.id} className="flex flex-col items-center">
@@ -905,13 +911,15 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                   <div className={`absolute -right-1 -bottom-1 w-6 h-6 rounded-full flex items-center justify-center text-xs ${
                     progress.step > 1 ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
                   }`}>
-                    {progress.step}
+                    {member.role === 'child' ? '2' : progress.step}
                   </div>
                 </div>
                 <div className="mt-2 text-center">
                   <div className="text-sm font-medium">{member.name}</div>
                   <div className="text-xs text-gray-500">
-                    {progress.completedSurvey ? 'Survey Done' : 'Step 1: Habits'}
+                    {member.role === 'child' 
+                      ? 'Step 2: Survey' 
+                      : progress.completedSurvey ? 'Survey Done' : 'Step 1: Habits'}
                   </div>
                 </div>
               </div>
@@ -949,7 +957,7 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
               const today = new Date();
               const defaultDate = surveyDue || new Date(today.setDate(today.getDate() + 7));
               setDatePickerDate(defaultDate);
-              setShowDatePicker(true);
+              setShowCalendar(true);
             }}
             className="px-4 py-2 border border-gray-300 rounded-md flex items-center hover:bg-gray-50"
           >
@@ -959,31 +967,53 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
         </div>
         
         {/* Cycle Information */}
-        <div className="mt-6 p-3 bg-gray-50 rounded-lg text-sm">
-          <h4 className="font-medium mb-2 flex items-center">
-            <Info size={16} className="mr-2 text-blue-500" />
-            Cycle Progress
-          </h4>
-          <p className="mb-2">
-            To complete this cycle:
-          </p>
-          <ul className="list-disc pl-5 space-y-1">
-            <li className={canTakeSurvey ? 'text-green-600' : ''}>
-              Complete a habit at least 5 times
-              {canTakeSurvey && ' ✓'}
-            </li>
-            <li className={Object.values(memberProgress).every(p => p.completedSurvey) ? 'text-green-600' : ''}>
-              All family members complete the survey
-              {Object.values(memberProgress).every(p => p.completedSurvey) && ' ✓'}
-            </li>
-            <li className={cycleStep >= 3 ? 'text-green-600' : ''}>
-              Hold a family meeting to review progress
-              {cycleStep >= 3 && ' ✓'}
-            </li>
-          </ul>
-          <p className="mt-2 text-xs text-gray-500">
-            Due date: {surveyDue ? formatDate(surveyDue) : 'Not scheduled yet'}
-          </p>
+        <div className="mt-6 p-3 bg-gray-50 rounded-lg text-sm border border-gray-100">
+          <div className="flex items-start">
+            <Info size={16} className="mr-2 text-blue-500 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h4 className="font-medium">Cycle Progress</h4>
+              
+              <div className="mt-2 flex items-center">
+                <div className={`w-4 h-4 rounded-full flex items-center justify-center mr-2 ${
+                  canTakeSurvey ? 'bg-green-500 text-white' : 'bg-gray-300'
+                }`}>
+                  {canTakeSurvey && <Check size={12} />}
+                </div>
+                <span className={canTakeSurvey ? 'text-green-700' : ''}>
+                  Complete a habit at least 5 times
+                </span>
+              </div>
+              
+              <div className="mt-1 flex items-center">
+                <div className={`w-4 h-4 rounded-full flex items-center justify-center mr-2 ${
+                  Object.values(memberProgress).every(p => p.completedSurvey) 
+                    ? 'bg-green-500 text-white' 
+                    : 'bg-gray-300'
+                }`}>
+                  {Object.values(memberProgress).every(p => p.completedSurvey) && <Check size={12} />}
+                </div>
+                <span className={Object.values(memberProgress).every(p => p.completedSurvey) ? 'text-green-700' : ''}>
+                  All family members complete the survey
+                </span>
+              </div>
+              
+              <div className="mt-1 flex items-center">
+                <div className={`w-4 h-4 rounded-full flex items-center justify-center mr-2 ${
+                  cycleStep >= 3 ? 'bg-green-500 text-white' : 'bg-gray-300'
+                }`}>
+                  {cycleStep >= 3 && <Check size={12} />}
+                </div>
+                <span className={cycleStep >= 3 ? 'text-green-700' : ''}>
+                  Hold a family meeting to review progress
+                </span>
+              </div>
+              
+              <div className="mt-2 text-gray-500 flex items-center text-xs">
+                <Clock size={12} className="mr-1" />
+                Due date: {surveyDue ? formatDate(surveyDue) : 'Not scheduled yet'}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -994,10 +1024,29 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
           <div className="flex space-x-2">
             <button 
               onClick={() => setShowAddHabit(true)}
-              className="text-sm flex items-center text-blue-600 hover:text-blue-800"
+              className="text-sm flex items-center px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md"
             >
               <Plus size={16} className="mr-1" />
               Add Habit
+            </button>
+            
+            <button 
+              onClick={() => {
+                const hasCompletions = habits.some(h => !h.isUserGenerated && hasCompletedInstances(h.id));
+                
+                if (hasCompletions) {
+                  if (window.confirm("This will replace your current system habit. Your completion progress will be lost. Continue?")) {
+                    createNewHabit(true);
+                  }
+                } else {
+                  createNewHabit(true);
+                }
+              }}
+              className="text-sm flex items-center px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md"
+              disabled={allieIsThinking}
+            >
+              <RefreshCw size={16} className="mr-1" />
+              Refresh
             </button>
           </div>
         </div>
@@ -1114,27 +1163,6 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                     {/* Action buttons */}
                     <div className="mt-4 flex justify-between items-center">
                       <div className="space-x-2">
-                        <button
-                          onClick={() => {
-                            setSelectedHabit(habit);
-                            setShowHabitDetail(habit.id);
-                          }}
-                          className="text-xs flex items-center text-gray-600 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-100"
-                        >
-                          <Info size={12} className="mr-1" />
-                          Details
-                        </button>
-                        
-                        {!habit.isUserGenerated && (
-                          <button
-                            onClick={() => createNewHabit(true)}
-                            className="text-xs flex items-center text-gray-600 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-100"
-                          >
-                            <RefreshCw size={12} className="mr-1" />
-                            Refresh
-                          </button>
-                        )}
-                        
                         {habit.isUserGenerated && (
                           <button
                             onClick={() => deleteHabit(habit.id)}
@@ -1147,21 +1175,14 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
                       </div>
                       
                       <button
-                        onClick={() => recordHabitInstance(habit.id)}
-                        disabled={isProcessing}
-                        className="px-3 py-2 bg-black text-white text-sm rounded-md hover:bg-gray-800 flex items-center disabled:bg-gray-400"
+                        onClick={() => {
+                          setSelectedHabit(habit);
+                          setShowHabitDetail(habit.id);
+                        }}
+                        className="px-3 py-2 bg-black text-white text-sm rounded-md hover:bg-gray-800 flex items-center"
                       >
-                        {isProcessing ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                            Processing...
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle size={14} className="mr-2" />
-                            Complete Now
-                          </>
-                        )}
+                        <CheckCircle size={14} className="mr-2" />
+                        Practice This Habit
                       </button>
                     </div>
                   </div>
@@ -1196,10 +1217,16 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
         {celebrations.map(celebration => (
           <div 
             key={celebration.id} 
-            className="p-3 rounded-lg shadow-lg animation-bounce-in max-w-xs bg-green-500 text-white"
+            className={`p-3 rounded-lg shadow-lg animation-bounce-in max-w-xs ${
+              celebration.success ? 'bg-green-500 text-white' : 'bg-amber-500 text-white'
+            }`}
           >
             <div className="flex items-center">
-              <Check className="text-white mr-2" size={18} />
+              {celebration.success ? (
+                <Check className="text-white mr-2" size={18} />
+              ) : (
+                <Info className="text-white mr-2" size={18} />
+              )}
               <div>
                 <div className="font-medium">{celebration.title}</div>
                 <div className="text-sm">{celebration.message}</div>
@@ -1327,13 +1354,37 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
             )}
             
             {/* Actions */}
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => {
+                  setShowHabitDetail(null);
+                  // Only try to record if there's a habit selected
+                  if (selectedHabit) {
+                    recordHabitInstance(selectedHabit.id);
+                  }
+                }}
+                className="px-4 py-2 bg-black text-white rounded-lg flex items-center"
+                disabled={isProcessing}
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle size={16} className="mr-2" />
+                    Complete Habit
+                  </>
+                )}
+              </button>
+              
               <button
                 onClick={saveReflection}
                 disabled={!reflection.trim()}
-                className="px-4 py-2 bg-black text-white rounded-lg flex items-center disabled:bg-gray-300 disabled:cursor-not-allowed"
+                className="px-4 py-2 border border-black rounded-lg flex items-center disabled:border-gray-300 disabled:text-gray-300 disabled:cursor-not-allowed"
               >
-                <CheckCircle size={16} className="mr-2" />
+                <Check size={16} className="mr-2" />
                 Save Reflection
               </button>
             </div>
@@ -1422,32 +1473,38 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
         </div>
       )}
       
-      {/* Date picker modal */}
-      {showDatePicker && (
-        <EnhancedEventManager
-          initialEvent={{
-            title: `Cycle ${currentWeek} Due Date`,
-            description: `Due date for completing Cycle ${currentWeek} activities including surveys and tasks.`,
-            dateTime: datePickerDate ? datePickerDate.toISOString() : new Date().toISOString(),
-            category: 'cycle-due-date',
-            eventType: 'cycle-due-date',
-            cycleNumber: currentWeek
-          }}
-          onSave={async (event) => {
-            setShowDatePicker(false);
-            const newDate = new Date(event.dateTime);
-            const success = await updateCycleDueDate(newDate);
-            if (success) {
-              // Update the UI with new date
-              setSurveyDue(newDate);
-              calculateNextSurveyDue();
-            }
-          }}
-          onCancel={() => setShowDatePicker(false)}
-          eventType="cycle-due-date"
+      {/* Calendar floating widget with embedded event editor */}
+      {showCalendar && (
+        <FloatingCalendar
+          onClose={() => setShowCalendar(false)}
           selectedDate={datePickerDate}
-          isCompact={true}
-          mode="create"
+          embeddedComponent={
+            <EnhancedEventManager
+              initialEvent={{
+                title: `Cycle ${currentWeek} Due Date`,
+                description: `Due date for completing Cycle ${currentWeek} activities including surveys and tasks.`,
+                dateTime: datePickerDate ? datePickerDate.toISOString() : new Date().toISOString(),
+                category: 'cycle-due-date',
+                eventType: 'cycle-due-date',
+                cycleNumber: currentWeek
+              }}
+              onSave={async (event) => {
+                setShowCalendar(false);
+                const newDate = new Date(event.dateTime);
+                const success = await updateCycleDueDate(newDate);
+                if (success) {
+                  // Update the UI with new date
+                  setSurveyDue(newDate);
+                  calculateNextSurveyDue();
+                }
+              }}
+              onCancel={() => setShowCalendar(false)}
+              eventType="cycle-due-date"
+              selectedDate={datePickerDate}
+              isCompact={true}
+              mode="create"
+            />
+          }
         />
       )}
       
