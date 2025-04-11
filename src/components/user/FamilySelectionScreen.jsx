@@ -955,7 +955,12 @@ if (currentUser && isLoggingIn) {
                         ? 'border-black bg-gray-50' 
                         : 'border-gray-200 hover:border-gray-900'
                     }`}
-                    onClick={() => handleSelectUser(member)}
+                    onClick={() => {
+                      // Just select the user without navigating
+                      console.log(`Selecting family member: ${member.name}, ID: ${member.id}`);
+                      localStorage.setItem('selectedUserId', member.id);
+                      selectFamilyMember(member);
+                    }}
                   >
                     <div className="flex items-center">
                       <div className="flex-shrink-0 mr-4 relative">
@@ -1015,19 +1020,30 @@ if (currentUser && isLoggingIn) {
 
           {/* Action buttons */}
           <div className="text-center space-y-4">
-            <button 
-              disabled={!selectedUser}
-              onClick={() => selectedUser && handleSelectUser(selectedUser)}
-              className={`w-full py-3 px-4 rounded-md font-medium text-white ${
-                selectedUser 
-                  ? 'bg-black hover:bg-gray-800' 
-                  : 'bg-gray-300 cursor-not-allowed'
-              }`}
-            >
-              {selectedUser 
-                ? `Continue as ${selectedUser.name}` 
-                : "Select your profile to continue"}
-            </button>
+          <button 
+  disabled={!selectedUser}
+  onClick={() => {
+    // Just navigate directly using the currently selected user
+    if (selectedUser) {
+      if (selectedUser.completed) {
+        navigate('/dashboard');
+      } else if (selectedUser.role === 'child') {
+        navigate('/kid-survey');
+      } else {
+        navigate('/survey');
+      }
+    }
+  }}
+  className={`w-full py-3 px-4 rounded-md font-medium text-white ${
+    selectedUser 
+      ? 'bg-black hover:bg-gray-800' 
+      : 'bg-gray-300 cursor-not-allowed'
+  }`}
+>
+  {selectedUser 
+    ? `Continue as ${selectedUser.name}` 
+    : "Select your profile to continue"}
+</button>
               
             <button
               onClick={() => navigate('/onboarding')}

@@ -10,6 +10,7 @@ import { useSurvey } from '../../contexts/SurveyContext';
 import AllieChat from '../chat/AllieChat.jsx';
 import QuestionFeedbackService from '../../services/QuestionFeedbackService';
 import QuestionFeedbackPanel from './QuestionFeedbackPanel';
+import SurveyWalkthrough from './SurveyWalkthrough';
 
 
 const SurveyScreen = ({ mode = 'initial' }) => {
@@ -64,6 +65,7 @@ const SurveyScreen = ({ mode = 'initial' }) => {
   const [expandedSections, setExpandedSections] = useState({});
   const [hasWeightChanges, setHasWeightChanges] = useState(false);
   const [weightBeingEdited, setWeightBeingEdited] = useState(null);
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
 
   const keyboardInitialized = useRef(false);
   const autoSaveIntervalRef = useRef(null);
@@ -83,19 +85,43 @@ const SurveyScreen = ({ mode = 'initial' }) => {
     setHasWeightChanges(true);
   };
 
-// Ensure we have the correct selected user on mount
-useEffect(() => {
-  if (familyMembers.length > 0) {
-    const storedUserId = localStorage.getItem('selectedUserId');
-    if (storedUserId && (!selectedUser || selectedUser.id !== storedUserId)) {
-      const userToSelect = familyMembers.find(m => m.id === storedUserId);
-      if (userToSelect) {
-        console.log("Restoring correct user for survey:", userToSelect.name);
-        selectFamilyMember(userToSelect);
+  // Check if this is the user's first time seeing the survey walkthrough
+  useEffect(() => {
+    if (mode === 'initial' && selectedUser) {
+      // Check if this user has seen the tutorial before
+      const hasSeen = localStorage.getItem(`surveyWalkthroughSeen_${selectedUser.id}`);
+      if (!hasSeen) {
+        // Delay the walkthrough to ensure UI is fully loaded
+        const timer = setTimeout(() => {
+          setShowWalkthrough(true);
+        }, 1000);
+        
+        return () => clearTimeout(timer);
       }
     }
-  }
-}, [familyMembers]);
+  }, [selectedUser, mode]);
+
+  // Function to mark the walkthrough as completed
+  const completeWalkthrough = () => {
+    if (selectedUser) {
+      localStorage.setItem(`surveyWalkthroughSeen_${selectedUser.id}`, 'true');
+    }
+    setShowWalkthrough(false);
+  };
+
+  // Ensure we have the correct selected user on mount
+  useEffect(() => {
+    if (familyMembers.length > 0) {
+      const storedUserId = localStorage.getItem('selectedUserId');
+      if (storedUserId && (!selectedUser || selectedUser.id !== storedUserId)) {
+        const userToSelect = familyMembers.find(m => m.id === storedUserId);
+        if (userToSelect) {
+          console.log("Restoring correct user for survey:", userToSelect.name);
+          selectFamilyMember(userToSelect);
+        }
+      }
+    }
+  }, [familyMembers]);
 
 
   // Redirect if no user is selected
@@ -116,89 +142,88 @@ useEffect(() => {
   }, [selectedUser, currentWeek, navigate, mode]);
 
   // Load appropriate questions based on mode
-  // Load appropriate questions based on mode
-useEffect(() => {
-  if (familyId && selectedUser && !isPersonalizationLoaded) {
-    console.log(`Loading ${mode} questions for user:`, selectedUser.id, "in family:", familyId);
-    
-    // Create a family data object for personalization
-    const familyData = {
-      familyName: familyName,
-      familyId: familyId,
-      parents: familyMembers.filter(m => m.role === 'parent').map(p => ({
-        name: p.name,
-        role: p.roleType || 'parent'
-      })),
-      children: familyMembers.filter(m => m.role === 'child').map(c => ({
-        name: c.name,
-        age: c.age || 10
-      })),
-      priorities: familyPriorities,
-      communication: { style: "open" } // Default communication style
-    };
-    
-    // Set the family data in survey context
-    setFamilyData(familyData);
-    
-    if (mode === 'initial') {
-      // Generate personalized questions for initial survey
-      const personalized = selectPersonalizedInitialQuestions(fullQuestionSet, familyData);
+  useEffect(() => {
+    if (familyId && selectedUser && !isPersonalizationLoaded) {
+      console.log(`Loading ${mode} questions for user:`, selectedUser.id, "in family:", familyId);
       
-      // Apply feedback filter to remove inapplicable questions
-      const loadFilteredQuestions = async () => {
-        try {
-          const filteredQuestions = await getFilteredQuestionsForAdult(familyId, personalized);
-          console.log("Generated personalized questions:", filteredQuestions.length);
-          setPersonalizedQuestions(filteredQuestions);
-          setIsPersonalizationLoaded(true);
-        } catch (error) {
-          console.error("Error filtering questions:", error);
-          // Fallback to unfiltered questions
-          setPersonalizedQuestions(personalized);
-          setIsPersonalizationLoaded(true);
-        }
+      // Create a family data object for personalization
+      const familyData = {
+        familyName: familyName,
+        familyId: familyId,
+        parents: familyMembers.filter(m => m.role === 'parent').map(p => ({
+          name: p.name,
+          role: p.roleType || 'parent'
+        })),
+        children: familyMembers.filter(m => m.role === 'child').map(c => ({
+          name: c.name,
+          age: c.age || 10
+        })),
+        priorities: familyPriorities,
+        communication: { style: "open" } // Default communication style
       };
       
-      loadFilteredQuestions();
-    } else if (mode === 'weekly') {
-      // Generate weekly questions with enhanced error handling
-      try {
-        const weeklyQuestions = generateWeeklyQuestions(currentWeek);
-        console.log(`Generated ${weeklyQuestions?.length || 0} weekly questions for week ${currentWeek}`);
+      // Set the family data in survey context
+      setFamilyData(familyData);
+      
+      if (mode === 'initial') {
+        // Generate personalized questions for initial survey
+        const personalized = selectPersonalizedInitialQuestions(fullQuestionSet, familyData);
         
-        if (!weeklyQuestions || weeklyQuestions.length === 0) {
-          console.error("No weekly questions generated, using fallback");
-          // Fallback to a subset of full questions if weekly generation fails
+        // Apply feedback filter to remove inapplicable questions
+        const loadFilteredQuestions = async () => {
+          try {
+            const filteredQuestions = await getFilteredQuestionsForAdult(familyId, personalized);
+            console.log("Generated personalized questions:", filteredQuestions.length);
+            setPersonalizedQuestions(filteredQuestions);
+            setIsPersonalizationLoaded(true);
+          } catch (error) {
+            console.error("Error filtering questions:", error);
+            // Fallback to unfiltered questions
+            setPersonalizedQuestions(personalized);
+            setIsPersonalizationLoaded(true);
+          }
+        };
+        
+        loadFilteredQuestions();
+      } else if (mode === 'weekly') {
+        // Generate weekly questions with enhanced error handling
+        try {
+          const weeklyQuestions = generateWeeklyQuestions(currentWeek);
+          console.log(`Generated ${weeklyQuestions?.length || 0} weekly questions for week ${currentWeek}`);
+          
+          if (!weeklyQuestions || weeklyQuestions.length === 0) {
+            console.error("No weekly questions generated, using fallback");
+            // Fallback to a subset of full questions if weekly generation fails
+            const fallbackQuestions = fullQuestionSet.slice(0, 20);
+            setPersonalizedQuestions(fallbackQuestions);
+          } else {
+            setPersonalizedQuestions(weeklyQuestions);
+          }
+          setIsPersonalizationLoaded(true);
+        } catch (error) {
+          console.error("Error generating weekly questions:", error);
+          // Fallback to a subset of full questions
           const fallbackQuestions = fullQuestionSet.slice(0, 20);
           setPersonalizedQuestions(fallbackQuestions);
-        } else {
-          setPersonalizedQuestions(weeklyQuestions);
+          setIsPersonalizationLoaded(true);
         }
-        setIsPersonalizationLoaded(true);
-      } catch (error) {
-        console.error("Error generating weekly questions:", error);
-        // Fallback to a subset of full questions
-        const fallbackQuestions = fullQuestionSet.slice(0, 20);
-        setPersonalizedQuestions(fallbackQuestions);
-        setIsPersonalizationLoaded(true);
       }
     }
-  }
-}, [
-  familyId, 
-  selectedUser, 
-  familyMembers, 
-  familyName, 
-  familyPriorities, 
-  fullQuestionSet, 
-  isPersonalizationLoaded, 
-  mode, 
-  currentWeek,
-  selectPersonalizedInitialQuestions, 
-  setFamilyData, 
-  getFilteredQuestionsForAdult,
-  generateWeeklyQuestions
-]);
+  }, [
+    familyId, 
+    selectedUser, 
+    familyMembers, 
+    familyName, 
+    familyPriorities, 
+    fullQuestionSet, 
+    isPersonalizationLoaded, 
+    mode, 
+    currentWeek,
+    selectPersonalizedInitialQuestions, 
+    setFamilyData, 
+    getFilteredQuestionsForAdult,
+    generateWeeklyQuestions
+  ]);
   
   // Show AllieChat after component mounts
   useEffect(() => {
@@ -1016,67 +1041,67 @@ useEffect(() => {
               <div className="p-4">
                 <div className="max-w-3xl mx-auto">
                   {/* Question */}
-                  <div className="bg-white rounded-lg p-6 shadow-sm border">
-  <div className="flex justify-between items-start mb-3">
-    <p className="text-lg">
-      {currentQuestion.text}
-    </p>
-    {currentQuestion.totalWeight && (
-      <div 
-        className={`ml-2 px-2 py-1 rounded-full text-xs flex items-center flex-shrink-0 ${getWeightImpactColor(currentQuestion.totalWeight)} cursor-pointer hover:scale-105 transition-transform`}
-        onClick={() => setShowWeightMetrics(!showWeightMetrics)}
-      >
-        <Scale size={12} className="mr-1" />
-        Impact: {getWeightImpactText(currentQuestion.totalWeight)}
-        <div className="ml-1 bg-white bg-opacity-30 rounded-full w-4 h-4 flex items-center justify-center">
-          <ChevronDown size={10} className={showWeightMetrics ? "hidden" : "block"} />
-          <ChevronUp size={10} className={showWeightMetrics ? "block" : "hidden"} />
-        </div>
-      </div>
-    )}
-  </div>
-  <p className="text-xs text-gray-500 mb-3">
-    {currentQuestion.category}
-  </p>
-  <div className="flex space-x-4">
-    <button 
-      onClick={() => setShowExplanation(!showExplanation)}
-      className="text-xs text-gray-600 flex items-center hover:underline"
-    >
-      <HelpCircle size={12} className="mr-1" />
-      {showExplanation ? "Hide explanation" : "Why are we asking this?"}
-    </button>
-    
-    <button 
-      onClick={() => setShowFeedbackPanel(true)}
-      className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full flex items-center hover:bg-gray-200"
-    >
-      <Scale size={12} className="mr-1" />
-      Question Feedback
-      <div className="ml-1 bg-white bg-opacity-50 rounded-full w-4 h-4 flex items-center justify-center">
-        <ChevronDown size={10} />
-      </div>
-    </button>
-  </div>
-{/* Add the feedback panel modal */}
-{showFeedbackPanel && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <QuestionFeedbackPanel
-      questionId={currentQuestion.id}
-      questionText={currentQuestion.text}
-      category={currentQuestion.category}
-      familyId={familyId}
-      onSave={(feedbackType) => {
-        setShowFeedbackPanel(false);
-        if (feedbackType === 'not_applicable') {
-          // If question is marked not applicable, skip to next question
-          handleSkip();
-        }
-      }}
-      onCancel={() => setShowFeedbackPanel(false)}
-    />
-  </div>
-)}
+                  <div className="bg-white rounded-lg p-6 shadow-sm border question-area">
+                    <div className="flex justify-between items-start mb-3">
+                      <p className="text-lg">
+                        {currentQuestion.text}
+                      </p>
+                      {currentQuestion.totalWeight && (
+                        <div 
+                          className={`ml-2 px-2 py-1 rounded-full text-xs flex items-center flex-shrink-0 ${getWeightImpactColor(currentQuestion.totalWeight)} cursor-pointer hover:scale-105 transition-transform impact-indicator`}
+                          onClick={() => setShowWeightMetrics(!showWeightMetrics)}
+                        >
+                          <Scale size={12} className="mr-1" />
+                          Impact: {getWeightImpactText(currentQuestion.totalWeight)}
+                          <div className="ml-1 bg-white bg-opacity-30 rounded-full w-4 h-4 flex items-center justify-center">
+                            <ChevronDown size={10} className={showWeightMetrics ? "hidden" : "block"} />
+                            <ChevronUp size={10} className={showWeightMetrics ? "block" : "hidden"} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 mb-3">
+                      {currentQuestion.category}
+                    </p>
+                    <div className="flex space-x-4">
+                      <button 
+                        onClick={() => setShowExplanation(!showExplanation)}
+                        className="text-xs text-gray-600 flex items-center hover:underline"
+                      >
+                        <HelpCircle size={12} className="mr-1" />
+                        {showExplanation ? "Hide explanation" : "Why are we asking this?"}
+                      </button>
+                      
+                      <button 
+                        onClick={() => setShowFeedbackPanel(true)}
+                        className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full flex items-center hover:bg-gray-200 feedback-button"
+                      >
+                        <Scale size={12} className="mr-1" />
+                        Question Feedback
+                        <div className="ml-1 bg-white bg-opacity-50 rounded-full w-4 h-4 flex items-center justify-center">
+                          <ChevronDown size={10} />
+                        </div>
+                      </button>
+                    </div>
+                    {/* Add the feedback panel modal */}
+                    {showFeedbackPanel && (
+                      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <QuestionFeedbackPanel
+                          questionId={currentQuestion.id}
+                          questionText={currentQuestion.text}
+                          category={currentQuestion.category}
+                          familyId={familyId}
+                          onSave={(feedbackType) => {
+                            setShowFeedbackPanel(false);
+                            if (feedbackType === 'not_applicable') {
+                              // If question is marked not applicable, skip to next question
+                              handleSkip();
+                            }
+                          }}
+                          onCancel={() => setShowFeedbackPanel(false)}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1087,7 +1112,7 @@ useEffect(() => {
               <div className="max-w-3xl mx-auto">
                 {/* Weight metrics visualization */}
                 {showWeightMetrics && (
-                  <div className="mb-4 p-3 bg-gray-50 rounded-md border relative">
+                  <div className="mb-4 p-3 bg-gray-50 rounded-md border relative weight-customization">
                     <div className="flex justify-between items-center mb-2">
                       <h4 className="text-sm font-medium flex items-center">
                         <Scale size={16} className="mr-2 text-gray-700" />
@@ -1389,7 +1414,7 @@ useEffect(() => {
                 </div>
                 
                 {/* Parent selection */}
-                <div className="flex justify-center items-center my-8">
+                <div className="flex justify-center items-center my-8 parent-selection">
                   <div className="flex w-full max-w-md justify-between items-center">
                     {/* Mama */}
                     <div className="flex flex-col items-center">
@@ -1497,6 +1522,12 @@ useEffect(() => {
 
       {/* Show AllieChat component */}
       {showAllieChat && <AllieChat />}
+
+      {/* Survey Walkthrough */}
+      <SurveyWalkthrough 
+        isVisible={showWalkthrough} 
+        onComplete={completeWalkthrough} 
+      />
     </div>
   );
 };

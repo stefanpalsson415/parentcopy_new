@@ -36,3 +36,49 @@
     transform: rotate(360deg);
   }
 }
+
+
+/* src/styles/walkthrough.css */
+.walkthrough-tooltip {
+  animation: fadeIn 0.3s ease-in-out;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.walkthrough-tooltip::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: white;
+  transform: rotate(45deg);
+}
+
+.walkthrough-tooltip[data-position="top"]::after {
+  bottom: -6px;
+  left: 50%;
+  margin-left: -6px;
+}
+
+.walkthrough-tooltip[data-position="bottom"]::after {
+  top: -6px;
+  left: 50%;
+  margin-left: -6px;
+}
+
+.walkthrough-tooltip[data-position="left"]::after {
+  right: -6px;
+  top: 50%;
+  margin-top: -6px;
+}
+
+.walkthrough-tooltip[data-position="right"]::after {
+  left: -6px;
+  top: 50%;
+  margin-top: -6px;
+} 
