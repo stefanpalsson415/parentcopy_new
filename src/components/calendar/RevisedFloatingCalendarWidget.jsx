@@ -369,35 +369,45 @@ const loadAllEvents = async () => {
   };
   
   // Get upcoming family meetings
-  const getUpcomingMeetings = () => {
-    const meetings = [];
-    
-    // Get family meeting for the current week if not completed
-    if (weekStatus && weekStatus[currentWeek] && !weekStatus[currentWeek].completed) {
-      const meetingDate = new Date();
-      // If today is Sunday, set to today, otherwise set to next Sunday
-      if (meetingDate.getDay() !== 0) {
-        meetingDate.setDate(meetingDate.getDate() + (7 - meetingDate.getDay())); // Next Sunday
-      }
-      meetingDate.setHours(19, 0, 0, 0); // 7:00 PM
-      
-      meetings.push({
-        id: `meeting-${currentWeek}`,
-        title: `Cycle ${currentWeek} Family Meeting`, // Changed "Week" to "Cycle"
-        date: meetingDate.toISOString(),
-        dateObj: meetingDate,
-        category: 'meeting',
-        eventType: 'meeting',
-        weekNumber: currentWeek,
-        linkedEntity: {
-          type: 'meeting',
-          id: currentWeek
-        }
-      });
+const getUpcomingMeetings = () => {
+  const meetings = [];
+  
+  // Get family meeting for the current week if not completed
+  if (weekStatus && weekStatus[currentWeek] && !weekStatus[currentWeek].completed) {
+    const meetingDate = new Date();
+    // If today is Sunday, set to today, otherwise set to next Sunday
+    if (meetingDate.getDay() !== 0) {
+      meetingDate.setDate(meetingDate.getDate() + (7 - meetingDate.getDay())); // Next Sunday
     }
+    meetingDate.setHours(19, 0, 0, 0); // 7:00 PM
     
-    return meetings;
-  };
+    // Create attendees list from all family members
+    const attendees = familyMembers.map(member => ({
+      id: member.id,
+      name: member.name,
+      profilePicture: member.profilePicture,
+      role: member.role
+    }));
+    
+    meetings.push({
+      id: `meeting-${currentWeek}`,
+      title: `Cycle ${currentWeek} Family Meeting`, // Changed "Week" to "Cycle"
+      date: meetingDate.toISOString(),
+      dateObj: meetingDate,
+      category: 'meeting',
+      eventType: 'meeting',
+      weekNumber: currentWeek,
+      linkedEntity: {
+        type: 'meeting',
+        id: currentWeek
+      },
+      attendees: attendees, // Add all family members as attendees
+      attendingParentId: 'both' // Indicate both parents attending
+    });
+  }
+  
+  return meetings;
+};
   
   // Load task events
   const loadTaskEvents = async () => {
@@ -695,12 +705,33 @@ const getEventsForSelectedDate = () => {
     }
   };
   
-  const handleEventEdit = (event) => {
-    setSelectedEvent(event);
-    setShowEventDetails(true);
-    setIsEditingEvent(true);
-    setEditedEvent({...event});
+  // Update the handleEventEdit function
+const handleEventEdit = (event) => {
+  // Create a properly formatted event object for the editor
+  const formattedEvent = {
+    ...event,
+    // Make sure we have these fields properly set
+    title: event.title || event.summary,
+    description: event.description || '',
+    location: event.location || '',
+    dateTime: event.dateObj?.toISOString() || event.start?.dateTime || new Date().toISOString(),
+    endDateTime: event.dateEndObj?.toISOString() || event.end?.dateTime,
+    childId: event.childId || null,
+    childName: event.childName || null,
+    attendingParentId: event.attendingParentId || null,
+    eventType: event.eventType || 'general',
+    category: event.category || 'general',
+    siblingIds: event.siblingIds || [],
+    siblingNames: event.siblingNames || [],
+    // Make sure we have the ID for updating
+    firestoreId: event.firestoreId || event.id
   };
+  
+  setSelectedEvent(formattedEvent);
+  setShowEventDetails(true);
+  setIsEditingEvent(true);
+  setEditedEvent(formattedEvent);
+};
   
   // Add task to calendar
   const handleAddTaskToCalendar = async (task) => {
@@ -1234,26 +1265,52 @@ const eventDates = allEvents
         <Calendar size={24} />
       </button>
       
-      {/* Event Details Modal */}
-      {showEventDetails && selectedEvent && (
-        <EventDetails
-          event={selectedEvent}
-          onClose={() => {
+      {/* Event Details Modal - Use EnhancedEventManager for editing */}
+{showEventDetails && selectedEvent && (
+  isEditingEvent ? (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <EnhancedEventManager
+          initialEvent={selectedEvent}
+          onSave={(result) => {
+            if (result?.success) {
+              // Close the editor
+              setShowEventDetails(false);
+              setIsEditingEvent(false);
+              
+              // Update local data and refresh
+              setLastRefresh(Date.now());
+              CalendarService.showNotification("Event updated successfully", "success");
+            }
+          }}
+          onCancel={() => {
             setShowEventDetails(false);
             setIsEditingEvent(false);
-            setEditedEvent(null);
           }}
-          onEdit={() => {
-            setIsEditingEvent(true);
-            setEditedEvent({...selectedEvent});
-          }}
-          onDelete={handleDeleteEvent}
-          onUpdate={handleUpdateEvent}
-          familyMembers={familyMembers}
-          pendingAction={pendingAction}
-          showSuccess={false}
+          mode="edit"
         />
-      )}
+      </div>
+    </div>
+  ) : (
+    <EventDetails
+      event={selectedEvent}
+      onClose={() => {
+        setShowEventDetails(false);
+        setIsEditingEvent(false);
+        setEditedEvent(null);
+      }}
+      onEdit={() => {
+        setIsEditingEvent(true);
+        setEditedEvent({...selectedEvent});
+      }}
+      onDelete={handleDeleteEvent}
+      onUpdate={handleUpdateEvent}
+      familyMembers={familyMembers}
+      pendingAction={pendingAction}
+      showSuccess={false}
+    />
+  )
+)}
     </div>
   );
 };

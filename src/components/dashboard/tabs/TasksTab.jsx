@@ -13,6 +13,8 @@ import { doc, getDoc, updateDoc, increment, serverTimestamp, setDoc } from 'fire
 import { db } from '../../../services/firebase';
 import confetti from 'canvas-confetti';
 import { EventManager as EnhancedEventManager, FloatingCalendar } from '../../../components/calendar';
+import CalendarService from '../../../services/CalendarService';
+import { useAuth } from '../../../contexts/AuthContext';
 
 // Helper function to format dates consistently
 const formatDate = (date) => {
@@ -106,6 +108,8 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   const [surveyDue, setSurveyDue] = useState(null);
   const [daysUntilSurvey, setDaysUntilSurvey] = useState(null);
   const [showEditEvent, setShowEditEvent] = useState(false);
+  const { currentUser } = useAuth();
+
   
   // Cycle progress tracking
   const [cycleStep, setCycleStep] = useState(1);
@@ -392,9 +396,7 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
       location: eventDetails.location || '',
       category: 'cycle-due-date',
       eventType: 'cycle-due-date',
-      cycleNumber: currentWeek,
-      // Add any other fields from eventDetails
-      ...eventDetails
+      cycleNumber: currentWeek
     };
     
     // Use CalendarService to add/update the event
@@ -407,6 +409,22 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
     // Update the UI
     setSurveyDue(newDate);
     calculateNextSurveyDue();
+    
+    // ADDED: Update week status in Firebase to ensure consistency
+    const updatedStatus = {
+      ...weekStatus,
+      [currentWeek]: {
+        ...weekStatus[currentWeek],
+        scheduledDate: newDate.toISOString()
+      }
+    };
+    
+    // ADDED: Update in Firebase to ensure data is consistent across tabs
+    await DatabaseService.saveFamilyData({
+      weekStatus: updatedStatus,
+      updatedAt: new Date().toISOString()
+    }, familyId);
+    
     createCelebration(`Cycle ${currentWeek} due date updated to ${formattedDate}`, true);
     
     setIsProcessing(false);
