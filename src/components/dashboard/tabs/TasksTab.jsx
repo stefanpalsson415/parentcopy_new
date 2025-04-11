@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Calendar, CheckCircle, X, Plus, Award, Flame, 
   Zap, Star, ArrowRight, MessageSquare, Clock, 
-  Heart, ArrowUp, Camera, Share2, Upload, Check,
-  Info, ChevronDown, ChevronUp, Edit, AlertCircle,
+  Heart, ArrowUp, Camera,RefreshCw, Share2, Upload, Check,
+  Info, ChevronDown, ChevronUp, Edit, AlertCircle, Trash,
   User, Settings, ArrowUpRight
 } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
@@ -379,134 +379,142 @@ const triggerAllieChat = (message) => {
   }
 };
 
-  // Load habits for the current week
-  useEffect(() => {
-    const loadHabits = async () => {
-      try {
-        setLoading(true);
-        console.log(`Loading habits for Week ${currentWeek}, user:`, selectedUser?.name);
+  // In TasksTab.jsx - Update the loadHabits function in the useEffect
+
+// Modified habit loading logic
+useEffect(() => {
+  const loadHabits = async () => {
+    try {
+      setLoading(true);
+      console.log(`Loading habits for Week ${currentWeek}, user:`, selectedUser?.name);
+      
+      if (familyId) {
+        // Load tasks from database
+        const tasks = await loadCurrentWeekTasks();
         
-        if (familyId) {
-          // Load tasks from database
-          const tasks = await loadCurrentWeekTasks();
-          
-          // Separate kid and adult habits
-          const adultHabits = [];
-          const childHabits = [];
-          
-          // Check for streak data in database
-          const streakData = await loadStreakData();
-          
-          // Transform tasks into habit format
-          await Promise.all(tasks.map(async (task) => {
-            // Skip tasks that are not for the current user
-            const isForSelectedUser = 
-              task.assignedTo === (selectedUser?.roleType || selectedUser?.role) || 
-              task.assignedToName === selectedUser?.name ||
-              task.assignedTo === "Everyone";
-              
-            // Check if this is a kid-focused habit
-            const isKidHabit = 
-              task.category === 'Kid Helper' || 
-              task.title && task.title.includes('Kid') || 
-              task.title && task.title.includes('Child');
-              
-            if (!isForSelectedUser && !isKidHabit) {
-              return;
-            }
+        // Separate kid and adult habits
+        const adultHabits = [];
+        const childHabits = [];
+        
+        // Check for streak data in database
+        const streakData = await loadStreakData();
+        
+        // Transform tasks into habit format
+        await Promise.all(tasks.map(async (task) => {
+          // Skip tasks that are not for the current user
+          const isForSelectedUser = 
+            task.assignedTo === (selectedUser?.roleType || selectedUser?.role) || 
+            task.assignedToName === selectedUser?.name ||
+            task.assignedTo === "Everyone";
             
-            // Get streak data for this habit
-            const streak = streakData[task.id] || 0;
-            const record = streakData[`${task.id}_record`] || streak;
+          // Check if this is a kid-focused habit
+          const isKidHabit = 
+            task.category === 'Kid Helper' || 
+            task.title && task.title.includes('Kid') || 
+            task.title && task.title.includes('Child');
             
-            // Calculate progress based on subtasks
-            const completedSubtasks = task.subTasks?.filter(st => st.completed)?.length || 0;
-            const totalSubtasks = task.subTasks?.length || 1;
-            const progress = task.completed ? 100 : Math.round((completedSubtasks / totalSubtasks) * 100);
-            
-            // Clean up insight text if it contains undefined variables
-            let insightText = task.insight || task.aiInsight || "";
-            if (insightText.includes("undefined%")) {
-              // Replace with generic insight
-              insightText = `This task was selected based on survey analysis from Week ${currentWeek}.`;
-            }
-            
-            // Create the habit object
-            const habitObj = {
-              id: task.id,
-              title: task.title ? task.title.replace(/Week \d+: /g, '') : "Task",
-              description: task.description ? task.description.replace(/for this week/g, 'consistently') : "Description unavailable",
-              cue: task.subTasks?.[0]?.title || "After breakfast",
-              action: task.subTasks?.[1]?.title || task.title || "Complete task",
-              reward: task.subTasks?.[2]?.title || "Feel accomplished and balanced",
-              identity: task.focusArea 
-                ? `I am someone who values ${task.focusArea.toLowerCase()}` 
-                : "I am someone who values family balance",
-              trackDays: Array(7).fill(false),
-              assignedTo: task.assignedTo,
-              assignedToName: task.assignedToName,
-              category: task.category,
-              insight: insightText,
-              completed: task.completed,
-              comments: task.comments || [],
-              streak: streak,
-              record: record,
-              progress: progress,
-              imageUrl: task.imageUrl || null,
-              lastCompleted: task.completedDate || null,
-              isPartOfStack: task.stackTrigger !== undefined,
-              stackTrigger: task.stackTrigger || null,
-              atomicSteps: task.subTasks?.map(st => ({
-                id: st.id,
-                title: st.title,
-                description: st.description,
-                completed: st.completed || false
-              })) || []
-            };
-            
-            if (isKidHabit) {
-              childHabits.push(habitObj);
-            } else {
-              adultHabits.push(habitObj);
-            }
-          }));
+          if (!isForSelectedUser && !isKidHabit) {
+            return;
+          }
           
-          // Sort adult habits - completed at the bottom
-          adultHabits.sort((a, b) => {
-            if (a.completed && !b.completed) return 1;
-            if (!a.completed && b.completed) return -1;
-            return 0;
-          });
+          // Get streak data for this habit
+          const streak = streakData[task.id] || 0;
+          const record = streakData[`${task.id}_record`] || streak;
           
-          // Sort kid habits - simpler ones first
-          childHabits.sort((a, b) => {
-            return (a.atomicSteps?.length || 0) - (b.atomicSteps?.length || 0);
-          });
+          // Calculate progress based on subtasks
+          const completedSubtasks = task.subTasks?.filter(st => st.completed)?.length || 0;
+          const totalSubtasks = task.subTasks?.length || 1;
+          const progress = task.completed ? 100 : Math.round((completedSubtasks / totalSubtasks) * 100);
           
-          setHabits(adultHabits);
-          setKidHabits(childHabits);
+          // Clean up insight text if it contains undefined variables
+          let insightText = task.insight || task.aiInsight || "";
+          if (insightText.includes("undefined%")) {
+            // Replace with generic insight
+            insightText = `This task was selected based on survey analysis from Week ${currentWeek}.`;
+          }
           
-          // Setup weekly progress based on current date
-          calculateWeekProgress();
+          // Create the habit object
+          const habitObj = {
+            id: task.id,
+            title: task.title ? task.title.replace(/Week \d+: /g, '') : "Task",
+            description: task.description ? task.description.replace(/for this week/g, 'consistently') : "Description unavailable",
+            cue: task.subTasks?.[0]?.title || "After breakfast",
+            action: task.subTasks?.[1]?.title || task.title || "Complete task",
+            reward: task.subTasks?.[2]?.title || "Feel accomplished and balanced",
+            identity: task.focusArea 
+              ? `I am someone who values ${task.focusArea.toLowerCase()}` 
+              : "I am someone who values family balance",
+            trackDays: Array(7).fill(false),
+            assignedTo: task.assignedTo,
+            assignedToName: task.assignedToName,
+            category: task.category,
+            insight: insightText,
+            completed: task.completed,
+            comments: task.comments || [],
+            streak: streak,
+            record: record,
+            progress: progress,
+            imageUrl: task.imageUrl || null,
+            lastCompleted: task.completedDate || null,
+            isPartOfStack: task.stackTrigger !== undefined,
+            stackTrigger: task.stackTrigger || null,
+            atomicSteps: task.subTasks?.map(st => ({
+              id: st.id,
+              title: st.title,
+              description: st.description,
+              completed: st.completed || false
+            })) || [],
+            isUserGenerated: task.isUserGenerated || false
+          };
           
-          // Load family streaks
-          loadFamilyStreaks();
-          
-          // Calculate when the next survey is due
-          calculateNextSurveyDue();
-          
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error("Error loading habits:", error);
-        setHabits([]);
-        setKidHabits([]);
+          if (isKidHabit) {
+            childHabits.push(habitObj);
+          } else {
+            adultHabits.push(habitObj);
+          }
+        }));
+        
+        // CHANGE: Limit to one initial habit per parent, unless they're user-generated
+        const initialHabit = adultHabits.filter(h => !h.isUserGenerated)[0];
+        const userGeneratedHabits = adultHabits.filter(h => h.isUserGenerated);
+        
+        // Sort adult habits - completed at the bottom, with initial habit first
+        const filteredAdultHabits = [initialHabit, ...userGeneratedHabits].filter(Boolean);
+        filteredAdultHabits.sort((a, b) => {
+          if (a.completed && !b.completed) return 1;
+          if (!a.completed && b.completed) return -1;
+          return 0;
+        });
+        
+        // Sort kid habits - simpler ones first
+        childHabits.sort((a, b) => {
+          return (a.atomicSteps?.length || 0) - (b.atomicSteps?.length || 0);
+        });
+        
+        setHabits(filteredAdultHabits);
+        setKidHabits(childHabits);
+        
+        // Setup weekly progress based on current date
+        calculateWeekProgress();
+        
+        // Load family streaks
+        loadFamilyStreaks();
+        
+        // Calculate when the next survey is due
+        calculateNextSurveyDue();
+        
         setLoading(false);
       }
-    };
-    
-    loadHabits();
-  }, [familyId, currentWeek, selectedUser]);
+    } catch (error) {
+      console.error("Error loading habits:", error);
+      setHabits([]);
+      setKidHabits([]);
+      setLoading(false);
+    }
+  };
+  
+  loadHabits();
+}, [familyId, currentWeek, selectedUser]);
   
   // Load streak data from database
   const loadStreakData = async () => {
@@ -1326,8 +1334,50 @@ const confirmScheduleToCalendar = async () => {
   }
 };
   
-  // Create a new habit using Allie AI - fixed version
-const createNewHabit = async () => {
+
+  
+// Add this function to TasksTab.jsx
+const deleteHabit = async (habitId) => {
+  try {
+    if (!familyId) return;
+    
+    // Confirm deletion
+    if (!window.confirm("Are you sure you want to delete this habit?")) {
+      return;
+    }
+    
+    // Update local state first for immediate feedback
+    setHabits(prev => prev.filter(h => h.id !== habitId));
+    
+    // Update in database
+    const familyRef = doc(db, "families", familyId);
+    const familyDoc = await getDoc(familyRef);
+    
+    if (familyDoc.exists()) {
+      const currentTasks = familyDoc.data().tasks || [];
+      const updatedTasks = currentTasks.filter(t => t.id !== habitId);
+      
+      await updateDoc(familyRef, {
+        tasks: updatedTasks,
+        updatedAt: new Date().toISOString()
+      });
+      
+      // Show success notification
+      createCelebration("Habit deleted", false);
+    }
+  } catch (error) {
+    console.error("Error deleting habit:", error);
+    createCelebration("Error", false, "Failed to delete the habit");
+    
+    // Reload habits to restore state
+    loadCurrentWeekTasks().then(tasks => {
+      // Transform tasks back into habits...
+    });
+  }
+};
+
+// Modified createNewHabit function in TasksTab.jsx
+const createNewHabit = async (isRefresh = false) => {
   try {
     setAllieIsThinking(true);
     
@@ -1390,37 +1440,31 @@ const createNewHabit = async () => {
       { title: reward, description: "This is your reward" }
     ];
     
-    // Create the habit in the database
-    const habitData = {
-      title: `${title}`,
-      description: description,
-      focusArea: title.split(' ')[0] + " " + title.split(' ')[1],
-      assignedTo: selectedUser.roleType || selectedUser.role,
-      assignedToName: selectedUser.name,
-      completed: false,
-      category: identity.includes("parent") ? "Parental Tasks" : "Household Tasks",
-      comments: [],
-      subTasks: subTasks,
-      createdAt: serverTimestamp(),
-      familyId: familyId,
-      aiInsight: `This habit helps build your identity as ${identity}`
-    };
-    
-    // Add the habit to the database with better error handling
     try {
-      // Try to add directly to the main tasks collection first
-      const tasksRef = collection(db, "families");
-      const familyDocRef = doc(tasksRef, familyId);
+      // Create the habit in the tasks array of the family document
+      const familyRef = doc(db, "families", familyId);
+      const familyDoc = await getDoc(familyRef);
       
-      // Get the current tasks array
-      const familyDoc = await getDoc(familyDocRef);
       if (!familyDoc.exists()) {
         throw new Error("Family document not found");
       }
       
+      // Get current tasks
       const currentTasks = familyDoc.data().tasks || [];
       
-      // Generate a unique task ID
+      // If refreshing, first remove the initial habit
+      let updatedTasks = [...currentTasks];
+      if (isRefresh) {
+        // Find and remove the initial non-user-generated habit
+        const initialHabitIndex = habits.findIndex(h => !h.isUserGenerated);
+        if (initialHabitIndex >= 0) {
+          // Find the corresponding task in currentTasks
+          const initialTaskId = habits[initialHabitIndex].id;
+          updatedTasks = updatedTasks.filter(t => t.id !== initialTaskId);
+        }
+      }
+      
+      // Generate a unique ID
       const taskId = `habit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       
       // Create the new habit with the ID
@@ -1445,6 +1489,7 @@ const createNewHabit = async () => {
         imageUrl: null,
         lastCompleted: null,
         isPartOfStack: false,
+        isUserGenerated: !isRefresh, // If refreshing, this is the new initial habit
         subTasks: subTasks.map((st, idx) => ({
           id: `${taskId}-step-${idx + 1}`,
           title: st.title,
@@ -1454,14 +1499,25 @@ const createNewHabit = async () => {
       };
       
       // Update the tasks array
-      await updateDoc(familyDocRef, {
-        tasks: [...currentTasks, newHabit]
+      await updateDoc(familyRef, {
+        tasks: [...updatedTasks, newHabit]
       });
       
       // Update the local state
-      setHabits(prev => [newHabit, ...prev]);
+      if (isRefresh) {
+        // Replace the initial habit
+        setHabits(prev => {
+          const filtered = prev.filter(h => h.isUserGenerated);
+          return [newHabit, ...filtered];
+        });
+        createCelebration("Habit refreshed!", false);
+      } else {
+        // Add to habits as user-generated
+        setHabits(prev => [prev[0], newHabit, ...prev.slice(1)]);
+        createCelebration("New habit created!", false);
+      }
+      
       setShowAddHabit(false);
-      createCelebration("New habit created!", false);
     } catch (dbError) {
       console.error("Database error creating habit:", dbError);
       throw dbError;
@@ -1476,7 +1532,7 @@ const createNewHabit = async () => {
     return false;
   }
 };
-  
+
   // Fixed createKidHabit function
 const createKidHabit = async () => {
   try {
@@ -2008,6 +2064,51 @@ const createKidHabit = async () => {
                           <p className="text-sm text-gray-600">{habit.description}</p>
                         </div>
                         
+{/* Inside the userHabits.map() function in TasksTab.jsx, update the action buttons section */}
+<div className="mt-3 pt-3 border-t flex justify-between items-center">
+  <div className="text-xs text-gray-500">
+    {habit.completed 
+      ? 'Completed today!' 
+      : 'Complete this habit to build your streak'}
+  </div>
+  <div className="flex space-x-2">
+    {/* Add refresh button for initial habit */}
+    {!habit.isUserGenerated && (
+      <button
+        onClick={() => createNewHabit(true)} // Pass true to indicate a refresh
+        className="text-xs flex items-center text-gray-600 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-100"
+      >
+        <RefreshCw size={12} className="mr-1" />
+        Refresh
+      </button>
+    )}
+
+    {/* Add delete button for user-generated habits */}
+    {habit.isUserGenerated && (
+      <button
+        onClick={() => deleteHabit(habit.id)}
+        className="text-xs flex items-center text-red-600 hover:text-red-800 px-2 py-1 rounded hover:bg-gray-100"
+      >
+        <Trash size={12} className="mr-1" />
+        Delete
+      </button>
+    )}
+
+    <button
+      onClick={() => {
+        setSelectedHabit(habit);
+        setShowHabitDetail(habit.id);
+      }}
+      className="text-xs flex items-center text-gray-600 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-100"
+    >
+      <Info size={12} className="mr-1" />
+      Details
+    </button>
+    
+    {/* Rest of the buttons remain the same... */}
+  </div>
+</div>
+
                         {/* Streak badge */}
                         <div className="flex items-center bg-amber-50 px-2 py-1 rounded-full text-amber-700 text-xs">
                           <Flame size={12} className="mr-1 text-amber-500" />
