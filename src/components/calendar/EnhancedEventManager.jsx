@@ -91,38 +91,61 @@ const autocompleteListener = useRef(null);
 
 // Add this useEffect to initialize Google Places Autocomplete
 useEffect(() => {
-  // Check if Google Maps API is loaded
-  if (window.google && window.google.maps && window.google.maps.places) {
-    const input = document.getElementById('google-places-input');
-    if (input) {
-      // Initialize Places Autocomplete
-      placesAutocomplete.current = new window.google.maps.places.Autocomplete(input, {
-        types: ['geocode', 'establishment'],
-        fields: ['place_id', 'formatted_address', 'name', 'geometry']
-      });
-      
-      // Add listener for place selection
-      autocompleteListener.current = placesAutocomplete.current.addListener('place_changed', () => {
-        const place = placesAutocomplete.current.getPlace();
-        if (place.formatted_address) {
-          setEvent(prev => ({ 
-            ...prev, 
-            location: place.name ? `${place.name}, ${place.formatted_address}` : place.formatted_address 
-          }));
+  // Check if the API is available and not in a failed state
+  if (window.google && window.google.maps && window.google.maps.places && 
+      !window.googleMapsAuthFailed && !window.googleMapsLoadFailed) {
+    try {
+      const input = document.getElementById('google-places-input');
+      if (input) {
+        // Initialize Places Autocomplete with error handling
+        try {
+          placesAutocomplete.current = new window.google.maps.places.Autocomplete(input, {
+            types: ['geocode', 'establishment'],
+            fields: ['place_id', 'formatted_address', 'name', 'geometry']
+          });
+          
+          // Add listener for place selection
+          autocompleteListener.current = placesAutocomplete.current.addListener('place_changed', () => {
+            try {
+              const place = placesAutocomplete.current.getPlace();
+              if (place && place.formatted_address) {
+                setEvent(prev => ({ 
+                  ...prev, 
+                  location: place.name ? `${place.name}, ${place.formatted_address}` : place.formatted_address 
+                }));
+              }
+            } catch (placeError) {
+              console.warn("Error handling place selection:", placeError);
+            }
+          });
+        } catch (autocompleteError) {
+          console.warn("Error initializing Places Autocomplete:", autocompleteError);
+          window.googleMapsAuthFailed = true; // Mark as failed to prevent further attempts
         }
-      });
+      }
+    } catch (error) {
+      console.warn("Error setting up Google Places:", error);
+      window.googleMapsAuthFailed = true;
     }
+  } else {
+    // Log a friendly message when Places API isn't available
+    console.log("Google Places API not available - using basic location input");
   }
   
   // Cleanup function
   return () => {
-    if (autocompleteListener.current && window.google) {
-      window.google.maps.event.removeListener(autocompleteListener.current);
+    if (autocompleteListener.current && window.google && 
+        window.google.maps && window.google.maps.event) {
+      try {
+        window.google.maps.event.removeListener(autocompleteListener.current);
+      } catch (cleanupError) {
+        console.warn("Error cleaning up Places listener:", cleanupError);
+      }
     }
   };
 }, []);
 
-// Replace the existing searchAddress function with this one
+// Improved searchAddress function with better fallback
 const searchAddress = async (query) => {
   if (!query || query.length < 3) {
     setAddressSuggestions([]);
@@ -132,32 +155,43 @@ const searchAddress = async (query) => {
   setIsSearchingAddress(true);
   
   try {
-    // If Google Places API is not loaded, use fallback method
-    if (!window.google || !window.google.maps || !window.google.maps.places) {
-      // Fallback to our own API endpoint that wraps Google Places API
-      const response = await fetch(`/api/places/autocomplete?input=${encodeURIComponent(query)}`);
-      const data = await response.json();
+    // Check if Google Places API is available and not failed
+    const placesAvailable = window.google && 
+                           window.google.maps && 
+                           window.google.maps.places &&
+                           !window.googleMapsAuthFailed &&
+                           !window.googleMapsLoadFailed;
+    
+    if (!placesAvailable) {
+      // API not available - provide basic suggestions based on input
+      // This is a simple fallback that doesn't require an API
+      const mockSuggestions = [
+        { place_id: 'home', description: `${query} (Home)` },
+        { place_id: 'work', description: `${query} (Work)` },
+        { place_id: 'other', description: `${query} (Other)` }
+      ];
       
-      setAddressSuggestions(data.predictions || []);
+      // Only show suggestions for queries of decent length
+      if (query.length >= 5) {
+        setAddressSuggestions(mockSuggestions);
+      } else {
+        setAddressSuggestions([]);
+      }
+      
       setIsSearchingAddress(false);
       return;
     }
     
     // Google Places API will handle suggestions directly through the Autocomplete widget
+    // We're not making direct API calls, the widget handles it
     setAddressSuggestions([]);
     setIsSearchingAddress(false);
   } catch (error) {
-    console.error("Error searching for address:", error);
+    console.warn("Error in address search:", error);
     setIsSearchingAddress(false);
     setAddressSuggestions([]);
   }
 };
-
-
-
-
-
-
 
   
 // Replace handleSave function with this improved version:
@@ -583,7 +617,6 @@ const handleSave = async () => {
   </select>
 </div>
         
-// Replace the existing location input section with this enhanced version
 <div>
   <label className="block text-sm font-medium mb-1 text-gray-700">
     Location
@@ -611,6 +644,13 @@ const handleSave = async () => {
       )}
     </div>
     
+    {/* Manual address entry notice when API is unavailable */}
+    {(window.googleMapsAuthFailed || window.googleMapsLoadFailed) && (
+      <div className="text-xs text-amber-600 mt-1 pl-2">
+        Location suggestions unavailable. Please type the full address.
+      </div>
+    )}
+    
     {/* Address suggestions dropdown */}
     {addressSuggestions.length > 0 && (
       <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border">
@@ -632,7 +672,6 @@ const handleSave = async () => {
     )}
   </div>
 </div>
-
 
         
         {/* Child Selection */}

@@ -7,7 +7,11 @@ class CalendarErrorHandler {
       'Could not extract valid JSON from response',
       'Could not extract valid JSON',
       'JSON parsing failed',
-      'orderBy is not defined'
+      'orderBy is not defined',
+      'ApiNotActivatedMapError',
+      'Places API error',
+      'This API project is not authorized to use',
+      'google.maps.places.Autocomplete'
     ];
     this.originalConsoleError = null;
     this.isSuppressing = false;

@@ -40,16 +40,31 @@ function GoogleMapsApiLoader() {
       window.initGoogleMapsApi = () => {
         console.log("Google Maps API loaded successfully");
       };
+      
+      // Handle API loading errors globally
+      window.gm_authFailure = () => {
+        console.warn("Google Maps API authentication failed - using fallback mode");
+        window.googleMapsAuthFailed = true;
+      };
+
+      // Get API key from environment variable
+      const apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
+      
+      if (!apiKey) {
+        console.warn("Google Maps API key not found in environment variables");
+        return; // Don't load the API if no key is available
+      }
 
       // Create and append the script tag
       const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyBPty6mgC5I_pTClSVtA5B6u9yuPEUBSq8&libraries=places&callback=initGoogleMapsApi`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initGoogleMapsApi`;
       script.async = true;
       script.defer = true;
       
       // Handle loading errors
       script.onerror = () => {
         console.error("Error loading Google Maps API");
+        window.googleMapsLoadFailed = true;
       };
       
       document.head.appendChild(script);
@@ -58,6 +73,9 @@ function GoogleMapsApiLoader() {
         // Clean up
         if (window.initGoogleMapsApi) {
           delete window.initGoogleMapsApi;
+        }
+        if (window.gm_authFailure) {
+          delete window.gm_authFailure;
         }
         // Optional: remove the script on unmount
         const scriptElement = document.querySelector(`script[src^="https://maps.googleapis.com/maps/api/js"]`);
