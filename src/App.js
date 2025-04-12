@@ -31,7 +31,7 @@ import EmailOptIn from './components/marketing/EmailOptIn';
 import ClaudeDebugger from './components/debug/ClaudeDebugger';
 import './styles/atomicHabits.css';
 
-// Replace the current GoogleMapsApiLoader function in App.js (around line 30-70)
+// In App.js - Replace the GoogleMapsApiLoader component
 function GoogleMapsApiLoader() {
   useEffect(() => {
     // Check if the script is already loaded
@@ -47,22 +47,12 @@ function GoogleMapsApiLoader() {
         window.googleMapsAuthFailed = true;
       };
 
-      // Get API key from environment variable with better debugging
+      // Get API key from environment variables
       const apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
       
       if (!apiKey) {
-        console.warn("Google Maps API key not found in environment variables - running in fallback mode");
+        console.warn("Google Maps API key not found in environment variables");
         window.googleMapsLoadFailed = true;
-        
-        // Print available environment variables in development (safe keys only)
-        if (process.env.NODE_ENV === 'development') {
-          console.log("Available REACT_APP_ environment variables:", 
-            Object.keys(process.env)
-              .filter(key => key.startsWith('REACT_APP_'))
-              .filter(key => !key.includes('SECRET') && !key.includes('KEY'))
-              .join(', ')
-          );
-        }
         return; // Don't load the API if no key is available
       }
 
@@ -87,6 +77,11 @@ function GoogleMapsApiLoader() {
         }
         if (window.gm_authFailure) {
           delete window.gm_authFailure;
+        }
+        // Optional: remove the script on unmount
+        const scriptElement = document.querySelector(`script[src^="https://maps.googleapis.com/maps/api/js"]`);
+        if (scriptElement) {
+          document.head.removeChild(scriptElement);
         }
       };
     }
