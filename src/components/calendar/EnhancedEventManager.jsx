@@ -613,55 +613,45 @@ const EnhancedEventManager = ({
           </select>
         </div>
         
-        {/* Location - Updated to use PlaceAutocompleteElement or fallback */}
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">
-            Location
-          </label>
-          
-          {/* PlaceAutocompleteElement container */}
-          <div ref={placesContainerRef} className="mb-2">
-            {/* PlaceAutocompleteElement will be inserted here */}
-            {/* Fallback while waiting for initialization */}
-            {!placesInitialized && (
-              <div className="flex items-center border rounded-md overflow-hidden">
-                <div className="p-2 text-gray-400">
-                  <MapPin size={16} />
-                </div>
-                <input
-                  type="text"
-                  value={event.location || ''}
-                  onChange={(e) => handleManualLocationInput(e.target.value)}
-                  className="w-full p-2 text-sm border-0 focus:ring-0"
-                  placeholder="Where is this event happening?"
-                />
-              </div>
-            )}
-          </div>
-          
-          {/* Manual fallback if API fails */}
-          {window.googleMapsAuthFailed === true || window.googleMapsLoadFailed === true ? (
-            <div className="flex items-center border rounded-md overflow-hidden mt-2">
-              <div className="p-2 text-gray-400">
-                <MapPin size={16} />
-              </div>
-              <input
-                type="text"
-                value={event.location || ''}
-                onChange={(e) => handleManualLocationInput(e.target.value)}
-                className="w-full p-2 text-sm border-0 focus:ring-0"
-                placeholder="Enter location manually"
-              />
-            </div>
-          ) : null}
-          
-          {/* Notice when API is unavailable */}
-          {(window.googleMapsAuthFailed || window.googleMapsLoadFailed) && (
-            <div className="text-xs text-amber-600 mt-1 pl-2">
-              Location suggestions unavailable. Please type the full address.
-            </div>
-          )}
+        {/* Location Section */}
+<div>
+  <label className="block text-sm font-medium mb-1 text-gray-700">
+    Location
+  </label>
+
+  {/* Always show manual input field for location */}
+  <div className="flex items-center border rounded-md overflow-hidden mb-2">
+    <div className="p-2 text-gray-400">
+      <MapPin size={16} />
+    </div>
+    <input
+      type="text"
+      value={event.location || ''}
+      onChange={(e) => handleManualLocationInput(e.target.value)}
+      className="w-full p-2 text-sm border-0 focus:ring-0"
+      placeholder="Where is this event happening?"
+    />
+  </div>
+  
+  {/* PlaceAutocompleteElement container - only try to load if not already failed */}
+  {!window.googleMapsAuthFailed && !window.googleMapsLoadFailed && (
+    <div ref={placesContainerRef} className="mb-2 mt-2">
+      {/* PlaceAutocompleteElement will be inserted here if available */}
+      {placesInitialized && (
+        <div className="text-xs text-green-600 pl-2">
+          Location suggestions are available. Type to see suggestions.
         </div>
+      )}
+    </div>
+  )}
+  
+  {/* Notice when API is unavailable */}
+  {(window.googleMapsAuthFailed || window.googleMapsLoadFailed) && (
+    <div className="text-xs text-amber-600 mt-1 pl-2">
+      Location suggestions unavailable. Please type the full address.
+    </div>
+  )}
+</div>
         
         {/* Child Selection */}
         <div>
