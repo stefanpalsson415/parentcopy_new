@@ -728,7 +728,7 @@ const handleEventEdit = (event) => {
   };
   
   setSelectedEvent(formattedEvent);
-  setShowEventDetails(true);
+  setShowEventDetails(false);
   setIsEditingEvent(true);
   setEditedEvent(formattedEvent);
 };
@@ -1266,31 +1266,48 @@ const eventDates = allEvents
       </button>
       
       {/* Event Details Modal - Use EnhancedEventManager for editing */}
-{showEventDetails && selectedEvent && (
-  isEditingEvent ? (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
-        <EnhancedEventManager
-          initialEvent={selectedEvent}
-          onSave={(result) => {
-            if (result?.success) {
-              // Close the editor
-              setShowEventDetails(false);
-              setIsEditingEvent(false);
-              
-              // Update local data and refresh
-              setLastRefresh(Date.now());
-              CalendarService.showNotification("Event updated successfully", "success");
-            }
-          }}
-          onCancel={() => {
+{showEventDetails && selectedEvent && !isEditingEvent && (
+  <EventDetails
+    event={selectedEvent}
+    onClose={() => {
+      setShowEventDetails(false);
+      setIsEditingEvent(false);
+      setEditedEvent(null);
+    }}
+    onEdit={handleEventEdit}
+    onDelete={handleDeleteEvent}
+    familyMembers={familyMembers}
+    pendingAction={pendingAction}
+    showSuccess={false}
+  />
+)}
+
+{/* Separate EnhancedEventManager for edit mode */}
+{selectedEvent && isEditingEvent && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <EnhancedEventManager
+        initialEvent={selectedEvent}
+        onSave={(result) => {
+          if (result?.success) {
+            // Close the editor
             setShowEventDetails(false);
             setIsEditingEvent(false);
-          }}
-          mode="edit"
-        />
-      </div>
+            
+            // Update local data and refresh
+            setLastRefresh(Date.now());
+            CalendarService.showNotification("Event updated successfully", "success");
+          }
+        }}
+        onCancel={() => {
+          setShowEventDetails(false);
+          setIsEditingEvent(false);
+        }}
+        mode="edit"
+      />
     </div>
+  </div>
+)}
   ) : (
     <EventDetails
       event={selectedEvent}
@@ -1310,7 +1327,6 @@ const eventDates = allEvents
       showSuccess={false}
     />
   )
-)}
     </div>
   );
 };
