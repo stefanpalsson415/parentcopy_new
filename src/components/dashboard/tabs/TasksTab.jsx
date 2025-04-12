@@ -414,6 +414,12 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
   try {
     setIsProcessing(true);
     
+    // Validate the date - ensure it's a valid Date object
+    if (!(newDate instanceof Date) || isNaN(newDate.getTime())) {
+      console.error("Invalid date provided to updateCycleDueDate:", newDate);
+      throw new Error("Invalid date provided");
+    }
+    
     // Format the date for display
     const formattedDate = newDate.toLocaleDateString('en-US', {
       weekday: 'long',
@@ -1174,16 +1180,29 @@ const createNewHabit = async (isRefresh = false) => {
           
           <button
   onClick={async () => {
-    // Set default date
-    const today = new Date();
-    const defaultDate = surveyDue || new Date(today.setDate(today.getDate() + 7));
-    setDatePickerDate(defaultDate);
-    
-    // Find existing event
-    const existingEvent = await findExistingDueDateEvent();
-    setExistingDueDateEvent(existingEvent);
-    
-    setShowCalendar(true);
+    try {
+      // Set default date with safer date manipulation
+      const today = new Date();
+      let defaultDate;
+      
+      if (surveyDue instanceof Date && !isNaN(surveyDue.getTime())) {
+        defaultDate = surveyDue;
+      } else {
+        // Create a new date 7 days in the future safely
+        defaultDate = new Date(today.getTime() + (7 * 24 * 60 * 60 * 1000));
+      }
+      
+      setDatePickerDate(defaultDate);
+      
+      // Find existing event
+      const existingEvent = await findExistingDueDateEvent();
+      setExistingDueDateEvent(existingEvent);
+      
+      setShowCalendar(true);
+    } catch (error) {
+      console.error("Error preparing calendar:", error);
+      createCelebration("Error", false, "Could not open calendar. Please try again.");
+    }
   }}
   className="px-4 py-2 border border-gray-300 rounded-md flex items-center hover:bg-gray-50"
 >
@@ -1649,38 +1668,66 @@ const createNewHabit = async (isRefresh = false) => {
       )}
       
       {/* Calendar floating widget with embedded event editor */}
-      {showCalendar && (
+{showCalendar && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
       <EnhancedEventManager
         initialEvent={existingDueDateEvent || {
           title: `Cycle ${currentWeek} Due Date`,
           description: `Due date for completing Cycle ${currentWeek} activities including surveys and tasks.`,
-          dateTime: datePickerDate ? datePickerDate.toISOString() : new Date().toISOString(),
+          dateTime: datePickerDate instanceof Date && !isNaN(datePickerDate.getTime()) 
+            ? datePickerDate.toISOString() 
+            : new Date().toISOString(),
           category: 'cycle-due-date',
           eventType: 'cycle-due-date',
           cycleNumber: currentWeek
         }}
         onSave={async (event) => {
-          const newDate = new Date(event.start?.dateTime || event.dateTime);
-          const success = await updateCycleDueDate(newDate, {
-            title: event.title || event.summary,
-            description: event.description,
-            location: event.location,
-            eventId: existingDueDateEvent?.firestoreId || existingDueDateEvent?.id
-          });
-          
-          if (success) {
-            // Force refresh of calendar components
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+          try {
+            // Extract and validate the date from the event
+            let newDate;
+            
+            if (event.start?.dateTime) {
+              newDate = new Date(event.start.dateTime);
+            } else if (event.dateTime) {
+              newDate = new Date(event.dateTime);
+            } else {
+              // Fallback to current date if no date is found
+              newDate = new Date();
+              console.warn("No date found in event, using current date");
             }
-            setShowCalendar(false);
+            
+            // Ensure the date is valid
+            if (isNaN(newDate.getTime())) {
+              console.error("Invalid date from event:", event);
+              createCelebration("Error", false, "Invalid date. Please try again with a valid date.");
+              return;
+            }
+            
+            const success = await updateCycleDueDate(newDate, {
+              title: event.title || event.summary,
+              description: event.description,
+              location: event.location,
+              eventId: existingDueDateEvent?.firestoreId || existingDueDateEvent?.id
+            });
+            
+            if (success) {
+              // Force refresh of calendar components
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+              }
+              setShowCalendar(false);
+            }
+          } catch (error) {
+            console.error("Error in calendar save handler:", error);
+            createCelebration("Error", false, "Failed to update due date. Please try again.");
           }
         }}
         onCancel={() => setShowCalendar(false)}
         eventType="cycle-due-date"
-        selectedDate={datePickerDate}
+        selectedDate={datePickerDate instanceof Date && !isNaN(datePickerDate.getTime()) 
+          ? datePickerDate 
+          : new Date()}
         isCompact={false}
         mode={existingDueDateEvent ? "edit" : "create"}
       />
