@@ -3195,9 +3195,11 @@ const renderRoutinesSection = () => {
       ) : (
         <>
           // Replace the "Child selector and actions" section (around line 2045-2091) with this code
-<div className="mb-6">
+          <div className="mb-6">
   <div className="flex justify-between items-center">
-    {/* Remove the "Children Tracking" h2 title */}
+    <div>
+      <h2 className="text-2xl font-bold font-roboto">Family Command Center</h2>
+    </div>
     <div className="flex space-x-3">
       <div className="relative">
         <input
@@ -3241,30 +3243,17 @@ const renderRoutinesSection = () => {
         Documents
       </button>
     </div>
-  </div>
-            {/* Shared To-Do List section */}
-            <div className="bg-white rounded-lg shadow mb-6">
-  <div 
-    className="p-4 flex justify-between items-center cursor-pointer"
-    onClick={toggleTodoSection}
-  >
-    <div className="flex items-center">
-      <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center mr-3">
-        <CheckSquare size={18} className="text-green-600" />
-      </div>
-      <h3 className="text-lg font-medium font-roboto">Shared To-Do List</h3>
+  </div>            
+  {/* Shared To-Do List section */}
+            <div className="mb-6">
+  <div className="flex items-center mb-4">
+    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center mr-3">
+      <CheckSquare size={18} className="text-green-600" />
     </div>
-    <div>
-      {expandedTodoSection ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-    </div>
-  </div>
-    <div>
-      {expandedTodoSection ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-    </div>
+    <h3 className="text-lg font-medium font-roboto">Family To-Do List</h3>
   </div>
   
-  {expandedTodoSection && (
-    <div className="p-4 border-t">
+  <div className="p-4 bg-white rounded-lg shadow">
       {/* Quick Add Task */}
       <div className="flex items-center mb-4">
         <input
@@ -3538,7 +3527,6 @@ const renderRoutinesSection = () => {
         </DragDropContext>
       )}
     </div>
-  )}
 </div>
 
 {/* Calendar Modal */}
