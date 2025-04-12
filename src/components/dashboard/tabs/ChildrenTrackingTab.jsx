@@ -3194,56 +3194,56 @@ const renderRoutinesSection = () => {
         </div>
       ) : (
         <>
-          {/* Child selector and actions */}
-          <div className="mb-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold font-roboto">Children Tracking</h2>
-              <div className="flex space-x-3">
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search..."
-                    value={searchQuery}
-                    onChange={handleSearch}
-                    ref={searchInputRef}
-                    className="px-3 py-2 pr-8 border rounded-md text-sm font-roboto"
-                  />
-                  <Search size={16} className="absolute right-3 top-2.5 text-gray-400" />
-                  {searchQuery && (
-                    <button
-                      className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
-                      onClick={() => setSearchQuery('')}
-                    >
-                      <X size={16} />
-                    </button>
-                  )}
-                </div>
-                <button
-                  className="px-3 py-2 bg-black text-white rounded-md text-sm font-roboto flex items-center"
-                  onClick={handleVoiceInput}
-                  title="Add via voice"
-                >
-                  <Mic size={16} className="mr-1" />
-                  Voice Input
-                </button>
-                <button
-  className="px-3 py-1 border border-black text-black rounded-md text-sm hover:bg-gray-50 font-roboto flex items-center"
-  onClick={() => setActiveComponent({
-    type: 'documentLibrary',
-    props: {
-      initialChildId: activeChild,
-      initialCategory: 'medical',
-      onClose: () => setActiveComponent(null)
-    }
-  })}
->
-  <FileText size={14} className="mr-1" />
-  Documents
-</button>
-              </div>
-            </div>
+          // Replace the "Child selector and actions" section (around line 2045-2091) with this code
+<div className="mb-6">
+  <div className="flex justify-between items-center">
+    {/* Remove the "Children Tracking" h2 title */}
+    <div className="flex space-x-3">
+      <div className="relative">
+        <input
+          type="text"
+          placeholder="Search..."
+          value={searchQuery}
+          onChange={handleSearch}
+          ref={searchInputRef}
+          className="px-3 py-2 pr-8 border rounded-md text-sm font-roboto"
+        />
+        <Search size={16} className="absolute right-3 top-2.5 text-gray-400" />
+        {searchQuery && (
+          <button
+            className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+            onClick={() => setSearchQuery('')}
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
+      <button
+        className="px-3 py-2 bg-black text-white rounded-md text-sm font-roboto flex items-center"
+        onClick={handleVoiceInput}
+        title="Add via voice"
+      >
+        <Mic size={16} className="mr-1" />
+        Voice Input
+      </button>
+      <button
+        className="px-3 py-1 border border-black text-black rounded-md text-sm hover:bg-gray-50 font-roboto flex items-center"
+        onClick={() => setActiveComponent({
+          type: 'documentLibrary',
+          props: {
+            initialChildId: activeChild,
+            initialCategory: 'medical',
+            onClose: () => setActiveComponent(null)
+          }
+        })}
+      >
+        <FileText size={14} className="mr-1" />
+        Documents
+      </button>
+    </div>
+  </div>
             {/* Shared To-Do List section */}
-<div className="bg-white rounded-lg shadow mb-6">
+            <div className="bg-white rounded-lg shadow mb-6">
   <div 
     className="p-4 flex justify-between items-center cursor-pointer"
     onClick={toggleTodoSection}
@@ -3252,11 +3252,12 @@ const renderRoutinesSection = () => {
       <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center mr-3">
         <CheckSquare size={18} className="text-green-600" />
       </div>
-      <div>
-        <h3 className="text-lg font-medium font-roboto">Shared To-Do List</h3>
-        <p className="text-sm text-gray-500 font-roboto">Manage tasks together with your family</p>
-      </div>
+      <h3 className="text-lg font-medium font-roboto">Shared To-Do List</h3>
     </div>
+    <div>
+      {expandedTodoSection ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+    </div>
+  </div>
     <div>
       {expandedTodoSection ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
     </div>
@@ -3662,7 +3663,7 @@ const renderRoutinesSection = () => {
         {parent.name}
       </button>
     ))}
-</div>          </div>
+</div>          
           
           {/* Allie message */}
           {allieMessage && (
