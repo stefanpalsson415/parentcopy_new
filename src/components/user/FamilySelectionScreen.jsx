@@ -910,19 +910,7 @@ if (currentUser && isLoggingIn) {
           </div>
         )}
         
-        {familyMembers.some(m => !m.profilePicture) && (
-          <div className="bg-gradient-to-r from-pink-100 to-purple-100 p-4 rounded-lg shadow-sm mb-6 max-w-md w-full">
-            <div className="flex items-start">
-              <Camera className="text-purple-600 mr-3 mt-1 flex-shrink-0" size={20} />
-              <div>
-                <h4 className="font-medium text-purple-800 font-roboto">Make Allie Personal!</h4>
-                <p className="text-sm text-purple-700 mt-1 font-roboto">
-                  Adding family photos makes Allie feel more personalized and helps us create a better experience just for you.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+
         
         <div className="w-full max-w-md">
           {/* Header with Logout */}
@@ -949,19 +937,14 @@ if (currentUser && isLoggingIn) {
               {familyMembers.length > 0 ? (
                 familyMembers.map((member) => (
                   <div 
-                    key={member.id}
-                    className={`border rounded-lg p-4 cursor-pointer transition-all ${
-                      selectedUser?.id === member.id 
-                        ? 'border-black bg-gray-50' 
-                        : 'border-gray-200 hover:border-gray-900'
-                    }`}
-                    onClick={() => {
-                      // Just select the user without navigating
-                      console.log(`Selecting family member: ${member.name}, ID: ${member.id}`);
-                      localStorage.setItem('selectedUserId', member.id);
-                      selectFamilyMember(member);
-                    }}
-                  >
+  key={member.id}
+  className={`border rounded-lg p-4 cursor-pointer transition-all hover:border-gray-900 hover:shadow-md ${
+    selectedUser?.id === member.id 
+      ? 'border-black bg-gray-50' 
+      : 'border-gray-200'
+  }`}
+  onClick={() => handleSelectUser(member)}
+>
                     <div className="flex items-center">
                       <div className="flex-shrink-0 mr-4 relative">
                         {!member.profilePicture ? (
@@ -1018,41 +1001,16 @@ if (currentUser && isLoggingIn) {
             </div>
           </div>
 
-          {/* Action buttons */}
-          <div className="text-center space-y-4">
-          <button 
-  disabled={!selectedUser}
-  onClick={() => {
-    // Just navigate directly using the currently selected user
-    if (selectedUser) {
-      if (selectedUser.completed) {
-        navigate('/dashboard');
-      } else if (selectedUser.role === 'child') {
-        navigate('/kid-survey');
-      } else {
-        navigate('/survey');
-      }
-    }
-  }}
-  className={`w-full py-3 px-4 rounded-md font-medium text-white ${
-    selectedUser 
-      ? 'bg-black hover:bg-gray-800' 
-      : 'bg-gray-300 cursor-not-allowed'
-  }`}
->
-  {selectedUser 
-    ? `Continue as ${selectedUser.name}` 
-    : "Select your profile to continue"}
-</button>
-              
-            <button
-              onClick={() => navigate('/onboarding')}
-              className="w-full py-3 px-4 rounded-md font-medium text-black border border-black hover:bg-gray-50 flex items-center justify-center"
-            >
-              <PlusCircle size={16} className="mr-2" />
-              Create New Family
-            </button>
-          </div>
+          {/* Create New Family button */}
+<div className="text-center mt-4">
+  <button
+    onClick={() => navigate('/onboarding')}
+    className="w-full py-3 px-4 rounded-md font-medium text-black border border-black hover:bg-gray-50 flex items-center justify-center"
+  >
+    <PlusCircle size={16} className="mr-2" />
+    Create New Family
+  </button>
+</div>
         </div>
       </div>
 
