@@ -104,7 +104,6 @@ const EnhancedEventManager = ({
           // Create a new PlaceAutocompleteElement
           const placeAutocompleteElement = new window.google.maps.places.PlaceAutocompleteElement({
             types: ['address', 'establishment'],
-            fields: ['formatted_address', 'name', 'geometry'],
             inputPlaceholder: 'Where is this event happening?',
           });
           
@@ -115,19 +114,39 @@ const EnhancedEventManager = ({
           placeAutocompleteElementRef.current = placeAutocompleteElement;
           
           // Add event listener for place selection
-          placeAutocompleteElement.addEventListener('gmp-placeautocomplete-place-changed', () => {
-            try {
-              const place = placeAutocompleteElement.getPlace();
-              if (place && place.formattedAddress) {
-                setEvent(prev => ({ 
-                  ...prev, 
-                  location: place.name ? `${place.name}, ${place.formattedAddress}` : place.formattedAddress 
-                }));
-              }
-            } catch (error) {
-              console.warn("Error handling place selection:", error);
-            }
-          });
+placeAutocompleteElement.addEventListener('gmp-placeautocomplete-place-changed', () => {
+  try {
+    const place = placeAutocompleteElement.getPlace();
+    if (place) {
+      // Try to get a well-formatted address using available properties
+      let locationText = '';
+      
+      if (place.formattedAddress) {
+        locationText = place.formattedAddress;
+      } else if (place.formatted_address) {
+        locationText = place.formatted_address;
+      } else if (place.vicinity) {
+        locationText = place.vicinity;
+      } else if (place.address) {
+        locationText = place.address;
+      }
+      
+      // If we have a name and it's different from the address, include it
+      if (place.name && place.name !== locationText && locationText) {
+        locationText = `${place.name}, ${locationText}`;
+      } else if (place.name && !locationText) {
+        locationText = place.name;
+      }
+      
+      // Only update the event if we have some location text
+      if (locationText) {
+        setEvent(prev => ({ ...prev, location: locationText }));
+      }
+    }
+  } catch (error) {
+    console.warn("Error handling place selection:", error);
+  }
+});
           
           return true;
         }
