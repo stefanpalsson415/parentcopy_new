@@ -87,7 +87,8 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
     loadCurrentWeekTasks,
     getWeekHistoryData,
     getWeekStatus,
-    surveySchedule
+    surveySchedule,
+    weekStatus
   } = useFamily();
 
   // Main states
@@ -109,6 +110,8 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   const [daysUntilSurvey, setDaysUntilSurvey] = useState(null);
   const [showEditEvent, setShowEditEvent] = useState(false);
   const { currentUser } = useAuth();
+  const [existingDueDateEvent, setExistingDueDateEvent] = useState(null);
+
 
   
   // Cycle progress tracking
@@ -275,6 +278,40 @@ setHabits(finalHabits);
     }
   };
   
+  const findExistingDueDateEvent = async () => {
+    if (!familyId || !currentUser) return null;
+    
+    try {
+      // Get all events from CalendarService
+      const events = await CalendarService.getEventsForUser(
+        currentUser.uid,
+        new Date(new Date().setDate(new Date().getDate() - 30)), // 30 days ago
+        new Date(new Date().setDate(new Date().getDate() + 90))  // 90 days ahead
+      );
+      
+      // Filter for cycle due date events for the current cycle
+      const dueDateEvents = events.filter(event => 
+        (event.eventType === 'cycle-due-date' || event.category === 'cycle-due-date') &&
+        (event.cycleNumber === currentWeek || 
+         (event.title && event.title.includes(`Cycle ${currentWeek}`)) || 
+         (event.summary && event.summary.includes(`Cycle ${currentWeek}`)))
+      );
+      
+      if (dueDateEvents.length > 0) {
+        console.log("Found existing due date event:", dueDateEvents[0]);
+        return dueDateEvents[0];
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error finding existing due date event:", error);
+      return null;
+    }
+  };
+  
+
+
+
   // Load family streaks from database
   const loadFamilyStreaks = async () => {
     try {
@@ -370,7 +407,7 @@ setHabits(finalHabits);
     }
   };
   
-  // Update cycle due date with calendar integration
+  // Replace the updateCycleDueDate function in TasksTab.jsx (around line 300-350)
 const updateCycleDueDate = async (newDate, eventDetails = {}) => {
   if (!familyId || !currentUser) return false;
   
@@ -387,23 +424,60 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
     // Update survey schedule in database
     await updateSurveySchedule(currentWeek, newDate);
     
-    // Create or update the calendar event
-    const eventData = {
-      title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
-      description: eventDetails.description || `Due date for completing Cycle ${currentWeek} activities including surveys and tasks.`,
-      startDate: newDate,
-      endDate: new Date(new Date(newDate).getTime() + 60 * 60 * 1000), // 1 hour duration
-      location: eventDetails.location || '',
-      category: 'cycle-due-date',
-      eventType: 'cycle-due-date',
-      cycleNumber: currentWeek
-    };
+    let result;
     
-    // Use CalendarService to add/update the event
-    const result = await CalendarService.addEvent(eventData, currentUser.uid);
+    // Check if we're updating an existing event
+    if (eventDetails.eventId) {
+      console.log("Updating existing event:", eventDetails.eventId);
+      
+      // Create event update object
+      const eventUpdate = {
+        title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
+        summary: eventDetails.title || `Cycle ${currentWeek} Due Date`,
+        description: eventDetails.description || `Due date for completing Cycle ${currentWeek} activities including surveys and tasks.`,
+        location: eventDetails.location || '',
+        start: {
+          dateTime: newDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        category: 'cycle-due-date',
+        eventType: 'cycle-due-date',
+        cycleNumber: currentWeek
+      };
+      
+      // Update the existing event
+      result = await CalendarService.updateEvent(eventDetails.eventId, eventUpdate, currentUser.uid);
+    } else {
+      // Create new event data with consistent universalId
+      const eventData = {
+        title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
+        description: eventDetails.description || `Due date for completing Cycle ${currentWeek} activities including surveys and tasks.`,
+        start: {
+          dateTime: newDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        location: eventDetails.location || '',
+        category: 'cycle-due-date',
+        eventType: 'cycle-due-date',
+        cycleNumber: currentWeek,
+        // Add a consistent universalId to help prevent duplicates
+        universalId: `cycle-due-date-${familyId}-${currentWeek}`
+      };
+      
+      // Add new event to calendar
+      result = await CalendarService.addEvent(eventData, currentUser.uid);
+    }
     
     if (!result.success) {
-      throw new Error(result.error || "Failed to add cycle date to calendar");
+      throw new Error(result.error || "Failed to update cycle date in calendar");
     }
     
     // Update the UI
@@ -1099,18 +1173,23 @@ const createNewHabit = async (isRefresh = false) => {
           </button>
           
           <button
-            onClick={() => {
-              // Set default date
-              const today = new Date();
-              const defaultDate = surveyDue || new Date(today.setDate(today.getDate() + 7));
-              setDatePickerDate(defaultDate);
-              setShowCalendar(true);
-            }}
-            className="px-4 py-2 border border-gray-300 rounded-md flex items-center hover:bg-gray-50"
-          >
-            <Clock size={18} className="mr-2" />
-            Change Due Date
-          </button>
+  onClick={async () => {
+    // Set default date
+    const today = new Date();
+    const defaultDate = surveyDue || new Date(today.setDate(today.getDate() + 7));
+    setDatePickerDate(defaultDate);
+    
+    // Find existing event
+    const existingEvent = await findExistingDueDateEvent();
+    setExistingDueDateEvent(existingEvent);
+    
+    setShowCalendar(true);
+  }}
+  className="px-4 py-2 border border-gray-300 rounded-md flex items-center hover:bg-gray-50"
+>
+  <Clock size={18} className="mr-2" />
+  Change Due Date
+</button>
         </div>
         
         {/* Cycle Information */}
@@ -1574,7 +1653,7 @@ const createNewHabit = async (isRefresh = false) => {
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
       <EnhancedEventManager
-        initialEvent={{
+        initialEvent={existingDueDateEvent || {
           title: `Cycle ${currentWeek} Due Date`,
           description: `Due date for completing Cycle ${currentWeek} activities including surveys and tasks.`,
           dateTime: datePickerDate ? datePickerDate.toISOString() : new Date().toISOString(),
@@ -1587,7 +1666,8 @@ const createNewHabit = async (isRefresh = false) => {
           const success = await updateCycleDueDate(newDate, {
             title: event.title || event.summary,
             description: event.description,
-            location: event.location
+            location: event.location,
+            eventId: existingDueDateEvent?.firestoreId || existingDueDateEvent?.id
           });
           
           if (success) {
@@ -1602,11 +1682,11 @@ const createNewHabit = async (isRefresh = false) => {
         eventType="cycle-due-date"
         selectedDate={datePickerDate}
         isCompact={false}
-        mode="create"
+        mode={existingDueDateEvent ? "edit" : "create"}
       />
     </div>
   </div>
-)}      
+)}  
       <style jsx="true">{`
         .animation-bounce-in {
           animation: bounceIn 0.5s;

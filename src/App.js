@@ -31,6 +31,45 @@ import EmailOptIn from './components/marketing/EmailOptIn';
 import ClaudeDebugger from './components/debug/ClaudeDebugger';
 import './styles/atomicHabits.css';
 
+// Google Maps API Loader Component
+function GoogleMapsApiLoader() {
+  useEffect(() => {
+    // Check if the script is already loaded
+    if (!window.google || !window.google.maps) {
+      // Define a global callback function for the script
+      window.initGoogleMapsApi = () => {
+        console.log("Google Maps API loaded successfully");
+      };
+
+      // Create and append the script tag
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyBPty6mgC5I_pTClSVtA5B6u9yuPEUBSq8&libraries=places&callback=initGoogleMapsApi`;
+      script.async = true;
+      script.defer = true;
+      
+      // Handle loading errors
+      script.onerror = () => {
+        console.error("Error loading Google Maps API");
+      };
+      
+      document.head.appendChild(script);
+      
+      return () => {
+        // Clean up
+        if (window.initGoogleMapsApi) {
+          delete window.initGoogleMapsApi;
+        }
+        // Optional: remove the script on unmount
+        const scriptElement = document.querySelector(`script[src^="https://maps.googleapis.com/maps/api/js"]`);
+        if (scriptElement) {
+          document.head.removeChild(scriptElement);
+        }
+      };
+    }
+  }, []);
+  
+  return null; // This component doesn't render anything
+}
 
 // App Routes Component - Used after context providers are set up
 function AppRoutes() {
@@ -51,6 +90,9 @@ function AppRoutes() {
 
   return (
     <>
+      {/* Add the Google Maps API Loader */}
+      <GoogleMapsApiLoader />
+      
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<FamilySelectionScreen />} />

@@ -9,6 +9,7 @@ import { db } from '../../services/firebase';
 import CalendarService from '../../services/CalendarService';
 import UserAvatar from '../common/UserAvatar';
 
+
 /**
  * Enhanced Event Manager - Universal component for creating and editing calendar events
  * 
@@ -70,6 +71,8 @@ const EnhancedEventManager = ({
   const [success, setSuccess] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
 const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+const placesAutocomplete = useRef(null);
+const autocompleteListener = useRef(null);
   
   const children = familyMembers.filter(m => m.role === 'child');
   const parents = familyMembers.filter(m => m.role === 'parent');
@@ -85,7 +88,41 @@ const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   }, [event.childId, children]);
   
 
-// Add a function to search for addresses
+
+// Add this useEffect to initialize Google Places Autocomplete
+useEffect(() => {
+  // Check if Google Maps API is loaded
+  if (window.google && window.google.maps && window.google.maps.places) {
+    const input = document.getElementById('google-places-input');
+    if (input) {
+      // Initialize Places Autocomplete
+      placesAutocomplete.current = new window.google.maps.places.Autocomplete(input, {
+        types: ['geocode', 'establishment'],
+        fields: ['place_id', 'formatted_address', 'name', 'geometry']
+      });
+      
+      // Add listener for place selection
+      autocompleteListener.current = placesAutocomplete.current.addListener('place_changed', () => {
+        const place = placesAutocomplete.current.getPlace();
+        if (place.formatted_address) {
+          setEvent(prev => ({ 
+            ...prev, 
+            location: place.name ? `${place.name}, ${place.formatted_address}` : place.formatted_address 
+          }));
+        }
+      });
+    }
+  }
+  
+  // Cleanup function
+  return () => {
+    if (autocompleteListener.current && window.google) {
+      window.google.maps.event.removeListener(autocompleteListener.current);
+    }
+  };
+}, []);
+
+// Replace the existing searchAddress function with this one
 const searchAddress = async (query) => {
   if (!query || query.length < 3) {
     setAddressSuggestions([]);
@@ -95,26 +132,20 @@ const searchAddress = async (query) => {
   setIsSearchingAddress(true);
   
   try {
-    // This is a placeholder for an actual address lookup API
-    // In a real implementation, you'd call a service like Google Places API or similar
-    // For demo purposes, we'll simulate results
-    const simulatedResults = [
-      { id: 1, address: `${query}, Stockholm, Sweden` },
-      { id: 2, address: `${query}, Gothenburg, Sweden` },
-      { id: 3, address: `${query} Street, Uppsala, Sweden` }
-    ];
-    
-    // Simulate API call delay
-    setTimeout(() => {
-      setAddressSuggestions(simulatedResults);
+    // If Google Places API is not loaded, use fallback method
+    if (!window.google || !window.google.maps || !window.google.maps.places) {
+      // Fallback to our own API endpoint that wraps Google Places API
+      const response = await fetch(`/api/places/autocomplete?input=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      
+      setAddressSuggestions(data.predictions || []);
       setIsSearchingAddress(false);
-    }, 500);
+      return;
+    }
     
-    // In a real implementation:
-    // const response = await fetch(`https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&types=address&key=YOUR_API_KEY`);
-    // const data = await response.json();
-    // setAddressSuggestions(data.predictions);
-    // setIsSearchingAddress(false);
+    // Google Places API will handle suggestions directly through the Autocomplete widget
+    setAddressSuggestions([]);
+    setIsSearchingAddress(false);
   } catch (error) {
     console.error("Error searching for address:", error);
     setIsSearchingAddress(false);
@@ -123,8 +154,12 @@ const searchAddress = async (query) => {
 };
 
 
+
+
+
+
+
   
- // In src/components/calendar/EnhancedEventManager.jsx
 // Replace handleSave function with this improved version:
 
 // Handle event saving
@@ -548,54 +583,57 @@ const handleSave = async () => {
   </select>
 </div>
         
-        {/* Location */}
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">
-            Location
-          </label>
-          <div className="relative">
-  <div className="flex items-center border rounded-md overflow-hidden">
-    <div className="p-2 text-gray-400">
-      <MapPin size={16} />
+// Replace the existing location input section with this enhanced version
+<div>
+  <label className="block text-sm font-medium mb-1 text-gray-700">
+    Location
+  </label>
+  <div className="relative">
+    <div className="flex items-center border rounded-md overflow-hidden">
+      <div className="p-2 text-gray-400">
+        <MapPin size={16} />
+      </div>
+      <input
+        type="text"
+        value={event.location || ''}
+        onChange={(e) => {
+          setEvent(prev => ({ ...prev, location: e.target.value }));
+          searchAddress(e.target.value);
+        }}
+        id="google-places-input"
+        className="w-full p-2 text-sm border-0 focus:ring-0"
+        placeholder="Where is this event happening?"
+      />
+      {isSearchingAddress && (
+        <div className="p-2 text-gray-400 animate-spin">
+          <div className="w-4 h-4 border-2 border-t-transparent border-gray-500 rounded-full"></div>
+        </div>
+      )}
     </div>
-    <input
-      type="text"
-      value={event.location || ''}
-      onChange={(e) => {
-        setEvent(prev => ({ ...prev, location: e.target.value }));
-        searchAddress(e.target.value);
-      }}
-      className="w-full p-2 text-sm border-0 focus:ring-0"
-      placeholder="Where is this event happening?"
-    />
-    {isSearchingAddress && (
-      <div className="p-2 text-gray-400 animate-spin">
-        <div className="w-4 h-4 border-2 border-t-transparent border-gray-500 rounded-full"></div>
+    
+    {/* Address suggestions dropdown */}
+    {addressSuggestions.length > 0 && (
+      <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border">
+        <ul className="max-h-60 overflow-auto py-1">
+          {addressSuggestions.map(suggestion => (
+            <li
+              key={suggestion.place_id}
+              className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+              onClick={() => {
+                setEvent(prev => ({ ...prev, location: suggestion.description }));
+                setAddressSuggestions([]);
+              }}
+            >
+              {suggestion.description}
+            </li>
+          ))}
+        </ul>
       </div>
     )}
   </div>
-  
-  {/* Address suggestions dropdown */}
-  {addressSuggestions.length > 0 && (
-    <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border">
-      <ul className="max-h-60 overflow-auto py-1">
-        {addressSuggestions.map(suggestion => (
-          <li
-            key={suggestion.id}
-            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
-            onClick={() => {
-              setEvent(prev => ({ ...prev, location: suggestion.address }));
-              setAddressSuggestions([]);
-            }}
-          >
-            {suggestion.address}
-          </li>
-        ))}
-      </ul>
-    </div>
-  )}
 </div>
-        </div>
+
+
         
         {/* Child Selection */}
         <div>
@@ -903,23 +941,23 @@ const handleSave = async () => {
           )}
           
           <button
-            type="button"
-            onClick={handleSave}
-            disabled={loading}
-            className="px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 disabled:bg-gray-400 flex items-center"
-          >
-            {loading ? (
-              <>
-                <div className="w-4 h-4 mr-2 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
-                Saving...
-              </>
-            ) : (
-              <>
-                <Calendar size={16} className="mr-2" />
-                {mode === 'edit' ? 'Update Event' : 'Add to Calendar'}
-              </>
-            )}
-          </button>
+  type="button"
+  onClick={handleSave}
+  disabled={loading}
+  className="px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 disabled:bg-gray-400 flex items-center"
+>
+  {loading ? (
+    <>
+      <div className="w-4 h-4 mr-2 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
+      Saving...
+    </>
+  ) : (
+    <>
+      <Calendar size={16} className="mr-2" />
+      {mode === 'edit' ? 'Update Event' : 'Add to Calendar'}
+    </>
+  )}
+</button>
         </div>
       </div>
       
