@@ -3194,7 +3194,6 @@ const renderRoutinesSection = () => {
         </div>
       ) : (
         <>
-          // Replace the "Child selector and actions" section (around line 2045-2091) with this code
           <div className="mb-6">
   <div className="flex justify-between items-center">
     <div>
@@ -3243,9 +3242,11 @@ const renderRoutinesSection = () => {
         Documents
       </button>
     </div>
-  </div>            
+  </div>
+</div>
+            
   {/* Shared To-Do List section */}
-            <div className="mb-6">
+<div className="mb-6">
   <div className="flex items-center mb-4">
     <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center mr-3">
       <CheckSquare size={18} className="text-green-600" />
