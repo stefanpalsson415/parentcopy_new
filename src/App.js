@@ -31,7 +31,7 @@ import EmailOptIn from './components/marketing/EmailOptIn';
 import ClaudeDebugger from './components/debug/ClaudeDebugger';
 import './styles/atomicHabits.css';
 
-// In App.js - Replace the GoogleMapsApiLoader component
+// New code for App.js (GoogleMapsApiLoader component)
 function GoogleMapsApiLoader() {
   useEffect(() => {
     // Check if the script is already loaded
@@ -39,6 +39,8 @@ function GoogleMapsApiLoader() {
       // Define a global callback function for the script
       window.initGoogleMapsApi = () => {
         console.log("Google Maps API loaded successfully");
+        // Dispatch an event to notify components that the API is loaded
+        window.dispatchEvent(new Event('google-maps-api-loaded'));
       };
       
       // Handle API loading errors globally
@@ -56,9 +58,9 @@ function GoogleMapsApiLoader() {
         return; // Don't load the API if no key is available
       }
 
-      // Create and append the script tag
+      // Create and append the script tag with updated libraries
       const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initGoogleMapsApi`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,marker&callback=initGoogleMapsApi`;
       script.async = true;
       script.defer = true;
       

@@ -9,7 +9,6 @@ import { db } from '../../services/firebase';
 import CalendarService from '../../services/CalendarService';
 import UserAvatar from '../common/UserAvatar';
 
-
 /**
  * Enhanced Event Manager - Universal component for creating and editing calendar events
  * 
@@ -69,10 +68,10 @@ const EnhancedEventManager = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
-  const [addressSuggestions, setAddressSuggestions] = useState([]);
-const [isSearchingAddress, setIsSearchingAddress] = useState(false);
-const placesAutocomplete = useRef(null);
-const autocompleteListener = useRef(null);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+  const [placesInitialized, setPlacesInitialized] = useState(false);
+  const placeAutocompleteElementRef = useRef(null);
+  const placesContainerRef = useRef(null);
   
   const children = familyMembers.filter(m => m.role === 'child');
   const parents = familyMembers.filter(m => m.role === 'parent');
@@ -86,297 +85,294 @@ const autocompleteListener = useRef(null);
       }
     }
   }, [event.childId, children]);
-  
 
+  // Initialize Google Places PlaceAutocompleteElement
+  useEffect(() => {
+    // Function to initialize PlaceAutocompleteElement
+    const initPlacesAutocomplete = () => {
+      if (!window.google || !window.google.maps || !window.google.maps.places || 
+          !window.google.maps.places.PlaceAutocompleteElement) {
+        console.log("Places API or PlaceAutocompleteElement not available");
+        return false;
+      }
 
-// Add this useEffect to initialize Google Places Autocomplete
-useEffect(() => {
-  // Check if the API is available and not in a failed state
-  if (window.google && window.google.maps && window.google.maps.places && 
-      !window.googleMapsAuthFailed && !window.googleMapsLoadFailed) {
-    try {
-      const input = document.getElementById('google-places-input');
-      if (input) {
-        // Initialize Places Autocomplete with error handling
-        try {
-          placesAutocomplete.current = new window.google.maps.places.Autocomplete(input, {
-            types: ['geocode', 'establishment'],
-            fields: ['place_id', 'formatted_address', 'name', 'geometry']
+      try {
+        if (placesContainerRef.current) {
+          // Clear any existing content
+          placesContainerRef.current.innerHTML = '';
+          
+          // Create a new PlaceAutocompleteElement
+          const placeAutocompleteElement = new window.google.maps.places.PlaceAutocompleteElement({
+            types: ['address', 'establishment'],
+            fields: ['formatted_address', 'name', 'geometry'],
+            inputPlaceholder: 'Where is this event happening?',
           });
           
-          // Add listener for place selection
-          autocompleteListener.current = placesAutocomplete.current.addListener('place_changed', () => {
+          // Add the element to the container
+          placesContainerRef.current.appendChild(placeAutocompleteElement);
+          
+          // Store reference to the element
+          placeAutocompleteElementRef.current = placeAutocompleteElement;
+          
+          // Add event listener for place selection
+          placeAutocompleteElement.addEventListener('gmp-placeautocomplete-place-changed', () => {
             try {
-              const place = placesAutocomplete.current.getPlace();
-              if (place && place.formatted_address) {
+              const place = placeAutocompleteElement.getPlace();
+              if (place && place.formattedAddress) {
                 setEvent(prev => ({ 
                   ...prev, 
-                  location: place.name ? `${place.name}, ${place.formatted_address}` : place.formatted_address 
+                  location: place.name ? `${place.name}, ${place.formattedAddress}` : place.formattedAddress 
                 }));
               }
-            } catch (placeError) {
-              console.warn("Error handling place selection:", placeError);
+            } catch (error) {
+              console.warn("Error handling place selection:", error);
             }
           });
-        } catch (autocompleteError) {
-          console.warn("Error initializing Places Autocomplete:", autocompleteError);
-          window.googleMapsAuthFailed = true; // Mark as failed to prevent further attempts
+          
+          return true;
         }
+        return false;
+      } catch (error) {
+        console.warn("Error initializing PlaceAutocompleteElement:", error);
+        return false;
       }
-    } catch (error) {
-      console.warn("Error setting up Google Places:", error);
-      window.googleMapsAuthFailed = true;
-    }
-  } else {
-    // Log a friendly message when Places API isn't available
-    console.log("Google Places API not available - using basic location input");
-  }
-  
-  // Cleanup function
-  return () => {
-    if (autocompleteListener.current && window.google && 
-        window.google.maps && window.google.maps.event) {
-      try {
-        window.google.maps.event.removeListener(autocompleteListener.current);
-      } catch (cleanupError) {
-        console.warn("Error cleaning up Places listener:", cleanupError);
-      }
-    }
-  };
-}, []);
+    };
 
-// Improved searchAddress function with better fallback
-const searchAddress = async (query) => {
-  if (!query || query.length < 3) {
-    setAddressSuggestions([]);
-    return;
-  }
-  
-  setIsSearchingAddress(true);
-  
-  try {
-    // Check if Google Places API is available and not failed
-    const placesAvailable = window.google && 
-                           window.google.maps && 
-                           window.google.maps.places &&
-                           !window.googleMapsAuthFailed &&
-                           !window.googleMapsLoadFailed;
-    
-    if (!placesAvailable) {
-      // API not available - provide basic suggestions based on input
-      // This is a simple fallback that doesn't require an API
-      const mockSuggestions = [
-        { place_id: 'home', description: `${query} (Home)` },
-        { place_id: 'work', description: `${query} (Work)` },
-        { place_id: 'other', description: `${query} (Other)` }
-      ];
-      
-      // Only show suggestions for queries of decent length
-      if (query.length >= 5) {
-        setAddressSuggestions(mockSuggestions);
-      } else {
-        setAddressSuggestions([]);
-      }
-      
-      setIsSearchingAddress(false);
-      return;
+    // Check if Google Maps API is loaded and initialize if it is
+    if (window.google && window.google.maps && window.google.maps.places && 
+        window.google.maps.places.PlaceAutocompleteElement && !placesInitialized) {
+      const success = initPlacesAutocomplete();
+      setPlacesInitialized(success);
     }
     
-    // Google Places API will handle suggestions directly through the Autocomplete widget
-    // We're not making direct API calls, the widget handles it
-    setAddressSuggestions([]);
-    setIsSearchingAddress(false);
-  } catch (error) {
-    console.warn("Error in address search:", error);
-    setIsSearchingAddress(false);
-    setAddressSuggestions([]);
-  }
-};
-
-  
-// Replace handleSave function with this improved version:
-
-// Handle event saving
-const handleSave = async () => {
-  try {
-    setLoading(true);
-    setError(null);
-    
-    // Validation
-    if (!event.title) {
-      setError("Please enter an event title");
-      setLoading(false);
-      return;
-    }
-    
-    if (!event.dateTime) {
-      setError("Please select a date and time");
-      setLoading(false);
-      return;
-    }
-    
-    // Format the event for the calendar service
-    const calendarEvent = {
-      ...event,
-      userId: currentUser.uid,
-      familyId,
-      source: 'unified-manager',
-      start: {
-        dateTime: new Date(event.dateTime).toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      end: {
-        dateTime: new Date(event.endDateTime || 
-                  new Date(new Date(event.dateTime).getTime() + 60 * 60 * 1000)
-                 ).toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    // Set up a handler for when the API loads
+    const handleMapsApiLoaded = () => {
+      if (window.google && window.google.maps && window.google.maps.places && 
+          window.google.maps.places.PlaceAutocompleteElement && !placesInitialized) {
+        const success = initPlacesAutocomplete();
+        setPlacesInitialized(success);
       }
     };
     
-    let result;
+    // Add event listener for when the Google Maps API loads
+    window.addEventListener('google-maps-api-loaded', handleMapsApiLoaded);
     
-    // Handle recurring events if applicable
-    if (event.isRecurring && event.recurrence.days.length > 0) {
-      // Create multiple events for each day of the week
-      const results = [];
+    // Also check again in a short timeout in case the API is loaded but the event hasn't fired
+    const timeoutId = setTimeout(() => {
+      if (window.google && window.google.maps && window.google.maps.places && 
+          window.google.maps.places.PlaceAutocompleteElement && !placesInitialized) {
+        const success = initPlacesAutocomplete();
+        setPlacesInitialized(success);
+      }
+    }, 1000);
+    
+    return () => {
+      window.removeEventListener('google-maps-api-loaded', handleMapsApiLoaded);
+      clearTimeout(timeoutId);
+    };
+  }, [placesInitialized]);
+
+  // Set initial value for the location field if editing
+  useEffect(() => {
+    if (event.location && placeAutocompleteElementRef.current) {
+      try {
+        // Try to set the input value
+        const input = placeAutocompleteElementRef.current.querySelector('input');
+        if (input) {
+          input.value = event.location;
+        }
+      } catch (error) {
+        console.warn("Error setting initial location value:", error);
+      }
+    }
+  }, [event.location, placesInitialized]);
+
+  // Manual location input for fallback
+  const handleManualLocationInput = (value) => {
+    setEvent(prev => ({ ...prev, location: value }));
+  };
+
+  // Handle event saving
+  const handleSave = async () => {
+    try {
+      setLoading(true);
+      setError(null);
       
-      for (const day of event.recurrence.days) {
-        // Calculate the next occurrence of this day
-        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const dayIndex = dayNames.indexOf(day);
-        if (dayIndex === -1) continue;
+      // Validation
+      if (!event.title) {
+        setError("Please enter an event title");
+        setLoading(false);
+        return;
+      }
+      
+      if (!event.dateTime) {
+        setError("Please select a date and time");
+        setLoading(false);
+        return;
+      }
+      
+      // Format the event for the calendar service
+      const calendarEvent = {
+        ...event,
+        userId: currentUser.uid,
+        familyId,
+        source: 'unified-manager',
+        start: {
+          dateTime: new Date(event.dateTime).toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: new Date(event.endDateTime || 
+                  new Date(new Date(event.dateTime).getTime() + 60 * 60 * 1000)
+                 ).toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        }
+      };
+      
+      let result;
+      
+      // Handle recurring events if applicable
+      if (event.isRecurring && event.recurrence.days.length > 0) {
+        // Create multiple events for each day of the week
+        const results = [];
         
-        const currentDay = new Date(event.dateTime).getDay(); // 0-6, Sunday-Saturday
-        let daysToAdd = (dayIndex - currentDay + 7) % 7;
-        if (daysToAdd === 0) daysToAdd = 7; // If same day, add a week
-        
-        // Create a new date for this day
-        const eventDate = new Date(event.dateTime);
-        eventDate.setDate(eventDate.getDate() + daysToAdd);
-        
-        // Create event for this specific day
-        const dayEvent = { 
-          ...calendarEvent,
-          title: `${calendarEvent.title} (${day})`,
-          start: {
-            dateTime: eventDate.toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          end: {
-            dateTime: new Date(eventDate.getTime() + (event.duration || 60) * 60000).toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          // Add a special flag to indicate this is part of a recurring series
-          isRecurringSeries: true,
-          recurrenceParent: event.isRecurring && event.firestoreId ? event.firestoreId : null,
-          recurrence: {
-            ...event.recurrence,
-            currentDay: day
+        for (const day of event.recurrence.days) {
+          // Calculate the next occurrence of this day
+          const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          const dayIndex = dayNames.indexOf(day);
+          if (dayIndex === -1) continue;
+          
+          const currentDay = new Date(event.dateTime).getDay(); // 0-6, Sunday-Saturday
+          let daysToAdd = (dayIndex - currentDay + 7) % 7;
+          if (daysToAdd === 0) daysToAdd = 7; // If same day, add a week
+          
+          // Create a new date for this day
+          const eventDate = new Date(event.dateTime);
+          eventDate.setDate(eventDate.getDate() + daysToAdd);
+          
+          // Create event for this specific day
+          const dayEvent = { 
+            ...calendarEvent,
+            title: `${calendarEvent.title} (${day})`,
+            start: {
+              dateTime: eventDate.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            end: {
+              dateTime: new Date(eventDate.getTime() + (event.duration || 60) * 60000).toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            // Add a special flag to indicate this is part of a recurring series
+            isRecurringSeries: true,
+            recurrenceParent: event.isRecurring && event.firestoreId ? event.firestoreId : null,
+            recurrence: {
+              ...event.recurrence,
+              currentDay: day
+            }
+          };
+          
+          // Save to calendar
+          let dayResult;
+          if (mode === 'edit' && event.firestoreId && event.recurrence.currentDay === day) {
+            // Update existing event if this is the same day
+            dayResult = await CalendarService.updateEvent(event.firestoreId, dayEvent, currentUser.uid);
+          } else {
+            // Create new event
+            dayResult = await CalendarService.addEvent(dayEvent, currentUser.uid);
           }
-        };
-        
-        // Save to calendar
-        let dayResult;
-        if (mode === 'edit' && event.firestoreId && event.recurrence.currentDay === day) {
-          // Update existing event if this is the same day
-          dayResult = await CalendarService.updateEvent(event.firestoreId, dayEvent, currentUser.uid);
-        } else {
-          // Create new event
-          dayResult = await CalendarService.addEvent(dayEvent, currentUser.uid);
+          
+          results.push(dayResult);
         }
         
-        results.push(dayResult);
+        // Show success animation
+        setSuccess(true);
+        setTimeout(() => {
+          setSuccess(false);
+          if (onSave) onSave({success: true, recurringResults: results});
+        }, 1500);
+        setLoading(false);
+        return; // Stop execution since we've already handled saving
+      }
+      
+      // Not recurring - handle as single event
+      if (mode === 'edit' && event.firestoreId) {
+        // Update existing event
+        result = await CalendarService.updateEvent(event.firestoreId, calendarEvent, currentUser.uid);
+      } else {
+        // Create new event
+        result = await CalendarService.addEvent(calendarEvent, currentUser.uid);
+      }
+      
+      // If this is an activity and for a child, also update the childrenData
+      if (event.category === 'activity' && event.childId && mode === 'create' && result.success) {
+        try {
+          // Create the activity data structure
+          const activityData = {
+            id: result.firestoreId || result.eventId || `activity-${Date.now()}`,
+            title: event.title,
+            type: event.eventType || 'activity',
+            date: new Date(event.dateTime).toISOString(),
+            location: event.location || '',
+            duration: event.duration || 60,
+            days: event.isRecurring ? event.recurrence.days : [],
+            notes: event.description || event.extraDetails?.notes || '',
+            startTime: new Date(event.dateTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false}),
+            endTime: event.endDateTime ? new Date(event.endDateTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false}) : '',
+            calendarId: result.firestoreId || result.eventId,
+            isRecurring: event.isRecurring,
+            createdAt: new Date().toISOString()
+          };
+          
+          // Get a reference to the family document
+          const familyRef = doc(db, "families", familyId);
+          
+          // Get current child data
+          const familyDoc = await getDoc(familyRef);
+          if (familyDoc.exists()) {
+            const childrenData = familyDoc.data().childrenData || {};
+            const childData = childrenData[event.childId] || {};
+            
+            // Add or update activities array
+            const activities = childData.routines || [];
+            
+            // Check if activity already exists
+            const existingIndex = activities.findIndex(a => a.id === activityData.id);
+            
+            if (existingIndex !== -1) {
+              // Update existing activity
+              activities[existingIndex] = activityData;
+            } else {
+              // Add new activity
+              activities.push(activityData);
+            }
+            
+            // Update the database
+            await updateDoc(familyRef, {
+              [`childrenData.${event.childId}.routines`]: activities
+            });
+            
+            console.log("Activity synchronized with child tracking data");
+          }
+        } catch (syncError) {
+          console.error("Error synchronizing activity:", syncError);
+          // Don't block the main success path
+        }
       }
       
       // Show success animation
       setSuccess(true);
       setTimeout(() => {
         setSuccess(false);
-        if (onSave) onSave({success: true, recurringResults: results});
+        if (onSave) onSave(result);
       }, 1500);
+      
       setLoading(false);
-      return; // Stop execution since we've already handled saving
+    } catch (error) {
+      console.error("Error processing event:", error);
+      setError(error.message || "An error occurred while saving");
+      setLoading(false);
     }
-    
-    // Not recurring - handle as single event
-    if (mode === 'edit' && event.firestoreId) {
-      // Update existing event
-      result = await CalendarService.updateEvent(event.firestoreId, calendarEvent, currentUser.uid);
-    } else {
-      // Create new event
-      result = await CalendarService.addEvent(calendarEvent, currentUser.uid);
-    }
-    
-    // If this is an activity and for a child, also update the childrenData
-    if (event.category === 'activity' && event.childId && mode === 'create' && result.success) {
-      try {
-        // Create the activity data structure
-        const activityData = {
-          id: result.firestoreId || result.eventId || `activity-${Date.now()}`,
-          title: event.title,
-          type: event.eventType || 'activity',
-          date: new Date(event.dateTime).toISOString(),
-          location: event.location || '',
-          duration: event.duration || 60,
-          days: event.isRecurring ? event.recurrence.days : [],
-          notes: event.description || event.extraDetails?.notes || '',
-          startTime: new Date(event.dateTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false}),
-          endTime: event.endDateTime ? new Date(event.endDateTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false}) : '',
-          calendarId: result.firestoreId || result.eventId,
-          isRecurring: event.isRecurring,
-          createdAt: new Date().toISOString()
-        };
-        
-        // Get a reference to the family document
-        const familyRef = doc(db, "families", familyId);
-        
-        // Get current child data
-        const familyDoc = await getDoc(familyRef);
-        if (familyDoc.exists()) {
-          const childrenData = familyDoc.data().childrenData || {};
-          const childData = childrenData[event.childId] || {};
-          
-          // Add or update activities array
-          const activities = childData.routines || [];
-          
-          // Check if activity already exists
-          const existingIndex = activities.findIndex(a => a.id === activityData.id);
-          
-          if (existingIndex !== -1) {
-            // Update existing activity
-            activities[existingIndex] = activityData;
-          } else {
-            // Add new activity
-            activities.push(activityData);
-          }
-          
-          // Update the database
-          await updateDoc(familyRef, {
-            [`childrenData.${event.childId}.routines`]: activities
-          });
-          
-          console.log("Activity synchronized with child tracking data");
-        }
-      } catch (syncError) {
-        console.error("Error synchronizing activity:", syncError);
-        // Don't block the main success path
-      }
-    }
-    
-    // Show success animation
-    setSuccess(true);
-    setTimeout(() => {
-      setSuccess(false);
-      if (onSave) onSave(result);
-    }, 1500);
-    
-    setLoading(false);
-  } catch (error) {
-    console.error("Error processing event:", error);
-    setError(error.message || "An error occurred while saving");
-    setLoading(false);
-  }
-};
+  };
   
   // Toggle a day in recurring settings
   const toggleRecurringDay = (day) => {
@@ -411,20 +407,20 @@ const handleSave = async () => {
   
   return (
     <div className={`bg-white rounded-lg shadow-md ${isCompact ? 'p-3' : 'p-4'} max-w-2xl mx-auto font-roboto max-h-[90vh] overflow-y-auto`}>
-    <div className="flex justify-between items-center mb-4 sticky top-0 bg-white z-10 pb-2">
-            <h3 className="text-lg font-medium flex items-center">
-              <Calendar size={20} className="mr-2" />
-              {mode === 'edit' ? 'Edit Event' : 'Add New Event'}
-            </h3>
-            {onCancel && (
-              <button 
-                onClick={handleCancel}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X size={20} />
-              </button>
-            )}
-          </div>
+      <div className="flex justify-between items-center mb-4 sticky top-0 bg-white z-10 pb-2">
+        <h3 className="text-lg font-medium flex items-center">
+          <Calendar size={20} className="mr-2" />
+          {mode === 'edit' ? 'Edit Event' : 'Add New Event'}
+        </h3>
+        {onCancel && (
+          <button 
+            onClick={handleCancel}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <X size={20} />
+          </button>
+        )}
+      </div>
       
       <div className="space-y-4">
         {/* Event Type */}
@@ -502,177 +498,170 @@ const handleSave = async () => {
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-  <div>
-    <label className="block text-sm font-medium mb-1 text-gray-700">
-      Date*
-    </label>
-    <input
-      type="date"
-      value={event.dateTime ? new Date(event.dateTime).toISOString().split('T')[0] : ''}
-      onChange={(e) => {
-        const date = new Date(event.dateTime || new Date());
-        const newDate = new Date(e.target.value);
-        date.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
-        
-        // Also update end time to match start date
-        let endDate = event.endDateTime ? new Date(event.endDateTime) : new Date(date);
-        endDate.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
-        
-        setEvent(prev => ({ 
-          ...prev, 
-          dateTime: date.toISOString(),
-          endDateTime: endDate.toISOString()
-        }));
-      }}
-      className="w-full border rounded-md p-2 text-sm"
-    />
-  </div>
-  
-  <div>
-    <label className="block text-sm font-medium mb-1 text-gray-700">
-      Time
-    </label>
-    <input
-      type="time"
-      value={event.dateTime ? new Date(event.dateTime).toTimeString().slice(0, 5) : ''}
-      onChange={(e) => {
-        const date = new Date(event.dateTime || new Date());
-        const [hours, minutes] = e.target.value.split(':');
-        date.setHours(hours, minutes);
-        
-        // Also update end time based on duration
-        const endDate = new Date(date);
-        endDate.setMinutes(date.getMinutes() + (event.duration || 30));
-        
-        setEvent(prev => ({ 
-          ...prev, 
-          dateTime: date.toISOString(),
-          endDateTime: endDate.toISOString() 
-        }));
-      }}
-      className="w-full border rounded-md p-2 text-sm"
-    />
-  </div>
-</div>
-
-{/* Duration */}
-<div>
-  <label className="block text-sm font-medium mb-1 text-gray-700">
-    Duration
-  </label>
-  <div className="grid grid-cols-4 gap-2">
-    {[30, 60, 90, 120].map(mins => (
-      <button
-        key={mins}
-        type="button"
-        onClick={() => {
-          // Update end time based on start time + duration
-          const startDate = new Date(event.dateTime);
-          const endDate = new Date(startDate);
-          endDate.setMinutes(startDate.getMinutes() + mins);
-          
-          setEvent(prev => ({ 
-            ...prev, 
-            duration: mins,
-            endDateTime: endDate.toISOString()
-          }));
-        }}
-        className={`py-2 px-3 text-sm rounded-md ${
-          event.duration === mins 
-            ? 'bg-blue-100 text-blue-800 border border-blue-200' 
-            : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-        }`}
-      >
-        {mins >= 60 ? `${mins/60} ${mins === 60 ? 'hour' : 'hours'}` : `${mins} min`}
-      </button>
-    ))}
-  </div>
-  <select
-    value={event.duration || 30}
-    onChange={(e) => {
-      const duration = parseInt(e.target.value);
-      
-      // Update end time based on start time + duration
-      const startDate = new Date(event.dateTime);
-      const endDate = new Date(startDate);
-      endDate.setMinutes(startDate.getMinutes() + duration);
-      
-      setEvent(prev => ({ 
-        ...prev, 
-        duration: duration,
-        endDateTime: endDate.toISOString()
-      }));
-    }}
-    className="w-full border rounded-md p-2 text-sm mt-2"
-  >
-    <option value="30">30 minutes</option>
-    <option value="60">1 hour</option>
-    <option value="90">1.5 hours</option>
-    <option value="120">2 hours</option>
-    <option value="150">2.5 hours</option>
-    <option value="180">3 hours</option>
-    <option value="240">4 hours</option>
-    <option value="300">5 hours</option>
-    <option value="480">8 hours (full day)</option>
-  </select>
-</div>
-        
-<div>
-  <label className="block text-sm font-medium mb-1 text-gray-700">
-    Location
-  </label>
-  <div className="relative">
-    <div className="flex items-center border rounded-md overflow-hidden">
-      <div className="p-2 text-gray-400">
-        <MapPin size={16} />
-      </div>
-      <input
-        type="text"
-        value={event.location || ''}
-        onChange={(e) => {
-          setEvent(prev => ({ ...prev, location: e.target.value }));
-          searchAddress(e.target.value);
-        }}
-        id="google-places-input"
-        className="w-full p-2 text-sm border-0 focus:ring-0"
-        placeholder="Where is this event happening?"
-      />
-      {isSearchingAddress && (
-        <div className="p-2 text-gray-400 animate-spin">
-          <div className="w-4 h-4 border-2 border-t-transparent border-gray-500 rounded-full"></div>
-        </div>
-      )}
-    </div>
-    
-    {/* Manual address entry notice when API is unavailable */}
-    {(window.googleMapsAuthFailed || window.googleMapsLoadFailed) && (
-      <div className="text-xs text-amber-600 mt-1 pl-2">
-        Location suggestions unavailable. Please type the full address.
-      </div>
-    )}
-    
-    {/* Address suggestions dropdown */}
-    {addressSuggestions.length > 0 && (
-      <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border">
-        <ul className="max-h-60 overflow-auto py-1">
-          {addressSuggestions.map(suggestion => (
-            <li
-              key={suggestion.place_id}
-              className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
-              onClick={() => {
-                setEvent(prev => ({ ...prev, location: suggestion.description }));
-                setAddressSuggestions([]);
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700">
+              Date*
+            </label>
+            <input
+              type="date"
+              value={event.dateTime ? new Date(event.dateTime).toISOString().split('T')[0] : ''}
+              onChange={(e) => {
+                const date = new Date(event.dateTime || new Date());
+                const newDate = new Date(e.target.value);
+                date.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+                
+                // Also update end time to match start date
+                let endDate = event.endDateTime ? new Date(event.endDateTime) : new Date(date);
+                endDate.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+                
+                setEvent(prev => ({ 
+                  ...prev, 
+                  dateTime: date.toISOString(),
+                  endDateTime: endDate.toISOString()
+                }));
               }}
-            >
-              {suggestion.description}
-            </li>
-          ))}
-        </ul>
-      </div>
-    )}
-  </div>
-</div>
+              className="w-full border rounded-md p-2 text-sm"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700">
+              Time
+            </label>
+            <input
+              type="time"
+              value={event.dateTime ? new Date(event.dateTime).toTimeString().slice(0, 5) : ''}
+              onChange={(e) => {
+                const date = new Date(event.dateTime || new Date());
+                const [hours, minutes] = e.target.value.split(':');
+                date.setHours(hours, minutes);
+                
+                // Also update end time based on duration
+                const endDate = new Date(date);
+                endDate.setMinutes(date.getMinutes() + (event.duration || 30));
+                
+                setEvent(prev => ({ 
+                  ...prev, 
+                  dateTime: date.toISOString(),
+                  endDateTime: endDate.toISOString() 
+                }));
+              }}
+              className="w-full border rounded-md p-2 text-sm"
+            />
+          </div>
+        </div>
 
+        {/* Duration */}
+        <div>
+          <label className="block text-sm font-medium mb-1 text-gray-700">
+            Duration
+          </label>
+          <div className="grid grid-cols-4 gap-2">
+            {[30, 60, 90, 120].map(mins => (
+              <button
+                key={mins}
+                type="button"
+                onClick={() => {
+                  // Update end time based on start time + duration
+                  const startDate = new Date(event.dateTime);
+                  const endDate = new Date(startDate);
+                  endDate.setMinutes(startDate.getMinutes() + mins);
+                  
+                  setEvent(prev => ({ 
+                    ...prev, 
+                    duration: mins,
+                    endDateTime: endDate.toISOString()
+                  }));
+                }}
+                className={`py-2 px-3 text-sm rounded-md ${
+                  event.duration === mins 
+                    ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                }`}
+              >
+                {mins >= 60 ? `${mins/60} ${mins === 60 ? 'hour' : 'hours'}` : `${mins} min`}
+              </button>
+            ))}
+          </div>
+          <select
+            value={event.duration || 30}
+            onChange={(e) => {
+              const duration = parseInt(e.target.value);
+              
+              // Update end time based on start time + duration
+              const startDate = new Date(event.dateTime);
+              const endDate = new Date(startDate);
+              endDate.setMinutes(startDate.getMinutes() + duration);
+              
+              setEvent(prev => ({ 
+                ...prev, 
+                duration: duration,
+                endDateTime: endDate.toISOString()
+              }));
+            }}
+            className="w-full border rounded-md p-2 text-sm mt-2"
+          >
+            <option value="30">30 minutes</option>
+            <option value="60">1 hour</option>
+            <option value="90">1.5 hours</option>
+            <option value="120">2 hours</option>
+            <option value="150">2.5 hours</option>
+            <option value="180">3 hours</option>
+            <option value="240">4 hours</option>
+            <option value="300">5 hours</option>
+            <option value="480">8 hours (full day)</option>
+          </select>
+        </div>
+        
+        {/* Location - Updated to use PlaceAutocompleteElement or fallback */}
+        <div>
+          <label className="block text-sm font-medium mb-1 text-gray-700">
+            Location
+          </label>
+          
+          {/* PlaceAutocompleteElement container */}
+          <div ref={placesContainerRef} className="mb-2">
+            {/* PlaceAutocompleteElement will be inserted here */}
+            {/* Fallback while waiting for initialization */}
+            {!placesInitialized && (
+              <div className="flex items-center border rounded-md overflow-hidden">
+                <div className="p-2 text-gray-400">
+                  <MapPin size={16} />
+                </div>
+                <input
+                  type="text"
+                  value={event.location || ''}
+                  onChange={(e) => handleManualLocationInput(e.target.value)}
+                  className="w-full p-2 text-sm border-0 focus:ring-0"
+                  placeholder="Where is this event happening?"
+                />
+              </div>
+            )}
+          </div>
+          
+          {/* Manual fallback if API fails */}
+          {window.googleMapsAuthFailed === true || window.googleMapsLoadFailed === true ? (
+            <div className="flex items-center border rounded-md overflow-hidden mt-2">
+              <div className="p-2 text-gray-400">
+                <MapPin size={16} />
+              </div>
+              <input
+                type="text"
+                value={event.location || ''}
+                onChange={(e) => handleManualLocationInput(e.target.value)}
+                className="w-full p-2 text-sm border-0 focus:ring-0"
+                placeholder="Enter location manually"
+              />
+            </div>
+          ) : null}
+          
+          {/* Notice when API is unavailable */}
+          {(window.googleMapsAuthFailed || window.googleMapsLoadFailed) && (
+            <div className="text-xs text-amber-600 mt-1 pl-2">
+              Location suggestions unavailable. Please type the full address.
+            </div>
+          )}
+        </div>
         
         {/* Child Selection */}
         <div>
@@ -980,23 +969,23 @@ const handleSave = async () => {
           )}
           
           <button
-  type="button"
-  onClick={handleSave}
-  disabled={loading}
-  className="px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 disabled:bg-gray-400 flex items-center"
->
-  {loading ? (
-    <>
-      <div className="w-4 h-4 mr-2 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
-      Saving...
-    </>
-  ) : (
-    <>
-      <Calendar size={16} className="mr-2" />
-      {mode === 'edit' ? 'Update Event' : 'Add to Calendar'}
-    </>
-  )}
-</button>
+            type="button"
+            onClick={handleSave}
+            disabled={loading}
+            className="px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 disabled:bg-gray-400 flex items-center"
+          >
+            {loading ? (
+              <>
+                <div className="w-4 h-4 mr-2 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
+                Saving...
+              </>
+            ) : (
+              <>
+                <Calendar size={16} className="mr-2" />
+                {mode === 'edit' ? 'Update Event' : 'Add to Calendar'}
+              </>
+            )}
+          </button>
         </div>
       </div>
       
