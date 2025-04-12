@@ -20,6 +20,12 @@ import AllieAIService from '../../../services/AllieAIService';
 import UserAvatar from '../../common/UserAvatar';
 import UnifiedEventManager from '../../calendar/EnhancedEventManager';
 import DocumentLibrary from '../../document/DocumentLibrary';
+import { 
+  DragDropContext, Droppable, Draggable 
+} from 'react-beautiful-dnd';
+import confetti from 'canvas-confetti';
+
+
 
 
 const ChildrenTrackingTab = () => {
@@ -47,8 +53,8 @@ const ChildrenTrackingTab = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingText, setRecordingText] = useState('');
   const [expandedSections, setExpandedSections] = useState({
-    medical: true,
-    growth: true,
+    medical: false,
+    growth: false,
     routines: false
   });
 
@@ -63,6 +69,34 @@ const ChildrenTrackingTab = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [documents, setDocuments] = useState([]);
   const [activeComponent, setActiveComponent] = useState(null);
+  
+
+// Add this in the main ChildrenTrackingTab component right after the const notifications declaration
+const [todos, setTodos] = useState([]);
+const [loadingTodos, setLoadingTodos] = useState(true);
+const [newTodoText, setNewTodoText] = useState('');
+const [categoryFilter, setCategoryFilter] = useState('all');
+const [showCompleted, setShowCompleted] = useState(false);
+const [editingTodo, setEditingTodo] = useState(null);
+const [showAddCalendar, setShowAddCalendar] = useState(false);
+const [selectedTodoForCalendar, setSelectedTodoForCalendar] = useState(null);
+const [editingTodoText, setEditingTodoText] = useState('');
+const [editingTodoCategory, setEditingTodoCategory] = useState('');
+const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+const [todoToDelete, setTodoToDelete] = useState(null);
+const [expandedTodoSection, setExpandedTodoSection] = useState(true);
+
+const todoInputRef = useRef(null);
+
+// Add this after other constants in the component
+const categories = [
+  { id: 'household', name: 'Household', color: 'bg-blue-100 text-blue-800' },
+  { id: 'relationship', name: 'Relationship', color: 'bg-pink-100 text-pink-800' },
+  { id: 'parenting', name: 'Parenting', color: 'bg-purple-100 text-purple-800' },
+  { id: 'errands', name: 'Errands', color: 'bg-green-100 text-green-800' },
+  { id: 'work', name: 'Work', color: 'bg-amber-100 text-amber-800' },
+  { id: 'other', name: 'Other', color: 'bg-gray-100 text-gray-800' }
+];
   
   // Refs
   const searchInputRef = useRef(null);
@@ -850,6 +884,387 @@ const ChildrenTrackingTab = () => {
     }
   };
   
+
+// Load todos from Firestore with real-time updates
+useEffect(() => {
+  if (!familyId) return;
+  
+  setLoadingTodos(true);
+  
+  // Create a real-time listener for todos
+  const todosRef = collection(db, "relationshipTodos");
+  const q = query(todosRef, where("familyId", "==", familyId));
+  
+  const unsubscribe = onSnapshot(q, (querySnapshot) => {
+    const loadedTodos = [];
+    querySnapshot.forEach((doc) => {
+      loadedTodos.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+    
+    // Sort by position first, then by most recently created
+    loadedTodos.sort((a, b) => {
+      if (a.position !== undefined && b.position !== undefined) {
+        return a.position - b.position;
+      }
+      // Fall back to creation time if position not available
+      return new Date(b.createdAt?.toDate?.() || 0) - new Date(a.createdAt?.toDate?.() || 0);
+    });
+    
+    setTodos(loadedTodos);
+    setLoadingTodos(false);
+  }, (error) => {
+    console.error("Error loading todos:", error);
+    setLoadingTodos(false);
+  });
+  
+  // Clean up listener when component unmounts
+  return () => unsubscribe();
+}, [familyId]); 
+
+// Add todo
+const addTodo = async () => {
+  if (!newTodoText.trim() || !familyId) return;
+  
+  try {
+    const newTodo = {
+      text: newTodoText.trim(),
+      completed: false,
+      familyId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      createdBy: currentUser.uid,
+      assignedTo: null, 
+      category: 'other', 
+      position: todos.length, 
+      notes: '',
+      dueDate: null
+    };
+    
+    // Add to Firestore
+    const docRef = await addDoc(collection(db, "relationshipTodos"), newTodo);
+    
+    // Update state with the new todo
+    setTodos(prev => [...prev, { 
+      id: docRef.id,
+      ...newTodo,
+      createdAt: new Date() 
+    }]);
+    
+    // Clear input
+    setNewTodoText('');
+    
+  } catch (error) {
+    console.error("Error adding todo:", error);
+  }
+};
+
+// Toggle todo completion
+const toggleTodo = async (todoId) => {
+  try {
+    const todoIndex = todos.findIndex(todo => todo.id === todoId);
+    if (todoIndex === -1) return;
+    
+    const updatedTodo = {...todos[todoIndex], completed: !todos[todoIndex].completed};
+    
+    // Update Firestore
+    const todoRef = doc(db, "relationshipTodos", todoId);
+    await updateDoc(todoRef, {
+      completed: updatedTodo.completed,
+      updatedAt: serverTimestamp()
+    });
+    
+    // Update state
+    const newTodos = [...todos];
+    newTodos[todoIndex] = updatedTodo;
+    setTodos(newTodos);
+    
+    // Trigger confetti animation if completed
+    if (updatedTodo.completed) {
+      const todoElement = document.getElementById(`todo-${todoId}`);
+      if (todoElement) {
+        const rect = todoElement.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { 
+            x: x / window.innerWidth, 
+            y: y / window.innerHeight 
+          },
+          colors: ['#4ade80', '#3b82f6', '#8b5cf6'],
+          zIndex: 9999
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Error toggling todo:", error);
+  }
+};
+
+// Start editing a todo
+const startEditTodo = (todo) => {
+  setEditingTodo(todo.id);
+  setEditingTodoText(todo.text);
+  setEditingTodoCategory(todo.category);
+  
+  // Focus the input after a short delay to ensure it's rendered
+  setTimeout(() => {
+    const editInput = document.getElementById(`edit-todo-${todo.id}`);
+    if (editInput) editInput.focus();
+  }, 50);
+};
+
+// Cancel editing
+const cancelEdit = () => {
+  setEditingTodo(null);
+  setEditingTodoText('');
+  setEditingTodoCategory('');
+};
+
+// Save edited todo
+const saveEditedTodo = async (todoId) => {
+  if (!editingTodoText.trim()) return cancelEdit();
+  
+  try {
+    const todoIndex = todos.findIndex(todo => todo.id === todoId);
+    if (todoIndex === -1) return;
+    
+    const updatedTodo = {
+      ...todos[todoIndex],
+      text: editingTodoText.trim(),
+      category: editingTodoCategory || 'other',
+      updatedAt: new Date()
+    };
+    
+    // Update Firestore
+    const todoRef = doc(db, "relationshipTodos", todoId);
+    await updateDoc(todoRef, {
+      text: updatedTodo.text,
+      category: updatedTodo.category,
+      updatedAt: serverTimestamp()
+    });
+    
+    // Update state
+    const newTodos = [...todos];
+    newTodos[todoIndex] = updatedTodo;
+    setTodos(newTodos);
+    
+    // Reset editing state
+    cancelEdit();
+    
+  } catch (error) {
+    console.error("Error updating todo:", error);
+  }
+};
+
+// Delete todo
+const deleteTodo = async (todoId) => {
+  setTodoToDelete(todoId);
+  setShowDeleteConfirmation(true);
+};
+
+// Confirm delete todo
+const confirmDeleteTodo = async () => {
+  try {
+    // Delete from Firestore
+    await deleteDoc(doc(db, "relationshipTodos", todoToDelete));
+    
+    // Update state
+    setTodos(prev => prev.filter(todo => todo.id !== todoToDelete));
+    
+    // Reset states
+    setTodoToDelete(null);
+    setShowDeleteConfirmation(false);
+  } catch (error) {
+    console.error("Error deleting todo:", error);
+  }
+};
+
+// Reassign todo to a different parent
+const reassignTodo = async (todoId, parentId) => {
+  try {
+    const todoIndex = todos.findIndex(todo => todo.id === todoId);
+    if (todoIndex === -1) return;
+    
+    // Find parent name
+    const parent = familyMembers.find(m => m.id === parentId);
+    
+    const updatedTodo = {
+      ...todos[todoIndex],
+      assignedTo: parentId,
+      assignedToName: parent?.name || 'Unknown'
+    };
+    
+    // Update Firestore
+    const todoRef = doc(db, "relationshipTodos", todoId);
+    await updateDoc(todoRef, {
+      assignedTo: updatedTodo.assignedTo,
+      assignedToName: updatedTodo.assignedToName,
+      updatedAt: serverTimestamp()
+    });
+    
+    // Update state
+    const newTodos = [...todos];
+    newTodos[todoIndex] = updatedTodo;
+    setTodos(newTodos);
+    
+  } catch (error) {
+    console.error("Error reassigning todo:", error);
+  }
+};
+
+// Add a due date via calendar integration
+const openCalendarForTodo = (todo) => {
+  setSelectedTodoForCalendar(todo);
+  setShowAddCalendar(true);
+};
+
+// Handle todo drag and drop
+const handleDragEnd = async (result) => {
+  // Drop outside a droppable area
+  if (!result.destination) return;
+  
+  const sourceIndex = result.source.index;
+  const destinationIndex = result.destination.index;
+  
+  // No change
+  if (sourceIndex === destinationIndex) return;
+  
+  try {
+    // Reorder the todos
+    const filteredTodos = filterTodos();
+    const draggedTodo = filteredTodos[sourceIndex];
+    
+    // Create new array with the moved todo
+    const newFilteredTodos = [...filteredTodos];
+    newFilteredTodos.splice(sourceIndex, 1);
+    newFilteredTodos.splice(destinationIndex, 0, draggedTodo);
+    
+    // Update the position of all todos in the filtered view
+    const updatedAllTodos = [...todos];
+    
+    // Update positions in the full list based on the new filtered order
+    filteredTodos.forEach((todo, oldIndex) => {
+      const newIndex = newFilteredTodos.findIndex(t => t.id === todo.id);
+      if (oldIndex !== newIndex) {
+        const fullListIndex = updatedAllTodos.findIndex(t => t.id === todo.id);
+        if (fullListIndex !== -1) {
+          updatedAllTodos[fullListIndex] = {
+            ...updatedAllTodos[fullListIndex],
+            position: newIndex
+          };
+        }
+      }
+    });
+    
+    // Update state immediately for better UX
+    setTodos(updatedAllTodos);
+    
+    // Batch update positions in Firestore
+    for (const todo of updatedAllTodos) {
+      if (todo.id === draggedTodo.id) {
+        const todoRef = doc(db, "relationshipTodos", todo.id);
+        await updateDoc(todoRef, { 
+          position: todo.position,
+          updatedAt: serverTimestamp()
+        });
+      }
+    }
+    
+  } catch (error) {
+    console.error("Error reordering todos:", error);
+  }
+};
+
+// Handle successful calendar event addition
+const handleCalendarEventAdded = (eventResult) => {
+  if (!eventResult || !eventResult.success || !selectedTodoForCalendar) return;
+  
+  // Update the todo with the due date and event ID
+  updateTodoDueDate(selectedTodoForCalendar.id, eventResult);
+  
+  // Reset state
+  setShowAddCalendar(false);
+  setSelectedTodoForCalendar(null);
+};
+
+// Update todo with due date info
+const updateTodoDueDate = async (todoId, eventResult) => {
+  try {
+    const todoIndex = todos.findIndex(todo => todo.id === todoId);
+    if (todoIndex === -1) return;
+    
+    const updatedTodo = {
+      ...todos[todoIndex],
+      dueDate: new Date().toISOString(),
+      eventId: eventResult.eventId,
+      universalId: eventResult.universalId || eventResult.eventId
+    };
+    
+    // Update Firestore
+    const todoRef = doc(db, "relationshipTodos", todoId);
+    await updateDoc(todoRef, {
+      dueDate: updatedTodo.dueDate,
+      eventId: updatedTodo.eventId,
+      universalId: updatedTodo.universalId,
+      updatedAt: serverTimestamp()
+    });
+    
+    // Update state
+    const newTodos = [...todos];
+    newTodos[todoIndex] = updatedTodo;
+    setTodos(newTodos);
+    
+  } catch (error) {
+    console.error("Error updating todo due date:", error);
+  }
+};
+
+// Filter todos based on current filters
+const filterTodos = () => {
+  return todos.filter(todo => {
+    // Filter by completion status
+    if (!showCompleted && todo.completed) return false;
+    
+    // Filter by category
+    if (categoryFilter !== 'all' && todo.category !== categoryFilter) return false;
+    
+    return true;
+  });
+};
+
+// Get category display info
+const getCategoryInfo = (categoryId) => {
+  const category = categories.find(c => c.id === categoryId) || categories.find(c => c.id === 'other');
+  return category;
+};
+
+// Handle keypress in new todo input
+const handleKeyPress = (e) => {
+  if (e.key === 'Enter') {
+    addTodo();
+  }
+};
+
+// Get parent name
+const getParentName = (parentId) => {
+  const parent = familyMembers.find(m => m.id === parentId);
+  return parent?.name || 'Unassigned';
+};
+
+// Toggle Todo section expansion
+const toggleTodoSection = () => {
+  setExpandedTodoSection(!expandedTodoSection);
+};
+
+
+
+
   useEffect(() => {
     const loadChildrenData = async () => {
       try {
@@ -1590,156 +2005,184 @@ const handleCoachTeacherSubmit = async (coachData) => {
     }
   };
   
-  // Render the medical appointments section
-  const renderMedicalSection = () => {
-    const children = familyMembers.filter(member => member.role === 'child');
-    
-    if (children.length === 0) {
-      return (
-        <div className="text-center p-4 bg-gray-50 rounded-lg">
-          <p className="text-gray-500 font-roboto">No children added to your family yet</p>
-        </div>
-      );
-    }
-    
-    const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
-    
+  // Replace the entire renderMedicalSection function with this
+const renderMedicalSection = () => {
+  // Get both children and parents
+  const children = familyMembers.filter(member => member.role === 'child');
+  const parents = familyMembers.filter(member => member.role === 'parent');
+  const allMembers = [...children, ...parents];
+  
+  if (allMembers.length === 0) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium font-roboto">Medical Appointments & Health Records</h3>
-          <div className="flex space-x-2">
-            <button
-              className="p-2 rounded-md hover:bg-gray-100"
-              onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
-              title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
-            >
-              {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
-            </button>
-            <button 
-              className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
-              onClick={() => {
-                if (activeChild) {
-                  openModal('appointment', {
+      <div className="text-center p-4 bg-gray-50 rounded-lg">
+        <p className="text-gray-500 font-roboto">No family members found</p>
+      </div>
+    );
+  }
+  
+  // Filter based on activeChild (if selected)
+  let filteredMembers = allMembers;
+  if (activeChild) {
+    filteredMembers = allMembers.filter(member => member.id === activeChild);
+  }
+  
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-medium font-roboto">Medical Appointments & Health Records</h3>
+        <div className="flex space-x-2">
+          <button
+            className="p-2 rounded-md hover:bg-gray-100"
+            onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
+            title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
+          >
+            {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
+          </button>
+          <button 
+            className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
+            onClick={() => {
+              if (activeChild) {
+                openModal('appointment', {
+                  title: '',
+                  date: new Date().toISOString().split('T')[0],
+                  time: '09:00',
+                  doctor: '',
+                  notes: '',
+                  childId: activeChild,
+                  completed: false,
+                  documents: []
+                });
+              } else {
+                setAllieMessage({
+                  type: 'warning',
+                  text: 'Please select a family member first before adding an appointment.'
+                });
+              }
+            }}
+          >
+            <Plus size={20} />
+          </button>
+        </div>
+      </div>
+      
+      <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
+        {filteredMembers.map(member => (
+          <div key={member.id} className={`bg-white rounded-lg shadow ${viewMode === 'card' ? 'p-4' : 'p-4'}`}>
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center">
+                <UserAvatar user={member} size={40} className="mr-3" />
+                <div>
+                  <h4 className="font-medium font-roboto text-lg">{member.name}'s Health</h4>
+                  <p className="text-sm text-gray-500 font-roboto">
+                    {member.role === 'child' ? 
+                      (childrenData[member.id]?.medicalAppointments?.length || 0) + ' appointments' :
+                      (member.medicalAppointments?.length || 0) + ' appointments'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  className="px-3 py-1 border border-black text-black rounded-md text-sm hover:bg-gray-50 font-roboto flex items-center"
+                  onClick={() => openModal('provider', { familyId })}
+                >
+                  <User size={14} className="mr-1" />
+                  Manage Providers
+                </button>
+                <button 
+                  className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
+                  onClick={() => openModal('appointment', {
                     title: '',
                     date: new Date().toISOString().split('T')[0],
                     time: '09:00',
                     doctor: '',
                     notes: '',
-                    childId: activeChild,
+                    childId: member.id,
                     completed: false,
                     documents: []
-                  });
-                } else {
-                  setAllieMessage({
-                    type: 'warning',
-                    text: 'Please select a child first before adding an appointment.'
-                  });
-                }
-              }}
-            >
-              <Plus size={20} />
-            </button>
-          </div>
-        </div>
-        
-        <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
-          {filteredChildren.map(child => (
-            <div key={child.id} className={`bg-white rounded-lg shadow ${viewMode === 'card' ? 'p-4' : 'p-4'}`}>
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center">
-                <UserAvatar user={child} size={40} className="mr-3" />
-
-                  <div>
-                    <h4 className="font-medium font-roboto text-lg">{child.name}'s Health</h4>
-                    <p className="text-sm text-gray-500 font-roboto">
-                      {childrenData[child.id]?.medicalAppointments?.length || 0} appointments
-                    </p>
-                  </div>
-                </div>
-                <div className="flex space-x-2">
-                  <button
-                    className="px-3 py-1 border border-black text-black rounded-md text-sm hover:bg-gray-50 font-roboto flex items-center"
-                    onClick={() => openModal('provider', { familyId })}
-                  >
-                    <User size={14} className="mr-1" />
-                    Manage Providers
-                  </button>
-                  <button 
-                    className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
-                    onClick={() => openModal('appointment', {
-                      title: '',
-                      date: new Date().toISOString().split('T')[0],
-                      time: '09:00',
-                      doctor: '',
-                      notes: '',
-                      childId: child.id,
-                      completed: false,
-                      documents: []
-                    })}
-                  >
-                    <PlusCircle size={14} className="mr-1" />
-                    Add Appointment
-                  </button>
-                </div>
+                  })}
+                >
+                  <PlusCircle size={14} className="mr-1" />
+                  Add Appointment
+                </button>
+              </div>
+            </div>
+            
+            {/* Recommended checkups based on age - only for children */}
+            {member.role === 'child' && member.age && (
+              <div className="mb-4 bg-blue-50 p-3 rounded-lg">
+                <h5 className="font-medium text-sm font-roboto mb-1 flex items-center">
+                  <Info size={14} className="text-blue-500 mr-1" />
+                  Recommended for {member.age} years old
+                </h5>
+                <ul className="text-sm font-roboto space-y-1">
+                  {member.age < 1 && (
+                    <>
+                      <li>• Well-baby checkups at 1, 2, 4, 6, 9, and 12 months</li>
+                      <li>• Multiple immunizations throughout first year</li>
+                    </>
+                  )}
+                  {member.age >= 1 && member.age < 3 && (
+                    <>
+                      <li>• Well-child checkups at 15, 18, 24, and 30 months</li>
+                      <li>• First dental visit by age 1</li>
+                      <li>• Vision screening</li>
+                    </>
+                  )}
+                  {member.age >= 3 && member.age < 6 && (
+                    <>
+                      <li>• Annual well-child checkups</li>
+                      <li>• Dental checkups every 6 months</li>
+                      <li>• Vision and hearing screening</li>
+                    </>
+                  )}
+                  {member.age >= 6 && member.age < 12 && (
+                    <>
+                      <li>• Annual well-child checkups</li>
+                      <li>• Dental checkups every 6 months</li>
+                      <li>• Vision and hearing screenings</li>
+                      <li>• Sports physicals if applicable</li>
+                    </>
+                  )}
+                  {member.age >= 12 && (
+                    <>
+                      <li>• Annual well-teen checkups</li>
+                      <li>• Dental checkups every 6 months</li>
+                      <li>• Sports physicals if applicable</li>
+                      <li>• Adolescent immunizations</li>
+                    </>
+                  )}
+                </ul>
+              </div>
+            )}
+            
+            {/* Adult health recommendations for parents */}
+            {member.role === 'parent' && (
+              <div className="mb-4 bg-blue-50 p-3 rounded-lg">
+                <h5 className="font-medium text-sm font-roboto mb-1 flex items-center">
+                  <Info size={14} className="text-blue-500 mr-1" />
+                  Recommended Adult Health Screenings
+                </h5>
+                <ul className="text-sm font-roboto space-y-1">
+                  <li>• Annual physical exam</li>
+                  <li>• Blood pressure check (once a year)</li>
+                  <li>• Cholesterol screening (every 4-6 years)</li>
+                  <li>• Dental exam (twice a year)</li>
+                  <li>• Eye exam (every 1-2 years)</li>
+                </ul>
+              </div>
+            )}
+            
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <h5 className="font-medium text-sm font-roboto">Upcoming Appointments</h5>
+                <button className="text-xs text-blue-600 hover:underline font-roboto">View all</button>
               </div>
               
-              {/* Recommended checkups based on age */}
-              {child.age && (
-                <div className="mb-4 bg-blue-50 p-3 rounded-lg">
-                  <h5 className="font-medium text-sm font-roboto mb-1 flex items-center">
-                    <Info size={14} className="text-blue-500 mr-1" />
-                    Recommended for {child.age} years old
-                  </h5>
-                  <ul className="text-sm font-roboto space-y-1">
-                    {child.age < 1 && (
-                      <>
-                        <li>• Well-baby checkups at 1, 2, 4, 6, 9, and 12 months</li>
-                        <li>• Multiple immunizations throughout first year</li>
-                      </>
-                    )}
-                    {child.age >= 1 && child.age < 3 && (
-                      <>
-                        <li>• Well-child checkups at 15, 18, 24, and 30 months</li>
-                        <li>• First dental visit by age 1</li>
-                        <li>• Vision screening</li>
-                      </>
-                    )}
-                    {child.age >= 3 && child.age < 6 && (
-                      <>
-                        <li>• Annual well-child checkups</li>
-                        <li>• Dental checkups every 6 months</li>
-                        <li>• Vision and hearing screening</li>
-                      </>
-                    )}
-                    {child.age >= 6 && child.age < 12 && (
-                      <>
-                        <li>• Annual well-child checkups</li>
-                        <li>• Dental checkups every 6 months</li>
-                        <li>• Vision and hearing screenings</li>
-                        <li>• Sports physicals if applicable</li>
-                      </>
-                    )}
-                    {child.age >= 12 && (
-                      <>
-                        <li>• Annual well-teen checkups</li>
-                        <li>• Dental checkups every 6 months</li>
-                        <li>• Sports physicals if applicable</li>
-                        <li>• Adolescent immunizations</li>
-                      </>
-                    )}
-                  </ul>
-                </div>
-              )}
-              
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <h5 className="font-medium text-sm font-roboto">Upcoming Appointments</h5>
-                  <button className="text-xs text-blue-600 hover:underline font-roboto">View all</button>
-                </div>
-                
-                {childrenData[child.id]?.medicalAppointments?.filter(a => !a.completed && new Date(a.date) >= new Date()).length > 0 ? (
-                  childrenData[child.id].medicalAppointments
+              {/* Different handling of appointments based on member type */}
+              {member.role === 'child' ? (
+                // Child appointments
+                childrenData[member.id]?.medicalAppointments?.filter(a => !a.completed && new Date(a.date) >= new Date()).length > 0 ? (
+                  childrenData[member.id].medicalAppointments
                     .filter(a => !a.completed && new Date(a.date) >= new Date())
                     .sort((a, b) => new Date(a.date) - new Date(b.date))
                     .slice(0, 3)
@@ -1761,13 +2204,13 @@ const handleCoachTeacherSubmit = async (coachData) => {
                           <div className="flex space-x-2">
                             <button 
                               className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                              onClick={() => openModal('appointment', {...appointment, childId: child.id})}
+                              onClick={() => openModal('appointment', {...appointment, childId: member.id})}
                             >
                               <Edit size={16} />
                             </button>
                             <button 
                               className="p-1 text-red-600 hover:bg-red-50 rounded"
-                              onClick={() => handleRemoveItem('appointment', child.id, appointment.id)}
+                              onClick={() => handleRemoveItem('appointment', member.id, appointment.id)}
                             >
                               <Trash2 size={16} />
                             </button>
@@ -1784,14 +2227,66 @@ const handleCoachTeacherSubmit = async (coachData) => {
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
                     <p className="text-sm text-gray-500 font-roboto">No upcoming appointments</p>
                   </div>
-                )}
-                
-                <div className="flex justify-between items-center mt-4">
-                  <h5 className="font-medium text-sm font-roboto">Past Appointments</h5>
-                </div>
-                
-                {childrenData[child.id]?.medicalAppointments?.filter(a => a.completed || new Date(a.date) < new Date()).length > 0 ? (
-                  childrenData[child.id].medicalAppointments
+                )
+              ) : (
+                // Parent appointments - check if member.medicalAppointments exists
+                member.medicalAppointments?.filter(a => !a.completed && new Date(a.date) >= new Date()).length > 0 ? (
+                  member.medicalAppointments
+                    .filter(a => !a.completed && new Date(a.date) >= new Date())
+                    .sort((a, b) => new Date(a.date) - new Date(b.date))
+                    .slice(0, 3)
+                    .map(appointment => (
+                      <div key={appointment.id} className="border rounded-lg p-3 bg-white hover:bg-gray-50">
+                        <div className="flex justify-between">
+                          <div>
+                            <h5 className="font-medium font-roboto text-md">{appointment.title}</h5>
+                            <p className="text-sm text-gray-600 font-roboto">
+                              {formatDate(appointment.date)} at {appointment.time}
+                            </p>
+                            {appointment.doctor && (
+                              <p className="text-sm text-gray-600 font-roboto">Doctor: {appointment.doctor}</p>
+                            )}
+                            {appointment.providerDetails && appointment.providerDetails.address && (
+                              <p className="text-sm text-gray-600 font-roboto truncate">{appointment.providerDetails.address}</p>
+                            )}
+                          </div>
+                          <div className="flex space-x-2">
+                            <button 
+                              className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                              onClick={() => openModal('appointment', {...appointment, parentId: member.id})}
+                            >
+                              <Edit size={16} />
+                            </button>
+                            <button 
+                              className="p-1 text-red-600 hover:bg-red-50 rounded"
+                              onClick={() => handleRemoveItem('appointment', member.id, appointment.id)}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                        {appointment.notes && (
+                          <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
+                            <p>{appointment.notes}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                ) : (
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-500 font-roboto">No upcoming appointments</p>
+                  </div>
+                )
+              )}
+              
+              <div className="flex justify-between items-center mt-4">
+                <h5 className="font-medium text-sm font-roboto">Past Appointments</h5>
+              </div>
+              
+              {/* Past appointments - again handling differently for children vs parents */}
+              {member.role === 'child' ? (
+                childrenData[member.id]?.medicalAppointments?.filter(a => a.completed || new Date(a.date) < new Date()).length > 0 ? (
+                  childrenData[member.id].medicalAppointments
                     .filter(a => a.completed || new Date(a.date) < new Date())
                     .sort((a, b) => new Date(b.date) - new Date(a.date))
                     .slice(0, 3)
@@ -1810,7 +2305,7 @@ const handleCoachTeacherSubmit = async (coachData) => {
                           <div className="flex space-x-2">
                             <button 
                               className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                              onClick={() => openModal('appointment', {...appointment, childId: child.id})}
+                              onClick={() => openModal('appointment', {...appointment, childId: member.id})}
                             >
                               <Edit size={16} />
                             </button>
@@ -1828,14 +2323,56 @@ const handleCoachTeacherSubmit = async (coachData) => {
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
                     <p className="text-sm text-gray-500 font-roboto">No past appointments</p>
                   </div>
-                )}
-              </div>
+                )
+              ) : (
+                // Parent past appointments
+                member.medicalAppointments?.filter(a => a.completed || new Date(a.date) < new Date()).length > 0 ? (
+                  member.medicalAppointments
+                    .filter(a => a.completed || new Date(a.date) < new Date())
+                    .sort((a, b) => new Date(b.date) - new Date(a.date))
+                    .slice(0, 3)
+                    .map(appointment => (
+                      <div key={appointment.id} className="border rounded-lg p-3 bg-gray-50">
+                        <div className="flex justify-between">
+                          <div>
+                            <h5 className="font-medium font-roboto">{appointment.title}</h5>
+                            <p className="text-sm text-gray-600 font-roboto">
+                              {formatDate(appointment.date)} at {appointment.time}
+                            </p>
+                            {appointment.doctor && (
+                              <p className="text-sm text-gray-600 font-roboto">Doctor: {appointment.doctor}</p>
+                            )}
+                          </div>
+                          <div className="flex space-x-2">
+                            <button 
+                              className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                              onClick={() => openModal('appointment', {...appointment, parentId: member.id})}
+                            >
+                              <Edit size={16} />
+                            </button>
+                          </div>
+                        </div>
+                        {appointment.completed && (
+                          <div className="mt-2 flex items-center text-sm text-green-600 font-roboto">
+                            <CheckCircle size={14} className="mr-1" />
+                            Completed
+                          </div>
+                        )}
+                      </div>
+                    ))
+                ) : (
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-500 font-roboto">No past appointments</p>
+                  </div>
+                )
+              )}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
-    );
-  };
+    </div>
+  );
+};
   
   // Render the growth & development section
   const renderGrowthSection = () => {
@@ -2698,43 +3235,427 @@ const renderRoutinesSection = () => {
 </button>
               </div>
             </div>
-            
-            {/* Child selector */}
-            <div className="flex space-x-2 mt-4 overflow-x-auto pb-2">
-              <button
-                className={`px-3 py-2 rounded-md text-sm font-roboto flex items-center whitespace-nowrap ${
-                  activeChild === null
-                    ? 'bg-black text-white'
-                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                }`}
-                onClick={() => setActiveChild(null)}
+            {/* Shared To-Do List section */}
+<div className="bg-white rounded-lg shadow mb-6">
+  <div 
+    className="p-4 flex justify-between items-center cursor-pointer"
+    onClick={toggleTodoSection}
+  >
+    <div className="flex items-center">
+      <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center mr-3">
+        <CheckSquare size={18} className="text-green-600" />
+      </div>
+      <div>
+        <h3 className="text-lg font-medium font-roboto">Shared To-Do List</h3>
+        <p className="text-sm text-gray-500 font-roboto">Manage tasks together with your family</p>
+      </div>
+    </div>
+    <div>
+      {expandedTodoSection ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+    </div>
+  </div>
+  
+  {expandedTodoSection && (
+    <div className="p-4 border-t">
+      {/* Quick Add Task */}
+      <div className="flex items-center mb-4">
+        <input
+          ref={todoInputRef}
+          type="text"
+          value={newTodoText}
+          onChange={(e) => setNewTodoText(e.target.value)}
+          onKeyPress={handleKeyPress}
+          placeholder="Add a new task..."
+          className="flex-1 border rounded-l-md p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-roboto"
+        />
+        <button
+          onClick={addTodo}
+          className="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700 transition-colors font-roboto flex items-center"
+        >
+          <Plus size={16} className="mr-1" />
+          Add
+        </button>
+      </div>
+      
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <span className="text-sm text-gray-600 mr-1 font-roboto">Filter:</span>
+        
+        <button
+          onClick={() => setCategoryFilter('all')}
+          className={`text-xs px-3 py-1 rounded-full transition-colors font-roboto ${
+            categoryFilter === 'all' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'
+          }`}
+        >
+          All
+        </button>
+        
+        {categories.map(category => (
+          <button
+            key={category.id}
+            onClick={() => setCategoryFilter(category.id)}
+            className={`text-xs px-3 py-1 rounded-full transition-colors font-roboto ${
+              categoryFilter === category.id ? category.color : 'bg-gray-100 hover:bg-gray-200'
+            }`}
+          >
+            {category.name}
+          </button>
+        ))}
+        
+        <div className="ml-auto flex items-center">
+          <input
+            type="checkbox"
+            id="show-completed"
+            checked={showCompleted}
+            onChange={() => setShowCompleted(!showCompleted)}
+            className="mr-2"
+          />
+          <label htmlFor="show-completed" className="text-sm font-roboto">
+            Show completed
+          </label>
+        </div>
+      </div>
+      
+      {/* Todo List with Drag and Drop */}
+      {loadingTodos ? (
+        <div className="py-8 text-center">
+          <div className="w-8 h-8 border-2 border-t-transparent border-blue-500 rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-gray-500 font-roboto">Loading tasks...</p>
+        </div>
+      ) : filterTodos().length === 0 ? (
+        <div className="py-8 text-center border-2 border-dashed rounded-lg">
+          <p className="text-gray-500 font-roboto">No tasks found</p>
+          <p className="text-sm text-gray-400 font-roboto mt-1">
+            {!showCompleted && todos.some(t => t.completed) ? 
+              'There are completed tasks. Check "Show completed" to view them.' : 
+              'Add your first task using the input above!'}
+          </p>
+        </div>
+      ) : (
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <Droppable droppableId="todos-list">
+            {(provided) => (
+              <div
+                {...provided.droppableProps}
+                ref={provided.innerRef}
+                className="space-y-2"
               >
-                <Users size={16} className="mr-1" />
-                All Children
-              </button>
-              {familyMembers
-  .filter(member => member.role === 'child')
-  .map(child => (
-    <button
-      key={child.id}
-      className={`px-3 py-2 rounded-md text-sm font-roboto flex items-center whitespace-nowrap ${
-        activeChild === child.id
-          ? 'bg-black text-white'
-          : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-      }`}
-      onClick={() => setActiveChild(child.id)}
-    >
-      <UserAvatar 
-        user={child}
-        size={20}
-        className="mr-1"
+                {filterTodos().map((todo, index) => (
+                  <Draggable key={todo.id} draggableId={todo.id} index={index}>
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        className={`border rounded-lg p-3 ${
+                          todo.completed ? 'bg-gray-50' : 'bg-white'
+                        } ${
+                          snapshot.isDragging ? 'shadow-lg' : ''
+                        }`}
+                        id={`todo-${todo.id}`}
+                      >
+                        <div className="flex items-start gap-2">
+                          {/* Drag Handle */}
+                          <div
+                            {...provided.dragHandleProps}
+                            className="cursor-move flex-shrink-0 text-gray-400 p-1 self-center"
+                          >
+                            <GripVertical size={16} />
+                          </div>
+                          
+                          {/* Checkbox */}
+                          <button
+                            onClick={() => toggleTodo(todo.id)}
+                            className="flex-shrink-0 mt-0.5"
+                          >
+                            {todo.completed ? (
+                              <CheckSquare size={18} className="text-blue-500" />
+                            ) : (
+                              <Square size={18} className="text-gray-400" />
+                            )}
+                          </button>
+                          
+                          {/* Todo Content */}
+                          <div className="flex-1 min-w-0">
+                            {editingTodo === todo.id ? (
+                              <div className="space-y-2">
+                                <input
+                                  id={`edit-todo-${todo.id}`}
+                                  type="text"
+                                  value={editingTodoText}
+                                  onChange={(e) => setEditingTodoText(e.target.value)}
+                                  className="w-full border rounded p-1 text-sm"
+                                  onKeyPress={(e) => {
+                                    if (e.key === 'Enter') saveEditedTodo(todo.id);
+                                  }}
+                                />
+                                
+                                <select
+                                  value={editingTodoCategory}
+                                  onChange={(e) => setEditingTodoCategory(e.target.value)}
+                                  className="w-full border rounded p-1 text-sm"
+                                >
+                                  {categories.map(category => (
+                                    <option key={category.id} value={category.id}>
+                                      {category.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={cancelEdit}
+                                    className="px-2 py-1 text-xs border rounded"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={() => saveEditedTodo(todo.id)}
+                                    className="px-2 py-1 text-xs bg-blue-500 text-white rounded"
+                                  >
+                                    Save
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex items-center gap-2">
+                                  <p className={`text-sm break-words font-roboto ${
+                                    todo.completed ? 'text-gray-400 line-through' : ''
+                                  }`}>
+                                    {todo.text}
+                                  </p>
+                                </div>
+                                
+                                <div className="flex items-center flex-wrap gap-2 mt-2">
+                                  {/* Category Tag */}
+                                  <span className={`text-xs px-2 py-0.5 rounded-full flex items-center ${
+                                    getCategoryInfo(todo.category).color
+                                  }`}>
+                                    <Tag size={10} className="mr-1" />
+                                    {getCategoryInfo(todo.category).name}
+                                  </span>
+                                  
+                                  {/* Assigned To */}
+                                  {todo.assignedTo && (
+                                    <span className="text-xs px-2 py-0.5 bg-gray-100 rounded-full">
+                                      Assigned to: {getParentName(todo.assignedTo)}
+                                    </span>
+                                  )}
+                                  
+                                  {/* Due Date */}
+                                  {todo.dueDate && (
+                                    <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full flex items-center">
+                                      <CalendarIcon size={10} className="mr-1" />
+                                      Due: {new Date(todo.dueDate).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          
+                          {/* Actions - Only show when not editing */}
+                          {editingTodo !== todo.id && (
+                            <div className="flex items-center space-x-1">
+                              {/* Calendar Button */}
+                              <button
+                                onClick={() => openCalendarForTodo(todo)}
+                                className="p-1 hover:bg-gray-100 rounded text-gray-500"
+                                title="Add to calendar"
+                              >
+                                <CalendarIcon size={16} />
+                              </button>
+                              
+                              {/* Assign Menu */}
+                              <div className="relative group">
+                                <button
+                                  className="p-1 hover:bg-gray-100 rounded text-gray-500"
+                                  title="Assign task"
+                                >
+                                  <Users size={16} />
+                                </button>
+                                
+                                {/* Dropdown Menu */}
+                                <div className="absolute right-0 mt-1 hidden group-hover:block bg-white shadow-lg rounded-md border py-1 z-10 w-32">
+                                  {familyMembers
+                                    .filter(m => m.role === 'parent')
+                                    .map(parent => (
+                                      <button
+                                        key={parent.id}
+                                        onClick={() => reassignTodo(todo.id, parent.id)}
+                                        className={`w-full text-left px-3 py-1 text-sm hover:bg-gray-100 ${
+                                          todo.assignedTo === parent.id ? 'font-medium' : ''
+                                        }`}
+                                      >
+                                        {parent.name}
+                                      </button>
+                                    ))}
+                                  <button
+                                    onClick={() => reassignTodo(todo.id, null)}
+                                    className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100 border-t"
+                                  >
+                                    Unassign
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              {/* Edit Button */}
+                              <button
+                                onClick={() => startEditTodo(todo)}
+                                className="p-1 hover:bg-gray-100 rounded text-gray-500"
+                                title="Edit task"
+                              >
+                                <Edit size={16} />
+                              </button>
+                              
+                              {/* Delete Button */}
+                              <button
+                                onClick={() => deleteTodo(todo.id)}
+                                className="p-1 hover:bg-gray-100 rounded text-gray-500"
+                                title="Delete task"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
+        </DragDropContext>
+      )}
+    </div>
+  )}
+</div>
+
+{/* Calendar Modal */}
+{showAddCalendar && selectedTodoForCalendar && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg p-4 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-medium">Add Task to Calendar</h3>
+        <button
+          onClick={() => {
+            setShowAddCalendar(false);
+            setSelectedTodoForCalendar(null);
+          }}
+          className="p-1 hover:bg-gray-100 rounded"
+        >
+          <X size={18} />
+        </button>
+      </div>
+      
+      <EnhancedEventManager
+        initialEvent={{
+          title: selectedTodoForCalendar.text,
+          description: `Todo: ${selectedTodoForCalendar.text}`,
+          category: 'task',
+          eventType: 'task',
+        }}
+        selectedDate={new Date()}
+        onSave={handleCalendarEventAdded}
+        onCancel={() => {
+          setShowAddCalendar(false);
+          setSelectedTodoForCalendar(null);
+        }}
+        isCompact={true}
+        mode="create"
       />
-      {child.name}
-      {child.age && <span className="ml-1 text-xs">({child.age})</span>}
-    </button>
-  ))}
-            </div>
-          </div>
+    </div>
+  </div>
+)}
+
+{/* Delete Confirmation Modal */}
+{showDeleteConfirmation && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+      <h3 className="text-lg font-medium mb-4">Delete Task</h3>
+      <p className="mb-6">Are you sure you want to delete this task?</p>
+      <div className="flex justify-end space-x-3">
+        <button
+          onClick={() => setShowDeleteConfirmation(false)}
+          className="px-4 py-2 border rounded-md"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={confirmDeleteTodo}
+          className="px-4 py-2 bg-red-600 text-white rounded-md"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+            {/* Family member selector */}
+<div className="flex space-x-2 mt-4 overflow-x-auto pb-2">
+  <button
+    className={`px-3 py-2 rounded-md text-sm font-roboto flex items-center whitespace-nowrap ${
+      activeChild === null
+        ? 'bg-black text-white'
+        : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+    }`}
+    onClick={() => setActiveChild(null)}
+  >
+    <Users size={16} className="mr-1" />
+    All Family
+  </button>
+  
+  {/* Children Filter */}
+  <div className="ml-2 bg-gray-200 h-full w-px"></div>
+  <span className="text-xs text-gray-500 self-center">Children:</span>
+  {familyMembers
+    .filter(member => member.role === 'child')
+    .map(child => (
+      <button
+        key={child.id}
+        className={`px-3 py-2 rounded-md text-sm font-roboto flex items-center whitespace-nowrap ${
+          activeChild === child.id
+            ? 'bg-black text-white'
+            : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+        }`}
+        onClick={() => setActiveChild(child.id)}
+      >
+        <UserAvatar 
+          user={child}
+          size={20}
+          className="mr-1"
+        />
+        {child.name}
+        {child.age && <span className="ml-1 text-xs">({child.age})</span>}
+      </button>
+    ))}
+    
+  {/* Parents Filter */}
+  <div className="ml-2 bg-gray-200 h-full w-px"></div>
+  <span className="text-xs text-gray-500 self-center">Parents:</span>
+  {familyMembers
+    .filter(member => member.role === 'parent')
+    .map(parent => (
+      <button
+        key={parent.id}
+        className={`px-3 py-2 rounded-md text-sm font-roboto flex items-center whitespace-nowrap ${
+          activeChild === parent.id
+            ? 'bg-black text-white'
+            : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+        }`}
+        onClick={() => setActiveChild(parent.id)}
+      >
+        <UserAvatar 
+          user={parent}
+          size={20}
+          className="mr-1"
+        />
+        {parent.name}
+      </button>
+    ))}
+</div>          </div>
           
           {/* Allie message */}
           {allieMessage && (

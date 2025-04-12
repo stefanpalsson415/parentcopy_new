@@ -1308,25 +1308,6 @@ const eventDates = allEvents
     </div>
   </div>
 )}
-  ) : (
-    <EventDetails
-      event={selectedEvent}
-      onClose={() => {
-        setShowEventDetails(false);
-        setIsEditingEvent(false);
-        setEditedEvent(null);
-      }}
-      onEdit={() => {
-        setIsEditingEvent(true);
-        setEditedEvent({...selectedEvent});
-      }}
-      onDelete={handleDeleteEvent}
-      onUpdate={handleUpdateEvent}
-      familyMembers={familyMembers}
-      pendingAction={pendingAction}
-      showSuccess={false}
-    />
-  )
     </div>
   );
 };
