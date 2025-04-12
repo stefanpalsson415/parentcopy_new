@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Calendar, ChevronDown, ChevronUp, Clock, Heart, AlertCircle, 
-  Activity, Users, Star, Clipboard, Camera, Plus, Edit, Trash2, 
+  Activity, Users, Star, Clipboard, Camera, Plus, Edit, Trash2,   CheckSquare, 
+  Square, 
+  GripVertical, 
+  Tag, 
+  Calendar as CalendarIcon ,
   CheckCircle, Info, Brain, Smile, Frown, Apple, Upload, 
   Search, X, RefreshCw, Settings, List, Grid, HelpCircle,
   FileText, Download, Save, Paperclip, User, PlusCircle, Mic
@@ -11,7 +15,8 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { db, storage } from '../../../services/firebase';
 import { 
   doc, getDoc, updateDoc, setDoc, collection, 
-  query, where, getDocs, serverTimestamp, addDoc 
+  query, where, getDocs, serverTimestamp, addDoc, onSnapshot, 
+  deleteDoc  
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import DatabaseService from '../../../services/DatabaseService';
@@ -24,6 +29,8 @@ import {
   DragDropContext, Droppable, Draggable 
 } from 'react-beautiful-dnd';
 import confetti from 'canvas-confetti';
+import EnhancedEventManager from '../../calendar/EnhancedEventManager';
+
 
 
 
