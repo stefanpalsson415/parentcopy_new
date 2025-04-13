@@ -214,31 +214,58 @@ class AllieAIService {
     }
   }
 
-// Add to src/services/AllieAIService.js
-// New method to handle medical appointments from chat
-// Handle adding a healthcare provider from chat
-// Update in src/services/AllieAIService.js
-// Replace the existing processProviderFromChat method:
+
+// Replace the existing processProviderFromChat method in src/services/AllieAIService.js
+
+// Replace the processProviderFromChat method in src/services/AllieAIService.js
 
 async processProviderFromChat(message, familyId) {
   try {
     if (!familyId) return { success: false, error: "Family ID is required" };
     
-    // Import ProviderService dynamically
-    const ProviderService = (await import('./ProviderService')).default;
+    console.log("Processing provider from chat:", message);
+    
+    // Load ProviderService dynamically if needed
+    let ProviderService;
+    try {
+      ProviderService = (await import('./ProviderService')).default;
+    } catch (error) {
+      console.error("Failed to import ProviderService:", error);
+      // Create an inline version if import fails
+      ProviderService = {
+        saveProvider: async (familyId, providerData) => {
+          try {
+            const providersRef = collection(db, "providers");
+            const docRef = await addDoc(providersRef, {
+              ...providerData,
+              familyId,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            });
+            return { success: true, providerId: docRef.id, isNew: true };
+          } catch (error) {
+            console.error("Error saving provider:", error);
+            return { success: false, error: error.message };
+          }
+        }
+      };
+    }
     
     // Extract provider details from message
-    const providerDetails = ProviderService.extractProviderInfo(message);
+    const providerDetails = await this.extractProviderDetails(message);
     
     // Make sure we have a name
-    if (!providerDetails.name) {
+    if (!providerDetails.name || providerDetails.name === "Unknown Provider") {
       return { 
         success: false, 
         error: "Could not determine the provider's name from your message" 
       };
     }
     
+    console.log("Saving provider details:", providerDetails);
+    
     // Save provider to database
+    providerDetails.familyId = familyId;
     const result = await ProviderService.saveProvider(familyId, providerDetails);
     
     if (result.success) {
@@ -247,12 +274,12 @@ async processProviderFromChat(message, familyId) {
         providerId: result.providerId,
         providerDetails: providerDetails,
         isNew: result.isNew,
-        message: `Successfully added ${providerDetails.specialty || ''} ${providerDetails.name} to your healthcare providers.`
+        message: `Successfully added ${providerDetails.type === 'education' ? 'teacher' : 'provider'} ${providerDetails.name} to your provider directory.`
       };
     } else {
       return { 
         success: false, 
-        error: result.error || "Failed to create healthcare provider" 
+        error: result.error || "Failed to create provider" 
       };
     }
   } catch (error) {
@@ -261,47 +288,151 @@ async processProviderFromChat(message, familyId) {
   }
 }
 
-// Helper method to extract provider details
+// Replace the extractProviderDetails method in src/services/AllieAIService.js
+
 async extractProviderDetails(message) {
-  // Use Claude API to extract structured data
-  const systemPrompt = `You are an AI that extracts healthcare provider information from text.
-  Extract the following details in a structured JSON format:
-  - name: Provider's name (e.g., Dr. Smith)
-  - specialty: Provider's specialty (e.g., pediatrician, dentist, general)
-  - email: Provider's email if mentioned
-  - phone: Provider's phone if mentioned
-  - address: Provider's address or location
-  - notes: Any additional information
-  
-  If information isn't available, use null for that field.`;
-  
-  const userMessage = `Extract healthcare provider details from this message: "${message}"`;
-  
-  const response = await ClaudeService.generateResponse(
-    [{ role: 'user', content: userMessage }],
-    { system: systemPrompt }
-  );
-  
   try {
-    const details = JSON.parse(response);
-    return {
-      name: details.name || "Unknown Provider",
-      specialty: details.specialty || "General",
-      email: details.email || "",
-      phone: details.phone || "",
-      address: details.address || "",
-      notes: details.notes || ""
-    };
-  } catch (error) {
-    console.error("Error parsing provider details:", error);
-    // Extract basic information if parsing fails
-    const nameMatch = message.match(/(?:doctor|dr\.?)\s+([a-z]+)/i);
-    const name = nameMatch ? nameMatch[1] : "Unknown Provider";
+    console.log("Extracting provider details from message:", message);
     
-    return {
+    // Check for direct name mentions using common patterns
+    let name = null;
+    let type = "medical";
+    let specialty = "";
+    let email = "";
+    
+    // Try to extract name using pattern "name is X"
+    const nameIsPattern = /(?:name is|named|called)\s+([A-Za-z]+(?: [A-Za-z]+){0,2})/i;
+    const nameIsMatch = message.match(nameIsPattern);
+    if (nameIsMatch && nameIsMatch[1]) {
+      name = nameIsMatch[1].trim();
+      console.log("Found name using 'name is' pattern:", name);
+    }
+    
+    // Try to extract teacher type
+    if (message.toLowerCase().includes("music teacher") || 
+        message.toLowerCase().includes("guitar teacher") ||
+        message.toLowerCase().includes("piano teacher")) {
+      type = "education";
+      specialty = message.toLowerCase().includes("guitar") ? "Guitar Teacher" : 
+                message.toLowerCase().includes("piano") ? "Piano Teacher" : "Music Teacher";
+    } else if (message.toLowerCase().includes("teacher")) {
+      type = "education";
+      specialty = "Teacher";
+    }
+    
+    // Extract email if present
+    const emailMatch = message.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
+    if (emailMatch && emailMatch[1]) {
+      email = emailMatch[1].trim();
+      console.log("Found email:", email);
+    }
+    
+    // If we still don't have a name, try to use Claude to extract the details
+    if (!name) {
+      try {
+        // Use Claude API to extract structured data
+        const systemPrompt = `You are an AI that extracts provider information from text.
+        Extract the following details in a structured JSON format:
+        - name: Provider's name (e.g., Dr. Smith, Jane Doe, or any full name mentioned)
+        - type: Provider type (e.g., medical, education, activity, childcare, services)
+        - specialty: Provider's specialty (e.g., pediatrician, dentist, piano teacher, tutor)
+        - email: Provider's email if mentioned
+        - phone: Provider's phone if mentioned
+        - address: Provider's address or location if mentioned
+        
+        IMPORTANT: Return ONLY valid JSON with no other text. Be very careful to extract full names like "Sart Lee Tang" or "John Smith" correctly.`;
+        
+        const userMessage = `Extract provider details from this message: "${message}"`;
+        
+        const response = await ClaudeService.generateResponse(
+          [{ role: 'user', content: userMessage }],
+          { system: systemPrompt },
+          { temperature: 0.1 } // Lower temperature for more accurate extraction
+        );
+        
+        // Try to find JSON in the response
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : null;
+        
+        if (jsonString) {
+          const details = JSON.parse(jsonString);
+          if (details.name) {
+            name = details.name;
+            console.log("Claude extracted name:", name);
+          }
+          if (details.type) type = details.type;
+          if (details.specialty) specialty = details.specialty;
+          if (details.email) email = details.email;
+        }
+      } catch (claudeError) {
+        console.error("Error using Claude to extract provider details:", claudeError);
+        // Continue with manual extraction if Claude fails
+      }
+    }
+    
+    // If still no name, try additional extraction patterns
+    if (!name) {
+      // For music teachers format "X is a Y teacher for Z"
+      const teacherPattern = /([A-Za-z]+(?: [A-Za-z]+){0,2})\s+is\s+a\s+([a-z]+)\s+teacher\s+for/i;
+      const teacherMatch = message.match(teacherPattern);
+      if (teacherMatch && teacherMatch[1]) {
+        name = teacherMatch[1].trim();
+        specialty = teacherMatch[2] ? `${teacherMatch[2].charAt(0).toUpperCase() + teacherMatch[2].slice(1)} Teacher` : "Teacher";
+        type = "education";
+        console.log("Found teacher name:", name, "specialty:", specialty);
+      }
+    }
+    
+    // Last resort extraction for any type of name reference
+    if (!name) {
+      const possibleNames = [];
+      
+      // Check for teacher/doctor prefix patterns
+      const prefixPattern = /(?:(?:doctor|dr\.?|teacher|instructor|provider)\s+([a-z]+(?: [a-z]+){0,2}))/i;
+      const prefixMatch = message.match(prefixPattern);
+      if (prefixMatch && prefixMatch[1]) possibleNames.push(prefixMatch[1].trim());
+      
+      // Look for words that might be names (simplistic but can help)
+      const words = message.split(/\s+/);
+      for (let i = 0; i < words.length - 1; i++) {
+        // Look for capitalized words that could be names
+        if (/^[A-Z][a-z]{2,}$/.test(words[i]) && 
+            (i+1 < words.length && /^[A-Z][a-z]{2,}$/.test(words[i+1]))) {
+          possibleNames.push(`${words[i]} ${words[i+1]}`);
+        }
+      }
+      
+      // If we found possible names, use the longest one (most likely to be a full name)
+      if (possibleNames.length > 0) {
+        name = possibleNames.sort((a, b) => b.length - a.length)[0];
+        console.log("Found name from possible names:", name);
+      }
+    }
+    
+    // Final fallback
+    if (!name || name.length < 3) {
+      name = "Unknown Provider";
+    }
+    
+    const result = {
       name: name,
-      specialty: message.includes("pediatrician") ? "Pediatrician" : 
-                message.includes("dentist") ? "Dentist" : "General",
+      type: type,
+      specialty: specialty,
+      email: email || "",
+      phone: "",
+      address: "",
+      notes: message // Use original message as notes
+    };
+    
+    console.log("Final extracted provider details:", result);
+    return result;
+  } catch (error) {
+    console.error("Error extracting provider details:", error);
+    // Return basic structure in case of error
+    return {
+      name: "Unknown Provider",
+      type: "medical",
+      specialty: "",
       email: "",
       phone: "",
       address: "",

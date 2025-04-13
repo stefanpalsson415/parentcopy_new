@@ -1491,7 +1491,8 @@ if (sharedTodoResponse) {
     }
   }
   
-// Handle healthcare provider-related requests
+// Replace the handleProviderRequest method in src/services/EnhancedChatService.js
+
 async handleProviderRequest(text, familyContext) {
   try {
     // Check if this is a provider-related request
@@ -1503,11 +1504,16 @@ async handleProviderRequest(text, familyContext) {
     ].includes(intent);
     
     if (!isProviderIntent) {
+      // Expanded list of provider keywords
       const providerKeywords = [
         'add doctor', 'new doctor', 'healthcare provider', 
         'add provider', 'doctor for', 'pediatrician', 
-        'family doctor', 'our doctor', 'children\'s doctor'
+        'family doctor', 'our doctor', 'children\'s doctor',
+        'add teacher', 'new teacher', 'music teacher',
+        'add a teacher', 'tutor', 'instructor',
+        'can you add', 'add a', 'in providers'
       ];
+      
       const hasProviderKeyword = providerKeywords.some(keyword => 
         text.toLowerCase().includes(keyword)
       );
@@ -1515,20 +1521,52 @@ async handleProviderRequest(text, familyContext) {
       if (!hasProviderKeyword) return null;
     }
     
-    // Get AllieAI service to process the provider
-    const AllieAIService = (await import('./AllieAIService')).default;
+    console.log("Handling provider request:", text);
+    
+    // Get AllieAIService
+    let AllieAIService;
+    try {
+      AllieAIService = (await import('./AllieAIService')).default;
+    } catch (error) {
+      console.error("Failed to import AllieAIService:", error);
+      return "I'm having trouble connecting to the provider service right now. Please try again in a moment.";
+    }
     
     // Process the provider request
     const result = await AllieAIService.processProviderFromChat(text, familyContext.familyId);
     
     if (result.success) {
-      return `Great! I've added ${result.providerDetails.name} to your healthcare providers. ${result.providerDetails.specialty ? `Specialty: ${result.providerDetails.specialty}.` : ''} ${result.providerDetails.email ? `Contact: ${result.providerDetails.email}` : ''} You can see all your healthcare providers in the Children Tracking tab under Medical & Health section.`;
+      // Format success message
+      let response = `✅ Added provider: ${result.providerDetails.name}\n`;
+      
+      if (result.providerDetails.specialty) {
+        response += `Type: ${result.providerDetails.specialty}\n`;
+      }
+      
+      if (result.providerDetails.email) {
+        response += `Email: ${result.providerDetails.email}\n`;
+      }
+      
+      // For children teachers, add extra context
+      if (text.toLowerCase().includes("for") && 
+          (result.providerDetails.type === "education" || text.toLowerCase().includes("teacher"))) {
+        // Extract child name
+        const forPattern = /for\s+([a-z]+)/i;
+        const forMatch = text.match(forPattern);
+        if (forMatch && forMatch[1]) {
+          response += `For: ${forMatch[1].charAt(0).toUpperCase() + forMatch[1].slice(1)}\n`;
+        }
+      }
+      
+      response += "\nThe provider has been successfully added to your family's records. Is there anything else you'd like to add about this provider, such as phone number, location, or when appointments are scheduled?";
+      
+      return response;
     } else {
-      throw new Error(result.error || "Failed to add healthcare provider");
+      return `I wasn't able to add this provider to your directory. ${result.error || "Please try again with more details about the provider."} You can also add providers manually in the Family Provider Directory section.`;
     }
   } catch (error) {
     console.error("Error handling provider request:", error);
-    return `I'm sorry, I couldn't add the healthcare provider. ${error.message}. You can add healthcare providers manually in the Children Tracking tab under Medical & Health section.`;
+    return `I'm sorry, I couldn't add the provider. ${error.message || "Something went wrong."} You can add providers manually in the Family Provider Directory section.`;
   }
 }
 

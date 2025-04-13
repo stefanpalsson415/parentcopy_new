@@ -121,60 +121,101 @@ class ProviderService {
    * @param {Object} providerData - Provider information
    * @returns {Promise<Object>} Result with provider ID
    */
-  async saveProvider(familyId, providerData) {
-    try {
-      // Add validation for required fields
-      if (!providerData.name) {
-        throw new Error("Provider name is required");
-      }
+ // Add or update this method in src/services/ProviderService.js
 
-      // Check if provider already exists (by name)
-      const providersRef = collection(this.db, "healthcareProviders");
+// Save a provider to the database
+async saveProvider(familyId, providerData) {
+    try {
+      if (!familyId) {
+        console.error("No family ID provided for saving provider");
+        return { success: false, error: "Family ID is required" };
+      }
+      
+      console.log("Saving provider for family:", familyId, providerData);
+      
+      // First check if this provider already exists (by name and type)
+      const providersRef = collection(db, "providers");
       const q = query(
-        providersRef, 
+        providersRef,
         where("familyId", "==", familyId),
-        where("name", "==", providerData.name)
+        where("name", "==", providerData.name),
+        where("type", "==", providerData.type || "medical")
       );
       
       const querySnapshot = await getDocs(q);
+      let providerId;
+      let isNew = true;
       
       if (!querySnapshot.empty) {
         // Update existing provider
-        const docRef = querySnapshot.docs[0].ref;
-        await updateDoc(docRef, {
+        providerId = querySnapshot.docs[0].id;
+        isNew = false;
+        
+        await updateDoc(doc(db, "providers", providerId), {
           ...providerData,
           updatedAt: serverTimestamp()
         });
         
-        return {
-          success: true,
-          providerId: querySnapshot.docs[0].id,
-          isNew: false
-        };
+        console.log("Updated existing provider:", providerId);
+      } else {
+        // Create new provider
+        const newProviderRef = await addDoc(providersRef, {
+          ...providerData,
+          familyId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        
+        providerId = newProviderRef.id;
+        console.log("Created new provider:", providerId);
       }
       
-      // Add new provider
-      const newProviderData = {
-        ...providerData,
-        familyId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
-      
-      const docRef = await addDoc(providersRef, newProviderData);
-      
-      return {
-        success: true,
-        providerId: docRef.id,
-        isNew: true
+      return { 
+        success: true, 
+        providerId,
+        isNew
       };
     } catch (error) {
       console.error("Error saving provider:", error);
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
+  }
+  
+  // Extract provider information from text
+  extractProviderInfo(text) {
+    // Basic extraction of provider information from text
+    const type = text.toLowerCase().includes("teacher") ? "education" :
+                 text.toLowerCase().includes("dentist") ? "medical" :
+                 text.toLowerCase().includes("coach") || text.toLowerCase().includes("instructor") ? "activity" :
+                 "medical";
+    
+    const nameMatches = text.match(/(?:doctor|dr\.?|teacher|instructor|provider)\s+([a-z\s\.]+)/i);
+    const name = nameMatches ? nameMatches[1] : "Unknown Provider";
+    
+    const specialty = text.toLowerCase().includes("pediatrician") ? "Pediatrician" : 
+                     text.toLowerCase().includes("dentist") ? "Dentist" :
+                     text.toLowerCase().includes("guitar") ? "Guitar Teacher" :
+                     text.toLowerCase().includes("piano") ? "Piano Teacher" :
+                     text.toLowerCase().includes("music") ? "Music Teacher" :
+                     "";
+    
+    // Extract email if present
+    const emailMatch = text.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
+    const email = emailMatch ? emailMatch[1] : "";
+    
+    // Extract phone if present
+    const phoneMatch = text.match(/(?:\+\d{1,2}\s)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/);
+    const phone = phoneMatch ? phoneMatch[0] : "";
+    
+    return {
+      name,
+      type,
+      specialty,
+      email,
+      phone,
+      address: "",
+      notes: ""
+    };
   }
 
   /**
