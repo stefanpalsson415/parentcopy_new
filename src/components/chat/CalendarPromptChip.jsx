@@ -1,7 +1,8 @@
-
+// src/components/chat/CalendarPromptChip.jsx
 import React, { useState } from 'react';
-import { Calendar, ChevronDown, X } from 'lucide-react';
+import { Calendar, ChevronDown, X, Clock } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { standardizeDate, createEventId } from '../../services/CalendarOperations';
 
 const CalendarPromptChip = ({ onClick, onSelectDate }) => {
   const { currentUser } = useAuth();
@@ -26,9 +27,12 @@ const CalendarPromptChip = ({ onClick, onSelectDate }) => {
     
     date.setHours(hour, selectedMinute, 0, 0);
     
+    // Standardize the date format using our CalendarOperations utility
+    const standardizedDate = standardizeDate(date);
+    
     // Pass the date up to parent
     if (onSelectDate) {
-      onSelectDate(date);
+      onSelectDate(standardizedDate);
     }
     
     // Close pickers
@@ -102,9 +106,10 @@ const CalendarPromptChip = ({ onClick, onSelectDate }) => {
           <div className="mb-3 flex justify-between items-center">
             <span className="text-sm">{formatDateForDisplay(selectedDate)}</span>
             <button
-              className="text-sm text-blue-600 hover:text-blue-800"
+              className="text-sm text-blue-600 hover:text-blue-800 flex items-center"
               onClick={() => setShowTimePicker(!showTimePicker)}
             >
+              <Clock size={14} className="mr-1" />
               {showTimePicker ? "Hide time" : "Add time"}
             </button>
           </div>

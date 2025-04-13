@@ -1047,38 +1047,77 @@ class EnhancedChatService {
     return response;
   }
   
-// Add this function after other functions in EnhancedChatService.js (around line 1650)
-// Check if all family members have completed the initial survey
+// Check if family is still in initial onboarding phase
 async isInitialOnboardingPhase(familyId) {
   try {
-    if (!familyId) return true; // Default to onboarding if no family ID
+    if (!familyId) {
+      console.log("No familyId provided, defaulting to onboarding phase");
+      return true; // Default to onboarding if no family ID
+    }
+    
+    console.log(`Checking onboarding phase for family: ${familyId}`);
     
     // Get family data from Firestore
     const docRef = doc(db, "families", familyId);
     const docSnap = await getDoc(docRef);
     
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      const familyMembers = data.familyMembers || [];
-      
-      // Check if all parents have completed the survey
-      const parents = familyMembers.filter(m => m.role === 'parent');
-      const allParentsCompleted = parents.every(p => p.completed);
-      
-      // If not all parents have completed, it's still onboarding
-      if (!allParentsCompleted) return true;
-      
-      // Check if we have completed any weeks
-      const hasCompletedWeeks = data.completedWeeks && data.completedWeeks.length > 0;
-      
-      // If we have completed weeks, onboarding is done
-      return !hasCompletedWeeks;
+    if (!docSnap.exists()) {
+      console.log(`Family ${familyId} not found in Firestore`);
+      return true; // Default to onboarding if family not found
     }
     
-    return true; // Default to onboarding if we can't determine
+    const data = docSnap.data();
+    console.log(`Loaded family data, checking completion status:`, {
+      hasFamilyMembers: !!data.familyMembers,
+      memberCount: data.familyMembers?.length || 0,
+      hasCompletedWeeks: !!data.completedWeeks?.length,
+      completedWeeksCount: data.completedWeeks?.length || 0,
+      currentWeek: data.currentWeek || 1
+    });
+    
+    // Check if we have any survey responses
+    const hasSurveyResponses = async () => {
+      try {
+        const surveyResponsesQuery = query(
+          collection(db, "surveyResponses"), 
+          where("familyId", "==", familyId),
+          limit(1)
+        );
+        const snapshot = await getDocs(surveyResponsesQuery);
+        return !snapshot.empty;
+      } catch (e) {
+        console.error("Error checking survey responses:", e);
+        return false;
+      }
+    };
+    
+    // Three ways to determine completion:
+    
+    // 1. Check if we have completed weeks
+    if (data.completedWeeks && data.completedWeeks.length > 0) {
+      console.log(`Family has ${data.completedWeeks.length} completed weeks - onboarding complete`);
+      return false; // Not in onboarding phase
+    }
+    
+    // 2. Check if current week is beyond 1
+    if (data.currentWeek && data.currentWeek > 1) {
+      console.log(`Family current week is ${data.currentWeek} - onboarding complete`);
+      return false; // Not in onboarding phase
+    }
+    
+    // 3. Check if we have any survey responses
+    if (await hasSurveyResponses()) {
+      console.log(`Found survey responses - onboarding complete`);
+      return false; // Not in onboarding phase
+    }
+    
+    // If all checks fail, we're still in onboarding
+    console.log("No completion indicators found - still in onboarding phase");
+    return true;
   } catch (error) {
     console.error("Error checking onboarding phase:", error);
-    return true; // Default to onboarding on error
+    // Don't default to restricting content on error - let them use the chat
+    return false;
   }
 }
 
@@ -1086,38 +1125,146 @@ async isInitialOnboardingPhase(familyId) {
 // Handle shared todo requests for the relationship tab
 async handleSharedTodoRequest(text, familyContext, userId) {
   try {
-    // Check if this is a shared todo request
-    const isTodoRequest = (
-      text.toLowerCase().includes('add todo') ||
-      text.toLowerCase().includes('add a todo') ||
-      text.toLowerCase().includes('add shared todo') ||
-      text.toLowerCase().includes('add a task to our shared list') ||
-      text.toLowerCase().includes('add to shared todo') ||
-      text.toLowerCase().includes('add to our todo list')
+    // Enhanced detection of todo requests with broader patterns
+    const todoKeywords = [
+      'add todo', 'add a todo', 'create todo', 'new todo', 
+      'add to-do', 'add a to-do', 'create to-do', 'new to-do',
+      'add to todo list', 'add to to-do list', 'add to our list',
+      'add task', 'create task', 'new task', 'add a task',
+      'todo for', 'to-do for', 'task for'
+    ];
+    
+    const isTodoRequest = todoKeywords.some(keyword => 
+      text.toLowerCase().includes(keyword)
     );
     
-    if (!isTodoRequest) return null;
+    // If someone corrects and says "it's a todo"
+    const isCorrectionAsTodo = text.toLowerCase().match(/it'?s a todo/i) || 
+                              text.toLowerCase().match(/this is a todo/i);
     
-    // Extract the todo content - everything after "add todo" or similar phrases
+    // Check previous messages for context if it's a correction
+    let isInTodoContext = false;
+    if (familyContext.conversationContext && 
+        familyContext.conversationContext.recentTopics) {
+      isInTodoContext = familyContext.conversationContext.recentTopics.some(topic => 
+        topic.query && todoKeywords.some(keyword => 
+          topic.query.toLowerCase().includes(keyword)
+        )
+      );
+    }
+    
+    if (!isTodoRequest && !isCorrectionAsTodo && !isInTodoContext) return null;
+    
+    // Log for debugging
+    console.log("Detected todo request:", {
+      isTodoRequest,
+      isCorrectionAsTodo,
+      isInTodoContext,
+      text
+    });
+    
+    // Extract the todo content with enhanced patterns
     let todoText = '';
-    const todoMatches = [
-      text.match(/add (?:a |shared )?todo:?\s+(.*)/i),
-      text.match(/add (?:a |shared )?task to (?:our |the |shared )?(?:todo |to-do )?list:?\s+(.*)/i),
-      text.match(/add to (?:our |the |shared )?(?:todo |to-do )?list:?\s+(.*)/i)
-    ].filter(Boolean);
     
-    if (todoMatches.length > 0 && todoMatches[0][1]) {
-      todoText = todoMatches[0][1].trim();
-    } else {
-      // Fallback - if no specific format found, use everything after "add todo"
-      const index = text.toLowerCase().indexOf('add todo');
-      if (index !== -1) {
-        todoText = text.substring(index + 8).trim();
+    // First try explicit patterns
+    const todoPatterns = [
+      /add (?:a |the |shared )?(?:todo|to-do|task):?\s+(.*?)(?:\.|\n|$)/i,
+      /add (?:a |shared )?(?:todo|to-do|task) (?:for|to) (.+?)(?:\.|\n|$)/i,
+      /add (?:a |the |shared )?(?:todo|to-do|task) (?:about|regarding) (.+?)(?:\.|\n|$)/i,
+      /create (?:a |the |shared )?(?:todo|to-do|task):?\s+(.*?)(?:\.|\n|$)/i,
+      /(?:todo|to-do|task) for (.+?)(?:\.|\n|$)/i
+    ];
+    
+    for (const pattern of todoPatterns) {
+      const match = text.match(pattern);
+      if (match && match[1]) {
+        todoText = match[1].trim();
+        break;
       }
     }
     
+    // If no match yet, try extracting content after the keyword
     if (!todoText) {
-      return "I'd like to add a shared todo for you and your partner, but I need to know what the todo should be. Could you please provide more details?";
+      for (const keyword of todoKeywords) {
+        if (text.toLowerCase().includes(keyword)) {
+          const index = text.toLowerCase().indexOf(keyword) + keyword.length;
+          todoText = text.substring(index).trim();
+          
+          // Clean up trailing periods or other punctuation
+          todoText = todoText.replace(/^\s*[:;-]\s*/, '').trim();
+          todoText = todoText.replace(/\.$/, '').trim();
+          break;
+        }
+      }
+    }
+    
+    // For corrections like "it's a todo, not a provider"
+    // Try to extract from previous messages
+    if (!todoText && (isCorrectionAsTodo || isInTodoContext)) {
+      // Find the most recent message that might contain the todo content
+      if (familyContext.conversationContext && 
+          familyContext.conversationContext.recentTopics) {
+        for (const topic of familyContext.conversationContext.recentTopics) {
+          if (topic.query) {
+            // Try to extract content from this previous message
+            for (const pattern of todoPatterns) {
+              const match = topic.query.match(pattern);
+              if (match && match[1]) {
+                todoText = match[1].trim();
+                break;
+              }
+            }
+            
+            // If found, break out of the loop
+            if (todoText) break;
+            
+            // Otherwise, try the keyword approach
+            for (const keyword of todoKeywords) {
+              if (topic.query.toLowerCase().includes(keyword)) {
+                const index = topic.query.toLowerCase().indexOf(keyword) + keyword.length;
+                todoText = topic.query.substring(index).trim();
+                todoText = todoText.replace(/^\s*[:;-]\s*/, '').trim();
+                todoText = todoText.replace(/\.$/, '').trim();
+                break;
+              }
+            }
+            
+            // If found now, break out of the loop
+            if (todoText) break;
+          }
+        }
+      }
+    }
+    
+    // Extract assignee if specified (e.g., "for Kim")
+    let assignTo = null;
+    const assigneeMatch = text.match(/for\s+([A-Za-z]+)(?:\s|$|\.|,)/i) || 
+                         todoText.match(/for\s+([A-Za-z]+)(?:\s|$|\.|,)/i);
+    
+    if (assigneeMatch && assigneeMatch[1]) {
+      const potentialAssignee = assigneeMatch[1].trim();
+      
+      // Check if this is a valid family member
+      if (familyContext.familyMembers) {
+        const matchedMember = familyContext.familyMembers.find(member => 
+          member.name.toLowerCase() === potentialAssignee.toLowerCase() ||
+          (member.roleType && member.roleType.toLowerCase() === potentialAssignee.toLowerCase())
+        );
+        
+        if (matchedMember) {
+          assignTo = matchedMember.id;
+          // Remove the assignee part from the todo text to avoid redundancy
+          todoText = todoText.replace(new RegExp(`for\\s+${potentialAssignee}\\b`, 'i'), '').trim();
+        }
+      }
+    }
+    
+    // Clean up the todo text
+    todoText = todoText.replace(/^\s*(?:to|is|about|that)\s+/, '').trim();
+    
+    // If we couldn't extract a valid todo
+    if (!todoText) {
+      return "I understand you want to add a todo item, but I'm not sure what the task should be. Could you please provide more details about what you'd like to add to your todo list?";
     }
     
     // Determine task category based on content
@@ -1130,35 +1277,113 @@ async handleSharedTodoRequest(text, familyContext, userId) {
       category = 'parenting';
     } else if (todoText.toLowerCase().match(/shop|buy|store|groceries|pick up/)) {
       category = 'errands';
+    } else if (todoText.toLowerCase().match(/fix|repair|maintain|car|vehicle/)) {
+      category = 'maintenance';
     } else if (todoText.toLowerCase().match(/meet|call|email|work|job|office/)) {
       category = 'work';
     }
     
+    // Extract due date if mentioned
+    let dueDate = null;
+    const datePatterns = [
+      /(?:by|before|due|on)\s+(?:the\s+)?(\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:January|February|March|April|May|June|July|August|September|October|November|December)(?:\s+\d{4})?)/i,
+      /(?:by|before|due|on)\s+(?:the\s+)?(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i,
+      /(?:by|before|due|on)\s+(?:the\s+)?(\d{1,2}-\d{1,2}(?:-\d{2,4})?)/i,
+      /(?:by|before|due|on)\s+(?:the\s+)?(\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?[A-Za-z]+)/i,
+    ];
+    
+    for (const pattern of datePatterns) {
+      const match = text.match(pattern);
+      if (match && match[1]) {
+        try {
+          // Convert the date string to a Date object
+          dueDate = new Date(match[1]);
+          // If invalid date, try other formats
+          if (isNaN(dueDate.getTime())) {
+            // Try DD/MM/YYYY format
+            const dateParts = match[1].split(/\/|-/);
+            if (dateParts.length >= 2) {
+              dueDate = new Date();
+              dueDate.setDate(parseInt(dateParts[0]));
+              dueDate.setMonth(parseInt(dateParts[1]) - 1);
+              if (dateParts.length > 2 && dateParts[2].length >= 2) {
+                let year = parseInt(dateParts[2]);
+                if (year < 100) year += 2000;
+                dueDate.setFullYear(year);
+              }
+            } else {
+              // Try to parse "18th of April" type dates
+              const monthNames = ["january", "february", "march", "april", "may", "june",
+                "july", "august", "september", "october", "november", "december"];
+              const dateText = match[1].toLowerCase();
+              
+              for (let i = 0; i < monthNames.length; i++) {
+                if (dateText.includes(monthNames[i])) {
+                  const day = parseInt(dateText.match(/\d+/)[0]);
+                  dueDate = new Date();
+                  dueDate.setDate(day);
+                  dueDate.setMonth(i);
+                  break;
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Error parsing date:", error);
+          dueDate = null;
+        }
+      }
+    }
+    
     // Create the todo
-    if (familyContext.familyId && userId) {
+    if (familyContext.familyId) {
       const todoData = {
         text: todoText,
         completed: false,
         familyId: familyContext.familyId,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        createdBy: userId,
-        assignedTo: null, // Not assigned to any parent initially
+        createdBy: userId || 'allie-chat',
+        assignedTo: assignTo,
         category: category,
         position: 0, // Will be at the top of the list
-        notes: 'Added via Allie Chat'
+        notes: 'Added via Allie Chat',
+        dueDate: dueDate ? dueDate.toISOString() : null
       };
+      
+      console.log("Creating todo:", todoData);
       
       // Add to Firestore
       const docRef = await addDoc(collection(db, "relationshipTodos"), todoData);
       
-      return `Perfect! I've added "${todoText}" to your shared todo list. You and your partner can find it in the Relationship tab under "Shared To-Do List". You can assign it to either of you, add it to your calendar, or make other changes there.`;
+      // Trigger update event for the UI
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('todo-added', { 
+          detail: { todoId: docRef.id }
+        }));
+      }
+      
+      // Create response message
+      let response = `Perfect! I've added "${todoText}" to your todo list. `;
+      
+      if (assignTo) {
+        const assigneeName = familyContext.familyMembers.find(m => m.id === assignTo)?.name || 'the assigned person';
+        response += `It's assigned to ${assigneeName}. `;
+      }
+      
+      if (dueDate) {
+        response += `It's due by ${dueDate.toLocaleDateString()}. `;
+      }
+      
+      response += `You can find it in the To-Do List section where you can edit, assign, or mark it complete.`;
+      
+      return response;
     } else {
-      return "I'd like to add this to your shared todo list, but I need you to be logged in first. Please make sure you're logged in and try again.";
+      return "I'd like to add this to your todo list, but I need to know which family this belongs to. Please make sure you're logged in and try again.";
     }
   } catch (error) {
     console.error("Error handling shared todo request:", error);
-    return "I tried to add this to your shared todo list, but encountered an error. You can add it directly in the Relationship tab under 'Shared To-Do List'.";
+    return "I tried to add this to your todo list, but encountered an error. You can add it directly in the To-Do List section of the app.";
   }
 }
 
@@ -1185,6 +1410,25 @@ async handleSharedTodoRequest(text, familyContext, userId) {
         return "I didn't receive any message to respond to. Please try again.";
       }
       
+
+
+// Add after initial checks in getAIResponse() function (around line 920)
+// Check for special admin commands
+if (text.startsWith("/admin") || text.startsWith("/debug")) {
+  if (text.includes("fix onboarding") || text.includes("complete setup")) {
+    const result = await this.forceCompleteOnboarding(familyId);
+    return result 
+      ? "✅ Onboarding status has been fixed. You should now have full access to all features. Please try your request again."
+      : "❌ Sorry, I wasn't able to fix the onboarding status. Please contact support for assistance.";
+  }
+  
+  if (text.includes("status") || text.includes("check")) {
+    const isOnboarding = await this.isInitialOnboardingPhase(familyId);
+    return `Diagnostic Info:\n- Family ID: ${familyId}\n- Onboarding Phase: ${isOnboarding ? "YES" : "NO"}\n- Current Timestamp: ${new Date().toISOString()}\n\nIf you're seeing incorrect onboarding status, type "/admin fix onboarding" to resolve it.`;
+  }
+  
+  return "Admin commands:\n- /admin fix onboarding: Fix stuck onboarding status\n- /admin status: Check system status";
+}
 
 // Modify the getAIResponse function in EnhancedChatService.js (around line 920)
 // Add this code after the initial checks and before calling the specialized handlers
@@ -1492,6 +1736,64 @@ if (sharedTodoResponse) {
   }
   
 // Replace the handleProviderRequest method in src/services/EnhancedChatService.js
+// Manual fix for onboarding status issues
+async forceCompleteOnboarding(familyId) {
+  try {
+    if (!familyId) {
+      console.warn("Cannot force complete onboarding: No family ID provided");
+      return false;
+    }
+    
+    console.log(`Manually forcing onboarding completion for family: ${familyId}`);
+    
+    const docRef = doc(db, "families", familyId);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      console.warn(`Cannot force complete onboarding: Family ${familyId} not found`);
+      return false;
+    }
+    
+    const data = docSnap.data();
+    
+    // 1. Ensure all family members marked as completed
+    const updatedMembers = (data.familyMembers || []).map(member => {
+      if (member.role === 'parent' && !member.completed) {
+        return {
+          ...member,
+          completed: true,
+          completedDate: new Date().toISOString().split('T')[0]
+        };
+      }
+      return member;
+    });
+    
+    // 2. Ensure we have completedWeeks with at least week 1
+    const completedWeeks = data.completedWeeks || [];
+    if (!completedWeeks.includes(1)) {
+      completedWeeks.push(1);
+    }
+    
+    // 3. Ensure currentWeek is at least 2
+    const currentWeek = Math.max(2, data.currentWeek || 1);
+    
+    // Update the family document
+    await updateDoc(docRef, {
+      familyMembers: updatedMembers,
+      completedWeeks: completedWeeks,
+      currentWeek: currentWeek,
+      updatedAt: serverTimestamp()
+    });
+    
+    console.log("Successfully forced onboarding completion");
+    return true;
+  } catch (error) {
+    console.error("Error forcing onboarding completion:", error);
+    return false;
+  }
+}
+
+
 
 async handleProviderRequest(text, familyContext) {
   try {

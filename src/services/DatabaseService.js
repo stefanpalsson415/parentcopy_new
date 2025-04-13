@@ -384,62 +384,113 @@ class DatabaseService {
     }
   }
 
-  // Update member survey completion
-  async updateMemberSurveyCompletion(familyId, memberId, surveyType, isCompleted) {
-    try {
-      const docRef = doc(this.db, "families", familyId);
-      const familyData = await getDoc(docRef);
-      
-      if (familyData.exists()) {
-        const updatedMembers = familyData.data().familyMembers.map(member => {
-          if (member.id === memberId) {
-            if (surveyType === 'initial') {
-              return {
-                ...member,
-                completed: isCompleted,
-                completedDate: new Date().toISOString().split('T')[0]
-              };
-            } else if (surveyType.startsWith('weekly-')) {
-              const weekIndex = parseInt(surveyType.replace('weekly-', '')) - 1;
-              const updatedWeeklyCompleted = [...(member.weeklyCompleted || [])];
-              
-              while (updatedWeeklyCompleted.length <= weekIndex) {
-                updatedWeeklyCompleted.push({
-                  id: updatedWeeklyCompleted.length + 1,
-                  completed: false,
-                  date: null
-                });
-              }
-              
-              updatedWeeklyCompleted[weekIndex] = {
-                ...updatedWeeklyCompleted[weekIndex],
-                completed: isCompleted,
-                date: new Date().toISOString().split('T')[0]
-              };
-              
-              return {
-                ...member,
-                weeklyCompleted: updatedWeeklyCompleted
-              };
-            }
-          }
-          return member;
-        });
-        
-        await updateDoc(docRef, {
-          familyMembers: updatedMembers,
-          updatedAt: serverTimestamp()
-        });
-        
-        return true;
-      } else {
-        throw new Error("Family not found");
-      }
-    } catch (error) {
-      console.error("Error updating member completion:", error);
-      throw error;
+  // Update member survey completion with improved tracking
+async updateMemberSurveyCompletion(familyId, memberId, surveyType, isCompleted) {
+  try {
+    if (!familyId || !memberId) {
+      throw new Error("Family ID and Member ID are required");
     }
+    
+    console.log(`Updating survey completion for member ${memberId} in family ${familyId} - ${surveyType}: ${isCompleted}`);
+    
+    const docRef = doc(this.db, "families", familyId);
+    const familyData = await getDoc(docRef);
+    
+    if (!familyData.exists()) {
+      throw new Error("Family not found");
+    }
+    
+    const familyDoc = familyData.data();
+    const updatedMembers = familyDoc.familyMembers.map(member => {
+      if (member.id === memberId) {
+        if (surveyType === 'initial') {
+          return {
+            ...member,
+            completed: isCompleted,
+            completedDate: new Date().toISOString().split('T')[0]
+          };
+        } else if (surveyType.startsWith('weekly-')) {
+          const weekIndex = parseInt(surveyType.replace('weekly-', '')) - 1;
+          const updatedWeeklyCompleted = [...(member.weeklyCompleted || [])];
+          
+          while (updatedWeeklyCompleted.length <= weekIndex) {
+            updatedWeeklyCompleted.push({
+              id: updatedWeeklyCompleted.length + 1,
+              completed: false,
+              date: null
+            });
+          }
+          
+          updatedWeeklyCompleted[weekIndex] = {
+            ...updatedWeeklyCompleted[weekIndex],
+            completed: isCompleted,
+            date: new Date().toISOString().split('T')[0]
+          };
+          
+          return {
+            ...member,
+            weeklyCompleted: updatedWeeklyCompleted
+          };
+        }
+      }
+      return member;
+    });
+    
+    // Check if this completes all parents' initial surveys
+    const allParentsCompleted = updatedMembers
+      .filter(m => m.role === 'parent')
+      .every(p => p.completed);
+    
+    // Update family document with member completion status
+    const updateData = {
+      familyMembers: updatedMembers,
+      updatedAt: serverTimestamp()
+    };
+    
+    // If all parents have completed their surveys, mark week 1 as completed
+    if (allParentsCompleted && surveyType === 'initial' && isCompleted) {
+      console.log("All parents have completed surveys - marking week 1 as complete");
+      
+      // Add first week to completedWeeks if not already there
+      const completedWeeks = familyDoc.completedWeeks || [];
+      if (!completedWeeks.includes(1)) {
+        updateData.completedWeeks = [...completedWeeks, 1];
+      }
+      
+      // Also make sure currentWeek is at least 2
+      if (!familyDoc.currentWeek || familyDoc.currentWeek <= 1) {
+        updateData.currentWeek = 2;
+      }
+    }
+    
+    await updateDoc(docRef, updateData);
+    
+    // Also update survey completion status in a separate document for redundancy
+    try {
+      const completionRef = doc(this.db, "surveyCompletions", familyId);
+      await setDoc(completionRef, {
+        familyId,
+        [surveyType]: {
+          [memberId]: {
+            completed: isCompleted,
+            completedDate: new Date().toISOString()
+          }
+        },
+        allParentsCompleted: allParentsCompleted,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } catch (err) {
+      console.warn("Non-critical error updating survey completion tracker:", err);
+      // Continue even if this fails
+    }
+    
+    console.log(`Successfully updated survey completion status for ${memberId}`);
+    return true;
+  } catch (error) {
+    console.error("Error updating member completion:", error);
+    throw error;
   }
+}
 
   // Save survey responses
   async saveSurveyResponses(familyId, memberId, surveyType, responses) {

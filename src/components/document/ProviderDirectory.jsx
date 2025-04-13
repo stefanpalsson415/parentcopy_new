@@ -103,10 +103,9 @@ const ProviderDirectory = ({
   
   useEffect(() => {
     const handleProviderAdded = () => {
-      // Refresh provider list
-      if (onLoadProviders) {
-        onLoadProviders();
-      }
+      // If we're on the Provider Directory page, refresh the page to show new providers
+      // This is a simple solution; a more elegant one would use context or Redux
+      window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
     };
   
     // Listen for the custom event
@@ -116,8 +115,7 @@ const ProviderDirectory = ({
     return () => {
       window.removeEventListener('provider-added', handleProviderAdded);
     };
-  }, [onLoadcProviders]);
-
+  }, []); // Empty dependency array since we don't reference any props
 
   // Open add/edit modal
   const openProviderModal = (provider = null) => {
