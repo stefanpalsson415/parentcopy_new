@@ -4,7 +4,7 @@ import {
   Activity, Users, Star, Clipboard, Camera, Plus, Edit, Trash2,   CheckSquare, 
   Square, 
   GripVertical, 
-  Tag, 
+  Tag, Check,
   Calendar as CalendarIcon ,
   CheckCircle, Info, Brain, Smile, Frown, Apple, Upload, 
   Search, X, RefreshCw, Settings, List, Grid, HelpCircle,
@@ -3187,5 +3187,1144 @@ const ChildrenTrackingTab = () => {
                                     <span className="font-roboto">{latestGrowth.shoeSize}</span>
                                   </div>
                                 )}
-                                {latestGrowth.clothingSize && (
-                                  <div className="text-sm"></div>
+                                
+                                  {latestGrowth.clothingSize && (
+                                    <div className="text-sm">
+                                      <span className="font-medium font-roboto">Clothing:</span>{' '}
+                                      <span className="font-roboto">{latestGrowth.clothingSize}</span>
+                                    </div>
+                                  )}
+                                                                </div>
+                                                              </div>
+                                                            </div>
+                                                          </div>
+                                                        );
+                                                      })()}
+                                                    </div>
+                                                  ) : (
+                                                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                                                      <p className="text-sm text-gray-500 font-roboto">No measurements recorded yet</p>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                                
+                                                {/* Hand-me-downs section */}
+                                                <div className="mb-4">
+                                                  <h5 className="font-medium text-sm font-roboto mb-2">Saved Clothing Items</h5>
+                                                  
+                                                  {childrenData[child.id]?.clothesHandMeDowns?.length > 0 ? (
+                                                    <div className="grid grid-cols-1 gap-3">
+                                                      {childrenData[child.id].clothesHandMeDowns
+                                                        .filter(item => !item.used)
+                                                        .slice(0, 3)
+                                                        .map(item => (
+                                                          <div key={item.id} className="border rounded-lg p-3">
+                                                            <div className="flex justify-between">
+                                                              <div>
+                                                                <h6 className="font-medium text-sm font-roboto">{item.name}</h6>
+                                                                <p className="text-sm text-gray-600 font-roboto">
+                                                                  Size: {item.size}
+                                                                </p>
+                                                                <p className="text-sm text-gray-600 font-roboto">
+                                                                  Ready date: {formatDate(item.readyDate)}
+                                                                </p>
+                                                              </div>
+                                                              <div className="flex space-x-2">
+                                                                <button 
+                                                                  className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                                                  onClick={() => markHandMeDownAsUsed(child.id, item.id)}
+                                                                  title="Mark as used"
+                                                                >
+                                                                  <Check size={16} />
+                                                                </button>
+                                                                <button 
+                                                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                                                  onClick={() => {
+                                                                    setActiveComponent({
+                                                                      type: 'eventManager',
+                                                                      props: {
+                                                                        initialEvent: {
+                                                                          title: item.name,
+                                                                          description: item.description || '',
+                                                                          childId: child.id,
+                                                                          childName: getChildName(child.id),
+                                                                          dateTime: item.readyDate ? `${item.readyDate}T12:00:00` : new Date().toISOString(),
+                                                                          category: 'clothes',
+                                                                          eventType: 'handmedown',
+                                                                          size: item.size || '',
+                                                                          used: item.used || false,
+                                                                          imageUrl: item.imageUrl || ''
+                                                                        },
+                                                                        eventType: 'handmedown',
+                                                                        mode: 'edit',
+                                                                        onSave: (result) => {
+                                                                          if (result.success) {
+                                                                            const handMeDownData = {
+                                                                              ...item,
+                                                                              name: result.eventData?.title || item.name,
+                                                                              description: result.eventData?.description || item.description,
+                                                                              size: result.eventData?.size || item.size,
+                                                                              readyDate: new Date(result.eventData?.dateTime || new Date()).toISOString().split('T')[0],
+                                                                              used: result.eventData?.used || item.used,
+                                                                              childId: child.id
+                                                                            };
+                                                                            
+                                                                            handleHandMeDownFormSubmit(handMeDownData);
+                                                                            
+                                                                            setAllieMessage({
+                                                                              type: 'success',
+                                                                              text: 'Hand-me-down item updated successfully!'
+                                                                            });
+                                                                          }
+                                                                          setActiveComponent(null);
+                                                                        },
+                                                                        onCancel: () => setActiveComponent(null)
+                                                                      }
+                                                                    });
+                                                                  }}
+                                                                >
+                                                                  <Edit size={16} />
+                                                                </button>
+                                                                <button 
+                                                                  className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                                                  onClick={() => handleRemoveItem('handmedown', child.id, item.id)}
+                                                                >
+                                                                  <Trash2 size={16} />
+                                                                </button>
+                                                              </div>
+                                                            </div>
+                                                            {item.imageUrl && (
+                                                              <div className="mt-2">
+                                                                <img 
+                                                                  src={item.imageUrl} 
+                                                                  alt={item.name} 
+                                                                  className="h-32 w-auto object-cover rounded-md"
+                                                                />
+                                                              </div>
+                                                            )}
+                                                          </div>
+                                                        ))}
+                                                    </div>
+                                                  ) : (
+                                                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                                                      <p className="text-sm text-gray-500 font-roboto">No saved clothing items</p>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      );
+                                    };
+                                  
+                                    // Render the routines section
+                                    const renderRoutinesSection = () => {
+                                      const children = familyMembers.filter(member => member.role === 'child');
+                                      
+                                      if (children.length === 0) {
+                                        return (
+                                          <div className="text-center p-4 bg-gray-50 rounded-lg">
+                                            <p className="text-gray-500 font-roboto">No children added to your family yet</p>
+                                          </div>
+                                        );
+                                      }
+                                      
+                                      const filteredChildren = activeChild ? children.filter(child => child.id === activeChild) : children;
+                                      
+                                      return (
+                                        <div className="space-y-6">
+                                          <div className="flex items-center justify-between mb-4">
+                                            <h3 className="text-lg font-medium font-roboto">Routines & Activities</h3>
+                                            <div className="flex space-x-2">
+                                              <button
+                                                className="p-2 rounded-md hover:bg-gray-100"
+                                                onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
+                                                title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
+                                              >
+                                                {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
+                                              </button>
+                                              <button 
+                                                className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
+                                                onClick={() => {
+                                                  if (activeChild) {
+                                                    setActiveComponent({
+                                                      type: 'eventManager',
+                                                      props: {
+                                                        initialEvent: {
+                                                          title: '',
+                                                          description: '',
+                                                          childId: activeChild,
+                                                          childName: getChildName(activeChild),
+                                                          dateTime: new Date().toISOString(),
+                                                          category: 'activity',
+                                                          eventType: 'activity',
+                                                          isRecurring: true,
+                                                          recurrence: {
+                                                            frequency: 'weekly',
+                                                            days: [],
+                                                            endDate: ''
+                                                          }
+                                                        },
+                                                        eventType: 'routine',
+                                                        onSave: (result) => {
+                                                          if (result.success) {
+                                                            const routineData = {
+                                                              id: Date.now().toString(),
+                                                              title: result.eventData?.title || '',
+                                                              days: result.eventData?.recurrence?.days || [],
+                                                              startTime: result.eventData?.startTime || '09:00',
+                                                              endTime: result.eventData?.endTime || '',
+                                                              notes: result.eventData?.description || '',
+                                                              childId: activeChild
+                                                            };
+                                                            
+                                                            handleRoutineFormSubmit(routineData);
+                                                            
+                                                            setAllieMessage({
+                                                              type: 'success',
+                                                              text: 'Routine added successfully!'
+                                                            });
+                                                          }
+                                                          setActiveComponent(null);
+                                                        },
+                                                        onCancel: () => setActiveComponent(null)
+                                                      }
+                                                    });
+                                                  } else {
+                                                    setAllieMessage({
+                                                      type: 'warning',
+                                                      text: 'Please select a child first before adding a routine.'
+                                                    });
+                                                  }
+                                                }}
+                                              >
+                                                <Plus size={20} />
+                                              </button>
+                                            </div>
+                                          </div>
+                                          
+                                          <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
+                                            {filteredChildren.map(child => (
+                                              <div key={child.id} className={`bg-white rounded-lg shadow ${viewMode === 'card' ? 'p-4' : 'p-4'}`}>
+                                                <div className="flex justify-between items-center mb-4">
+                                                  <div className="flex items-center">
+                                                    <UserAvatar user={child} size={40} className="mr-3" />
+                                                    <div>
+                                                      <h4 className="font-medium font-roboto text-lg">{child.name}'s Routines</h4>
+                                                      <p className="text-sm text-gray-500 font-roboto">
+                                                        {childrenData[child.id]?.routines?.length || 0} activities & routines
+                                                      </p>
+                                                    </div>
+                                                  </div>
+                                                  <div className="flex space-x-2">
+                                                    <button 
+                                                      className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 font-roboto flex items-center"
+                                                      onClick={() => {
+                                                        setActiveComponent({
+                                                          type: 'eventManager',
+                                                          props: {
+                                                            initialEvent: {
+                                                              title: '',
+                                                              description: '',
+                                                              childId: child.id,
+                                                              childName: child.name,
+                                                              dateTime: new Date().toISOString(),
+                                                              category: 'activity',
+                                                              eventType: 'activity',
+                                                              isRecurring: true,
+                                                              recurrence: {
+                                                                frequency: 'weekly',
+                                                                days: [],
+                                                                endDate: ''
+                                                              }
+                                                            },
+                                                            eventType: 'routine',
+                                                            onSave: (result) => {
+                                                              if (result.success) {
+                                                                const routineData = {
+                                                                  id: Date.now().toString(),
+                                                                  title: result.eventData?.title || '',
+                                                                  days: result.eventData?.recurrence?.days || [],
+                                                                  startTime: result.eventData?.startTime || '09:00',
+                                                                  endTime: result.eventData?.endTime || '',
+                                                                  notes: result.eventData?.description || '',
+                                                                  childId: child.id
+                                                                };
+                                                                
+                                                                handleRoutineFormSubmit(routineData);
+                                                                
+                                                                setAllieMessage({
+                                                                  type: 'success',
+                                                                  text: 'Routine added successfully!'
+                                                                });
+                                                              }
+                                                              setActiveComponent(null);
+                                                            },
+                                                            onCancel: () => setActiveComponent(null)
+                                                          }
+                                                        });
+                                                      }}
+                                                    >
+                                                      <PlusCircle size={14} className="mr-1" />
+                                                      Add Routine
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                                
+                                                <div className="space-y-3 mb-6">
+                                                  <div className="flex justify-between items-center">
+                                                    <h5 className="font-medium text-sm font-roboto">Regular Routines</h5>
+                                                  </div>
+                                                  
+                                                  {childrenData[child.id]?.routines?.filter(r => (r.days || []).length > 0).length > 0 ? (
+                                                    childrenData[child.id].routines
+                                                      .filter(r => (r.days || []).length > 0)
+                                                      .map(routine => (
+                                                        <div key={routine.id} className="border rounded-lg p-3 bg-white hover:bg-gray-50">
+                                                          <div className="flex justify-between">
+                                                            <div>
+                                                              <h5 className="font-medium font-roboto">{routine.title}</h5>
+                                                              <p className="text-sm text-gray-600 font-roboto">
+                                                                {(routine.days || []).join(', ')}
+                                                              </p>
+                                                              <p className="text-sm text-gray-600 font-roboto">
+                                                                {routine.startTime}{routine.endTime ? ` - ${routine.endTime}` : ''}
+                                                              </p>
+                                                            </div>
+                                                            <div className="flex space-x-2">
+                                                              <button 
+                                                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                                                onClick={() => {
+                                                                  setActiveComponent({
+                                                                    type: 'eventManager',
+                                                                    props: {
+                                                                      initialEvent: {
+                                                                        title: routine.title,
+                                                                        description: routine.notes || '',
+                                                                        childId: child.id,
+                                                                        childName: child.name,
+                                                                        dateTime: new Date().toISOString(),
+                                                                        category: 'activity',
+                                                                        eventType: 'activity',
+                                                                        isRecurring: true,
+                                                                        recurrence: {
+                                                                          frequency: 'weekly',
+                                                                          days: routine.days || [],
+                                                                          endDate: ''
+                                                                        },
+                                                                        startTime: routine.startTime || '',
+                                                                        endTime: routine.endTime || ''
+                                                                      },
+                                                                      eventType: 'routine',
+                                                                      mode: 'edit',
+                                                                      onSave: (result) => {
+                                                                        if (result.success) {
+                                                                          const updatedRoutine = {
+                                                                            ...routine,
+                                                                            title: result.eventData?.title || routine.title,
+                                                                            days: result.eventData?.recurrence?.days || routine.days,
+                                                                            startTime: result.eventData?.startTime || routine.startTime,
+                                                                            endTime: result.eventData?.endTime || routine.endTime,
+                                                                            notes: result.eventData?.description || routine.notes,
+                                                                            childId: child.id
+                                                                          };
+                                                                          
+                                                                          handleRoutineFormSubmit(updatedRoutine);
+                                                                          
+                                                                          setAllieMessage({
+                                                                            type: 'success',
+                                                                            text: 'Routine updated successfully!'
+                                                                          });
+                                                                        }
+                                                                        setActiveComponent(null);
+                                                                      },
+                                                                      onCancel: () => setActiveComponent(null)
+                                                                    }
+                                                                  });
+                                                                }}
+                                                              >
+                                                                <Edit size={16} />
+                                                              </button>
+                                                              <button 
+                                                                className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                                                onClick={() => handleRemoveItem('routine', child.id, routine.id)}
+                                                              >
+                                                                <Trash2 size={16} />
+                                                              </button>
+                                                            </div>
+                                                          </div>
+                                                          {routine.notes && (
+                                                            <div className="mt-2 p-2 bg-gray-50 rounded text-sm font-roboto">
+                                                              <p>{routine.notes}</p>
+                                                            </div>
+                                                          )}
+                                                        </div>
+                                                      ))
+                                                  ) : (
+                                                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                                                      <p className="text-sm text-gray-500 font-roboto">No regular routines set up</p>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      );
+                                    };
+                                  
+                                    // Render main content
+                                    return (
+                                      <div className="relative min-h-full">
+                                        {/* Loading overlay */}
+                                        {loading && (
+                                          <div className="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center z-10">
+                                            <div className="p-4 rounded-lg bg-white shadow-lg">
+                                              <div className="w-12 h-12 border-4 border-t-blue-500 border-blue-200 rounded-full animate-spin mx-auto mb-2"></div>
+                                              <p className="text-gray-700 font-roboto text-center">Loading data...</p>
+                                            </div>
+                                          </div>
+                                        )}
+                                        
+                                        {/* AI insights and alerts */}
+                                        {aiInsights.length > 0 && (
+                                          <div className="bg-blue-50 rounded-lg p-4 mb-6">
+                                            <div className="flex items-center justify-between mb-3">
+                                              <h3 className="text-lg font-medium font-roboto text-blue-800 flex items-center">
+                                                <Brain size={20} className="mr-2 text-blue-500" />
+                                                Allie AI Insights
+                                              </h3>
+                                            </div>
+                                            
+                                            <div className="space-y-2">
+                                              {aiInsights.slice(0, 3).map((insight, index) => (
+                                                <div key={index} className="bg-white p-3 rounded-md shadow-sm">
+                                                  <div className="flex items-start">
+                                                    <div className={`p-2 rounded-full flex-shrink-0 mr-3 ${
+                                                      insight.priority === 'high' 
+                                                        ? 'bg-red-100 text-red-600' 
+                                                        : insight.priority === 'medium'
+                                                        ? 'bg-amber-100 text-amber-600'
+                                                        : 'bg-blue-100 text-blue-600'
+                                                    }`}>
+                                                      {insight.type === 'medical' ? (
+                                                        <Heart size={16} />
+                                                      ) : insight.type === 'growth' ? (
+                                                        <Activity size={16} />
+                                                      ) : insight.type === 'recommendation' ? (
+                                                        <Info size={16} />
+                                                      ) : insight.type === 'clothes' ? (
+                                                        <Tag size={16} />
+                                                      ) : (
+                                                        <Star size={16} />
+                                                      )}
+                                                    </div>
+                                                    <div>
+                                                      <h4 className="font-medium text-sm font-roboto">
+                                                        {insight.title}
+                                                        {insight.childId && (
+                                                          <span className="font-normal text-gray-500 ml-1">
+                                                            ({getChildName(insight.childId)})
+                                                          </span>
+                                                        )}
+                                                      </h4>
+                                                      <p className="text-sm text-gray-700 font-roboto mt-1">{insight.content}</p>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Error message */}
+                                        {tabError && (
+                                          <div className="bg-red-50 border border-red-100 text-red-700 rounded-lg p-4 mb-6 flex items-start">
+                                            <AlertCircle size={18} className="mr-2 mt-0.5 flex-shrink-0" />
+                                            <div>
+                                              <p className="font-medium mb-1 font-roboto">Error loading data</p>
+                                              <p className="text-sm font-roboto">{tabError}</p>
+                                            </div>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Top bar with controls */}
+                                        <div className="bg-white rounded-lg p-4 shadow-sm mb-6">
+                                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                                            <div className="mb-4 sm:mb-0">
+                                              <h2 className="text-xl font-bold font-roboto mb-1">Children Tracking</h2>
+                                              <p className="text-gray-600 font-roboto text-sm">
+                                                Track your children's growth, health, routines, and more
+                                              </p>
+                                            </div>
+                                            
+                                            <div className="flex flex-col sm:flex-row gap-3">
+                                              {/* Child selector */}
+                                              <div className="relative inline-block">
+                                                <select
+                                                  value={activeChild || ''}
+                                                  onChange={e => setActiveChild(e.target.value || null)}
+                                                  className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md font-roboto"
+                                                >
+                                                  <option value="">All Children</option>
+                                                  {familyMembers
+                                                    .filter(member => member.role === 'child')
+                                                    .map(child => (
+                                                      <option key={child.id} value={child.id}>
+                                                        {child.name} {child.age ? `(${child.age})` : ''}
+                                                      </option>
+                                                    ))}
+                                                </select>
+                                              </div>
+                                              
+                                              {/* Search */}
+                                              <div className="relative">
+                                                <input
+                                                  type="text"
+                                                  ref={searchInputRef}
+                                                  value={searchQuery}
+                                                  onChange={handleSearch}
+                                                  placeholder="Search..."
+                                                  className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-roboto"
+                                                />
+                                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                  <Search size={16} className="text-gray-400" />
+                                                </div>
+                                                {searchQuery && (
+                                                  <button
+                                                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                                                    onClick={() => setSearchQuery('')}
+                                                  >
+                                                    <X size={16} className="text-gray-400 hover:text-gray-600" />
+                                                  </button>
+                                                )}
+                                              </div>
+                                              
+                                              {/* Voice input button */}
+                                              <button
+                                                className="py-2 px-3 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 flex items-center font-roboto"
+                                                onClick={handleVoiceInput}
+                                                ref={microphoneRef}
+                                              >
+                                                <Mic size={16} className="mr-2" />
+                                                Voice Input
+                                              </button>
+                                            </div>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Voice input modal */}
+                                        {newVoiceEntry && (
+                                          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                                            <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+                                              <div className="text-center">
+                                                <div className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center ${
+                                                  isRecording ? 'bg-red-100 animate-pulse' : 'bg-gray-100'
+                                                }`}>
+                                                  <Mic size={32} className={isRecording ? 'text-red-500' : 'text-gray-400'} />
+                                                </div>
+                                                
+                                                <h3 className="text-lg font-medium mb-2 font-roboto">
+                                                  {isRecording ? 'Listening...' : 'Voice Command'}
+                                                </h3>
+                                                
+                                                <p className="text-sm text-gray-500 mb-4 font-roboto">
+                                                  {isRecording 
+                                                    ? 'Speak clearly, I\'m listening...' 
+                                                    : 'Click Start to record a voice command like "Add a doctor\'s appointment" or "Record Emma\'s height measurement"'}
+                                                </p>
+                                                
+                                                {recordingText && recordingText !== 'Listening...' && (
+                                                  <div className="bg-gray-50 p-3 rounded-lg mb-4 text-left max-h-32 overflow-y-auto">
+                                                    <p className="text-sm font-roboto">{recordingText}</p>
+                                                  </div>
+                                                )}
+                                                
+                                                <div className="flex justify-center space-x-3">
+                                                  <button
+                                                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
+                                                    onClick={() => setNewVoiceEntry(false)}
+                                                  >
+                                                    Cancel
+                                                  </button>
+                                                  
+                                                  {!isRecording ? (
+                                                    <button
+                                                      className="px-4 py-2 bg-blue-600 text-white rounded-md font-roboto hover:bg-blue-700"
+                                                      onClick={recognizeSpeech}
+                                                    >
+                                                      Start Recording
+                                                    </button>
+                                                  ) : (
+                                                    <button
+                                                      className="px-4 py-2 bg-red-600 text-white rounded-md font-roboto hover:bg-red-700"
+                                                      onClick={() => setIsRecording(false)}
+                                                    >
+                                                      Stop Recording
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Allie notification */}
+                                        {allieMessage && (
+                                          <div className={`fixed bottom-4 right-4 max-w-sm bg-white rounded-lg shadow-lg border-l-4 p-4 z-50 ${
+                                            allieMessage.type === 'success' 
+                                              ? 'border-green-500' 
+                                              : allieMessage.type === 'error'
+                                              ? 'border-red-500'
+                                              : allieMessage.type === 'warning'
+                                              ? 'border-yellow-500'
+                                              : 'border-blue-500'
+                                          }`}>
+                                            <div className="flex items-start">
+                                              <div className="flex-shrink-0 mr-3">
+                                                {allieMessage.type === 'success' ? (
+                                                  <CheckCircle size={20} className="text-green-500" />
+                                                ) : allieMessage.type === 'error' ? (
+                                                  <AlertCircle size={20} className="text-red-500" />
+                                                ) : allieMessage.type === 'warning' ? (
+                                                  <AlertCircle size={20} className="text-yellow-500" />
+                                                ) : (
+                                                  <Info size={20} className="text-blue-500" />
+                                                )}
+                                              </div>
+                                              <div>
+                                                <p className="text-sm font-medium font-roboto">
+                                                  {allieMessage.type.charAt(0).toUpperCase() + allieMessage.type.slice(1)}
+                                                </p>
+                                                <p className="text-sm text-gray-600 font-roboto mt-1">
+                                                  {allieMessage.text}
+                                                </p>
+                                              </div>
+                                              <button 
+                                                className="ml-auto text-gray-400 hover:text-gray-500"
+                                                onClick={() => setAllieMessage(null)}
+                                              >
+                                                <X size={16} />
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Main content sections */}
+                                        <div className="space-y-8">
+                                          {/* Medical section */}
+                                          <div>
+                                            <button
+                                              onClick={() => toggleSection('medical')}
+                                              className="w-full flex items-center justify-between bg-white p-3 rounded-t-lg shadow-sm font-medium font-roboto mb-1"
+                                            >
+                                              <div className="flex items-center">
+                                                <Heart size={18} className="mr-2 text-red-500" />
+                                                Medical Appointments & Records
+                                                {notifications.medical > 0 && (
+                                                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                                    {notifications.medical}
+                                                  </span>
+                                                )}
+                                              </div>
+                                              {expandedSections.medical ? (
+                                                <ChevronUp size={18} className="text-gray-500" />
+                                              ) : (
+                                                <ChevronDown size={18} className="text-gray-500" />
+                                              )}
+                                            </button>
+                                            
+                                            {expandedSections.medical && renderMedicalSection()}
+                                          </div>
+                                          
+                                          {/* Growth section */}
+                                          <div>
+                                            <button
+                                              onClick={() => toggleSection('growth')}
+                                              className="w-full flex items-center justify-between bg-white p-3 rounded-t-lg shadow-sm font-medium font-roboto mb-1"
+                                            >
+                                              <div className="flex items-center">
+                                                <Activity size={18} className="mr-2 text-blue-500" />
+                                                Growth & Development
+                                                {notifications.growth > 0 && (
+                                                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                    {notifications.growth}
+                                                  </span>
+                                                )}
+                                              </div>
+                                              {expandedSections.growth ? (
+                                                <ChevronUp size={18} className="text-gray-500" />
+                                              ) : (
+                                                <ChevronDown size={18} className="text-gray-500" />
+                                              )}
+                                            </button>
+                                            
+                                            {expandedSections.growth && renderGrowthSection()}
+                                          </div>
+                                          
+                                          {/* Routines section */}
+                                          <div>
+                                            <button
+                                              onClick={() => toggleSection('routines')}
+                                              className="w-full flex items-center justify-between bg-white p-3 rounded-t-lg shadow-sm font-medium font-roboto mb-1"
+                                            >
+                                              <div className="flex items-center">
+                                                <CalendarIcon size={18} className="mr-2 text-purple-500" />
+                                                Routines & Activities
+                                                {notifications.routines > 0 && (
+                                                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                                    {notifications.routines}
+                                                  </span>
+                                                )}
+                                              </div>
+                                              {expandedSections.routines ? (
+                                                <ChevronUp size={18} className="text-gray-500" />
+                                              ) : (
+                                                <ChevronDown size={18} className="text-gray-500" />
+                                              )}
+                                            </button>
+                                            
+                                            {expandedSections.routines && renderRoutinesSection()}
+                                          </div>
+                                          
+                                          {/* Todo Section */}
+                                          <div className="border border-gray-200 rounded-lg bg-white">
+                                            <button
+                                              onClick={toggleTodoSection}
+                                              className="w-full flex items-center justify-between p-3 font-medium font-roboto"
+                                            >
+                                              <div className="flex items-center">
+                                                <CheckSquare size={18} className="mr-2 text-green-500" />
+                                                Family To-Do List
+                                              </div>
+                                              {expandedTodoSection ? (
+                                                <ChevronUp size={18} className="text-gray-500" />
+                                              ) : (
+                                                <ChevronDown size={18} className="text-gray-500" />
+                                              )}
+                                            </button>
+                                            
+                                            {expandedTodoSection && (
+                                              <div className="p-4 border-t border-gray-200">
+                                                {loadingTodos ? (
+                                                  <div className="flex justify-center items-center py-10">
+                                                    <RefreshCw size={20} className="animate-spin text-gray-400" />
+                                                  </div>
+                                                ) : (
+                                                  <>
+                                                    {/* Filters */}
+                                                    <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
+                                                      <div className="flex flex-wrap gap-2">
+                                                        <button
+                                                          className={`px-3 py-1 text-sm rounded-md ${
+                                                            categoryFilter === 'all' 
+                                                              ? 'bg-black text-white' 
+                                                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                          }`}
+                                                          onClick={() => setCategoryFilter('all')}
+                                                        >
+                                                          All
+                                                        </button>
+                                                        
+                                                        {categories.map(category => (
+                                                          <button
+                                                            key={category.id}
+                                                            className={`px-3 py-1 text-sm rounded-md ${
+                                                              categoryFilter === category.id 
+                                                                ? 'bg-black text-white' 
+                                                                : category.color
+                                                            }`}
+                                                            onClick={() => setCategoryFilter(category.id)}
+                                                          >
+                                                            {category.name}
+                                                          </button>
+                                                        ))}
+                                                      </div>
+                                                      
+                                                      <div className="flex items-center">
+                                                        <label className="flex items-center text-sm text-gray-600 font-roboto">
+                                                          <input
+                                                            type="checkbox"
+                                                            checked={showCompleted}
+                                                            onChange={() => setShowCompleted(!showCompleted)}
+                                                            className="mr-2 h-4 w-4 text-blue-600 rounded"
+                                                          />
+                                                          Show completed
+                                                        </label>
+                                                      </div>
+                                                    </div>
+                                                    
+                                                    {/* Todo input */}
+                                                    <div className="flex mb-4">
+                                                      <input
+                                                        type="text"
+                                                        ref={todoInputRef}
+                                                        value={newTodoText}
+                                                        onChange={(e) => setNewTodoText(e.target.value)}
+                                                        onKeyPress={handleKeyPress}
+                                                        placeholder="Add a new to-do item..."
+                                                        className="flex-grow px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm font-roboto"
+                                                      />
+                                                      <button
+                                                        onClick={addTodo}
+                                                        disabled={!newTodoText.trim()}
+                                                        className={`px-4 py-2 rounded-r-md text-white ${
+                                                          newTodoText.trim() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'
+                                                        }`}
+                                                      >
+                                                        Add
+                                                      </button>
+                                                    </div>
+                                                    
+                                                    {/* Todos list */}
+                                                    <DragDropContext onDragEnd={handleDragEnd}>
+                                                      <Droppable droppableId="todos">
+                                                        {(provided) => (
+                                                          <div
+                                                            {...provided.droppableProps}
+                                                            ref={provided.innerRef}
+                                                            className="space-y-2"
+                                                          >
+                                                            {filterTodos().length > 0 ? (
+                                                              filterTodos().map((todo, index) => (
+                                                                <Draggable 
+                                                                  key={todo.id} 
+                                                                  draggableId={todo.id} 
+                                                                  index={index}
+                                                                >
+                                                                  {(provided) => (
+                                                                    <div
+                                                                      ref={provided.innerRef}
+                                                                      {...provided.draggableProps}
+                                                                      id={`todo-${todo.id}`}
+                                                                      className={`flex items-center p-3 rounded-md border ${
+                                                                        todo.completed ? 'bg-gray-50' : 'bg-white'
+                                                                      }`}
+                                                                    >
+                                                                      <div 
+                                                                        {...provided.dragHandleProps}
+                                                                        className="mr-2 text-gray-400 cursor-grab"
+                                                                      >
+                                                                        <GripVertical size={16} />
+                                                                      </div>
+                                                                      
+                                                                      <button
+                                                                        onClick={() => toggleTodo(todo.id)}
+                                                                        className="mr-2 flex-shrink-0"
+                                                                      >
+                                                                        {todo.completed ? (
+                                                                          <CheckSquare size={18} className="text-green-500" />
+                                                                        ) : (
+                                                                          <Square size={18} className="text-gray-400" />
+                                                                        )}
+                                                                      </button>
+                                                                      
+                                                                      {editingTodo === todo.id ? (
+                                                                        <div className="flex-grow">
+                                                                          <input
+                                                                            id={`edit-todo-${todo.id}`}
+                                                                            type="text"
+                                                                            value={editingTodoText}
+                                                                            onChange={(e) => setEditingTodoText(e.target.value)}
+                                                                            onKeyPress={(e) => {
+                                                                              if (e.key === 'Enter') {
+                                                                                saveEditedTodo(todo.id);
+                                                                              }
+                                                                            }}
+                                                                            className="w-full px-2 py-1 border rounded text-sm"
+                                                                            autoFocus
+                                                                          />
+                                                                          
+                                                                          <div className="flex mt-2 space-x-2">
+                                                                            <select
+                                                                              value={editingTodoCategory}
+                                                                              onChange={(e) => setEditingTodoCategory(e.target.value)}
+                                                                              className="text-xs border rounded px-2 py-1"
+                                                                            >
+                                                                              {categories.map(cat => (
+                                                                                <option key={cat.id} value={cat.id}>
+                                                                                  {cat.name}
+                                                                                </option>
+                                                                              ))}
+                                                                            </select>
+                                                                            
+                                                                            <button
+                                                                              onClick={() => saveEditedTodo(todo.id)}
+                                                                              className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+                                                                            >
+                                                                              Save
+                                                                            </button>
+                                                                            
+                                                                            <button
+                                                                              onClick={cancelEdit}
+                                                                              className="text-xs px-2 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                                                                            >
+                                                                              Cancel
+                                                                            </button>
+                                                                          </div>
+                                                                        </div>
+                                                                      ) : (
+                                                                        <div className="flex-grow flex flex-col">
+                                                                          <span className={`text-sm font-roboto ${todo.completed ? 'line-through text-gray-500' : ''}`}>
+                                                                            {todo.text}
+                                                                          </span>
+                                                                          
+                                                                          <div className="flex items-center mt-1">
+                                                                            {todo.category && (
+                                                                              <span className={`text-xs px-2 py-0.5 rounded-full mr-2 ${getCategoryInfo(todo.category)?.color}`}>
+                                                                                {getCategoryInfo(todo.category)?.name}
+                                                                              </span>
+                                                                            )}
+                                                                            
+                                                                            {todo.assignedTo && (
+                                                                              <span className="text-xs text-gray-500 mr-2">
+                                                                                Assigned to: {getParentName(todo.assignedTo)}
+                                                                              </span>
+                                                                            )}
+                                                                            
+                                                                            {todo.dueDate && (
+                                                                              <span className="text-xs text-gray-500">
+                                                                                Due: {new Date(todo.dueDate).toLocaleDateString()}
+                                                                              </span>
+                                                                            )}
+                                                                          </div>
+                                                                        </div>
+                                                                      )}
+                                                                      
+                                                                      {editingTodo !== todo.id && (
+                                                                        <div className="flex space-x-1 ml-2">
+                                                                          <button
+                                                                            onClick={() => openCalendarForTodo(todo)}
+                                                                            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                                                            title="Add to calendar"
+                                                                          >
+                                                                            <Calendar size={16} />
+                                                                          </button>
+                                                                          
+                                                                          <button
+                                                                            onClick={() => startEditTodo(todo)}
+                                                                            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                                                            title="Edit"
+                                                                          >
+                                                                            <Edit size={16} />
+                                                                          </button>
+                                                                          
+                                                                          <button
+                                                                            onClick={() => deleteTodo(todo.id)}
+                                                                            className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                                                            title="Delete"
+                                                                          >
+                                                                            <Trash2 size={16} />
+                                                                          </button>
+                                                                        </div>
+                                                                      )}
+                                                                    </div>
+                                                                  )}
+                                                                </Draggable>
+                                                              ))
+                                                            ) : (
+                                                              <div className="text-center py-6 bg-gray-50 rounded-lg">
+                                                                <p className="text-gray-500 font-roboto">
+                                                                  {todos.length > 0 
+                                                                    ? 'No todos match your filters' 
+                                                                    : 'Your todo list is empty'}
+                                                                </p>
+                                                              </div>
+                                                            )}
+                                                            {provided.placeholder}
+                                                          </div>
+                                                        )}
+                                                      </Droppable>
+                                                    </DragDropContext>
+                                                  </>
+                                                )}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Delete Confirmation Modal */}
+                                        {showDeleteConfirmation && (
+                                          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                                            <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+                                              <h3 className="text-lg font-medium mb-4 font-roboto">Confirm Deletion</h3>
+                                              <p className="text-gray-600 mb-6 font-roboto">
+                                                Are you sure you want to delete this item? This action cannot be undone.
+                                              </p>
+                                              
+                                              <div className="flex justify-end space-x-3">
+                                                <button
+                                                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
+                                                  onClick={() => setShowDeleteConfirmation(false)}
+                                                >
+                                                  Cancel
+                                                </button>
+                                                <button
+                                                  className="px-4 py-2 bg-red-600 text-white rounded-md font-roboto hover:bg-red-700"
+                                                  onClick={confirmDeleteTodo}
+                                                >
+                                                  Delete
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Calendar Add Modal */}
+                                        {showAddCalendar && selectedTodoForCalendar && (
+                                          <EnhancedEventManager
+                                            initialEvent={{
+                                              title: selectedTodoForCalendar.text,
+                                              description: selectedTodoForCalendar.text,
+                                              category: selectedTodoForCalendar.category || 'general',
+                                              eventType: 'todo',
+                                              dateTime: new Date().toISOString(),
+                                              duration: 60
+                                            }}
+                                            eventType="general"
+                                            onSave={handleCalendarEventAdded}
+                                            onCancel={() => {
+                                              setShowAddCalendar(false);
+                                              setSelectedTodoForCalendar(null);
+                                            }}
+                                          />
+                                        )}
+                                        
+                                        {/* Render active component (EnhancedEventManager, etc.) */}
+                                        {activeComponent && (
+                                          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                                            {activeComponent.type === 'eventManager' && (
+                                              <EnhancedEventManager {...activeComponent.props} />
+                                            )}
+                                            {activeComponent.type === 'documentLibrary' && (
+                                              <DocumentLibrary {...activeComponent.props} />
+                                            )}
+                                          </div>
+                                        )}
+                                  
+                                        {/* Only keep the provider modal since we're not replacing it with EnhancedEventManager */}
+                                        {activeModal === 'provider' && (
+                                          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                                            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+                                              <div className="p-4 border-b flex justify-between items-center">
+                                                <h3 className="text-lg font-medium font-roboto">
+                                                  {modalData.id ? 'Edit' : 'Add'} Healthcare Provider
+                                                </h3>
+                                                <button className="text-gray-500 hover:text-gray-700" onClick={closeModal}>
+                                                  <X size={20} />
+                                                </button>
+                                              </div>
+                                              
+                                              <div className="p-4">
+                                                <div className="space-y-4">
+                                                  <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                                                      Provider Name
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      value={modalData.name || ''}
+                                                      onChange={e => setModalData({...modalData, name: e.target.value})}
+                                                      className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                                                      placeholder="e.g., Dr. Smith"
+                                                    />
+                                                  </div>
+                                                  
+                                                  <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                                                      Specialty
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      value={modalData.specialty || ''}
+                                                      onChange={e => setModalData({...modalData, specialty: e.target.value})}
+                                                      className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                                                      placeholder="e.g., Pediatrician, Dentist, etc."
+                                                    />
+                                                  </div>
+                                                  
+                                                  <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                      <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                                                        Phone
+                                                      </label>
+                                                      <input
+                                                        type="tel"
+                                                        value={modalData.phone || ''}
+                                                        onChange={e => setModalData({...modalData, phone: e.target.value})}
+                                                        className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                                                        placeholder="e.g., 555-555-5555"
+                                                      />
+                                                    </div>
+                                                    <div>
+                                                      <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                                                        Email
+                                                      </label>
+                                                      <input
+                                                        type="email"
+                                                        value={modalData.email || ''}
+                                                        onChange={e => setModalData({...modalData, email: e.target.value})}
+                                                        className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                                                        placeholder="e.g., doctor@example.com"
+                                                      />
+                                                    </div>
+                                                  </div>
+                                                  
+                                                  <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                                                      Address
+                                                    </label>
+                                                    <textarea
+                                                      value={modalData.address || ''}
+                                                      onChange={e => setModalData({...modalData, address: e.target.value})}
+                                                      className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                                                      rows={2}
+                                                      placeholder="Practice address"
+                                                    />
+                                                  </div>
+                                                  
+                                                  <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1 font-roboto">
+                                                      Notes
+                                                    </label>
+                                                    <textarea
+                                                      value={modalData.notes || ''}
+                                                      onChange={e => setModalData({...modalData, notes: e.target.value})}
+                                                      className="w-full px-3 py-2 border rounded-md text-sm font-roboto"
+                                                      rows={2}
+                                                      placeholder="Additional notes about this provider"
+                                                    />
+                                                  </div>
+                                                </div>
+                                              </div>
+                                              
+                                              <div className="p-4 border-t flex justify-end space-x-3">
+                                                <button
+                                                  type="button"
+                                                  onClick={closeModal}
+                                                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 font-roboto"
+                                                >
+                                                  Cancel
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleProviderSubmit(modalData)}
+                                                  disabled={loadingSection === 'provider'}
+                                                  className={`px-4 py-2 text-sm font-medium rounded-md font-roboto ${
+                                                    loadingSection === 'provider'
+                                                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                      : 'bg-black text-white hover:bg-gray-800'
+                                                  }`}
+                                                >
+                                                  {loadingSection === 'provider' ? 'Saving...' : 'Save'}
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  };
+                                  
+                                  export default ChildrenTrackingTab;
