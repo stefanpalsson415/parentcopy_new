@@ -8,6 +8,9 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import CalendarService from '../../services/CalendarService';
 import UserAvatar from '../common/UserAvatar';
+import SmartReminderSuggestions from './SmartReminderSuggestions';
+
+
 
 /**
  * Enhanced Event Manager - Universal component for creating and editing calendar events
@@ -72,6 +75,8 @@ const EnhancedEventManager = ({
   const [placesInitialized, setPlacesInitialized] = useState(false);
   const placeAutocompleteElementRef = useRef(null);
   const placesContainerRef = useRef(null);
+  const [selectedReminders, setSelectedReminders] = useState([]);
+
   
   const children = familyMembers.filter(m => m.role === 'child');
   const parents = familyMembers.filter(m => m.role === 'parent');
@@ -245,7 +250,15 @@ placeAutocompleteElement.addEventListener('gmp-placeautocomplete-place-changed',
                   new Date(new Date(event.dateTime).getTime() + 60 * 60 * 1000)
                  ).toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        }
+        },
+        // Add reminders if we have any
+        reminders: selectedReminders.length > 0 ? {
+          useDefault: false,
+          overrides: selectedReminders.map(minutes => ({
+            method: 'popup',
+            minutes
+          }))
+        } : undefined
       };
       
       let result;
@@ -393,6 +406,27 @@ placeAutocompleteElement.addEventListener('gmp-placeautocomplete-place-changed',
     }
   };
   
+  const handleAddReminder = (minutes) => {
+    if (minutes === 'custom') {
+      // Show custom reminder input (you'd need to implement this UI)
+      // For now, just add a default 15 minute reminder
+      if (!selectedReminders.includes(15)) {
+        setSelectedReminders([...selectedReminders, 15]);
+      }
+      return;
+    }
+    
+    // Add the reminder if not already added
+    if (!selectedReminders.includes(minutes)) {
+      setSelectedReminders([...selectedReminders, minutes]);
+    }
+  };
+  
+  const handleRemoveReminder = (minutes) => {
+    setSelectedReminders(selectedReminders.filter(r => r !== minutes));
+  };
+
+
   // Toggle a day in recurring settings
   const toggleRecurringDay = (day) => {
     setEvent(prev => {
@@ -922,6 +956,32 @@ placeAutocompleteElement.addEventListener('gmp-placeautocomplete-place-changed',
             </div>
           </div>
         )}
+
+<SmartReminderSuggestions 
+  eventType={event.eventType || eventType} 
+  onSelectReminder={handleAddReminder} 
+/>
+
+{selectedReminders.length > 0 && (
+  <div className="mb-4">
+    <h4 className="text-sm font-medium mb-2">Selected Reminders</h4>
+    <div className="flex flex-wrap gap-2">
+      {selectedReminders.map(minutes => (
+        <div key={minutes} className="flex items-center bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs">
+          {minutes >= 1440 ? `${minutes / 1440} day(s)` : 
+           minutes >= 60 ? `${minutes / 60} hour(s)` : 
+           `${minutes} minute(s)`} before
+          <button 
+            onClick={() => handleRemoveReminder(minutes)}
+            className="ml-1 text-blue-500 hover:text-blue-700"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
         
         {/* Description */}
         <div>

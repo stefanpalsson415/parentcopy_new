@@ -82,6 +82,129 @@ const eventDetails = {
     }
   }
   
+// Add to src/services/EventParserService.js
+
+/**
+ * Extract recurring event pattern from text
+ * @param {string} text - Text to analyze
+ * @returns {Object|null} Recurrence pattern or null if not found
+ */
+extractRecurrencePattern(text) {
+  // Initialize empty recurrence pattern
+  const recurrence = {
+    frequency: null,
+    days: [],
+    interval: 1,
+    endDate: null,
+    count: null
+  };
+  
+  // Check for frequency patterns
+  const dailyPattern = /\b(?:every day|daily|each day)\b/i;
+  const weeklyPattern = /\b(?:every week|weekly|each week)\b/i;
+  const biweeklyPattern = /\b(?:every two weeks|bi-weekly|biweekly|every other week)\b/i;
+  const monthlyPattern = /\b(?:every month|monthly|each month)\b/i;
+  const yearlyPattern = /\b(?:every year|yearly|annually|each year)\b/i;
+  
+  // Check for day of week patterns
+  const mondayPattern = /\b(?:every|each)?\s*monday(?:s)?\b/i;
+  const tuesdayPattern = /\b(?:every|each)?\s*tuesday(?:s)?\b/i;
+  const wednesdayPattern = /\b(?:every|each)?\s*wednesday(?:s)?\b/i;
+  const thursdayPattern = /\b(?:every|each)?\s*thursday(?:s)?\b/i;
+  const fridayPattern = /\b(?:every|each)?\s*friday(?:s)?\b/i;
+  const saturdayPattern = /\b(?:every|each)?\s*saturday(?:s)?\b/i;
+  const sundayPattern = /\b(?:every|each)?\s*sunday(?:s)?\b/i;
+  
+  // Check for recurrence end patterns
+  const untilDatePattern = /\b(?:until|through|till)\s+([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i;
+  const forCountPattern = /\b(?:for|repeat)\s+(\d+)\s+(?:times|weeks|months|occurrences)\b/i;
+  
+  // Determine frequency
+  if (dailyPattern.test(text)) {
+    recurrence.frequency = 'DAILY';
+  } else if (biweeklyPattern.test(text)) {
+    recurrence.frequency = 'WEEKLY';
+    recurrence.interval = 2;
+  } else if (weeklyPattern.test(text)) {
+    recurrence.frequency = 'WEEKLY';
+  } else if (monthlyPattern.test(text)) {
+    recurrence.frequency = 'MONTHLY';
+  } else if (yearlyPattern.test(text)) {
+    recurrence.frequency = 'YEARLY';
+  }
+  
+  // Determine days of week
+  if (mondayPattern.test(text)) recurrence.days.push('MO');
+  if (tuesdayPattern.test(text)) recurrence.days.push('TU');
+  if (wednesdayPattern.test(text)) recurrence.days.push('WE');
+  if (thursdayPattern.test(text)) recurrence.days.push('TH');
+  if (fridayPattern.test(text)) recurrence.days.push('FR');
+  if (saturdayPattern.test(text)) recurrence.days.push('SA');
+  if (sundayPattern.test(text)) recurrence.days.push('SU');
+  
+  // Extract "until date"
+  const untilMatch = text.match(untilDatePattern);
+  if (untilMatch && untilMatch[1]) {
+    try {
+      const untilDate = new Date(untilMatch[1]);
+      if (!isNaN(untilDate.getTime())) {
+        recurrence.endDate = untilDate;
+      }
+    } catch (e) {
+      console.warn("Error parsing 'until' date:", e);
+    }
+  }
+  
+  // Extract count
+  const countMatch = text.match(forCountPattern);
+  if (countMatch && countMatch[1]) {
+    recurrence.count = parseInt(countMatch[1]);
+  }
+  
+  // If no frequency was detected but days are specified, assume weekly
+  if (!recurrence.frequency && recurrence.days.length > 0) {
+    recurrence.frequency = 'WEEKLY';
+  }
+  
+  // If no recurrence information was found, return null
+  if (!recurrence.frequency && recurrence.days.length === 0) {
+    return null;
+  }
+  
+  return recurrence;
+}
+
+
+/**
+ * Detect if text is likely to be in US or Swedish regional format
+ * @param {string} text - Text to analyze
+ * @returns {string} 'US' or 'SE'
+ */
+detectTextRegion(text) {
+  const text_lower = text.toLowerCase();
+  
+  // Count Swedish indicators
+  let swedishScore = 0;
+  if (text_lower.match(/\bkl\.?\s+\d{1,2}[\.:]\d{2}\b/)) swedishScore += 3; // kl. 14:00
+  if (text_lower.match(/\bkalas\b/)) swedishScore += 2;
+  if (text_lower.match(/\bvälkommen\b/)) swedishScore += 2;
+  if (text_lower.match(/\bfyller\b/)) swedishScore += 2;
+  if (text_lower.match(/\blir\b/)) swedishScore += 1;
+  if (text_lower.match(/\d{1,2}[\.:]\d{2}\b/)) swedishScore += 1; // 24h time
+  
+  // Count US indicators
+  let usScore = 0;
+  if (text_lower.match(/\b\d{1,2}:\d{2}\s*(am|pm)\b/i)) usScore += 3; // 2:00 pm
+  if (text_lower.match(/\bbirthday\s+party\b/)) usScore += 2;
+  if (text_lower.match(/\binvited\b/)) usScore += 1;
+  if (text_lower.match(/\bplease\s+join\b/)) usScore += 1;
+  if (text_lower.match(/\bcelebrating\b/)) usScore += 1;
+  
+  return swedishScore > usScore ? 'SE' : 'US';
+}
+
+
+
   /**
    * Process screenshot with OCR
    * @param {File} imageFile - Uploaded image file
@@ -140,6 +263,8 @@ const eventDetails = {
   
   // Add this improved method to EventParserService.js (around line 140)
 
+// Add this improved method to EventParserService.js (around line 140)
+
 /**
  * Enhanced OCR processing function that extracts text from images with better accuracy
  * @param {string} imageUrl - URL of the image to process
@@ -181,6 +306,237 @@ async performEnhancedOCR(imageUrl) {
     console.error("Enhanced OCR processing failed:", error);
     throw error;
   }
+}
+
+/**
+ * Post-process OCR text to improve quality
+ * @param {string} text - Raw OCR text
+ * @returns {string} Processed text
+ */
+postProcessOCRText(text) {
+  // Replace common OCR errors
+  let processed = text
+    .replace(/(\d)l(\d)/g, '$1/$2') // Fix common "1" instead of "/" error in dates
+    .replace(/(\d)I(\d)/g, '$1/$2')
+    .replace(/\bI\b/g, '1')         // Fix standalone "I" as "1"
+    .replace(/\bO\b/g, '0')         // Fix standalone "O" as "0"
+    .replace(/(\d)O/g, '$10')       // Fix "O" as "0" after numbers
+    .replace(/\bAM\b/g, 'AM')       // Correct time notation
+    .replace(/\bPM\b/g, 'PM')
+    .replace(/\bam\b/g, 'am')
+    .replace(/\bpm\b/g, 'pm');
+    
+  // Try to normalize line breaks (invitations often have weird formatting)
+  processed = processed
+    .replace(/([.:!?])\s*\n/g, '$1 ')  // Remove line breaks after punctuation
+    .replace(/(\d)\s*\n\s*(\d)/g, '$1$2')  // Join split numbers
+    .replace(/([A-Za-z])-\s*\n\s*([A-Za-z])/g, '$1$2')  // Join hyphenated words
+    .replace(/\n{3,}/g, '\n\n');  // Normalize multiple line breaks
+    
+  console.log("Post-processed OCR text:", processed);
+  return processed;
+}
+
+/**
+ * Process an image to extract event details with improved reliability
+ * @param {File} imageFile - The image file to process
+ * @param {Object} familyContext - Family context for better parsing
+ * @returns {Promise<Object|null>} Extracted event details or null if unsuccessful
+ */
+async parseEventImage(imageFile, familyContext) {
+  try {
+    console.log("Starting enhanced event parsing from image");
+    
+    // 1. Upload the image to storage for OCR processing
+    const imageUrl = await this.uploadImageForOCR(imageFile);
+    console.log("Image uploaded successfully, URL:", imageUrl);
+    
+    // 2. Extract text using enhanced OCR
+    let extractedText;
+    try {
+      extractedText = await this.performEnhancedOCR(imageUrl);
+      console.log("OCR extracted text length:", extractedText.length);
+    } catch (ocrError) {
+      console.error("OCR failed, falling back to basic extraction:", ocrError);
+      // Fallback to basic OCR if enhanced fails
+      extractedText = await this.performOCR(imageUrl);
+    }
+    
+    // Early exit if we couldn't extract text
+    if (!extractedText || extractedText.trim().length < 10) {
+      console.warn("Insufficient text extracted from image");
+      return null;
+    }
+    
+    // 3. Try to determine if this is an invitation (especially for events/birthdays)
+    const isInvitation = this.isLikelyInvitation(extractedText);
+    
+    // 4. Parse the extracted text using the appropriate strategy
+    let eventDetails;
+    if (isInvitation) {
+      console.log("Detected likely invitation, using invitation parsing strategy");
+      eventDetails = await this.parseInvitationText(extractedText, familyContext);
+    } else {
+      console.log("Using standard event parsing for extracted text");
+      eventDetails = await this.parseEventText(extractedText, familyContext);
+    }
+    
+    // 5. Add confidence level based on the quality of extraction
+    if (eventDetails) {
+      eventDetails.extractionConfidence = this.calculateExtractionConfidence(eventDetails);
+      eventDetails.originalText = extractedText;
+      eventDetails.parsedFromImage = true;
+    }
+    
+    return eventDetails;
+  } catch (error) {
+    console.error("Error parsing event from image:", error);
+    throw error;
+  }
+}
+
+/**
+ * Determine if text is likely an invitation
+ * @param {string} text - The text to analyze
+ * @returns {boolean} True if the text appears to be an invitation
+ */
+isLikelyInvitation(text) {
+  const invitationKeywords = [
+    'invite', 'invitation', 'invited', 'join us', 'celebrate', 'celebration',
+    'birthday', 'party', 'rsvp', 'please join', 'honor', 'pleasure', 'attending',
+    'cordially', 'occasion'
+  ];
+  
+  const textLower = text.toLowerCase();
+  const matchCount = invitationKeywords.filter(keyword => textLower.includes(keyword)).length;
+  
+  // If we match multiple invitation keywords, it's likely an invitation
+  return matchCount >= 2;
+}
+
+/**
+ * Parse text specifically as an invitation with specialized extraction
+ * @param {string} text - The invitation text
+ * @param {Object} familyContext - Family context for better parsing
+ * @returns {Promise<Object|null>} Extracted event details
+ */
+async parseInvitationText(text, familyContext) {
+  try {
+    console.log("Parsing invitation text");
+    
+    // Use our regular parsing as a base
+    const baseDetails = await this.parseEventText(text, familyContext);
+    
+    // Enhanced extraction specifically for invitations
+    const invitationSpecificFields = {
+      rsvpBy: this.extractRSVPDeadline(text),
+      hostContact: this.extractHostContact(text),
+      giftInfo: this.extractGiftInformation(text)
+    };
+    
+    // Merge the information
+    const enhancedDetails = {
+      ...baseDetails,
+      ...invitationSpecificFields,
+      isInvitation: true
+    };
+    
+    return enhancedDetails;
+  } catch (error) {
+    console.error("Error parsing invitation text:", error);
+    // Fall back to standard parsing
+    return this.parseEventText(text, familyContext);
+  }
+}
+
+/**
+ * Extract RSVP deadline from invitation text
+ * @param {string} text - The invitation text
+ * @returns {string|null} RSVP deadline or null if not found
+ */
+extractRSVPDeadline(text) {
+  const rsvpPatterns = [
+    /rsvp\s+by\s+([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i,
+    /please\s+respond\s+by\s+([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i,
+    /respond\s+by\s+([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i,
+    /rsvp\s+([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i
+  ];
+  
+  for (const pattern of rsvpPatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Extract host contact information from invitation text
+ * @param {string} text - The invitation text
+ * @returns {Object|null} Host contact info or null if not found
+ */
+extractHostContact(text) {
+  // Phone pattern
+  const phonePattern = /(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})/;
+  const phoneMatch = text.match(phonePattern);
+  
+  // Email pattern
+  const emailPattern = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/;
+  const emailMatch = text.match(emailPattern);
+  
+  if (phoneMatch || emailMatch) {
+    return {
+      phone: phoneMatch ? phoneMatch[1] : null,
+      email: emailMatch ? emailMatch[1] : null
+    };
+  }
+  
+  return null;
+}
+
+/**
+ * Extract gift information from invitation text
+ * @param {string} text - The invitation text
+ * @returns {string|null} Gift information or null if not found
+ */
+extractGiftInformation(text) {
+  const giftPatterns = [
+    /gifts?:?\s+([^\.]+\.)/i,
+    /presents?:?\s+([^\.]+\.)/i,
+    /registry:?\s+([^\.]+\.)/i,
+    /(?:no\s+gifts|no\s+presents)/i
+  ];
+  
+  for (const pattern of giftPatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      return match[0];
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Calculate confidence level in extraction based on available details
+ * @param {Object} eventDetails - The extracted event details
+ * @returns {number} Confidence score from 0-1
+ */
+calculateExtractionConfidence(eventDetails) {
+  let score = 0;
+  let totalFactors = 0;
+  
+  // Add points for each successfully extracted piece of information
+  if (eventDetails.eventType) { score += 0.2; totalFactors += 0.2; }
+  if (eventDetails.title) { score += 0.2; totalFactors += 0.2; }
+  if (eventDetails.dateTime || eventDetails.startDate) { score += 0.3; totalFactors += 0.3; }
+  if (eventDetails.location) { score += 0.15; totalFactors += 0.15; }
+  if (eventDetails.hostParent || eventDetails.extraDetails?.birthdayChildName) { score += 0.15; totalFactors += 0.15; }
+  
+  // Calculate final score (normalize if needed)
+  return totalFactors > 0 ? score / totalFactors : 0;
 }
 
 /**
@@ -610,194 +966,196 @@ calculateExtractionConfidence(eventDetails) {
     return 'event';
   }
   
-  extractDateTime(text, region = 'US') {
-    const now = new Date();
-    let date = new Date(now);
-    date.setHours(0, 0, 0, 0); // Reset time
-    
-    // Try to find date patterns based on region
-    const datePatterns = {
-      'SE': [
-        // DD/MM format (Sweden)
-        {
-          pattern: /(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/,
-          handler: (match) => {
-            const day = parseInt(match[1]);
-            const month = parseInt(match[2]) - 1; // 0-indexed
-            const year = match[3] ? parseInt(match[3]) : date.getFullYear();
-            
-            // Check if year is 2-digit
-            const fullYear = year < 100 ? 2000 + year : year;
-            
-            return new Date(fullYear, month, day);
-          }
-        },
-        // DD.MM format
-        {
-          pattern: /(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?/,
-          handler: (match) => {
-            const day = parseInt(match[1]);
-            const month = parseInt(match[2]) - 1; // 0-indexed
-            const year = match[3] ? parseInt(match[3]) : date.getFullYear();
-            
-            return new Date(year < 100 ? 2000 + year : year, month, day);
-          }
-        }
-      ],
-      'US': [
-        // MM/DD format (US)
-        {
-          pattern: /(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/,
-          handler: (match) => {
-            const month = parseInt(match[1]) - 1; // 0-indexed
-            const day = parseInt(match[2]);
-            const year = match[3] ? parseInt(match[3]) : date.getFullYear();
-            
-            return new Date(year < 100 ? 2000 + year : year, month, day);
-          }
-        },
-        // MM-DD format
-        {
-          pattern: /(\d{1,2})-(\d{1,2})(?:-(\d{2,4}))?/,
-          handler: (match) => {
-            const month = parseInt(match[1]) - 1; // 0-indexed
-            const day = parseInt(match[2]);
-            const year = match[3] ? parseInt(match[3]) : date.getFullYear();
-            
-            return new Date(year < 100 ? 2000 + year : year, month, day);
-          }
-        }
-      ]
-    };
-    
-    // Month names pattern (works for both regions)
-    const monthNamePattern = {
-      pattern: /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{2,4}))?/i,
-      handler: (match) => {
-        const monthNames = [
-          'january', 'february', 'march', 'april', 'may', 'june',
-          'july', 'august', 'september', 'october', 'november', 'december'
-        ];
-        const shortMonthNames = [
-          'jan', 'feb', 'mar', 'apr', 'may', 'jun',
-          'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
-        ];
-        
-        const monthName = match[1].toLowerCase();
-        const day = parseInt(match[2]);
-        const year = match[3] ? parseInt(match[3]) : date.getFullYear();
-        
-        let monthIndex = monthNames.findIndex(m => m === monthName);
-        if (monthIndex === -1) {
-          // Try short month names
-          monthIndex = shortMonthNames.findIndex(m => m === monthName);
+  // In src/services/EventParserService.js
+// Replace the existing extractDateTime method with this improved version:
+
+extractDateTime(text, region = 'US') {
+  const now = new Date();
+  let date = new Date(now);
+  date.setHours(0, 0, 0, 0); // Reset time
+  
+  // Try to find date patterns based on region
+  const datePatterns = {
+    'SE': [
+      // DD/MM format (Sweden)
+      {
+        pattern: /(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/,
+        handler: (match) => {
+          const day = parseInt(match[1]);
+          const month = parseInt(match[2]) - 1; // 0-indexed
+          const year = match[3] ? parseInt(match[3]) : date.getFullYear();
           
-          // Special case for "sept"
-          if (monthIndex === -1 && (monthName === 'sept' || monthName === 'sep')) {
-            monthIndex = 8; // September
-          }
+          // Check if year is 2-digit
+          const fullYear = year < 100 ? 2000 + year : year;
+          
+          return new Date(fullYear, month, day);
         }
-        
-        if (monthIndex !== -1) {
-          return new Date(year < 100 ? 2000 + year : year, monthIndex, day);
+      },
+      // DD.MM format
+      {
+        pattern: /(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?/,
+        handler: (match) => {
+          const day = parseInt(match[1]);
+          const month = parseInt(match[2]) - 1; // 0-indexed
+          const year = match[3] ? parseInt(match[3]) : date.getFullYear();
+          
+          return new Date(year < 100 ? 2000 + year : year, month, day);
         }
-        
-        return null;
       }
-    };
-    
-    // Try regional patterns first
-    for (const pattern of datePatterns[region]) {
-      const match = text.match(pattern.pattern);
-      if (match) {
-        const parsedDate = pattern.handler(match);
-        if (parsedDate && !isNaN(parsedDate.getTime())) {
-          date = parsedDate;
-          break;
+    ],
+    'US': [
+      // MM/DD format (US)
+      {
+        pattern: /(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/,
+        handler: (match) => {
+          const month = parseInt(match[1]) - 1; // 0-indexed
+          const day = parseInt(match[2]);
+          const year = match[3] ? parseInt(match[3]) : date.getFullYear();
+          
+          return new Date(year < 100 ? 2000 + year : year, month, day);
         }
+      },
+      // MM-DD format
+      {
+        pattern: /(\d{1,2})-(\d{1,2})(?:-(\d{2,4}))?/,
+        handler: (match) => {
+          const month = parseInt(match[1]) - 1; // 0-indexed
+          const day = parseInt(match[2]);
+          const year = match[3] ? parseInt(match[3]) : date.getFullYear();
+          
+          return new Date(year < 100 ? 2000 + year : year, month, day);
+        }
+      }
+    ]
+  };
+  
+  // Month names pattern (works for both regions)
+  const monthNamePattern = {
+    pattern: /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?/i,
+    handler: (match) => {
+      const monthNames = [
+        'january', 'february', 'march', 'april', 'may', 'june',
+        'july', 'august', 'september', 'october', 'november', 'december'
+      ];
+      const shortMonthNames = [
+        'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+        'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
+      ];
+      
+      const monthName = match[1].toLowerCase();
+      const day = parseInt(match[2]);
+      const year = match[3] ? parseInt(match[3]) : date.getFullYear();
+      
+      let monthIndex = monthNames.findIndex(m => m === monthName);
+      if (monthIndex === -1) {
+        // Try short month names
+        monthIndex = shortMonthNames.findIndex(m => m === monthName);
+        
+        // Special case for "sept"
+        if (monthIndex === -1 && (monthName === 'sept' || monthName === 'sep')) {
+          monthIndex = 8; // September
+        }
+      }
+      
+      if (monthIndex !== -1) {
+        return new Date(year < 100 ? 2000 + year : year, monthIndex, day);
+      }
+      
+      return null;
+    }
+  };
+  
+  // Try regional patterns first
+  for (const pattern of datePatterns[region]) {
+    const match = text.match(pattern.pattern);
+    if (match) {
+      const parsedDate = pattern.handler(match);
+      if (parsedDate && !isNaN(parsedDate.getTime())) {
+        date = parsedDate;
+        break;
       }
     }
-    
-    // If no regional pattern matched, try the month name pattern
-    if (date.getTime() === now.setHours(0, 0, 0, 0)) {
-      const match = text.match(monthNamePattern.pattern);
-      if (match) {
-        const parsedDate = monthNamePattern.handler(match);
-        if (parsedDate && !isNaN(parsedDate.getTime())) {
-          date = parsedDate;
-        }
+  }
+  
+  // If no regional pattern matched, try the month name pattern
+  if (date.getTime() === now.setHours(0, 0, 0, 0)) {
+    const match = text.match(monthNamePattern.pattern);
+    if (match) {
+      const parsedDate = monthNamePattern.handler(match);
+      if (parsedDate && !isNaN(parsedDate.getTime())) {
+        date = parsedDate;
       }
     }
-    
-    // Try to find time patterns
-    const timePatterns = {
-      'SE': [
-        // 24-hour clock: 14:00 or 14.00
-        {
-          pattern: /(kl\.?|klockan)?\s*(\d{1,2})[.:](\d{2})\b/i,
-          handler: (match) => {
-            const hours = parseInt(match[2]);
-            const minutes = parseInt(match[3]);
-            
-            if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
-              date.setHours(hours, minutes, 0, 0);
-              return true;
-            }
-            return false;
+  }
+  
+  // Try to find time patterns
+  const timePatterns = {
+    'SE': [
+      // 24-hour clock: 14:00 or 14.00
+      {
+        pattern: /(kl\.?|klockan)?\s*(\d{1,2})[.:](\d{2})\b/i,
+        handler: (match) => {
+          const hours = parseInt(match[2]);
+          const minutes = parseInt(match[3]);
+          
+          if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+            date.setHours(hours, minutes, 0, 0);
+            return true;
           }
+          return false;
         }
-      ],
-      'US': [
-        // 12-hour clock: 2:00 pm
-        {
-          pattern: /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i,
-          handler: (match) => {
-            let hours = parseInt(match[1]);
-            const minutes = match[2] ? parseInt(match[2]) : 0;
-            const period = match[3].toLowerCase();
-            
-            // Adjust for AM/PM
-            if (period === 'pm' && hours < 12) {
-              hours += 12;
-            } else if (period === 'am' && hours === 12) {
-              hours = 0;
-            }
-            
-            if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
-              date.setHours(hours, minutes, 0, 0);
-              return true;
-            }
-            return false;
+      }
+    ],
+    'US': [
+      // 12-hour clock: 2:00 pm
+      {
+        pattern: /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i,
+        handler: (match) => {
+          let hours = parseInt(match[1]);
+          const minutes = match[2] ? parseInt(match[2]) : 0;
+          const period = match[3].toLowerCase();
+          
+          // Adjust for AM/PM
+          if (period === 'pm' && hours < 12) {
+            hours += 12;
+          } else if (period === 'am' && hours === 12) {
+            hours = 0;
           }
+          
+          if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+            date.setHours(hours, minutes, 0, 0);
+            return true;
+          }
+          return false;
         }
-      ]
-    };
-    
-    // Try time patterns for the detected region
-    let timeFound = false;
-    for (const pattern of timePatterns[region]) {
+      }
+    ]
+  };
+  
+  // Try time patterns for the detected region
+  let timeFound = false;
+  for (const pattern of timePatterns[region]) {
+    const match = text.match(pattern.pattern);
+    if (match) {
+      timeFound = pattern.handler(match);
+      if (timeFound) break;
+    }
+  }
+  
+  // If no time pattern matched, try the other region's patterns
+  if (!timeFound) {
+    const otherRegion = region === 'SE' ? 'US' : 'SE';
+    for (const pattern of timePatterns[otherRegion]) {
       const match = text.match(pattern.pattern);
       if (match) {
         timeFound = pattern.handler(match);
         if (timeFound) break;
       }
     }
-    
-    // If no time pattern matched, try the other region's patterns
-    if (!timeFound) {
-      const otherRegion = region === 'SE' ? 'US' : 'SE';
-      for (const pattern of timePatterns[otherRegion]) {
-        const match = text.match(pattern.pattern);
-        if (match) {
-          timeFound = pattern.handler(match);
-          if (timeFound) break;
-        }
-      }
-    }
-    
-    // If still no time found, set default based on event type
-    // If still no time found, set default based on event type
-if (!timeFound) {
+  }
+  
+  // If still no time found, set default based on event type
+  if (!timeFound) {
     const eventType = this.detectEventType(text);
     
     switch (eventType) {
@@ -841,21 +1199,21 @@ if (!timeFound) {
         date.setHours(12, 0, 0, 0); // Noon default for other events
     }
   }
-    
-    // Make sure the date is in the future
-    const currentDate = new Date();
-    if (date < currentDate) {
-      // If the date is today but the time has passed, keep it
-      if (date.toDateString() === currentDate.toDateString()) {
-        // Keep the date as is
-      } else {
-        // If it's a past date, push it to next year
-        date.setFullYear(date.getFullYear() + 1);
-      }
+  
+  // Make sure the date is in the future
+  const currentDate = new Date();
+  if (date < currentDate) {
+    // If the date is today but the time has passed, keep it
+    if (date.toDateString() === currentDate.toDateString()) {
+      // Keep the date as is
+    } else {
+      // If it's a past date, push it to next year
+      date.setFullYear(date.getFullYear() + 1);
     }
-    
-    return date;
   }
+  
+  return date;
+}
   
   extractLocation(text) {
     // Pattern matching for locations
@@ -1041,6 +1399,144 @@ if (!timeFound) {
     return notes.join('. ');
   }
   
+// Add to src/services/EventParserService.js
+
+// Add this improved parsing for birthday events
+extractEventDetails(text, familyMembers = []) {
+  try {
+    // Determine likely region (US or SE)
+    const region = this.detectTextRegion(text);
+    
+    // Extract event type
+    const eventType = this.detectEventType(text);
+    
+    // Special handling for birthday parties
+    if (eventType === 'birthday' || text.toLowerCase().includes('birthday') || text.toLowerCase().includes('party')) {
+      const birthdayPatterns = [
+        /(?:invited to|join us for)\s+([A-Za-z]+(?:'s)?)\s+(?:birthday|party)/i,
+        /([A-Za-z]+(?:'s)?)\s+(?:\d+(?:st|nd|rd|th)?\s+)?birthday\s+party/i,
+        /party\s+for\s+([A-Za-z]+)/i,
+        /([A-Za-z]+)\s+is\s+turning\s+(\d+)/i,
+        /([A-Za-z]+)\s+turns\s+(\d+)/i
+      ];
+
+      let birthdayChild = null;
+      let birthdayAge = null;
+
+      // Try to extract birthday child name
+      for (const pattern of birthdayPatterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          birthdayChild = match[1].replace(/'s$/, '').trim(); // Remove possessive if present
+          if (match[2] && !isNaN(parseInt(match[2]))) {
+            birthdayAge = parseInt(match[2]);
+          }
+          break;
+        }
+      }
+
+      // Look for age if not found with name
+      if (!birthdayAge) {
+        const agePattern = /turning\s+(\d+)|(\d+)(?:st|nd|rd|th)?\s+birthday/i;
+        const ageMatch = text.match(agePattern);
+        if (ageMatch) {
+          birthdayAge = parseInt(ageMatch[1] || ageMatch[2]);
+        }
+      }
+
+      // Extract location
+      const locationPatterns = [
+        /at\s+([A-Za-z0-9\s'.]+?)(?:[,.]|\s+on|\s+at|\s+from)/i,
+        /at\s+([A-Za-z0-9\s'.]+?)$/i,
+        /location\s*:?\s*([A-Za-z0-9\s'.]+?)(?:[,.]|$)/i
+      ];
+
+      let location = null;
+      for (const pattern of locationPatterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          location = match[1].trim();
+          break;
+        }
+      }
+
+      // Extract date and time using existing functions
+      const dateTime = this.extractDateTime(text, region);
+
+      // Construct the event
+      const eventDetails = {
+        eventType: 'birthday',
+        title: birthdayChild ? `${birthdayChild}'s Birthday Party` : 'Birthday Party',
+        dateTime: dateTime,
+        location: location,
+        extraDetails: {
+          birthdayChildName: birthdayChild,
+          birthdayChildAge: birthdayAge,
+          notes: text // Include original text for reference
+        }
+      };
+
+      // Try to match a child if it's for one of the family's children
+      if (birthdayChild && familyMembers.length > 0) {
+        const matchedChild = familyMembers.find(child => 
+          child.name.toLowerCase() === birthdayChild.toLowerCase()
+        );
+        
+        if (matchedChild) {
+          eventDetails.childId = matchedChild.id;
+          eventDetails.childName = matchedChild.name;
+        }
+      }
+
+      return eventDetails;
+    }
+    
+    // Continue with original method for other event types
+    // Extract date and time considering regional formats
+    const dateTime = this.extractEventDateTime(text, region);
+    
+    // Extract location
+    const location = this.extractEventLocation(text);
+    
+    // Extract child info
+    const childInfo = this.extractChildReference(text, familyMembers);
+    
+    // Extract host info
+    const hostInfo = this.extractHostInfo(text);
+    
+    // Extract birthday child info if relevant
+    const birthdayInfo = eventType === 'birthday' ? this.extractBirthdayInfo(text) : null;
+    
+    // Extract notes or special instructions
+    const notes = this.extractEventNotes(text);
+    
+    // Create comprehensive event object
+    const eventDetails = {
+      eventType: eventType,
+      title: this.generateEventTitle(eventType, childInfo.name, birthdayInfo),
+      childId: childInfo.id,
+      childName: childInfo.name,
+      dateTime: dateTime,
+      location: location,
+      hostParent: hostInfo.name,
+      extraDetails: {
+        birthdayChildName: birthdayInfo?.name,
+        birthdayChildAge: birthdayInfo?.age,
+        notes: notes
+      },
+      attendingParentId: null, // To be filled by user
+      creationSource: 'AI-parse-text',
+      region: region
+    };
+    
+    return eventDetails;
+  } catch (error) {
+    console.error("Error extracting event details:", error);
+    throw error;
+  }
+}
+
+
   generateEventTitle(eventType, childInfo, hostInfo) {
     if (eventType === 'birthday' && hostInfo?.name) {
       let title = `${hostInfo.name}'s`;

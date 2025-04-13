@@ -1,3 +1,4 @@
+// src/components/calendar/index.js
 /**
  * Allie Calendar Components Library
  * 
@@ -15,7 +16,8 @@ import CalendarGrid from './CalendarGrid';
 import CalendarFilters from './CalendarFilters';
 import EventsList from './EventsList';
 import EventDetails from './EventDetails';
-import MergedEventParser from './MergedEventParser'; 
+import MergedEventParser from './MergedEventParser';
+import SmartReminderSuggestions from './SmartReminderSuggestions';
 
 // Integration components
 import CalendarIntegrationButton from './CalendarIntegrationButton';
@@ -34,6 +36,7 @@ export {
   EventsList,
   EventDetails,
   MergedEventParser as EventParser,
+  SmartReminderSuggestions,
   
   // Integration components
   CalendarIntegrationButton,

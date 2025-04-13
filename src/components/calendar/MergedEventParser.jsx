@@ -9,6 +9,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import EventParserService from '../../services/EventParserService';
 import CalendarService from '../../services/CalendarService';
 import UserAvatar from '../common/UserAvatar';
+import { useEffect, useState } from 'react';
+
+
 
 /**
  * MergedEventParser - A unified component that handles both event parsing and confirmation
@@ -60,6 +63,9 @@ const MergedEventParser = ({
   const effectiveFamilyId = familyId || contextFamilyId;
   const parents = familyMembers.filter(m => m.role === 'parent');
   const children = familyMembers.filter(m => m.role === 'child');
+
+  const [conflictingEvents, setConflictingEvents] = useState([]);
+const [familyAvailability, setFamilyAvailability] = useState({});
   
   // Initialize with the provided text if any
   useEffect(() => {
@@ -219,6 +225,127 @@ const MergedEventParser = ({
     }
   };
   
+  const checkForEventConflicts = async (eventDetails) => {
+    if (!eventDetails || !eventDetails.dateTime) return [];
+    
+    try {
+      // Create date range for checking conflicts (2 hours before and after)
+      const eventDate = new Date(eventDetails.dateTime);
+      const startCheck = new Date(eventDate);
+      startCheck.setHours(startCheck.getHours() - 2);
+      
+      const endCheck = new Date(eventDate);
+      endCheck.setHours(endCheck.getHours() + 2);
+      
+      // Get events in this time range from CalendarService
+      const events = await CalendarService.getEventsForUser(
+        currentUser.uid,
+        startCheck,
+        endCheck
+      );
+      
+      // Filter to find events that overlap with our event time
+      const conflicts = events.filter(event => {
+        // Convert event times to Date objects for comparison
+        let eventStart = new Date(event.start?.dateTime || event.date || event.dateTime);
+        let eventEnd = new Date(event.end?.dateTime || event.endTime || new Date(eventStart.getTime() + 60 * 60 * 1000));
+        
+        // If this is the same event, don't mark as conflict
+        if (event.id === eventDetails.id) return false;
+        
+        // Calculate our event end time (assume 1 hour duration if not specified)
+        const ourEventEnd = eventDetails.endDateTime ? 
+          new Date(eventDetails.endDateTime) : 
+          new Date(eventDate.getTime() + 60 * 60 * 1000);
+        
+        // Check for overlap
+        return (eventStart <= ourEventEnd) && (eventEnd >= eventDate);
+      });
+      
+      return conflicts;
+    } catch (error) {
+      console.error("Error checking for event conflicts:", error);
+      return [];
+    }
+  };
+  
+  // Add this function to analyze family availability
+  const analyzeAvailability = (conflictingEvents, familyMembers) => {
+    const availability = {};
+    
+    // Initialize availability for all family members
+    familyMembers.forEach(member => {
+      availability[member.id] = {
+        available: true,
+        conflictingEvent: null
+      };
+    });
+    
+    // Check conflicts for each family member
+    conflictingEvents.forEach(event => {
+      // Check for directly assigned events
+      if (event.childId) {
+        // Child is not available
+        if (availability[event.childId]) {
+          availability[event.childId] = {
+            available: false,
+            conflictingEvent: event
+          };
+        }
+        
+        // Attending parent is not available
+        if (event.attendingParentId && event.attendingParentId !== 'both' && 
+            event.attendingParentId !== 'undecided' && availability[event.attendingParentId]) {
+          availability[event.attendingParentId] = {
+            available: false,
+            conflictingEvent: event
+          };
+        } else if (event.attendingParentId === 'both') {
+          // Both parents are unavailable
+          familyMembers.filter(m => m.role === 'parent').forEach(parent => {
+            if (availability[parent.id]) {
+              availability[parent.id] = {
+                available: false,
+                conflictingEvent: event
+              };
+            }
+          });
+        }
+      }
+      
+      // Check for attendees
+      if (event.attendees && event.attendees.length > 0) {
+        event.attendees.forEach(attendee => {
+          if (availability[attendee.id]) {
+            availability[attendee.id] = {
+              available: false,
+              conflictingEvent: event
+            };
+          }
+        });
+      }
+    });
+    
+    return availability;
+  };
+  
+  // Add this useEffect to check for conflicts when event changes
+  useEffect(() => {
+    if (parsedEvent) {
+      // Check for conflicts
+      checkForEventConflicts(parsedEvent).then(conflicts => {
+        setConflictingEvents(conflicts);
+        
+        // Analyze family availability
+        const availability = analyzeAvailability(conflicts, familyMembers);
+        setFamilyAvailability(availability);
+      });
+    }
+  }, [parsedEvent]);
+
+
+
+
   // File upload handler
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
