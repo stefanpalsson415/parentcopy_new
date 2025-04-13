@@ -115,24 +115,9 @@ class ProviderService {
     }
   }
 
-  useEffect(() => {
-    const handleProviderAdded = () => {
-      // Refresh provider list when event is fired
-      if (onLoadProviders) {
-        onLoadProviders();
-      }
-    };
+
+
   
-    // Listen for the custom event
-    window.addEventListener('provider-added', handleProviderAdded);
-    
-    // Clean up
-    return () => {
-      window.removeEventListener('provider-added', handleProviderAdded);
-    };
-  }, [onLoadProviders]);
-
-
   /**
    * Add or update a provider in the database
    * @param {string} familyId - Family ID

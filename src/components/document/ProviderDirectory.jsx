@@ -19,6 +19,7 @@ import {
 } from 'firebase/firestore';
 import UserAvatar from '../common/UserAvatar';
 
+
 /**
  * Provider Directory Component
  * 
@@ -100,6 +101,24 @@ const ProviderDirectory = ({
     return true;
   });
   
+  useEffect(() => {
+    const handleProviderAdded = () => {
+      // Refresh provider list
+      if (onLoadProviders) {
+        onLoadProviders();
+      }
+    };
+  
+    // Listen for the custom event
+    window.addEventListener('provider-added', handleProviderAdded);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('provider-added', handleProviderAdded);
+    };
+  }, [onLoadcProviders]);
+
+
   // Open add/edit modal
   const openProviderModal = (provider = null) => {
     if (provider) {
