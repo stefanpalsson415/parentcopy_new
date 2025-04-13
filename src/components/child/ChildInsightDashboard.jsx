@@ -126,6 +126,159 @@ const ChildInsightDashboard = ({ childId }) => {
     }, 100);
   };
   
+  // Helper to render appropriate visualization based on type and data
+  const renderVisualization = (data, type) => {
+    if (!data) return null;
+    
+    switch (type) {
+      case 'growth_trend':
+        return (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={data}
+                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="date" 
+                  tickFormatter={(date) => new Date(date).toLocaleDateString()} 
+                />
+                <YAxis yAxisId="left" orientation="left" stroke={colors.primary} />
+                <YAxis yAxisId="right" orientation="right" stroke={colors.secondary} />
+                <Tooltip 
+                  formatter={(value, name) => [
+                    `${value} ${name === 'height' ? 'cm' : 'kg'}`,
+                    name === 'height' ? 'Height' : 'Weight'
+                  ]}
+                  labelFormatter={(date) => new Date(date).toLocaleDateString()}
+                />
+                <Legend />
+                <Line 
+                  yAxisId="left"
+                  type="monotone" 
+                  dataKey="height" 
+                  name="Height" 
+                  stroke={colors.primary} 
+                  activeDot={{ r: 8 }} 
+                />
+                <Line 
+                  yAxisId="right"
+                  type="monotone" 
+                  dataKey="weight" 
+                  name="Weight" 
+                  stroke={colors.secondary} 
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        );
+        
+      case 'mood_trend':
+        return (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data.predominantEmotions}
+                  dataKey="count"
+                  nameKey="emotion"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  label={({ emotion, percentage }) => `${emotion} (${percentage}%)`}
+                >
+                  {data.predominantEmotions.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={moodColors[entry.emotion.toLowerCase()] || colors.primary} 
+                    />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value, name, props) => [value, props.payload.emotion]} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        );
+        
+      case 'academic_summary':
+        return (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={data.subjects}
+                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="completed" name="Completed" fill={colors.success} />
+                <Bar dataKey="upcoming" name="Pending" fill={colors.warning} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
+        
+      case 'activity_categories':
+        return (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data}
+                  dataKey="count"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  label={({ name, count, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                >
+                  {data.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={Object.values(colors)[index % Object.values(colors).length]} 
+                    />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value, name, props) => [value, props.payload.name]} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        );
+        
+      case 'tracking_summary':
+        return (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={data.trackingAreas.map(area => ({
+                  name: area.split('(')[0].trim(),
+                  value: parseInt(area.match(/\((\d+)/)?.[1] || 0)
+                }))}
+                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="value" name="Records" fill={colors.primary} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      
+      default:
+        return (
+          <div className="p-4 text-center text-gray-500">
+            <Info size={24} className="mx-auto mb-2" />
+            <p>Visualization not available for this data type.</p>
+          </div>
+        );
+    }
+  };
+  
   // Render loading placeholder
   if (loading) {
     return (
@@ -826,4 +979,621 @@ const ChildInsightDashboard = ({ childId }) => {
                         {analytics.medicalAnalytics.recommendedSchedule || 'Based on age'}
                       </div>
                       {analytics.medicalAnalytics.recommendedVaccines && (
-                        <div className="text
+                        <div className="text-sm text-green-500 mt-1">
+                          {analytics.medicalAnalytics.recommendedVaccines}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Upcoming Appointments */}
+                {analytics.medicalAnalytics.upcomingAppointments?.length > 0 && (
+                  <div className="bg-white border rounded-lg p-4">
+                    <h3 className="font-medium mb-4">Upcoming Appointments</h3>
+                    <div className="divide-y">
+                      {analytics.medicalAnalytics.upcomingAppointments.map((appointment, index) => (
+                        <div key={index} className="py-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-medium">{appointment.title || appointment.appointmentType || 'Appointment'}</div>
+                              <div className="text-sm text-gray-500">
+                                {new Date(appointment.date || appointment.dateTime).toLocaleDateString()} at {new Date(appointment.date || appointment.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                              {appointment.location && (
+                                <div className="text-sm text-gray-500 mt-1">
+                                  {appointment.location}
+                                </div>
+                              )}
+                            </div>
+                            <div className="bg-indigo-50 px-2 py-1 rounded text-xs text-indigo-700">
+                              {appointment.appointmentType || 'General'}
+                            </div>
+                          </div>
+                          {appointment.notes && (
+                            <div className="mt-2 text-xs text-gray-500">
+                              Notes: {appointment.notes}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Past Appointments */}
+                {analytics.medicalAnalytics.pastAppointments?.length > 0 && (
+                  <div className="bg-white border rounded-lg p-4">
+                    <h3 className="font-medium mb-4">Past Appointments</h3>
+                    <div className="divide-y">
+                      {analytics.medicalAnalytics.pastAppointments.map((appointment, index) => (
+                        <div key={index} className="py-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-medium">{appointment.title || appointment.appointmentType || 'Appointment'}</div>
+                              <div className="text-sm text-gray-500">
+                                {new Date(appointment.date || appointment.dateTime).toLocaleDateString()}
+                              </div>
+                              {appointment.doctor && (
+                                <div className="text-sm text-gray-500 mt-1">
+                                  Dr. {appointment.doctor}
+                                </div>
+                              )}
+                            </div>
+                            <div className="bg-gray-100 px-2 py-1 rounded text-xs text-gray-700">
+                              {appointment.appointmentType || 'General'}
+                            </div>
+                          </div>
+                          {appointment.notes && (
+                            <div className="mt-2 text-xs text-gray-500">
+                              Notes: {appointment.notes}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Recommendations */}
+                {analytics.medicalAnalytics.recommendations?.length > 0 && (
+                  <div className="bg-white border rounded-lg p-4">
+                    <h3 className="font-medium mb-4">Recommendations</h3>
+                    <div className="space-y-2">
+                      {analytics.medicalAnalytics.recommendations.map((rec, index) => (
+                        <div 
+                          key={index} 
+                          className={`p-3 rounded-lg ${
+                            rec.priority === 'high' ? 'bg-red-50' :
+                            rec.priority === 'medium' ? 'bg-yellow-50' :
+                            'bg-green-50'
+                          }`}
+                        >
+                          <div className="flex">
+                            <AlertCircle 
+                              size={18} 
+                              className={`mr-2 flex-shrink-0 ${
+                                rec.priority === 'high' ? 'text-red-500' :
+                                rec.priority === 'medium' ? 'text-yellow-500' :
+                                'text-green-500'
+                              }`} 
+                            />
+                            <p className="text-sm">{rec.message}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-white border rounded-lg p-4 text-center py-8">
+                <Heart size={48} className="mx-auto text-gray-300 mb-4" />
+                <h3 className="text-xl font-medium text-gray-400 mb-2">No Medical Data Yet</h3>
+                <p className="text-gray-500 mb-4">
+                  Start tracking {analytics.basicInfo.name}'s medical appointments to see insights.
+                </p>
+                <button className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
+                  Add First Appointment
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {activeTab === 'emotional' && (
+          <div>
+            <h2 className="text-lg font-semibold mb-4">Emotional Well-being</h2>
+            
+            {analytics.emotionalAnalytics.recentMood ? (
+              <div className="space-y-6">
+                {/* Current Mood */}
+                <div className="bg-white border rounded-lg p-4">
+                  <h3 className="font-medium mb-4">Current Emotional State</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-orange-50 p-3 rounded-lg">
+                      <div className="text-orange-700 font-medium mb-1">Recent Mood</div>
+                      <div className="text-2xl font-semibold">
+                        {analytics.emotionalAnalytics.recentMood.emotion || analytics.emotionalAnalytics.recentMood.mood}
+                      </div>
+                      <div className="text-sm text-orange-500 mt-1">
+                        Recorded {new Date(analytics.emotionalAnalytics.recentMood.date).toLocaleDateString()}
+                      </div>
+                    </div>
+                    
+                    {analytics.emotionalAnalytics.predominantEmotions?.length > 0 && (
+                      <div className="bg-purple-50 p-3 rounded-lg">
+                        <div className="text-purple-700 font-medium mb-1">Most Common Emotion</div>
+                        <div className="text-xl font-semibold">
+                          {analytics.emotionalAnalytics.predominantEmotions[0].emotion}
+                        </div>
+                        <div className="text-sm text-purple-500 mt-1">
+                          {analytics.emotionalAnalytics.predominantEmotions[0].percentage}% of check-ins
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="bg-teal-50 p-3 rounded-lg">
+                      <div className="text-teal-700 font-medium mb-1">Emotional Check-ins</div>
+                      <div className="text-xl font-semibold">
+                        {analytics.emotionalAnalytics.moodTrends?.totalCheckIns || 0} total
+                      </div>
+                      <div className="text-sm text-teal-500 mt-1">
+                        Last 30 days: {analytics.emotionalAnalytics.moodTrends?.recentCheckIns || 0}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Emotion Trends */}
+                {analytics.emotionalAnalytics.predominantEmotions?.length > 0 && (
+                  <div className="bg-white border rounded-lg p-4">
+                    <h3 className="font-medium mb-4">Emotion Distribution</h3>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={analytics.emotionalAnalytics.predominantEmotions}
+                            dataKey="count"
+                            nameKey="emotion"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={80}
+                            label={({ emotion, percentage }) => `${emotion} (${percentage}%)`}
+                          >
+                            {analytics.emotionalAnalytics.predominantEmotions.map((entry, index) => (
+                              <Cell 
+                                key={`cell-${index}`} 
+                                fill={moodColors[entry.emotion.toLowerCase()] || Object.values(colors)[index % Object.values(colors).length]} 
+                              />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value, name, props) => [value, props.payload.emotion]} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    
+                    <div className="mt-4 bg-gray-50 p-3 rounded-lg text-sm">
+                      <p>
+                        This chart shows the distribution of {analytics.basicInfo.name}'s emotions across all recorded check-ins.
+                        Regular emotional check-ins help identify patterns and provide support when needed.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Mood History */}
+                {analytics.emotionalAnalytics.moodHistory?.length > 0 && (
+                  <div className="bg-white border rounded-lg p-4">
+                    <h3 className="font-medium mb-4">Recent Mood Check-ins</h3>
+                    <div className="divide-y">
+                      {analytics.emotionalAnalytics.moodHistory.map((checkIn, index) => (
+                        <div key={index} className="py-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-medium">{checkIn.emotion || checkIn.mood}</div>
+                              <div className="text-sm text-gray-500">
+                                {new Date(checkIn.date).toLocaleDateString()}
+                              </div>
+                            </div>
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: moodColors[(checkIn.emotion || checkIn.mood).toLowerCase()] || colors.gray }}
+                            ></div>
+                          </div>
+                          {checkIn.notes && (
+                            <div className="mt-2 text-sm text-gray-600">
+                              "{checkIn.notes}"
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Recommendations */}
+                {analytics.emotionalAnalytics.recommendations?.length > 0 && (
+                  <div className="bg-white border rounded-lg p-4">
+                    <h3 className="font-medium mb-4">Emotional Support Suggestions</h3>
+                    <div className="space-y-2">
+                      {analytics.emotionalAnalytics.recommendations.map((rec, index) => (
+                        <div 
+                          key={index} 
+                          className={`p-3 rounded-lg ${
+                            rec.priority === 'high' ? 'bg-red-50' :
+                            rec.priority === 'medium' ? 'bg-yellow-50' :
+                            'bg-green-50'
+                          }`}
+                        >
+                          <div className="flex">
+                            <AlertCircle 
+                              size={18} 
+                              className={`mr-2 flex-shrink-0 ${
+                                rec.priority === 'high' ? 'text-red-500' :
+                                rec.priority === 'medium' ? 'text-yellow-500' :
+                                'text-green-500'
+                              }`} 
+                            />
+                            <p className="text-sm">{rec.message}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-white border rounded-lg p-4 text-center py-8">
+                <Heart size={48} className="mx-auto text-gray-300 mb-4" />
+                <h3 className="text-xl font-medium text-gray-400 mb-2">No Emotional Data Yet</h3>
+                <p className="text-gray-500 mb-4">
+                  Regular emotional check-ins can help track {analytics.basicInfo.name}'s well-being over time.
+                </p>
+                <button className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
+                  Add First Check-in
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {activeTab === 'academic' && (
+          <div>
+            <h2 className="text-lg font-semibold mb-4">Academic Progress</h2>
+            
+            {(analytics.academicAnalytics.currentAssignments?.length > 0 || 
+              analytics.academicAnalytics.completedAssignments?.length > 0 ||
+              analytics.academicAnalytics.subjects?.length > 0) ? (
+              <div className="space-y-6">
+                {/* Academic Summary */}
+                <div className="bg-white border rounded-lg p-4">
+                  <h3 className="font-medium mb-4">Academic Summary</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <div className="text-blue-700 font-medium mb-1">Subjects</div>
+                      <div className="text-2xl font-semibold">
+                        {analytics.academicAnalytics.subjects?.length || 0}
+                      </div>
+                      {analytics.academicAnalytics.subjects?.length > 0 && (
+                        <div className="text-sm text-blue-500 mt-1">
+                          {analytics.academicAnalytics.subjects.map(s => s.name).slice(0, 3).join(', ')}
+                          {analytics.academicAnalytics.subjects.length > 3 ? '...' : ''}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="bg-green-50 p-3 rounded-lg">
+                      <div className="text-green-700 font-medium mb-1">Completed</div>
+                      <div className="text-2xl font-semibold">
+                        {analytics.academicAnalytics.completedAssignments?.length || 0}
+                      </div>
+                      {analytics.academicAnalytics.completedAssignments?.length > 0 && (
+                        <div className="text-sm text-green-500 mt-1">
+                          Latest: {new Date(
+                            analytics.academicAnalytics.completedAssignments[0].dueDate || 
+                            analytics.academicAnalytics.completedAssignments[0].date
+                          ).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="bg-yellow-50 p-3 rounded-lg">
+                      <div className="text-yellow-700 font-medium mb-1">Current Assignments</div>
+                      <div className="text-2xl font-semibold">
+                        {analytics.academicAnalytics.currentAssignments?.length || 0}
+                      </div>
+                      {analytics.academicAnalytics.currentAssignments?.length > 0 && (
+                        <div className="text-sm text-yellow-500 mt-1">
+                          Upcoming: {analytics.academicAnalytics.recommendations.filter(r => r.type === 'upcoming_deadline').length} due soon
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Subject Performance */}
+                {analytics.academicAnalytics.subjects?.length > 0 && (
+                  <div className="bg-white border rounded-lg p-4">
+                    <h3 className="font-medium mb-4">Subject Breakdown</h3>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={analytics.academicAnalytics.subjects}
+                          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Bar name="Completed" dataKey="completed" fill={colors.success} />
+                          <Bar name="Pending" dataKey="upcoming" fill={colors.warning} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    
+                    <div className="mt-4 bg-gray-50 p-3 rounded-lg text-sm">
+                      <p>
+                        This chart shows the breakdown of {analytics.basicInfo.name}'s assignments by subject,
+                        including both completed and pending assignments.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Current Assignments */}
+                {analytics.academicAnalytics.currentAssignments?.length > 0 && (
+                  <div className="bg-white border rounded-lg p-4">
+                    <h3 className="font-medium mb-4">Current Assignments</h3>
+                    <div className="divide-y">
+                      {analytics.academicAnalytics.currentAssignments.map((assignment, index) => {
+                        const dueDate = new Date(assignment.dueDate || assignment.date);
+                        const daysUntilDue = Math.floor((dueDate - new Date()) / (1000 * 60 * 60 * 24));
+                        const isDueSoon = daysUntilDue <= 3;
+                        
+                        return (
+                          <div key={index} className="py-3">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <div className="font-medium">{assignment.title || assignment.name || 'Assignment'}</div>
+                                <div className="text-sm text-gray-500">
+                                  Due: {dueDate.toLocaleDateString()}
+                                </div>
+                                {assignment.subject && (
+                                  <div className="text-sm text-gray-500 mt-1">
+                                    Subject: {assignment.subject}
+                                  </div>
+                                )}
+                              </div>
+                              <div className={`px-2 py-1 rounded text-xs ${
+                                isDueSoon ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'
+                              }`}>
+                                {isDueSoon ? `Due in ${daysUntilDue} day${daysUntilDue !== 1 ? 's' : ''}` : 'Upcoming'}
+                              </div>
+                            </div>
+                            {assignment.description && (
+                              <div className="mt-2 text-sm text-gray-600">
+                                {assignment.description}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Recommendations */}
+                {analytics.academicAnalytics.recommendations?.length > 0 && (
+                  <div className="bg-white border rounded-lg p-4">
+                    <h3 className="font-medium mb-4">Academic Recommendations</h3>
+                    <div className="space-y-2">
+                      {analytics.academicAnalytics.recommendations.map((rec, index) => (
+                        <div 
+                          key={index} 
+                          className={`p-3 rounded-lg ${
+                            rec.priority === 'high' ? 'bg-red-50' :
+                            rec.priority === 'medium' ? 'bg-yellow-50' :
+                            'bg-green-50'
+                          }`}
+                        >
+                          <div className="flex">
+                            <AlertCircle 
+                              size={18} 
+                              className={`mr-2 flex-shrink-0 ${
+                                rec.priority === 'high' ? 'text-red-500' :
+                                rec.priority === 'medium' ? 'text-yellow-500' :
+                                'text-green-500'
+                              }`} 
+                            />
+                            <p className="text-sm">{rec.message}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-white border rounded-lg p-4 text-center py-8">
+                <Book size={48} className="mx-auto text-gray-300 mb-4" />
+                <h3 className="text-xl font-medium text-gray-400 mb-2">No Academic Data Yet</h3>
+                <p className="text-gray-500 mb-4">
+                  Start tracking {analytics.basicInfo.name}'s homework and academic progress to see insights.
+                </p>
+                <button className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
+                  Add First Assignment
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {activeTab === 'activities' && (
+          <div>
+            <h2 className="text-lg font-semibold mb-4">Activities & Extracurriculars</h2>
+            
+            {analytics.activityAnalytics.upcomingActivities?.length > 0 || 
+             analytics.activityAnalytics.activityCategories?.length > 0 ? (
+              <div className="space-y-6">
+                {/* Activities Summary */}
+                <div className="bg-white border rounded-lg p-4">
+                  <h3 className="font-medium mb-4">Activities Summary</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-purple-50 p-3 rounded-lg">
+                      <div className="text-purple-700 font-medium mb-1">Activity Categories</div>
+                      <div className="text-2xl font-semibold">
+                        {analytics.activityAnalytics.activityCategories?.length || 0}
+                      </div>
+                      {analytics.activityAnalytics.activityCategories?.length > 0 && (
+                        <div className="text-sm text-purple-500 mt-1">
+                          {analytics.activityAnalytics.activityCategories.map(c => c.name).slice(0, 3).join(', ')}
+                          {analytics.activityAnalytics.activityCategories.length > 3 ? '...' : ''}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="bg-indigo-50 p-3 rounded-lg">
+                      <div className="text-indigo-700 font-medium mb-1">Upcoming Activities</div>
+                      <div className="text-2xl font-semibold">
+                        {analytics.activityAnalytics.upcomingActivities?.length || 0}
+                      </div>
+                      {analytics.activityAnalytics.upcomingActivities?.length > 0 && (
+                        <div className="text-sm text-indigo-500 mt-1">
+                          Next: {new Date(
+                            analytics.activityAnalytics.upcomingActivities[0].date || 
+                            analytics.activityAnalytics.upcomingActivities[0].dateTime
+                          ).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Activity Categories */}
+                {analytics.activityAnalytics.activityCategories?.length > 0 && (
+                  <div className="bg-white border rounded-lg p-4">
+                    <h3 className="font-medium mb-4">Activity Categories</h3>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={analytics.activityAnalytics.activityCategories}
+                            dataKey="count"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={80}
+                            label={({ name, count, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                          >
+                            {analytics.activityAnalytics.activityCategories.map((entry, index) => (
+                              <Cell 
+                                key={`cell-${index}`} 
+                                fill={Object.values(colors)[index % Object.values(colors).length]} 
+                              />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value, name, props) => [value, props.payload.name]} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    
+                    <div className="mt-4 bg-gray-50 p-3 rounded-lg text-sm">
+                      <p>
+                        This chart shows the distribution of {analytics.basicInfo.name}'s activities by category.
+                        A well-rounded mix of different activity types helps develop various skills and interests.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Upcoming Activities */}
+                {analytics.activityAnalytics.upcomingActivities?.length > 0 && (
+                  <div className="bg-white border rounded-lg p-4">
+                    <h3 className="font-medium mb-4">Upcoming Activities</h3>
+                    <div className="divide-y">
+                      {analytics.activityAnalytics.upcomingActivities.map((activity, index) => {
+                        const activityDate = new Date(activity.date || activity.dateTime);
+                        
+                        return (
+                          <div key={index} className="py-3">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <div className="font-medium">{activity.title || activity.activityName || activity.type || 'Activity'}</div>
+                                <div className="text-sm text-gray-500">
+                                  {activityDate.toLocaleDateString()} at {activityDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                                {activity.location && (
+                                  <div className="text-sm text-gray-500 mt-1">
+                                    Location: {activity.location}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="bg-indigo-50 px-2 py-1 rounded text-xs text-indigo-700">
+                                {activity.activityType || activity.type || 'Activity'}
+                              </div>
+                            </div>
+                            {activity.description && (
+                              <div className="mt-2 text-sm text-gray-600">
+                                {activity.description}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Recommendations */}
+                {analytics.activityAnalytics.recommendations?.length > 0 && (
+                  <div className="bg-white border rounded-lg p-4">
+                    <h3 className="font-medium mb-4">Activity Recommendations</h3>
+                    <div className="space-y-2">
+                      {analytics.activityAnalytics.recommendations.map((rec, index) => (
+                        <div 
+                          key={index} 
+                          className={`p-3 rounded-lg ${
+                            rec.priority === 'high' ? 'bg-red-50' :
+                            rec.priority === 'medium' ? 'bg-yellow-50' :
+                            'bg-green-50'
+                          }`}
+                        >
+                          <div className="flex">
+                            <AlertCircle 
+                              size={18} 
+                              className={`mr-2 flex-shrink-0 ${
+                                rec.priority === 'high' ? 'text-red-500' :
+                                rec.priority === 'medium' ? 'text-yellow-500' :
+                                'text-green-500'
+                              }`} 
+                            />
+                            <p className="text-sm">{rec.message}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-white border rounded-lg p-4 text-center py-8">
+                <Activity size={48} className="mx-auto text-gray-300 mb-4" />
+                <h3 className="text-xl font-medium text-gray-400 mb-2">No Activity Data Yet</h3>
+                <p className="text-gray-500 mb-4">
+                  Start tracking {analytics.basicInfo.name}'s activities and extracurriculars to see insights.
+                </p>
+                <button className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
+                  Add First Activity
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ChildInsightDashboard;
