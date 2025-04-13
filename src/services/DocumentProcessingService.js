@@ -1,6 +1,6 @@
 // src/services/DocumentProcessingService.js
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, query, where, getDocs, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, doc, updateDoc, serverTimestamp, orderBy } from 'firebase/firestore';
 import { db, storage } from './firebase';
 
 class DocumentProcessingService {
