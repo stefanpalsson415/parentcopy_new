@@ -4273,6 +4273,64 @@ const handleProviderDelete = async (providerId) => {
                                                     </DragDropContext>
                                                   </>
                                                 )}
+                                                  {/* Document Library Section */}
+  <div className="border border-gray-200 rounded-lg bg-white">
+    <button
+      onClick={() => toggleSection('documents')}
+      className="w-full flex items-center justify-between p-3 font-medium font-roboto"
+    >
+      <div className="flex items-center">
+        <FileText size={18} className="mr-2 text-orange-500" />
+        Family Document Library
+      </div>
+      {expandedSections.documents ? (
+        <ChevronUp size={18} className="text-gray-500" />
+      ) : (
+        <ChevronDown size={18} className="text-gray-500" />
+      )}
+    </button>
+    
+    {expandedSections.documents && (
+      <div className="p-4 border-t border-gray-200">
+        <DocumentLibrary 
+          initialChildId={activeChild} 
+          onClose={() => setExpandedSections(prev => ({...prev, documents: false}))}
+        />
+      </div>
+    )}
+  </div>
+
+  {/* Provider Directory Section */}
+  <div className="border border-gray-200 rounded-lg bg-white">
+    <button
+      onClick={() => toggleSection('providers')}
+      className="w-full flex items-center justify-between p-3 font-medium font-roboto"
+    >
+      <div className="flex items-center">
+        <User size={18} className="mr-2 text-purple-500" />
+        Family Provider Directory
+      </div>
+      {expandedSections.providers ? (
+        <ChevronUp size={18} className="text-gray-500" />
+      ) : (
+        <ChevronDown size={18} className="text-gray-500" />
+      )}
+    </button>
+    
+    {expandedSections.providers && (
+      <div className="p-4 border-t border-gray-200">
+        <ProviderDirectory 
+          familyId={familyId}
+          providers={healthcareProviders}
+          loadingProviders={loadingProviders}
+          onAddProvider={(providerData) => handleProviderSubmit(providerData)}
+          onUpdateProvider={(providerData) => handleProviderSubmit(providerData)}
+          onDeleteProvider={(providerId) => handleProviderDelete(providerId)}
+        />
+      </div>
+    )}
+  </div>
+
                                               </div>
                                             )}
                                           </div>
@@ -4454,62 +4512,6 @@ const handleProviderDelete = async (providerId) => {
                                                   {loadingSection === 'provider' ? 'Saving...' : 'Save'}
                                                 </button>
                                               </div>
-                                              {/* Document Library Section */}
-<div className="border border-gray-200 rounded-lg bg-white mt-8">
-  <button
-    onClick={() => setExpandedSections(prev => ({...prev, documents: !prev.documents}))}
-    className="w-full flex items-center justify-between p-3 font-medium font-roboto"
-  >
-    <div className="flex items-center">
-      <FileText size={18} className="mr-2 text-orange-500" />
-      Family Document Library
-    </div>
-    {expandedSections.documents ? (
-      <ChevronUp size={18} className="text-gray-500" />
-    ) : (
-      <ChevronDown size={18} className="text-gray-500" />
-    )}
-  </button>
-  
-  {expandedSections.documents && (
-    <div className="p-4 border-t border-gray-200">
-      <DocumentLibrary 
-        initialChildId={activeChild} 
-        onClose={() => setExpandedSections(prev => ({...prev, documents: false}))}
-      />
-    </div>
-  )}
-</div>
-{/* Provider Directory Section */}
-<div className="border border-gray-200 rounded-lg bg-white mt-8">
-  <button
-    onClick={() => setExpandedSections(prev => ({...prev, providers: !prev.providers}))}
-    className="w-full flex items-center justify-between p-3 font-medium font-roboto"
-  >
-    <div className="flex items-center">
-      <User size={18} className="mr-2 text-purple-500" />
-      Family Provider Directory
-    </div>
-    {expandedSections.providers ? (
-      <ChevronUp size={18} className="text-gray-500" />
-    ) : (
-      <ChevronDown size={18} className="text-gray-500" />
-    )}
-  </button>
-  
-  {expandedSections.providers && (
-    <div className="p-4 border-t border-gray-200">
-      <ProviderDirectory 
-        familyId={familyId}
-        providers={healthcareProviders}
-        loadingProviders={loadingProviders}
-        onAddProvider={(providerData) => handleProviderSubmit(providerData)}
-        onUpdateProvider={(providerData) => handleProviderSubmit(providerData)}
-        onDeleteProvider={(providerId) => handleProviderDelete(providerId)}
-      />
-    </div>
-  )}
-</div>
                                             </div>
                                           </div>
                                         )}

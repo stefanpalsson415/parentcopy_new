@@ -2,6 +2,7 @@
 // Consolidated AI service combining EnhancedAIService and AllieAIEngineService
 
 import ClaudeService from './ClaudeService';
+import ProviderService from './ProviderService';
 import CalendarService from './CalendarService';
 import { db } from './firebase';
 import { 
@@ -216,35 +217,42 @@ class AllieAIService {
 // Add to src/services/AllieAIService.js
 // New method to handle medical appointments from chat
 // Handle adding a healthcare provider from chat
+// Update in src/services/AllieAIService.js
+// Replace the existing processProviderFromChat method:
+
 async processProviderFromChat(message, familyId) {
   try {
     if (!familyId) return { success: false, error: "Family ID is required" };
     
+    // Import ProviderService dynamically
+    const ProviderService = (await import('./ProviderService')).default;
+    
     // Extract provider details from message
-    const providerDetails = await this.extractProviderDetails(message);
+    const providerDetails = ProviderService.extractProviderInfo(message);
     
-    // Create provider in the database
-    const providerId = await this.createOrFindProvider(
-      familyId, 
-      providerDetails.name,
-      providerDetails.specialty,
-      providerDetails.email,
-      providerDetails.phone,
-      providerDetails.address,
-      providerDetails.notes
-    );
+    // Make sure we have a name
+    if (!providerDetails.name) {
+      return { 
+        success: false, 
+        error: "Could not determine the provider's name from your message" 
+      };
+    }
     
-    if (providerId) {
+    // Save provider to database
+    const result = await ProviderService.saveProvider(familyId, providerDetails);
+    
+    if (result.success) {
       return { 
         success: true, 
-        providerId: providerId,
+        providerId: result.providerId,
         providerDetails: providerDetails,
-        message: `Successfully added Dr. ${providerDetails.name} to your healthcare providers.`
+        isNew: result.isNew,
+        message: `Successfully added ${providerDetails.specialty || ''} ${providerDetails.name} to your healthcare providers.`
       };
     } else {
       return { 
         success: false, 
-        error: "Failed to create healthcare provider" 
+        error: result.error || "Failed to create healthcare provider" 
       };
     }
   } catch (error) {

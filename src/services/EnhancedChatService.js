@@ -4,6 +4,8 @@ import ClaudeService from './ClaudeService';
 import EnhancedNLU from './EnhancedNLU';
 import CalendarService from './CalendarService';
 import { knowledgeBase } from '../data/AllieKnowledgeBase';
+import ProviderService from './ProviderService';
+
 import { 
   collection, 
   query, 
