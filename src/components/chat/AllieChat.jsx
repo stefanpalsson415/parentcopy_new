@@ -14,6 +14,9 @@ import { useLocation } from 'react-router-dom';
 import CalendarService from '../../services/CalendarService';
 import EventParserService from '../../services/EventParserService';
 import { EventParser } from '../calendar';
+import DocumentProcessingService from '../../services/DocumentProcessingService';
+import DocumentCategoryService from '../../services/DocumentCategoryService';
+import DocumentOCRService from '../../services/DocumentOCRService';
 
 
 const AllieChat = () => {
@@ -926,7 +929,9 @@ const detectDocumentType = async (file) => {
 
 
 
-// Process dropped document based on type
+// Updated code for AllieChat.jsx - document processing related functions
+
+// Replace the existing handleDocumentProcess function with this improved version:
 const handleDocumentProcess = async (file, detectedType) => {
   setLoading(true);
   
@@ -942,114 +947,91 @@ const handleDocumentProcess = async (file, detectedType) => {
     
     setMessages(prev => [...prev, processingMessage]);
     
-    // First try to determine if it's a medical document
-    const isMedicalDocument = detectedType.possibleTypes.includes('medical') && 
-      (file.name.toLowerCase().includes('medical') || 
-       file.name.toLowerCase().includes('health') ||
-       file.name.toLowerCase().includes('doctor') || 
-       file.name.toLowerCase().includes('exam') ||
-       file.name.toLowerCase().includes('record'));
+    // Use the new DocumentProcessingService to process the document
+    const result = await DocumentProcessingService.processDocument(file, familyId, selectedUser.id);
     
-    // Check if it's a school document
-    const isSchoolDocument = detectedType.possibleTypes.includes('school') &&
-      (file.name.toLowerCase().includes('school') || 
-       file.name.toLowerCase().includes('homework') ||
-       file.name.toLowerCase().includes('assignment') || 
-       file.name.toLowerCase().includes('report card'));
-    
-    // If it's a medical document, offer to save it to a child's medical records
-    if (isMedicalDocument) {
-      const children = familyMembers.filter(m => m.role === 'child');
-      
-      // Response with options for the user
-      let responseText = "This looks like a medical document. Would you like me to:";
-      
-      if (children.length === 1) {
-        responseText += `\n1. Add it to ${children[0].name}'s medical records`;
-      } else if (children.length > 1) {
-        responseText += "\n1. Add it to a child's medical records";
-      }
-      
-      responseText += "\n2. Save it to your document library";
-      responseText += "\n3. Check if it contains event information";
-      
-      const responseMessage = {
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: responseText,
-        timestamp: new Date().toISOString(),
-        documentFile: file,
-        documentType: 'medical'
-      };
-      
-      setMessages(prev => [...prev, responseMessage]);
-      return;
+    if (!result.success) {
+      throw new Error(result.error || "Error processing document");
     }
     
-    // If it's a school document, offer to save it to a child's school records
-    if (isSchoolDocument) {
-      const children = familyMembers.filter(m => m.role === 'child');
-      
-      // Response with options for the user
-      let responseText = "This looks like a school document. Would you like me to:";
-      
-      if (children.length === 1) {
-        responseText += `\n1. Add it to ${children[0].name}'s school records`;
-      } else if (children.length > 1) {
-        responseText += "\n1. Add it to a child's school records";
-      }
-      
-      responseText += "\n2. Save it to your document library";
-      responseText += "\n3. Check if it contains event information";
-      
-      const responseMessage = {
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: responseText,
-        timestamp: new Date().toISOString(),
-        documentFile: file,
-        documentType: 'school'
-      };
-      
-      setMessages(prev => [...prev, responseMessage]);
-      return;
-    }
+    const document = result.documentData;
     
-    // If it's an image, try to detect if it's an event
-    if (detectedType.primaryType === 'image' && detectedType.possibleTypes.includes('event')) {
-      // First try to process as an event
-      const isEvent = await handleImageProcessForEvent(file);
-      
-      // If not an event, offer document library
-      if (!isEvent) {
-        const responseMessage = {
-          familyId,
-          sender: 'allie',
-          userName: 'Allie',
-          text: `I couldn't identify this as an event invitation. Would you like me to add it to your document library instead?`,
-          timestamp: new Date().toISOString(),
-          documentFile: file
-        };
+    // Determine response based on document category
+    let responseText = "";
+    
+    switch (document.category) {
+      case 'medical':
+        const children = familyMembers.filter(m => m.role === 'child');
         
-        setMessages(prev => [...prev, responseMessage]);
-      }
-      return;
+        responseText = "I processed your medical document. Would you like me to:";
+        
+        if (children.length === 1) {
+          responseText += `\n1. Add it to ${children[0].name}'s medical records`;
+        } else if (children.length > 1) {
+          responseText += "\n1. Add it to a child's medical records";
+        }
+        
+        responseText += "\n2. Save it to your document library";
+        responseText += "\n3. Check if it contains appointment information";
+        break;
+        
+      case 'school':
+        responseText = "I analyzed this school document. Would you like me to:";
+        responseText += "\n1. Add it to a child's school records";
+        responseText += "\n2. Extract homework or assignment details";
+        responseText += "\n3. Save it to your document library";
+        break;
+        
+      case 'event':
+        responseText = "This looks like an event or invitation! I've extracted the following details:";
+        
+        if (document.entities && document.entities.dates && document.entities.dates.length > 0) {
+          responseText += `\nDate: ${document.entities.dates[0]}`;
+        }
+        
+        if (document.entities && document.entities.addresses && document.entities.addresses.length > 0) {
+          responseText += `\nLocation: ${document.entities.addresses[0]}`;
+        }
+        
+        responseText += "\n\nWould you like me to add this to your calendar?";
+        
+        // Try to extract calendar event
+        const eventDetails = await EventParserService.parseEventFromDocument(document);
+        if (eventDetails) {
+          setParsedEventDetails(eventDetails);
+          setShowEventParser(true);
+          setEventParsingSource('document');
+        }
+        break;
+        
+      default:
+        responseText = `I've processed your ${document.category} document and saved it to your library. You can view and manage it in the Document Library section.`;
+        
+        // Include extracted details if available
+        if (document.entities) {
+          const entityCounts = Object.entries(document.entities)
+            .filter(([_, values]) => values && values.length > 0)
+            .map(([type, values]) => `${type}: ${values.length}`);
+            
+          if (entityCounts.length > 0) {
+            responseText += `\n\nI extracted the following information: ${entityCounts.join(', ')}.`;
+          }
+        }
     }
     
-    // For other document types, offer general options
+    // Add response message
     const responseMessage = {
       familyId,
       sender: 'allie',
       userName: 'Allie',
-      text: `I've received your ${detectedType.primaryType} file. Would you like me to:\n1. Save it to your document library\n2. Check if it contains event information\n3. Connect it to a family member's profile`,
+      text: responseText,
       timestamp: new Date().toISOString(),
-      documentFile: file
+      documentId: document.id,
+      documentData: document
     };
     
     setMessages(prev => [...prev, responseMessage]);
-    
+    return;
   } catch (error) {
     console.error("Error processing document:", error);
     
@@ -1058,7 +1040,7 @@ const handleDocumentProcess = async (file, detectedType) => {
       familyId,
       sender: 'allie',
       userName: 'Allie',
-      text: `I had trouble processing your document. You can try uploading it directly to the Document Library for safekeeping.`,
+      text: `I had trouble processing your document: ${error.message}. Please try uploading it directly to the Document Library.`,
       timestamp: new Date().toISOString()
     };
     
@@ -1067,6 +1049,84 @@ const handleDocumentProcess = async (file, detectedType) => {
     setLoading(false);
   }
 };
+
+// Replace the existing detectDocumentType function
+const detectDocumentType = async (file) => {
+  try {
+    // Use the document type detection from the DocumentProcessingService
+    const validationResult = DocumentProcessingService.validateDocument(file);
+    if (!validationResult.valid) {
+      return {
+        primaryType: 'unsupported',
+        possibleTypes: ['general'],
+        error: validationResult.error
+      };
+    }
+    
+    // Determine main type based on file type
+    const fileType = file.type.toLowerCase();
+    
+    // Image types - could be events, medical records, school flyers, etc.
+    if (fileType.startsWith('image/')) {
+      return {
+        primaryType: 'image',
+        possibleTypes: ['event', 'medical', 'school', 'general']
+      };
+    }
+    
+    // PDF documents
+    if (fileType === 'application/pdf') {
+      return {
+        primaryType: 'document',
+        possibleTypes: ['medical', 'school', 'event', 'general']
+      };
+    }
+    
+    // Word documents
+    if (fileType.includes('word') || 
+        fileType.includes('document') || 
+        fileType.includes('msword') || 
+        fileType.includes('officedocument')) {
+      return {
+        primaryType: 'document',
+        possibleTypes: ['medical', 'school', 'general']
+      };
+    }
+    
+    // Text files
+    if (fileType.includes('text') || fileType === 'text/plain') {
+      return {
+        primaryType: 'text',
+        possibleTypes: ['note', 'general']
+      };
+    }
+    
+    // CSV or Excel files
+    if (fileType.includes('csv') || 
+        fileType.includes('excel') || 
+        fileType.includes('spreadsheet')) {
+      return {
+        primaryType: 'spreadsheet',
+        possibleTypes: ['growth', 'schedule', 'general']
+      };
+    }
+    
+    // Default for unknown types
+    return {
+      primaryType: 'unknown',
+      possibleTypes: ['general']
+    };
+  } catch (error) {
+    console.error("Error detecting document type:", error);
+    return {
+      primaryType: 'unknown',
+      possibleTypes: ['general'],
+      error: error.message
+    };
+  }
+};
+
+
 
 // Handle user selection for document actions
 const handleDocumentActionSelection = (text, messageWithDocument) => {
