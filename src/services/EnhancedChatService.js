@@ -5,6 +5,11 @@ import EnhancedNLU from './EnhancedNLU';
 import CalendarService from './CalendarService';
 import { knowledgeBase } from '../data/AllieKnowledgeBase';
 import ProviderService from './ProviderService';
+import AdvancedNLU from './AdvancedNLU';
+import ProviderChatService from './ProviderChatService';
+import MedicalChatService from './MedicalChatService';
+import TaskChatService from './TaskChatService';
+import RelationshipChatService from './RelationshipChatService';
 
 import { 
   collection, 
@@ -1388,325 +1393,110 @@ async handleSharedTodoRequest(text, familyContext, userId) {
 }
 
 
-  // Get AI response to a message with enhanced NLU
-  async getAIResponse(text, familyId, previousMessages) {
-    try {
-      // Log request with more details for debugging
-      console.log("Allie Chat request:", { 
-        text, 
-        familyId, 
-        previousMessagesCount: previousMessages?.length || 0
-      });
-      
-      // Better error handling for missing familyId
-      if (!familyId) {
-        console.warn("getAIResponse called without familyId");
-        return "I need access to your family data to provide personalized responses. Please ensure you're logged in correctly.";
-      }
-      
-      // Verify we have the minimally required data to proceed
-      if (!text || text.trim() === '') {
-        console.warn("Empty message text received");
-        return "I didn't receive any message to respond to. Please try again.";
-      }
-      
-
-
-// Add after initial checks in getAIResponse() function (around line 920)
-// Check for special admin commands
-if (text.startsWith("/admin") || text.startsWith("/debug")) {
-  if (text.includes("fix onboarding") || text.includes("complete setup")) {
-    const result = await this.forceCompleteOnboarding(familyId);
-    return result 
-      ? "✅ Onboarding status has been fixed. You should now have full access to all features. Please try your request again."
-      : "❌ Sorry, I wasn't able to fix the onboarding status. Please contact support for assistance.";
-  }
-  
-  if (text.includes("status") || text.includes("check")) {
-    const isOnboarding = await this.isInitialOnboardingPhase(familyId);
-    return `Diagnostic Info:\n- Family ID: ${familyId}\n- Onboarding Phase: ${isOnboarding ? "YES" : "NO"}\n- Current Timestamp: ${new Date().toISOString()}\n\nIf you're seeing incorrect onboarding status, type "/admin fix onboarding" to resolve it.`;
-  }
-  
-  return "Admin commands:\n- /admin fix onboarding: Fix stuck onboarding status\n- /admin status: Check system status";
-}
-
-// Modify the getAIResponse function in EnhancedChatService.js (around line 920)
-// Add this code after the initial checks and before calling the specialized handlers
-
-// Extract intent and entities from the message first
-const intent = this.nlu.detectIntent(text);
-const entities = this.nlu.extractEntities(text);
-
-console.log("Detected intent:", intent);
-console.log("Extracted entities:", entities);
-
-// Check if we're in the onboarding phase
-const isOnboarding = await this.isInitialOnboardingPhase(familyId);
-
-// If we're in onboarding, restrict to specific topics
-if (isOnboarding) {
-  // Allow only specific intents during onboarding
-  const allowedIntents = [
-    'general.greeting', 
-    'general.question', 
-    'technical.help',
-    'survey.result',
-    'survey.insight',
-    'creative.writing' // Allow fun/creative content like dad jokes
-  ];
-  
-  // Check if the intent is restricted
-  const isIntentRestricted = !allowedIntents.some(allowed => 
-    intent.startsWith(allowed.split('.')[0])
-  );
-  
-  // If the intent is outside allowed topics, redirect to onboarding-focused response
-  if (isIntentRestricted && 
-      !text.toLowerCase().includes('survey') && 
-      !text.toLowerCase().includes('allie') &&
-      !text.toLowerCase().includes('profile') &&
-      !text.toLowerCase().includes('help')) {
+async getAIResponse(message, familyId, messageHistory = []) {
+  try {
+    // Get family context
+    const familyContext = await this.getFamilyContext(familyId);
     
-    const onboardingResponse = `I'd love to help with that once your family completes the initial setup! For now, I can answer questions about:
-
-1. How Allie works and what I can do
-2. The initial survey and why it's important
-3. Setting up family profiles
-4. The different types of tasks we measure
-
-Would you like to know more about one of these topics?`;
+    // Analyze message with the new AdvancedNLU
+    const analysis = AdvancedNLU.analyzeMessage(message, familyContext.familyMembers);
     
-    return onboardingResponse;
+    // Check if this is a domain-specific request we can handle directly
+    if (analysis.intent === 'provider.add' && analysis.confidence > 0.6) {
+      // Provider creation request
+      const result = await ProviderChatService.processProviderRequest(message, analysis.entities, familyId);
+      if (result.success) {
+        return result.message;
+      }
+    } 
+    else if (analysis.intent === 'medical.appointment.add' && analysis.confidence > 0.6) {
+      // Medical appointment request
+      const result = await MedicalChatService.processAppointmentRequest(message, analysis.entities, {
+        ...familyContext,
+        currentUser: this.getCurrentUserFromHistory(messageHistory)
+      });
+      if (result.success) {
+        return result.message;
+      }
+    } 
+    else if (analysis.intent === 'task.add' && analysis.confidence > 0.6) {
+      // Task creation request
+      const result = await TaskChatService.processTaskRequest(message, analysis.entities, {
+        ...familyContext,
+        currentUser: this.getCurrentUserFromHistory(messageHistory)
+      });
+      if (result.success) {
+        return result.message;
+      }
+    } 
+    else if (analysis.intent === 'task.complete' && analysis.confidence > 0.6) {
+      // Task completion request
+      const result = await TaskChatService.processTaskCompletion(message, familyId);
+      if (result.success) {
+        return result.message;
+      }
+    } 
+    else if (analysis.intent === 'relationship.date' && analysis.confidence > 0.6) {
+      // Date night request
+      const result = await RelationshipChatService.processDateNightRequest(message, analysis.entities, {
+        ...familyContext,
+        currentUser: this.getCurrentUserFromHistory(messageHistory)
+      });
+      if (result.success) {
+        return result.message;
+      }
+    } 
+    else if (analysis.intent === 'relationship.gratitude' && analysis.confidence > 0.6) {
+      // Gratitude message request
+      const result = await RelationshipChatService.processGratitudeRequest(message, {
+        ...familyContext,
+        currentUser: this.getCurrentUserFromHistory(messageHistory)
+      });
+      if (result.success) {
+        return result.message;
+      }
+    }
+    
+    // Check for FAQ response before falling back to Claude
+    const faqResponse = AdvancedNLU.getFAQResponse(message);
+    if (faqResponse) {
+      return faqResponse;
+    }
+    
+    // If not a specialized request, use Claude for general response
+    return await ClaudeService.generateResponse(
+      messageHistory, 
+      {
+        ...familyContext,
+        currentIntent: analysis.intent,
+        currentEntities: analysis.entities
+      }
+    );
+  } catch (error) {
+    console.error("Error getting AI response:", error);
+    return "I'm sorry, I encountered an issue processing your request. Please try again.";
   }
 }
-      // Add a start timestamp for performance tracking
-      const startTime = Date.now();
-      console.log(`Starting AI response generation at ${new Date().toISOString()}`);
-      
+
+// Add helper method to get current user from message history
+getCurrentUserFromHistory(messageHistory) {
+  if (!messageHistory || messageHistory.length === 0) {
+    return null;
+  }
   
-      
-      // Update conversation context
-      this.updateConversationContext(familyId, {
-        query: text,
-        intent,
-        entities
-      });
-      
-      // Get family data from Firestore for context
-      let familyData = {};
-      try {
-        familyData = await this.getFamilyContext(familyId);
-        
-        // Add conversation context to family data
-        familyData.conversationContext = this.conversationContext[familyId] || {};
-        
-        // Get current user ID from last message
-        let userId = null;
-        if (previousMessages && previousMessages.length > 0) {
-          const lastUserMsg = [...previousMessages].reverse().find(m => m.sender !== 'allie');
-          if (lastUserMsg) {
-            userId = lastUserMsg.sender;
-          }
-        }
-        
-        // Handle specialized requests with custom handlers
-
-// 1. Calendar requests
-const calendarResponse = await this.handleCalendarRequest(text, familyData, userId);
-if (calendarResponse) {
-  console.log("Handled as calendar request");
-  return calendarResponse;
-}
-
-// 2. Relationship events
-const relationshipResponse = await this.handleRelationshipRequest(text, familyData, userId);
-if (relationshipResponse) {
-  console.log("Handled as relationship request");
-  return relationshipResponse;
-}
-
-// 3. Child tracking requests
-const childTrackingResponse = await this.handleChildTrackingRequest(text, familyData);
-if (childTrackingResponse) {
-  console.log("Handled as child tracking request");
-  return childTrackingResponse;
-}
-
-// 4. Healthcare provider requests
-const providerResponse = await this.handleProviderRequest(text, familyData);
-if (providerResponse) {
-  console.log("Handled as healthcare provider request");
-  return providerResponse;
-}
-
-// 5. Task-related requests
-const taskResponse = await this.handleTaskRequest(text, familyData);
-if (taskResponse) {
-  console.log("Handled as task request");
-  return taskResponse;
-}
-
-// 6. Survey-based insights for direct questions
-const surveyResponse = await this.handleSurveyQuestion(text, familyData);
-if (surveyResponse) {
-  console.log("Handled as survey question");
-  return surveyResponse;
-}
-
-// 7. Shared todo list requests
-const sharedTodoResponse = await this.handleSharedTodoRequest(text, familyData, userId);
-if (sharedTodoResponse) {
-  console.log("Handled as shared todo request");
-  return sharedTodoResponse;
-}
-        
-        // Add knowledge base to context
-        familyData.knowledgeBase = knowledgeBase;
-        
-        // Format messages for Claude API
-        const formattedMessages = previousMessages
-          .slice(-15) // Last 15 messages for extended context
-          .map(msg => ({
-            role: msg.sender === 'allie' ? 'assistant' : 'user',
-            content: msg.text
-          }));
-        
-        // Add the current message with detected intent
-        formattedMessages.push({
-          role: 'user',
-          content: text
-        });
-        
-        // Add intent as metadata
-        familyData.currentIntent = intent;
-        familyData.currentEntities = entities;
-        
-        // Prepare system prompt customization based on intent
-        let temperatureAdjustment = 0;
-        let maxTokensAdjustment = 0;
-        
-        // Adjust parameters based on intent
-        switch (intent.split('.')[0]) {
-          case 'creative':
-          case 'relationship':
-            temperatureAdjustment = 0.2; // Slightly more creative
-            maxTokensAdjustment = 500; // Longer responses
-            break;
-          case 'technical':
-          case 'data':
-            temperatureAdjustment = -0.2; // More precise
-            break;
-          case 'emotional':
-            temperatureAdjustment = 0.1; // Slightly more empathetic
-            maxTokensAdjustment = 300; // Slightly longer for emotional support
-            break;
-        }
-        
-        console.log("Sending to Claude API via proxy:", {
-          messageCount: formattedMessages.length,
-          contextSize: JSON.stringify(familyData).length,
-          familyDataKeys: Object.keys(familyData),
-          temperature: 0.7 + temperatureAdjustment,
-          maxTokens: 4000 + maxTokensAdjustment
-        });
-        
-        // Call the Claude API through our service
-        let response;
-        try {
-          response = await ClaudeService.generateResponse(
-            formattedMessages, 
-            familyData,
-            {
-              temperature: 0.7 + temperatureAdjustment,
-              maxTokens: 4000 + maxTokensAdjustment
-            }
-          );
-          console.log("Claude API call succeeded with response length:", response?.length);
-          
-          // Record the clock time taken
-          const endTime = Date.now();
-          const duration = endTime - startTime;
-          console.log(`AI response generated in ${duration}ms`);
-          
-          // Track basic analytics
-          try {
-            await setDoc(doc(db, "analytics", `chat_${Date.now()}`), {
-              intent,
-              responseTime: duration,
-              familyId,
-              timestamp: serverTimestamp(),
-              messageLength: text.length,
-              responseLength: response?.length || 0
-            });
-          } catch (analyticsError) {
-            console.warn("Failed to record analytics:", analyticsError);
-            // Non-critical, continue anyway
-          }
-        } catch (apiError) {
-          console.error("Claude API error details:", apiError);
-          
-          // Try one more time with a simpler prompt if the error might be prompt-related
-          if (apiError.message?.includes('prompt') || apiError.message?.includes('token') || apiError.message?.includes('length')) {
-            try {
-              console.log("Retrying with simplified prompt...");
-              
-              // Simplify family data to reduce context size
-              const simplifiedContext = {
-                familyName: familyData.familyName,
-                familyMembers: familyData.familyMembers,
-                surveyData: {
-                  mamaPercentage: familyData.surveyData?.mamaPercentage
-                },
-                knowledgeBase: {
-                  faqs: familyData.knowledgeBase?.faqs
-                }
-              };
-              
-              response = await ClaudeService.generateResponse(
-                formattedMessages.slice(-5), // Only use last 5 messages
-                simplifiedContext
-              );
-              console.log("Retry succeeded with response length:", response?.length);
-            } catch (retryError) {
-              console.error("Retry also failed:", retryError);
-              
-              // Fall back to generated response
-              response = this.generateFallbackResponse(text, familyData, intent);
-              console.log("Using fallback response");
-            }
-          } else {
-            // Fall back to generated response
-            response = this.generateFallbackResponse(text, familyData, intent);
-            console.log("Using fallback response");
-          }
-        }
-        
-        // If we got a response, return it
-        if (response && response.length > 0) {
-          return response;
-        }
-        
-        // If we got here, something went wrong but didn't throw an error
-        return "I should be able to answer this with your family's data, but I'm having trouble processing it right now. Could you try asking in a different way?";
-      } catch (contextError) {
-        console.error("Error getting family context:", contextError);
-        return "I'm having trouble accessing your family data right now. Please try again in a moment.";
-      }
-    } catch (error) {
-      console.error("Error getting AI response:", error);
-      
-      // Provide more specific error message for common issues
-      if (error.message?.includes("timeout")) {
-        return "I'm taking longer than expected to process your question. This might be due to high demand. Please try again in a moment.";
-      }
-      
-      if (text.toLowerCase().includes("survey") || text.toLowerCase().includes("data")) {
-        return "I'd like to analyze your survey data, but I'm having trouble accessing it right now. Please try refreshing the page or asking again in a few moments.";
-      }
-      
-      return "I'm having trouble processing your question right now. While I'm reconnecting, you can explore the dashboard for insights or check your tasks in the Tasks tab.";
+  // Find the most recent user message
+  for (let i = messageHistory.length - 1; i >= 0; i--) {
+    const msg = messageHistory[i];
+    if (msg.sender !== 'allie') {
+      return {
+        id: msg.sender,
+        name: msg.userName
+      };
     }
   }
+  
+  return null;
+}
   
   // Generate a fallback response when AI fails
   generateFallbackResponse(text, familyData, intent) {
