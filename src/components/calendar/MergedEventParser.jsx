@@ -9,7 +9,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import EventParserService from '../../services/EventParserService';
 import CalendarService from '../../services/CalendarService';
 import UserAvatar from '../common/UserAvatar';
-import { useEffect, useState } from 'react';
 
 
 
