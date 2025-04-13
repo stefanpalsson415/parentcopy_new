@@ -29,6 +29,8 @@ import {
   DragDropContext, Droppable, Draggable 
 } from 'react-beautiful-dnd';
 import confetti from 'canvas-confetti';
+import ProviderDirectory from '../../document/ProviderDirectory';
+
 
 const ChildrenTrackingTab = () => {
   // Context hooks
@@ -57,7 +59,9 @@ const ChildrenTrackingTab = () => {
   const [expandedSections, setExpandedSections] = useState({
     medical: false,
     growth: false,
-    routines: false
+    routines: false,
+    documents: false,
+    providers: false
   });
 
   // Healthcare provider management 
@@ -1439,6 +1443,44 @@ const ChildrenTrackingTab = () => {
       console.error("Error deleting todo:", error);
     }
   };
+
+// Add this function to handle provider deletion
+const handleProviderDelete = async (providerId) => {
+  try {
+    if (!familyId) throw new Error("No family ID available");
+    
+    setLoadingSection("provider");
+    
+    // Delete provider from Firestore
+    const providerRef = doc(db, "healthcareProviders", providerId);
+    await deleteDoc(providerRef);
+    
+    // Update local state
+    const updatedProviders = healthcareProviders.filter(p => p.id !== providerId);
+    setHealthcareProviders(updatedProviders);
+    
+    setLoadingSection(null);
+    
+    setAllieMessage({
+      type: 'success',
+      text: 'Provider deleted successfully!'
+    });
+    
+    return true;
+  } catch (error) {
+    console.error("Error deleting provider:", error);
+    setLoadingSection(null);
+    
+    setAllieMessage({
+      type: 'error',
+      text: `Error deleting provider: ${error.message}`
+    });
+    
+    return false;
+  }
+};
+
+
 
   // Reassign todo to a different parent
   const reassignTodo = async (todoId, parentId) => {
@@ -3588,55 +3630,113 @@ const ChildrenTrackingTab = () => {
                                         )}
                                         
                                         {/* AI insights and alerts */}
-                                        {aiInsights.length > 0 && (
-                                          <div className="bg-blue-50 rounded-lg p-4 mb-6">
-                                            <div className="flex items-center justify-between mb-3">
-                                              <h3 className="text-lg font-medium font-roboto text-blue-800 flex items-center">
-                                                <Brain size={20} className="mr-2 text-blue-500" />
-                                                Allie AI Insights
-                                              </h3>
-                                            </div>
-                                            
-                                            <div className="space-y-2">
-                                              {aiInsights.slice(0, 3).map((insight, index) => (
-                                                <div key={index} className="bg-white p-3 rounded-md shadow-sm">
-                                                  <div className="flex items-start">
-                                                    <div className={`p-2 rounded-full flex-shrink-0 mr-3 ${
-                                                      insight.priority === 'high' 
-                                                        ? 'bg-red-100 text-red-600' 
-                                                        : insight.priority === 'medium'
-                                                        ? 'bg-amber-100 text-amber-600'
-                                                        : 'bg-blue-100 text-blue-600'
-                                                    }`}>
-                                                      {insight.type === 'medical' ? (
-                                                        <Heart size={16} />
-                                                      ) : insight.type === 'growth' ? (
-                                                        <Activity size={16} />
-                                                      ) : insight.type === 'recommendation' ? (
-                                                        <Info size={16} />
-                                                      ) : insight.type === 'clothes' ? (
-                                                        <Tag size={16} />
-                                                      ) : (
-                                                        <Star size={16} />
-                                                      )}
-                                                    </div>
-                                                    <div>
-                                                      <h4 className="font-medium text-sm font-roboto">
-                                                        {insight.title}
-                                                        {insight.childId && (
-                                                          <span className="font-normal text-gray-500 ml-1">
-                                                            ({getChildName(insight.childId)})
-                                                          </span>
-                                                        )}
-                                                      </h4>
-                                                      <p className="text-sm text-gray-700 font-roboto mt-1">{insight.content}</p>
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        )}
+{aiInsights.length > 0 && (
+  <div className="bg-blue-50 rounded-lg p-4 mb-6">
+    <div className="flex items-center justify-between mb-3">
+      <h3 className="text-lg font-medium font-roboto text-blue-800 flex items-center">
+        <Brain size={20} className="mr-2 text-blue-500" />
+        Allie AI Insights
+      </h3>
+      <button 
+        onClick={async () => {
+          try {
+            setLoadingSection("insights");
+            await generateAiInsights(childrenData);
+            setLoadingSection(null);
+            setAllieMessage({
+              type: 'success',
+              text: 'AI insights refreshed successfully!'
+            });
+          } catch (error) {
+            console.error("Error refreshing insights:", error);
+            setLoadingSection(null);
+            setAllieMessage({
+              type: 'error',
+              text: 'Error refreshing insights. Please try again.'
+            });
+          }
+        }}
+        className={`p-2 rounded hover:bg-blue-100 ${loadingSection === "insights" ? "animate-spin" : ""}`}
+        disabled={loadingSection === "insights"}
+        title="Refresh insights"
+      >
+        <RefreshCw size={18} className="text-blue-600" />
+      </button>
+    </div>
+    
+    <div className="space-y-2">
+      {aiInsights.slice(0, 3).map((insight, index) => (
+        <button 
+          key={index} 
+          className="bg-white p-3 rounded-md shadow-sm w-full text-left hover:bg-blue-50 transition-colors"
+          onClick={() => {
+            // Navigate to relevant section based on insight type
+            if (insight.type === 'medical') {
+              setExpandedSections(prev => ({...prev, medical: true}));
+              if (insight.childId) setActiveChild(insight.childId);
+              const section = document.querySelector('#medical-section');
+              if (section) section.scrollIntoView({ behavior: 'smooth' });
+            } 
+            else if (insight.type === 'growth') {
+              setExpandedSections(prev => ({...prev, growth: true}));
+              if (insight.childId) setActiveChild(insight.childId);
+              const section = document.querySelector('#growth-section');
+              if (section) section.scrollIntoView({ behavior: 'smooth' });
+            }
+            else if (insight.type === 'clothes') {
+              setExpandedSections(prev => ({...prev, growth: true}));
+              if (insight.childId) setActiveChild(insight.childId);
+              const section = document.querySelector('#growth-section');
+              if (section) section.scrollIntoView({ behavior: 'smooth' });
+            }
+            else if (insight.type === 'routine') {
+              setExpandedSections(prev => ({...prev, routines: true}));
+              if (insight.childId) setActiveChild(insight.childId);
+              const section = document.querySelector('#routines-section');
+              if (section) section.scrollIntoView({ behavior: 'smooth' });
+            }
+          }}
+        >
+          <div className="flex items-start">
+            <div className={`p-2 rounded-full flex-shrink-0 mr-3 ${
+              insight.priority === 'high' 
+                ? 'bg-red-100 text-red-600' 
+                : insight.priority === 'medium'
+                ? 'bg-amber-100 text-amber-600'
+                : 'bg-blue-100 text-blue-600'
+            }`}>
+              {insight.type === 'medical' ? (
+                <Heart size={16} />
+              ) : insight.type === 'growth' ? (
+                <Activity size={16} />
+              ) : insight.type === 'recommendation' ? (
+                <Info size={16} />
+              ) : insight.type === 'clothes' ? (
+                <Tag size={16} />
+              ) : (
+                <Star size={16} />
+              )}
+            </div>
+            <div className="flex-grow">
+              <h4 className="font-medium text-sm font-roboto flex items-center">
+                {insight.title}
+                {insight.childId && (
+                  <div className="ml-2">
+                    <UserAvatar 
+                      user={familyMembers.find(m => m.id === insight.childId)} 
+                      size={20} 
+                    />
+                  </div>
+                )}
+              </h4>
+              <p className="text-sm text-gray-700 font-roboto mt-1">{insight.content}</p>
+            </div>
+          </div>
+        </button>
+      ))}
+    </div>
+  </div>
+)}
                                         
                                         {/* Error message */}
                                         {tabError && (
@@ -3653,30 +3753,61 @@ const ChildrenTrackingTab = () => {
                                         <div className="bg-white rounded-lg p-4 shadow-sm mb-6">
                                           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
                                             <div className="mb-4 sm:mb-0">
-                                              <h2 className="text-xl font-bold font-roboto mb-1">Children Tracking</h2>
+                                              <h2 className="text-xl font-bold font-roboto mb-1">Family Command Center</h2>
                                               <p className="text-gray-600 font-roboto text-sm">
                                                 Track your children's growth, health, routines, and more
                                               </p>
                                             </div>
                                             
                                             <div className="flex flex-col sm:flex-row gap-3">
-                                              {/* Child selector */}
-                                              <div className="relative inline-block">
-                                                <select
-                                                  value={activeChild || ''}
-                                                  onChange={e => setActiveChild(e.target.value || null)}
-                                                  className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md font-roboto"
-                                                >
-                                                  <option value="">All Children</option>
-                                                  {familyMembers
-                                                    .filter(member => member.role === 'child')
-                                                    .map(child => (
-                                                      <option key={child.id} value={child.id}>
-                                                        {child.name} {child.age ? `(${child.age})` : ''}
-                                                      </option>
-                                                    ))}
-                                                </select>
-                                              </div>
+                                              {/* Profile selector chips */}
+<div className="flex flex-wrap gap-2">
+  <button
+    onClick={() => setActiveChild(null)}
+    className={`flex items-center px-3 py-2 rounded-md text-sm ${
+      !activeChild 
+        ? 'bg-black text-white font-medium' 
+        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+    }`}
+  >
+    <Users size={16} className="mr-2" />
+    All Family
+  </button>
+  
+  {familyMembers
+    .filter(member => member.role === 'child')
+    .map(child => (
+      <button
+        key={child.id}
+        onClick={() => setActiveChild(child.id)}
+        className={`flex items-center px-3 py-2 rounded-md text-sm ${
+          activeChild === child.id 
+            ? 'bg-blue-500 text-white font-medium' 
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+        }`}
+      >
+        <UserAvatar user={child} size={24} className="mr-2" />
+        {child.name} {child.age ? `(${child.age})` : ''}
+      </button>
+    ))}
+  
+  {familyMembers
+    .filter(member => member.role === 'parent')
+    .map(parent => (
+      <button
+        key={parent.id}
+        onClick={() => setActiveChild(parent.id)}
+        className={`flex items-center px-3 py-2 rounded-md text-sm ${
+          activeChild === parent.id 
+            ? 'bg-purple-500 text-white font-medium' 
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+        }`}
+      >
+        <UserAvatar user={parent} size={24} className="mr-2" />
+        {parent.name}
+      </button>
+    ))}
+</div>
                                               
                                               {/* Search */}
                                               <div className="relative">
@@ -3814,14 +3945,15 @@ const ChildrenTrackingTab = () => {
                                         {/* Main content sections */}
                                         <div className="space-y-8">
                                           {/* Medical section */}
-                                          <div>
+                                          <div id="medical-section">
+
                                             <button
                                               onClick={() => toggleSection('medical')}
                                               className="w-full flex items-center justify-between bg-white p-3 rounded-t-lg shadow-sm font-medium font-roboto mb-1"
                                             >
                                               <div className="flex items-center">
                                                 <Heart size={18} className="mr-2 text-red-500" />
-                                                Medical Appointments & Records
+                                                Families Medical Appointments & Records
                                                 {notifications.medical > 0 && (
                                                   <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                                     {notifications.medical}
@@ -3839,14 +3971,15 @@ const ChildrenTrackingTab = () => {
                                           </div>
                                           
                                           {/* Growth section */}
-                                          <div>
+                                          <div id="growth-section">
+
                                             <button
                                               onClick={() => toggleSection('growth')}
                                               className="w-full flex items-center justify-between bg-white p-3 rounded-t-lg shadow-sm font-medium font-roboto mb-1"
                                             >
                                               <div className="flex items-center">
                                                 <Activity size={18} className="mr-2 text-blue-500" />
-                                                Growth & Development
+                                                Kids Growth & Development
                                                 {notifications.growth > 0 && (
                                                   <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                                                     {notifications.growth}
@@ -3864,14 +3997,15 @@ const ChildrenTrackingTab = () => {
                                           </div>
                                           
                                           {/* Routines section */}
-                                          <div>
+                                          <div id="routines-section">
+
                                             <button
                                               onClick={() => toggleSection('routines')}
                                               className="w-full flex items-center justify-between bg-white p-3 rounded-t-lg shadow-sm font-medium font-roboto mb-1"
                                             >
                                               <div className="flex items-center">
                                                 <CalendarIcon size={18} className="mr-2 text-purple-500" />
-                                                Routines & Activities
+                                                Kids Routines & Activities
                                                 {notifications.routines > 0 && (
                                                   <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                                                     {notifications.routines}
@@ -4320,6 +4454,62 @@ const ChildrenTrackingTab = () => {
                                                   {loadingSection === 'provider' ? 'Saving...' : 'Save'}
                                                 </button>
                                               </div>
+                                              {/* Document Library Section */}
+<div className="border border-gray-200 rounded-lg bg-white mt-8">
+  <button
+    onClick={() => setExpandedSections(prev => ({...prev, documents: !prev.documents}))}
+    className="w-full flex items-center justify-between p-3 font-medium font-roboto"
+  >
+    <div className="flex items-center">
+      <FileText size={18} className="mr-2 text-orange-500" />
+      Family Document Library
+    </div>
+    {expandedSections.documents ? (
+      <ChevronUp size={18} className="text-gray-500" />
+    ) : (
+      <ChevronDown size={18} className="text-gray-500" />
+    )}
+  </button>
+  
+  {expandedSections.documents && (
+    <div className="p-4 border-t border-gray-200">
+      <DocumentLibrary 
+        initialChildId={activeChild} 
+        onClose={() => setExpandedSections(prev => ({...prev, documents: false}))}
+      />
+    </div>
+  )}
+</div>
+{/* Provider Directory Section */}
+<div className="border border-gray-200 rounded-lg bg-white mt-8">
+  <button
+    onClick={() => setExpandedSections(prev => ({...prev, providers: !prev.providers}))}
+    className="w-full flex items-center justify-between p-3 font-medium font-roboto"
+  >
+    <div className="flex items-center">
+      <User size={18} className="mr-2 text-purple-500" />
+      Family Provider Directory
+    </div>
+    {expandedSections.providers ? (
+      <ChevronUp size={18} className="text-gray-500" />
+    ) : (
+      <ChevronDown size={18} className="text-gray-500" />
+    )}
+  </button>
+  
+  {expandedSections.providers && (
+    <div className="p-4 border-t border-gray-200">
+      <ProviderDirectory 
+        familyId={familyId}
+        providers={healthcareProviders}
+        loadingProviders={loadingProviders}
+        onAddProvider={(providerData) => handleProviderSubmit(providerData)}
+        onUpdateProvider={(providerData) => handleProviderSubmit(providerData)}
+        onDeleteProvider={(providerId) => handleProviderDelete(providerId)}
+      />
+    </div>
+  )}
+</div>
                                             </div>
                                           </div>
                                         )}
