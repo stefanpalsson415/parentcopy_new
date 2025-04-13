@@ -1050,8 +1050,7 @@ const handleDocumentProcess = async (file, detectedType) => {
   }
 };
 
-// Replace the existing detectDocumentType function
-const detectDocumentType = async (file) => {
+const getDocumentTypeFromFile = async (file) => {
   try {
     // Use the document type detection from the DocumentProcessingService
     const validationResult = DocumentProcessingService.validateDocument(file);
