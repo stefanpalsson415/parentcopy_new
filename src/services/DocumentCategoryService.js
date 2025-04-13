@@ -40,13 +40,8 @@ class DocumentCategoryService {
             'project', 'schedule', 'tutor', 'learning', 'academic',
             'semester', 'course', 'subject', 'principal', 'enrollment'
           ],
-          patterns: [
-            /\bgrade\s+[k-9]|1[0-2]\b/i,
-            /\breport\s+card\b/i,
-            /\bschool\s+district\b/i,
-            /\bteacher\s*:\s*[a-z]+\b/i,
-            /\bhomework\s+assignment\b/i
-          ],
+          patterns: [/\bgrade\s+([k]|[0-9]|1[0-2])\b/i, /\breport\s+card\b/i, /\bschool\s+district\b/i, /\bteacher\s*:\s*[a-z]+\b/i, /\bhomework\s+assignment\b/i],
+
           subcategories: [
             'homework', 'report_card', 'schedule', 'permission_slip',
             'project', 'enrollment', 'extracurricular'
