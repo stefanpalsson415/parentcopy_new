@@ -115,6 +115,24 @@ class ProviderService {
     }
   }
 
+  useEffect(() => {
+    const handleProviderAdded = () => {
+      // Refresh provider list when event is fired
+      if (onLoadProviders) {
+        onLoadProviders();
+      }
+    };
+  
+    // Listen for the custom event
+    window.addEventListener('provider-added', handleProviderAdded);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('provider-added', handleProviderAdded);
+    };
+  }, [onLoadProviders]);
+
+
   /**
    * Add or update a provider in the database
    * @param {string} familyId - Family ID
@@ -123,7 +141,9 @@ class ProviderService {
    */
  // Add or update this method in src/services/ProviderService.js
 
-// Save a provider to the database
+// Replace in src/services/ProviderService.js
+// Replace the existing saveProvider method (starting around line 110)
+
 async saveProvider(familyId, providerData) {
     try {
       if (!familyId) {
@@ -134,7 +154,7 @@ async saveProvider(familyId, providerData) {
       console.log("Saving provider for family:", familyId, providerData);
       
       // First check if this provider already exists (by name and type)
-      const providersRef = collection(db, "providers");
+      const providersRef = collection(db, "healthcareProviders");
       const q = query(
         providersRef,
         where("familyId", "==", familyId),
@@ -151,7 +171,7 @@ async saveProvider(familyId, providerData) {
         providerId = querySnapshot.docs[0].id;
         isNew = false;
         
-        await updateDoc(doc(db, "providers", providerId), {
+        await updateDoc(doc(db, "healthcareProviders", providerId), {
           ...providerData,
           updatedAt: serverTimestamp()
         });

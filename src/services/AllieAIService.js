@@ -269,6 +269,8 @@ async processProviderFromChat(message, familyId) {
     const result = await ProviderService.saveProvider(familyId, providerDetails);
     
     if (result.success) {
+      window.dispatchEvent(new CustomEvent('provider-added'));
+
       return { 
         success: true, 
         providerId: result.providerId,
@@ -287,6 +289,8 @@ async processProviderFromChat(message, familyId) {
     return { success: false, error: error.message };
   }
 }
+
+
 
 // Replace the extractProviderDetails method in src/services/AllieAIService.js
 
