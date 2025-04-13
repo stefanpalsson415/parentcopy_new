@@ -1,184 +1,134 @@
 // src/components/chat/ChatFeedback.jsx
 import React, { useState } from 'react';
-import { ThumbsUp, ThumbsDown, MessageSquare, X, Star, Smile, Frown } from 'lucide-react';
-import EnhancedChatService from '../../services/EnhancedChatService';
+import { ThumbsUp, ThumbsDown, MessageSquare } from 'lucide-react';
+import FeedbackLearningSystem from '../../services/FeedbackLearningSystem';
+import ConversationContext from '../../services/ConversationContext';
 
-/**
- * Enhanced component for collecting user feedback on AI responses
- */
 const ChatFeedback = ({ messageId, familyId }) => {
   const [feedback, setFeedback] = useState(null);
-  const [showCorrectionForm, setShowCorrectionForm] = useState(false);
-  const [correction, setCorrection] = useState('');
+  const [showComment, setShowComment] = useState(false);
+  const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [feedbackType, setFeedbackType] = useState(null);
 
-  // Handle feedback button click
-  const handleFeedback = async (type) => {
-    try {
-      setFeedback(type);
+  const handleFeedback = async (isPositive) => {
+    if (isSubmitting) return;
+    
+    const feedbackType = isPositive ? 'helpful' : 'unhelpful';
+    
+    if (feedback === feedbackType) {
+      // Toggle feedback off if clicking the same button again
+      setFeedback(null);
+      setShowComment(false);
+    } else {
+      // Set new feedback
+      setFeedback(feedbackType);
       
-      // For negative feedback, show correction form
-      if (type === 'negative') {
-        setShowCorrectionForm(true);
+      // Only show comment box for negative feedback
+      if (!isPositive) {
+        setShowComment(true);
       } else {
-        // For positive feedback, submit immediately
-        setIsSubmitting(true);
-        await EnhancedChatService.saveUserFeedback(messageId, 'positive');
-        setSubmitted(true);
-        setIsSubmitting(false);
+        // For positive feedback, just record without comment
+        await submitFeedback(feedbackType, '');
       }
-    } catch (error) {
-      console.error("Error providing feedback:", error);
-      setIsSubmitting(false);
     }
   };
 
-  // Handle specific feedback type selection
-  const handleFeedbackType = (type) => {
-    setFeedbackType(type);
-  };
-
-  // Handle correction submission
-  const handleCorrectionSubmit = async (e) => {
-    e.preventDefault();
+  const submitFeedback = async (type, userComment = '') => {
+    setIsSubmitting(true);
     
     try {
-      setIsSubmitting(true);
-      // Include feedback type in the submission if selected
-      const feedbackData = {
-        feedback: 'negative',
-        correction: correction,
-        feedbackType: feedbackType
-      };
-      await EnhancedChatService.saveUserFeedback(messageId, 'negative', correction, familyId, feedbackType);
-      setSubmitted(true);
-      setShowCorrectionForm(false);
-      setIsSubmitting(false);
+      // Use our new feedback system
+      await FeedbackLearningSystem.recordFeedback(
+        messageId,
+        type,
+        userComment,
+        {
+          familyId,
+          ...ConversationContext.getConversationSummary(familyId)
+        }
+      );
+      
+      // Hide comment box after submission
+      if (type !== 'helpful') {
+        setShowComment(false);
+      }
     } catch (error) {
-      console.error("Error submitting correction:", error);
+      console.error("Error submitting feedback:", error);
+    } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Reset feedback
-  const handleReset = () => {
-    setFeedback(null);
-    setShowCorrectionForm(false);
-    setCorrection('');
-    setSubmitted(false);
-    setFeedbackType(null);
+  const handleCommentSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Determine specific feedback type based on content
+    let specificType = 'unhelpful';
+    
+    if (comment.match(/(?:not right|wrong|incorrect)/i)) {
+      specificType = 'incorrect_information';
+    } else if (comment.match(/(?:confusing|don'?t understand|unclear)/i)) {
+      specificType = 'confusing';
+    } else if (comment.match(/(?:more information|not enough|incomplete)/i)) {
+      specificType = 'incomplete';
+    }
+    
+    await submitFeedback(specificType, comment);
+    setComment('');
   };
 
-  // If feedback already submitted, show thank you message
-  if (submitted) {
-    return (
-      <div className="mt-2 text-xs text-gray-500 bg-gray-50 p-2 rounded-md">
-        <p className="font-roboto flex items-center">
-          <ThumbsUp size={12} className="mr-1 text-green-500" />
-          Thanks for your feedback!
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div className="mt-2 text-xs">
-      {!showCorrectionForm ? (
-        <div className="flex items-center">
-          <span className="text-gray-500 mr-2 font-roboto">Was this helpful?</span>
+    <div className="mt-2 flex flex-col">
+      <div className="flex items-center text-xs space-x-2 justify-end">
+        <button
+          onClick={() => handleFeedback(true)}
+          className={`p-1 rounded-md transition ${
+            feedback === 'helpful' 
+              ? 'bg-green-100 text-green-700' 
+              : 'text-gray-400 hover:text-gray-600'
+          }`}
+          title="Helpful"
+        >
+          <ThumbsUp size={12} />
+        </button>
+        <button
+          onClick={() => handleFeedback(false)}
+          className={`p-1 rounded-md transition ${
+            feedback === 'unhelpful' 
+              ? 'bg-red-100 text-red-700' 
+              : 'text-gray-400 hover:text-gray-600'
+          }`}
+          title="Not helpful"
+        >
+          <ThumbsDown size={12} />
+        </button>
+        {!showComment && feedback === 'unhelpful' && (
           <button
-            onClick={() => handleFeedback('positive')}
-            disabled={isSubmitting}
-            className={`p-1 rounded-full ${
-              feedback === 'positive' 
-                ? 'bg-green-100 text-green-600' 
-                : 'hover:bg-gray-100'
-            }`}
-            aria-label="This was helpful"
+            onClick={() => setShowComment(true)}
+            className="p-1 text-gray-400 hover:text-gray-600 rounded-md transition"
+            title="Add comment"
           >
-            <ThumbsUp size={14} />
+            <MessageSquare size={12} />
           </button>
-          <button
-            onClick={() => handleFeedback('negative')}
-            disabled={isSubmitting}
-            className={`p-1 rounded-full ml-1 ${
-              feedback === 'negative' 
-                ? 'bg-red-100 text-red-600' 
-                : 'hover:bg-gray-100'
-            }`}
-            aria-label="This was not helpful"
-          >
-            <ThumbsDown size={14} />
-          </button>
-        </div>
-      ) : (
-        <form onSubmit={handleCorrectionSubmit} className="bg-gray-50 p-2 rounded-md">
-          <div className="flex justify-between items-center mb-1">
-            <span className="font-medium font-roboto flex items-center">
-              <MessageSquare size={12} className="mr-1" />
-              What was wrong with this response?
-            </span>
-            <button
-              type="button"
-              onClick={handleReset}
-              className="text-gray-400 hover:text-gray-600"
-              aria-label="Cancel feedback"
-            >
-              <X size={14} />
-            </button>
-          </div>
-          
-          {/* Feedback type selection */}
-          <div className="flex mb-2 gap-1">
-            <button
-              type="button"
-              onClick={() => handleFeedbackType('incorrect')}
-              className={`flex items-center text-xs p-1 rounded flex-1 ${
-                feedbackType === 'incorrect' ? 'bg-red-100 text-red-700' : 'bg-white border'
-              }`}
-            >
-              <Frown size={12} className="mr-1" />
-              Incorrect
-            </button>
-            <button
-              type="button"
-              onClick={() => handleFeedbackType('confusing')}
-              className={`flex items-center text-xs p-1 rounded flex-1 ${
-                feedbackType === 'confusing' ? 'bg-amber-100 text-amber-700' : 'bg-white border'
-              }`}
-            >
-              <MessageSquare size={12} className="mr-1" />
-              Confusing
-            </button>
-            <button
-              type="button"
-              onClick={() => handleFeedbackType('better')}
-              className={`flex items-center text-xs p-1 rounded flex-1 ${
-                feedbackType === 'better' ? 'bg-blue-100 text-blue-700' : 'bg-white border'
-              }`}
-            >
-              <Star size={12} className="mr-1" />
-              Could be better
-            </button>
-          </div>
-          
-          <textarea
-            value={correction}
-            onChange={(e) => setCorrection(e.target.value)}
-            className="w-full border rounded text-xs p-2 focus:outline-none focus:ring-1 focus:ring-blue-500 font-roboto"
-            placeholder="Please explain what was incorrect or unhelpful..."
-            rows="2"
-            required
-          ></textarea>
-          <div className="flex justify-end mt-1">
+        )}
+      </div>
+      
+      {showComment && (
+        <form onSubmit={handleCommentSubmit} className="mt-2">
+          <div className="flex">
+            <input
+              type="text"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="What was wrong with this response?"
+              className="flex-1 text-xs p-2 border rounded-l-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
             <button
               type="submit"
-              disabled={isSubmitting || !correction.trim()}
-              className="bg-blue-600 text-white text-xs px-2 py-1 rounded hover:bg-blue-700 disabled:bg-blue-300 font-roboto"
+              disabled={isSubmitting || !comment.trim()}
+              className="px-2 py-1 bg-blue-600 text-white text-xs rounded-r-md hover:bg-blue-700 disabled:bg-blue-300"
             >
-              {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
+              {isSubmitting ? "..." : "Send"}
             </button>
           </div>
         </form>

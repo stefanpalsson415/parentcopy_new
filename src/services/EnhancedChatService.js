@@ -10,6 +10,9 @@ import ProviderChatService from './ProviderChatService';
 import MedicalChatService from './MedicalChatService';
 import TaskChatService from './TaskChatService';
 import RelationshipChatService from './RelationshipChatService';
+import IntentClassifier from './IntentClassifier';
+import ConversationContext from './ConversationContext';
+import FeedbackLearningSystem from './FeedbackLearningSystem';
 
 import { 
   collection, 
@@ -1393,13 +1396,27 @@ async handleSharedTodoRequest(text, familyContext, userId) {
 }
 
 
+// Replace the existing getAIResponse method with this enhanced version
 async getAIResponse(message, familyId, messageHistory = []) {
   try {
     // Get family context
     const familyContext = await this.getFamilyContext(familyId);
     
-    // Analyze message with the new AdvancedNLU
-    const analysis = AdvancedNLU.analyzeMessage(message, familyContext.familyMembers);
+    // Use the enhanced IntentClassifier instead of basic AdvancedNLU
+    const analysis = IntentClassifier.analyzeMessage(
+      message, 
+      familyId, 
+      familyContext
+    );
+    
+    // Apply feedback learnings to optimize interaction
+    const promptOptimizations = FeedbackLearningSystem.getPromptOptimizations(
+      analysis.intent,
+      {
+        ...familyContext,
+        ...analysis.conversationContext
+      }
+    );
     
     // Check if this is a domain-specific request we can handle directly
     if (analysis.intent === 'provider.add' && analysis.confidence > 0.6) {
@@ -1456,6 +1473,16 @@ async getAIResponse(message, familyId, messageHistory = []) {
         return result.message;
       }
     }
+    // Check for clarification intents
+    else if (analysis.intent === 'clarification.who' || analysis.intent === 'clarification.when') {
+      // Handle disambiguation with context awareness
+      return this.handleDisambiguation(analysis, familyContext, messageHistory);
+    }
+    // Check for conversation feedback
+    else if (analysis.intent === 'conversation.feedback') {
+      // Process feedback and improve future responses
+      this.processFeedbackIntent(message, familyId, messageHistory);
+    }
     
     // Check for FAQ response before falling back to Claude
     const faqResponse = AdvancedNLU.getFAQResponse(message);
@@ -1463,13 +1490,15 @@ async getAIResponse(message, familyId, messageHistory = []) {
       return faqResponse;
     }
     
-    // If not a specialized request, use Claude for general response
+    // If not a specialized request, use Claude for general response with enhanced context
     return await ClaudeService.generateResponse(
       messageHistory, 
       {
         ...familyContext,
         currentIntent: analysis.intent,
-        currentEntities: analysis.entities
+        currentEntities: analysis.entities,
+        conversationContext: analysis.conversationContext,
+        promptOptimizations
       }
     );
   } catch (error) {
@@ -1525,6 +1554,119 @@ getCurrentUserFromHistory(messageHistory) {
     }
   }
   
+
+// Add these new methods to EnhancedChatService
+/**
+ * Handle disambiguation requests using conversation context
+ * @param {object} analysis - Message analysis
+ * @param {object} familyContext - Family data context
+ * @param {Array} messageHistory - Previous messages
+ * @returns {string} - Disambiguated response
+ */
+handleDisambiguation(analysis, familyContext, messageHistory) {
+  try {
+    // Get the previous intent from context if available
+    const previousIntent = analysis.previousIntent || 
+                          ConversationContext.getContext(familyContext.familyId)
+                            .intentHistory[0]?.intent;
+    
+    if (!previousIntent) {
+      return "I'm not sure what you're asking about. Could you provide more details?";
+    }
+    
+    // Handle "who" disambiguation
+    if (analysis.intent === 'clarification.who') {
+      const children = familyContext.children || [];
+      
+      if (children.length === 0) {
+        return "I don't see any children in your family profile. Would you like to add a child first?";
+      }
+      
+      if (children.length === 1) {
+        return `I'm referring to ${children[0].name}, your only child in the family profile.`;
+      }
+      
+      return `Your family has ${children.length} children: ${children.map(c => c.name).join(', ')}. Which one would you like to discuss?`;
+    }
+    
+    // Handle "when" disambiguation
+    if (analysis.intent === 'clarification.when') {
+      // Extract dates from recent context
+      const context = ConversationContext.getContext(familyContext.familyId);
+      const dates = context.entities.date || [];
+      
+      if (dates.length === 0) {
+        return "I don't have a specific date in mind. Would you like to schedule something for a particular day?";
+      }
+      
+      if (dates.length === 1) {
+        return `I'm referring to ${dates[0]}.`;
+      }
+      
+      return `I have several dates in our conversation: ${dates.join(', ')}. Which one were you asking about?`;
+    }
+    
+    return "I'm not sure what you're asking about. Could you provide more details?";
+  } catch (error) {
+    console.error("Error handling disambiguation:", error);
+    return "I'm sorry, I'm having trouble understanding what you're asking. Could you try rephrasing your question?";
+  }
+}
+
+/**
+ * Process feedback from user about conversation quality
+ * @param {string} message - User message
+ * @param {string} familyId - Family ID
+ * @param {Array} messageHistory - Previous messages
+ */
+async processFeedbackIntent(message, familyId, messageHistory) {
+  try {
+    // Find the most recent Allie response
+    let lastAllieMessage = null;
+    for (let i = messageHistory.length - 1; i >= 0; i--) {
+      if (messageHistory[i].sender === 'allie') {
+        lastAllieMessage = messageHistory[i];
+        break;
+      }
+    }
+    
+    if (!lastAllieMessage) return;
+    
+    // Determine feedback type
+    let feedbackType = 'other';
+    
+    if (message.match(/(?:not right|wrong|incorrect)/i)) {
+      feedbackType = 'incorrect_information';
+    } else if (message.match(/(?:confusing|don'?t understand|unclear)/i)) {
+      feedbackType = 'confusing';
+    } else if (message.match(/(?:not helpful|unhelpful|useless|not what I needed)/i)) {
+      feedbackType = 'unhelpful';
+    } else if (message.match(/(?:helpful|useful|great|thanks|correct|right)/i)) {
+      feedbackType = 'helpful';
+    } else if (message.match(/(?:more information|not enough|incomplete)/i)) {
+      feedbackType = 'incomplete';
+    }
+    
+    // Get conversation context
+    const context = ConversationContext.getContext(familyId);
+    
+    // Record the feedback
+    await FeedbackLearningSystem.recordFeedback(
+      lastAllieMessage.id,
+      feedbackType,
+      message,
+      {
+        familyId,
+        intent: context.intentHistory[0]?.intent,
+        currentWeek: familyContext.currentWeek,
+        hasChildren: (familyContext.children || []).length > 0,
+        hasCompletedSurvey: familyContext.completedWeeks?.length > 0
+      }
+    );
+  } catch (error) {
+    console.error("Error processing feedback intent:", error);
+  }
+}  
 // Replace the handleProviderRequest method in src/services/EnhancedChatService.js
 // Manual fix for onboarding status issues
 async forceCompleteOnboarding(familyId) {
