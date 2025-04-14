@@ -526,78 +526,112 @@ class ConsolidatedNLU {
   }
 
   /**
-   * Extract entities from text
-   * @param {string} text - The message text to analyze
-   * @param {Array} familyMembers - Optional family members for validation
-   * @returns {Object} Extracted entities by type
-   */
-  extractEntities(text, familyMembers = []) {
-    if (!text) return {};
+ * Extract entities from text
+ * @param {string} text - The message text to analyze
+ * @param {Array} familyMembers - Optional family members for validation
+ * @returns {Object} Extracted entities by type
+ */
+extractEntities(text, familyMembers = []) {
+  if (!text) return {};
+  
+  const entities = {};
+  
+  // Extract entities based on patterns
+  for (const [entityType, entityData] of Object.entries(this.entityPatterns)) {
+    const { pattern, validate } = entityData;
     
-    const entities = {};
+    // Skip if pattern is invalid
+    if (!pattern || typeof pattern.test !== 'function') continue;
     
-    // Extract entities based on patterns
-    for (const [entityType, entityData] of Object.entries(this.entityPatterns)) {
-      const { pattern, validate } = entityData;
-      
-      // Reset regex lastIndex
-      pattern.lastIndex = 0;
-      
-      const matches = [];
-      let match;
-      
+    // Reset regex lastIndex
+    pattern.lastIndex = 0;
+    
+    const matches = [];
+    let match;
+    
+    try {
       while ((match = pattern.exec(text)) !== null) {
         // Skip if validation function exists and returns false
         if (validate && !validate(match, familyMembers)) {
           continue;
         }
         
-        matches.push(match[1]);
+        if (match[1]) {
+          matches.push(match[1]);
+        }
       }
       
       if (matches.length > 0) {
         entities[entityType] = matches;
       }
+    } catch (error) {
+      console.warn(`Error extracting ${entityType} entities:`, error);
+      // Continue with other entity types instead of breaking completely
     }
-    
-    // Add dates if present
+  }
+  
+  // Add dates if present (with error handling)
+  try {
     const dates = this.extractDates(text);
-    if (dates.length > 0) {
+    if (dates && dates.length > 0) {
       entities.dates = dates;
     }
-    
-    // Add times if present
+  } catch (error) {
+    console.warn("Error extracting dates:", error);
+  }
+  
+  // Add times if present (with error handling)
+  try {
     const times = this.extractTimes(text);
-    if (times.length > 0) {
+    if (times && times.length > 0) {
       entities.times = times;
     }
-    
-    // Add locations if present
+  } catch (error) {
+    console.warn("Error extracting times:", error);
+  }
+  
+  // Add locations if present (with error handling)
+  try {
     const locations = this.extractLocations(text);
-    if (locations.length > 0) {
+    if (locations && locations.length > 0) {
       entities.locations = locations;
     }
-    
-    // Add people if present
+  } catch (error) {
+    console.warn("Error extracting locations:", error);
+  }
+  
+  // Add people if present (with error handling)
+  try {
     const people = this.extractPeople(text, familyMembers);
-    if (people.length > 0) {
+    if (people && people.length > 0) {
       entities.people = people;
     }
-    
-    // Add event types if present
+  } catch (error) {
+    console.warn("Error extracting people:", error);
+  }
+  
+  // Add event types if present (with error handling)
+  try {
     const eventTypes = this.extractEventTypes(text);
-    if (eventTypes.length > 0) {
+    if (eventTypes && eventTypes.length > 0) {
       entities.eventTypes = eventTypes;
     }
-    
-    // Add emotions if present
+  } catch (error) {
+    console.warn("Error extracting event types:", error);
+  }
+  
+  // Add emotions if present (with error handling)
+  try {
     const emotions = this.extractEmotions(text);
-    if (emotions.length > 0) {
+    if (emotions && emotions.length > 0) {
       entities.emotions = emotions;
     }
-    
-    return entities;
+  } catch (error) {
+    console.warn("Error extracting emotions:", error);
   }
+  
+  return entities;
+}
 
   /**
    * Detect the sentiment of a message
