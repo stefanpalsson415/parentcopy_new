@@ -1619,6 +1619,7 @@ handleDisambiguation(analysis, familyContext, messageHistory) {
  * @param {string} familyId - Family ID
  * @param {Array} messageHistory - Previous messages
  */
+// Replace the processFeedbackIntent method in src/services/EnhancedChatService.js
 async processFeedbackIntent(message, familyId, messageHistory) {
   try {
     // Find the most recent Allie response
@@ -1647,6 +1648,9 @@ async processFeedbackIntent(message, familyId, messageHistory) {
       feedbackType = 'incomplete';
     }
     
+    // Get family context for this feedback
+    const familyContext = await this.getFamilyContext(familyId);
+    
     // Get conversation context
     const context = ConversationContext.getContext(familyId);
     
@@ -1666,7 +1670,7 @@ async processFeedbackIntent(message, familyId, messageHistory) {
   } catch (error) {
     console.error("Error processing feedback intent:", error);
   }
-}  
+} 
 // Replace the handleProviderRequest method in src/services/EnhancedChatService.js
 // Manual fix for onboarding status issues
 async forceCompleteOnboarding(familyId) {

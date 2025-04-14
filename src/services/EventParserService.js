@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 class EventParserService {
   constructor() {
-    this.nlu = new ConsolidatedNLU();
+    this.nlu = ConsolidatedNLU; // Fixed: use the imported instance directly
     this.ocrApiUrl = '/api/ocr'; // Will proxy to our Cloud Function
   }
 
