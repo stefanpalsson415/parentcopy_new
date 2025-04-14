@@ -1139,7 +1139,8 @@ async handleSharedTodoRequest(text, familyContext, userId) {
       'add to-do', 'add a to-do', 'create to-do', 'new to-do',
       'add to todo list', 'add to to-do list', 'add to our list',
       'add task', 'create task', 'new task', 'add a task',
-      'todo for', 'to-do for', 'task for'
+      'todo for', 'to-do for', 'task for', 'create a todo for',
+      'make todo', 'make a todo', 'add reminder', 'create reminder'
     ];
     
     const isTodoRequest = todoKeywords.some(keyword => 
@@ -1417,6 +1418,21 @@ async getAIResponse(message, familyId, messageHistory = []) {
         ...analysis.conversationContext
       }
     );
+
+    // First check for todos since this is common and needs special handling
+    const todoKeywords = ['todo', 'to-do', 'to do', 'add a task', 'create a task', 'make a task'];
+    const isTodoRequest = todoKeywords.some(keyword => message.toLowerCase().includes(keyword));
+    
+    if (isTodoRequest || message.toLowerCase().includes('create') && message.toLowerCase().includes('for')) {
+      // Try to handle as a shared todo request first
+      const todoResponse = await this.handleSharedTodoRequest(message, familyContext, 
+          this.getCurrentUserFromHistory(messageHistory)?.id);
+          
+      if (todoResponse) {
+        console.log("Handled as todo request:", todoResponse);
+        return todoResponse;
+      }
+    }
     
     // Check if this is a domain-specific request we can handle directly
     if (analysis.intent === 'provider.add' && analysis.confidence > 0.6) {
@@ -1482,6 +1498,18 @@ async getAIResponse(message, familyId, messageHistory = []) {
     else if (analysis.intent === 'conversation.feedback') {
       // Process feedback and improve future responses
       this.processFeedbackIntent(message, familyId, messageHistory);
+    }
+    
+    // Check for calendar events
+    if (message.toLowerCase().includes('schedule') || 
+        message.toLowerCase().includes('calendar') || 
+        message.toLowerCase().includes('appointment')) {
+      // Handle calendar event
+      const calendarResponse = await this.handleCalendarRequest(message, familyContext, 
+        this.getCurrentUserFromHistory(messageHistory)?.id);
+      if (calendarResponse) {
+        return calendarResponse;
+      }
     }
     
     // Check for FAQ response before falling back to Claude

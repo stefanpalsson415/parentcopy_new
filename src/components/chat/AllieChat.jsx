@@ -72,7 +72,7 @@ const childTrackingService = useRef(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const chatContainerRef = useRef(null);
-  const nlu = useRef(new ConsolidatedNLU());
+  const nlu = useRef(ConsolidatedNLU); // Fixed: use the imported instance directly
   
   // Initialize userClosedChat from localStorage on component mount
   useEffect(() => {
