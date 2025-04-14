@@ -13,6 +13,8 @@ import RelationshipChatService from './RelationshipChatService';
 import IntentClassifier from './IntentClassifier';
 import ConversationContext from './ConversationContext';
 import FeedbackLearningSystem from './FeedbackLearningSystem';
+import ChatPersistenceService from './ChatPersistenceService';
+
 
 import { 
   collection, 
@@ -40,87 +42,25 @@ class EnhancedChatService {
     this.feedbackLog = {};
   }
   
-  // Load messages for a family with enhanced caching
   async loadMessages(familyId, limit = 100) {
     try {
-      if (!familyId) {
-        console.warn("No familyId provided to loadMessages");
-        return [];
-      }
-
-      console.log(`Loading up to ${limit} messages for family ${familyId}`);
-
-      const q = query(
-        collection(db, "chatMessages"),
-        where("familyId", "==", familyId),
-        orderBy("timestamp", "desc"),
-        limit(limit)
-      );
-      
-      const querySnapshot = await getDocs(q);
-      const messages = [];
-      
-      querySnapshot.forEach((doc) => {
-        messages.push({
-          id: doc.id,
-          ...doc.data()
-        });
+      const result = await ChatPersistenceService.loadMessages(familyId, {
+        pageSize: limit,
+        includeMetadata: true
       });
-      
-      // Sort messages in ascending order (oldest first)
-      messages.sort((a, b) => {
-        const aTime = a.timestamp?.toDate?.() || new Date(a.timestamp);
-        const bTime = b.timestamp?.toDate?.() || new Date(b.timestamp);
-        return aTime - bTime;
-      });
-      
-      console.log(`Loaded ${messages.length} messages for family ${familyId}`);
       
       // Update conversation context based on loaded messages
-      this.updateConversationContextFromHistory(familyId, messages);
+      this.updateConversationContextFromHistory(familyId, result.messages);
       
-      return messages;
+      return result.messages;
     } catch (error) {
       console.error("Error loading messages:", error);
       return [];
     }
   }
   
-  // Save a message to the database with enhanced metadata
   async saveMessage(message) {
-    try {
-      if (!message.familyId) {
-        console.error("Cannot save message without familyId", message);
-        return false;
-      }
-      
-      // Add metadata about the message content
-      const enhancedMessage = {
-        ...message,
-        createdAt: serverTimestamp(),
-        metadata: {
-          intent: message.sender !== 'allie' ? this.nlu.detectIntent(message.text) : undefined,
-          sentiment: message.sender !== 'allie' ? this.nlu.detectSentiment(message.text) : undefined,
-          entities: message.sender !== 'allie' ? this.nlu.extractEntities(message.text) : undefined,
-          topicCategories: this.nlu.detectTopicCategories(message.text),
-          wordCount: message.text.split(/\s+/).length
-        }
-      };
-      
-      const docRef = await addDoc(collection(db, "chatMessages"), enhancedMessage);
-      
-      console.log(`Message saved with ID: ${docRef.id} and intent: ${enhancedMessage.metadata?.intent}`);
-      
-      // If this is a user message, update session intents
-      if (message.sender !== 'allie') {
-        this.updateSessionIntents(message.familyId, enhancedMessage.metadata?.intent);
-      }
-      
-      return { success: true, messageId: docRef.id };
-    } catch (error) {
-      console.error("Error saving message:", error);
-      return { success: false, error: error.message };
-    }
+    return ChatPersistenceService.saveMessage(message);
   }
   
   // Track conversation context by family
@@ -1397,7 +1337,7 @@ async handleSharedTodoRequest(text, familyContext, userId) {
 }
 
 
-// Replace the existing getAIResponse method with this enhanced version
+/// Update getAIResponse method to use the proper message format for Claude
 async getAIResponse(message, familyId, messageHistory = []) {
   try {
     // Get family context
@@ -1518,9 +1458,12 @@ async getAIResponse(message, familyId, messageHistory = []) {
       return faqResponse;
     }
     
+    // Format messages for Claude API using our helper
+    const formattedMessages = ChatPersistenceService.formatMessagesForClaude(messageHistory);
+    
     // If not a specialized request, use Claude for general response with enhanced context
     return await ClaudeService.generateResponse(
-      messageHistory, 
+      formattedMessages, 
       {
         ...familyContext,
         currentIntent: analysis.intent,

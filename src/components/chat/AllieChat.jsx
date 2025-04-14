@@ -17,6 +17,8 @@ import { EventParser } from '../calendar';
 import DocumentProcessingService from '../../services/DocumentProcessingService';
 import DocumentCategoryService from '../../services/DocumentCategoryService';
 import DocumentOCRService from '../../services/DocumentOCRService';
+import ChatPersistenceService from '../../services/ChatPersistenceService';
+
 
 
 const AllieChat = () => {
@@ -52,6 +54,8 @@ const childTrackingService = useRef(null);
   const [textareaHeight, setTextareaHeight] = useState(42); // Increased default height in px
   const [detectedEventDetails, setDetectedEventDetails] = useState(null);
   const [showEventConfirmation, setShowEventConfirmation] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+const [loadingMore, setLoadingMore] = useState(false);
   
   // Event parsing variables
   const [parsedEventDetails, setParsedEventDetails] = useState(null);
@@ -332,19 +336,269 @@ const childTrackingService = useRef(null);
     }
   }, [isOpen, shouldAutoOpen, initialMessageSent, location.pathname, familyId, familyMembers, selectedUser]);
   
-  const loadMessages = async () => {
-    try {
-      if (!selectedUser || !familyId) return;
-      
+
+// Replace the loadMessages function with this improved version
+const loadMessages = async (loadMore = false) => {
+  try {
+    if (!selectedUser || !familyId) return;
+    
+    if (loadMore) {
+      setLoadingMore(true);
+    } else {
       setLoading(true);
-      const chatMessages = await EnhancedChatService.loadMessages(familyId);
-      setMessages(chatMessages);
+    }
+    
+    const result = await ChatPersistenceService.loadMessages(familyId, {
+      pageSize: 25,
+      loadMore,
+      includeMetadata: false
+    });
+    
+    if (result.error) {
+      console.error("Error loading messages:", result.error);
+      throw new Error(result.error);
+    }
+    
+    setHasMoreMessages(result.hasMore);
+    
+    if (loadMore) {
+      // Prepend the older messages to the current list
+      setMessages(prev => [...result.messages, ...prev]);
+    } else {
+      // Replace all messages
+      setMessages(result.messages);
+    }
+  } catch (error) {
+    console.error("Error loading chat messages:", error);
+    
+    // Show error message to user
+    if (!loadMore) {
+      setMessages([{
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: "I had trouble loading your conversation history. Please refresh the page to try again.",
+        timestamp: new Date().toISOString(),
+        error: true
+      }]);
+    }
+  } finally {
+    setLoading(false);
+    setLoadingMore(false);
+  }
+};
+
+// Add a "Load More" button at the top of the messages section
+// In the chat messages div, add at the top:
+{hasMoreMessages && (
+  <div className="text-center py-2">
+    <button 
+      onClick={() => loadMessages(true)} 
+      disabled={loadingMore}
+      className="text-xs text-blue-600 hover:text-blue-800 flex items-center justify-center mx-auto"
+    >
+      {loadingMore ? (
+        <>
+          <div className="w-3 h-3 border-2 border-t-0 border-blue-500 rounded-full animate-spin mr-2"></div>
+          Loading more...
+        </>
+      ) : (
+        'Load earlier messages'
+      )}
+    </button>
+  </div>
+)}
+
+// Replace the handleSend function to use the new ChatPersistenceService
+const handleSend = async () => {
+  if (input.trim() && canUseChat && selectedUser && familyId) {
+    try {
+      // Process with NLU first to show insights
+      const intent = nlu.current.detectIntent(input);
+      const entities = nlu.current.extractEntities(input, familyMembers);
+      
+      // Update NLU insights
+      setDetectedIntent(intent);
+      setExtractedEntities(entities);
+      
+      // Create user message
+      const userMessage = {
+        familyId,
+        sender: selectedUser.id,
+        userName: selectedUser.name,
+        userImage: selectedUser.profilePicture,
+        text: input,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Optimistically add message to UI
+      setMessages(prev => [...prev, userMessage]);
+      setInput('');
+      setTranscription('');
+      setLoading(true);
+      
+      // Reset image if any
+      if (imageFile) {
+        setImageFile(null);
+        setImagePreview(null);
+      }
+      
+      // Always try to parse the message as an event first
+      const isEvent = await processMessageForEvents(input);
+      
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage && (lastMessage.documentFile || lastMessage.awaitingChildSelection)) {
+        // This might be a response to document action options
+        const isDocumentResponse = handleDocumentActionSelection(input, lastMessage);
+        
+        if (isDocumentResponse) {
+          // If we handled the document action, don't send to AI
+          setLoading(false);
+          return;
+        }
+      }
+
+      // If this is an event, don't send to AI yet
+      if (isEvent) {
+        // Save message to database (but don't get AI response yet)
+        await ChatPersistenceService.saveMessage(userMessage);
+        setLoading(false);
+        return;
+      }
+      
+      // Check if this is a profile picture request
+      const isProfileRequest = 
+        input.toLowerCase().includes('profile picture') || 
+        input.toLowerCase().includes('profile photo') ||
+        input.toLowerCase().includes('upload picture') ||
+        input.toLowerCase().includes('add picture') ||
+        input.toLowerCase().includes('change picture');
+      
+      // Save message to database
+      const savedMessage = await ChatPersistenceService.saveMessage(userMessage);
+      
+      // If saving failed, show error
+      if (!savedMessage.success) {
+        console.error("Failed to save message:", savedMessage.error);
+        setMessages(prev => [...prev, {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: "I couldn't save your message. Please try again in a moment.",
+          timestamp: new Date().toISOString(),
+          error: true
+        }]);
+        setLoading(false);
+        return;
+      }
+      
+      // Update conversation context
+      const updatedContext = EnhancedChatService.updateConversationContext(familyId, {
+        query: input,
+        intent,
+        entities
+      });
+      
+      setConversationContext(updatedContext?.recentTopics || []);
+      
+      // Handle profile upload request
+      if (isProfileRequest) {
+        // Profile handling code - unchanged
+        return;
+      }
+      
+      // Get AI response for normal messages
+      const aiResponse = await EnhancedChatService.getAIResponse(
+        input, 
+        familyId, 
+        [...messages, userMessage]
+      );
+      
+      // Add AI response to messages
+      const allieMessage = {
+        id: Date.now().toString(), // Temporary ID 
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: aiResponse,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Save AI message to database
+      const savedAIMessage = await ChatPersistenceService.saveMessage(allieMessage);
+      if (savedAIMessage.success && savedAIMessage.messageId) {
+        allieMessage.id = savedAIMessage.messageId;
+      }
+      
+      // Update messages state with AI response
+      setMessages(prev => [...prev, allieMessage]);
+      
+      // NEW: Check if Allie's response is about a calendar event
+      const isCalendarResponse = 
+        aiResponse.toLowerCase().includes('add to your calendar') ||
+        aiResponse.toLowerCase().includes('added to your calendar') ||
+        aiResponse.toLowerCase().includes('calendar for') || 
+        aiResponse.toLowerCase().includes('birthday party') ||
+        aiResponse.toLowerCase().includes('event');
+      
+      // If it mentions calendar and there's no event parser visible yet, try to parse the combined conversation
+      if (isCalendarResponse && !showEventParser) {
+        // Create a combined text from the user's message and Allie's response
+        const combinedText = `${input}\n${aiResponse}`;
+        
+        // Try to parse this combined text
+        const familyContext = {
+          familyId,
+          children: familyMembers.filter(m => m.role === 'child')
+        };
+        
+        try {
+          // Parse the combined conversation
+          const eventDetails = await EventParserService.parseEventText(combinedText, familyContext);
+          
+          if (eventDetails && (eventDetails.title || eventDetails.eventType)) {
+            // We successfully parsed an event from the conversation
+            eventDetails.creationSource = 'conversation';
+            setParsedEventDetails(eventDetails);
+            setShowEventParser(true);
+            setEventParsingSource('text');
+            
+            // Add a helper message to explain
+            const helperMessage = {
+              familyId,
+              sender: 'allie',
+              userName: 'Allie',
+              text: `I've extracted the event details from our conversation. Would you like to review and add this to your calendar?`,
+              timestamp: new Date().toISOString()
+            };
+            
+            // Save and display the helper message
+            await ChatPersistenceService.saveMessage(helperMessage);
+            setMessages(prev => [...prev, helperMessage]);
+          }
+        } catch (parseError) {
+          console.error("Error parsing combined conversation:", parseError);
+          // This is a fallback, so just continue if it fails
+        }
+      }
+      
       setLoading(false);
     } catch (error) {
-      console.error("Error loading chat messages:", error);
+      console.error("Error sending message:", error);
       setLoading(false);
+      
+      // Show error message
+      setMessages(prev => [...prev, {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: "I'm having trouble processing your request right now. Please try again in a moment.",
+        timestamp: new Date().toISOString(),
+        error: true
+      }]);
     }
-  };
+  }
+};
   
   const tryParseCalendarEvent = async (messageText) => {
     if (!messageText.trim()) return false;
@@ -1483,179 +1737,7 @@ const addEventToCalendar = async (eventDetails) => {
   }
 };
   
-  const handleSend = async () => {
-    if (input.trim() && canUseChat && selectedUser && familyId) {
-      try {
-        // Process with NLU first to show insights
-        const intent = nlu.current.detectIntent(input);
-        const entities = nlu.current.extractEntities(input, familyMembers);
-        
-        // Update NLU insights
-        setDetectedIntent(intent);
-        setExtractedEntities(entities);
-        
-        // Create user message
-        const userMessage = {
-          familyId,
-          sender: selectedUser.id,
-          userName: selectedUser.name,
-          userImage: selectedUser.profilePicture,
-          text: input,
-          timestamp: new Date().toISOString()
-        };
-        
-        // Optimistically add message to UI
-        setMessages(prev => [...prev, userMessage]);
-        setInput('');
-        setTranscription('');
-        setLoading(true);
-        
-        // Reset image if any
-        if (imageFile) {
-          setImageFile(null);
-          setImagePreview(null);
-        }
-        
-        // Always try to parse the message as an event first
-        const isEvent = await processMessageForEvents(input);
-        
-        const lastMessage = messages[messages.length - 1];
-        if (lastMessage && (lastMessage.documentFile || lastMessage.awaitingChildSelection)) {
-          // This might be a response to document action options
-          const isDocumentResponse = handleDocumentActionSelection(input, lastMessage);
-          
-          if (isDocumentResponse) {
-            // If we handled the document action, don't send to AI
-            setLoading(false);
-            return;
-          }
-        }
-
-        // If this is an event, don't send to AI yet
-        if (isEvent) {
-          // Save message to database (but don't get AI response yet)
-          await EnhancedChatService.saveMessage(userMessage);
-          setLoading(false);
-          return;
-        }
-        
-        // Check if this is a profile picture request
-        const isProfileRequest = 
-          input.toLowerCase().includes('profile picture') || 
-          input.toLowerCase().includes('profile photo') ||
-          input.toLowerCase().includes('upload picture') ||
-          input.toLowerCase().includes('add picture') ||
-          input.toLowerCase().includes('change picture');
-        
-        // Save message to database
-        const savedMessage = await EnhancedChatService.saveMessage(userMessage);
-        
-        // Update conversation context
-        const updatedContext = EnhancedChatService.updateConversationContext(familyId, {
-          query: input,
-          intent,
-          entities
-        });
-        
-        setConversationContext(updatedContext?.recentTopics || []);
-        
-        // Handle profile upload request
-        if (isProfileRequest) {
-          // [Profile handling code - unchanged]
-          return;
-        }
-        
-        // Get AI response for normal messages
-        const aiResponse = await EnhancedChatService.getAIResponse(
-          input, 
-          familyId, 
-          [...messages, userMessage]
-        );
-        
-        // Add AI response to messages
-        const allieMessage = {
-          id: Date.now().toString(), // Temporary ID 
-          familyId,
-          sender: 'allie',
-          userName: 'Allie',
-          text: aiResponse,
-          timestamp: new Date().toISOString()
-        };
-        
-        // Save AI message to database
-        const savedAIMessage = await EnhancedChatService.saveMessage(allieMessage);
-        if (savedAIMessage.success && savedAIMessage.messageId) {
-          allieMessage.id = savedAIMessage.messageId;
-        }
-        
-        // Update messages state with AI response
-        setMessages(prev => [...prev, allieMessage]);
-        
-        // NEW: Check if Allie's response is about a calendar event
-        const isCalendarResponse = 
-          aiResponse.toLowerCase().includes('add to your calendar') ||
-          aiResponse.toLowerCase().includes('added to your calendar') ||
-          aiResponse.toLowerCase().includes('calendar for') || 
-          aiResponse.toLowerCase().includes('birthday party') ||
-          aiResponse.toLowerCase().includes('event');
-        
-        // If it mentions calendar and there's no event parser visible yet, try to parse the combined conversation
-        if (isCalendarResponse && !showEventParser) {
-          // Create a combined text from the user's message and Allie's response
-          const combinedText = `${input}\n${aiResponse}`;
-          
-          // Try to parse this combined text
-          const familyContext = {
-            familyId,
-            children: familyMembers.filter(m => m.role === 'child')
-          };
-          
-          try {
-            // Parse the combined conversation
-            const eventDetails = await EventParserService.parseEventText(combinedText, familyContext);
-            
-            if (eventDetails && (eventDetails.title || eventDetails.eventType)) {
-              // We successfully parsed an event from the conversation
-              eventDetails.creationSource = 'conversation';
-              setParsedEventDetails(eventDetails);
-              setShowEventParser(true);
-              setEventParsingSource('text');
-              
-              // Add a helper message to explain
-              const helperMessage = {
-                familyId,
-                sender: 'allie',
-                userName: 'Allie',
-                text: `I've extracted the event details from our conversation. Would you like to review and add this to your calendar?`,
-                timestamp: new Date().toISOString()
-              };
-              
-              // Save and display the helper message
-              await EnhancedChatService.saveMessage(helperMessage);
-              setMessages(prev => [...prev, helperMessage]);
-            }
-          } catch (parseError) {
-            console.error("Error parsing combined conversation:", parseError);
-            // This is a fallback, so just continue if it fails
-          }
-        }
-        
-        setLoading(false);
-      } catch (error) {
-        console.error("Error sending message:", error);
-        setLoading(false);
-        
-        // Show error message
-        setMessages(prev => [...prev, {
-          familyId,
-          sender: 'allie',
-          userName: 'Allie',
-          text: "I'm having trouble processing your request right now. Please try again in a moment.",
-          timestamp: new Date().toISOString()
-        }]);
-      }
-    }
-  };
+  
   
   const handleUsePrompt = (promptText, memberId) => {
     if (memberId) {

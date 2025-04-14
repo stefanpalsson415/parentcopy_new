@@ -75,140 +75,175 @@ async testProxyConnection() {
   }
 }
 
-  async generateResponse(messages, context, options = {}) {
+  // src/services/ClaudeService.js - update the generateResponse method
+
+async generateResponse(messages, context, options = {}) {
+  try {
+    // Format system prompt with family context
+    const systemPrompt = this.formatSystemPrompt(context || {});
+    
+    // Log for debugging
+    console.log("Claude API request via proxy:", { 
+      messagesCount: messages.length, 
+      systemPromptLength: systemPrompt.length,
+      model: this.model,
+      mockMode: this.mockMode,
+      temperature: options.temperature ||.7,
+      maxTokens: options.maxTokens || 4000
+    });
+    
+    // Check if messages is an array of our internal message format
+    let formattedMessages;
+    if (messages.length > 0 && messages[0].sender) {
+      // Convert to Claude's expected format
+      formattedMessages = messages.map(msg => ({
+        role: msg.sender === 'allie' ? 'assistant' : 'user',
+        content: msg.text || ""
+      }));
+    } else {
+      // Assume messages are already in Claude's format
+      formattedMessages = messages;
+    }
+    
+    // Reduce context size if needed (Claude has token limits)
+    // Keep the most recent messages, ensuring we have context but don't exceed limits
+    if (formattedMessages.length > 20) {
+      const contextLimit = 20;
+      // Always keep the last message
+      const lastMessage = formattedMessages[formattedMessages.length - 1];
+      
+      // Pick a selection of older messages for context
+      // Get every other message from the rest to reduce context size
+      const oldMessages = formattedMessages.slice(0, formattedMessages.length - 1)
+        .filter((_, index) => index % 2 === 0)
+        .slice(-contextLimit + 1);
+      
+      formattedMessages = [...oldMessages, lastMessage];
+      
+      console.log(`Reduced message context from ${messages.length} to ${formattedMessages.length} messages`);
+    }
+    
+    // Check if this is a calendar-related request in the last message
+    const lastUserMessage = formattedMessages[formattedMessages.length - 1].content || "";
+    const calendarEventData = this.extractCalendarRequest(lastUserMessage);
+    if (calendarEventData) {
+      // Process the calendar request and return the response
+      return this.processCalendarRequest(calendarEventData, context);
+    }
+    
+    // Prepare request payload for Claude API
+    const payload = {
+      model: this.model,
+      max_tokens: options.maxTokens || 4000,
+      temperature: options.temperature || 0.7,
+      messages: formattedMessages,
+      system: systemPrompt
+    };
+    
+    // Add a timeout to the API call
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // Increased timeout to 45 seconds
+    
+    // Make the API call through our proxy server
+    console.log("Attempting to connect to proxy at:", this.proxyUrl);
+    const response = await fetch(this.proxyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      console.warn("Claude proxy returned error status:", response.status);
+      // Instead of throwing, return a personalized response
+      return this.createPersonalizedResponse(lastUserMessage, context);
+    }
+    
+    const result = await response.json();
+    
+    // Check for valid response
+    if (!result || !result.content || !result.content[0]) {
+      console.error("Invalid response format from Claude API:", result);
+      return this.createPersonalizedResponse(lastUserMessage, context);
+    }
+    
+    return result.content[0].text;
+  } catch (error) {
+    console.error("Error in Claude API call:", error.message);
+    
+    // Only use fallback for certain errors
+    if (error.message?.includes("timeout") || error.message?.includes("network")) {
+      console.log("Using fallback response due to network/timeout error");
+      return this.createPersonalizedResponse(
+        typeof messages[messages.length - 1] === 'object' 
+          ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "") 
+          : "", 
+        context
+      );
+    }
+    
+    // For other errors, retry with simpler prompt
     try {
-      // Format system prompt with family context
-      const systemPrompt = this.formatSystemPrompt(context || {});
+      console.log("Retrying with simplified prompt...");
+      // Create a more focused system prompt
+      const simplifiedSystemPrompt = `You are Allie, an AI assistant focused on family workload balance.
+      Today's date is ${new Date().toLocaleDateString()}.
       
-      // Log for debugging
-      console.log("Claude API request via proxy:", { 
-        messagesCount: messages.length, 
-        systemPromptLength: systemPrompt.length,
-        model: this.model,
-        mockMode: this.mockMode,
-        temperature: options.temperature ||.7,
-        maxTokens: options.maxTokens || 4000
-      });
+      IMPORTANT: Give specific answers about the family data you have access to:
+      - Family: ${context.familyName || 'Unknown'}
+      - Survey data: ${context.surveyData?.mamaPercentage ? `Mama: ${context.surveyData.mamaPercentage.toFixed(1)}%, Papa: ${(100 - context.surveyData.mamaPercentage).toFixed(1)}%` : 'Not yet available'}
+      - Tasks: ${context.tasks?.length || 0} active tasks
       
-      // Get the last user message
-      const lastUserMessage = messages[messages.length - 1]?.content || "";
+      REMEMBER: Always be specific and precise when referring to this family's data.
+      DO NOT say "I have access to the family's data" - instead SHOW that access by mentioning specific data points.
       
-      // Check if this is a calendar-related request
-      const calendarEventData = this.extractCalendarRequest(lastUserMessage);
-      if (calendarEventData) {
-        // Process the calendar request and return the response
-        return this.processCalendarRequest(calendarEventData, context);
-      }
+      ABOUT SURVEY QUESTIONS: Be informative about all survey questions. Explain why they're asked, how their weights are calculated, and the impact of each factor (frequency, invisibility, emotional labor, child development) on task importance.`;
       
-      // Prepare request payload for Claude API
-      const payload = {
-        model: this.model,
-        max_tokens: options.maxTokens || 4000,
-        temperature: options.temperature || 0.7,
-        messages: [
-          {
-            role: "user",
-            content: lastUserMessage
-          }
-        ],
-        system: systemPrompt
-      };
+      // Extract last user message for the retry
+      const lastMessageContent = typeof messages[messages.length - 1] === 'object'
+        ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
+        : "";
       
-      // Add a timeout to the API call
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
-      
-      // Make the API call through our proxy server
-      console.log("Attempting to connect to proxy at:", this.proxyUrl);
+      // Make a simpler request
       const response = await fetch(this.proxyUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: this.model,
+          max_tokens: 2000,
+          temperature: 0.7,
+          messages: [{ role: "user", content: lastMessageContent }],
+          system: simplifiedSystemPrompt
+        })
       });
       
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        console.warn("Claude proxy returned error status:", response.status);
-        // Instead of throwing, return a personalized response
-        return this.createPersonalizedResponse(lastUserMessage, context);
-      }
-      
-      const result = await response.json();
-      
-      // Check for valid response
-      if (!result || !result.content || !result.content[0]) {
-        console.error("Invalid response format from Claude API:", result);
-        return this.createPersonalizedResponse(lastUserMessage, context);
-      }
-      
-      return result.content[0].text;
-    } catch (error) {
-      console.error("Error in Claude API call:", error.message);
-      
-      // Only use fallback for certain errors
-      if (error.message?.includes("timeout") || error.message?.includes("network")) {
-        console.log("Using fallback response due to network/timeout error");
-        return this.createPersonalizedResponse(
-          messages[messages.length - 1]?.content || "", 
-          context
-        );
-      }
-      
-      // For other errors, retry with simpler prompt
-      try {
-        console.log("Retrying with simplified prompt...");
-        // Create a more focused system prompt
-        const simplifiedSystemPrompt = `You are Allie, an AI assistant focused on family workload balance.
-        Today's date is ${new Date().toLocaleDateString()}.
-        
-        IMPORTANT: Give specific answers about the family data you have access to:
-        - Family: ${context.familyName || 'Unknown'}
-        - Survey data: ${context.surveyData?.mamaPercentage ? `Mama: ${context.surveyData.mamaPercentage.toFixed(1)}%, Papa: ${(100 - context.surveyData.mamaPercentage).toFixed(1)}%` : 'Not yet available'}
-        - Tasks: ${context.tasks?.length || 0} active tasks
-        
-        REMEMBER: Always be specific and precise when referring to this family's data.
-        DO NOT say "I have access to the family's data" - instead SHOW that access by mentioning specific data points.
-        
-        ABOUT SURVEY QUESTIONS: Be informative about all survey questions. Explain why they're asked, how their weights are calculated, and the impact of each factor (frequency, invisibility, emotional labor, child development) on task importance.`;
-        
-        // Make a simpler request
-        const response = await fetch(this.proxyUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: this.model,
-            max_tokens: 2000,
-            temperature: 0.7,
-            messages: [{ role: "user", content: messages[messages.length - 1]?.content || "" }],
-            system: simplifiedSystemPrompt
-          })
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          if (result && result.content && result.content[0]) {
-            return result.content[0].text;
-          }
+      if (response.ok) {
+        const result = await response.json();
+        if (result && result.content && result.content[0]) {
+          return result.content[0].text;
         }
-        
-        // If retry fails, fall back to default response
-        return this.createPersonalizedResponse(
-          messages[messages.length - 1]?.content || "", 
-          context
-        );
-      } catch (retryError) {
-        console.error("Retry also failed:", retryError);
-        return this.createPersonalizedResponse(
-          messages[messages.length - 1]?.content || "", 
-          context
-        );
       }
+      
+      // If retry fails, fall back to default response
+      return this.createPersonalizedResponse(
+        lastMessageContent, 
+        context
+      );
+    } catch (retryError) {
+      console.error("Retry also failed:", retryError);
+      return this.createPersonalizedResponse(
+        typeof messages[messages.length - 1] === 'object'
+          ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
+          : "",
+        context
+      );
     }
   }
+}
   
   // Extract calendar event data from user message
   extractCalendarRequest(message) {
