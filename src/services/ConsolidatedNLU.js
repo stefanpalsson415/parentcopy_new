@@ -525,7 +525,10 @@ class ConsolidatedNLU {
     return bestIntent;
   }
 
-  /**
+ // Fix the extractEntities method in src/services/ConsolidatedNLU.js
+// Replace the current method with this improved version
+
+/**
  * Extract entities from text
  * @param {string} text - The message text to analyze
  * @param {Array} familyMembers - Optional family members for validation
@@ -543,14 +546,24 @@ extractEntities(text, familyMembers = []) {
     // Skip if pattern is invalid
     if (!pattern || typeof pattern.test !== 'function') continue;
     
-    // Reset regex lastIndex
-    pattern.lastIndex = 0;
+    // Create a fresh copy of the RegExp to avoid lastIndex issues
+    // This is crucial - using the same regex object can lead to infinite loops
+    const freshPattern = new RegExp(pattern.source, pattern.flags);
     
     const matches = [];
     let match;
+    let safetyCounter = 0;
+    const MAX_MATCHES = 50; // Safety limit to prevent infinite loops
     
     try {
-      while ((match = pattern.exec(text)) !== null) {
+      while ((match = freshPattern.exec(text)) !== null) {
+        // Safety check to prevent infinite loops
+        safetyCounter++;
+        if (safetyCounter > MAX_MATCHES) {
+          console.warn(`Reached safety limit of ${MAX_MATCHES} matches for ${entityType}`);
+          break;
+        }
+        
         // Skip if validation function exists and returns false
         if (validate && !validate(match, familyMembers)) {
           continue;
@@ -558,6 +571,11 @@ extractEntities(text, familyMembers = []) {
         
         if (match[1]) {
           matches.push(match[1]);
+        }
+        
+        // For non-global patterns, break after first match to prevent infinite loops
+        if (!freshPattern.global) {
+          break;
         }
       }
       

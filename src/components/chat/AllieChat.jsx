@@ -631,61 +631,58 @@ const handleSend = async () => {
   };
 
 
- // In src/components/chat/AllieChat.jsx
-// Update the processMessageForEvents function to better detect medical-related content
-
-// Update this function in src/components/chat/AllieChat.jsx
-// Enhanced processMessageForEvents function
-
-const processMessageForEvents = async (text) => {
-  try {
-    // Only try to parse events if we have family context
-    if (!familyId || !selectedUser) return false;
-    
-    // Get basic NLU analysis
-    const intent = nlu.current.detectIntent(text);
-    const entities = nlu.current.extractEntities(text);
-    
-    // Create child event detector if we don't have one
-    if (!childEventDetector.current) {
-      const ChildEventDetection = (await import('../../services/EnhancedChildEventDetection')).default;
-      childEventDetector.current = new ChildEventDetection();
-    }
-    
-    // Check for provider-specific requests first (doctors, specialists)
-    const isProviderRequest = 
-      text.toLowerCase().includes('doctor') || 
-      text.toLowerCase().includes('provider') ||
-      text.toLowerCase().includes('pediatrician') ||
-      text.toLowerCase().includes('dentist') ||
-      (text.toLowerCase().includes('add') && 
-       (text.toLowerCase().includes('medical') || 
-        text.toLowerCase().includes('healthcare')));
-    
-    if (isProviderRequest) {
-      // Don't try to handle as an event, let the provider-specific handler take care of it
-      const childrenMentioned = familyMembers
-        .filter(m => m.role === 'child')
-        .some(child => text.toLowerCase().includes(child.name.toLowerCase()));
+  const processMessageForEvents = async (text) => {
+    try {
+      // Only try to parse events if we have family context
+      if (!familyId || !selectedUser) return false;
       
-      // Only return true if it's clearly a provider request with children mentioned
-      if (childrenMentioned) {
-        console.log("Detected provider request with children mentioned, skipping event parsing");
-        // Don't handle here, let EnhancedChatService handle it
-        return false;
+      // Get basic NLU analysis
+      const intentObj = nlu.current.detectIntent(text);
+      // Extract the intent string safely (it was trying to call startsWith on the object)
+      const intent = intentObj?.intent || '';
+      const entities = nlu.current.extractEntities(text);
+      
+      // Create child event detector if we don't have one
+      if (!childEventDetector.current) {
+        const ChildEventDetection = (await import('../../services/EnhancedChildEventDetection')).default;
+        childEventDetector.current = new ChildEventDetection();
       }
-    }
-    
-    // Enhanced detection for calendar-related content
-    const isCalendarRelated = 
-      intent.startsWith('calendar.') || 
-      text.toLowerCase().includes('birthday') ||
-      text.toLowerCase().includes('party') ||
-      text.toLowerCase().includes('invite') ||
-      text.toLowerCase().includes('calendar') ||
-      text.toLowerCase().includes('appointment') ||
-      text.toLowerCase().includes('event') ||
-      text.toLowerCase().includes('schedule');
+      
+      // Check for provider-specific requests first (doctors, specialists)
+      const isProviderRequest = 
+        text.toLowerCase().includes('doctor') || 
+        text.toLowerCase().includes('provider') ||
+        text.toLowerCase().includes('pediatrician') ||
+        text.toLowerCase().includes('dentist') ||
+        (text.toLowerCase().includes('add') && 
+         (text.toLowerCase().includes('medical') || 
+          text.toLowerCase().includes('healthcare')));
+      
+      if (isProviderRequest) {
+        // Don't try to handle as an event, let the provider-specific handler take care of it
+        const childrenMentioned = familyMembers
+          .filter(m => m.role === 'child')
+          .some(child => text.toLowerCase().includes(child.name.toLowerCase()));
+        
+        // Only return true if it's clearly a provider request with children mentioned
+        if (childrenMentioned) {
+          console.log("Detected provider request with children mentioned, skipping event parsing");
+          // Don't handle here, let EnhancedChatService handle it
+          return false;
+        }
+      }
+      
+      // Enhanced detection for calendar-related content
+      const isCalendarRelated = 
+        intent.startsWith('calendar.') || 
+        text.toLowerCase().includes('birthday') ||
+        text.toLowerCase().includes('party') ||
+        text.toLowerCase().includes('invite') ||
+        text.toLowerCase().includes('calendar') ||
+        text.toLowerCase().includes('appointment') ||
+        text.toLowerCase().includes('event') ||
+        text.toLowerCase().includes('schedule');
+      
     
     // Check for child-specific events like activities and medical appointments
     const childrenList = familyMembers.filter(m => m.role === 'child');
