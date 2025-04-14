@@ -42,11 +42,18 @@ class EnhancedChatService {
     this.feedbackLog = {};
   }
   
-  async loadMessages(familyId, limit = 100) {
+  async loadMessages(familyId, options = {}) {
     try {
+      // Handle both cases: when options is a number (backwards compatibility)
+      // and when it's an object with configuration parameters
+      const pageSize = typeof options === 'number' ? options : (options.pageSize || 100);
+      const includeMetadata = options.includeMetadata !== undefined ? options.includeMetadata : true;
+      const loadMore = options.loadMore || false;
+      
       const result = await ChatPersistenceService.loadMessages(familyId, {
-        pageSize: limit,
-        includeMetadata: true
+        pageSize,
+        loadMore,
+        includeMetadata
       });
       
       // Update conversation context based on loaded messages
