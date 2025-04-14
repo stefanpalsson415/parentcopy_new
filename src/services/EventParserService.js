@@ -1,12 +1,12 @@
 // src/services/EventParserService.js
-import EnhancedNLU from './EnhancedNLU';
+import ConsolidatedNLU from './ConsolidatedNLU';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from './firebase';
 import { v4 as uuidv4 } from 'uuid';
 
 class EventParserService {
   constructor() {
-    this.nlu = new EnhancedNLU();
+    this.nlu = new ConsolidatedNLU();
     this.ocrApiUrl = '/api/ocr'; // Will proxy to our Cloud Function
   }
 

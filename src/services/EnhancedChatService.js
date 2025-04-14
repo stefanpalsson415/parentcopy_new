@@ -5,7 +5,7 @@ import EnhancedNLU from './EnhancedNLU';
 import CalendarService from './CalendarService';
 import { knowledgeBase } from '../data/AllieKnowledgeBase';
 import ProviderService from './ProviderService';
-import AdvancedNLU from './AdvancedNLU';
+import ConsolidatedNLU from './ConsolidatedNLU';
 import ProviderChatService from './ProviderChatService';
 import MedicalChatService from './MedicalChatService';
 import TaskChatService from './TaskChatService';
@@ -1485,7 +1485,7 @@ async getAIResponse(message, familyId, messageHistory = []) {
     }
     
     // Check for FAQ response before falling back to Claude
-    const faqResponse = AdvancedNLU.getFAQResponse(message);
+    const faqResponse = ConsolidatedNLU.getFAQResponse(message);
     if (faqResponse) {
       return faqResponse;
     }

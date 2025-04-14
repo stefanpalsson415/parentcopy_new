@@ -1,10 +1,10 @@
 // src/services/IntentClassifier.js
-import AdvancedNLU from './AdvancedNLU';
+import ConsolidatedNLU from './ConsolidatedNLU';
 import ConversationContext from './ConversationContext';
 
 class IntentClassifier {
   constructor() {
-    this.nlu = AdvancedNLU;
+    this.nlu = ConsolidatedNLU;
     this.context = ConversationContext;
     this.intentConfidenceThreshold = 0.6;
     

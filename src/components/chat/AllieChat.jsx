@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, X, MinusSquare, Send, Info, Calendar, PlusCircle, Mic, User, ChevronUp, ChevronDown, Upload, Camera, Maximize } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import EnhancedChatService from '../../services/EnhancedChatService';
-import EnhancedNLU from '../../services/EnhancedNLU';
+import ConsolidatedNLU from '../../services/ConsolidatedNLU';
 import ChatMessage from './ChatMessage';
 import CalendarPromptChip from './CalendarPromptChip';
 import ChatFeedback from './ChatFeedback';
@@ -72,7 +72,7 @@ const childTrackingService = useRef(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const chatContainerRef = useRef(null);
-  const nlu = useRef(new EnhancedNLU());
+  const nlu = useRef(new ConsolidatedNLU());
   
   // Initialize userClosedChat from localStorage on component mount
   useEffect(() => {
