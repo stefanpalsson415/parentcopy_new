@@ -3,11 +3,13 @@ import ConsolidatedNLU from './ConsolidatedNLU';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from './firebase';
 import { v4 as uuidv4 } from 'uuid';
+import * as chrono from 'chrono-node';
+
 
 class EventParserService {
   constructor() {
-    this.nlu = ConsolidatedNLU; // Fixed: use the imported instance directly
-    this.ocrApiUrl = '/api/ocr'; // Will proxy to our Cloud Function
+    this.nlu = ConsolidatedNLU;
+    this.ocrApiUrl = '/api/ocr';
   }
 
   /**
@@ -1058,244 +1060,122 @@ detectInvitation(text, familyMembers = []) {
     return 'event';
   }
   
-// Replace the existing extractDateTime method in EventParserService.js
-extractDateTime(text, region = 'US') {
-  try {
-    console.log(`Extracting date/time with region: ${region}`);
-    const now = new Date();
-    let date = new Date(now);
-    date.setHours(0, 0, 0, 0); // Reset time
-    
-    // First check for relative date references
-    const nextWeekPattern = /\b(?:next\s+week|coming\s+week)\b/i;
-    const isNextWeek = nextWeekPattern.test(text);
-    
-    // Check for day of week references
-    const dayMapping = {
-      'monday': 1, 'mon': 1,
-      'tuesday': 2, 'tue': 2, 'tues': 2,
-      'wednesday': 3, 'wed': 3, 'weds': 3,
-      'thursday': 4, 'thu': 4, 'thur': 4, 'thurs': 4,
-      'friday': 5, 'fri': 5,
-      'saturday': 6, 'sat': 6,
-      'sunday': 0, 'sun': 0
+  extractDateTime(text, region = 'US') {
+    try {
+      console.log(`Extracting date/time with region: ${region} from text: "${text}"`);
+      
+      // Set reference date to now
+      const refDate = new Date();
+      
+      // Create parsing options
+      const options = {
+        forwardDate: true // Always prefer future dates for events
+      };
+      
+      // Handle Swedish text by adding additional context if needed
+      if (region === 'SE') {
+        // Add context for Swedish day/month names if they appear in the text
+        // This helps chrono better understand Swedish references
+        const swedishContext = this.detectSwedishDateContext(text);
+        if (swedishContext) {
+          text = `${swedishContext} ${text}`;
+        }
+      }
+      
+      // Parse the text using chrono-node's natural language parsing
+      const parsedResults = chrono.parse(text, refDate, options);
+      
+      // If parsing failed, use default date/time
+      if (!parsedResults || parsedResults.length === 0) {
+        console.log("Failed to parse date/time, using default");
+        return this.getDefaultDateTime(text);
+      }
+      
+      // Get the first result (most likely match)
+      const parsedDate = parsedResults[0].start.date();
+      
+      // Log the extracted date for debugging
+      console.log(`Extracted date/time: ${parsedDate.toISOString()}`);
+      
+      return parsedDate;
+    } catch (error) {
+      console.error("Error in extractDateTime:", error);
+      return this.getDefaultDateTime(text); // Use default on error
+    }
+  }
+  
+  // Helper method for Swedish date context
+  detectSwedishDateContext(text) {
+    // If Swedish month names are detected, add English equivalents to help chrono
+    const swedishMonths = {
+      'januari': 'January', 'februari': 'February', 'mars': 'March',
+      'april': 'April', 'maj': 'May', 'juni': 'June',
+      'juli': 'July', 'augusti': 'August', 'september': 'September',
+      'oktober': 'October', 'november': 'November', 'december': 'December'
     };
     
-    let dayOfWeek = null;
-    // Check text for day of week mentions
-    for (const [dayName, dayValue] of Object.entries(dayMapping)) {
-      const dayPattern = new RegExp(`\\b${dayName}\\b`, 'i');
-      if (dayPattern.test(text)) {
-        dayOfWeek = dayValue;
+    // If Swedish day names are detected, add English equivalents to help chrono
+    const swedishDays = {
+      'måndag': 'Monday', 'tisdag': 'Tuesday', 'onsdag': 'Wednesday',
+      'torsdag': 'Thursday', 'fredag': 'Friday', 'lördag': 'Saturday', 
+      'söndag': 'Sunday'
+    };
+    
+    // Check for Swedish time indicators
+    const hasSwedishTimeFormat = text.match(/\b(kl\.?|klockan)\s+\d{1,2}([:.])\d{2}\b/i);
+    
+    // Build context string if needed
+    let context = '';
+    
+    // Check for month names
+    for (const [swedish, english] of Object.entries(swedishMonths)) {
+      if (text.toLowerCase().includes(swedish)) {
+        context += `${english} `;
         break;
       }
     }
     
-    // If we found a day of week, adjust the date
-    if (dayOfWeek !== null) {
-      const currentDay = date.getDay();
-      let daysToAdd = (dayOfWeek - currentDay + 7) % 7;
-      
-      // If it's the same day and not specified as "today", assume next occurrence
-      if (daysToAdd === 0 && !text.toLowerCase().includes('today')) {
-        daysToAdd = 7;
-      }
-      
-      // If "next week" is mentioned, adjust to next week explicitly
-      if (isNextWeek) {
-        // If we're already calculating next week's day, add 7 more days
-        if (daysToAdd < 7) {
-          daysToAdd += 7;
-        }
-      }
-      
-      date.setDate(date.getDate() + daysToAdd);
-      console.log(`Adjusted date for day of week: ${date.toISOString()}`);
-    } else if (isNextWeek) {
-      // If just "next week" with no specific day, default to Monday of next week
-      const currentDay = date.getDay();
-      const daysToAdd = (1 - currentDay + 7) % 7 + 7; // Days until next Monday
-      date.setDate(date.getDate() + daysToAdd);
-      console.log(`Adjusted date for next week: ${date.toISOString()}`);
-    }
-    
-    // Now try standard date formats (existing code)
-    // ...
-    
-    // Try to find time patterns - improved version
-    const timePatterns = {
-      'SE': [
-        // 24-hour clock: 14:00 or 14.00
-        {
-          pattern: /(kl\.?|klockan)?\s*(\d{1,2})[.:](\d{2})\b/i,
-          handler: (match) => {
-            const hours = parseInt(match[2]);
-            const minutes = parseInt(match[3]);
-            
-            if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
-              date.setHours(hours, minutes, 0, 0);
-              return true;
-            }
-            return false;
-          }
-        }
-      ],
-      'US': [
-        // 12-hour clock with colon: 2:00 pm
-        {
-          pattern: /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i,
-          handler: (match) => {
-            let hours = parseInt(match[1]);
-            const minutes = match[2] ? parseInt(match[2]) : 0;
-            const period = match[3].toLowerCase();
-            
-            // Adjust for AM/PM
-            if (period === 'pm' && hours < 12) {
-              hours += 12;
-            } else if (period === 'am' && hours === 12) {
-              hours = 0;
-            }
-            
-            if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
-              date.setHours(hours, minutes, 0, 0);
-              return true;
-            }
-            return false;
-          }
-        },
-        // 12-hour clock without colon: 7pm
-        {
-          pattern: /\b(\d{1,2})(am|pm)\b/i,
-          handler: (match) => {
-            let hours = parseInt(match[1]);
-            const period = match[2].toLowerCase();
-            
-            if (period === 'pm' && hours < 12) {
-              hours += 12;
-            } else if (period === 'am' && hours === 12) {
-              hours = 0;
-            }
-            
-            if (hours >= 0 && hours <= 23) {
-              date.setHours(hours, 0, 0, 0);
-              return true;
-            }
-            return false;
-          }
-        }
-      ],
-      // Add general time pattern that works for both regions
-      'general': [
-        // Just a number with am/pm or hour specification
-        {
-          pattern: /\b(?:at|@)?\s*(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.|)\b/i,
-          handler: (match) => {
-            let hours = parseInt(match[1]);
-            const period = match[2].toLowerCase();
-            
-            // If time is 7 without am/pm, assume pm for evening times (5-12)
-            if (!period && (hours >= 5 && hours <= 12)) {
-              hours += 12;
-            }
-            // Adjust for explicit pm
-            else if ((period.includes('pm') || period.includes('p.m')) && hours < 12) {
-              hours += 12;
-            } 
-            // Adjust for explicit am
-            else if ((period.includes('am') || period.includes('a.m')) && hours === 12) {
-              hours = 0;
-            }
-            
-            if (hours >= 0 && hours <= 23) {
-              date.setHours(hours, 0, 0, 0);
-              return true;
-            }
-            return false;
-          }
-        }
-      ]
-    };
-    
-    // Try specific regional time patterns first
-    let timeFound = false;
-    for (const pattern of timePatterns[region]) {
-      const match = text.match(pattern.pattern);
-      if (match) {
-        timeFound = pattern.handler(match);
-        if (timeFound) break;
+    // Check for day names
+    for (const [swedish, english] of Object.entries(swedishDays)) {
+      if (text.toLowerCase().includes(swedish)) {
+        context += `${english} `;
+        break;
       }
     }
     
-    // If no regional time pattern matched, try general patterns
-    if (!timeFound) {
-      for (const pattern of timePatterns.general) {
-        const match = text.match(pattern.pattern);
-        if (match) {
-          timeFound = pattern.handler(match);
-          if (timeFound) break;
-        }
-      }
-    }
-    
-    // If still no time found, try the other region's patterns
-    if (!timeFound) {
-      const otherRegion = region === 'SE' ? 'US' : 'SE';
-      for (const pattern of timePatterns[otherRegion]) {
-        const match = text.match(pattern.pattern);
-        if (match) {
-          timeFound = pattern.handler(match);
-          if (timeFound) break;
-        }
-      }
-    }
-    
-    // If still no time found, set default based on event type
-    if (!timeFound) {
-      const eventType = this.detectEventType(text);
-      
-      // Look for evening indicators
-      const eveningIndicators = /\b(?:evening|dinner|night)\b/i;
-      const isEvening = eveningIndicators.test(text);
-      
-      if (isEvening) {
-        date.setHours(19, 0, 0, 0); // 7:00 PM default for evening events
-      } else {
-        switch (eventType) {
-          case 'birthday':
-            date.setHours(14, 0, 0, 0); // 2:00 PM default for birthdays
-            break;
-          case 'doctor':
-          case 'dental':
-            date.setHours(10, 0, 0, 0); // 10:00 AM default for appointments
-            break;
-          case 'playdate':
-            date.setHours(15, 0, 0, 0); // 3:00 PM default for playdates
-            break;
-          default:
-            date.setHours(12, 0, 0, 0); // Noon default for other events
-        }
-      }
-    }
-    
-    // Make sure the date is in the future
-    const currentDate = new Date();
-    if (date < currentDate) {
-      // If the date is today but the time has passed, keep it
-      if (date.toDateString() === currentDate.toDateString()) {
-        // Keep the date as is
-      } else {
-        // If it's a past date, push it to next year
-        date.setFullYear(date.getFullYear() + 1);
-      }
-    }
-    
-    console.log(`Final extracted date/time: ${date.toISOString()}`);
-    return date;
-  } catch (error) {
-    console.error("Error in extractDateTime:", error);
-    return new Date(); // Return current date/time as fallback
+    return context.trim();
   }
-}
+  
+  // Helper method for default date/time when parsing fails
+  getDefaultDateTime(text) {
+    const now = new Date();
+    const eventType = this.detectEventType(text);
+    
+    // Look for evening indicators
+    const eveningIndicators = /\b(?:evening|dinner|night)\b/i;
+    const isEvening = eveningIndicators.test(text);
+    
+    if (isEvening) {
+      now.setHours(19, 0, 0, 0); // 7:00 PM default for evening events
+    } else {
+      switch (eventType) {
+        case 'birthday':
+          now.setHours(14, 0, 0, 0); // 2:00 PM default for birthdays
+          break;
+        case 'doctor':
+        case 'dental':
+          now.setHours(10, 0, 0, 0); // 10:00 AM default for appointments
+          break;
+        case 'playdate':
+          now.setHours(15, 0, 0, 0); // 3:00 PM default for playdates
+          break;
+        default:
+          now.setHours(12, 0, 0, 0); // Noon default for other events
+      }
+    }
+    
+    return now;
+  }
   
 extractLocation(text) {
   // Pattern matching for locations

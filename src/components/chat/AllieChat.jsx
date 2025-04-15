@@ -22,6 +22,39 @@ import ChatPersistenceService from '../../services/ChatPersistenceService';
 
 
 const AllieChat = () => {
+  // Utility function to format message dates into readable groups
+const formatMessageDate = (timestamp) => {
+  const messageDate = new Date(timestamp);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  // Reset hours to compare dates only
+  const messageDay = new Date(messageDate.getFullYear(), messageDate.getMonth(), messageDate.getDate());
+  const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const yesterdayDay = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+  
+  if (messageDay.getTime() === todayDay.getTime()) {
+    return "Today";
+  } else if (messageDay.getTime() === yesterdayDay.getTime()) {
+    return "Yesterday";
+  } else {
+    return messageDate.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: messageDay.getFullYear() !== todayDay.getFullYear() ? 'numeric' : undefined
+    });
+  }
+};
+
+// Date header component for message groups
+const DateHeader = ({ date }) => (
+  <div className="flex justify-center my-4">
+    <div className="bg-gray-200 text-gray-600 text-xs px-3 py-1 rounded-full font-roboto">
+      {date}
+    </div>
+  </div>
+);
   const { familyId, selectedUser, familyMembers, updateMemberProfile, familyName, currentWeek, completedWeeks } = useFamily();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -337,7 +370,7 @@ const [loadingMore, setLoadingMore] = useState(false);
   }, [isOpen, shouldAutoOpen, initialMessageSent, location.pathname, familyId, familyMembers, selectedUser]);
   
 
-// Replace the loadMessages function in AllieChat.jsx with this improved version
+/// Replace the loadMessages function in AllieChat.jsx with this improved version
 const loadMessages = async (loadMore = false) => {
   try {
     if (!selectedUser || !familyId) {
@@ -621,7 +654,6 @@ useEffect(() => {
     retryLoadMessages();
   }
 }, [selectedUser, familyId]);
-
 
 const processMessageForEvents = async (text) => {
   try {
@@ -2259,8 +2291,8 @@ const addEventToCalendar = async (eventDetails) => {
           </div>
           
           {/* Chat messages */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-3">
-            {/* Welcome message if no messages */}
+          <div className="flex-1 overflow-y-auto p-3">
+          {/* Welcome message if no messages */}
             {messages.length === 0 && (
               <div className="bg-blue-50 p-3 rounded-lg">
                 <div className="flex items-center mb-1">
@@ -2273,52 +2305,69 @@ const addEventToCalendar = async (eventDetails) => {
               </div>
             )}
             
-            {/* Render messages */}
-{messages.map((msg, index) => (
-  <div key={index} className={`flex mb-4 ${msg.sender === 'allie' ? 'justify-start' : 'justify-end'}`}>
-    {msg.sender === 'allie' && (
-      <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center mr-2 flex-shrink-0">
-        <span className="text-xs font-bold">A</span>
-      </div>
-    )}
+            {/* Render messages with date headers */}
+{(() => {
+  let currentDate = null;
+  return messages.map((msg, index) => {
+    const messageDate = new Date(msg.timestamp);
+    const messageDateStr = formatMessageDate(messageDate);
     
-    <div className={`max-w-[80%] p-3 rounded-lg ${
-  msg.sender === 'allie' 
-    ? 'bg-white border border-gray-100 shadow-sm' 
-    : 'bg-blue-600 text-white'
-} transition-all duration-200 hover:shadow-md`}>
+    // Check if this message is from a different date than the previous one
+    const showDateHeader = currentDate !== messageDateStr;
+    if (showDateHeader) {
+      currentDate = messageDateStr;
+    }
     
-      <div className="flex justify-between items-start">
-        {!msg.sender !== 'allie' && (
-          <div className="font-medium text-xs mb-1">{msg.userName}</div>
-        )}
-        {msg.sender === 'allie' && (
-          <div className="font-medium text-xs mb-1">Allie</div>
-        )}
-        <div className="text-xs text-gray-500 ml-2">
-          {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+    return (
+      <React.Fragment key={index}>
+        {showDateHeader && <DateHeader date={currentDate} />}
+        <div className={`flex mb-4 ${msg.sender === 'allie' ? 'justify-start' : 'justify-end'}`}>
+          {msg.sender === 'allie' && (
+            <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center mr-2 flex-shrink-0">
+              <span className="text-xs font-bold">A</span>
+            </div>
+          )}
+          
+          <div className={`max-w-[80%] p-3 rounded-lg ${
+            msg.sender === 'allie' 
+              ? 'bg-white border border-gray-100 shadow-sm' 
+              : 'bg-blue-600 text-white'
+          } transition-all duration-200 hover:shadow-md`}>
+          
+            <div className="flex justify-between items-start">
+              {!msg.sender !== 'allie' && (
+                <div className="font-medium text-xs mb-1">{msg.userName}</div>
+              )}
+              {msg.sender === 'allie' && (
+                <div className="font-medium text-xs mb-1">Allie</div>
+              )}
+              <div className="text-xs text-gray-500 ml-2">
+                {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+              </div>
+            </div>
+            
+            <div className="text-sm whitespace-pre-wrap">{msg.text}</div>
+            
+            {/* Add feedback component for Allie messages */}
+            {msg.sender === 'allie' && msg.id && (
+              <ChatFeedback messageId={msg.id} familyId={familyId} />
+            )}
+          </div>
+          
+          {msg.sender !== 'allie' && msg.userImage && (
+            <div className="h-8 w-8 rounded-full overflow-hidden ml-2 flex-shrink-0">
+              <img 
+                src={msg.userImage} 
+                alt={msg.userName}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
         </div>
-      </div>
-      
-      <div className="text-sm whitespace-pre-wrap">{msg.text}</div>
-      
-      {/* Add feedback component for Allie messages */}
-      {msg.sender === 'allie' && msg.id && (
-        <ChatFeedback messageId={msg.id} familyId={familyId} />
-      )}
-    </div>
-    
-    {msg.sender !== 'allie' && msg.userImage && (
-      <div className="h-8 w-8 rounded-full overflow-hidden ml-2 flex-shrink-0">
-        <img 
-          src={msg.userImage} 
-          alt={msg.userName}
-          className="w-full h-full object-cover"
-        />
-      </div>
-    )}
-  </div>
-))}
+      </React.Fragment>
+    );
+  });
+})()}
             
             {/* Event confirmation UI */}
             {showEventConfirmation && detectedEventDetails && (
