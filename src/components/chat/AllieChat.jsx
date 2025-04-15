@@ -734,7 +734,8 @@ const processMessageForEvents = async (text) => {
           }
           
           // Now that we have all the details, create the event directly
-          const response = await this.createCalendarEventDirectly(parsedEvent);
+          const response = await createCalendarEventDirectly(parsedEvent);
+
           
           if (response.success) {
             // Send success message
@@ -839,7 +840,7 @@ const extractMentionedPeople = (text, familyMembers) => {
 };
 
 // Helper method to create calendar event directly
-async createCalendarEventDirectly(eventDetails) {
+const createCalendarEventDirectly = async (eventDetails) => {
   try {
     if (!eventDetails || !selectedUser) {
       return { success: false, error: "Missing event details or user" };
