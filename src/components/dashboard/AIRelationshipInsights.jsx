@@ -1,3 +1,4 @@
+// src/components/dashboard/AIRelationshipInsights.jsx
 import React, { useState, useEffect } from 'react';
 import { Brain, Lightbulb, Heart, Users, RefreshCw, ArrowRight, Calendar, Clock, Info } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
@@ -8,6 +9,7 @@ const AIRelationshipInsights = ({ insights = [], onActionClick }) => {
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [hasData, setHasData] = useState(true);
+  const [localInsights, setLocalInsights] = useState(insights);
 
   // Check if we have enough data on initial render
   useEffect(() => {
@@ -23,6 +25,7 @@ const AIRelationshipInsights = ({ insights = [], onActionClick }) => {
   const handleActionClick = (insight) => {
     // Determine template type from action text
     let templateType = null;
+    let category = insight.category || 'general';
     
     if (!insight?.actionable) return;
     
@@ -53,9 +56,9 @@ const AIRelationshipInsights = ({ insights = [], onActionClick }) => {
       }
     }
     
-    // Call the parent's handler with the template type
+    // Call the parent's handler with the template type and category
     if (onActionClick) {
-      onActionClick(templateType);
+      onActionClick(category);
     }
   };
 
@@ -87,14 +90,7 @@ const AIRelationshipInsights = ({ insights = [], onActionClick }) => {
       );
       
       setLastRefresh(new Date());
-      
-      // Return new insights to parent component
-      if (onActionClick && typeof onActionClick === 'function') {
-        // If onActionClick has a second parameter for updating insights
-        if (onActionClick.length > 1) {
-          onActionClick(null, newInsights);
-        }
-      }
+      setLocalInsights(newInsights);
       
       setLoading(false);
     } catch (error) {
@@ -132,7 +128,7 @@ const AIRelationshipInsights = ({ insights = [], onActionClick }) => {
   ];
 
   // Display default insights if none provided or data is insufficient
-  const displayInsights = insights?.length > 0 ? insights : getDefaultInsights();
+  const displayInsights = localInsights?.length > 0 ? localInsights : getDefaultInsights();
 
   // If there's truly no relationship data, show an introductory message instead
   if (!hasData && displayInsights.length === 0) {
@@ -214,12 +210,13 @@ const AIRelationshipInsights = ({ insights = [], onActionClick }) => {
             {displayInsights.map((insight) => (
               <div 
                 key={insight.id}
-                className={`p-4 rounded-lg border ${
+                className={`p-4 rounded-lg border cursor-pointer hover:shadow-md transition-all ${
                   insight.category === 'connection' ? 'bg-pink-50 border-pink-200' :
                   insight.category === 'workload' ? 'bg-purple-50 border-purple-200' :
                   insight.category === 'gratitude' ? 'bg-blue-50 border-blue-200' :
                   'bg-green-50 border-green-200'
                 }`}
+                onClick={() => handleActionClick(insight)}
               >
                 <div className="flex items-start">
                   <div className="mt-1 mr-3 flex-shrink-0">
@@ -231,8 +228,7 @@ const AIRelationshipInsights = ({ insights = [], onActionClick }) => {
                     
                     {insight.actionable && (
                       <div 
-                        className="mt-3 p-2 bg-white rounded border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors duration-150"
-                        onClick={() => handleActionClick(insight)}
+                        className="mt-3 p-2 bg-white rounded border-t border-gray-100 hover:bg-gray-50 transition-colors duration-150"
                       >
                         <p className="text-sm font-medium font-roboto flex items-center justify-between">
                           <span className="flex items-center">

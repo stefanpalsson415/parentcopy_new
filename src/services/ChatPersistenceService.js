@@ -139,6 +139,8 @@ import {
             timestamp: messageData.timestamp?.toDate?.() || new Date(messageData.timestamp)
           });
         });
+
+        
         
         // Sort messages in ascending order (oldest first)
         messages.sort((a, b) => {
@@ -159,6 +161,9 @@ import {
         return { messages: [], hasMore: false, error: error.message };
       }
     }
+    
+
+
     
     /**
      * Search for messages containing specific text

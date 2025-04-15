@@ -527,7 +527,8 @@ useEffect(() => {
             className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'children' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
             onClick={() => setActiveTab('children')}
           >
-            Children Tracking
+              Family Command Center
+
           </button>
           
           <button 

@@ -337,10 +337,13 @@ const [loadingMore, setLoadingMore] = useState(false);
   }, [isOpen, shouldAutoOpen, initialMessageSent, location.pathname, familyId, familyMembers, selectedUser]);
   
 
-// Replace the loadMessages function with this improved version
+// Replace the loadMessages function in AllieChat.jsx with this improved version
 const loadMessages = async (loadMore = false) => {
   try {
-    if (!selectedUser || !familyId) return;
+    if (!selectedUser || !familyId) {
+      console.warn("loadMessages called without selectedUser or familyId", { selectedUser, familyId });
+      return;
+    }
     
     if (loadMore) {
       setLoadingMore(true);
@@ -348,14 +351,18 @@ const loadMessages = async (loadMore = false) => {
       setLoading(true);
     }
     
+    console.log(`Attempting to load messages for family ${familyId}`, { loadMore });
+    
     const result = await ChatPersistenceService.loadMessages(familyId, {
       pageSize: 25,
       loadMore,
       includeMetadata: false
     });
     
+    console.log("Message loading result:", result);
+    
     if (result.error) {
-      console.error("Error loading messages:", result.error);
+      console.error("Error from ChatPersistenceService:", result.error);
       throw new Error(result.error);
     }
     
@@ -366,18 +373,22 @@ const loadMessages = async (loadMore = false) => {
       setMessages(prev => [...result.messages, ...prev]);
     } else {
       // Replace all messages
-      setMessages(result.messages);
+      setMessages(result.messages || []);
     }
   } catch (error) {
-    console.error("Error loading chat messages:", error);
+    console.error("Error loading chat messages:", error, {
+      stack: error.stack,
+      familyId,
+      selectedUser: selectedUser?.id
+    });
     
-    // Show error message to user
+    // Only show error message if we're not loading more
     if (!loadMore) {
       setMessages([{
         familyId,
         sender: 'allie',
         userName: 'Allie',
-        text: "I had trouble loading your conversation history. Please refresh the page to try again.",
+        text: "I had trouble loading your conversation history. Please try again or check your connection.",
         timestamp: new Date().toISOString(),
         error: true
       }]);
@@ -629,6 +640,37 @@ const handleSend = async () => {
     
     return false;
   };
+
+
+// Add this function to AllieChat.jsx
+const retryLoadMessages = (attempts = 3, delay = 1000) => {
+  let retryCount = 0;
+  
+  const attemptLoad = async () => {
+    try {
+      await loadMessages();
+      console.log("Successfully loaded messages after retry");
+    } catch (error) {
+      retryCount++;
+      console.log(`Attempt ${retryCount} failed, ${attempts - retryCount} attempts remaining`);
+      
+      if (retryCount < attempts) {
+        setTimeout(attemptLoad, delay);
+      } else {
+        console.error("All retry attempts failed");
+      }
+    }
+  };
+  
+  attemptLoad();
+};
+
+// Then modify the useEffect that loads messages:
+useEffect(() => {
+  if (selectedUser && familyId) {
+    retryLoadMessages();
+  }
+}, [selectedUser, familyId]);
 
 
   const processMessageForEvents = async (text) => {
