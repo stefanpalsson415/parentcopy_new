@@ -8,7 +8,6 @@ import {
   Clipboard
 } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
-import { useAuth } from '../../../contexts/AuthContext';
 import { useSurvey } from '../../../contexts/SurveyContext';
 import { db } from '../../../services/firebase';
 import { 
@@ -24,6 +23,8 @@ import RelationshipPrework from '../../relationship/RelationshipPrework';
 import CouplesMeeting from '../../relationship/CouplesMeeting';
 import UserAvatar from '../../common/UserAvatar';
 import RelationshipEventCard from '../../calendar';
+import { useAuth } from '../../../contexts/AuthContext';
+
 
 
 // Lazy load heavy components to improve initial load performance
@@ -150,7 +151,6 @@ const CombinedHistoryAndCharts = ({ hasEnoughDataForCharts }) => {
 const CycleManager = ({ cycle }) => {
   const { 
     familyId, 
-    currentUser,
     familyMembers,
     getRelationshipCycleData,
     completeRelationshipAssessment,
@@ -158,6 +158,9 @@ const CycleManager = ({ cycle }) => {
     scheduleCouplesMeeting,
     completeCouplesMeeting
   } = useFamily();
+
+  const { currentUser } = useAuth();
+
   
   const [cycleData, setCycleData] = useState(null);
   const [loading, setLoading] = useState(true);
