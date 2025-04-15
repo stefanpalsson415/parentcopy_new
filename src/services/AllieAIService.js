@@ -871,6 +871,7 @@ async processActivityFromChat(message, familyId, childId = null) {
  * @returns {Promise<Array>} Array of personalized insights
  */
 // Replace the existing generateChildInsights method in src/services/AllieAIService.js
+// Corrected generateChildInsights method for src/services/AllieAIService.js
 async generateChildInsights(familyId, childrenData) {
   try {
     if (!familyId || !childrenData) {
@@ -892,45 +893,120 @@ async generateChildInsights(familyId, childrenData) {
     const localInsights = this.getFallbackChildInsights(childrenData);
     
     try {
-      // Set local insights immediately so UI is not empty
-      setAiInsights(localInsights);
-      
       // Try to get enhanced insights from AI service with a longer timeout
-      console.log("Requesting AI-generated child insights from AllieAIService");
-      const aiInsightsPromise = AllieAIService.generateChildInsights(familyId, childrenData);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("AI insights request timed out")), 20000) // 20 seconds timeout
-      );
+      console.log("Requesting AI-generated child insights from Claude API");
       
-      // Race between the actual request and a timeout
-      const aiInsights = await Promise.race([aiInsightsPromise, timeoutPromise]);
+      // Prepare system prompt for Claude
+      const systemPrompt = `You are Allie's child development and healthcare expert AI. 
+      Analyze the provided child data and create 3-6 personalized, actionable insights.
       
-      if (aiInsights && Array.isArray(aiInsights) && aiInsights.length > 0) {
-        console.log(`Received ${aiInsights.length} AI-generated insights`);
-        // Only update if we got valid insights
-        return aiInsights;
-      } else {
-        // Keep using local insights
-        console.warn("AI service returned empty or invalid insights, using local insights");
+      For each insight, include:
+      1. A specific title related to the child's health, growth, or routine
+      2. A category (medical, growth, routine, recommendation, etc.)
+      3. Specific content with a data point from the child's records
+      4. A priority level (high, medium, low) based on importance
+      5. The relevant childId
+      
+      VERY IMPORTANT: Your response must be in valid JSON format with this structure:
+      {
+        "insights": [
+          {
+            "title": "string (concise, specific title)",
+            "type": "string (medical, growth, recommendation, clothes, routine)",
+            "content": "string (insight with specific data point)",
+            "priority": "string (high, medium, low)",
+            "childId": "string (child's ID)"
+          }
+        ]
+      }`;
+      
+      // Create a concise version of the data to avoid token limits
+      const processedData = {};
+      Object.keys(childrenData).forEach(childId => {
+        const child = childrenData[childId];
+        
+        // Only include essential data for insights
+        processedData[childId] = {
+          medicalAppointments: (child.medicalAppointments || [])
+            .slice(0, 10)  // Limit to recent appointments
+            .map(apt => ({
+              title: apt.title,
+              date: apt.date,
+              completed: apt.completed,
+              notes: apt.notes?.substring(0, 100) // Limit note length
+            })),
+          growthData: (child.growthData || [])
+            .slice(0, 10)  // Limit to recent measurements
+            .map(entry => ({
+              date: entry.date,
+              height: entry.height,
+              weight: entry.weight,
+              shoeSize: entry.shoeSize,
+              clothingSize: entry.clothingSize
+            })),
+          routines: (child.routines || []).slice(0, 5),
+          clothesHandMeDowns: (child.clothesHandMeDowns || [])
+            .filter(item => !item.used)
+            .slice(0, 5)
+        };
+      });
+      
+      const userMessage = `Generate child health and development insights based on this data:
+      
+      Children Data:
+      ${JSON.stringify(processedData)}
+      
+      ${familyContext ? `Family Information:
+      ${JSON.stringify({
+        familyName: familyContext.familyName,
+        familyMembers: familyContext.familyMembers
+      })}` : ''}
+      
+      IMPORTANT: Create specific, data-driven insights for each child in the family. Return ONLY JSON with no extra text.`;
+      
+      // Call Claude API with timeout handling
+      let claudeResponse = null;
+      try {
+        const messages = [{ role: 'user', content: userMessage }];
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("AI insights request timed out")), 20000) // 20 seconds timeout
+        );
+        
+        claudeResponse = await Promise.race([
+          ClaudeService.generateResponse(
+            messages, 
+            { system: systemPrompt },
+            { temperature: 0.3 } // Lower temperature for more predictable JSON responses
+          ),
+          timeoutPromise
+        ]);
+        
+        if (!claudeResponse) {
+          console.warn("Empty response from Claude API");
+          return localInsights;
+        }
+      } catch (timeoutError) {
+        console.error("Claude API timed out:", timeoutError);
         return localInsights;
       }
-    } catch (serviceError) {
-      // Already showing local insights, just log the error
-      console.warn("AI service error, using local insights:", serviceError);
+      
+      // Parse JSON response with enhanced error handling
+      const responseData = this.safelyParseJSON(claudeResponse, { insights: [] });
+      
+      // Validate structure
+      if (!responseData.insights || !Array.isArray(responseData.insights) || responseData.insights.length === 0) {
+        console.warn("Invalid insights structure returned");
+        return localInsights;
+      }
+      
+      return responseData.insights;
+    } catch (error) {
+      console.error("Error generating child insights:", error);
       return localInsights;
     }
   } catch (error) {
     console.error("Error in insight generation:", error);
-    // Create basic insights as a last resort
-    return [
-      {
-        title: "Getting Started",
-        type: "recommendation",
-        content: "Track your children's health, growth, and routines to get personalized insights.",
-        priority: "medium",
-        childId: null
-      }
-    ];
+    return this.getFallbackChildInsights(childrenData);
   }
 }
 
