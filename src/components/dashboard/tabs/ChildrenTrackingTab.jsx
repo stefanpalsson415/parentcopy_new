@@ -1258,11 +1258,6 @@ const handleProviderDelete = async (providerId) => {
 };
 
 
-  // Get category display info
-  const getCategoryInfo = (categoryId) => {
-    const category = categories.find(c => c.id === categoryId) || categories.find(c => c.id === 'other');
-    return category;
-  };
 
   
 
@@ -1272,10 +1267,7 @@ const handleProviderDelete = async (providerId) => {
     return parent?.name || 'Unassigned';
   };
 
-  // Toggle Todo section expansion
-  const toggleTodoSection = () => {
-    setExpandedTodoSection(!expandedTodoSection);
-  };
+ 
 
   // Load children data
   useEffect(() => {
@@ -3707,52 +3699,8 @@ const handleProviderDelete = async (providerId) => {
                                               </div>
                                           
                                         
-                                        {/* Delete Confirmation Modal */}
-                                        {showDeleteConfirmation && (
-                                          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-                                            <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-                                              <h3 className="text-lg font-medium mb-4 font-roboto">Confirm Deletion</h3>
-                                              <p className="text-gray-600 mb-6 font-roboto">
-                                                Are you sure you want to delete this item? This action cannot be undone.
-                                              </p>
-                                              
-                                              <div className="flex justify-end space-x-3">
-                                                <button
-                                                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
-                                                  onClick={() => setShowDeleteConfirmation(false)}
-                                                >
-                                                  Cancel
-                                                </button>
-                                                <button
-                                                  className="px-4 py-2 bg-red-600 text-white rounded-md font-roboto hover:bg-red-700"
-                                                  onClick={confirmDeleteTodo}
-                                                >
-                                                  Delete
-                                                </button>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        )}
                                         
-                                        {/* Calendar Add Modal */}
-                                        {showAddCalendar && selectedTodoForCalendar && (
-                                          <EnhancedEventManager
-                                            initialEvent={{
-                                              title: selectedTodoForCalendar.text,
-                                              description: selectedTodoForCalendar.text,
-                                              category: selectedTodoForCalendar.category || 'general',
-                                              eventType: 'todo',
-                                              dateTime: new Date().toISOString(),
-                                              duration: 60
-                                            }}
-                                            eventType="general"
-                                            onSave={handleCalendarEventAdded}
-                                            onCancel={() => {
-                                              setShowAddCalendar(false);
-                                              setSelectedTodoForCalendar(null);
-                                            }}
-                                          />
-                                        )}
+                                        
                                         
                                         {/* Render active component (EnhancedEventManager, etc.) */}
                                         {activeComponent && (
@@ -3887,7 +3835,7 @@ const handleProviderDelete = async (providerId) => {
                                           </div>
                                         )}
                                       </div>
-                                    );
+                                  
                                   };
                                   
                                   export default ChildrenTrackingTab;
