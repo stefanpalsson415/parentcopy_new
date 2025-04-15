@@ -1058,10 +1058,7 @@ detectInvitation(text, familyMembers = []) {
     return 'event';
   }
   
-  // In src/services/EventParserService.js
-// Replace the existing extractDateTime method with this improved version:
-
-// Replace the existing extractDateTime method with this improved version:
+// Replace the existing extractDateTime method in EventParserService.js
 extractDateTime(text, region = 'US') {
   try {
     console.log(`Extracting date/time with region: ${region}`);
@@ -1099,13 +1096,16 @@ extractDateTime(text, region = 'US') {
       const currentDay = date.getDay();
       let daysToAdd = (dayOfWeek - currentDay + 7) % 7;
       
-      // If it's next week or we mentioned the current day, add 7 days
+      // If it's the same day and not specified as "today", assume next occurrence
+      if (daysToAdd === 0 && !text.toLowerCase().includes('today')) {
+        daysToAdd = 7;
+      }
+      
+      // If "next week" is mentioned, adjust to next week explicitly
       if (isNextWeek) {
-        daysToAdd += 7;
-      } else if (daysToAdd === 0) {
-        // If today is the mentioned day and not explicitly "today", assume next occurrence
-        if (!text.toLowerCase().includes('today')) {
-          daysToAdd = 7;
+        // If we're already calculating next week's day, add 7 more days
+        if (daysToAdd < 7) {
+          daysToAdd += 7;
         }
       }
       
@@ -1119,76 +1119,10 @@ extractDateTime(text, region = 'US') {
       console.log(`Adjusted date for next week: ${date.toISOString()}`);
     }
     
-    // Now try standard date formats
-    const datePatterns = {
-      'SE': [
-        // DD/MM format (Sweden)
-        {
-          pattern: /(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/,
-          handler: (match) => {
-            const day = parseInt(match[1]);
-            const month = parseInt(match[2]) - 1; // 0-indexed
-            const year = match[3] ? parseInt(match[3]) : date.getFullYear();
-            
-            // Check if year is 2-digit
-            const fullYear = year < 100 ? 2000 + year : year;
-            
-            return new Date(fullYear, month, day);
-          }
-        },
-        // DD.MM format
-        {
-          pattern: /(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?/,
-          handler: (match) => {
-            const day = parseInt(match[1]);
-            const month = parseInt(match[2]) - 1; // 0-indexed
-            const year = match[3] ? parseInt(match[3]) : date.getFullYear();
-            
-            return new Date(year < 100 ? 2000 + year : year, month, day);
-          }
-        }
-      ],
-      'US': [
-        // MM/DD format (US)
-        {
-          pattern: /(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/,
-          handler: (match) => {
-            const month = parseInt(match[1]) - 1; // 0-indexed
-            const day = parseInt(match[2]);
-            const year = match[3] ? parseInt(match[3]) : date.getFullYear();
-            
-            return new Date(year < 100 ? 2000 + year : year, month, day);
-          }
-        },
-        // MM-DD format
-        {
-          pattern: /(\d{1,2})-(\d{1,2})(?:-(\d{2,4}))?/,
-          handler: (match) => {
-            const month = parseInt(match[1]) - 1; // 0-indexed
-            const day = parseInt(match[2]);
-            const year = match[3] ? parseInt(match[3]) : date.getFullYear();
-            
-            return new Date(year < 100 ? 2000 + year : year, month, day);
-          }
-        }
-      ]
-    };
+    // Now try standard date formats (existing code)
+    // ...
     
-    // Try regional date patterns if relative dates didn't work
-    if (dayOfWeek === null && !isNextWeek) {
-      for (const pattern of datePatterns[region]) {
-        const match = text.match(pattern.pattern);
-        if (match) {
-          const parsedDate = pattern.handler(match);
-          if (parsedDate && !isNaN(parsedDate.getTime())) {
-            date = parsedDate;
-            break;
-          }
-        }
-      }
-    }
-    
-    // Try to find time patterns
+    // Try to find time patterns - improved version
     const timePatterns = {
       'SE': [
         // 24-hour clock: 14:00 or 14.00
@@ -1207,7 +1141,7 @@ extractDateTime(text, region = 'US') {
         }
       ],
       'US': [
-        // 12-hour clock: 2:00 pm
+        // 12-hour clock with colon: 2:00 pm
         {
           pattern: /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i,
           handler: (match) => {
@@ -1228,13 +1162,33 @@ extractDateTime(text, region = 'US') {
             }
             return false;
           }
+        },
+        // 12-hour clock without colon: 7pm
+        {
+          pattern: /\b(\d{1,2})(am|pm)\b/i,
+          handler: (match) => {
+            let hours = parseInt(match[1]);
+            const period = match[2].toLowerCase();
+            
+            if (period === 'pm' && hours < 12) {
+              hours += 12;
+            } else if (period === 'am' && hours === 12) {
+              hours = 0;
+            }
+            
+            if (hours >= 0 && hours <= 23) {
+              date.setHours(hours, 0, 0, 0);
+              return true;
+            }
+            return false;
+          }
         }
       ],
       // Add general time pattern that works for both regions
       'general': [
         // Just a number with am/pm or hour specification
         {
-          pattern: /\b(?:at|@)\s*(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.|)\b/i,
+          pattern: /\b(?:at|@)?\s*(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.|)\b/i,
           handler: (match) => {
             let hours = parseInt(match[1]);
             const period = match[2].toLowerCase();
@@ -1343,39 +1297,47 @@ extractDateTime(text, region = 'US') {
   }
 }
   
-  extractLocation(text) {
-    // Pattern matching for locations
-    const locationPatterns = [
-      /\bat\s+([A-Za-z0-9\s'.,]+)(?:\s+(?:on|at|from))/i,
-      /\blocation\s*:?\s*([A-Za-z0-9\s'.,]+)(?:\b|$)/i,
-      /\bplace\s*:?\s*([A-Za-z0-9\s'.,]+)(?:\b|$)/i,
-      /\bvenue\s*:?\s*([A-Za-z0-9\s'.,]+)(?:\b|$)/i,
-      /\baddress\s*:?\s*([A-Za-z0-9\s'.,]+)(?:\b|$)/i
-    ];
-    
-    for (const pattern of locationPatterns) {
-      const match = text.match(pattern);
-      if (match && match[1]) {
-        return match[1].trim();
-      }
+extractLocation(text) {
+  // Pattern matching for locations
+  const locationPatterns = [
+    /\bat\s+([A-Za-z0-9\s'.,]+)(?:\s+(?:on|at|from))/i,
+    /\blocation\s*:?\s*([A-Za-z0-9\s'.,]+)(?:\b|$)/i,
+    /\bplace\s*:?\s*([A-Za-z0-9\s'.,]+)(?:\b|$)/i,
+    /\bvenue\s*:?\s*([A-Za-z0-9\s'.,]+)(?:\b|$)/i,
+    /\baddress\s*:?\s*([A-Za-z0-9\s'.,]+)(?:\b|$)/i,
+    /\bsomewhere\s+([A-Za-z0-9\s'.,]+)(?:\b|$)/i // Added for "somewhere Italian"
+  ];
+  
+  for (const pattern of locationPatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      return match[1].trim();
     }
-    
-    // Check for common venue types
-    const venueKeywords = [
-      'laserdome', 'playground', 'park', 'school', 'restaurant',
-      'center', 'centre', 'arena', 'gym', 'pool', 'museum', 'theater'
-    ];
-    
-    for (const keyword of venueKeywords) {
-      const keywordPattern = new RegExp(`\\b(${keyword}\\s+[A-Za-z0-9\\s'.,]+)\\b`, 'i');
-      const match = text.match(keywordPattern);
-      if (match && match[1]) {
-        return match[1].trim();
-      }
-    }
-    
-    return null;
   }
+  
+  // Check for cuisine/restaurant types
+  const cuisinePattern = /\b(?:italian|chinese|mexican|japanese|thai|indian|french)\b/i;
+  const cuisineMatch = text.match(cuisinePattern);
+  if (cuisineMatch) {
+    return cuisineMatch[0].trim() + " restaurant";
+  }
+  
+  // Check for common venue types
+  const venueKeywords = [
+    'laserdome', 'playground', 'park', 'school', 'restaurant',
+    'center', 'centre', 'arena', 'gym', 'pool', 'museum', 'theater'
+  ];
+  
+  for (const keyword of venueKeywords) {
+    const keywordPattern = new RegExp(`\\b(${keyword}\\s+[A-Za-z0-9\\s'.,]+)\\b`, 'i');
+    const match = text.match(keywordPattern);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+  }
+  
+  return null;
+}
   
   extractChildInfo(text, familyContext) {
     // Try to find which child is invited from family context

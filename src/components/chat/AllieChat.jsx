@@ -853,6 +853,49 @@ const createCalendarEventDirectly = async (eventDetails) => {
     const endDate = new Date(startDate);
     endDate.setHours(startDate.getHours() + 1); // Default 1 hour event
     
+    // Check if "me and wife" or similar phrases are in the original text
+    const hasSpouse = eventDetails.originalText?.toLowerCase().includes('wife') || 
+                     eventDetails.originalText?.toLowerCase().includes('husband') ||
+                     eventDetails.originalText?.toLowerCase().includes('spouse') ||
+                     eventDetails.originalText?.toLowerCase().includes('partner');
+    
+    // Extract mentioned people
+    const attendees = [];
+    
+    // Add current user (me)
+    if (selectedUser) {
+      attendees.push({
+        id: selectedUser.id,
+        name: selectedUser.name,
+        role: selectedUser.role
+      });
+    }
+    
+    // Add spouse if mentioned
+    if (hasSpouse) {
+      const spouse = familyMembers.find(m => 
+        m.role === 'parent' && m.id !== selectedUser.id
+      );
+      
+      if (spouse) {
+        attendees.push({
+          id: spouse.id,
+          name: spouse.name,
+          role: spouse.role
+        });
+      }
+    }
+    
+    // Include any attendees from event details
+    if (eventDetails.attendees && eventDetails.attendees.length > 0) {
+      eventDetails.attendees.forEach(attendee => {
+        // Only add if not already in the list
+        if (!attendees.some(a => a.id === attendee.id)) {
+          attendees.push(attendee);
+        }
+      });
+    }
+    
     // Create event object with explicit structure
     const event = {
       summary: eventDetails.title,
@@ -872,7 +915,7 @@ const createCalendarEventDirectly = async (eventDetails) => {
       eventType: eventDetails.eventType || 'general',
       category: eventDetails.category || 'general',
       // Include attendee information
-      attendees: eventDetails.attendees || [],
+      attendees: attendees,
       // Track source
       source: 'chat',
       creationSource: 'direct_creation',
