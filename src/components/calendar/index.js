@@ -40,11 +40,12 @@ export {
   EventDetails,
   MergedEventParser as EventParser,
   SmartReminderSuggestions,
+  CalendarPromptChip,
   
   // Integration components
   CalendarIntegrationButton,
   AllieCalendarEvents,
-  
+  RelationshipEventCard
 };
 
 // Default export the most commonly used component
