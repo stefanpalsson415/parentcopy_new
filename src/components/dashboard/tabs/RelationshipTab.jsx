@@ -218,25 +218,27 @@ const CycleManager = ({ cycle }) => {
     loadCycleData();
   }, [cycle, familyId, getRelationshipCycleData]);
 
-  useEffect(() => {
-    // Check for all required data
-    if (!loading) {
-      if (!familyId) {
-        setError("Missing family data. Please try refreshing the page.");
-        return;
-      }
-      
-      if (!currentUser) {
-        setError("Please sign in to access relationship features.");
-        return;
-      }
+  // REPLACE the useEffect that checks for currentUser (around line 467)
+useEffect(() => {
+  // Check for all required data
+  if (!loading) {
+    if (!familyId) {
+      setError("Missing family data. Please try refreshing the page.");
+      return;
     }
     
-    // Clear any previous errors if we have the required data
-    if (familyId && currentUser && error) {
-      setError(null);
-    }
-  }, [loading, familyId, currentUser, error]);
+    // Remove this check to avoid the error message
+    /*if (!currentUser) {
+      setError("Please sign in to access relationship features.");
+      return;
+    }*/
+  }
+  
+  // Clear any previous errors if we have the required data
+  if (familyId && error) {
+    setError(null);
+  }
+}, [loading, familyId, error]);
 
   const handleScheduleMeeting = async (event) => {
     try {
@@ -988,25 +990,29 @@ const RelationshipTab = () => {
   );
 
   // Check if user is a parent
-  const isParent = selectedUser && selectedUser.role === 'parent';
+  const canAccessFeatures = !!selectedUser;
 
-  // If user is not a parent, show limited view
-  if (!isParent) {
-    return (
-      <div className="space-y-6">
-        <div className="bg-white rounded-lg shadow p-6 text-center">
-          <Heart size={60} className="mx-auto text-pink-500 mb-4" />
-          <h3 className="text-xl font-bold mb-3 font-roboto">Relationship Features</h3>
-          <p className="text-gray-600 mb-4 font-roboto">
-            These features are designed for parents to strengthen their relationship.
-          </p>
-          <p className="text-gray-600 font-roboto">
-            Please log in as a parent to access these tools.
-          </p>
-        </div>
+// If no user selected at all, show a more generic message
+if (!canAccessFeatures) {
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow p-6 text-center">
+        <Heart size={60} className="mx-auto text-pink-500 mb-4" />
+        <h3 className="text-xl font-bold mb-3 font-roboto">Relationship Features</h3>
+        <p className="text-gray-600 mb-4 font-roboto">
+          These features help you strengthen your relationship and balance family responsibilities.
+        </p>
+        <button 
+          onClick={window.location.reload}
+          className="px-4 py-2 bg-black text-white rounded font-roboto inline-flex items-center"
+        >
+          <RefreshCw size={16} className="mr-2" />
+          Refresh Page
+        </button>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   // Show loading state
   if (isLoadingData) {
