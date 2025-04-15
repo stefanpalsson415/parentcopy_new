@@ -780,7 +780,7 @@ const processMessageForEvents = async (text) => {
 };
 
 // Helper method to extract mentioned people
-extractMentionedPeople(text, familyMembers) {
+const extractMentionedPeople = (text, familyMembers) => {
   if (!text || !familyMembers || familyMembers.length === 0) {
     return [];
   }
@@ -836,7 +836,7 @@ extractMentionedPeople(text, familyMembers) {
   }
   
   return mentionedPeople;
-}
+};
 
 // Helper method to create calendar event directly
 async createCalendarEventDirectly(eventDetails) {
