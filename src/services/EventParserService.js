@@ -1061,250 +1061,286 @@ detectInvitation(text, familyMembers = []) {
   // In src/services/EventParserService.js
 // Replace the existing extractDateTime method with this improved version:
 
+// Replace the existing extractDateTime method with this improved version:
 extractDateTime(text, region = 'US') {
-  const now = new Date();
-  let date = new Date(now);
-  date.setHours(0, 0, 0, 0); // Reset time
-  
-  // Try to find date patterns based on region
-  const datePatterns = {
-    'SE': [
-      // DD/MM format (Sweden)
-      {
-        pattern: /(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/,
-        handler: (match) => {
-          const day = parseInt(match[1]);
-          const month = parseInt(match[2]) - 1; // 0-indexed
-          const year = match[3] ? parseInt(match[3]) : date.getFullYear();
-          
-          // Check if year is 2-digit
-          const fullYear = year < 100 ? 2000 + year : year;
-          
-          return new Date(fullYear, month, day);
-        }
-      },
-      // DD.MM format
-      {
-        pattern: /(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?/,
-        handler: (match) => {
-          const day = parseInt(match[1]);
-          const month = parseInt(match[2]) - 1; // 0-indexed
-          const year = match[3] ? parseInt(match[3]) : date.getFullYear();
-          
-          return new Date(year < 100 ? 2000 + year : year, month, day);
-        }
-      }
-    ],
-    'US': [
-      // MM/DD format (US)
-      {
-        pattern: /(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/,
-        handler: (match) => {
-          const month = parseInt(match[1]) - 1; // 0-indexed
-          const day = parseInt(match[2]);
-          const year = match[3] ? parseInt(match[3]) : date.getFullYear();
-          
-          return new Date(year < 100 ? 2000 + year : year, month, day);
-        }
-      },
-      // MM-DD format
-      {
-        pattern: /(\d{1,2})-(\d{1,2})(?:-(\d{2,4}))?/,
-        handler: (match) => {
-          const month = parseInt(match[1]) - 1; // 0-indexed
-          const day = parseInt(match[2]);
-          const year = match[3] ? parseInt(match[3]) : date.getFullYear();
-          
-          return new Date(year < 100 ? 2000 + year : year, month, day);
-        }
-      }
-    ]
-  };
-  
-  // Month names pattern (works for both regions)
-  const monthNamePattern = {
-    pattern: /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?/i,
-    handler: (match) => {
-      const monthNames = [
-        'january', 'february', 'march', 'april', 'may', 'june',
-        'july', 'august', 'september', 'october', 'november', 'december'
-      ];
-      const shortMonthNames = [
-        'jan', 'feb', 'mar', 'apr', 'may', 'jun',
-        'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
-      ];
-      
-      const monthName = match[1].toLowerCase();
-      const day = parseInt(match[2]);
-      const year = match[3] ? parseInt(match[3]) : date.getFullYear();
-      
-      let monthIndex = monthNames.findIndex(m => m === monthName);
-      if (monthIndex === -1) {
-        // Try short month names
-        monthIndex = shortMonthNames.findIndex(m => m === monthName);
-        
-        // Special case for "sept"
-        if (monthIndex === -1 && (monthName === 'sept' || monthName === 'sep')) {
-          monthIndex = 8; // September
-        }
-      }
-      
-      if (monthIndex !== -1) {
-        return new Date(year < 100 ? 2000 + year : year, monthIndex, day);
-      }
-      
-      return null;
-    }
-  };
-  
-  // Try regional patterns first
-  for (const pattern of datePatterns[region]) {
-    const match = text.match(pattern.pattern);
-    if (match) {
-      const parsedDate = pattern.handler(match);
-      if (parsedDate && !isNaN(parsedDate.getTime())) {
-        date = parsedDate;
+  try {
+    console.log(`Extracting date/time with region: ${region}`);
+    const now = new Date();
+    let date = new Date(now);
+    date.setHours(0, 0, 0, 0); // Reset time
+    
+    // First check for relative date references
+    const nextWeekPattern = /\b(?:next\s+week|coming\s+week)\b/i;
+    const isNextWeek = nextWeekPattern.test(text);
+    
+    // Check for day of week references
+    const dayMapping = {
+      'monday': 1, 'mon': 1,
+      'tuesday': 2, 'tue': 2, 'tues': 2,
+      'wednesday': 3, 'wed': 3, 'weds': 3,
+      'thursday': 4, 'thu': 4, 'thur': 4, 'thurs': 4,
+      'friday': 5, 'fri': 5,
+      'saturday': 6, 'sat': 6,
+      'sunday': 0, 'sun': 0
+    };
+    
+    let dayOfWeek = null;
+    // Check text for day of week mentions
+    for (const [dayName, dayValue] of Object.entries(dayMapping)) {
+      const dayPattern = new RegExp(`\\b${dayName}\\b`, 'i');
+      if (dayPattern.test(text)) {
+        dayOfWeek = dayValue;
         break;
       }
     }
-  }
-  
-  // If no regional pattern matched, try the month name pattern
-  if (date.getTime() === now.setHours(0, 0, 0, 0)) {
-    const match = text.match(monthNamePattern.pattern);
-    if (match) {
-      const parsedDate = monthNamePattern.handler(match);
-      if (parsedDate && !isNaN(parsedDate.getTime())) {
-        date = parsedDate;
-      }
-    }
-  }
-  
-  // Try to find time patterns
-  const timePatterns = {
-    'SE': [
-      // 24-hour clock: 14:00 or 14.00
-      {
-        pattern: /(kl\.?|klockan)?\s*(\d{1,2})[.:](\d{2})\b/i,
-        handler: (match) => {
-          const hours = parseInt(match[2]);
-          const minutes = parseInt(match[3]);
-          
-          if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
-            date.setHours(hours, minutes, 0, 0);
-            return true;
-          }
-          return false;
+    
+    // If we found a day of week, adjust the date
+    if (dayOfWeek !== null) {
+      const currentDay = date.getDay();
+      let daysToAdd = (dayOfWeek - currentDay + 7) % 7;
+      
+      // If it's next week or we mentioned the current day, add 7 days
+      if (isNextWeek) {
+        daysToAdd += 7;
+      } else if (daysToAdd === 0) {
+        // If today is the mentioned day and not explicitly "today", assume next occurrence
+        if (!text.toLowerCase().includes('today')) {
+          daysToAdd = 7;
         }
       }
-    ],
-    'US': [
-      // 12-hour clock: 2:00 pm
-      {
-        pattern: /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i,
-        handler: (match) => {
-          let hours = parseInt(match[1]);
-          const minutes = match[2] ? parseInt(match[2]) : 0;
-          const period = match[3].toLowerCase();
-          
-          // Adjust for AM/PM
-          if (period === 'pm' && hours < 12) {
-            hours += 12;
-          } else if (period === 'am' && hours === 12) {
-            hours = 0;
+      
+      date.setDate(date.getDate() + daysToAdd);
+      console.log(`Adjusted date for day of week: ${date.toISOString()}`);
+    } else if (isNextWeek) {
+      // If just "next week" with no specific day, default to Monday of next week
+      const currentDay = date.getDay();
+      const daysToAdd = (1 - currentDay + 7) % 7 + 7; // Days until next Monday
+      date.setDate(date.getDate() + daysToAdd);
+      console.log(`Adjusted date for next week: ${date.toISOString()}`);
+    }
+    
+    // Now try standard date formats
+    const datePatterns = {
+      'SE': [
+        // DD/MM format (Sweden)
+        {
+          pattern: /(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/,
+          handler: (match) => {
+            const day = parseInt(match[1]);
+            const month = parseInt(match[2]) - 1; // 0-indexed
+            const year = match[3] ? parseInt(match[3]) : date.getFullYear();
+            
+            // Check if year is 2-digit
+            const fullYear = year < 100 ? 2000 + year : year;
+            
+            return new Date(fullYear, month, day);
           }
-          
-          if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
-            date.setHours(hours, minutes, 0, 0);
-            return true;
+        },
+        // DD.MM format
+        {
+          pattern: /(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?/,
+          handler: (match) => {
+            const day = parseInt(match[1]);
+            const month = parseInt(match[2]) - 1; // 0-indexed
+            const year = match[3] ? parseInt(match[3]) : date.getFullYear();
+            
+            return new Date(year < 100 ? 2000 + year : year, month, day);
           }
-          return false;
+        }
+      ],
+      'US': [
+        // MM/DD format (US)
+        {
+          pattern: /(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/,
+          handler: (match) => {
+            const month = parseInt(match[1]) - 1; // 0-indexed
+            const day = parseInt(match[2]);
+            const year = match[3] ? parseInt(match[3]) : date.getFullYear();
+            
+            return new Date(year < 100 ? 2000 + year : year, month, day);
+          }
+        },
+        // MM-DD format
+        {
+          pattern: /(\d{1,2})-(\d{1,2})(?:-(\d{2,4}))?/,
+          handler: (match) => {
+            const month = parseInt(match[1]) - 1; // 0-indexed
+            const day = parseInt(match[2]);
+            const year = match[3] ? parseInt(match[3]) : date.getFullYear();
+            
+            return new Date(year < 100 ? 2000 + year : year, month, day);
+          }
+        }
+      ]
+    };
+    
+    // Try regional date patterns if relative dates didn't work
+    if (dayOfWeek === null && !isNextWeek) {
+      for (const pattern of datePatterns[region]) {
+        const match = text.match(pattern.pattern);
+        if (match) {
+          const parsedDate = pattern.handler(match);
+          if (parsedDate && !isNaN(parsedDate.getTime())) {
+            date = parsedDate;
+            break;
+          }
         }
       }
-    ]
-  };
-  
-  // Try time patterns for the detected region
-  let timeFound = false;
-  for (const pattern of timePatterns[region]) {
-    const match = text.match(pattern.pattern);
-    if (match) {
-      timeFound = pattern.handler(match);
-      if (timeFound) break;
     }
-  }
-  
-  // If no time pattern matched, try the other region's patterns
-  if (!timeFound) {
-    const otherRegion = region === 'SE' ? 'US' : 'SE';
-    for (const pattern of timePatterns[otherRegion]) {
+    
+    // Try to find time patterns
+    const timePatterns = {
+      'SE': [
+        // 24-hour clock: 14:00 or 14.00
+        {
+          pattern: /(kl\.?|klockan)?\s*(\d{1,2})[.:](\d{2})\b/i,
+          handler: (match) => {
+            const hours = parseInt(match[2]);
+            const minutes = parseInt(match[3]);
+            
+            if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+              date.setHours(hours, minutes, 0, 0);
+              return true;
+            }
+            return false;
+          }
+        }
+      ],
+      'US': [
+        // 12-hour clock: 2:00 pm
+        {
+          pattern: /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i,
+          handler: (match) => {
+            let hours = parseInt(match[1]);
+            const minutes = match[2] ? parseInt(match[2]) : 0;
+            const period = match[3].toLowerCase();
+            
+            // Adjust for AM/PM
+            if (period === 'pm' && hours < 12) {
+              hours += 12;
+            } else if (period === 'am' && hours === 12) {
+              hours = 0;
+            }
+            
+            if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+              date.setHours(hours, minutes, 0, 0);
+              return true;
+            }
+            return false;
+          }
+        }
+      ],
+      // Add general time pattern that works for both regions
+      'general': [
+        // Just a number with am/pm or hour specification
+        {
+          pattern: /\b(?:at|@)\s*(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.|)\b/i,
+          handler: (match) => {
+            let hours = parseInt(match[1]);
+            const period = match[2].toLowerCase();
+            
+            // If time is 7 without am/pm, assume pm for evening times (5-12)
+            if (!period && (hours >= 5 && hours <= 12)) {
+              hours += 12;
+            }
+            // Adjust for explicit pm
+            else if ((period.includes('pm') || period.includes('p.m')) && hours < 12) {
+              hours += 12;
+            } 
+            // Adjust for explicit am
+            else if ((period.includes('am') || period.includes('a.m')) && hours === 12) {
+              hours = 0;
+            }
+            
+            if (hours >= 0 && hours <= 23) {
+              date.setHours(hours, 0, 0, 0);
+              return true;
+            }
+            return false;
+          }
+        }
+      ]
+    };
+    
+    // Try specific regional time patterns first
+    let timeFound = false;
+    for (const pattern of timePatterns[region]) {
       const match = text.match(pattern.pattern);
       if (match) {
         timeFound = pattern.handler(match);
         if (timeFound) break;
       }
     }
-  }
-  
-  // If still no time found, set default based on event type
-  if (!timeFound) {
-    const eventType = this.detectEventType(text);
     
-    switch (eventType) {
-      case 'birthday':
-        date.setHours(14, 0, 0, 0); // 2:00 PM default for birthdays
-        break;
-      case 'doctor':
-      case 'dental':
-        date.setHours(10, 0, 0, 0); // 10:00 AM default for appointments
-        break;
-      case 'playdate':
-        date.setHours(15, 0, 0, 0); // 3:00 PM default for playdates
-        break;
-      case 'sports':
-        date.setHours(16, 0, 0, 0); // 4:00 PM default for sports
-        break;
-      case 'music':
-      case 'dance':
-      case 'art':
-      case 'coding':
-      case 'tutoring':
-        date.setHours(16, 30, 0, 0); // 4:30 PM default for after-school activities
-        break;
-      case 'school':
-        date.setHours(18, 0, 0, 0); // 6:00 PM default for school events
-        break;
-      case 'sleepover':
-        date.setHours(17, 0, 0, 0); // 5:00 PM default for sleepovers
-        break;
-      case 'family':
-      case 'religious':
-        date.setHours(10, 0, 0, 0); // 10:00 AM default for family/religious events (often weekend mornings)
-        break;
-      case 'community':
-        date.setHours(11, 0, 0, 0); // 11:00 AM default for community events
-        break;
-      case 'camp':
-        date.setHours(9, 0, 0, 0); // 9:00 AM default for camps
-        break;
-      default:
-        date.setHours(12, 0, 0, 0); // Noon default for other events
+    // If no regional time pattern matched, try general patterns
+    if (!timeFound) {
+      for (const pattern of timePatterns.general) {
+        const match = text.match(pattern.pattern);
+        if (match) {
+          timeFound = pattern.handler(match);
+          if (timeFound) break;
+        }
+      }
     }
-  }
-  
-  // Make sure the date is in the future
-  const currentDate = new Date();
-  if (date < currentDate) {
-    // If the date is today but the time has passed, keep it
-    if (date.toDateString() === currentDate.toDateString()) {
-      // Keep the date as is
-    } else {
-      // If it's a past date, push it to next year
-      date.setFullYear(date.getFullYear() + 1);
+    
+    // If still no time found, try the other region's patterns
+    if (!timeFound) {
+      const otherRegion = region === 'SE' ? 'US' : 'SE';
+      for (const pattern of timePatterns[otherRegion]) {
+        const match = text.match(pattern.pattern);
+        if (match) {
+          timeFound = pattern.handler(match);
+          if (timeFound) break;
+        }
+      }
     }
+    
+    // If still no time found, set default based on event type
+    if (!timeFound) {
+      const eventType = this.detectEventType(text);
+      
+      // Look for evening indicators
+      const eveningIndicators = /\b(?:evening|dinner|night)\b/i;
+      const isEvening = eveningIndicators.test(text);
+      
+      if (isEvening) {
+        date.setHours(19, 0, 0, 0); // 7:00 PM default for evening events
+      } else {
+        switch (eventType) {
+          case 'birthday':
+            date.setHours(14, 0, 0, 0); // 2:00 PM default for birthdays
+            break;
+          case 'doctor':
+          case 'dental':
+            date.setHours(10, 0, 0, 0); // 10:00 AM default for appointments
+            break;
+          case 'playdate':
+            date.setHours(15, 0, 0, 0); // 3:00 PM default for playdates
+            break;
+          default:
+            date.setHours(12, 0, 0, 0); // Noon default for other events
+        }
+      }
+    }
+    
+    // Make sure the date is in the future
+    const currentDate = new Date();
+    if (date < currentDate) {
+      // If the date is today but the time has passed, keep it
+      if (date.toDateString() === currentDate.toDateString()) {
+        // Keep the date as is
+      } else {
+        // If it's a past date, push it to next year
+        date.setFullYear(date.getFullYear() + 1);
+      }
+    }
+    
+    console.log(`Final extracted date/time: ${date.toISOString()}`);
+    return date;
+  } catch (error) {
+    console.error("Error in extractDateTime:", error);
+    return new Date(); // Return current date/time as fallback
   }
-  
-  return date;
 }
   
   extractLocation(text) {

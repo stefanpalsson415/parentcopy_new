@@ -420,7 +420,7 @@ const loadMessages = async (loadMore = false) => {
   </div>
 )}
 
-// Replace the handleSend function to use the new ChatPersistenceService
+// Replace the handleSend function in AllieChat.jsx
 const handleSend = async () => {
   if (input.trim() && canUseChat && selectedUser && familyId) {
     try {
@@ -454,38 +454,7 @@ const handleSend = async () => {
         setImagePreview(null);
       }
       
-      // Always try to parse the message as an event first
-      const isEvent = await processMessageForEvents(input);
-      
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage && (lastMessage.documentFile || lastMessage.awaitingChildSelection)) {
-        // This might be a response to document action options
-        const isDocumentResponse = handleDocumentActionSelection(input, lastMessage);
-        
-        if (isDocumentResponse) {
-          // If we handled the document action, don't send to AI
-          setLoading(false);
-          return;
-        }
-      }
-
-      // If this is an event, don't send to AI yet
-      if (isEvent) {
-        // Save message to database (but don't get AI response yet)
-        await ChatPersistenceService.saveMessage(userMessage);
-        setLoading(false);
-        return;
-      }
-      
-      // Check if this is a profile picture request
-      const isProfileRequest = 
-        input.toLowerCase().includes('profile picture') || 
-        input.toLowerCase().includes('profile photo') ||
-        input.toLowerCase().includes('upload picture') ||
-        input.toLowerCase().includes('add picture') ||
-        input.toLowerCase().includes('change picture');
-      
-      // Save message to database
+      // Save message to database first (we'll handle AI response after event processing if needed)
       const savedMessage = await ChatPersistenceService.saveMessage(userMessage);
       
       // If saving failed, show error
@@ -503,6 +472,42 @@ const handleSend = async () => {
         return;
       }
       
+      // Always try to parse the message as an event first
+      const isEvent = await processMessageForEvents(input);
+      
+      // Check if this is a response to document action options
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage && (lastMessage.documentFile || lastMessage.awaitingChildSelection)) {
+        const isDocumentResponse = handleDocumentActionSelection(input, lastMessage);
+        
+        if (isDocumentResponse) {
+          // If we handled the document action, don't send to AI
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // Check if this is a profile picture request
+      const isProfileRequest = 
+        input.toLowerCase().includes('profile picture') || 
+        input.toLowerCase().includes('profile photo') ||
+        input.toLowerCase().includes('upload picture') ||
+        input.toLowerCase().includes('add picture') ||
+        input.toLowerCase().includes('change picture');
+        
+      // Handle profile upload request
+      if (isProfileRequest) {
+        // Profile handling code
+        setLoading(false);
+        return;
+      }
+      
+      // If event was successfully processed, don't get AI response
+      if (isEvent) {
+        setLoading(false);
+        return;
+      }
+      
       // Update conversation context
       const updatedContext = EnhancedChatService.updateConversationContext(familyId, {
         query: input,
@@ -511,12 +516,6 @@ const handleSend = async () => {
       });
       
       setConversationContext(updatedContext?.recentTopics || []);
-      
-      // Handle profile upload request
-      if (isProfileRequest) {
-        // Profile handling code - unchanged
-        return;
-      }
       
       // Get AI response for normal messages
       const aiResponse = await EnhancedChatService.getAIResponse(
@@ -543,55 +542,6 @@ const handleSend = async () => {
       
       // Update messages state with AI response
       setMessages(prev => [...prev, allieMessage]);
-      
-      // NEW: Check if Allie's response is about a calendar event
-      const isCalendarResponse = 
-        aiResponse.toLowerCase().includes('add to your calendar') ||
-        aiResponse.toLowerCase().includes('added to your calendar') ||
-        aiResponse.toLowerCase().includes('calendar for') || 
-        aiResponse.toLowerCase().includes('birthday party') ||
-        aiResponse.toLowerCase().includes('event');
-      
-      // If it mentions calendar and there's no event parser visible yet, try to parse the combined conversation
-      if (isCalendarResponse && !showEventParser) {
-        // Create a combined text from the user's message and Allie's response
-        const combinedText = `${input}\n${aiResponse}`;
-        
-        // Try to parse this combined text
-        const familyContext = {
-          familyId,
-          children: familyMembers.filter(m => m.role === 'child')
-        };
-        
-        try {
-          // Parse the combined conversation
-          const eventDetails = await EventParserService.parseEventText(combinedText, familyContext);
-          
-          if (eventDetails && (eventDetails.title || eventDetails.eventType)) {
-            // We successfully parsed an event from the conversation
-            eventDetails.creationSource = 'conversation';
-            setParsedEventDetails(eventDetails);
-            setShowEventParser(true);
-            setEventParsingSource('text');
-            
-            // Add a helper message to explain
-            const helperMessage = {
-              familyId,
-              sender: 'allie',
-              userName: 'Allie',
-              text: `I've extracted the event details from our conversation. Would you like to review and add this to your calendar?`,
-              timestamp: new Date().toISOString()
-            };
-            
-            // Save and display the helper message
-            await ChatPersistenceService.saveMessage(helperMessage);
-            setMessages(prev => [...prev, helperMessage]);
-          }
-        } catch (parseError) {
-          console.error("Error parsing combined conversation:", parseError);
-          // This is a fallback, so just continue if it fails
-        }
-      }
       
       setLoading(false);
     } catch (error) {
@@ -673,225 +623,148 @@ useEffect(() => {
 }, [selectedUser, familyId]);
 
 
-  const processMessageForEvents = async (text) => {
-    try {
-      // Only try to parse events if we have family context
-      if (!familyId || !selectedUser) return false;
-      
-      // Get basic NLU analysis
-      const intentObj = nlu.current.detectIntent(text);
-      // Extract the intent string safely (it was trying to call startsWith on the object)
-      const intent = intentObj?.intent || '';
-      const entities = nlu.current.extractEntities(text);
-      
-      // Create child event detector if we don't have one
-      if (!childEventDetector.current) {
-        const ChildEventDetection = (await import('../../services/EnhancedChildEventDetection')).default;
-        childEventDetector.current = new ChildEventDetection();
-      }
-      
-      // Check for provider-specific requests first (doctors, specialists)
-      const isProviderRequest = 
-        text.toLowerCase().includes('doctor') || 
-        text.toLowerCase().includes('provider') ||
-        text.toLowerCase().includes('pediatrician') ||
-        text.toLowerCase().includes('dentist') ||
-        (text.toLowerCase().includes('add') && 
-         (text.toLowerCase().includes('medical') || 
-          text.toLowerCase().includes('healthcare')));
-      
-      if (isProviderRequest) {
-        // Don't try to handle as an event, let the provider-specific handler take care of it
-        const childrenMentioned = familyMembers
-          .filter(m => m.role === 'child')
-          .some(child => text.toLowerCase().includes(child.name.toLowerCase()));
-        
-        // Only return true if it's clearly a provider request with children mentioned
-        if (childrenMentioned) {
-          console.log("Detected provider request with children mentioned, skipping event parsing");
-          // Don't handle here, let EnhancedChatService handle it
-          return false;
-        }
-      }
-      
-      // Enhanced detection for calendar-related content
-      const isCalendarRelated = 
-        intent.startsWith('calendar.') || 
-        text.toLowerCase().includes('birthday') ||
-        text.toLowerCase().includes('party') ||
-        text.toLowerCase().includes('invite') ||
-        text.toLowerCase().includes('calendar') ||
-        text.toLowerCase().includes('appointment') ||
-        text.toLowerCase().includes('event') ||
-        text.toLowerCase().includes('schedule');
-      
+const processMessageForEvents = async (text) => {
+  try {
+    // Only try to parse events if we have family context
+    if (!familyId || !selectedUser) return false;
     
-    // Check for child-specific events like activities and medical appointments
-    const childrenList = familyMembers.filter(m => m.role === 'child');
+    // Get basic NLU analysis
+    const intentObj = nlu.current.detectIntent(text);
+    const intent = intentObj?.intent || '';
+    const entities = nlu.current.extractEntities(text, familyMembers);
     
-    // Try to detect child activity
-    const activityEvent = childEventDetector.current.detectActivity(text, childrenList);
-    if (activityEvent && activityEvent.childId) {
-      // We found an activity for a specific child
-      console.log("Detected child activity:", activityEvent);
-      
-      // Add needed metadata
-      activityEvent.userId = selectedUser.id;
-      activityEvent.familyId = familyId;
-      activityEvent.creationSource = 'chat';
-      
-      // Set it as the parsed event
-      setParsedEventDetails(activityEvent);
-      setShowEventParser(true);
-      setEventParsingSource('text');
-      
-      // Add a helper message about what we found
-      const helperMessage = {
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: `I noticed you're planning ${activityEvent.activityName} for ${activityEvent.childName}. I've extracted the details for you to review and can add this to both your calendar and ${activityEvent.childName}'s activity tracking.`,
-        timestamp: new Date().toISOString()
-      };
-      
-      setMessages(prev => [...prev, helperMessage]);
-      return true;
-    }
+    // Enhanced detection for calendar-related content
+    const isCalendarRelated = 
+      intent.startsWith('calendar.') || 
+      text.toLowerCase().includes('calendar') ||
+      text.toLowerCase().includes('appointment') ||
+      text.toLowerCase().includes('event') ||
+      text.toLowerCase().includes('schedule') ||
+      text.toLowerCase().includes('plan a') ||
+      text.toLowerCase().includes('date') ||
+      text.toLowerCase().includes('meet');
     
-    // Try to detect medical appointment
-    const medicalEvent = childEventDetector.current.detectMedicalAppointment(text, childrenList);
-    if (medicalEvent && medicalEvent.childId) {
-      // We found a medical appointment for a specific child
-      console.log("Detected medical appointment:", medicalEvent);
-      
-      // Add needed metadata
-      medicalEvent.userId = selectedUser.id;
-      medicalEvent.familyId = familyId;
-      medicalEvent.creationSource = 'chat';
-      
-      // Check if a doctor/provider name is mentioned
-      const doctorNameMatch = text.match(/(?:doctor|dr\.?)\s+([a-z]+)/i);
-      if (doctorNameMatch && doctorNameMatch[1]) {
-        medicalEvent.doctor = doctorNameMatch[1];
-      }
-      
-      // Set it as the parsed event
-      setParsedEventDetails(medicalEvent);
-      setShowEventParser(true);
-      setEventParsingSource('text');
-      
-      // Add a helper message about what we found
-      const helperMessage = {
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: `I noticed you're scheduling a ${medicalEvent.title} for ${medicalEvent.childName}. I've extracted the details for you to review and can add this to both your calendar and ${medicalEvent.childName}'s medical records.`,
-        timestamp: new Date().toISOString()
-      };
-      
-      setMessages(prev => [...prev, helperMessage]);
-      return true;
-    }
-    
-    
-    
-    // Determine if this is a query about existing events
-    const isCalendarQuery = 
-      intent === 'calendar.check' || 
-      text.toLowerCase().includes('when is') || 
-      text.toLowerCase().includes('what time is') ||
-      text.match(/\b(next|upcoming)\s+(appointment|event|meeting)\b/i);
-    
-    // If it looks like a calendar query, try to get existing events
-    if (isCalendarQuery) {
-      const eventInfo = await EnhancedChatService.lookupCalendarEvent(text, familyId, selectedUser.id);
-      // If we found event info, return true to indicate we handled it
-      if (eventInfo && eventInfo.success) {
-        // Add a response message with the event information
-        const responseMessage = {
-          familyId,
-          sender: 'allie',
-          userName: 'Allie',
-          text: eventInfo.message,
-          timestamp: new Date().toISOString()
-        };
-        
-        setMessages(prev => [...prev, responseMessage]);
-        return true;
-      }
-    }
-    
-    // If this appears to be calendar-related at all, try to parse it as an event
+    // If this appears to be calendar-related, try to parse it as an event
     if (isCalendarRelated) {
       // Get family context for better parsing
       const familyContext = {
         familyId,
-        children: familyMembers.filter(m => m.role === 'child')
+        children: familyMembers.filter(m => m.role === 'child'),
+        parents: familyMembers.filter(m => m.role === 'parent')
       };
       
-      // Try to parse the text as an event
-      let eventDetails = null;
+      // Extract people mentioned in the text
+      const mentionedPeople = this.extractMentionedPeople(text, familyMembers);
       
+      // Try to parse the text as an event
       try {
-        // Always try the EventParserService first as it has more detailed extraction
+        // Use the EventParserService to parse the text
         const parsedEvent = await EventParserService.parseEventText(text, familyContext);
         
-        // Fallback to NLU if needed
-        if (!parsedEvent || Object.keys(parsedEvent).length === 0) {
-          const standardEvent = nlu.current.extractEventDetails(text, familyMembers);
-          if (standardEvent && (standardEvent.title || standardEvent.startDate)) {
-            eventDetails = standardEvent;
-          }
-        } else {
-          eventDetails = parsedEvent;
-        }
-        
-        if (eventDetails && (eventDetails.title || eventDetails.eventType)) {
-          // We successfully parsed an event
+        if (parsedEvent && (parsedEvent.title || parsedEvent.eventType)) {
+          console.log("Successfully parsed event:", parsedEvent);
+          
           // Add source tracking for learning feedback
-          eventDetails.creationSource = 'text';
+          parsedEvent.creationSource = 'text';
           // Add user and family IDs
-          eventDetails.userId = selectedUser.id;
-          eventDetails.familyId = familyId;
+          parsedEvent.userId = selectedUser.id;
+          parsedEvent.familyId = familyId;
           
-          setParsedEventDetails(eventDetails);
-          setShowEventParser(true);
-          setEventParsingSource('text');
-          
-          // Create a more appropriate helper message based on event type
-          let helperText;
-          
-          // Check if this is an invitation (child attending) vs. hosting
-          const isInvitation = eventDetails.isInvitation || 
-                             (eventDetails.extraDetails?.eventRelationship === "attending");
-          
-          // Get child name or first child in family if not specified
-          const childName = eventDetails.childName || 
-                           (familyContext.children.length > 0 ? familyContext.children[0].name : "your child");
-          
-          if (isInvitation) {
-            const hostName = eventDetails.extraDetails?.hostName || "someone";
+          // Add mentioned people as attendees
+          if (mentionedPeople && mentionedPeople.length > 0) {
+            parsedEvent.attendees = mentionedPeople.map(person => ({
+              id: person.id || null,
+              name: person.name,
+              role: person.role || null
+            }));
             
-            if (eventDetails.eventType === 'birthday') {
-              helperText = `I see that ${childName} is invited to ${hostName}'s birthday party! I've extracted the details for you to review before adding to your calendar.`;
-            } else {
-              helperText = `I see that ${childName} is invited to an event. I've extracted the details for you to review before adding to your calendar.`;
+            // If "me" is mentioned, add the current user
+            if (text.toLowerCase().includes(' me ') || 
+                text.toLowerCase().includes('for me') || 
+                text.toLowerCase().startsWith('me ')) {
+              const currentUser = familyMembers.find(m => m.id === selectedUser.id);
+              if (currentUser && !parsedEvent.attendees.some(a => a.id === currentUser.id)) {
+                parsedEvent.attendees.push({
+                  id: currentUser.id,
+                  name: currentUser.name,
+                  role: currentUser.role
+                });
+              }
             }
-          } else {
-            // Default message for events that are not invitations
-            helperText = `I noticed what appears to be an event in your message. I've extracted the details for you to review before adding to your calendar.`;
+            
+            // If "wife" or "husband" is mentioned, try to find the spouse
+            const spouseTerms = ['wife', 'husband', 'spouse', 'partner'];
+            const hasSpouseTerm = spouseTerms.some(term => text.toLowerCase().includes(term));
+            
+            if (hasSpouseTerm) {
+              const currentUser = familyMembers.find(m => m.id === selectedUser.id);
+              const spouses = familyMembers.filter(m => 
+                m.role === 'parent' && m.id !== currentUser.id
+              );
+              
+              if (spouses.length > 0) {
+                const spouse = spouses[0];
+                if (!parsedEvent.attendees.some(a => a.id === spouse.id)) {
+                  parsedEvent.attendees.push({
+                    id: spouse.id,
+                    name: spouse.name,
+                    role: spouse.role
+                  });
+                }
+              }
+            }
           }
           
-          const helperMessage = {
-            familyId,
-            sender: 'allie',
-            userName: 'Allie',
-            text: helperText,
-            timestamp: new Date().toISOString()
-          };
+          // If this is a personal event for adults (like a date night), set appropriate properties
+          if (text.toLowerCase().includes('date night') || 
+              text.toLowerCase().includes('plan a date') || 
+              text.toLowerCase().includes('night out')) {
+            parsedEvent.eventType = 'date';
+            parsedEvent.category = 'relationship';
+            
+            // Make sure both parents are included
+            const parents = familyMembers.filter(m => m.role === 'parent');
+            if (parents.length > 0) {
+              parsedEvent.attendees = parents.map(parent => ({
+                id: parent.id,
+                name: parent.name,
+                role: parent.role
+              }));
+            }
+          }
           
-          setMessages(prev => [...prev, helperMessage]);
-          return true;
+          // Now that we have all the details, create the event directly
+          const response = await this.createCalendarEventDirectly(parsedEvent);
+          
+          if (response.success) {
+            // Send success message
+            const successMessage = {
+              familyId,
+              sender: 'allie',
+              userName: 'Allie',
+              text: `I've added the following event to your family's shared calendar:\n\nEvent: ${parsedEvent.title}\nDate: ${new Date(parsedEvent.dateTime).toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric'})}\nTime: ${new Date(parsedEvent.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}\nLocation: ${parsedEvent.location || 'Not specified'}\n\nThis has been added to your family's shared calendar. You can view and manage this in your calendar.`,
+              timestamp: new Date().toISOString()
+            };
+            
+            setMessages(prev => [...prev, successMessage]);
+            return true;
+          } else {
+            // If direct creation failed, show the event parser UI
+            setParsedEventDetails(parsedEvent);
+            setShowEventParser(true);
+            setEventParsingSource('text');
+            
+            const helperMessage = {
+              familyId,
+              sender: 'allie',
+              userName: 'Allie',
+              text: `I've extracted event details from your message. Please review before adding to your calendar.`,
+              timestamp: new Date().toISOString()
+            };
+            
+            setMessages(prev => [...prev, helperMessage]);
+            return true;
+          }
         }
       } catch (parseError) {
         console.error("Error in event parsing:", parseError);
@@ -905,6 +778,134 @@ useEffect(() => {
     return false;
   }
 };
+
+// Helper method to extract mentioned people
+extractMentionedPeople(text, familyMembers) {
+  if (!text || !familyMembers || familyMembers.length === 0) {
+    return [];
+  }
+  
+  const mentionedPeople = [];
+  
+  // Check for each family member by name
+  familyMembers.forEach(member => {
+    const namePattern = new RegExp(`\\b${member.name}\\b`, 'i');
+    if (namePattern.test(text)) {
+      mentionedPeople.push({
+        id: member.id,
+        name: member.name,
+        role: member.role
+      });
+    }
+  });
+  
+  // Check for "me" references
+  if (text.toLowerCase().includes(' me ') || 
+      text.toLowerCase().includes(' my ') || 
+      text.toLowerCase().includes('for me') || 
+      text.toLowerCase().startsWith('me ')) {
+    const currentUser = familyMembers.find(m => m.id === selectedUser.id);
+    if (currentUser && !mentionedPeople.some(p => p.id === currentUser.id)) {
+      mentionedPeople.push({
+        id: currentUser.id,
+        name: currentUser.name,
+        role: currentUser.role
+      });
+    }
+  }
+  
+  // Check for spouse references
+  if (text.toLowerCase().includes('wife') || 
+      text.toLowerCase().includes('husband') || 
+      text.toLowerCase().includes('spouse') || 
+      text.toLowerCase().includes('partner')) {
+    
+    // Find the spouse (assuming the other parent is the spouse)
+    const currentUser = familyMembers.find(m => m.id === selectedUser.id);
+    const spouse = familyMembers.find(m => 
+      m.role === 'parent' && m.id !== currentUser?.id
+    );
+    
+    if (spouse && !mentionedPeople.some(p => p.id === spouse.id)) {
+      mentionedPeople.push({
+        id: spouse.id,
+        name: spouse.name,
+        role: spouse.role
+      });
+    }
+  }
+  
+  return mentionedPeople;
+}
+
+// Helper method to create calendar event directly
+async createCalendarEventDirectly(eventDetails) {
+  try {
+    if (!eventDetails || !selectedUser) {
+      return { success: false, error: "Missing event details or user" };
+    }
+    
+    // Format and standardize the event
+    const startDate = eventDetails.dateTime instanceof Date ? 
+      eventDetails.dateTime : new Date(eventDetails.dateTime);
+    
+    const endDate = new Date(startDate);
+    endDate.setHours(startDate.getHours() + 1); // Default 1 hour event
+    
+    // Create event object with explicit structure
+    const event = {
+      summary: eventDetails.title,
+      title: eventDetails.title,
+      description: eventDetails.description || `Added from Allie chat`,
+      location: eventDetails.location || '',
+      start: {
+        dateTime: startDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: endDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      // Add all metadata
+      familyId: familyId,
+      eventType: eventDetails.eventType || 'general',
+      category: eventDetails.category || 'general',
+      // Include attendee information
+      attendees: eventDetails.attendees || [],
+      // Track source
+      source: 'chat',
+      creationSource: 'direct_creation',
+      originalText: eventDetails.originalText || ''
+    };
+    
+    // Add the event to the calendar
+    const result = await CalendarService.addEvent(event, selectedUser.id);
+    
+    if (result.success) {
+      // Force calendar refresh
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+      }
+      
+      return { 
+        success: true, 
+        eventId: result.eventId || result.firestoreId,
+        message: "Event added successfully"
+      };
+    } else {
+      return { 
+        success: false, 
+        error: result.error || "Failed to add event to calendar" 
+      };
+    }
+  } catch (error) {
+    console.error("Error creating calendar event:", error);
+    return { 
+      success: false, 
+      error: error.message || "Error creating calendar event" 
+    };
+  }
+}
   
 // Add this helper function to src/components/chat/AllieChat.jsx
 

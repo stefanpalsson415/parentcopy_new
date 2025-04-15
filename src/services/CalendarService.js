@@ -157,180 +157,126 @@ class CalendarService {
 
 
 
-async addEvent(event, userId) {
-  try {
-    if (!userId) {
-      throw new Error("User ID is required to add events");
-    }
-    
-    // Generate a universal ID for the event that will be used across all components
-    const universalId = `event-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
-    
-    // Log the incoming event for debugging
-    console.log("Adding calendar event:", {
-      title: event.summary || event.title || 'Untitled',
-      hasStart: !!event.start,
-      hasDate: !!(event.start?.dateTime || event.start?.date),
-      childName: event.childName || 'None',
-      universalId,
-      userId
-    });
-    
-    // Ensure event has required fields
-    if (!event.summary && !event.title) {
-      event.summary = "Untitled Event";
-    }
-    
-    // Standardize event format - this ensures a consistent structure
-    const standardizedEvent = {
-      ...event,
-      // Use universal ID as the primary identifier
-      universalId,
-      // Ensure both summary and title are set for compatibility
-      summary: event.summary || event.title,
-      title: event.title || event.summary, 
-      description: event.description || '',
-      // Ensure start and end dates are properly formatted
-      start: event.start || {
-        dateTime: new Date().toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      end: event.end || {
-        dateTime: new Date(new Date().getTime() + 60*60000).toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      // Preserve all metadata including attendees
-      childId: event.childId || null,
-      childName: event.childName || null,
-      attendingParentId: event.attendingParentId || null,
-      siblingIds: event.siblingIds || [],
-      siblingNames: event.siblingNames || [],
-      eventType: event.eventType || 'general',
-      extraDetails: event.extraDetails || {},
-      // Always include these fields
-      userId,
-      familyId: event.familyId || null,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      source: event.source || 'manual',
-      // Include the original text if available (for later reference)
-      originalText: event.originalText || ''
-    };
-    
-    // Check if a similar event already exists to prevent duplicates
-    if (event.familyId) {
-      const eventsQuery = query(
-        collection(db, "calendar_events"),
-        where("familyId", "==", event.familyId),
-        where("userId", "==", userId)
-      );
+  async addEvent(event, userId) {
+    try {
+      if (!userId) {
+        throw new Error("User ID is required to add events");
+      }
       
-      const querySnapshot = await getDocs(eventsQuery);
-      let isDuplicate = false;
+      // Generate a universal ID for the event
+      const universalId = `event-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
       
-      querySnapshot.forEach((doc) => {
-        const existingEvent = doc.data();
-        // Only consider it a duplicate if ALL of these match:
-        // 1. Exact same title
-        // 2. Same date (ignoring time)
-        // 3. Same child (if applicable)
-        if (existingEvent.summary === standardizedEvent.summary || 
-            existingEvent.title === standardizedEvent.title) {
-          
-          const existingDate = new Date(existingEvent.start?.dateTime || existingEvent.start?.date || existingEvent.dateTime || new Date());
-          const newDate = new Date(standardizedEvent.start?.dateTime || standardizedEvent.start?.date || standardizedEvent.dateTime || new Date());
-          
-          // Compare only the date part (not time)
-          const sameDate = existingDate.getFullYear() === newDate.getFullYear() &&
-                           existingDate.getMonth() === newDate.getMonth() &&
-                           existingDate.getDate() === newDate.getDate();
-                           
-          // Compare child if present
-          const sameChild = (!existingEvent.childId && !standardizedEvent.childId) ||
-                            (existingEvent.childId === standardizedEvent.childId);
-          
-          // Only mark as duplicate if title, date AND child match
-          if (sameDate && sameChild) {
-            console.log("Found potential duplicate event, checking time...");
-            
-            // If times are different (more than 15 minutes), it's not a duplicate
-            const timeDiffMinutes = Math.abs(existingDate - newDate) / (1000 * 60);
-            if (timeDiffMinutes < 15) {
-              console.log("Duplicate confirmed - same time or very close");
-              isDuplicate = true;
-            } else {
-              console.log("Not a duplicate - different times");
-            }
-          }
-        }
+      // Log the incoming event for debugging
+      console.log("Adding calendar event:", {
+        title: event.summary || event.title || 'Untitled',
+        hasStart: !!event.start,
+        hasDate: !!(event.start?.dateTime || event.start?.date),
+        childName: event.childName || 'None',
+        universalId,
+        userId,
+        attendees: event.attendees || []
       });
       
-      if (isDuplicate) {
-        this.showNotification("Similar event already exists in your calendar", "info");
-        return { success: true, isDuplicate: true };
+      // Ensure event has required fields
+      if (!event.summary && !event.title) {
+        event.summary = "Untitled Event";
       }
-    }
-    
-    // Save event to Firestore in the calendar_events collection
-    const eventRef = collection(db, "calendar_events");
-    const docRef = await addDoc(eventRef, standardizedEvent);
-    
-    // Update the document with its own ID for easy reference
-    await updateDoc(docRef, {
-      firestoreId: docRef.id,
-      // Include universalId again to ensure it's set
-      universalId: universalId
-    });
-    
-    console.log("Event saved to Firestore with ID:", docRef.id, "and universalId:", universalId);
-    
-    // Dispatch events - this is crucial for keeping the UI in sync
-    if (typeof window !== 'undefined') {
-      // Ensure we use a consistent event structure with the universalId
-      const eventDetail = {
-        eventId: docRef.id,
-        universalId: universalId,
-        title: standardizedEvent.summary,
-        eventType: standardizedEvent.eventType,
-        childId: standardizedEvent.childId,
-        childName: standardizedEvent.childName,
-        attendees: standardizedEvent.siblingIds 
-          ? [...(standardizedEvent.siblingIds || []), standardizedEvent.childId].filter(Boolean)
-          : [standardizedEvent.childId].filter(Boolean),
-        dateTime: standardizedEvent.start.dateTime
+      
+      // Standardize event format
+      const standardizedEvent = {
+        ...event,
+        // Use universal ID as the primary identifier
+        universalId,
+        // Ensure both summary and title are set for compatibility
+        summary: event.summary || event.title,
+        title: event.title || event.summary, 
+        description: event.description || '',
+        // Ensure start and end dates are properly formatted
+        start: event.start || {
+          dateTime: new Date().toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: event.end || {
+          dateTime: new Date(new Date().getTime() + 60*60000).toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        // Preserve all metadata including attendees
+        attendees: event.attendees || [],
+        childId: event.childId || null,
+        childName: event.childName || null,
+        attendingParentId: event.attendingParentId || null,
+        siblingIds: event.siblingIds || [],
+        siblingNames: event.siblingNames || [],
+        eventType: event.eventType || 'general',
+        extraDetails: event.extraDetails || {},
+        // Always include these fields
+        userId,
+        familyId: event.familyId || null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        source: event.source || 'manual',
+        // Include the original text if available (for later reference)
+        originalText: event.originalText || ''
       };
       
-      // Force refresh all calendar views
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-        // Also dispatch specific event type for more targeted refreshes
-        window.dispatchEvent(new CustomEvent('calendar-event-added', {
-          detail: eventDetail
-        }));
+      // Save event to Firestore in the calendar_events collection
+      const eventRef = collection(db, "calendar_events");
+      const docRef = await addDoc(eventRef, standardizedEvent);
+      
+      // Update the document with its own ID for easy reference
+      await updateDoc(docRef, {
+        firestoreId: docRef.id,
+        // Include universalId again to ensure it's set
+        universalId: universalId
+      });
+      
+      console.log("Event saved to Firestore with ID:", docRef.id, "and universalId:", universalId);
+      
+      // Dispatch events for UI refresh
+      if (typeof window !== 'undefined') {
+        // Ensure we use a consistent event structure with the universalId
+        const eventDetail = {
+          eventId: docRef.id,
+          universalId: universalId,
+          title: standardizedEvent.summary,
+          eventType: standardizedEvent.eventType,
+          childId: standardizedEvent.childId,
+          childName: standardizedEvent.childName,
+          attendees: standardizedEvent.attendees || [],
+          dateTime: standardizedEvent.start.dateTime
+        };
         
-        if (standardizedEvent.childId) {
-          window.dispatchEvent(new CustomEvent('calendar-child-event-added', {
+        // Force refresh all calendar views
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+          // Also dispatch specific event type for more targeted refreshes
+          window.dispatchEvent(new CustomEvent('calendar-event-added', {
             detail: eventDetail
           }));
-        }
-      }, 300);
+          
+          if (standardizedEvent.childId) {
+            window.dispatchEvent(new CustomEvent('calendar-child-event-added', {
+              detail: eventDetail
+            }));
+          }
+        }, 300);
+      }
+      
+      // Show success notification
+      this.showNotification(`Event "${standardizedEvent.summary}" added to your calendar`, "success");
+      
+      return {
+        success: true,
+        eventId: docRef.id,
+        universalId: universalId,
+        firestoreId: docRef.id
+      };
+    } catch (error) {
+      console.error("Error adding event to calendar:", error);
+      this.showNotification("Failed to add event to calendar", "error");
+      return { success: false, error: error.message || "Unknown error" };
     }
-    
-    // Show success notification
-    this.showNotification(`Event "${standardizedEvent.summary}" added to your calendar`, "success");
-    
-    return {
-      success: true,
-      eventId: docRef.id,
-      universalId: universalId,
-      firestoreId: docRef.id  // Include the Firestore ID for backward compatibility
-    };
-  } catch (error) {
-    console.error("Error adding event to calendar:", error);
-    this.showNotification("Failed to add event to calendar", "error");
-    return { success: false, error: error.message || "Unknown error" };
   }
-}
 
 // Add a new method to handle recurring events
 async createRecurringEvents(baseEvent, userId, universalId) {
