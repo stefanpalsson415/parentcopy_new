@@ -367,13 +367,20 @@ const generateAiInsights = useCallback(async (data) => {
       return;
     }
     
-    // Try to get insights from AI service
+    console.log("Generating child insights for family:", familyId);
+    
+    // Always generate local insights first as a fallback
+    const localInsights = generateLocalInsights(data);
+    
     try {
+      // Set local insights immediately so UI is not empty
+      setAiInsights(localInsights);
+      
+      // Try to get enhanced insights from AI service with a longer timeout
       console.log("Requesting AI-generated child insights from AllieAIService");
-      // Add a timeout to prevent hanging
       const aiInsightsPromise = AllieAIService.generateChildInsights(familyId, data);
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("AI insights request timed out")), 5000)
+        setTimeout(() => reject(new Error("AI insights request timed out")), 20000) // 20 seconds timeout
       );
       
       // Race between the actual request and a timeout
@@ -381,24 +388,30 @@ const generateAiInsights = useCallback(async (data) => {
       
       if (aiInsights && Array.isArray(aiInsights) && aiInsights.length > 0) {
         console.log(`Received ${aiInsights.length} AI-generated insights`);
+        // Only update if we got valid insights
         setAiInsights(aiInsights);
-        return;
       } else {
-        console.warn("AI service returned empty or invalid insights, using fallback");
-        throw new Error("Invalid insights format");
+        // Keep using local insights
+        console.warn("AI service returned empty or invalid insights, keeping local insights");
       }
     } catch (serviceError) {
-      console.warn("AI service error, falling back to local insights:", serviceError);
-      // Always fall back to local generation on any error
-      const localInsights = generateLocalInsights(data);
-      setAiInsights(localInsights);
+      // Already showing local insights, just log the error
+      console.warn("AI service error, using local insights:", serviceError);
     }
   } catch (error) {
     console.error("Error in insight generation:", error);
-    // Ensure we always have at least an empty array of insights to prevent rendering issues
-    setAiInsights([]);
+    // Create basic insights as a last resort
+    setAiInsights([
+      {
+        title: "Getting Started",
+        type: "recommendation",
+        content: "Track your children's health, growth, and routines to get personalized insights.",
+        priority: "medium",
+        childId: null
+      }
+    ]);
   }
-}, [familyId]);
+}, [familyId, generateLocalInsights]);
 
   // Update notification counts based on data
   const updateNotificationCounts = useCallback((data) => {
@@ -1251,65 +1264,107 @@ useEffect(() => {
       setLoading(true);
       console.log("Loading children data...");
       
-      const docRef = doc(db, "families", familyId);
-      const docSnap = await getDoc(docRef);
+      // Add a timeout to prevent UI freeze if Firebase is slow
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Loading children data timed out")), 10000)
+      );
       
-      if (docSnap.exists()) {
-        const familyData = docSnap.data();
+      // Create the main data loading function
+      const dataLoadingPromise = async () => {
+        const docRef = doc(db, "families", familyId);
+        const docSnap = await getDoc(docRef);
         
-        // Check if we have children data structure, if not create it
-        if (!familyData.childrenData) {
-          // Initialize empty children data structure
-          const initialChildrenData = {};
+        if (docSnap.exists()) {
+          const familyData = docSnap.data();
           
-          // Create entry for each child in the family
-          familyMembers
-            .filter(member => member.role === 'child')
-            .forEach(child => {
-              initialChildrenData[child.id] = {
-                medicalAppointments: [],
-                growthData: [],
-                routines: [],
-                clothesHandMeDowns: []
-              };
-            });
-          
-          // Save initial structure to Firebase
-          await updateDoc(docRef, {
-            childrenData: initialChildrenData
-          });
-          
-          setChildrenData(initialChildrenData);
+          // Check if we have children data structure, if not create it
+          if (!familyData.childrenData) {
+            console.log("No children data found, initializing structure");
+            // Initialize empty children data structure
+            const initialChildrenData = {};
+            
+            // Create entry for each child in the family
+            familyMembers
+              .filter(member => member.role === 'child')
+              .forEach(child => {
+                initialChildrenData[child.id] = {
+                  medicalAppointments: [],
+                  growthData: [],
+                  routines: [],
+                  clothesHandMeDowns: []
+                };
+              });
+            
+            try {
+              // Save initial structure to Firebase
+              await updateDoc(docRef, {
+                childrenData: initialChildrenData
+              });
+              console.log("Initialized children data structure in Firebase");
+            } catch (updateError) {
+              console.warn("Failed to save initial children data structure:", updateError);
+            }
+            
+            return initialChildrenData;
+          } else {
+            console.log("Found existing children data");
+            return familyData.childrenData;
+          }
         } else {
-          setChildrenData(familyData.childrenData);
+          console.warn("Family document not found");
+          return {};
         }
-        
-        // Set active child to the first child if none is selected
-        if (!activeChild && familyMembers.filter(m => m.role === 'child').length > 0) {
-          setActiveChild(familyMembers.filter(m => m.role === 'child')[0].id);
-        }
-        
-        // Update notification counts
-        updateNotificationCounts(familyData.childrenData);
-        
-        // Important change: Set loading to false before AI generation
-        setLoading(false);
-        
-        // Generate AI insights in the background
-        if (familyData.childrenData) {
-          generateAiInsights(familyData.childrenData).catch(error => {
+      };
+      
+      // Race the data loading against the timeout
+      let childrenDataResult;
+      try {
+        childrenDataResult = await Promise.race([dataLoadingPromise(), timeoutPromise]);
+      } catch (timeoutError) {
+        console.warn("Children data loading timed out, showing empty state");
+        childrenDataResult = {}; // Empty state if timeout
+        setTabError("Loading took too long. Some data may be unavailable.");
+      }
+      
+      // Set the children data
+      setChildrenData(childrenDataResult);
+      
+      // Set active child to the first child if none is selected
+      if (!activeChild && familyMembers.filter(m => m.role === 'child').length > 0) {
+        setActiveChild(familyMembers.filter(m => m.role === 'child')[0].id);
+      }
+      
+      // Update notification counts
+      updateNotificationCounts(childrenDataResult);
+      
+      // Set loading to false before AI generation
+      setLoading(false);
+      
+      // Generate AI insights in the background
+      if (Object.keys(childrenDataResult).length > 0) {
+        console.log("Generating AI insights in the background");
+        setTimeout(() => {
+          generateAiInsights(childrenDataResult).catch(error => {
             console.error("Background AI insights generation failed:", error);
-            // This won't block rendering since loading is already set to false
           });
-        }
+        }, 1000); // Slight delay to let UI render first
       } else {
-        // No data exists
-        setLoading(false);
+        console.log("No children data to generate insights from");
+        // Set default insights
+        setAiInsights([{
+          title: "Getting Started",
+          type: "recommendation",
+          content: "Start tracking your children's health, growth, and routines to get personalized insights.",
+          priority: "medium",
+          childId: null
+        }]);
       }
     } catch (error) {
       console.error("Error loading children data:", error);
       setLoading(false);
       setTabError("There was an error loading children data. Please try refreshing the page.");
+      // Set fallback empty data
+      setChildrenData({});
     }
   };
   

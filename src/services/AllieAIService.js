@@ -217,6 +217,78 @@ class AllieAIService {
 
 // Replace the existing processProviderFromChat method in src/services/AllieAIService.js
 
+// Add this to AllieAIService.js just after the constructor
+safelyParseJSON(jsonString, defaultValue) {
+  try {
+    // Handle empty or null responses
+    if (!jsonString || typeof jsonString !== 'string') {
+      console.warn("Invalid input for JSON parsing:", jsonString);
+      return defaultValue;
+    }
+
+    // Check if the response is a plain text insight rather than JSON
+    if (jsonString.trim().startsWith("Here are") || 
+        jsonString.trim().startsWith("Based on") ||
+        jsonString.trim().startsWith("I can help")) {
+      // Handle plain text responses by converting to our expected format
+      console.log("Received text response instead of JSON, creating structured format");
+      
+      // Extract meaningful content from the text
+      const textLines = jsonString.split('\n').filter(line => line.trim().length > 0);
+      
+      // Create structured insights from text
+      return {
+        insights: [
+          {
+            title: "AI Analysis",
+            type: "recommendation",
+            content: textLines.slice(0, 3).join(' '),
+            priority: "medium",
+            childId: null
+          }
+        ]
+      };
+    }
+
+    // Try direct parsing first
+    try {
+      return JSON.parse(jsonString);
+    } catch (initialError) {
+      console.warn("Initial JSON parsing failed, attempting recovery:", initialError.message);
+    }
+    
+    // Try to find and extract a valid JSON object
+    try {
+      // Look for anything that looks like a JSON object
+      const objectMatch = jsonString.match(/(\{[\s\S]*\})/);
+      if (objectMatch && objectMatch[0]) {
+        // Further clean the match to ensure it's valid JSON
+        const cleanJSON = objectMatch[0]
+          .replace(/\\'/g, "'")
+          .replace(/\\"/g, '"')
+          .replace(/\n/g, ' ');
+          
+        return JSON.parse(cleanJSON);
+      }
+      
+      // Try to find JSON arrays
+      const arrayMatch = jsonString.match(/(\[[\s\S]*\])/);
+      if (arrayMatch && arrayMatch[0]) {
+        return JSON.parse(arrayMatch[0]);
+      }
+    } catch (recoveryError) {
+      console.warn("JSON extraction failed:", recoveryError.message);
+    }
+    
+    console.error("Could not extract valid JSON from response");
+    console.log("Response preview:", jsonString.substring(0, 200) + "...");
+    return defaultValue;
+  } catch (error) {
+    console.error("JSON recovery completely failed:", error.message);
+    return defaultValue;
+  }
+}
+
 // Replace the processProviderFromChat method in src/services/AllieAIService.js
 
 async processProviderFromChat(message, familyId) {
@@ -823,7 +895,7 @@ async generateChildInsights(familyId, childrenData) {
     4. A priority level (high, medium, low) based on importance
     5. The relevant childId
     
-    Your response should be in valid JSON format with this structure:
+    VERY IMPORTANT: Your response must be in valid JSON format with this structure:
     {
       "insights": [
         {
@@ -878,27 +950,33 @@ async generateChildInsights(familyId, childrenData) {
       familyMembers: familyContext.familyMembers
     })}` : ''}
     
-    Create specific, data-driven insights for each child in the family.`;
+    IMPORTANT: Create specific, data-driven insights for each child in the family. Return ONLY JSON with no extra text.`;
     
     // Call Claude API with timeout handling
     let claudeResponse = null;
     try {
-      claudeResponse = await Promise.race([
-        ClaudeService.generateResponse(
-          [{ role: 'user', content: userMessage }],
-          { system: systemPrompt }
-        ),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Claude API timeout")), 15000)
-        )
-      ]);
+      const messages = [{ role: 'user', content: userMessage }];
+      claudeResponse = await ClaudeService.generateResponse(
+        messages, 
+        { system: systemPrompt },
+        { temperature: 0.3 } // Lower temperature for more predictable JSON responses
+      );
+      
+      if (!claudeResponse) {
+        console.warn("Empty response from Claude API");
+        return this.getFallbackChildInsights(childrenData);
+      }
+      
+      // Check if the response might be conversational instead of JSON
+      if (claudeResponse.includes("I'll analyze") || 
+          claudeResponse.includes("Here are") || 
+          claudeResponse.includes("Based on")) {
+        console.warn("Received conversational response instead of JSON");
+        console.log("Response preview:", claudeResponse.substring(0, 200));
+        return this.getFallbackChildInsights(childrenData);
+      }
     } catch (timeoutError) {
-      console.error("Claude API timed out:", timeoutError);
-      return this.getFallbackChildInsights(childrenData);
-    }
-    
-    if (!claudeResponse) {
-      console.warn("Empty response from Claude API");
+      console.error("Claude API error:", timeoutError);
       return this.getFallbackChildInsights(childrenData);
     }
     

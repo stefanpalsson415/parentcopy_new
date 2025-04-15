@@ -75,8 +75,6 @@ async testProxyConnection() {
   }
 }
 
-  // src/services/ClaudeService.js - update the generateResponse method
-
 async generateResponse(messages, context, options = {}) {
   try {
     // Format system prompt with family context
@@ -144,104 +142,135 @@ async generateResponse(messages, context, options = {}) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 45000); // Increased timeout to 45 seconds
     
-    // Make the API call through our proxy server
+    // Make the API call through our proxy server with better error handling
     console.log("Attempting to connect to proxy at:", this.proxyUrl);
-    const response = await fetch(this.proxyUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      console.warn("Claude proxy returned error status:", response.status);
-      // Instead of throwing, return a personalized response
-      return this.createPersonalizedResponse(lastUserMessage, context);
+    try {
+      const response = await fetch(this.proxyUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        console.warn("Claude proxy returned error status:", response.status);
+        // Try to get more details about the error
+        let errorDetails = "";
+        try {
+          const errorText = await response.text();
+          errorDetails = errorText.substring(0, 200); // Get first 200 chars of error
+          console.warn("Error details from proxy:", errorDetails);
+        } catch (e) {}
+        
+        // Return a personalized response
+        return this.createPersonalizedResponse(lastUserMessage, context);
+      }
+      
+      // Try to parse the JSON with better error handling
+      let result;
+      try {
+        result = await response.json();
+      } catch (jsonError) {
+        console.error("Error parsing JSON from Claude API:", jsonError);
+        // Try to get the raw text to see what's wrong
+        const rawText = await response.text();
+        console.warn("Raw response text (first 200 chars):", rawText.substring(0, 200));
+        return this.createPersonalizedResponse(lastUserMessage, context);
+      }
+      
+      // Check for valid response
+      if (!result || !result.content || !result.content[0]) {
+        console.error("Invalid response format from Claude API:", result);
+        return this.createPersonalizedResponse(lastUserMessage, context);
+      }
+      
+      return result.content[0].text;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      console.error("Error in Claude API call:", error.message);
+      
+      // Only use fallback for certain errors
+      if (error.message?.includes("timeout") || error.message?.includes("network")) {
+        console.log("Using fallback response due to network/timeout error");
+        return this.createPersonalizedResponse(
+          typeof messages[messages.length - 1] === 'object' 
+            ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "") 
+            : "", 
+          context
+        );
+      }
+      
+      // For other errors, retry with simpler prompt
+      try {
+        console.log("Retrying with simplified prompt...");
+        // Create a more focused system prompt
+        const simplifiedSystemPrompt = `You are Allie, an AI assistant focused on family workload balance.
+        Today's date is ${new Date().toLocaleDateString()}.
+        
+        IMPORTANT: Give specific answers about the family data you have access to:
+        - Family: ${context.familyName || 'Unknown'}
+        - Survey data: ${context.surveyData?.mamaPercentage ? `Mama: ${context.surveyData.mamaPercentage.toFixed(1)}%, Papa: ${(100 - context.surveyData.mamaPercentage).toFixed(1)}%` : 'Not yet available'}
+        - Tasks: ${context.tasks?.length || 0} active tasks
+        
+        REMEMBER: Always be specific and precise when referring to this family's data.
+        DO NOT say "I have access to the family's data" - instead SHOW that access by mentioning specific data points.
+        
+        ABOUT SURVEY QUESTIONS: Be informative about all survey questions. Explain why they're asked, how their weights are calculated, and the impact of each factor (frequency, invisibility, emotional labor, child development) on task importance.`;
+        
+        // Extract last user message for the retry
+        const lastMessageContent = typeof messages[messages.length - 1] === 'object'
+          ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
+          : "";
+        
+        // Make a simpler request
+        const response = await fetch(this.proxyUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: this.model,
+            max_tokens: 2000,
+            temperature: 0.7,
+            messages: [{ role: "user", content: lastMessageContent }],
+            system: simplifiedSystemPrompt
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          if (result && result.content && result.content[0]) {
+            return result.content[0].text;
+          }
+        }
+        
+        // If retry fails, fall back to default response
+        return this.createPersonalizedResponse(
+          lastMessageContent, 
+          context
+        );
+      } catch (retryError) {
+        console.error("Retry also failed:", retryError);
+        return this.createPersonalizedResponse(
+          typeof messages[messages.length - 1] === 'object'
+            ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
+            : "",
+          context
+        );
+      }
     }
-    
-    const result = await response.json();
-    
-    // Check for valid response
-    if (!result || !result.content || !result.content[0]) {
-      console.error("Invalid response format from Claude API:", result);
-      return this.createPersonalizedResponse(lastUserMessage, context);
-    }
-    
-    return result.content[0].text;
   } catch (error) {
     console.error("Error in Claude API call:", error.message);
     
-    // Only use fallback for certain errors
-    if (error.message?.includes("timeout") || error.message?.includes("network")) {
-      console.log("Using fallback response due to network/timeout error");
-      return this.createPersonalizedResponse(
-        typeof messages[messages.length - 1] === 'object' 
-          ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "") 
-          : "", 
-        context
-      );
-    }
-    
-    // For other errors, retry with simpler prompt
-    try {
-      console.log("Retrying with simplified prompt...");
-      // Create a more focused system prompt
-      const simplifiedSystemPrompt = `You are Allie, an AI assistant focused on family workload balance.
-      Today's date is ${new Date().toLocaleDateString()}.
-      
-      IMPORTANT: Give specific answers about the family data you have access to:
-      - Family: ${context.familyName || 'Unknown'}
-      - Survey data: ${context.surveyData?.mamaPercentage ? `Mama: ${context.surveyData.mamaPercentage.toFixed(1)}%, Papa: ${(100 - context.surveyData.mamaPercentage).toFixed(1)}%` : 'Not yet available'}
-      - Tasks: ${context.tasks?.length || 0} active tasks
-      
-      REMEMBER: Always be specific and precise when referring to this family's data.
-      DO NOT say "I have access to the family's data" - instead SHOW that access by mentioning specific data points.
-      
-      ABOUT SURVEY QUESTIONS: Be informative about all survey questions. Explain why they're asked, how their weights are calculated, and the impact of each factor (frequency, invisibility, emotional labor, child development) on task importance.`;
-      
-      // Extract last user message for the retry
-      const lastMessageContent = typeof messages[messages.length - 1] === 'object'
+    // Return fallback response
+    return this.createPersonalizedResponse(
+      typeof messages[messages.length - 1] === 'object'
         ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
-        : "";
-      
-      // Make a simpler request
-      const response = await fetch(this.proxyUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: this.model,
-          max_tokens: 2000,
-          temperature: 0.7,
-          messages: [{ role: "user", content: lastMessageContent }],
-          system: simplifiedSystemPrompt
-        })
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        if (result && result.content && result.content[0]) {
-          return result.content[0].text;
-        }
-      }
-      
-      // If retry fails, fall back to default response
-      return this.createPersonalizedResponse(
-        lastMessageContent, 
-        context
-      );
-    } catch (retryError) {
-      console.error("Retry also failed:", retryError);
-      return this.createPersonalizedResponse(
-        typeof messages[messages.length - 1] === 'object'
-          ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
-          : "",
-        context
-      );
-    }
+        : "",
+      context
+    );
   }
 }
   
