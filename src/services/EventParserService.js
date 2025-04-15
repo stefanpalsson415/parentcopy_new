@@ -55,25 +55,43 @@ class EventParserService {
       const notes = this.extractNotes(text);
       console.log("Extracted notes:", notes);
       
+      // Determine if the child is hosting or attending the event
+      const eventRelationship = this.determineEventRelationship(text, childInfo.childName);
+      console.log("Determined event relationship:", eventRelationship);
+      
+      // Set the correct title based on whether the child is hosting or attending
+      let title;
+      if (eventRelationship.relationship === "attending" && eventRelationship.hostName) {
+        title = `${eventRelationship.hostName}'s ${eventType === 'birthday' ? 'Birthday Party' : 'Event'}`;
+        if (birthdayInfo?.age || hostInfo.birthdayChildAge) {
+          title += ` (${birthdayInfo?.age || hostInfo.birthdayChildAge})`;
+        }
+      } else {
+        title = this.generateEventTitle(eventType, childInfo, birthdayInfo || hostInfo);
+      }
+      
       // Create a structured event object
-const eventDetails = {
-    eventType: eventType,
-    title: this.generateEventTitle(eventType, childInfo, birthdayInfo || hostInfo),
-    childId: childInfo.childId,
-    childName: childInfo.childName,
-    dateTime: dateTime,
-    location: location,
-    hostParent: hostInfo.name,
-    extraDetails: {
-      birthdayChildName: birthdayInfo?.name || hostInfo.birthdayChildName,
-      birthdayChildAge: birthdayInfo?.age || hostInfo.birthdayChildAge,
-      notes: notes
-    },
-    attendingParentId: null, // To be filled in by user
-    creationSource: 'AI-parse-text',
-    region: region, // Store the detected region for reference
-    originalText: text // Store original text for learning feedback
-  };
+      const eventDetails = {
+        eventType: eventType,
+        title: title,
+        childId: childInfo.childId,
+        childName: childInfo.childName,
+        dateTime: dateTime,
+        location: location,
+        hostParent: hostInfo.name,
+        extraDetails: {
+          birthdayChildName: birthdayInfo?.name || hostInfo.birthdayChildName,
+          birthdayChildAge: birthdayInfo?.age || hostInfo.birthdayChildAge,
+          notes: notes,
+          eventRelationship: eventRelationship.relationship, // Add relationship info
+          hostName: eventRelationship.hostName || null // Add host name if available
+        },
+        attendingParentId: null, // To be filled in by user
+        creationSource: 'AI-parse-text',
+        region: region, // Store the detected region for reference
+        originalText: text, // Store original text for learning feedback
+        isInvitation: eventRelationship.relationship === "attending" // Flag if this is an invitation
+      };
       
       return eventDetails;
     } catch (error) {
@@ -770,7 +788,81 @@ calculateExtractionConfidence(eventDetails) {
   return totalFactors > 0 ? score / totalFactors : 0;
 }
 
-
+/**
+ * Analyzes text to determine if it's an invitation for a child to attend an event
+ * @param {string} text - Message text
+ * @param {Array} familyMembers - Family members for matching
+ * @returns {Object|null} - Details about the invitation or null if not an invitation
+ */
+detectInvitation(text, familyMembers = []) {
+  try {
+    // Look for patterns indicating an invitation for a child to attend
+    const invitationPatterns = [
+      /([A-Za-z]+)\s+(?:is|has been|was)\s+invited\s+to\s+([A-Za-z]+(?:'s)?)\s*([a-z\s]+)(?:party|event)/i,
+      /invite\s+([A-Za-z]+)\s+to\s+(?:a|an|the)\s+([a-z\s]+)(?:party|event)/i,
+      /([A-Za-z]+)\s+(?:got|received|has)\s+(?:an|the)\s+invitation\s+(?:to|for)\s+([A-Za-z]+(?:'s)?)/i
+    ];
+    
+    for (const pattern of invitationPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        const childName = match[1];
+        const hostName = match[2] ? match[2].replace(/'s$/, '') : null;
+        
+        // Match to family members
+        const matchedChild = familyMembers.find(m => 
+          m.role === 'child' && 
+          m.name.toLowerCase() === childName.toLowerCase()
+        );
+        
+        if (matchedChild) {
+          return {
+            isInvitation: true,
+            childName: matchedChild.name,
+            childId: matchedChild.id,
+            hostName: hostName,
+            guestRole: 'attendee'
+          };
+        }
+      }
+    }
+    
+    // Check for phrasings like "Tegner to attend John's party"
+    const attendingPatterns = [
+      /([A-Za-z]+)\s+to\s+(?:attend|go to|join)\s+([A-Za-z]+(?:'s)?)/i,
+      /taking\s+([A-Za-z]+)\s+to\s+([A-Za-z]+(?:'s)?)/i
+    ];
+    
+    for (const pattern of attendingPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        const childName = match[1];
+        const hostName = match[2] ? match[2].replace(/'s$/, '') : null;
+        
+        // Match to family members
+        const matchedChild = familyMembers.find(m => 
+          m.role === 'child' && 
+          m.name.toLowerCase() === childName.toLowerCase()
+        );
+        
+        if (matchedChild) {
+          return {
+            isInvitation: true,
+            childName: matchedChild.name,
+            childId: matchedChild.id,
+            hostName: hostName,
+            guestRole: 'attendee'
+          };
+        }
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error detecting invitation:", error);
+    return null;
+  }
+}
 
   /**
    * Call OCR API to extract text from image
@@ -1315,6 +1407,61 @@ extractDateTime(text, region = 'US') {
     }
     
     return hostInfo;
+  }
+  
+  // Add new method to distinguish between hosting and attending events
+  determineEventRelationship(text, childName) {
+    if (!childName) return { relationship: "unknown" };
+    
+    // Check if the text indicates the child is invited/attending someone else's event
+    const invitedPatterns = [
+      new RegExp(`\\b${childName}\\s+(?:is|has been)\\s+invited\\b`, 'i'),
+      new RegExp(`\\binvite\\s+${childName}\\b`, 'i'),
+      new RegExp(`\\b${childName}\\s+(?:to attend|to go to|is going to)\\b`, 'i')
+    ];
+    
+    // Check if the pattern indicates it's the child's own event
+    const hostingPatterns = [
+      new RegExp(`\\b${childName}'s\\s+(?:birthday|party)\\b`, 'i'),
+      new RegExp(`\\b${childName}\\s+is\\s+(?:having|hosting)\\b`, 'i'),
+      new RegExp(`\\bfor\\s+${childName}['s]?\\b`, 'i')
+    ];
+    
+    // First check if child is invited to someone else's event
+    for (const pattern of invitedPatterns) {
+      if (pattern.test(text)) {
+        return { 
+          relationship: "attending",
+          childName: childName
+        };
+      }
+    }
+    
+    // Then check if it's the child's own event
+    for (const pattern of hostingPatterns) {
+      if (pattern.test(text)) {
+        return { 
+          relationship: "hosting",
+          childName: childName
+        };
+      }
+    }
+    
+    // Look for another person who might be hosting
+    const otherHostPattern = /\b([A-Za-z]+)['']s\s+(?:birthday|party)\b/i;
+    const otherHostMatch = text.match(otherHostPattern);
+    
+    if (otherHostMatch && otherHostMatch[1] && 
+        otherHostMatch[1].toLowerCase() !== childName.toLowerCase()) {
+      return {
+        relationship: "attending",
+        childName: childName,
+        hostName: otherHostMatch[1]
+      };
+    }
+    
+    // Default to hosting if we can't determine
+    return { relationship: "unknown", childName: childName };
   }
   
   extractBirthdayInfo(text) {

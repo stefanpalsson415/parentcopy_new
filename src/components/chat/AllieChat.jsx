@@ -816,12 +816,35 @@ const handleSend = async () => {
           setShowEventParser(true);
           setEventParsingSource('text');
           
-          // Add a helper message about what we found
+          // Create a more appropriate helper message based on event type
+          let helperText;
+          
+          // Check if this is an invitation (child attending) vs. hosting
+          const isInvitation = eventDetails.isInvitation || 
+                             (eventDetails.extraDetails?.eventRelationship === "attending");
+          
+          // Get child name or first child in family if not specified
+          const childName = eventDetails.childName || 
+                           (familyContext.children.length > 0 ? familyContext.children[0].name : "your child");
+          
+          if (isInvitation) {
+            const hostName = eventDetails.extraDetails?.hostName || "someone";
+            
+            if (eventDetails.eventType === 'birthday') {
+              helperText = `I see that ${childName} is invited to ${hostName}'s birthday party! I've extracted the details for you to review before adding to your calendar.`;
+            } else {
+              helperText = `I see that ${childName} is invited to an event. I've extracted the details for you to review before adding to your calendar.`;
+            }
+          } else {
+            // Default message for events that are not invitations
+            helperText = `I noticed what appears to be an event in your message. I've extracted the details for you to review before adding to your calendar.`;
+          }
+          
           const helperMessage = {
             familyId,
             sender: 'allie',
             userName: 'Allie',
-            text: `I noticed what appears to be an event in your message. I've extracted the details for you to review before adding to your calendar.`,
+            text: helperText,
             timestamp: new Date().toISOString()
           };
           
@@ -1594,6 +1617,7 @@ const handleDrop = async (e) => {
   // In AllieChat.jsx - Update the addEventToCalendar function
   // src/components/chat/AllieChat.jsx - Update the addEventToCalendar function
   
+// In src/components/chat/AllieChat.jsx - Update the addEventToCalendar function
 const addEventToCalendar = async (eventDetails) => {
   try {
     if (!eventDetails || !selectedUser) return false;
@@ -1618,13 +1642,36 @@ const addEventToCalendar = async (eventDetails) => {
     // Determine event title
     let eventTitle = eventDetails.title || 'New Event';
     
-    // Add more context to title based on event type
-    if (eventDetails.eventType === 'birthday' && eventDetails.extraDetails?.birthdayChildName) {
-      const childAge = eventDetails.extraDetails.birthdayChildAge 
-        ? ` (${eventDetails.extraDetails.birthdayChildAge})` 
-        : '';
-      eventTitle = `${eventDetails.extraDetails.birthdayChildName}'s Birthday${childAge}`;
-    } else if (eventDetails.childName) {
+    // Determine if this is an invitation (child attending) or an event (child hosting)
+    const isInvitation = eventDetails.isInvitation || 
+                         (eventDetails.extraDetails?.eventRelationship === "attending");
+    
+    // Add more context to title based on event type and relationship
+    if (eventDetails.eventType === 'birthday') {
+      if (isInvitation && eventDetails.extraDetails?.hostName) {
+        const childAge = eventDetails.extraDetails.birthdayChildAge 
+          ? ` (${eventDetails.extraDetails.birthdayChildAge})` 
+          : '';
+        eventTitle = `${eventDetails.extraDetails.hostName}'s Birthday Party${childAge}`;
+      } else if (eventDetails.extraDetails?.birthdayChildName) {
+        const childAge = eventDetails.extraDetails.birthdayChildAge 
+          ? ` (${eventDetails.extraDetails.birthdayChildAge})` 
+          : '';
+        eventTitle = `${eventDetails.extraDetails.birthdayChildName}'s Birthday${childAge}`;
+      }
+    }
+    
+    // If it's an invitation, make sure to reflect that in the title
+    if (isInvitation && eventDetails.childName) {
+      if (!eventTitle.includes("'s")) {
+        // If no specific host is in the title, add context that this is an invitation
+        eventTitle = `${eventDetails.childName} attending: ${eventTitle}`;
+      } else if (!eventTitle.includes(eventDetails.childName)) {
+        // If host is in title but not the child, add that info
+        eventTitle = `${eventDetails.childName} invited to ${eventTitle}`;
+      }
+    } else if (!isInvitation && eventDetails.childName && !eventTitle.includes(eventDetails.childName)) {
+      // For hosted events, add child name if not already in title
       eventTitle = `${eventTitle} - ${eventDetails.childName}`;
     }
     
@@ -1659,7 +1706,9 @@ const addEventToCalendar = async (eventDetails) => {
       // Track source of event creation
       source: 'chat',
       // Include original text for reference
-      originalText: eventDetails.originalText || ''
+      originalText: eventDetails.originalText || '',
+      // Flag if this is an invitation vs. a hosted event
+      isInvitation: isInvitation
     };
     
     console.log("Adding event to calendar:", event);
@@ -1668,12 +1717,19 @@ const addEventToCalendar = async (eventDetails) => {
     const result = await CalendarService.addEvent(event, selectedUser.id);
     
     if (result.success) {
-      // Success message
+      // Success message - adjusted based on invitation vs. hosted event
+      let successText;
+      if (isInvitation) {
+        successText = `Great! I've added "${eventTitle}" to your calendar for ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.${eventDetails.location ? ` Location: ${eventDetails.location}.` : ''} This has been added as an invitation for ${eventDetails.childName} to attend.`;
+      } else {
+        successText = `Great! I've added "${eventTitle}" to your calendar for ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.${eventDetails.location ? ` Location: ${eventDetails.location}.` : ''}`;
+      }
+      
       const successMessage = {
         familyId,
         sender: 'allie',
         userName: 'Allie',
-        text: `Great! I've added "${eventTitle}" to your calendar for ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.${eventDetails.location ? ` Location: ${eventDetails.location}.` : ''}`,
+        text: successText,
         timestamp: new Date().toISOString()
       };
       
@@ -1688,7 +1744,8 @@ const addEventToCalendar = async (eventDetails) => {
           title: eventTitle,
           time: startDate.toISOString(),
           childId: eventDetails.childId,
-          childName: eventDetails.childName
+          childName: eventDetails.childName,
+          isInvitation: isInvitation
         };
         
         // First dispatch the standard event

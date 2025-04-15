@@ -25,11 +25,10 @@ import AllieAIService from '../../../services/AllieAIService';
 import UserAvatar from '../../common/UserAvatar';
 import EnhancedEventManager from '../../calendar/EnhancedEventManager';
 import DocumentLibrary from '../../document/DocumentLibrary';
-import { 
-  DragDropContext, Droppable, Draggable 
-} from 'react-beautiful-dnd';
 import confetti from 'canvas-confetti';
 import ProviderDirectory from '../../document/ProviderDirectory';
+import FamilyKanbanBoard from '../../kanban/FamilyKanbanBoard';
+
 
 
 const ChildrenTrackingTab = () => {
@@ -78,8 +77,6 @@ const ChildrenTrackingTab = () => {
 
   // Todo states
   const [todos, setTodos] = useState([]);
-  const [loadingTodos, setLoadingTodos] = useState(true);
-  const [newTodoText, setNewTodoText] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [showCompleted, setShowCompleted] = useState(false);
   const [editingTodo, setEditingTodo] = useState(null);
@@ -3808,6 +3805,9 @@ const handleProviderDelete = async (providerId) => {
       </button>
     ))}
 </div>
+<div className="mt-8">
+  <FamilyKanbanBoard />
+</div>
                                               
                                               {/* Search */}
                                               <div className="relative">
@@ -4022,257 +4022,7 @@ const handleProviderDelete = async (providerId) => {
                                             {expandedSections.routines && renderRoutinesSection()}
                                           </div>
                                           
-                                          {/* Todo Section */}
-                                          <div className="border border-gray-200 rounded-lg bg-white">
-                                            <button
-                                              onClick={toggleTodoSection}
-                                              className="w-full flex items-center justify-between p-3 font-medium font-roboto"
-                                            >
-                                              <div className="flex items-center">
-                                                <CheckSquare size={18} className="mr-2 text-green-500" />
-                                                Family To-Do List
-                                              </div>
-                                              {expandedTodoSection ? (
-                                                <ChevronUp size={18} className="text-gray-500" />
-                                              ) : (
-                                                <ChevronDown size={18} className="text-gray-500" />
-                                              )}
-                                            </button>
-                                            
-                                            {expandedTodoSection && (
-                                              <div className="p-4 border-t border-gray-200">
-                                                {loadingTodos ? (
-                                                  <div className="flex justify-center items-center py-10">
-                                                    <RefreshCw size={20} className="animate-spin text-gray-400" />
-                                                  </div>
-                                                ) : (
-                                                  <>
-                                                    {/* Filters */}
-                                                    <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
-                                                      <div className="flex flex-wrap gap-2">
-                                                        <button
-                                                          className={`px-3 py-1 text-sm rounded-md ${
-                                                            categoryFilter === 'all' 
-                                                              ? 'bg-black text-white' 
-                                                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                                          }`}
-                                                          onClick={() => setCategoryFilter('all')}
-                                                        >
-                                                          All
-                                                        </button>
-                                                        
-                                                        {categories.map(category => (
-                                                          <button
-                                                            key={category.id}
-                                                            className={`px-3 py-1 text-sm rounded-md ${
-                                                              categoryFilter === category.id 
-                                                                ? 'bg-black text-white' 
-                                                                : category.color
-                                                            }`}
-                                                            onClick={() => setCategoryFilter(category.id)}
-                                                          >
-                                                            {category.name}
-                                                          </button>
-                                                        ))}
-                                                      </div>
-                                                      
-                                                      <div className="flex items-center">
-                                                        <label className="flex items-center text-sm text-gray-600 font-roboto">
-                                                          <input
-                                                            type="checkbox"
-                                                            checked={showCompleted}
-                                                            onChange={() => setShowCompleted(!showCompleted)}
-                                                            className="mr-2 h-4 w-4 text-blue-600 rounded"
-                                                          />
-                                                          Show completed
-                                                        </label>
-                                                      </div>
-                                                    </div>
-                                                    
-                                                    {/* Todo input */}
-                                                    <div className="flex mb-4">
-                                                      <input
-                                                        type="text"
-                                                        ref={todoInputRef}
-                                                        value={newTodoText}
-                                                        onChange={(e) => setNewTodoText(e.target.value)}
-                                                        onKeyPress={handleKeyPress}
-                                                        placeholder="Add a new to-do item..."
-                                                        className="flex-grow px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm font-roboto"
-                                                      />
-                                                      <button
-                                                        onClick={addTodo}
-                                                        disabled={!newTodoText.trim()}
-                                                        className={`px-4 py-2 rounded-r-md text-white ${
-                                                          newTodoText.trim() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'
-                                                        }`}
-                                                      >
-                                                        Add
-                                                      </button>
-                                                    </div>
-                                                    
-                                                    {/* Todos list */}
-                                                    <DragDropContext onDragEnd={handleDragEnd}>
-                                                      <Droppable droppableId="todos">
-                                                        {(provided) => (
-                                                          <div
-                                                            {...provided.droppableProps}
-                                                            ref={provided.innerRef}
-                                                            className="space-y-2"
-                                                          >
-                                                            {filterTodos().length > 0 ? (
-                                                              filterTodos().map((todo, index) => (
-                                                                <Draggable 
-                                                                  key={todo.id} 
-                                                                  draggableId={todo.id} 
-                                                                  index={index}
-                                                                >
-                                                                  {(provided) => (
-                                                                    <div
-                                                                      ref={provided.innerRef}
-                                                                      {...provided.draggableProps}
-                                                                      id={`todo-${todo.id}`}
-                                                                      className={`flex items-center p-3 rounded-md border ${
-                                                                        todo.completed ? 'bg-gray-50' : 'bg-white'
-                                                                      }`}
-                                                                    >
-                                                                      <div 
-                                                                        {...provided.dragHandleProps}
-                                                                        className="mr-2 text-gray-400 cursor-grab"
-                                                                      >
-                                                                        <GripVertical size={16} />
-                                                                      </div>
-                                                                      
-                                                                      <button
-                                                                        onClick={() => toggleTodo(todo.id)}
-                                                                        className="mr-2 flex-shrink-0"
-                                                                      >
-                                                                        {todo.completed ? (
-                                                                          <CheckSquare size={18} className="text-green-500" />
-                                                                        ) : (
-                                                                          <Square size={18} className="text-gray-400" />
-                                                                        )}
-                                                                      </button>
-                                                                      
-                                                                      {editingTodo === todo.id ? (
-                                                                        <div className="flex-grow">
-                                                                          <input
-                                                                            id={`edit-todo-${todo.id}`}
-                                                                            type="text"
-                                                                            value={editingTodoText}
-                                                                            onChange={(e) => setEditingTodoText(e.target.value)}
-                                                                            onKeyPress={(e) => {
-                                                                              if (e.key === 'Enter') {
-                                                                                saveEditedTodo(todo.id);
-                                                                              }
-                                                                            }}
-                                                                            className="w-full px-2 py-1 border rounded text-sm"
-                                                                            autoFocus
-                                                                          />
-                                                                          
-                                                                          <div className="flex mt-2 space-x-2">
-                                                                            <select
-                                                                              value={editingTodoCategory}
-                                                                              onChange={(e) => setEditingTodoCategory(e.target.value)}
-                                                                              className="text-xs border rounded px-2 py-1"
-                                                                            >
-                                                                              {categories.map(cat => (
-                                                                                <option key={cat.id} value={cat.id}>
-                                                                                  {cat.name}
-                                                                                </option>
-                                                                              ))}
-                                                                            </select>
-                                                                            
-                                                                            <button
-                                                                              onClick={() => saveEditedTodo(todo.id)}
-                                                                              className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700"
-                                                                            >
-                                                                              Save
-                                                                            </button>
-                                                                            
-                                                                            <button
-                                                                              onClick={cancelEdit}
-                                                                              className="text-xs px-2 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                                                                            >
-                                                                              Cancel
-                                                                            </button>
-                                                                          </div>
-                                                                        </div>
-                                                                      ) : (
-                                                                        <div className="flex-grow flex flex-col">
-                                                                          <span className={`text-sm font-roboto ${todo.completed ? 'line-through text-gray-500' : ''}`}>
-                                                                            {todo.text}
-                                                                          </span>
-                                                                          
-                                                                          <div className="flex items-center mt-1">
-                                                                            {todo.category && (
-                                                                              <span className={`text-xs px-2 py-0.5 rounded-full mr-2 ${getCategoryInfo(todo.category)?.color}`}>
-                                                                                {getCategoryInfo(todo.category)?.name}
-                                                                              </span>
-                                                                            )}
-                                                                            
-                                                                            {todo.assignedTo && (
-                                                                              <span className="text-xs text-gray-500 mr-2">
-                                                                                Assigned to: {getParentName(todo.assignedTo)}
-                                                                              </span>
-                                                                            )}
-                                                                            
-                                                                            {todo.dueDate && (
-                                                                              <span className="text-xs text-gray-500">
-                                                                                Due: {new Date(todo.dueDate).toLocaleDateString()}
-                                                                              </span>
-                                                                            )}
-                                                                          </div>
-                                                                        </div>
-                                                                      )}
-                                                                      
-                                                                      {editingTodo !== todo.id && (
-                                                                        <div className="flex space-x-1 ml-2">
-                                                                          <button
-                                                                            onClick={() => openCalendarForTodo(todo)}
-                                                                            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                                                            title="Add to calendar"
-                                                                          >
-                                                                            <Calendar size={16} />
-                                                                          </button>
-                                                                          
-                                                                          <button
-                                                                            onClick={() => startEditTodo(todo)}
-                                                                            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                                                            title="Edit"
-                                                                          >
-                                                                            <Edit size={16} />
-                                                                          </button>
-                                                                          
-                                                                          <button
-                                                                            onClick={() => deleteTodo(todo.id)}
-                                                                            className="p-1 text-red-600 hover:bg-red-50 rounded"
-                                                                            title="Delete"
-                                                                          >
-                                                                            <Trash2 size={16} />
-                                                                          </button>
-                                                                        </div>
-                                                                      )}
-                                                                    </div>
-                                                                  )}
-                                                                </Draggable>
-                                                              ))
-                                                            ) : (
-                                                              <div className="text-center py-6 bg-gray-50 rounded-lg">
-                                                                <p className="text-gray-500 font-roboto">
-                                                                  {todos.length > 0 
-                                                                    ? 'No todos match your filters' 
-                                                                    : 'Your todo list is empty'}
-                                                                </p>
-                                                              </div>
-                                                            )}
-                                                            {provided.placeholder}
-                                                          </div>
-                                                        )}
-                                                      </Droppable>
-                                                    </DragDropContext>
-                                                  </>
-                                                )}
+                                          
                                                   {/* Document Library Section */}
   <div className="border border-gray-200 rounded-lg bg-white">
     <button
