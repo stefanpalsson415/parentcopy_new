@@ -358,112 +358,112 @@ const ChildrenTrackingTab = () => {
   }, []);
 
 
-  const generateLocalInsights = useCallback((data) => {
-    try {
-      // For a simplified version, create some dynamic insights based on the data
-      const insights = [];
-      
-      // Safely process data for each child
-      if (!data || typeof data !== 'object') {
-        console.warn("Invalid data provided to generateLocalInsights", data);
-        return [];
-      }
-      
-      Object.keys(data).forEach(childId => {
-        try {
-          const childData = data[childId];
-          if (!childData) return;
+// Replace the generateLocalInsights function with this more robust version
+const generateLocalInsights = useCallback((data) => {
+  try {
+    // For a simplified version, create some dynamic insights based on the data
+    const insights = [];
+    
+    // Safely process data for each child
+    if (!data || typeof data !== 'object') {
+      console.warn("Invalid data provided to generateLocalInsights", data);
+      return [];
+    }
+    
+    Object.keys(data).forEach(childId => {
+      try {
+        const childData = data[childId];
+        if (!childData) return;
+        
+        const childName = getChildName(childId) || "Your child";
+        const childAge = getChildAge(childId);
+        
+        // Medical appointment insights
+        if (childData.medicalAppointments && Array.isArray(childData.medicalAppointments)) {
+          // Check for upcoming appointments
+          const upcomingAppointments = childData.medicalAppointments.filter(apt => 
+            apt && !apt.completed && apt.date && new Date(apt.date) > new Date()
+          );
           
-          const childName = getChildName(childId) || "Your child";
-          const childAge = getChildAge(childId);
-          
-          // Medical appointment insights
-          if (childData.medicalAppointments && Array.isArray(childData.medicalAppointments)) {
-            // Check for upcoming appointments
-            const upcomingAppointments = childData.medicalAppointments.filter(apt => 
-              apt && !apt.completed && apt.date && new Date(apt.date) > new Date()
-            );
-            
-            if (upcomingAppointments.length > 0) {
-              const nextAppointment = upcomingAppointments.sort((a, b) => 
-                new Date(a.date) - new Date(b.date)
-              )[0];
-              
-              insights.push({
-                type: "medical",
-                title: "Upcoming Medical Appointment",
-                content: `${childName} has a ${nextAppointment.title || 'medical'} appointment on ${formatDate(nextAppointment.date)}${nextAppointment.time ? ` at ${nextAppointment.time}` : ''}.`,
-                priority: "medium",
-                childId: childId
-              });
-            }
-          }
-          
-          // Growth data insights
-          if (childData.growthData && Array.isArray(childData.growthData) && childData.growthData.length > 0) {
-            // Check if growth data is recent
-            const latestGrowthEntry = childData.growthData.sort((a, b) => 
-              new Date(b.date || 0) - new Date(a.date || 0)
+          if (upcomingAppointments.length > 0) {
+            const nextAppointment = upcomingAppointments.sort((a, b) => 
+              new Date(a.date) - new Date(b.date)
             )[0];
             
-            if (latestGrowthEntry && latestGrowthEntry.date) {
-              const threeMothsAgo = new Date();
-              threeMothsAgo.setMonth(threeMothsAgo.getMonth() - 3);
-              
-              if (new Date(latestGrowthEntry.date) < threeMothsAgo) {
-                insights.push({
-                  type: "growth",
-                  title: "Growth Update Reminder",
-                  content: `${childName}'s growth measurements were last updated on ${formatDate(latestGrowthEntry.date)}. Consider updating their height and weight.`,
-                  priority: "low",
-                  childId: childId
-                });
-              }
-            }
-          } else if (childAge) {
-            // No growth data recorded
             insights.push({
-              type: "recommendation",
-              title: "Missing Growth Data",
-              content: `You haven't recorded any growth data for ${childName} yet. Tracking height, weight, and sizes helps monitor their development.`,
+              type: "medical",
+              title: "Upcoming Medical Appointment",
+              content: `${childName} has a ${nextAppointment.title || 'medical'} appointment on ${formatDate(nextAppointment.date)}${nextAppointment.time ? ` at ${nextAppointment.time}` : ''}.`,
               priority: "medium",
               childId: childId
             });
           }
-          
-          // Add more insights here as needed...
-          
-        } catch (childError) {
-          console.warn(`Error generating insights for child ${childId}:`, childError);
-          // Continue with other children even if one fails
         }
-      });
-      
-      // If we still have no insights, add a default one
-      if (insights.length === 0) {
-        insights.push({
-          type: "recommendation",
-          title: "Getting Started",
-          content: "Start tracking your children's health, growth, and routines to get personalized insights.",
-          priority: "medium",
-          childId: null
-        });
+        
+        // Growth data insights
+        if (childData.growthData && Array.isArray(childData.growthData) && childData.growthData.length > 0) {
+          // Check if growth data is recent
+          const latestGrowthEntry = childData.growthData.sort((a, b) => 
+            new Date(b.date || 0) - new Date(a.date || 0)
+          )[0];
+          
+          if (latestGrowthEntry && latestGrowthEntry.date) {
+            const threeMothsAgo = new Date();
+            threeMothsAgo.setMonth(threeMothsAgo.getMonth() - 3);
+            
+            if (new Date(latestGrowthEntry.date) < threeMothsAgo) {
+              insights.push({
+                type: "growth",
+                title: "Growth Update Reminder",
+                content: `${childName}'s growth measurements were last updated on ${formatDate(latestGrowthEntry.date)}. Consider updating their height and weight.`,
+                priority: "low",
+                childId: childId
+              });
+            }
+          }
+        } else if (childAge) {
+          // No growth data recorded
+          insights.push({
+            type: "recommendation",
+            title: "Missing Growth Data",
+            content: `You haven't recorded any growth data for ${childName} yet. Tracking height, weight, and sizes helps monitor their development.`,
+            priority: "medium",
+            childId: childId
+          });
+        }
+        
+        // Add more insights here as needed...
+        
+      } catch (childError) {
+        console.warn(`Error generating insights for child ${childId}:`, childError);
+        // Continue with other children even if one fails
       }
-      
-      // Sort insights by priority (high, medium, low)
-      const priorityOrder = { high: 0, medium: 1, low: 2 };
-      
-      insights.sort((a, b) => {
-        return priorityOrder[a.priority || 'medium'] - priorityOrder[b.priority || 'medium'];
+    });
+    
+    // If we still have no insights, add a default one
+    if (insights.length === 0) {
+      insights.push({
+        type: "recommendation",
+        title: "Getting Started",
+        content: "Start tracking your children's health, growth, and routines to get personalized insights.",
+        priority: "medium",
+        childId: null
       });
-      
-      return insights;
-    } catch (error) {
-      console.error("Error in generateLocalInsights:", error);
-      return []; // Return empty array on error
     }
-  }, [getChildName, getChildAge, formatDate]);
-
+    
+    // Sort insights by priority (high, medium, low)
+    const priorityOrder = { high: 0, medium: 1, low: 2 };
+    
+    insights.sort((a, b) => {
+      return priorityOrder[a.priority || 'medium'] - priorityOrder[b.priority || 'medium'];
+    });
+    
+    return insights;
+  } catch (error) {
+    console.error("Error in generateLocalInsights:", error);
+    return []; // Return empty array on error
+  }
+}, [getChildName, getChildAge, formatDate]);
 
 
 const generateAiInsights = useCallback(async (data) => {
@@ -1252,9 +1252,7 @@ const handleProviderDelete = async (providerId) => {
 
  
 
-  /// src/components/dashboard/tabs/ChildrenTrackingTab.jsx
-// Replace the useEffect with loadChildrenData with this version:
-
+// Replace the useEffect with loadChildrenData in ChildrenTrackingTab.jsx
 useEffect(() => {
   const loadChildrenData = async () => {
     try {
