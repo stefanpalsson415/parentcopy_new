@@ -25,7 +25,6 @@ import AllieAIService from '../../../services/AllieAIService';
 import UserAvatar from '../../common/UserAvatar';
 import EnhancedEventManager from '../../calendar/EnhancedEventManager';
 import DocumentLibrary from '../../document/DocumentLibrary';
-import confetti from 'canvas-confetti';
 import ProviderDirectory from '../../document/ProviderDirectory';
 import FamilyKanbanBoard from '../../kanban/FamilyKanbanBoard';
 
@@ -74,31 +73,6 @@ const ChildrenTrackingTab = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [documents, setDocuments] = useState([]);
   const [activeComponent, setActiveComponent] = useState(null);
-
-  // Todo states
-  const [todos, setTodos] = useState([]);
-  const [categoryFilter, setCategoryFilter] = useState('all');
-  const [showCompleted, setShowCompleted] = useState(false);
-  const [editingTodo, setEditingTodo] = useState(null);
-  const [showAddCalendar, setShowAddCalendar] = useState(false);
-  const [selectedTodoForCalendar, setSelectedTodoForCalendar] = useState(null);
-  const [editingTodoText, setEditingTodoText] = useState('');
-  const [editingTodoCategory, setEditingTodoCategory] = useState('');
-  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const [todoToDelete, setTodoToDelete] = useState(null);
-  const [expandedTodoSection, setExpandedTodoSection] = useState(true);
-
-  const todoInputRef = useRef(null);
-
-  // Categories for todos
-  const categories = [
-    { id: 'household', name: 'Household', color: 'bg-blue-100 text-blue-800' },
-    { id: 'relationship', name: 'Relationship', color: 'bg-pink-100 text-pink-800' },
-    { id: 'parenting', name: 'Parenting', color: 'bg-purple-100 text-purple-800' },
-    { id: 'errands', name: 'Errands', color: 'bg-green-100 text-green-800' },
-    { id: 'work', name: 'Work', color: 'bg-amber-100 text-amber-800' },
-    { id: 'other', name: 'Other', color: 'bg-gray-100 text-gray-800' }
-  ];
   
   // Refs
   const searchInputRef = useRef(null);
@@ -1241,132 +1215,7 @@ const ChildrenTrackingTab = () => {
     }
   };
 
-  // Load todos from Firestore with real-time updates
-  useEffect(() => {
-    if (!familyId) return;
-    
-    setLoadingTodos(true);
-    
-    // Create a real-time listener for todos
-    const todosRef = collection(db, "relationshipTodos");
-    const q = query(todosRef, where("familyId", "==", familyId));
-    
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const loadedTodos = [];
-      querySnapshot.forEach((doc) => {
-        loadedTodos.push({
-          id: doc.id,
-          ...doc.data()
-        });
-      });
-      
-      // Sort by position first, then by most recently created
-      loadedTodos.sort((a, b) => {
-        if (a.position !== undefined && b.position !== undefined) {
-          return a.position - b.position;
-        }
-        // Fall back to creation time if position not available
-        return new Date(b.createdAt?.toDate?.() || 0) - new Date(a.createdAt?.toDate?.() || 0);
-      });
-      
-      setTodos(loadedTodos);
-      setLoadingTodos(false);
-    }, (error) => {
-      console.error("Error loading todos:", error);
-      setLoadingTodos(false);
-    });
-    
-    // Clean up listener when component unmounts
-    return () => unsubscribe();
-  }, [familyId]); 
-
-  // Add todo
-  const addTodo = async () => {
-    if (!newTodoText.trim() || !familyId) return;
-    
-    try {
-      const newTodo = {
-        text: newTodoText.trim(),
-        completed: false,
-        familyId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        createdBy: currentUser.uid,
-        assignedTo: null, 
-        category: 'other', 
-        position: todos.length, 
-        notes: '',
-        dueDate: null
-      };
-      
-      // Add to Firestore
-      const docRef = await addDoc(collection(db, "relationshipTodos"), newTodo);
-      
-      // Update state with the new todo
-      setTodos(prev => [...prev, { 
-        id: docRef.id,
-        ...newTodo,
-        createdAt: new Date() 
-      }]);
-      
-      // Clear input
-      setNewTodoText('');
-      
-    } catch (error) {
-      console.error("Error adding todo:", error);
-    }
-  };
-
-  // Toggle todo completion
-  const toggleTodo = async (todoId) => {
-    try {
-      const todoIndex = todos.findIndex(todo => todo.id === todoId);
-      if (todoIndex === -1) return;
-      
-      const updatedTodo = {...todos[todoIndex], completed: !todos[todoIndex].completed};
-      
-      // Update Firestore
-      const todoRef = doc(db, "relationshipTodos", todoId);
-      await updateDoc(todoRef, {
-        completed: updatedTodo.completed,
-        updatedAt: serverTimestamp()
-      });
-      
-      // Update state
-      const newTodos = [...todos];
-      newTodos[todoIndex] = updatedTodo;
-      setTodos(newTodos);
-      
-      // Trigger confetti animation if completed
-      if (updatedTodo.completed) {
-        const todoElement = document.getElementById(`todo-${todoId}`);
-        if (todoElement) {
-          const rect = todoElement.getBoundingClientRect();
-          const x = rect.left + rect.width / 2;
-          const y = rect.top + rect.height / 2;
-          
-          confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: { 
-              x: x / window.innerWidth, 
-              y: y / window.innerHeight 
-            },
-            colors: ['#4ade80', '#3b82f6', '#8b5cf6'],
-            zIndex: 9999
-          });
-        }
-      }
-    } catch (error) {
-      console.error("Error toggling todo:", error);
-    }
-  };
-
-  // Start editing a todo
-  const startEditTodo = (todo) => {
-    setEditingTodo(todo.id);
-    setEditingTodoText(todo.text);
-    setEditingTodoCategory(todo.category);
+  
     
     // Focus the input after a short delay to ensure it's rendered
     setTimeout(() => {
@@ -1382,65 +1231,7 @@ const ChildrenTrackingTab = () => {
     setEditingTodoCategory('');
   };
 
-  // Save edited todo
-  const saveEditedTodo = async (todoId) => {
-    if (!editingTodoText.trim()) return cancelEdit();
-    
-    try {
-      const todoIndex = todos.findIndex(todo => todo.id === todoId);
-      if (todoIndex === -1) return;
-      
-      const updatedTodo = {
-        ...todos[todoIndex],
-        text: editingTodoText.trim(),
-        category: editingTodoCategory || 'other',
-        updatedAt: new Date()
-      };
-      
-      // Update Firestore
-      const todoRef = doc(db, "relationshipTodos", todoId);
-      await updateDoc(todoRef, {
-        text: updatedTodo.text,
-        category: updatedTodo.category,
-        updatedAt: serverTimestamp()
-      });
-      
-      // Update state
-      const newTodos = [...todos];
-      newTodos[todoIndex] = updatedTodo;
-      setTodos(newTodos);
-      
-      // Reset editing state
-      cancelEdit();
-      
-    } catch (error) {
-      console.error("Error updating todo:", error);
-    }
-  };
-
-  // Delete todo
-  const deleteTodo = async (todoId) => {
-    setTodoToDelete(todoId);
-    setShowDeleteConfirmation(true);
-  };
-
-  // Confirm delete todo
-  const confirmDeleteTodo = async () => {
-    try {
-      // Delete from Firestore
-      await deleteDoc(doc(db, "relationshipTodos", todoToDelete));
-      
-      // Update state
-      setTodos(prev => prev.filter(todo => todo.id !== todoToDelete));
-      
-      // Reset states
-      setTodoToDelete(null);
-      setShowDeleteConfirmation(false);
-    } catch (error) {
-      console.error("Error deleting todo:", error);
-    }
-  };
-
+  
 // Add this function to handle provider deletion
 const handleProviderDelete = async (providerId) => {
   try {
@@ -3805,8 +3596,11 @@ const handleProviderDelete = async (providerId) => {
       </button>
     ))}
 </div>
-<div className="mt-8">
-  <FamilyKanbanBoard />
+{/* Family Kanban Board */}
+<div className="mt-8 border border-gray-200 rounded-lg bg-white">
+  <div className="p-4">
+    <FamilyKanbanBoard />
+  </div>
 </div>
                                               
                                               {/* Search */}
@@ -4082,9 +3876,7 @@ const handleProviderDelete = async (providerId) => {
   </div>
 
                                               </div>
-                                            )}
-                                          </div>
-                                        </div>
+                                          
                                         
                                         {/* Delete Confirmation Modal */}
                                         {showDeleteConfirmation && (

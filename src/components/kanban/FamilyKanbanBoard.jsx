@@ -34,6 +34,8 @@ import {
 import { Plus, Loader, AlertCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import CalendarService from '../../services/CalendarService';
+import UserAvatar from '../../common/UserAvatar';  
+
 
 const FamilyKanbanBoard = () => {
   const { familyId, familyMembers, selectedUser } = useFamily();
