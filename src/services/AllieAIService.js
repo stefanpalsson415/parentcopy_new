@@ -38,7 +38,7 @@ class AllieAIService {
    * @param {object} defaultValue - Default value to return if parsing fails
    * @returns {object} The parsed JSON or default value
    */
-  // Replace the existing safelyParseJSON method in src/services/AllieAIService.js
+// Replace the safelyParseJSON method in AllieAIService.js
 safelyParseJSON(jsonString, defaultValue) {
   try {
     // Handle empty or null responses
@@ -47,11 +47,23 @@ safelyParseJSON(jsonString, defaultValue) {
       return defaultValue;
     }
 
+    // NEW: Check if response contains markdown code blocks and extract the content
+    const markdownJsonRegex = /```(?:json)?\s*({[\s\S]*?})\s*```/;
+    const markdownMatch = jsonString.match(markdownJsonRegex);
+    if (markdownMatch && markdownMatch[1]) {
+      console.log("Found JSON in markdown code block, extracting...");
+      try {
+        return JSON.parse(markdownMatch[1]);
+      } catch (markdownError) {
+        console.warn("Error parsing JSON from markdown:", markdownError);
+        // Continue with other parsing methods
+      }
+    }
+    
     // Check if the response is a plain text insight rather than JSON
     if (jsonString.trim().startsWith("Here are") || 
         jsonString.trim().startsWith("Based on") ||
         jsonString.trim().startsWith("I can help")) {
-      // Handle plain text responses by converting to our expected format
       console.log("Received text response instead of JSON, creating structured format");
       
       // Extract meaningful content from the text
@@ -870,7 +882,6 @@ async processActivityFromChat(message, familyId, childId = null) {
  * @param {object} childrenData - Data about children including medical, growth, routines, etc.
  * @returns {Promise<Array>} Array of personalized insights
  */
-// Replace the existing generateChildInsights method in src/services/AllieAIService.js
 // Corrected generateChildInsights method for src/services/AllieAIService.js
 async generateChildInsights(familyId, childrenData) {
   try {
@@ -881,14 +892,6 @@ async generateChildInsights(familyId, childrenData) {
     
     console.log("Generating child insights for family:", familyId);
     
-    // Try to get family context for richer insights
-    let familyContext = null;
-    try {
-      familyContext = await this.getFamilyContext(familyId);
-    } catch (contextError) {
-      console.warn("Could not get family context, using limited data:", contextError);
-    }
-    
     // Always generate local insights first as a fallback
     const localInsights = this.getFallbackChildInsights(childrenData);
     
@@ -898,27 +901,29 @@ async generateChildInsights(familyId, childrenData) {
       
       // Prepare system prompt for Claude
       const systemPrompt = `You are Allie's child development and healthcare expert AI. 
-      Analyze the provided child data and create 3-6 personalized, actionable insights.
-      
-      For each insight, include:
-      1. A specific title related to the child's health, growth, or routine
-      2. A category (medical, growth, routine, recommendation, etc.)
-      3. Specific content with a data point from the child's records
-      4. A priority level (high, medium, low) based on importance
-      5. The relevant childId
-      
-      VERY IMPORTANT: Your response must be in valid JSON format with this structure:
-      {
-        "insights": [
-          {
-            "title": "string (concise, specific title)",
-            "type": "string (medical, growth, recommendation, clothes, routine)",
-            "content": "string (insight with specific data point)",
-            "priority": "string (high, medium, low)",
-            "childId": "string (child's ID)"
-          }
-        ]
-      }`;
+Analyze the provided child data and create 3-6 personalized, actionable insights.
+
+For each insight, include:
+1. A specific title related to the child's health, growth, or routine
+2. A category (medical, growth, routine, recommendation, etc.)
+3. Specific content with a data point from the child's records
+4. A priority level (high, medium, low) based on importance
+5. The relevant childId
+
+VERY IMPORTANT: Your response must be in valid JSON format with this structure, DO NOT use markdown code blocks, just return the raw JSON:
+{
+  "insights": [
+    {
+      "title": "string (concise, specific title)",
+      "type": "string (medical, growth, recommendation, clothes, routine)",
+      "content": "string (insight with specific data point)",
+      "priority": "string (high, medium, low)",
+      "childId": "string (child's ID)"
+    }
+  ]
+}
+
+DO NOT wrap your response in markdown code blocks or use \`\`\`json. Return ONLY the raw JSON.`;
       
       // Create a concise version of the data to avoid token limits
       const processedData = {};
@@ -955,12 +960,6 @@ async generateChildInsights(familyId, childrenData) {
       
       Children Data:
       ${JSON.stringify(processedData)}
-      
-      ${familyContext ? `Family Information:
-      ${JSON.stringify({
-        familyName: familyContext.familyName,
-        familyMembers: familyContext.familyMembers
-      })}` : ''}
       
       IMPORTANT: Create specific, data-driven insights for each child in the family. Return ONLY JSON with no extra text.`;
       
