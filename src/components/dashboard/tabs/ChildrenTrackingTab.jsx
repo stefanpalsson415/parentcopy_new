@@ -1217,19 +1217,8 @@ const ChildrenTrackingTab = () => {
 
   
     
-    // Focus the input after a short delay to ensure it's rendered
-    setTimeout(() => {
-      const editInput = document.getElementById(`edit-todo-${todo.id}`);
-      if (editInput) editInput.focus();
-    }, 50);
-  };
+  
 
-  // Cancel editing
-  const cancelEdit = () => {
-    setEditingTodo(null);
-    setEditingTodoText('');
-    setEditingTodoCategory('');
-  };
 
   
 // Add this function to handle provider deletion
@@ -1269,172 +1258,13 @@ const handleProviderDelete = async (providerId) => {
 };
 
 
-
-  // Reassign todo to a different parent
-  const reassignTodo = async (todoId, parentId) => {
-    try {
-      const todoIndex = todos.findIndex(todo => todo.id === todoId);
-      if (todoIndex === -1) return;
-      
-      // Find parent name
-      const parent = familyMembers.find(m => m.id === parentId);
-      
-      const updatedTodo = {
-        ...todos[todoIndex],
-        assignedTo: parentId,
-        assignedToName: parent?.name || 'Unknown'
-      };
-      
-      // Update Firestore
-      const todoRef = doc(db, "relationshipTodos", todoId);
-      await updateDoc(todoRef, {
-        assignedTo: updatedTodo.assignedTo,
-        assignedToName: updatedTodo.assignedToName,
-        updatedAt: serverTimestamp()
-      });
-      
-      // Update state
-      const newTodos = [...todos];
-      newTodos[todoIndex] = updatedTodo;
-      setTodos(newTodos);
-      
-    } catch (error) {
-      console.error("Error reassigning todo:", error);
-    }
-  };
-
-  // Add a due date via calendar integration
-  const openCalendarForTodo = (todo) => {
-    setSelectedTodoForCalendar(todo);
-    setShowAddCalendar(true);
-  };
-
-  // Handle todo drag and drop
-  const handleDragEnd = async (result) => {
-    // Drop outside a droppable area
-    if (!result.destination) return;
-    
-    const sourceIndex = result.source.index;
-    const destinationIndex = result.destination.index;
-    
-    // No change
-    if (sourceIndex === destinationIndex) return;
-    
-    try {
-      // Reorder the todos
-      const filteredTodos = filterTodos();
-      const draggedTodo = filteredTodos[sourceIndex];
-      
-      // Create new array with the moved todo
-      const newFilteredTodos = [...filteredTodos];
-      newFilteredTodos.splice(sourceIndex, 1);
-      newFilteredTodos.splice(destinationIndex, 0, draggedTodo);
-      
-      // Update the position of all todos in the filtered view
-      const updatedAllTodos = [...todos];
-      
-      // Update positions in the full list based on the new filtered order
-      filteredTodos.forEach((todo, oldIndex) => {
-        const newIndex = newFilteredTodos.findIndex(t => t.id === todo.id);
-        if (oldIndex !== newIndex) {
-          const fullListIndex = updatedAllTodos.findIndex(t => t.id === todo.id);
-          if (fullListIndex !== -1) {
-            updatedAllTodos[fullListIndex] = {
-              ...updatedAllTodos[fullListIndex],
-              position: newIndex
-            };
-          }
-        }
-      });
-      
-      // Update state immediately for better UX
-      setTodos(updatedAllTodos);
-      
-      // Batch update positions in Firestore
-      for (const todo of updatedAllTodos) {
-        if (todo.id === draggedTodo.id) {
-          const todoRef = doc(db, "relationshipTodos", todo.id);
-          await updateDoc(todoRef, { 
-            position: todo.position,
-            updatedAt: serverTimestamp()
-          });
-        }
-      }
-      
-    } catch (error) {
-      console.error("Error reordering todos:", error);
-    }
-  };
-
-  // Handle successful calendar event addition
-  const handleCalendarEventAdded = (eventResult) => {
-    if (!eventResult || !eventResult.success || !selectedTodoForCalendar) return;
-    
-    // Update the todo with the due date and event ID
-    updateTodoDueDate(selectedTodoForCalendar.id, eventResult);
-    
-    // Reset state
-    setShowAddCalendar(false);
-    setSelectedTodoForCalendar(null);
-  };
-
-  // Update todo with due date info
-  const updateTodoDueDate = async (todoId, eventResult) => {
-    try {
-      const todoIndex = todos.findIndex(todo => todo.id === todoId);
-      if (todoIndex === -1) return;
-      
-      const updatedTodo = {
-        ...todos[todoIndex],
-        dueDate: new Date().toISOString(),
-        eventId: eventResult.eventId,
-        universalId: eventResult.universalId || eventResult.eventId
-      };
-      
-      // Update Firestore
-      const todoRef = doc(db, "relationshipTodos", todoId);
-      await updateDoc(todoRef, {
-        dueDate: updatedTodo.dueDate,
-        eventId: updatedTodo.eventId,
-        universalId: updatedTodo.universalId,
-        updatedAt: serverTimestamp()
-      });
-      
-      // Update state
-      const newTodos = [...todos];
-      newTodos[todoIndex] = updatedTodo;
-      setTodos(newTodos);
-      
-    } catch (error) {
-      console.error("Error updating todo due date:", error);
-    }
-  };
-
-  // Filter todos based on current filters
-  const filterTodos = () => {
-    return todos.filter(todo => {
-      // Filter by completion status
-      if (!showCompleted && todo.completed) return false;
-      
-      // Filter by category
-      if (categoryFilter !== 'all' && todo.category !== categoryFilter) return false;
-      
-      return true;
-    });
-  };
-
   // Get category display info
   const getCategoryInfo = (categoryId) => {
     const category = categories.find(c => c.id === categoryId) || categories.find(c => c.id === 'other');
     return category;
   };
 
-  // Handle keypress in new todo input
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      addTodo();
-    }
-  };
+  
 
   // Get parent name
   const getParentName = (parentId) => {
@@ -3405,7 +3235,6 @@ const handleProviderDelete = async (providerId) => {
                                     };
                                   
                                     // Render main content
-                                    return (
                                       <div className="relative min-h-full">
                                         {/* Loading overlay */}
                                         {loading && (

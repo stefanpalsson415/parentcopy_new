@@ -1,4 +1,5 @@
 // src/components/kanban/FamilyKanbanBoard.jsx
+import UserAvatar from '../../common/UserAvatar';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -34,7 +35,6 @@ import {
 import { Plus, Loader, AlertCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import CalendarService from '../../services/CalendarService';
-import UserAvatar from '../../common/UserAvatar';  
 
 
 const FamilyKanbanBoard = () => {
