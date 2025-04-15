@@ -218,20 +218,19 @@ const CycleManager = ({ cycle }) => {
     loadCycleData();
   }, [cycle, familyId, getRelationshipCycleData]);
 
-  // Add this useEffect to ensure we don't show auth errors unnecessarily
-  useEffect(() => {
-    // Only show auth error if we're definitely not loading AND there's no user
-    if (!loading && !currentUser && familyId) {
-      console.log("Auth check - no currentUser but familyId exists:", familyId);
-      // Instead of showing error immediately, try to get user from context
-      if (familyMembers && familyMembers.length > 0 && familyMembers.some(m => m.role === 'parent')) {
-        console.log("Found family members, proceeding without currentUser");
-        // We have family data, so we can continue even without currentUser
-        return;
-      }
-      setError("Authentication required. Please sign in to continue.");
-    }
-  }, [currentUser, loading, familyId, familyMembers]);
+  // This updated effect removes the unnecessary authentication check
+useEffect(() => {
+  // Only show error if we're not loading and don't have required data
+  if (!loading && !familyId) {
+    setError("Missing family data. Please try refreshing the page.");
+    return;
+  }
+  
+  // Clear any previous auth error if we have family data
+  if (familyId && error && error.includes("authentication")) {
+    setError(null);
+  }
+}, [loading, familyId, error]);
 
   const handleScheduleMeeting = async (event) => {
     try {
@@ -267,16 +266,21 @@ const CycleManager = ({ cycle }) => {
     }
   };
 
-  // Fixed handleAssessmentSubmit function - removed the currentUser.uid check
   const handleAssessmentSubmit = async (responses) => {
     try {
+      // Get the selected user ID (which will be the current user in the app)
+      const userId = selectedUser?.id;
+      if (!userId) {
+        throw new Error("No user selected");
+      }
+      
       await completeRelationshipAssessment(cycle, responses);
       
       // Update local state
       const updatedData = { ...cycleData };
       if (!updatedData.assessments) updatedData.assessments = {};
       
-      updatedData.assessments[currentUser.uid] = {
+      updatedData.assessments[userId] = {
         completed: true,
         completedDate: new Date().toISOString(),
         responses: responses
@@ -301,39 +305,44 @@ const CycleManager = ({ cycle }) => {
     }
   };
   
-  // Handle prework completion
-  const handlePreworkSubmit = async (preworkData) => {
-    try {
-      await completeRelationshipPrework(cycle, preworkData);
-      
-      // Update local state
-      const updatedData = { ...cycleData };
-      if (!updatedData.prework) updatedData.prework = {};
-      
-      updatedData.prework[currentUser.uid] = {
-        completed: true,
-        completedDate: new Date().toISOString(),
-        ...preworkData
-      };
-      
-      const bothComplete = parentIds.every(id => 
-        updatedData.prework[id]?.completed
-      );
-      
-      if (bothComplete) {
-        updatedData.preworkCompleted = true;
-        updatedData.preworkCompletedDate = new Date().toISOString();
-      }
-      
-      setCycleData(updatedData);
-      setShowPrework(false);
-      
-      return true;
-    } catch (err) {
-      console.error("Error completing prework:", err);
-      throw err;
+  // Handle prework completion with added null check
+const handlePreworkSubmit = async (preworkData) => {
+  try {
+    if (!currentUser) {
+      setError("You need to be signed in to complete the pre-work.");
+      return false;
     }
-  };
+    
+    await completeRelationshipPrework(cycle, preworkData);
+    
+    // Update local state
+    const updatedData = { ...cycleData };
+    if (!updatedData.prework) updatedData.prework = {};
+    
+    updatedData.prework[currentUser.uid] = {
+      completed: true,
+      completedDate: new Date().toISOString(),
+      ...preworkData
+    };
+    
+    const bothComplete = parentIds.every(id => 
+      updatedData.prework[id]?.completed
+    );
+    
+    if (bothComplete) {
+      updatedData.preworkCompleted = true;
+      updatedData.preworkCompletedDate = new Date().toISOString();
+    }
+    
+    setCycleData(updatedData);
+    setShowPrework(false);
+    
+    return true;
+  } catch (err) {
+    console.error("Error completing prework:", err);
+    throw err;
+  }
+};
   
   // Handle meeting scheduling
   const processScheduleMeeting = async (eventData) => {
@@ -551,25 +560,25 @@ const CycleManager = ({ cycle }) => {
       </div>          
   
       {/* Action Buttons - Shows different options based on progress */}
-      <div className="flex flex-wrap justify-center mt-4 gap-4">
-        {/* Step 1: Assessment */}
-        {!myAssessmentComplete && (
-          <button 
-            className="px-4 py-2.5 rounded-lg font-medium font-roboto flex items-center shadow-md transition-all duration-300 bg-gradient-to-r from-purple-600 to-pink-500 text-white hover:shadow-lg"
-            onClick={() => setShowAssessment(true)}
-          >
-            <Shield size={16} className="mr-2" />
-            Complete Your Assessment
-          </button>
-        )}
-        
-        {myAssessmentComplete && !partnerAssessmentComplete && (
-          <div className="px-4 py-2.5 rounded-lg font-medium font-roboto flex items-center bg-gray-100 text-gray-500">
-            <CheckCircle size={16} className="mr-2" />
-            Your Assessment Complete
-            <span className="ml-2 text-xs">Waiting for partner</span>
-          </div>
-        )}
+<div className="flex flex-wrap justify-center mt-4 gap-4">
+  {/* Step 1: Assessment */}
+  {!myAssessmentComplete && (
+    <button 
+      className="px-4 py-2.5 rounded-lg font-medium font-roboto flex items-center shadow-md transition-all duration-300 bg-gradient-to-r from-purple-600 to-pink-500 text-white hover:shadow-lg"
+      onClick={() => setShowAssessment(true)}
+    >
+      <Shield size={16} className="mr-2" />
+      Complete Your Assessment
+    </button>
+  )}
+  
+  {myAssessmentComplete && !partnerAssessmentComplete && (
+    <div className="px-4 py-2.5 rounded-lg font-medium font-roboto flex items-center bg-gray-100 text-gray-500">
+      <CheckCircle size={16} className="mr-2" />
+      Your Assessment Complete
+      <span className="ml-2 text-xs">Waiting for partner</span>
+    </div>
+  )}
         
         {/* Step 2: Pre-Meeting Work */}
         {assessmentsComplete && !myPreworkComplete && (
