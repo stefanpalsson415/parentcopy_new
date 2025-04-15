@@ -789,6 +789,263 @@ async processActivityFromChat(message, familyId, childId = null) {
 }
 
 
+/**
+ * Generate personalized insights for children based on their data
+ * @param {string} familyId - Family ID
+ * @param {object} childrenData - Data about children including medical, growth, routines, etc.
+ * @returns {Promise<Array>} Array of personalized insights
+ */
+async generateChildInsights(familyId, childrenData) {
+  try {
+    if (!familyId || !childrenData) {
+      console.warn("Missing required parameters in generateChildInsights");
+      return [];
+    }
+    
+    console.log("Generating child insights for family:", familyId);
+    
+    // Try to get family context for richer insights
+    let familyContext = null;
+    try {
+      familyContext = await this.getFamilyContext(familyId);
+    } catch (contextError) {
+      console.warn("Could not get family context, using limited data:", contextError);
+    }
+    
+    // Prepare system prompt for Claude
+    const systemPrompt = `You are Allie's child development and healthcare expert AI. 
+    Analyze the provided child data and create 3-6 personalized, actionable insights.
+    
+    For each insight, include:
+    1. A specific title related to the child's health, growth, or routine
+    2. A category (medical, growth, routine, recommendation, etc.)
+    3. Specific content with a data point from the child's records
+    4. A priority level (high, medium, low) based on importance
+    5. The relevant childId
+    
+    Your response should be in valid JSON format with this structure:
+    {
+      "insights": [
+        {
+          "title": "string (concise, specific title)",
+          "type": "string (medical, growth, recommendation, clothes, routine)",
+          "content": "string (insight with specific data point)",
+          "priority": "string (high, medium, low)",
+          "childId": "string (child's ID)"
+        }
+      ]
+    }`;
+    
+    // Create a concise version of the data to avoid token limits
+    const processedData = {};
+    Object.keys(childrenData).forEach(childId => {
+      const child = childrenData[childId];
+      
+      // Only include essential data for insights
+      processedData[childId] = {
+        medicalAppointments: (child.medicalAppointments || [])
+          .slice(0, 10)  // Limit to recent appointments
+          .map(apt => ({
+            title: apt.title,
+            date: apt.date,
+            completed: apt.completed,
+            notes: apt.notes?.substring(0, 100) // Limit note length
+          })),
+        growthData: (child.growthData || [])
+          .slice(0, 10)  // Limit to recent measurements
+          .map(entry => ({
+            date: entry.date,
+            height: entry.height,
+            weight: entry.weight,
+            shoeSize: entry.shoeSize,
+            clothingSize: entry.clothingSize
+          })),
+        routines: (child.routines || []).slice(0, 5),
+        clothesHandMeDowns: (child.clothesHandMeDowns || [])
+          .filter(item => !item.used)
+          .slice(0, 5)
+      };
+    });
+    
+    const userMessage = `Generate child health and development insights based on this data:
+    
+    Children Data:
+    ${JSON.stringify(processedData)}
+    
+    ${familyContext ? `Family Information:
+    ${JSON.stringify({
+      familyName: familyContext.familyName,
+      familyMembers: familyContext.familyMembers
+    })}` : ''}
+    
+    Create specific, data-driven insights for each child in the family.`;
+    
+    // Call Claude API with timeout handling
+    let claudeResponse = null;
+    try {
+      claudeResponse = await Promise.race([
+        ClaudeService.generateResponse(
+          [{ role: 'user', content: userMessage }],
+          { system: systemPrompt }
+        ),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Claude API timeout")), 15000)
+        )
+      ]);
+    } catch (timeoutError) {
+      console.error("Claude API timed out:", timeoutError);
+      return this.getFallbackChildInsights(childrenData);
+    }
+    
+    if (!claudeResponse) {
+      console.warn("Empty response from Claude API");
+      return this.getFallbackChildInsights(childrenData);
+    }
+    
+    // Parse JSON response with enhanced error handling
+    const responseData = this.safelyParseJSON(claudeResponse, { insights: [] });
+    
+    // Validate structure
+    if (!responseData.insights || !Array.isArray(responseData.insights) || responseData.insights.length === 0) {
+      console.warn("Invalid insights structure returned");
+      return this.getFallbackChildInsights(childrenData);
+    }
+    
+    return responseData.insights;
+  } catch (error) {
+    console.error("Error generating child insights:", error);
+    return this.getFallbackChildInsights(childrenData);
+  }
+}
+
+/**
+ * Get fallback child insights if AI generation fails
+ * @param {object} childrenData - Children data
+ * @returns {Array} Array of fallback insights
+ */
+getFallbackChildInsights(childrenData) {
+  const insights = [];
+  
+  // Process data for each child
+  Object.keys(childrenData || {}).forEach(childId => {
+    const child = childrenData[childId];
+    
+    // Medical appointment insights
+    if (child.medicalAppointments && child.medicalAppointments.length > 0) {
+      // Check for upcoming appointments
+      const upcomingAppointments = child.medicalAppointments.filter(apt => 
+        !apt.completed && new Date(apt.date) > new Date()
+      );
+      
+      if (upcomingAppointments.length > 0) {
+        const nextAppointment = upcomingAppointments.sort((a, b) => 
+          new Date(a.date) - new Date(b.date)
+        )[0];
+        
+        insights.push({
+          title: "Upcoming Medical Appointment",
+          type: "medical",
+          content: `Appointment scheduled for ${new Date(nextAppointment.date).toLocaleDateString()} - ${nextAppointment.title}`,
+          priority: "medium",
+          childId: childId
+        });
+      }
+    }
+    
+    // Growth insights
+    if (child.growthData && child.growthData.length > 1) {
+      // Compare latest two measurements
+      const sortedGrowth = [...child.growthData].sort((a, b) => 
+        new Date(b.date) - new Date(a.date)
+      );
+      
+      const latest = sortedGrowth[0];
+      const previous = sortedGrowth[1];
+      
+      if (latest && previous) {
+        // Check if measurements were updated
+        if (latest.height !== previous.height) {
+          insights.push({
+            title: "Height Change Detected",
+            type: "growth",
+            content: `Height has changed from ${previous.height} to ${latest.height}`,
+            priority: "low",
+            childId: childId
+          });
+        }
+        
+        if (latest.weight !== previous.weight) {
+          insights.push({
+            title: "Weight Change Detected",
+            type: "growth",
+            content: `Weight has changed from ${previous.weight} to ${latest.weight}`,
+            priority: "low",
+            childId: childId
+          });
+        }
+      }
+      
+      // Check if growth data is outdated
+      if (latest) {
+        const lastMeasurementDate = new Date(latest.date);
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+        
+        if (lastMeasurementDate < threeMonthsAgo) {
+          insights.push({
+            title: "Growth Data Needs Update",
+            type: "recommendation",
+            content: `Last growth measurements were recorded on ${lastMeasurementDate.toLocaleDateString()}, more than 3 months ago`,
+            priority: "medium",
+            childId: childId
+          });
+        }
+      }
+    }
+    
+    // Recommendations for missing data
+    if (!child.medicalAppointments || child.medicalAppointments.length === 0) {
+      insights.push({
+        title: "No Medical Records",
+        type: "recommendation",
+        content: "Consider adding medical appointments to track health history",
+        priority: "high",
+        childId: childId
+      });
+    }
+    
+    if (!child.growthData || child.growthData.length === 0) {
+      insights.push({
+        title: "No Growth Data",
+        type: "recommendation",
+        content: "Start tracking height and weight to monitor development",
+        priority: "medium",
+        childId: childId
+      });
+    }
+    
+    // Hand-me-down insights
+    if (child.clothesHandMeDowns && child.clothesHandMeDowns.length > 0) {
+      const readyItems = child.clothesHandMeDowns.filter(item => 
+        !item.used && new Date(item.readyDate) <= new Date()
+      );
+      
+      if (readyItems.length > 0) {
+        insights.push({
+          title: "Clothing Items Ready to Use",
+          type: "clothes",
+          content: `${readyItems.length} saved clothing items are ready to be used`,
+          priority: "low",
+          childId: childId
+        });
+      }
+    }
+  });
+  
+  return insights;
+}
+
+
   /**
    * Generate personalized tasks based on survey data
    * @param {string} familyId - Family ID

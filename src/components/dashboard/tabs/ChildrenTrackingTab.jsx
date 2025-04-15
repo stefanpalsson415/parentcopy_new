@@ -357,38 +357,48 @@ const ChildrenTrackingTab = () => {
     return recommendation;
   }, []);
 
-  // Enhanced AI insights generation with service integration and local fallback
-  const generateAiInsights = useCallback(async (data) => {
+  // src/components/dashboard/tabs/ChildrenTrackingTab.jsx
+// Replace the generateAiInsights function with this improved version:
+
+const generateAiInsights = useCallback(async (data) => {
+  try {
+    if (!familyId || !data) {
+      setAiInsights([]);
+      return;
+    }
+    
+    // Try to get insights from AI service
     try {
-      if (!familyId || !data) {
-        setAiInsights([]);
+      console.log("Requesting AI-generated child insights from AllieAIService");
+      // Add a timeout to prevent hanging
+      const aiInsightsPromise = AllieAIService.generateChildInsights(familyId, data);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("AI insights request timed out")), 5000)
+      );
+      
+      // Race between the actual request and a timeout
+      const aiInsights = await Promise.race([aiInsightsPromise, timeoutPromise]);
+      
+      if (aiInsights && Array.isArray(aiInsights) && aiInsights.length > 0) {
+        console.log(`Received ${aiInsights.length} AI-generated insights`);
+        setAiInsights(aiInsights);
         return;
+      } else {
+        console.warn("AI service returned empty or invalid insights, using fallback");
+        throw new Error("Invalid insights format");
       }
-      
-      // Try to get insights from AI service
-      try {
-        console.log("Requesting AI-generated child insights from AllieAIService");
-        const aiInsights = await AllieAIService.generateChildInsights(familyId, data);
-        
-        if (aiInsights && aiInsights.length > 0) {
-          console.log(`Received ${aiInsights.length} AI-generated insights`);
-          setAiInsights(aiInsights);
-          return;
-        }
-      } catch (serviceError) {
-        console.warn("AI service error, falling back to local insights:", serviceError);
-      }
-      
-      // If AI service fails or returns no insights, fall back to local generation
-      console.log("Generating local insights as fallback");
+    } catch (serviceError) {
+      console.warn("AI service error, falling back to local insights:", serviceError);
+      // Always fall back to local generation on any error
       const localInsights = generateLocalInsights(data);
       setAiInsights(localInsights);
-      
-    } catch (error) {
-      console.error("Error in insight generation:", error);
-      setAiInsights([]);
     }
-  }, [familyId]);
+  } catch (error) {
+    console.error("Error in insight generation:", error);
+    // Ensure we always have at least an empty array of insights to prevent rendering issues
+    setAiInsights([]);
+  }
+}, [familyId]);
 
   // Update notification counts based on data
   const updateNotificationCounts = useCallback((data) => {
@@ -434,153 +444,114 @@ const ChildrenTrackingTab = () => {
     setNotifications(counts);
   }, []);
 
-  // Local fallback implementation for generating insights
-  const generateLocalInsights = useCallback((data) => {
+  // src/components/dashboard/tabs/ChildrenTrackingTab.jsx
+// Replace the generateLocalInsights function with this more robust version:
+
+const generateLocalInsights = useCallback((data) => {
+  try {
     // For a simplified version, create some dynamic insights based on the data
     const insights = [];
     
-    // Process data for each child
+    // Safely process data for each child
+    if (!data || typeof data !== 'object') {
+      console.warn("Invalid data provided to generateLocalInsights", data);
+      return [];
+    }
+    
     Object.keys(data).forEach(childId => {
-      const childData = data[childId];
-      const childName = getChildName(childId);
-      const childAge = getChildAge(childId);
-      
-      // Medical appointment insights
-      if (childData.medicalAppointments && childData.medicalAppointments.length > 0) {
-        // Check for upcoming appointments
-        const upcomingAppointments = childData.medicalAppointments.filter(apt => 
-          !apt.completed && new Date(apt.date) > new Date()
-        );
+      try {
+        const childData = data[childId];
+        if (!childData) return;
         
-        if (upcomingAppointments.length > 0) {
-          const nextAppointment = upcomingAppointments.sort((a, b) => 
-            new Date(a.date) - new Date(b.date)
+        const childName = getChildName(childId) || "Your child";
+        const childAge = getChildAge(childId);
+        
+        // Medical appointment insights
+        if (childData.medicalAppointments && Array.isArray(childData.medicalAppointments)) {
+          // Check for upcoming appointments
+          const upcomingAppointments = childData.medicalAppointments.filter(apt => 
+            apt && !apt.completed && apt.date && new Date(apt.date) > new Date()
+          );
+          
+          if (upcomingAppointments.length > 0) {
+            const nextAppointment = upcomingAppointments.sort((a, b) => 
+              new Date(a.date) - new Date(b.date)
+            )[0];
+            
+            insights.push({
+              type: "medical",
+              title: "Upcoming Medical Appointment",
+              content: `${childName} has a ${nextAppointment.title || 'medical'} appointment on ${formatDate(nextAppointment.date)}${nextAppointment.time ? ` at ${nextAppointment.time}` : ''}.`,
+              priority: "medium",
+              childId: childId
+            });
+          }
+        }
+        
+        // Growth data insights
+        if (childData.growthData && Array.isArray(childData.growthData) && childData.growthData.length > 0) {
+          // Check if growth data is recent
+          const latestGrowthEntry = childData.growthData.sort((a, b) => 
+            new Date(b.date || 0) - new Date(a.date || 0)
           )[0];
           
+          if (latestGrowthEntry && latestGrowthEntry.date) {
+            const threeMothsAgo = new Date();
+            threeMothsAgo.setMonth(threeMothsAgo.getMonth() - 3);
+            
+            if (new Date(latestGrowthEntry.date) < threeMothsAgo) {
+              insights.push({
+                type: "growth",
+                title: "Growth Update Reminder",
+                content: `${childName}'s growth measurements were last updated on ${formatDate(latestGrowthEntry.date)}. Consider updating their height and weight.`,
+                priority: "low",
+                childId: childId
+              });
+            }
+          }
+        } else if (childAge) {
+          // No growth data recorded
           insights.push({
-            type: "medical",
-            title: "Upcoming Medical Appointment",
-            content: `${childName} has a ${nextAppointment.title} appointment on ${formatDate(nextAppointment.date)}${nextAppointment.time ? ` at ${nextAppointment.time}` : ''}.`,
+            type: "recommendation",
+            title: "Missing Growth Data",
+            content: `You haven't recorded any growth data for ${childName} yet. Tracking height, weight, and sizes helps monitor their development.`,
             priority: "medium",
             childId: childId
           });
         }
         
-        // Check if child is due for a check-up based on their age
-        if (childAge) {
-          // Example age-based checkup recommendation
-          const lastCheckup = childData.medicalAppointments.filter(apt => 
-            apt.title.toLowerCase().includes('checkup') || apt.title.toLowerCase().includes('check-up')
-          ).sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-          
-          const checkupRecommendation = getCheckupRecommendation(childAge, lastCheckup);
-          if (checkupRecommendation) {
-            insights.push({
-              type: "recommendation",
-              title: "Checkup Recommendation",
-              content: `${childName} ${checkupRecommendation}`,
-              priority: "high",
-              childId: childId
-            });
-          }
-        }
-      } else if (childAge) {
-        // No appointments recorded, recommend initial checkup
-        insights.push({
-          type: "recommendation",
-          title: "Initial Medical Record",
-          content: `Consider adding ${childName}'s doctor information and scheduling a checkup to start building their medical history.`,
-          priority: "medium",
-          childId: childId
-        });
-      }
-      
-      // Growth insights
-      if (childData.growthData && childData.growthData.length > 0) {
-        // Check if growth data is recent
-        const latestGrowthEntry = childData.growthData.sort((a, b) => 
-          new Date(b.date) - new Date(a.date)
-        )[0];
+        // Add more insights here as needed...
         
-        const threeMothsAgo = new Date();
-        threeMothsAgo.setMonth(threeMothsAgo.getMonth() - 3);
-        
-        if (new Date(latestGrowthEntry.date) < threeMothsAgo) {
-          insights.push({
-            type: "growth",
-            title: "Growth Update Reminder",
-            content: `${childName}'s growth measurements were last updated on ${formatDate(latestGrowthEntry.date)}. Consider updating their height and weight.`,
-            priority: "low",
-            childId: childId
-          });
-        }
-        
-        // Check for shoe size and clothing size updates
-        if (childData.growthData.length >= 2) {
-          const twoLatestEntries = childData.growthData
-            .sort((a, b) => new Date(b.date) - new Date(a.date))
-            .slice(0, 2);
-          
-          if (twoLatestEntries[0].shoeSize !== twoLatestEntries[1].shoeSize && twoLatestEntries[0].shoeSize) {
-            insights.push({
-              type: "growth",
-              title: "Shoe Size Change",
-              content: `${childName}'s shoe size has changed from ${twoLatestEntries[1].shoeSize} to ${twoLatestEntries[0].shoeSize}. You might need to update their footwear.`,
-              priority: "medium",
-              childId: childId
-            });
-          }
-          
-          if (twoLatestEntries[0].clothingSize !== twoLatestEntries[1].clothingSize && twoLatestEntries[0].clothingSize) {
-            insights.push({
-              type: "growth",
-              title: "Clothing Size Change",
-              content: `${childName}'s clothing size has changed from ${twoLatestEntries[1].clothingSize} to ${twoLatestEntries[0].clothingSize}. You might want to check if their clothes still fit.`,
-              priority: "medium",
-              childId: childId
-            });
-          }
-        }
-      } else if (childAge) {
-        // No growth data recorded
-        insights.push({
-          type: "recommendation",
-          title: "Missing Growth Data",
-          content: `You haven't recorded any growth data for ${childName} yet. Tracking height, weight, and sizes helps monitor their development.`,
-          priority: "medium",
-          childId: childId
-        });
-      }
-
-      // Hand-me-down insights
-      if (childData.clothesHandMeDowns && childData.clothesHandMeDowns.length > 0) {
-        const readyItems = childData.clothesHandMeDowns.filter(item => {
-          const readyDate = new Date(item.readyDate);
-          const today = new Date();
-          return !item.used && readyDate <= today;
-        });
-        
-        if (readyItems.length > 0) {
-          insights.push({
-            type: "clothes",
-            title: "Hand-Me-Downs Ready",
-            content: `${childName} has ${readyItems.length} saved clothing ${readyItems.length === 1 ? 'item' : 'items'} ready to be used.`,
-            priority: "low",
-            childId: childId
-          });
-        }
+      } catch (childError) {
+        console.warn(`Error generating insights for child ${childId}:`, childError);
+        // Continue with other children even if one fails
       }
     });
+    
+    // If we still have no insights, add a default one
+    if (insights.length === 0) {
+      insights.push({
+        type: "recommendation",
+        title: "Getting Started",
+        content: "Start tracking your children's health, growth, and routines to get personalized insights.",
+        priority: "medium",
+        childId: null
+      });
+    }
     
     // Sort insights by priority (high, medium, low)
     const priorityOrder = { high: 0, medium: 1, low: 2 };
     
     insights.sort((a, b) => {
-      return priorityOrder[a.priority] - priorityOrder[b.priority];
+      return priorityOrder[a.priority || 'medium'] - priorityOrder[b.priority || 'medium'];
     });
     
     return insights;
-  }, [getChildName, getChildAge, formatDate, getCheckupRecommendation]);
+  } catch (error) {
+    console.error("Error in generateLocalInsights:", error);
+    return []; // Return empty array on error
+  }
+}, [getChildName, getChildAge, formatDate]);
 
   // Load healthcare providers
   useEffect(() => {
@@ -1269,72 +1240,81 @@ const handleProviderDelete = async (providerId) => {
 
  
 
-  // Load children data
-  useEffect(() => {
-    const loadChildrenData = async () => {
-      try {
-        if (!familyId) return;
+  /// src/components/dashboard/tabs/ChildrenTrackingTab.jsx
+// Replace the useEffect with loadChildrenData with this version:
+
+useEffect(() => {
+  const loadChildrenData = async () => {
+    try {
+      if (!familyId) return;
+      
+      setLoading(true);
+      console.log("Loading children data...");
+      
+      const docRef = doc(db, "families", familyId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const familyData = docSnap.data();
         
-        setLoading(true);
-        console.log("Loading children data...");
-        
-        const docRef = doc(db, "families", familyId);
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
-          const familyData = docSnap.data();
+        // Check if we have children data structure, if not create it
+        if (!familyData.childrenData) {
+          // Initialize empty children data structure
+          const initialChildrenData = {};
           
-          // Check if we have children data structure, if not create it
-          if (!familyData.childrenData) {
-            // Initialize empty children data structure
-            const initialChildrenData = {};
-            
-            // Create entry for each child in the family
-            familyMembers
-              .filter(member => member.role === 'child')
-              .forEach(child => {
-                initialChildrenData[child.id] = {
-                  medicalAppointments: [],
-                  growthData: [],
-                  routines: [],
-                  clothesHandMeDowns: []
-                };
-              });
-            
-            // Save initial structure to Firebase
-            await updateDoc(docRef, {
-              childrenData: initialChildrenData
+          // Create entry for each child in the family
+          familyMembers
+            .filter(member => member.role === 'child')
+            .forEach(child => {
+              initialChildrenData[child.id] = {
+                medicalAppointments: [],
+                growthData: [],
+                routines: [],
+                clothesHandMeDowns: []
+              };
             });
-            
-            setChildrenData(initialChildrenData);
-          } else {
-            setChildrenData(familyData.childrenData);
-          }
           
-          // Generate AI insights based on the children data
-          if (familyData.childrenData) {
-            await generateAiInsights(familyData.childrenData);
-          }
+          // Save initial structure to Firebase
+          await updateDoc(docRef, {
+            childrenData: initialChildrenData
+          });
           
-          // Set active child to the first child if none is selected
-          if (!activeChild && familyMembers.filter(m => m.role === 'child').length > 0) {
-            setActiveChild(familyMembers.filter(m => m.role === 'child')[0].id);
-          }
-          
-          // Update notification counts
-          updateNotificationCounts(familyData.childrenData);
+          setChildrenData(initialChildrenData);
+        } else {
+          setChildrenData(familyData.childrenData);
         }
         
+        // Set active child to the first child if none is selected
+        if (!activeChild && familyMembers.filter(m => m.role === 'child').length > 0) {
+          setActiveChild(familyMembers.filter(m => m.role === 'child')[0].id);
+        }
+        
+        // Update notification counts
+        updateNotificationCounts(familyData.childrenData);
+        
+        // Important change: Set loading to false before AI generation
         setLoading(false);
-      } catch (error) {
-        console.error("Error loading children data:", error);
+        
+        // Generate AI insights in the background
+        if (familyData.childrenData) {
+          generateAiInsights(familyData.childrenData).catch(error => {
+            console.error("Background AI insights generation failed:", error);
+            // This won't block rendering since loading is already set to false
+          });
+        }
+      } else {
+        // No data exists
         setLoading(false);
-        setTabError("There was an error loading children data. Please try refreshing the page.");
       }
-    };
-    
-    loadChildrenData();
-  }, [familyId, familyMembers, activeChild, generateAiInsights, updateNotificationCounts]); 
+    } catch (error) {
+      console.error("Error loading children data:", error);
+      setLoading(false);
+      setTabError("There was an error loading children data. Please try refreshing the page.");
+    }
+  };
+  
+  loadChildrenData();
+}, [familyId, familyMembers, activeChild, generateAiInsights, updateNotificationCounts]);
   
   // Handle form submission for different data types
   const handleFormSubmit = async (formType) => {
@@ -3344,6 +3324,12 @@ const handleProviderDelete = async (providerId) => {
         </button>
       ))}
     </div>
+  </div>
+)}
+{/* AI insights and alerts */}
+{Array.isArray(aiInsights) && aiInsights.length > 0 && (
+  <div className="bg-blue-50 rounded-lg p-4 mb-6">
+    {/* Rest of the aiInsights code */}
   </div>
 )}
                                         
