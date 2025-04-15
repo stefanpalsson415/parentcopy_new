@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Calendar, ChevronDown, X, Clock } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { standardizeDate, createEventId } from '../../services/CalendarOperations';
+import CalendarOperations from '../../services/CalendarOperations';
 
 const CalendarPromptChip = ({ onClick, onSelectDate }) => {
   const { currentUser } = useAuth();
@@ -27,12 +27,9 @@ const CalendarPromptChip = ({ onClick, onSelectDate }) => {
     
     date.setHours(hour, selectedMinute, 0, 0);
     
-    // Standardize the date format using our CalendarOperations utility
-    const standardizedDate = standardizeDate(date);
-    
     // Pass the date up to parent
     if (onSelectDate) {
-      onSelectDate(standardizedDate);
+      onSelectDate(date);
     }
     
     // Close pickers
