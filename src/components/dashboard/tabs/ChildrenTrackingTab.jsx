@@ -1252,7 +1252,7 @@ const handleProviderDelete = async (providerId) => {
 
  
 
-// Replace the useEffect with loadChildrenData in ChildrenTrackingTab.jsx
+// Modified useEffect for safer AI insights loading
 useEffect(() => {
   const loadChildrenData = async () => {
     try {
@@ -1337,24 +1337,30 @@ useEffect(() => {
       // Set loading to false before AI generation
       setLoading(false);
       
-      // Generate AI insights in the background
-      if (Object.keys(childrenDataResult).length > 0) {
-        console.log("Generating AI insights in the background");
-        setTimeout(() => {
-          generateAiInsights(childrenDataResult).catch(error => {
-            console.error("Background AI insights generation failed:", error);
-          });
-        }, 1000); // Slight delay to let UI render first
-      } else {
-        console.log("No children data to generate insights from");
-        // Set default insights
-        setAiInsights([{
+      // Generate fallback insights immediately instead of waiting for AI
+      const fallbackInsights = [
+        {
           title: "Getting Started",
           type: "recommendation",
-          content: "Start tracking your children's health, growth, and routines to get personalized insights.",
+          content: "Track your children's health, growth, and routines to get personalized insights.",
           priority: "medium",
           childId: null
-        }]);
+        }
+      ];
+      
+      setAiInsights(fallbackInsights);
+      
+      // Attempt to load AI insights in the background with explicit error handling
+      if (Object.keys(childrenDataResult).length > 0) {
+        try {
+          const localInsights = await AllieAIService.generateChildInsights(familyId, childrenDataResult);
+          if (localInsights && localInsights.length > 0) {
+            setAiInsights(localInsights);
+          }
+        } catch (insightError) {
+          console.error("Failed to generate AI insights:", insightError);
+          // We already have fallback insights set, so no need to do anything here
+        }
       }
     } catch (error) {
       console.error("Error loading children data:", error);
@@ -1362,11 +1368,19 @@ useEffect(() => {
       setTabError("There was an error loading children data. Please try refreshing the page.");
       // Set fallback empty data
       setChildrenData({});
+      // Set basic fallback insights
+      setAiInsights([{
+        title: "Getting Started",
+        type: "recommendation",
+        content: "Start tracking your children's health, growth, and routines to get personalized insights.",
+        priority: "medium",
+        childId: null
+      }]);
     }
   };
   
   loadChildrenData();
-}, [familyId, familyMembers, activeChild, generateAiInsights, updateNotificationCounts]);
+}, [familyId, familyMembers, activeChild, updateNotificationCounts]);
   
   // Handle form submission for different data types
   const handleFormSubmit = async (formType) => {
@@ -3270,23 +3284,25 @@ useEffect(() => {
                                           </div>
                                         )}
                                         
-                                        {/* AI insights and alerts */}
-{aiInsights.length > 0 && (
+{/* AI insights and alerts */}
+{Array.isArray(aiInsights) && aiInsights.length > 0 && (
   <div className="bg-blue-50 rounded-lg p-4 mb-6">
     <div className="flex items-center justify-between mb-3">
       <h3 className="text-lg font-medium font-roboto text-blue-800 flex items-center">
         <Brain size={20} className="mr-2 text-blue-500" />
-        Allie AI Insights
+        Family Insights
       </h3>
       <button 
         onClick={async () => {
           try {
             setLoadingSection("insights");
-            await generateAiInsights(childrenData);
+            // Use local insights only to avoid Claude API timeout
+            const localInsights = AllieAIService.getFallbackChildInsights(childrenData);
+            setAiInsights(localInsights);
             setLoadingSection(null);
             setAllieMessage({
               type: 'success',
-              text: 'AI insights refreshed successfully!'
+              text: 'Insights refreshed successfully!'
             });
           } catch (error) {
             console.error("Error refreshing insights:", error);
@@ -3378,13 +3394,7 @@ useEffect(() => {
     </div>
   </div>
 )}
-{/* AI insights and alerts */}
-{Array.isArray(aiInsights) && aiInsights.length > 0 && (
-  <div className="bg-blue-50 rounded-lg p-4 mb-6">
-    {/* Rest of the aiInsights code */}
-  </div>
-)}
-                                        
+                                      
                                         {/* Error message */}
                                         {tabError && (
                                           <div className="bg-red-50 border border-red-100 text-red-700 rounded-lg p-4 mb-6 flex items-start">
