@@ -18,10 +18,13 @@ import EventsList from './EventsList';
 import EventDetails from './EventDetails';
 import MergedEventParser from './MergedEventParser';
 import SmartReminderSuggestions from './SmartReminderSuggestions';
+import CalendarPromptChip from './CalendarPromptChip';
 
 // Integration components
 import CalendarIntegrationButton from './CalendarIntegrationButton';
 import AllieCalendarEvents from './AllieCalendarEvents';
+import RelationshipEventCard from './RelationshipEventCard';
+
 
 // Re-export everything under a consistent namespace
 export {
@@ -41,6 +44,7 @@ export {
   // Integration components
   CalendarIntegrationButton,
   AllieCalendarEvents,
+  
 };
 
 // Default export the most commonly used component

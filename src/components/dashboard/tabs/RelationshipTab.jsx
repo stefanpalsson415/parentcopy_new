@@ -23,6 +23,8 @@ import RelationshipAssessment from '../../relationship/RelationshipAssessment';
 import RelationshipPrework from '../../relationship/RelationshipPrework';
 import CouplesMeeting from '../../relationship/CouplesMeeting';
 import UserAvatar from '../../common/UserAvatar';
+import RelationshipEventCard from '../../calendar';
+
 
 // Lazy load heavy components to improve initial load performance
 const DailyCheckInTool = lazy(() => import('../DailyCheckInTool'));
@@ -231,26 +233,34 @@ const CycleManager = ({ cycle }) => {
     }
   }, [currentUser, loading, familyId, familyMembers]);
 
-  // Handle meeting scheduling
   const handleScheduleMeeting = async (event) => {
     try {
-      // Format the data for the calendar
+      // Format the data for the calendar using standardized format
       const meetingDate = new Date(event.start.dateTime);
       
-      // Call the context function
-      await scheduleCouplesMeeting(cycle, meetingDate);
+      // Call the context function using the relationship calendar integration
+      const result = await RelationshipCalendarIntegration.addRelationshipMeetingToCalendar(
+        currentUser?.uid,
+        cycle,
+        meetingDate
+      );
       
-      // Update local state
-      setCycleData(prev => ({
-        ...prev,
-        meeting: {
-          ...prev.meeting,
-          scheduled: true,
-          scheduledDate: meetingDate.toISOString()
-        }
-      }));
-      
-      setShowScheduleModal(false);
+      if (result.success) {
+        // Update local state
+        setCycleData(prev => ({
+          ...prev,
+          meeting: {
+            ...prev.meeting,
+            scheduled: true,
+            scheduledDate: meetingDate.toISOString(),
+            calendarEventId: result.eventId || result.id
+          }
+        }));
+        
+        setShowScheduleModal(false);
+      } else {
+        throw new Error("Failed to add meeting to calendar");
+      }
     } catch (error) {
       console.error("Error scheduling meeting:", error);
       setError("Failed to schedule the meeting. Please try again.");
@@ -1127,18 +1137,22 @@ const RelationshipTab = () => {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Suspense fallback={
-              <div className="p-6 border rounded-lg flex justify-center">
-                <div className="w-6 h-6 border-2 border-t-transparent border-black rounded-full animate-spin"></div>
-              </div>
-            }>
-              <DateNightPlanner 
-                onAddToCalendar={dateNight => RelationshipCalendarIntegration.addDateNightToCalendar(
-                  currentUser?.uid,
-                  dateNight
-                )}
-              />
-            </Suspense>
+          <Suspense fallback={
+  <div className="p-6 border rounded-lg flex justify-center">
+    <div className="w-6 h-6 border-2 border-t-transparent border-black rounded-full animate-spin"></div>
+  </div>
+}>
+  <DateNightPlanner 
+    onAddToCalendar={dateNight => RelationshipCalendarIntegration.addDateNightToCalendar(
+      currentUser?.uid,
+      {
+        ...dateNight,
+        category: 'relationship',
+        eventType: 'date-night'
+      }
+    )}
+  />
+</Suspense>
             
             <Suspense fallback={
               <div className="p-6 border rounded-lg flex justify-center">

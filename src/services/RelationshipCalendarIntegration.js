@@ -1,5 +1,6 @@
 // src/services/RelationshipCalendarIntegration.js
 import CalendarService from './CalendarService';
+import CalendarOperations from './CalendarOperations';
 
 /**
  * Helper service for integrating relationship activities with the calendar
@@ -25,36 +26,33 @@ class RelationshipCalendarIntegration {
         scheduleDate.setHours(19, 0, 0, 0); // 7 PM
       }
       
-      // Create end time (30 minutes after start)
-      const endTime = new Date(scheduleDate);
-      endTime.setMinutes(endTime.getMinutes() + 30);
-      
-      // Create the event object
-      const event = {
-        summary: `Couple Check-in (Cycle ${cycleNumber})`,
+      // Create standardized event using CalendarOperations
+      const eventData = {
+        title: `Couple Check-in (Cycle ${cycleNumber})`,
         description: `Regular check-in to connect and strengthen your relationship.\n\n${
           checkInData?.description || 'Take 5-10 minutes to connect and share your day with your partner.'
         }`,
-        start: {
-          dateTime: scheduleDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        startDate: scheduleDate,
+        duration: 30, // 30 minutes
+        location: '',
+        category: 'relationship',
+        eventType: 'check-in',
+        colorId: '6', // Pink
+        metadata: {
+          cycleNumber,
+          relationshipActivity: true
         },
-        end: {
-          dateTime: endTime.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        reminders: {
-          useDefault: false,
-          overrides: [
-            { method: 'popup', minutes: 60 }, // 1 hour before
-            { method: 'popup', minutes: 10 }  // 10 minutes before
-          ]
-        },
-        colorId: '6' // Pink
+        reminders: [
+          { method: 'popup', minutes: 60 }, // 1 hour before
+          { method: 'popup', minutes: 10 }  // 10 minutes before
+        ]
       };
       
+      // Use CalendarOperations to standardize the event
+      const standardizedEvent = CalendarOperations.createStandardEvent(eventData);
+      
       // Add to calendar
-      return await CalendarService.addEvent(event, userId);
+      return await CalendarService.addEvent(standardizedEvent, userId);
     } catch (error) {
       console.error("Error adding check-in to calendar:", error);
       throw error;
@@ -74,40 +72,35 @@ class RelationshipCalendarIntegration {
       
       // Default to next Sunday if no date provided
       if (!meetingDate) {
-        meetingDate = new Date();
-        const daysToSunday = 7 - meetingDate.getDay();
-        meetingDate.setDate(meetingDate.getDate() + daysToSunday);
+        meetingDate = CalendarOperations.getNextWeekdayDate(0); // 0 = Sunday
         meetingDate.setHours(19, 0, 0, 0); // 7 PM
       }
       
-      // Create end time (1 hour after start)
-      const endTime = new Date(meetingDate);
-      endTime.setHours(endTime.getHours() + 1);
-      
-      // Create the event object
-      const event = {
-        summary: `Relationship Meeting (Cycle ${cycleNumber})`,
+      // Create standardized event
+      const eventData = {
+        title: `Relationship Meeting (Cycle ${cycleNumber})`,
         description: 'A focused time to discuss your relationship, celebrate successes, and address challenges together.',
-        start: {
-          dateTime: meetingDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        startDate: meetingDate,
+        duration: 60, // 1 hour
+        location: '',
+        category: 'relationship',
+        eventType: 'meeting',
+        colorId: '11', // Red
+        metadata: {
+          cycleNumber,
+          relationshipActivity: true
         },
-        end: {
-          dateTime: endTime.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        reminders: {
-          useDefault: false,
-          overrides: [
-            { method: 'popup', minutes: 24 * 60 }, // 1 day before
-            { method: 'popup', minutes: 60 }      // 1 hour before
-          ]
-        },
-        colorId: '11' // Red
+        reminders: [
+          { method: 'popup', minutes: 24 * 60 }, // 1 day before
+          { method: 'popup', minutes: 60 }      // 1 hour before
+        ]
       };
       
+      // Standardize the event
+      const standardizedEvent = CalendarOperations.createStandardEvent(eventData);
+      
       // Add to calendar
-      return await CalendarService.addEvent(event, userId);
+      return await CalendarService.addEvent(standardizedEvent, userId);
     } catch (error) {
       console.error("Error adding relationship meeting to calendar:", error);
       throw error;
@@ -124,36 +117,36 @@ class RelationshipCalendarIntegration {
     try {
       if (!userId || !dateNight) throw new Error("User ID and date night data required");
       
-      // Create date objects
-      const startDate = new Date(`${dateNight.date}T${dateNight.time || '19:00'}`);
-      const endDate = new Date(startDate);
-      endDate.setHours(endDate.getHours() + 2); // Default 2 hour duration
+      // Parse date and time
+      const startDate = dateNight.date ? 
+        CalendarOperations.parseDateTime(dateNight.date, dateNight.time || '19:00') :
+        CalendarOperations.getNextWeekendEvening();
       
-      // Create the event object
-      const event = {
-        summary: `Date Night: ${dateNight.title}`,
+      // Create standardized event
+      const eventData = {
+        title: `Date Night: ${dateNight.title || 'Dinner Date'}`,
         description: dateNight.description || 'Quality time together to strengthen your relationship.',
+        startDate: startDate,
+        duration: 120, // 2 hours
         location: dateNight.location || '',
-        start: {
-          dateTime: startDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        category: 'relationship',
+        eventType: 'date-night',
+        colorId: '10', // Purple
+        metadata: {
+          relationshipActivity: true,
+          dateNightDetails: dateNight
         },
-        end: {
-          dateTime: endDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        reminders: {
-          useDefault: false,
-          overrides: [
-            { method: 'popup', minutes: 24 * 60 }, // 1 day before
-            { method: 'popup', minutes: 120 }     // 2 hours before
-          ]
-        },
-        colorId: '10' // Purple
+        reminders: [
+          { method: 'popup', minutes: 24 * 60 }, // 1 day before
+          { method: 'popup', minutes: 120 }     // 2 hours before
+        ]
       };
       
+      // Standardize the event
+      const standardizedEvent = CalendarOperations.createStandardEvent(eventData);
+      
       // Add to calendar
-      return await CalendarService.addEvent(event, userId);
+      return await CalendarService.addEvent(standardizedEvent, userId);
     } catch (error) {
       console.error("Error adding date night to calendar:", error);
       throw error;
@@ -170,38 +163,41 @@ class RelationshipCalendarIntegration {
     try {
       if (!userId || !selfCareActivity) throw new Error("User ID and self-care data required");
       
-      // Create date objects
-      const startDate = new Date(selfCareActivity.date);
-      startDate.setHours(10, 0, 0, 0); // Default to 10 AM if no time specified
+      // Parse date
+      const startDate = selfCareActivity.date ? 
+        CalendarOperations.parseDate(selfCareActivity.date) : 
+        new Date();
       
-      // Calculate duration in milliseconds
-      const durationMs = (selfCareActivity.duration || 60) * 60 * 1000;
-      const endDate = new Date(startDate.getTime() + durationMs);
+      // Default to 10 AM if no specific time
+      startDate.setHours(10, 0, 0, 0);
       
-      // Create the event object
-      const event = {
-        summary: `Self-Care: ${selfCareActivity.title}`,
+      // Calculate duration in minutes
+      const duration = selfCareActivity.duration || 60; // Default 60 minutes
+      
+      // Create standardized event
+      const eventData = {
+        title: `Self-Care: ${selfCareActivity.title || 'Personal Time'}`,
         description: selfCareActivity.description || 'Time dedicated to self-care and personal wellbeing.',
+        startDate: startDate,
+        duration: duration,
         location: selfCareActivity.location || '',
-        start: {
-          dateTime: startDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        category: 'relationship',
+        eventType: 'self-care',
+        colorId: '9', // Blue
+        metadata: {
+          relationshipActivity: true,
+          selfCareDetails: selfCareActivity
         },
-        end: {
-          dateTime: endDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        reminders: {
-          useDefault: false,
-          overrides: [
-            { method: 'popup', minutes: 60 } // 1 hour before
-          ]
-        },
-        colorId: '9' // Blue
+        reminders: [
+          { method: 'popup', minutes: 60 } // 1 hour before
+        ]
       };
       
+      // Standardize the event
+      const standardizedEvent = CalendarOperations.createStandardEvent(eventData);
+      
       // Add to calendar
-      return await CalendarService.addEvent(event, userId);
+      return await CalendarService.addEvent(standardizedEvent, userId);
     } catch (error) {
       console.error("Error adding self-care to calendar:", error);
       throw error;
@@ -233,19 +229,32 @@ class RelationshipCalendarIntegration {
       // Get all events from calendar service
       const allEvents = await CalendarService.getEventsForUser(userId, startDate, endDate);
       
-      // Filter for relationship-related events
-      const relationshipKeywords = [
-        'relationship', 'couple', 'check-in', 'date night', 'self-care'
-      ];
-      
-      return allEvents.filter(event => {
-        const title = event.summary?.toLowerCase() || '';
-        return relationshipKeywords.some(keyword => title.includes(keyword));
-      });
+      // Filter for relationship-related events using standardized categories
+      return allEvents.filter(event => 
+        event.category === 'relationship' || 
+        (event.metadata && event.metadata.relationshipActivity) ||
+        (event.title && this.isRelationshipTitle(event.title))
+      );
     } catch (error) {
       console.error("Error getting relationship events:", error);
       return [];
     }
+  }
+  
+  /**
+   * Determine if an event title is relationship-related
+   * @param {string} title - Event title
+   * @returns {boolean} - True if title indicates a relationship event
+   */
+  isRelationshipTitle(title) {
+    if (!title) return false;
+    
+    const lowerTitle = title.toLowerCase();
+    const relationshipKeywords = [
+      'relationship', 'couple', 'check-in', 'date night', 'self-care'
+    ];
+    
+    return relationshipKeywords.some(keyword => lowerTitle.includes(keyword));
   }
 }
 
