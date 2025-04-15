@@ -218,19 +218,25 @@ const CycleManager = ({ cycle }) => {
     loadCycleData();
   }, [cycle, familyId, getRelationshipCycleData]);
 
-  // This updated effect removes the unnecessary authentication check
-useEffect(() => {
-  // Only show error if we're not loading and don't have required data
-  if (!loading && !familyId) {
-    setError("Missing family data. Please try refreshing the page.");
-    return;
-  }
-  
-  // Clear any previous auth error if we have family data
-  if (familyId && error && error.includes("authentication")) {
-    setError(null);
-  }
-}, [loading, familyId, error]);
+  useEffect(() => {
+    // Check for all required data
+    if (!loading) {
+      if (!familyId) {
+        setError("Missing family data. Please try refreshing the page.");
+        return;
+      }
+      
+      if (!currentUser) {
+        setError("Please sign in to access relationship features.");
+        return;
+      }
+    }
+    
+    // Clear any previous errors if we have the required data
+    if (familyId && currentUser && error) {
+      setError(null);
+    }
+  }, [loading, familyId, currentUser, error]);
 
   const handleScheduleMeeting = async (event) => {
     try {
@@ -266,44 +272,48 @@ useEffect(() => {
     }
   };
 
-  const handleAssessmentSubmit = async (responses) => {
-    try {
-      // Get the selected user ID (which will be the current user in the app)
-      const userId = selectedUser?.id;
-      if (!userId) {
-        throw new Error("No user selected");
-      }
-      
-      await completeRelationshipAssessment(cycle, responses);
-      
-      // Update local state
-      const updatedData = { ...cycleData };
-      if (!updatedData.assessments) updatedData.assessments = {};
-      
-      updatedData.assessments[userId] = {
-        completed: true,
-        completedDate: new Date().toISOString(),
-        responses: responses
-      };
-      
-      const bothComplete = parentIds.every(id => 
-        updatedData.assessments[id]?.completed
-      );
-      
-      if (bothComplete) {
-        updatedData.assessmentsCompleted = true;
-        updatedData.assessmentsCompletedDate = new Date().toISOString();
-      }
-      
-      setCycleData(updatedData);
-      setShowAssessment(false);
-      
-      return true;
-    } catch (err) {
-      console.error("Error completing assessment:", err);
-      throw err;
+ // New fixed code:
+const handleAssessmentSubmit = async (responses) => {
+  try {
+    // Get the currentUser.uid directly and add proper null checking
+    if (!currentUser || !currentUser.uid) {
+      setError("You need to be signed in to complete the assessment.");
+      return false;
     }
-  };
+    
+    const userId = currentUser.uid;
+    
+    await completeRelationshipAssessment(cycle, responses);
+    
+    // Update local state
+    const updatedData = { ...cycleData };
+    if (!updatedData.assessments) updatedData.assessments = {};
+    
+    updatedData.assessments[userId] = {
+      completed: true,
+      completedDate: new Date().toISOString(),
+      responses: responses
+    };
+    
+    const bothComplete = parentIds.every(id => 
+      updatedData.assessments[id]?.completed
+    );
+    
+    if (bothComplete) {
+      updatedData.assessmentsCompleted = true;
+      updatedData.assessmentsCompletedDate = new Date().toISOString();
+    }
+    
+    setCycleData(updatedData);
+    setShowAssessment(false);
+    
+    return true;
+  } catch (err) {
+    console.error("Error completing assessment:", err);
+    setError("Error completing assessment. Please try again.");
+    return false;
+  }
+};
   
   // Handle prework completion with added null check
 const handlePreworkSubmit = async (preworkData) => {
