@@ -4,7 +4,7 @@ import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import CalendarService from '../../services/CalendarService';
 import CalendarErrorHandler from '../../utils/CalendarErrorHandler';
-import CalendarOperations from '../../utils/CalendarOperations';
+import CalendarOperations from '../../utils/CalendarOperations.js';
 import { useNavigate } from 'react-router-dom';
 
 // Import sub-components

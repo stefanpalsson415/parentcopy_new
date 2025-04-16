@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  X, Check, Edit, Trash2, Calendar, Clock, MapPin, User, Users, Info, AlertCircle 
+  X, Check, Edit, Trash2, Calendar, Clock, MapPin, User, Users, Info, AlertCircle, BrainCircuit
 } from 'lucide-react';
 import UserAvatar from '../common/UserAvatar';
 import EventSourceBadge from './EventSourceBadge';
