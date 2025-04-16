@@ -166,7 +166,7 @@ class CalendarService {
       // Generate a universal ID for the event
       const universalId = `event-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
       
-      // Log the incoming event for debugging
+      // Enhanced logging for tracking event creation flow
       console.log("Adding calendar event:", {
         title: event.summary || event.title || 'Untitled',
         hasStart: !!event.start,
@@ -174,30 +174,94 @@ class CalendarService {
         childName: event.childName || 'None',
         universalId,
         userId,
-        attendees: event.attendees || []
+        attendees: event.attendees || [],
+        source: event.source || 'manual',
+        creationSource: event.extraDetails?.creationSource || 'manual',
+        eventType: event.eventType || 'general'
       });
       
-      // Ensure event has required fields
+      // Validate required fields
       if (!event.summary && !event.title) {
+        console.warn("Event missing title - setting default");
         event.summary = "Untitled Event";
       }
       
-      // Standardize event format
+      // Validate and normalize date/time fields
+      let startDate, endDate;
+      
+      if (event.start?.dateTime) {
+        try {
+          startDate = new Date(event.start.dateTime);
+          if (isNaN(startDate.getTime())) {
+            throw new Error("Invalid start dateTime");
+          }
+        } catch (dateError) {
+          console.warn("Invalid start.dateTime, using current time:", dateError);
+          startDate = new Date();
+        }
+      } else if (event.dateTime) {
+        try {
+          startDate = new Date(event.dateTime);
+          if (isNaN(startDate.getTime())) {
+            throw new Error("Invalid dateTime");
+          }
+        } catch (dateError) {
+          console.warn("Invalid dateTime, using current time:", dateError);
+          startDate = new Date();
+        }
+      } else {
+        console.warn("No start date provided, using current time");
+        startDate = new Date();
+      }
+      
+      // Set end date - either from event or default to 1 hour after start
+      if (event.end?.dateTime) {
+        try {
+          endDate = new Date(event.end.dateTime);
+          if (isNaN(endDate.getTime())) {
+            throw new Error("Invalid end dateTime");
+          }
+        } catch (dateError) {
+          console.warn("Invalid end.dateTime, using start + 1 hour:", dateError);
+          endDate = new Date(startDate.getTime() + 60*60000);
+        }
+      } else if (event.endDateTime) {
+        try {
+          endDate = new Date(event.endDateTime);
+          if (isNaN(endDate.getTime())) {
+            throw new Error("Invalid endDateTime");
+          }
+        } catch (dateError) {
+          console.warn("Invalid endDateTime, using start + 1 hour:", dateError);
+          endDate = new Date(startDate.getTime() + 60*60000);
+        }
+      } else {
+        // Default to 1 hour duration
+        endDate = new Date(startDate.getTime() + 60*60000);
+      }
+      
+      // Ensure end is after start
+      if (endDate <= startDate) {
+        console.warn("End time is before or equal to start time, adjusting to be 1 hour later");
+        endDate = new Date(startDate.getTime() + 60*60000);
+      }
+      
+      // Standardize event format with robust validation
       const standardizedEvent = {
         ...event,
         // Use universal ID as the primary identifier
         universalId,
         // Ensure both summary and title are set for compatibility
-        summary: event.summary || event.title,
-        title: event.title || event.summary, 
+        summary: event.summary || event.title || "Untitled Event",
+        title: event.title || event.summary || "Untitled Event",
         description: event.description || '',
-        // Ensure start and end dates are properly formatted
-        start: event.start || {
-          dateTime: new Date().toISOString(),
+        // Use validated start and end dates
+        start: {
+          dateTime: startDate.toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
         },
-        end: event.end || {
-          dateTime: new Date(new Date().getTime() + 60*60000).toISOString(),
+        end: {
+          dateTime: endDate.toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
         },
         // Preserve all metadata including attendees
@@ -211,11 +275,14 @@ class CalendarService {
         extraDetails: {
           ...(event.extraDetails || {}),
           // Preserve parsing metadata
-          parsedWithAI: event.parsedWithAI || false,
-          extractionConfidence: event.extractionConfidence || null,
-          parsedFromImage: event.parsedFromImage || false,
-          originalText: event.originalText || '',
-          creationSource: event.creationSource || 'manual'
+          parsedWithAI: event.extraDetails?.parsedWithAI || event.parsedWithAI || false,
+          extractionConfidence: event.extraDetails?.extractionConfidence || event.extractionConfidence || null,
+          parsedFromImage: event.extraDetails?.parsedFromImage || event.parsedFromImage || false,
+          originalText: event.extraDetails?.originalText || event.originalText || '',
+          creationSource: event.extraDetails?.creationSource || event.creationSource || 'manual',
+          // Add creation tracking for debugging
+          createdVia: event.source || 'manual',
+          dateAdded: new Date().toISOString()
         },
         // Always include these fields
         userId,
@@ -226,6 +293,18 @@ class CalendarService {
         // Include the original text if available (for later reference)
         originalText: event.originalText || ''
       };
+      
+      // Log standardized event for debugging
+      console.log("Standardized event to be saved:", {
+        title: standardizedEvent.summary,
+        startDate: standardizedEvent.start.dateTime,
+        endDate: standardizedEvent.end.dateTime,
+        childId: standardizedEvent.childId,
+        childName: standardizedEvent.childName,
+        eventType: standardizedEvent.eventType,
+        familyId: standardizedEvent.familyId,
+        userId: standardizedEvent.userId
+      });
       
       // Save event to Firestore in the calendar_events collection
       const eventRef = collection(db, "calendar_events");
@@ -238,9 +317,9 @@ class CalendarService {
         universalId: universalId
       });
       
-      console.log("Event saved to Firestore with ID:", docRef.id, "and universalId:", universalId);
+      console.log("Event successfully saved to Firestore with ID:", docRef.id, "and universalId:", universalId);
       
-      // Dispatch events for UI refresh
+      // Multiple UI refresh approaches for maximum compatibility
       if (typeof window !== 'undefined') {
         // Ensure we use a consistent event structure with the universalId
         const eventDetail = {
@@ -254,9 +333,14 @@ class CalendarService {
           dateTime: standardizedEvent.start.dateTime
         };
         
-        // Force refresh all calendar views
+        // Immediate dispatch for urgent updates
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        
+        // Also dispatch after a short delay to ensure components have mounted
         setTimeout(() => {
+          console.log("Dispatching calendar update events");
           window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+          
           // Also dispatch specific event type for more targeted refreshes
           window.dispatchEvent(new CustomEvent('calendar-event-added', {
             detail: eventDetail
@@ -267,6 +351,11 @@ class CalendarService {
               detail: eventDetail
             }));
           }
+          
+          // Third dispatch after slightly longer delay as a fallback
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+          }, 1000);
         }, 300);
       }
       
@@ -280,7 +369,7 @@ class CalendarService {
         firestoreId: docRef.id
       };
     } catch (error) {
-      console.error("Error adding event to calendar:", error);
+      console.error("Error adding event to calendar:", error, error.stack);
       this.showNotification("Failed to add event to calendar", "error");
       return { success: false, error: error.message || "Unknown error" };
     }

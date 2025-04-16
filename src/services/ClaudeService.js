@@ -123,10 +123,55 @@ async generateResponse(messages, context, options = {}) {
     
     // Check if this is a calendar-related request in the last message
     const lastUserMessage = formattedMessages[formattedMessages.length - 1].content || "";
-    const calendarEventData = this.extractCalendarRequest(lastUserMessage);
-    if (calendarEventData) {
-      // Process the calendar request and return the response
-      return this.processCalendarRequest(calendarEventData, context);
+    
+    // Check if the last message appears to be a standalone calendar request
+    const calendarIndicators = [
+      'add to calendar', 'schedule', 'appointment', 'meeting', 'event',
+      'create a', 'make a', 'add a', 'book a', 'plan a',
+      'dentist', 'doctor', 'birthday', 'party', 'invitation'
+    ];
+    
+    const isLikelyCalendarRequest = calendarIndicators.some(indicator => 
+      lastUserMessage.toLowerCase().includes(indicator)
+    );
+    
+    if (isLikelyCalendarRequest) {
+      console.log("Detected likely calendar request in latest message");
+      const calendarEventData = this.extractCalendarRequest(lastUserMessage);
+      
+      if (calendarEventData) {
+        // Process only the calendar request from the most recent message
+        console.log("Successfully extracted calendar data, processing only this request");
+        return this.processCalendarRequest(calendarEventData, context);
+      }
+    }
+    
+    // If we have too many messages, consider using a focused subset
+    // for non-calendar queries to avoid responding to everything at once
+    if (formattedMessages.length > 5) {
+      // Check if the last message is a specific, standalone question
+      const standaloneIndicators = [
+        'what', 'why', 'how', 'when', 'who', 
+        'can you', 'could you', 'will you', 'would you',
+        '?'
+      ];
+      
+      const isLikelyStandaloneQuestion = standaloneIndicators.some(indicator => 
+        lastUserMessage.toLowerCase().includes(indicator)
+      );
+      
+      if (isLikelyStandaloneQuestion) {
+        console.log("Detected standalone question, focusing response on latest message");
+        // Create a focused subset of messages: some context + latest message
+        const focusedMessages = [
+          ...formattedMessages.slice(-3, -1), // Some context
+          formattedMessages[formattedMessages.length - 1] // Latest message
+        ];
+        
+        // Update for logging
+        console.log(`Using focused context of ${focusedMessages.length} messages`);
+        formattedMessages = focusedMessages;
+      }
     }
     
     // Prepare request payload for Claude API
@@ -580,13 +625,18 @@ async generateResponse(messages, context, options = {}) {
     return null;
   }
   
-  // Process calendar request and add event to calendar
+  /// Process calendar request and add event to calendar
   async processCalendarRequest(eventData, context) {
     try {
+      console.log("Processing calendar request with data:", JSON.stringify(eventData, null, 2));
+      
       const currentUser = auth.currentUser;
       if (!currentUser) {
         return "I need you to be logged in to add events to your calendar. Please log in and try again.";
       }
+      
+      // Get family ID from context or currentUser
+      const familyId = context?.familyId || '';
       
       // Parse date and time
       let eventDate;
@@ -594,10 +644,21 @@ async generateResponse(messages, context, options = {}) {
         // Try to parse date string
         eventDate = new Date(eventData.date);
         // If date is invalid, try a more flexible approach
-        if (isNaN(eventDate)) {
+        if (isNaN(eventDate.getTime())) {
           const dateStr = eventData.date.replace(/(st|nd|rd|th)/, '');
           eventDate = new Date(dateStr);
+          
+          // If still invalid, try to extract date parts
+          if (isNaN(eventDate.getTime())) {
+            console.warn("Could not parse date directly:", eventData.date);
+            // Default to tomorrow
+            eventDate = new Date();
+            eventDate.setDate(eventDate.getDate() + 1);
+          }
         }
+      } else if (eventData.startDate) {
+        // Use startDate if provided
+        eventDate = new Date(eventData.startDate);
       } else {
         // Default to tomorrow if no date provided
         eventDate = new Date();
@@ -632,18 +693,43 @@ async generateResponse(messages, context, options = {}) {
           eventDate.setHours(12, 0, 0, 0);
         }
       } else {
-        // Default to noon if no time provided
-        eventDate.setHours(12, 0, 0, 0);
+        // Set appropriate default time based on event type
+        const eventType = eventData.type?.toLowerCase() || '';
+        if (eventType === 'doctor' || eventType === 'dental' || eventType === 'appointment') {
+          eventDate.setHours(10, 0, 0, 0); // 10 AM for appointments
+        } else if (eventType === 'birthday' || eventType === 'party') {
+          eventDate.setHours(14, 0, 0, 0); // 2 PM for parties
+        } else {
+          eventDate.setHours(12, 0, 0, 0); // Noon default
+        }
       }
       
-      // Create end time (1 hour after start)
+      // Create end time (1 hour after start by default)
       const endDate = new Date(eventDate);
       endDate.setHours(endDate.getHours() + 1);
       
-      // Create calendar event object
+      // Handle child-specific events
+      let childId = null;
+      let childName = null;
+      
+      // Try to find a matching child if a name or type is provided
+      if (eventData.person && context && context.children) {
+        // Look for child by name
+        const matchingChild = context.children.find(
+          child => child.name.toLowerCase() === eventData.person.toLowerCase()
+        );
+        
+        if (matchingChild) {
+          childId = matchingChild.id;
+          childName = matchingChild.name;
+        }
+      }
+      
+      // Create calendar event object with enhanced metadata
       const event = {
         summary: eventData.title || 'New Event',
-        description: eventData.description || '',
+        title: eventData.title || 'New Event', // Ensure both title and summary are set
+        description: eventData.description || `Event added via Allie chat`,
         location: eventData.location || '',
         start: {
           dateTime: eventDate.toISOString(),
@@ -655,14 +741,39 @@ async generateResponse(messages, context, options = {}) {
         },
         reminders: {
           useDefault: true
+        },
+        // Add child metadata if available
+        childId: childId,
+        childName: childName || eventData.person,
+        // Add event type and category
+        eventType: eventData.type?.toLowerCase() || 'event',
+        category: eventData.type?.toLowerCase() || 'event',
+        // Include context
+        familyId: familyId,
+        // Add source information for tracking
+        source: 'chat',
+        // Add extra details and parsing metadata
+        extraDetails: {
+          creationSource: 'chat',
+          parsedWithAI: true,
+          extractionConfidence: 0.9,
+          originalText: eventData.originalText || message
         }
       };
       
+      console.log("Adding calendar event:", JSON.stringify(event, null, 2));
+      
       // Add event to calendar
       const result = await CalendarService.addEvent(event, currentUser.uid);
+      console.log("Calendar add result:", result);
       
       // Format response
       if (result && result.success) {
+        // Trigger a UI refresh
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        }
+        
         const formattedDate = eventDate.toLocaleDateString('en-US', { 
           weekday: 'long', 
           month: 'long', 
@@ -683,8 +794,8 @@ async generateResponse(messages, context, options = {}) {
           response += `Location: ${eventData.location}\n`;
         }
         
-        if (eventData.person) {
-          response += `I've noted that this is for ${eventData.person}.`;
+        if (childName || eventData.person) {
+          response += `I've noted that this is for ${childName || eventData.person}.`;
         }
         
         response += `\nThis has been added to your family's shared calendar. You can view and manage this in your calendar.`;
