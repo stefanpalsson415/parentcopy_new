@@ -757,7 +757,7 @@ async generateResponse(messages, context, options = {}) {
           creationSource: 'chat',
           parsedWithAI: true,
           extractionConfidence: 0.9,
-          originalText: eventData.originalText || message
+          originalText: eventData.originalText || (typeof eventData === 'object' ? JSON.stringify(eventData) : 'Unknown original text')
         }
       };
       
