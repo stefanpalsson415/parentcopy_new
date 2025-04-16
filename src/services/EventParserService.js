@@ -19,14 +19,14 @@ class EventParserService {
    */
   async parseEventText(text, familyContext) {
     try {
-      console.log("Parsing event text:", text.substring(0, 100) + "...");
+      console.log("Beginning to parse event text:", text.substring(0, 100) + "...");
       
       // First, try to detect the language/region
       const region = this.detectRegion(text);
       console.log("Detected region:", region);
       
-      // Extract event type (birthday, appointment, etc.)
-      const eventType = this.detectEventType(text);
+      // Extract event type using Claude
+      const eventType = await this.detectEventTypeWithClaude(text);
       console.log("Detected event type:", eventType);
       
       // Extract date and time, considering regional format
@@ -102,13 +102,299 @@ class EventParserService {
   }
 
   /**
-   * Extract date and time using Claude API
+   * Detect event type using Claude API for more accurate classification
+   * @param {string} text - Text to analyze
+   * @returns {Promise<string>} Detected event type
+   */
+  async detectEventTypeWithClaude(text) {
+    try {
+      console.log("Using Claude API to detect event type from:", text.substring(0, 100) + "...");
+      
+      // Call Claude API
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.CLAUDE_API_KEY,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: "claude-3-sonnet-20240229",
+          max_tokens: 50,
+          system: "You are an expert at categorizing event descriptions. Analyze the text and determine the most accurate event type from this list: birthday, dental, doctor, playdate, sports, music, dance, school, camp, tutoring, art, coding, sleepover, family, religious, community, event. Return ONLY the single most accurate category as a lowercase word with no punctuation or explanation.",
+          messages: [{
+            role: "user", 
+            content: `Categorize this event: "${text}"`
+          }]
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      // Extract event type from Claude's response
+      let eventType = result.content[0].text.trim().toLowerCase();
+      
+      // Validate that the returned type is in our allowed list
+      const validTypes = ['birthday', 'dental', 'doctor', 'playdate', 'sports', 'music', 
+                        'dance', 'school', 'camp', 'tutoring', 'art', 'coding', 
+                        'sleepover', 'family', 'religious', 'community', 'event'];
+      
+      if (!validTypes.includes(eventType)) {
+        console.warn("Claude returned invalid event type:", eventType);
+        // Fall back to pattern matching
+        return this.detectEventTypeWithPatterns(text);
+      }
+      
+      console.log("Claude detected event type:", eventType);
+      return eventType;
+    } catch (error) {
+      console.error("Error using Claude for event type detection:", error);
+      // Fall back to pattern matching
+      return this.detectEventTypeWithPatterns(text);
+    }
+  }
+
+  /**
+   * Fall back to pattern matching for event type detection
+   * @param {string} text - Text to analyze
+   * @returns {string} Detected event type
+   */
+  detectEventTypeWithPatterns(text) {
+    // Handle null or empty input
+    if (!text) return 'event';
+    
+    const text_lower = text.toLowerCase();
+    
+    // Define event type patterns with confidence weights
+    const eventTypes = [
+      {
+        type: 'birthday',
+        patterns: ['birthday', 'kalas', 'fyller', 'turning', 'years old', 'celebration', 'cake', 'party for', 'year-old', 'år', 'födelsedag'],
+        confidence: 0
+      },
+      {
+        type: 'dental',
+        patterns: ['dentist', 'dental', 'teeth', 'tooth', 'orthodontist', 'braces', 'cleaning', 'checkup', 'cavity', 'tandläkare', 'tand'],
+        confidence: 0
+      },
+      {
+        type: 'doctor',
+        patterns: ['doctor', 'physician', 'pediatrician', 'medical', 'checkup', 'vaccination', 'shot', 'health', 'clinic', 'hospital', 'läkare', 'vaccination', 'hälsa', 'doc appt', 'doctor appt', 'doc appointment'],
+        confidence: 0
+      },
+      {
+        type: 'playdate',
+        patterns: ['playdate', 'play date', 'lekträff', 'come over', 'play together', 'playgroup', 'play with us', 'come play', 'hang out'],
+        confidence: 0
+      },
+      {
+        type: 'sports',
+        patterns: ['practice', 'game', 'training', 'match', 'soccer', 'football', 'baseball', 'basketball', 'hockey', 'gym', 'swimming', 'tournament', 'competition', 'team', 'coach'],
+        confidence: 0
+      },
+      {
+        type: 'music',
+        patterns: ['music', 'lesson', 'recital', 'concert', 'piano', 'guitar', 'violin', 'band', 'orchestra', 'choir', 'singing', 'performance'],
+        confidence: 0
+      },
+      {
+        type: 'dance',
+        patterns: ['dance', 'ballet', 'jazz', 'tap', 'hip hop', 'choreography', 'studio', 'dancing', 'dancer', 'recital', 'performance'],
+        confidence: 0
+      },
+      {
+        type: 'school',
+        patterns: ['school', 'class', 'parent-teacher', 'conference', 'open house', 'field trip', 'pta', 'assembly', 'principal', 'teacher', 'classroom', 'skola', 'föräldramöte'],
+        confidence: 0
+      },
+      {
+        type: 'camp',
+        patterns: ['camp', 'summer', 'holiday', 'break', 'day camp', 'overnight', 'wilderness', 'retreat', 'program', 'adventure', 'outdoor'],
+        confidence: 0
+      },
+      {
+        type: 'tutoring',
+        patterns: ['tutor', 'tutoring', 'study', 'homework', 'help', 'academic', 'session', 'learning', 'education', 'teacher', 'mentor'],
+        confidence: 0
+      },
+      {
+        type: 'art',
+        patterns: ['art', 'craft', 'drawing', 'painting', 'pottery', 'creative', 'studio', 'workshop', 'project', 'supplies', 'museum', 'gallery', 'exhibition'],
+        confidence: 0
+      },
+      {
+        type: 'coding',
+        patterns: ['coding', 'programming', 'computer', 'tech', 'robotics', 'stem', 'science', 'minecraft', 'scratch', 'class', 'workshop', 'lab'],
+        confidence: 0
+      },
+      {
+        type: 'sleepover',
+        patterns: ['sleepover', 'overnight', 'stay over', 'sleeping bag', 'pajamas', 'spend the night', 'sleep at', 'staying at', 'pajama party'],
+        confidence: 0
+      },
+      {
+        type: 'family',
+        patterns: ['family', 'gathering', 'reunion', 'holiday', 'celebration', 'dinner', 'relative', 'aunt', 'uncle', 'grandparent', 'cousin', 'thanksgiving', 'christmas', 'easter'],
+        confidence: 0
+      },
+      {
+        type: 'religious',
+        patterns: ['church', 'synagogue', 'mosque', 'temple', 'worship', 'sunday school', 'youth group', 'bible', 'faith', 'prayer', 'religious', 'spiritual'],
+        confidence: 0
+      },
+      {
+        type: 'community',
+        patterns: ['community', 'volunteer', 'service', 'town', 'neighborhood', 'local', 'fair', 'festival', 'parade', 'charity', 'drive', 'donation'],
+        confidence: 0
+      }
+    ];
+  
+    // Calculate confidence scores based on pattern matches
+    eventTypes.forEach(eventType => {
+      eventType.patterns.forEach(pattern => {
+        if (text_lower.includes(pattern)) {
+          eventType.confidence += 1;
+          
+          // Boost confidence for exact matches or strong indicators
+          if (new RegExp(`\\b${pattern}\\b`, 'i').test(text_lower)) {
+            eventType.confidence += 0.5;
+          }
+        }
+      });
+    });
+  
+    // Sort by confidence score
+    eventTypes.sort((a, b) => b.confidence - a.confidence);
+    
+    // If we have a confident match (at least 1 match)
+    if (eventTypes[0].confidence >= 1) {
+      console.log(`Detected event type: ${eventTypes[0].type} with confidence ${eventTypes[0].confidence}`);
+      return eventTypes[0].type;
+    }
+    
+    // Map appointment types to more specific categories
+    if (text_lower.includes('appointment') || text_lower.includes('appt') || 
+        text_lower.includes('visit') || text_lower.includes('checkup')) {
+      if (text_lower.includes('dentist') || text_lower.includes('dental') || 
+          text_lower.includes('tooth') || text_lower.includes('teeth')) {
+        return 'dental';
+      }
+      if (text_lower.includes('doctor') || text_lower.includes('doc') || 
+          text_lower.includes('medical') || text_lower.includes('health') || 
+          text_lower.includes('pediatrician')) {
+        return 'doctor';
+      }
+    }
+    
+    // Default to generic event
+    return 'event';
+  }
+
+  /**
+   * Extract date and time with enhanced Claude-based detection
    * @param {string} text - Text containing date/time information
+   * @param {string} region - 'US' or 'SE' for regional date formats
    * @returns {Promise<Date>} - Parsed date object
    */
-  async extractDateTimeUsingClaude(text) {
+  async extractDateTime(text, region = 'US') {
+    try {
+      console.log(`Extracting date/time with region: ${region} from text: "${text}"`);
+      
+      // Use Claude as the primary parser for both date and time
+      const dateTime = await this.extractDateTimeUsingClaude(text, region);
+      
+      // If Claude parsing succeeds, use it
+      if (dateTime) {
+        console.log(`Claude extracted date/time: ${dateTime.toISOString()}`);
+        return dateTime;
+      }
+      
+      // Fall back to chrono-node if Claude fails
+      console.log("Claude parsing failed, falling back to chrono-node");
+      const refDate = new Date();
+      const options = { forwardDate: true };
+      
+      try {
+        // Handle regional variations
+        let processedText = text;
+        if (region === 'SE') {
+          const swedishContext = this.detectSwedishDateContext(text);
+          if (swedishContext) {
+            processedText = `${swedishContext} ${text}`;
+          }
+        }
+        
+        // Parse with chrono-node
+        const parsedResults = chrono.parse(processedText, refDate, options);
+        
+        if (parsedResults && parsedResults.length > 0) {
+          const parsedDate = parsedResults[0].start.date();
+          console.log(`Chrono-node extracted date/time: ${parsedDate.toISOString()}`);
+          
+          // Check if the time component seems correct
+          // Look for time indicators in the text
+          const timePatterns = [
+            /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i,
+            /\b(\d{1,2})(am|pm)\b/i,
+            /\b(?:at|@)?\s*(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)\b/i,
+            /at\s+(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)?/i,  // Catch "at 3 pm" pattern
+            /(\d{1,2})\s*o'?clock\b/i  // Catch "3 o'clock" pattern
+          ];
+          
+          const hasTimeIndicator = timePatterns.some(pattern => pattern.test(text));
+          const isParsedTimeDefault = parsedDate.getHours() === 12 && parsedDate.getMinutes() === 0;
+          
+          // Only reject the parsed date if we have a time indicator AND it incorrectly defaulted to noon
+          if (!(hasTimeIndicator && isParsedTimeDefault)) {
+            console.log(`Final extracted date/time: ${parsedDate.toISOString()}, hasTimeIndicator: ${hasTimeIndicator}, isParsedTimeDefault: ${isParsedTimeDefault}`);
+            return parsedDate;
+          }
+          
+          console.log("Chrono-node defaulted to noon despite time indicator, using default time");
+        }
+      } catch (chronoError) {
+        console.warn("Chrono-node parsing error:", chronoError);
+      }
+      
+      // If all else fails, use default date/time
+      return this.getDefaultDateTime(text);
+    } catch (error) {
+      console.error("Error in extractDateTime:", error);
+      return this.getDefaultDateTime(text);
+    }
+  }
+
+  /**
+   * Extract date and time using Claude API with enhanced context
+   * @param {string} text - Text containing date/time information
+   * @param {string} region - 'US' or 'SE' for regional date formats
+   * @returns {Promise<Date|null>} - Parsed date object or null if parsing failed
+   */
+  async extractDateTimeUsingClaude(text, region = 'US') {
     try {
       console.log("Using Claude API to extract date/time from:", text);
+      
+      // Create a more detailed prompt that specifically emphasizes time extraction
+      const systemPrompt = `You are an expert at extracting specific date and time information from text. 
+      
+      IMPORTANT: Pay special attention to time information like "at 3 pm", "at 2:30", or "in the afternoon".
+      
+      Extract the specific date and time mentioned in the user's text. If the region is ${region}, use appropriate date format expectations.
+      
+      Return ONLY an ISO-8601 formatted date-time string (YYYY-MM-DDTHH:MM:SS.sssZ).
+      
+      If a specific time is mentioned (like "3 pm" or "14:00"), use that exact time.
+      If no specific time is mentioned, use a reasonable default based on the type of event:
+      - Medical appointments: 10:00 AM
+      - Evening events: 7:00 PM
+      - Social gatherings: 2:00 PM
+      - School events: 3:30 PM
+      
+      Always favor future dates over past dates.`;
       
       // Call Claude API
       const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -121,10 +407,11 @@ class EventParserService {
         body: JSON.stringify({
           model: "claude-3-sonnet-20240229",
           max_tokens: 100,
-          system: "You are an expert at extracting date and time information from text. Extract the specific date and time mentioned in the user's text. Return ONLY an ISO-8601 formatted date-time string (YYYY-MM-DDTHH:MM:SS.sssZ). If no specific time is mentioned, use a reasonable default based on the type of event (evening for social events, morning for appointments, etc.). Always favor future dates over past dates.",
+          temperature: 0.1, // Lower temperature for more precise extraction
+          system: systemPrompt,
           messages: [{
             role: "user", 
-            content: `Extract the date and time from: "${text}"`
+            content: `Extract the exact date and time from: "${text}". Remember to use the exact time mentioned (like "3 pm") if present.`
           }]
         })
       });
@@ -136,7 +423,6 @@ class EventParserService {
       const result = await response.json();
       
       // Extract ISO date string from Claude's response
-      // Claude should respond with just an ISO string, but we'll handle other responses too
       let isoDateString = result.content[0].text.trim();
       
       // Clean up the response if needed (remove quotes, etc.)
@@ -145,16 +431,113 @@ class EventParserService {
       // Validate the date string
       if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$/.test(isoDateString)) {
         console.warn("Claude didn't return a valid ISO date:", isoDateString);
-        throw new Error("Invalid date format returned");
+        return null;
       }
       
       console.log("Claude parsed date/time:", isoDateString);
-      return new Date(isoDateString);
+      
+      // Add extra validation - check if the time is at noon exactly when text mentions a specific time
+      const timePattern = /\b(?:at|@)?\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?/i;
+      const timeMatch = text.match(timePattern);
+      
+      const parsedDate = new Date(isoDateString);
+      
+      if (timeMatch && parsedDate.getHours() === 12 && parsedDate.getMinutes() === 0) {
+        // If text mentions a specific time but Claude returned noon, check if noon was explicitly mentioned
+        const explicitNoonPattern = /\b(?:12|noon|12:00)\s*(pm|p\.m\.)?\b/i;
+        if (!explicitNoonPattern.test(text)) {
+          console.warn("Claude defaulted to noon despite specific time in text");
+          // Return null to trigger fallback methods
+          return null;
+        }
+      }
+      
+      return parsedDate;
     } catch (error) {
       console.error("Error using Claude for date extraction:", error);
-      // Fallback to default
-      return this.getDefaultDateTime(text);
+      return null;
     }
+  }
+
+  /**
+   * Detect Swedish date context for better parsing
+   * @param {string} text - Text to analyze
+   * @returns {string} Context string to help with parsing
+   */
+  detectSwedishDateContext(text) {
+    // If Swedish month names are detected, add English equivalents to help chrono
+    const swedishMonths = {
+      'januari': 'January', 'februari': 'February', 'mars': 'March',
+      'april': 'April', 'maj': 'May', 'juni': 'June',
+      'juli': 'July', 'augusti': 'August', 'september': 'September',
+      'oktober': 'October', 'november': 'November', 'december': 'December'
+    };
+    
+    // If Swedish day names are detected, add English equivalents to help chrono
+    const swedishDays = {
+      'måndag': 'Monday', 'tisdag': 'Tuesday', 'onsdag': 'Wednesday',
+      'torsdag': 'Thursday', 'fredag': 'Friday', 'lördag': 'Saturday', 
+      'söndag': 'Sunday'
+    };
+    
+    // Check for Swedish time indicators
+    const hasSwedishTimeFormat = text.match(/\b(kl\.?|klockan)\s+\d{1,2}([:.])\d{2}\b/i);
+    
+    // Build context string if needed
+    let context = '';
+    
+    // Check for month names
+    for (const [swedish, english] of Object.entries(swedishMonths)) {
+      if (text.toLowerCase().includes(swedish)) {
+        context += `${english} `;
+        break;
+      }
+    }
+    
+    // Check for day names
+    for (const [swedish, english] of Object.entries(swedishDays)) {
+      if (text.toLowerCase().includes(swedish)) {
+        context += `${english} `;
+        break;
+      }
+    }
+    
+    return context.trim();
+  }
+
+  /**
+   * Get default date/time when parsing fails
+   * @param {string} text - Text to analyze
+   * @returns {Date} Default date based on event type
+   */
+  getDefaultDateTime(text) {
+    const now = new Date();
+    const eventType = this.detectEventTypeWithPatterns(text);
+    
+    // Look for evening indicators
+    const eveningIndicators = /\b(?:evening|dinner|night)\b/i;
+    const isEvening = eveningIndicators.test(text);
+    
+    if (isEvening) {
+      now.setHours(19, 0, 0, 0); // 7:00 PM default for evening events
+    } else {
+      switch (eventType) {
+        case 'birthday':
+          now.setHours(14, 0, 0, 0); // 2:00 PM default for birthdays
+          break;
+        case 'doctor':
+        case 'dental':
+          now.setHours(10, 0, 0, 0); // 10:00 AM default for appointments
+          break;
+        case 'playdate':
+          now.setHours(15, 0, 0, 0); // 3:00 PM default for playdates
+          break;
+        default:
+          now.setHours(12, 0, 0, 0); // Noon default for other events
+      }
+    }
+    
+    return now;
   }
 
   /**
@@ -616,149 +999,6 @@ class EventParserService {
   }
 
   /**
-   * Extract date and time from text
-   * @param {string} text - Text to analyze
-   * @param {string} region - 'US' or 'SE' for regional date formats
-   * @returns {Promise<Date>} - Extracted date
-   */
-  async extractDateTime(text, region = 'US') {
-    try {
-      console.log(`Extracting date/time with region: ${region} from text: "${text}"`);
-      
-      // First try using chrono-node
-      const refDate = new Date();
-      const options = { forwardDate: true };
-      
-      try {
-        // Handle Swedish text if needed
-        let processedText = text;
-        if (region === 'SE') {
-          const swedishContext = this.detectSwedishDateContext(text);
-          if (swedishContext) {
-            processedText = `${swedishContext} ${text}`;
-          }
-        }
-        
-        // Parse with chrono-node
-        const parsedResults = chrono.parse(processedText, refDate, options);
-        
-        if (parsedResults && parsedResults.length > 0) {
-          const parsedDate = parsedResults[0].start.date();
-          console.log(`Chrono-node extracted date/time: ${parsedDate.toISOString()}`);
-          
-          // Check if the time component seems correct (not defaulting to noon)
-          // Look for time indicators in the text
-          const timePatterns = [
-            /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i,
-            /\b(\d{1,2})(am|pm)\b/i,
-            /\b(?:at|@)?\s*(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)\b/i
-          ];
-          
-          const hasTimeIndicator = timePatterns.some(pattern => pattern.test(text));
-          const isParsedTimeDefault = parsedDate.getHours() === 12 && parsedDate.getMinutes() === 0;
-          
-          // If there's a time indicator but chrono defaulted to noon, don't trust it
-          if (!hasTimeIndicator || !isParsedTimeDefault) {
-            return parsedDate;
-          }
-        }
-        
-        // If chrono-node fails or returns suspicious results, fallback to Claude
-        console.log("Chrono-node failed or returned suspicious results, using Claude API");
-      } catch (chronoError) {
-        console.warn("Chrono-node parsing error:", chronoError);
-      }
-      
-      // Use Claude API as a fallback
-      return await this.extractDateTimeUsingClaude(text);
-    } catch (error) {
-      console.error("Error in extractDateTime:", error);
-      return this.getDefaultDateTime(text); // Use default on error
-    }
-  }
-
-  /**
-   * Detect Swedish date context for better parsing
-   * @param {string} text - Text to analyze
-   * @returns {string} Context string to help with parsing
-   */
-  detectSwedishDateContext(text) {
-    // If Swedish month names are detected, add English equivalents to help chrono
-    const swedishMonths = {
-      'januari': 'January', 'februari': 'February', 'mars': 'March',
-      'april': 'April', 'maj': 'May', 'juni': 'June',
-      'juli': 'July', 'augusti': 'August', 'september': 'September',
-      'oktober': 'October', 'november': 'November', 'december': 'December'
-    };
-    
-    // If Swedish day names are detected, add English equivalents to help chrono
-    const swedishDays = {
-      'måndag': 'Monday', 'tisdag': 'Tuesday', 'onsdag': 'Wednesday',
-      'torsdag': 'Thursday', 'fredag': 'Friday', 'lördag': 'Saturday', 
-      'söndag': 'Sunday'
-    };
-    
-    // Check for Swedish time indicators
-    const hasSwedishTimeFormat = text.match(/\b(kl\.?|klockan)\s+\d{1,2}([:.])\d{2}\b/i);
-    
-    // Build context string if needed
-    let context = '';
-    
-    // Check for month names
-    for (const [swedish, english] of Object.entries(swedishMonths)) {
-      if (text.toLowerCase().includes(swedish)) {
-        context += `${english} `;
-        break;
-      }
-    }
-    
-    // Check for day names
-    for (const [swedish, english] of Object.entries(swedishDays)) {
-      if (text.toLowerCase().includes(swedish)) {
-        context += `${english} `;
-        break;
-      }
-    }
-    
-    return context.trim();
-  }
-
-  /**
-   * Get default date/time when parsing fails
-   * @param {string} text - Text to analyze
-   * @returns {Date} Default date based on event type
-   */
-  getDefaultDateTime(text) {
-    const now = new Date();
-    const eventType = this.detectEventType(text);
-    
-    // Look for evening indicators
-    const eveningIndicators = /\b(?:evening|dinner|night)\b/i;
-    const isEvening = eveningIndicators.test(text);
-    
-    if (isEvening) {
-      now.setHours(19, 0, 0, 0); // 7:00 PM default for evening events
-    } else {
-      switch (eventType) {
-        case 'birthday':
-          now.setHours(14, 0, 0, 0); // 2:00 PM default for birthdays
-          break;
-        case 'doctor':
-        case 'dental':
-          now.setHours(10, 0, 0, 0); // 10:00 AM default for appointments
-          break;
-        case 'playdate':
-          now.setHours(15, 0, 0, 0); // 3:00 PM default for playdates
-          break;
-        default:
-          now.setHours(12, 0, 0, 0); // Noon default for other events
-      }
-    }
-    
-    return now;
-  }
-
-  /**
    * Extract location from text
    * @param {string} text - Text to analyze
    * @returns {string|null} Extracted location or null if not found
@@ -1037,138 +1277,6 @@ class EventParserService {
   }
 
   /**
-   * Detect event type from text
-   * @param {string} text - Text to analyze
-   * @returns {string} Detected event type
-   */
-  detectEventType(text) {
-    // Handle null or empty input
-    if (!text) return 'event';
-    
-    const text_lower = text.toLowerCase();
-    
-    // Define event type patterns with confidence weights
-    const eventTypes = [
-      {
-        type: 'birthday',
-        patterns: ['birthday', 'kalas', 'fyller', 'turning', 'years old', 'celebration', 'cake', 'party for', 'year-old', 'år', 'födelsedag'],
-        confidence: 0
-      },
-      {
-        type: 'dental',
-        patterns: ['dentist', 'dental', 'teeth', 'tooth', 'orthodontist', 'braces', 'cleaning', 'checkup', 'cavity', 'tandläkare', 'tand'],
-        confidence: 0
-      },
-      {
-        type: 'doctor',
-        patterns: ['doctor', 'physician', 'pediatrician', 'medical', 'checkup', 'vaccination', 'shot', 'health', 'clinic', 'hospital', 'läkare', 'vaccination', 'hälsa'],
-        confidence: 0
-      },
-      {
-        type: 'playdate',
-        patterns: ['playdate', 'play date', 'lekträff', 'come over', 'play together', 'playgroup', 'play with us', 'come play', 'hang out'],
-        confidence: 0
-      },
-      {
-        type: 'sports',
-        patterns: ['practice', 'game', 'training', 'match', 'soccer', 'football', 'baseball', 'basketball', 'hockey', 'gym', 'swimming', 'tournament', 'competition', 'team', 'coach'],
-        confidence: 0
-      },
-      {
-        type: 'music',
-        patterns: ['music', 'lesson', 'recital', 'concert', 'piano', 'guitar', 'violin', 'band', 'orchestra', 'choir', 'singing', 'performance'],
-        confidence: 0
-      },
-      {
-        type: 'dance',
-        patterns: ['dance', 'ballet', 'jazz', 'tap', 'hip hop', 'choreography', 'studio', 'dancing', 'dancer', 'recital', 'performance'],
-        confidence: 0
-      },
-      {
-        type: 'school',
-        patterns: ['school', 'class', 'parent-teacher', 'conference', 'open house', 'field trip', 'pta', 'assembly', 'principal', 'teacher', 'classroom', 'skola', 'föräldramöte'],
-        confidence: 0
-      },
-      {
-        type: 'camp',
-        patterns: ['camp', 'summer', 'holiday', 'break', 'day camp', 'overnight', 'wilderness', 'retreat', 'program', 'adventure', 'outdoor'],
-        confidence: 0
-      },
-      {
-        type: 'tutoring',
-        patterns: ['tutor', 'tutoring', 'study', 'homework', 'help', 'academic', 'session', 'learning', 'education', 'teacher', 'mentor'],
-        confidence: 0
-      },
-      {
-        type: 'art',
-        patterns: ['art', 'craft', 'drawing', 'painting', 'pottery', 'creative', 'studio', 'workshop', 'project', 'supplies', 'museum', 'gallery', 'exhibition'],
-        confidence: 0
-      },
-      {
-        type: 'coding',
-        patterns: ['coding', 'programming', 'computer', 'tech', 'robotics', 'stem', 'science', 'minecraft', 'scratch', 'class', 'workshop', 'lab'],
-        confidence: 0
-      },
-      {
-        type: 'sleepover',
-        patterns: ['sleepover', 'overnight', 'stay over', 'sleeping bag', 'pajamas', 'spend the night', 'sleep at', 'staying at', 'pajama party'],
-        confidence: 0
-      },
-      {
-        type: 'family',
-        patterns: ['family', 'gathering', 'reunion', 'holiday', 'celebration', 'dinner', 'relative', 'aunt', 'uncle', 'grandparent', 'cousin', 'thanksgiving', 'christmas', 'easter'],
-        confidence: 0
-      },
-      {
-        type: 'religious',
-        patterns: ['church', 'synagogue', 'mosque', 'temple', 'worship', 'sunday school', 'youth group', 'bible', 'faith', 'prayer', 'religious', 'spiritual'],
-        confidence: 0
-      },
-      {
-        type: 'community',
-        patterns: ['community', 'volunteer', 'service', 'town', 'neighborhood', 'local', 'fair', 'festival', 'parade', 'charity', 'drive', 'donation'],
-        confidence: 0
-      }
-    ];
-  
-    // Calculate confidence scores based on pattern matches
-    eventTypes.forEach(eventType => {
-      eventType.patterns.forEach(pattern => {
-        if (text_lower.includes(pattern)) {
-          eventType.confidence += 1;
-          
-          // Boost confidence for exact matches or strong indicators
-          if (new RegExp(`\\b${pattern}\\b`, 'i').test(text_lower)) {
-            eventType.confidence += 0.5;
-          }
-        }
-      });
-    });
-  
-    // Sort by confidence score
-    eventTypes.sort((a, b) => b.confidence - a.confidence);
-    
-    // If we have a confident match (at least 1 match)
-    if (eventTypes[0].confidence >= 1) {
-      console.log(`Detected event type: ${eventTypes[0].type} with confidence ${eventTypes[0].confidence}`);
-      return eventTypes[0].type;
-    }
-    
-    // Map appointment types to more specific categories
-    if (text_lower.includes('appointment') || text_lower.includes('visit') || text_lower.includes('checkup')) {
-      if (text_lower.includes('dentist') || text_lower.includes('dental') || text_lower.includes('tooth') || text_lower.includes('teeth')) {
-        return 'dental';
-      }
-      if (text_lower.includes('doctor') || text_lower.includes('medical') || text_lower.includes('health') || text_lower.includes('pediatrician')) {
-        return 'doctor';
-      }
-    }
-    
-    // Default to generic event
-    return 'event';
-  }
-
-  /**
    * Generate title for an event based on event type and context
    * @param {string} eventType - Type of event
    * @param {object} childInfo - Child information
@@ -1192,6 +1300,14 @@ class EventParserService {
       return `${childInfo.childName || 'Child'}'s Appointment`;
     }
     
+    if (eventType === 'doctor') {
+      return `${childInfo.childName || 'Child'}'s Doctor Appointment`;
+    }
+    
+    if (eventType === 'dental') {
+      return `${childInfo.childName || 'Child'}'s Dental Appointment`;
+    }
+    
     if (eventType === 'playdate') {
       return `${childInfo.childName || 'Child'}'s Playdate`;
     }
@@ -1200,7 +1316,7 @@ class EventParserService {
       return `${childInfo.childName || 'Child'}'s Sports Event`;
     }
     
-    return 'New Event';
+    return `${childInfo.childName || 'Child'}'s ${eventType.charAt(0).toUpperCase() + eventType.slice(1)} Event`;
   }
 
   /**
