@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertCircle, Activity, BookOpen, Bell, Users, Heart, Clock, Calendar, Check, Edit, Trash2 } from 'lucide-react';
-import UserAvatar from '../common/UserAvatar'; // Add this import
-
+import UserAvatar from '../common/UserAvatar';
+import EventSourceBadge from './EventSourceBadge';
 
 /**
  * Event list component to display calendar events
@@ -17,6 +17,7 @@ import UserAvatar from '../common/UserAvatar'; // Add this import
  * @param {Boolean} props.loading - Whether events are loading
  * @param {string} props.title - Optional title for the events list
  * @param {string} props.emptyMessage - Message to show when no events are found
+ * @param {Function} props.renderBadges - Optional function to render custom badges
  */
 const EventsList = ({ 
   events = [], 
@@ -28,7 +29,8 @@ const EventsList = ({
   showAddedMessage = {},
   loading = false,
   title = "Events",
-  emptyMessage = "No events scheduled"
+  emptyMessage = "No events scheduled",
+  renderBadges
 }) => {
   
   // Helper function to get a unique key for an event
@@ -194,18 +196,30 @@ const EventsList = ({
                   <div className="flex items-center">
                     {getEventIcon(event)}
                     <p className="text-sm font-medium font-roboto">{event.title}</p>
+                    
+                    {/* Display source badge */}
+                    <div className="ml-2">
+                      <EventSourceBadge 
+                        event={event} 
+                        size="sm"
+                        showDetails={false}
+                      />
+                    </div>
+                    
+                    {/* Custom badges if provided */}
+                    {renderBadges && renderBadges(event)}
                   </div>
                   <div className="flex justify-between items-center">
-  <p className="text-xs text-gray-500 font-roboto">
-    {event.time || event.dateObj?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-    {event.location && ` - ${event.location}`}
-  </p>
-  
-  {/* Always show attendee avatars if available */}
-  {event.attendees && event.attendees.length > 0 && (
-    <AttendeeAvatars attendees={event.attendees} />
-  )}
-</div>
+                    <p className="text-xs text-gray-500 font-roboto">
+                      {event.time || event.dateObj?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      {event.location && ` - ${event.location}`}
+                    </p>
+                    
+                    {/* Always show attendee avatars if available */}
+                    {event.attendees && event.attendees.length > 0 && (
+                      <AttendeeAvatars attendees={event.attendees} />
+                    )}
+                  </div>
                 </div>
                 
                 {/* Action buttons */}

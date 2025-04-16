@@ -19,6 +19,7 @@ import EventDetails from './EventDetails';
 import MergedEventParser from './MergedEventParser';
 import SmartReminderSuggestions from './SmartReminderSuggestions';
 import CalendarPromptChip from './CalendarPromptChip';
+import EventSourceBadge from './EventSourceBadge';
 
 // Integration components
 import CalendarIntegrationButton from './CalendarIntegrationButton';
@@ -41,6 +42,7 @@ export {
   MergedEventParser as EventParser,
   SmartReminderSuggestions,
   CalendarPromptChip,
+  EventSourceBadge,
   
   // Integration components
   CalendarIntegrationButton,

@@ -1,104 +1,110 @@
+// src/components/calendar/CalendarFilters.jsx
 import React from 'react';
-import { Filter } from 'lucide-react';
-import UserAvatar from '../common/UserAvatar'; // Add this import
-
+import { Filter, X, BrainCircuit } from 'lucide-react';
+import UserAvatar from '../common/UserAvatar';
 
 /**
- * Calendar filters component for filtering events by type and family members
+ * Component for filtering calendar events by type and family member
  * 
  * @param {Object} props
- * @param {string} props.view - Current view filter ('all', 'tasks', 'appointments', etc.)
- * @param {Function} props.onViewChange - Function to call when view filter changes
- * @param {string} props.selectedMember - Current member filter (ID or 'all')
- * @param {Function} props.onMemberChange - Function to call when member filter changes
- * @param {Array} props.familyMembers - Array of family members
- * @param {Function} props.onResetFilters - Function to call when resetting all filters
+ * @param {string} props.view - Current view filter ('all', 'appointments', etc.)
+ * @param {Function} props.onViewChange - Function to call when view changes
+ * @param {string} props.selectedMember - Currently selected family member ID
+ * @param {Function} props.onMemberChange - Function to call when member selection changes
+ * @param {Array} props.familyMembers - Family members array
+ * @param {Function} props.onResetFilters - Function to reset all filters
+ * @param {Array} props.filterOptions - Options for filtering (optional)
  */
-const CalendarFilters = ({ 
-  view = 'all', 
+const CalendarFilters = ({
+  view = 'all',
   onViewChange,
   selectedMember = 'all',
   onMemberChange,
   familyMembers = [],
-  onResetFilters
+  onResetFilters,
+  filterOptions = []
 }) => {
-  // Event type filters
-  const eventTypeFilters = [
-    { id: 'all', label: 'All Types' },
-    { id: 'tasks', label: 'Tasks' },
-    { id: 'appointments', label: 'Medical' },
+  // If no filter options provided, use defaults
+  const options = filterOptions.length > 0 ? filterOptions : [
+    { id: 'all', label: 'All Events' },
+    { id: 'appointments', label: 'Appointments' },
     { id: 'activities', label: 'Activities' },
-    { id: 'meetings', label: 'Meetings' }
+    { id: 'tasks', label: 'Tasks' },
+    { id: 'meetings', label: 'Meetings' },
+    { id: 'ai-parsed', label: 'AI Parsed' }
   ];
   
+  // Sorted family members (children first, then parents)
+  const sortedMembers = [...familyMembers].sort((a, b) => {
+    if (a.role === 'child' && b.role !== 'child') return -1;
+    if (a.role !== 'child' && b.role === 'child') return 1;
+    return 0;
+  });
+  
+  // Check if any filters are active
+  const hasActiveFilters = view !== 'all' || selectedMember !== 'all';
+  
   return (
-    <div className="mb-2">
-      <div className="flex justify-between items-center mb-1">
-        <h5 className="text-sm font-medium font-roboto flex items-center">
-          <Filter size={14} className="mr-1" />
-          Filters
-        </h5>
-        <button 
-          onClick={onResetFilters}
-          className="text-xs text-blue-600 hover:underline"
-        >
-          Reset all
-        </button>
+    <div className="mb-4">
+      <div className="flex justify-between items-center mb-2">
+        <h4 className="text-sm font-medium font-roboto">Filters</h4>
+        
+        {hasActiveFilters && (
+          <button
+            onClick={onResetFilters}
+            className="text-xs text-gray-500 hover:text-gray-700 flex items-center"
+          >
+            <X size={12} className="mr-1" />
+            Clear
+          </button>
+        )}
       </div>
       
-      {/* Event type filters */}
-      <div className="flex flex-wrap gap-1 mb-2">
-        {eventTypeFilters.map(filter => (
-          <button 
-            key={filter.id}
-            className={`text-xs px-2 py-1 rounded-full ${view === filter.id ? 'bg-black text-white' : 'bg-gray-100'}`}
-            onClick={() => onViewChange(filter.id)}
+      {/* View filters */}
+      <div className="flex flex-wrap gap-1 mb-3">
+        {options.map(option => (
+          <button
+            key={option.id}
+            onClick={() => onViewChange(option.id)}
+            className={`px-3 py-1 rounded-full text-xs ${
+              view === option.id ? 
+              (option.id === 'ai-parsed' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800') : 
+              'bg-gray-100 hover:bg-gray-200'
+            }`}
           >
-            {filter.label}
+            {option.id === 'ai-parsed' && <BrainCircuit size={12} className="inline mr-1" />}
+            {option.label}
           </button>
         ))}
       </div>
       
-      {/* Family member filters */}
-      <div className="flex flex-wrap gap-1 mb-2 mt-2">
-        <button 
-          className={`text-xs px-2 py-1 rounded-full ${selectedMember === 'all' ? 'bg-black text-white' : 'bg-gray-100'}`}
+      {/* Member filters */}
+      <h5 className="text-xs font-medium mb-2 font-roboto">Family Members</h5>
+      
+      <div className="flex flex-wrap gap-1">
+        <button
           onClick={() => onMemberChange('all')}
+          className={`px-3 py-1 rounded-full text-xs ${
+            selectedMember === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 hover:bg-gray-200'
+          }`}
         >
           All Members
         </button>
         
-        {/* Parents */}
-        {familyMembers.filter(m => m.role === 'parent').map(member => (
-  <button 
-    key={member.id}
-    className={`text-xs px-2 py-1 rounded-full flex items-center ${selectedMember === member.id ? 'bg-black text-white' : 'bg-gray-100'}`}
-    onClick={() => onMemberChange(member.id)}
-  >
-    <UserAvatar 
-      user={member} 
-      size={16} 
-      className="mr-1" 
-    />
-    {member.name}
-  </button>
-))}
-
-{/* Children */}
-{familyMembers.filter(m => m.role === 'child').map(member => (
-  <button 
-    key={member.id}
-    className={`text-xs px-2 py-1 rounded-full flex items-center ${selectedMember === member.id ? 'bg-black text-white' : 'bg-gray-100'}`}
-    onClick={() => onMemberChange(member.id)}
-  >
-    <UserAvatar 
-      user={member} 
-      size={16} 
-      className="mr-1" 
-    />
-    {member.name}
-  </button>
-))}
+        {sortedMembers.map(member => (
+          <button
+            key={member.id}
+            onClick={() => onMemberChange(member.id)}
+            className={`flex items-center px-3 py-1 rounded-full text-xs ${
+              selectedMember === member.id ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 hover:bg-gray-200'
+            }`}
+          >
+            <div className="w-4 h-4 mr-1">
+              <UserAvatar user={member} size={16} />
+            </div>
+            {member.name}
+          </button>
+        ))}
       </div>
     </div>
   );
