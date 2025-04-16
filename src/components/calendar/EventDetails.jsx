@@ -31,13 +31,13 @@ const EventDetails = ({
   showAiMetadata = false
 }) => {
   // Add a null check before trying to use event properties
-  if (!event) {
-    console.warn("EventDetails received null event");
-    return null;
-  }
-  
-  // State for showing/hiding sections
-  const [showConflicts, setShowConflicts] = useState(false);
+// State for showing/hiding sections
+const [showConflicts, setShowConflicts] = useState(false);
+
+if (!event) {
+  console.warn("EventDetails received null event");
+  return null;
+}
   
   // Format date for display
   const formatDate = (dateString) => {
