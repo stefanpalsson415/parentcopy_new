@@ -119,7 +119,8 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   const [memberProgress, setMemberProgress] = useState({});
   const [completedHabitInstances, setCompletedHabitInstances] = useState({});
   const [canTakeSurvey, setCanTakeSurvey] = useState(false);
-  const [canScheduleMeeting, setCanScheduleMeeting] = useState(false);
+  const [hasCompletedSurvey, setHasCompletedSurvey] = useState(false);
+    const [canScheduleMeeting, setCanScheduleMeeting] = useState(false);
 
   // Load habits and cycle data
   useEffect(() => {
@@ -231,8 +232,15 @@ setHabits(finalHabits);
           setCompletedHabitInstances(allInstances);
           
           // Check if any habit has 5+ completions
-          const hasEnoughCompletions = Object.values(allInstances).some(instances => instances.length >= 5);
-          setCanTakeSurvey(hasEnoughCompletions);
+          // Check if any habit has 5+ completions
+const hasEnoughCompletions = Object.values(allInstances).some(instances => instances.length >= 5);
+setCanTakeSurvey(hasEnoughCompletions);
+
+// Check if current user has already completed the survey for this week
+const userHasCompletedSurvey = selectedUser && 
+  selectedUser.weeklyCompleted && 
+  selectedUser.weeklyCompleted[currentWeek-1]?.completed;
+setHasCompletedSurvey(userHasCompletedSurvey);
           
           setLoading(false);
         }
@@ -942,16 +950,22 @@ const createNewHabit = async (isRefresh = false) => {
   };
 
   // Start the survey
-  const handleStartSurvey = () => {
-    // Check if at least one habit has 5+ completions
-    const hasEnoughCompletions = Object.values(completedHabitInstances).some(instances => instances.length >= 5);
-    
-    if (hasEnoughCompletions) {
-      onStartWeeklyCheckIn();
-    } else {
-      createCelebration("Not Ready Yet", false, "Complete a habit at least 5 times to unlock the survey.");
-    }
-  };
+const handleStartSurvey = () => {
+  // Already completed check
+  if (hasCompletedSurvey) {
+    createCelebration("Already Completed", false, "You've already completed the survey for this cycle.");
+    return;
+  }
+  
+  // Check if at least one habit has 5+ completions
+  const hasEnoughCompletions = Object.values(completedHabitInstances).some(instances => instances.length >= 5);
+  
+  if (hasEnoughCompletions) {
+    onStartWeeklyCheckIn();
+  } else {
+    createCelebration("Not Ready Yet", false, "Complete a habit at least 5 times to unlock the survey.");
+  }
+};
   
   // Trigger Allie chat
   const triggerAllieChat = (message) => {
@@ -1156,16 +1170,20 @@ const createNewHabit = async (isRefresh = false) => {
         
         {/* Action Buttons */}
         <div className="mt-6 flex flex-wrap gap-3 justify-center">
-          <button
-            onClick={handleStartSurvey}
-            disabled={!canTakeSurvey}
-            className={`px-4 py-2 rounded-md flex items-center ${
-              canTakeSurvey ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-            }`}
-          >
-            <CheckCircle size={18} className="mr-2" />
-            Take Survey
-          </button>
+        <button
+  onClick={handleStartSurvey}
+  disabled={!canTakeSurvey || hasCompletedSurvey}
+  className={`px-4 py-2 rounded-md flex items-center ${
+    hasCompletedSurvey
+      ? 'bg-green-600 text-white'
+      : canTakeSurvey
+        ? 'bg-blue-600 text-white hover:bg-blue-700'
+        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+  }`}
+>
+  <CheckCircle size={18} className="mr-2" />
+  {hasCompletedSurvey ? 'Survey Completed' : 'Take Survey'}
+</button>
           
           <button
             onClick={onOpenFamilyMeeting}
