@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, PlusCircle } from 'lucide-react';
+import { Calendar, PlusCircle, Filter, X, Check, AlertCircle, Info } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import CalendarService from '../../services/CalendarService';
 import CalendarErrorHandler from '../../utils/CalendarErrorHandler';
+import CalendarOperations from '../../utils/CalendarOperations';
 import { useNavigate } from 'react-router-dom';
 
 // Import sub-components
@@ -13,11 +14,11 @@ import CalendarFilters from './CalendarFilters';
 import EventsList from './EventsList';
 import EventDetails from './EventDetails';
 import EnhancedEventManager from './EnhancedEventManager';
-
+import EventSourceBadge from './EventSourceBadge';
 
 /**
  * RevisedFloatingCalendarWidget - A comprehensive floating calendar with filtering, 
- * event management, and detail views. Now with proper component separation.
+ * event management, and detail views with improved metadata handling and duplicate prevention.
  */
 const RevisedFloatingCalendarWidget = () => {
   const navigate = useNavigate();
@@ -33,7 +34,7 @@ const RevisedFloatingCalendarWidget = () => {
   
   // UI State
   const [isOpen, setIsOpen] = useState(false);
-  const [widgetHeight, setWidgetHeight] = useState(40);
+  const [widgetHeight, setWidgetHeight] = useState(45);
   const [widgetWidth, setWidgetWidth] = useState(64);
   const [isDragging, setIsDragging] = useState(null);
   const [startDragPos, setStartDragPos] = useState({ x: 0, y: 0 });
@@ -47,16 +48,14 @@ const RevisedFloatingCalendarWidget = () => {
   const [lastRefresh, setLastRefresh] = useState(Date.now());
   const [loading, setLoading] = useState(false);
   const [showEventManager, setShowEventManager] = useState(false);
+  const [showAiParseInfo, setShowAiParseInfo] = useState(false);
 
-  
   // Event collections
   const [allEvents, setAllEvents] = useState([]);
-  const [childrenEvents, setChildrenEvents] = useState([]);
-  const [childrenAppointments, setChildrenAppointments] = useState([]);
-  const [childrenActivities, setChildrenActivities] = useState([]);
-  const [eventCache, setEventCache] = useState(new Set());
+  const [eventCache, setEventCache] = useState(new Map()); // Changed to Map for better uniqueness checking
   const [addedEvents, setAddedEvents] = useState({});
   const [showAddedMessage, setShowAddedMessage] = useState({});
+  const [conflictingEvents, setConflictingEvents] = useState([]);
   
   // Event detail/editing state
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -64,6 +63,7 @@ const RevisedFloatingCalendarWidget = () => {
   const [isEditingEvent, setIsEditingEvent] = useState(false);
   const [editedEvent, setEditedEvent] = useState(null);
   const [pendingAction, setPendingAction] = useState(null);
+  const [showSuccess, setShowSuccess] = useState(false);
   
   // Refs
   const widgetRef = useRef(null);
@@ -100,15 +100,13 @@ const RevisedFloatingCalendarWidget = () => {
     const handleForceRefresh = () => {
       console.log("Force calendar refresh triggered");
       setLastRefresh(Date.now());
-      setEventCache(new Set());
-      buildEventCache();
+      resetEventCache();
     };
     
     const refreshEvents = (e) => {
       console.log("Calendar event refresh triggered", e?.type || 'manual refresh');
-      setEventCache(new Set());
+      resetEventCache();
       setLastRefresh(Date.now());
-      setTimeout(() => buildEventCache(), 500);
     };
     
     window.addEventListener('force-calendar-refresh', handleForceRefresh);
@@ -164,7 +162,11 @@ const RevisedFloatingCalendarWidget = () => {
     setStartDimensions({ width: widgetWidth, height: widgetHeight });
   };
   
-  // Helper function to create event signature for caching
+  /**
+   * Generate a unique event signature for deduplication
+   * @param {Object} event - Calendar event
+   * @returns {String} - Unique event signature
+   */
   const createEventSignature = (event) => {
     // Normalize title/summary
     const title = event.summary || event.title || '';
@@ -180,248 +182,263 @@ const RevisedFloatingCalendarWidget = () => {
       dateStr = event.start.date;
     } else if (event.date) {
       dateStr = event.date;
+    } else if (event.dateTime) {
+      dateStr = typeof event.dateTime === 'object' ? 
+        event.dateTime.toISOString() : event.dateTime;
     } else if (event.dateObj) {
       dateStr = event.dateObj.toISOString();
     }
     
     // Extract just the date part for consistency
-    const datePart = dateStr.split('T')[0] || '';
+    const datePart = typeof dateStr === 'string' ? dateStr.split('T')[0] : '';
+    
+    // Include event type for better uniqueness
+    const eventType = event.eventType || event.category || 'event';
     
     // Create signature that will match similar events
-    return `${childName}-${title}-${datePart}`.toLowerCase();
+    return `${childName}-${title}-${datePart}-${eventType}`.toLowerCase();
   };
   
-  // Helper function to check if an event exists in cache
+  /**
+   * Reset the event cache for fresh loading
+   */
+  const resetEventCache = () => {
+    setEventCache(new Map());
+  };
+  
+  /**
+   * Check if an event exists in cache to prevent duplicates
+   * @param {Object} event - Event to check
+   * @returns {Boolean} - True if event exists in cache
+   */
   const eventExists = (event) => {
     const signature = createEventSignature(event);
     return eventCache.has(signature);
   };
   
-  // Build cache of existing events
-  const buildEventCache = async () => {
-    try {
-      if (!currentUser?.uid || !familyId) return;
-      
-      const eventSignatures = new Set();
-      
-      // Process all events and add their signatures to the cache
-      allEvents.forEach(event => {
-        const signature = createEventSignature(event);
-        eventSignatures.add(signature);
-      });
-      
-      setEventCache(eventSignatures);
-      console.log(`Cached ${eventSignatures.size} event signatures to prevent duplicates`);
-    } catch (error) {
-      console.error("Error building event cache:", error);
-    }
+  /**
+   * Add event to cache to prevent future duplicates
+   * @param {Object} event - Event to add to cache
+   */
+  const addEventToCache = (event) => {
+    const signature = createEventSignature(event);
+    const updatedCache = new Map(eventCache);
+    updatedCache.set(signature, true);
+    setEventCache(updatedCache);
   };
   
-  // Helper function to get a unique key for an event
+  /**
+   * Helper function to get a unique key for an event
+   * @param {Object} event - Event to get key for
+   * @returns {String} - Unique key for event
+   */
   const getEventKey = (event) => {
     if (!event) return null;
     
     let key = '';
     
     if (event.id) key += event.id; // Use ID first if available
+    else if (event.firestoreId) key += event.firestoreId; // Then try firestoreId
+    else if (event.universalId) key += event.universalId; // Then try universalId
     else {
+      // Otherwise create a compound key
       if (event.title) key += event.title;
       if (event.dateObj) key += '-' + event.dateObj.toISOString().split('T')[0];
       if (event.childName) key += '-' + event.childName;
-      if (event.firestoreId) key += '-' + event.firestoreId;
     }
     
     return key.toLowerCase().replace(/\s+/g, '-');
   };
   
-  // In src/components/calendar/RevisedFloatingCalendarWidget.jsx
-// Enhance the loadAllEvents function:
-
-// Load all calendar events
-const loadAllEvents = async () => {
-  try {
-    setLoading(true);
-    console.log("Loading all calendar events...");
-    
-    // Ensure we have the current user ID
-    if (!currentUser?.uid) {
-      console.warn("No user ID available, cannot load events");
-      setLoading(false);
-      return;
-    }
-    
-    // Get general calendar events first
-    const generalEvents = await loadGeneralCalendarEvents();
-    console.log(`Loaded ${generalEvents.length} general calendar events`);
-    
-    // Process events to ensure they all have dateObj
-    const processedGeneralEvents = generalEvents.map(event => {
-      let dateObj = null;
+  /**
+   * Load all calendar events with improved deduplication
+   */
+  const loadAllEvents = async () => {
+    try {
+      setLoading(true);
+      console.log("Loading all calendar events...");
       
-      // Try to get a valid date from various possible fields
-      if (event.start?.dateTime) {
-        dateObj = new Date(event.start.dateTime);
-      } else if (event.start?.date) {
-        dateObj = new Date(event.start.date);
-      } else if (event.dateTime) {
-        dateObj = new Date(event.dateTime);
-      } else if (event.date) {
-        dateObj = new Date(event.date);
+      // Ensure we have the current user ID
+      if (!currentUser?.uid) {
+        console.warn("No user ID available, cannot load events");
+        setLoading(false);
+        return;
       }
       
-      // Skip events with invalid dates
-      if (!dateObj || isNaN(dateObj.getTime())) {
-        console.warn("Event has invalid date, using current date as fallback:", event.title || event.summary);
-        dateObj = new Date();
-      }
+      // Get general calendar events
+      const generalEvents = await CalendarService.getEventsForUser(
+        currentUser.uid, 
+        new Date(new Date().setDate(new Date().getDate() - 30)), // 30 days ago
+        new Date(new Date().setDate(new Date().getDate() + 60)) // 60 days ahead
+      );
       
-      return {
+      console.log(`Loaded ${generalEvents.length} general calendar events`);
+      
+      // Process events to ensure they all have dateObj and deduplication
+      const dedupMap = new Map();
+      
+      const processedGeneralEvents = generalEvents
+        .map(event => {
+          let dateObj = null;
+          
+          // Try to get a valid date from various possible fields
+          if (event.start?.dateTime) {
+            dateObj = new Date(event.start.dateTime);
+          } else if (event.start?.date) {
+            dateObj = new Date(event.start.date);
+          } else if (event.dateTime) {
+            dateObj = new Date(event.dateTime);
+          } else if (event.date) {
+            dateObj = new Date(event.date);
+          }
+          
+          // Skip events with invalid dates
+          if (!dateObj || isNaN(dateObj.getTime())) {
+            console.warn("Event has invalid date, using current date as fallback:", event.title || event.summary);
+            dateObj = new Date();
+          }
+          
+          // Create enhanced event object
+          return {
+            ...event,
+            dateObj,
+            // Add missing title/summary if needed
+            title: event.title || event.summary || "Untitled Event",
+            summary: event.summary || event.title || "Untitled Event",
+            // Ensure we have extraDetails and process AI metadata
+            extraDetails: {
+              ...(event.extraDetails || {}),
+              parsedWithAI: event.extraDetails?.parsedWithAI || event.parsedWithAI || false, 
+              extractionConfidence: event.extraDetails?.extractionConfidence || event.extractionConfidence || null,
+              parsedFromImage: event.extraDetails?.parsedFromImage || event.parsedFromImage || false,
+              creationSource: event.extraDetails?.creationSource || event.creationSource || 'manual'
+            }
+          };
+        })
+        .filter(event => {
+          // Create a deduplication signature
+          const signature = createEventSignature(event);
+          
+          // If we've already seen this event, skip it
+          if (dedupMap.has(signature)) return false;
+          
+          // Otherwise, add it to our deduplication map and keep it
+          dedupMap.set(signature, true);
+          return true;
+        });
+      
+      // Generate family events
+      const familyMeetings = getUpcomingMeetings();
+      const taskEvents = getTaskEvents();
+      
+      // Combine all events with deduplication
+      const allProcessedEvents = [
+        ...processedGeneralEvents,
+        ...familyMeetings,
+        ...taskEvents
+      ]
+      .filter(event => {
+        // One final deduplication pass after merging all sources
+        const signature = createEventSignature(event);
+        if (eventCache.has(signature)) return false;
+        
+        // Add to our event cache and keep the event
+        addEventToCache(event);
+        return true;
+      });
+      
+      // Process attendees for each event 
+      const eventsWithAttendees = allProcessedEvents.map(event => ({
         ...event,
-        dateObj,
-        // Add missing title/summary if needed
-        title: event.title || event.summary || "Untitled Event",
-        summary: event.summary || event.title || "Untitled Event"
-      };
-    });
-    
-    // Get children data from Firebase
-    const childrenData = await loadChildrenEvents();
-    
-    // Get family meeting data
-    const familyMeetings = getUpcomingMeetings();
-    
-    // Get relationship events
-    const relationshipEvents = await loadRelationshipEvents();
-    
-    // Get task events
-    const taskEvents = await loadTaskEvents();
-    
-    // Track already added events
-    const addedEventsMap = {};
-    processedGeneralEvents.forEach(event => {
-      const eventKey = getEventKey(event);
-      if (eventKey) {
-        addedEventsMap[eventKey] = true;
-      }
-    });
-    setAddedEvents(addedEventsMap);
-    
-    // Combine all events
-    const combined = [
-      ...processedGeneralEvents,
-      ...childrenData.childrenEvents || [],
-      ...childrenData.childrenAppointments || [],
-      ...childrenData.childrenActivities || [],
-      ...familyMeetings,
-      ...relationshipEvents,
-      ...taskEvents
-    ];
-    
-    // Process attendees for each event
-    const processedEvents = combined.map(event => ({
-      ...event,
-      attendees: getEventAttendees(event)
-    }));
-    
-    // Set all events
-    setAllEvents(processedEvents);
-    setLoading(false);
-    
-    console.log(`Final combined events: ${processedEvents.length}`);
-    
-    // Rebuild the event cache
-    setTimeout(() => buildEventCache(), 300);
-  } catch (error) {
-    console.error("Error loading events:", error);
-    setLoading(false);
-  }
-};
-  
-  // Load general calendar events from Firestore
-  const loadGeneralCalendarEvents = async () => {
-    return await CalendarService.getEventsForUser(
-      currentUser?.uid, 
-      new Date(new Date().setDate(new Date().getDate() - 30)), // 30 days ago
-      new Date(new Date().setDate(new Date().getDate() + 365)) // 1 year ahead
-    );
-  };
-  
-  // Load children's events
-  const loadChildrenEvents = async () => {
-    // This function would extract events from familyMembers children data
-    // Placeholder implementation - in a real app, you'd use your data-fetching logic
-    const childrenData = { childrenEvents: [], childrenAppointments: [], childrenActivities: [] };
-    
-    // Update state
-    setChildrenEvents(childrenData.childrenEvents || []);
-    setChildrenAppointments(childrenData.childrenAppointments || []);
-    setChildrenActivities(childrenData.childrenActivities || []);
-    
-    return childrenData;
-  };
-  
-  // Load relationship events
-  const loadRelationshipEvents = async () => {
-    // Placeholder implementation - in a real app, you'd use your data-fetching logic
-    const events = [];
-    
-    return events;
-  };
-  
-  // Get upcoming family meetings
-const getUpcomingMeetings = () => {
-  const meetings = [];
-  
-  // Get family meeting for the current week if not completed
-  if (weekStatus && weekStatus[currentWeek] && !weekStatus[currentWeek].completed) {
-    const meetingDate = new Date();
-    // If today is Sunday, set to today, otherwise set to next Sunday
-    if (meetingDate.getDay() !== 0) {
-      meetingDate.setDate(meetingDate.getDate() + (7 - meetingDate.getDay())); // Next Sunday
+        attendees: getEventAttendees(event)
+      }));
+      
+      // Track already added events
+      const addedEventsMap = {};
+      eventsWithAttendees.forEach(event => {
+        const eventKey = getEventKey(event);
+        if (eventKey) {
+          addedEventsMap[eventKey] = true;
+        }
+      });
+      
+      setAddedEvents(addedEventsMap);
+      setAllEvents(eventsWithAttendees);
+      setLoading(false);
+      
+      console.log(`Final combined events: ${eventsWithAttendees.length}`);
+    } catch (error) {
+      console.error("Error loading events:", error);
+      setLoading(false);
     }
-    meetingDate.setHours(19, 0, 0, 0); // 7:00 PM
-    
-    // Create attendees list from all family members
-    const attendees = familyMembers.map(member => ({
-      id: member.id,
-      name: member.name,
-      profilePicture: member.profilePicture,
-      role: member.role
-    }));
-    
-    meetings.push({
-      id: `meeting-${currentWeek}`,
-      title: `Cycle ${currentWeek} Family Meeting`, // Changed "Week" to "Cycle"
-      date: meetingDate.toISOString(),
-      dateObj: meetingDate,
-      category: 'meeting',
-      eventType: 'meeting',
-      weekNumber: currentWeek,
-      linkedEntity: {
-        type: 'meeting',
-        id: currentWeek
-      },
-      attendees: attendees, // Add all family members as attendees
-      attendingParentId: 'both' // Indicate both parents attending
-    });
-  }
+  };
   
-  return meetings;
-};
+  /**
+   * Get upcoming family meetings
+   * @returns {Array} Meeting events
+   */
+  const getUpcomingMeetings = () => {
+    const meetings = [];
+    
+    // Get family meeting for the current week if not completed
+    if (weekStatus && weekStatus[currentWeek] && !weekStatus[currentWeek].completed) {
+      const meetingDate = new Date();
+      // If today is Sunday, set to today, otherwise set to next Sunday
+      if (meetingDate.getDay() !== 0) {
+        meetingDate.setDate(meetingDate.getDate() + (7 - meetingDate.getDay())); // Next Sunday
+      }
+      meetingDate.setHours(19, 0, 0, 0); // 7:00 PM
+      
+      // Create attendees list from all family members
+      const attendees = familyMembers.map(member => ({
+        id: member.id,
+        name: member.name,
+        profilePicture: member.profilePicture,
+        role: member.role
+      }));
+      
+      meetings.push({
+        id: `meeting-${currentWeek}`,
+        title: `Cycle ${currentWeek} Family Meeting`,
+        date: meetingDate.toISOString(),
+        dateObj: meetingDate,
+        category: 'meeting',
+        eventType: 'meeting',
+        weekNumber: currentWeek,
+        linkedEntity: {
+          type: 'meeting',
+          id: currentWeek
+        },
+        attendees: attendees,
+        attendingParentId: 'both',
+        extraDetails: {
+          creationSource: 'system',
+          parsedWithAI: false
+        }
+      });
+    }
+    
+    return meetings;
+  };
   
-  // Load task events
-  const loadTaskEvents = async () => {
+  /**
+   * Get task-based events
+   * @returns {Array} Task events
+   */
+  const getTaskEvents = () => {
     const events = [];
     
     // Convert task recommendations to calendar events
     if (taskRecommendations && taskRecommendations.length > 0) {
       taskRecommendations.forEach(task => {
         if (task.dueDate && !task.completed) {
+          const dueDate = new Date(task.dueDate);
+          
           events.push({
             id: `task-${task.id}`,
             title: `Task Due: ${task.title}`,
             date: task.dueDate,
-            dateObj: new Date(task.dueDate),
+            dateObj: dueDate,
             category: 'task',
             eventType: 'task',
             assignedTo: task.assignedTo,
@@ -429,6 +446,10 @@ const getUpcomingMeetings = () => {
             linkedEntity: {
               type: 'task',
               id: task.id
+            },
+            extraDetails: {
+              creationSource: 'task-system',
+              parsedWithAI: false
             }
           });
         }
@@ -438,71 +459,86 @@ const getUpcomingMeetings = () => {
     return events;
   };
   
-  // Get attendees for an event
-const getEventAttendees = (event) => {
-  let attendees = [];
-  
-  // For child events
-  if (event.childName) {
-    const child = familyMembers.find(m => m.id === event.childId || m.name === event.childName);
-    if (child) {
-      attendees.push({
-        id: child.id,
-        name: child.name,
-        profilePicture: child.profilePicture,
-        role: 'child'
-      });
-    } else if (event.childName) {
-      attendees.push({
-        id: event.childId || `child-${event.childName}`,
-        name: event.childName,
-        profilePicture: null,
-        role: 'child'
-      });
-    }
-  }
-  
-  // For siblings
-  if (event.siblingIds && event.siblingIds.length > 0) {
-    event.siblingIds.forEach(sibId => {
-      const sibling = familyMembers.find(m => m.id === sibId);
-      if (sibling && !attendees.some(a => a.id === sibling.id)) {
+  /**
+   * Generate attendee list for an event
+   * @param {Object} event - Event to get attendees for 
+   * @returns {Array} Attendee information
+   */
+  const getEventAttendees = (event) => {
+    let attendees = [];
+    
+    // For child events
+    if (event.childName) {
+      const child = familyMembers.find(m => m.id === event.childId || m.name === event.childName);
+      if (child) {
         attendees.push({
-          id: sibling.id,
-          name: sibling.name,
-          profilePicture: sibling.profilePicture,
+          id: child.id,
+          name: child.name,
+          profilePicture: child.profilePicture,
           role: 'child'
         });
-      }
-    });
-  } else if (event.siblingNames && event.siblingNames.length > 0) {
-    event.siblingNames.forEach(name => {
-      const sibling = familyMembers.find(m => m.role === 'child' && m.name === name);
-      if (sibling && !attendees.some(a => a.id === sibling.id)) {
+      } else if (event.childName) {
         attendees.push({
-          id: sibling.id,
-          name: sibling.name,
-          profilePicture: sibling.profilePicture,
-          role: 'child'
-        });
-      } else if (!attendees.some(a => a.name === name)) {
-        attendees.push({
-          id: `sibling-${name}`,
-          name: name,
+          id: event.childId || `child-${event.childName}`,
+          name: event.childName,
           profilePicture: null,
           role: 'child'
         });
       }
-    });
-  }
-  
-  // For attendingParent
-  if (event.attendingParentId) {
-    if (event.attendingParentId === 'both') {
-      // Add both parents
-      const parents = familyMembers.filter(m => m.role === 'parent');
-      parents.forEach(parent => {
-        if (!attendees.some(a => a.id === parent.id)) {
+    }
+    
+    // For siblings
+    if (event.siblingIds && event.siblingIds.length > 0) {
+      event.siblingIds.forEach(sibId => {
+        const sibling = familyMembers.find(m => m.id === sibId);
+        if (sibling && !attendees.some(a => a.id === sibling.id)) {
+          attendees.push({
+            id: sibling.id,
+            name: sibling.name,
+            profilePicture: sibling.profilePicture,
+            role: 'child'
+          });
+        }
+      });
+    } else if (event.siblingNames && event.siblingNames.length > 0) {
+      event.siblingNames.forEach(name => {
+        const sibling = familyMembers.find(m => m.role === 'child' && m.name === name);
+        if (sibling && !attendees.some(a => a.id === sibling.id)) {
+          attendees.push({
+            id: sibling.id,
+            name: sibling.name,
+            profilePicture: sibling.profilePicture,
+            role: 'child'
+          });
+        } else if (!attendees.some(a => a.name === name)) {
+          attendees.push({
+            id: `sibling-${name}`,
+            name: name,
+            profilePicture: null,
+            role: 'child'
+          });
+        }
+      });
+    }
+    
+    // For attendingParent
+    if (event.attendingParentId) {
+      if (event.attendingParentId === 'both') {
+        // Add both parents
+        const parents = familyMembers.filter(m => m.role === 'parent');
+        parents.forEach(parent => {
+          if (!attendees.some(a => a.id === parent.id)) {
+            attendees.push({
+              id: parent.id,
+              name: parent.name,
+              profilePicture: parent.profilePicture,
+              role: 'parent'
+            });
+          }
+        });
+      } else if (event.attendingParentId !== 'undecided') {
+        const parent = familyMembers.find(m => m.id === event.attendingParentId);
+        if (parent && !attendees.some(a => a.id === parent.id)) {
           attendees.push({
             id: parent.id,
             name: parent.name,
@@ -510,125 +546,120 @@ const getEventAttendees = (event) => {
             role: 'parent'
           });
         }
-      });
-    } else if (event.attendingParentId !== 'undecided') {
-      const parent = familyMembers.find(m => m.id === event.attendingParentId);
-      if (parent && !attendees.some(a => a.id === parent.id)) {
+      }
+    }
+
+    // For host parent (if available)
+    if (event.hostParent) {
+      // Try to find a parent with this name
+      const hostParentName = event.hostParent;
+      const hostParent = familyMembers.find(m => 
+        m.role === 'parent' && m.name === hostParentName
+      );
+      
+      if (hostParent && !attendees.some(a => a.id === hostParent.id)) {
         attendees.push({
-          id: parent.id,
-          name: parent.name,
-          profilePicture: parent.profilePicture,
+          id: hostParent.id,
+          name: hostParent.name,
+          profilePicture: hostParent.profilePicture,
           role: 'parent'
+        });
+      } else if (!attendees.some(a => a.name === hostParentName)) {
+        attendees.push({
+          id: `host-${hostParentName}`,
+          name: hostParentName,
+          profilePicture: null,
+          role: 'host'
         });
       }
     }
-  }
+    
+    return attendees;
+  };
 
-  // For host parent (if available)
-  if (event.hostParent) {
-    // Try to find a parent with this name
-    const hostParentName = event.hostParent;
-    const hostParent = familyMembers.find(m => 
-      m.role === 'parent' && m.name === hostParentName
-    );
+  /**
+   * Get events for currently selected date with improved filtering
+   * @returns {Array} Filtered events for selected date
+   */
+  const getEventsForSelectedDate = () => {
+    if (!selectedDate) return [];
     
-    if (hostParent && !attendees.some(a => a.id === hostParent.id)) {
-      attendees.push({
-        id: hostParent.id,
-        name: hostParent.name,
-        profilePicture: hostParent.profilePicture,
-        role: 'parent'
-      });
-    } else if (!attendees.some(a => a.name === hostParentName)) {
-      // If not found in family members, still add as generic attendee
-      attendees.push({
-        id: `host-${hostParentName}`,
-        name: hostParentName,
-        profilePicture: null,
-        role: 'host'
-      });
-    }
-  }
-  
-  return attendees;
-};
-  
-  // In src/components/calendar/RevisedFloatingCalendarWidget.jsx
-// Replace the getEventsForSelectedDate function with this improved version:
-
-// Get events for the currently selected date, filtered by view and member
-const getEventsForSelectedDate = () => {
-  if (!selectedDate) return [];
-  
-  return allEvents.filter(event => {
-    // Ensure we have a valid date object
-    let eventDate = null;
-    
-    if (event.dateObj instanceof Date && !isNaN(event.dateObj)) {
-      eventDate = event.dateObj;
-    } else if (event.start?.dateTime) {
-      eventDate = new Date(event.start.dateTime);
-    } else if (event.start?.date) {
-      eventDate = new Date(event.start.date);
-    } else if (event.dateTime) {
-      eventDate = new Date(event.dateTime);
-    } else if (event.date) {
-      eventDate = new Date(event.date);
-    }
-    
-    // Skip events with invalid dates
-    if (!eventDate || isNaN(eventDate.getTime())) {
-      console.log("Skipping event with invalid date:", event.title || event.summary);
-      return false;
-    }
-    
-    // Check date match - only compare year, month, day (not time)
-    const dateMatch = eventDate.getDate() === selectedDate.getDate() &&
-                     eventDate.getMonth() === selectedDate.getMonth() &&
-                     eventDate.getFullYear() === selectedDate.getFullYear();
-    
-    // If date doesn't match, return false immediately
-    if (!dateMatch) return false;
-    
-    // Check member filter
-    if (selectedMember !== 'all') {
-      // For child events
-      if (event.childName && selectedMember !== event.childId && selectedMember !== event.childName) {
+    return allEvents.filter(event => {
+      // Ensure we have a valid date object
+      let eventDate = null;
+      
+      if (event.dateObj instanceof Date && !isNaN(event.dateObj)) {
+        eventDate = event.dateObj;
+      } else if (event.start?.dateTime) {
+        eventDate = new Date(event.start.dateTime);
+      } else if (event.start?.date) {
+        eventDate = new Date(event.start.date);
+      } else if (event.dateTime) {
+        eventDate = new Date(event.dateTime);
+      } else if (event.date) {
+        eventDate = new Date(event.date);
+      }
+      
+      // Skip events with invalid dates
+      if (!eventDate || isNaN(eventDate.getTime())) {
         return false;
       }
       
-      // For parent-assigned tasks
-      if (event.assignedTo && selectedMember !== event.assignedTo && 
-          event.assignedToName && selectedMember !== event.assignedToName) {
-        return false;
+      // Check date match - only compare year, month, day (not time)
+      const dateMatch = eventDate.getDate() === selectedDate.getDate() &&
+                       eventDate.getMonth() === selectedDate.getMonth() &&
+                       eventDate.getFullYear() === selectedDate.getFullYear();
+      
+      // If date doesn't match, return false immediately
+      if (!dateMatch) return false;
+      
+      // Check member filter
+      if (selectedMember !== 'all') {
+        // For child events
+        if (event.childName && selectedMember !== event.childId && selectedMember !== event.childName) {
+          return false;
+        }
+        
+        // For parent-assigned tasks
+        if (event.assignedTo && selectedMember !== event.assignedTo && 
+            event.assignedToName && selectedMember !== event.assignedToName) {
+          return false;
+        }
+        
+        // For family events, check attendees
+        const hasSelectedMember = event.attendees?.some(
+          attendee => attendee.id === selectedMember || attendee.name === selectedMember
+        );
+        
+        if (!hasSelectedMember && !event.childName && !event.assignedTo) {
+          return false;
+        }
       }
       
-      // For family events, check attendees
-      const hasSelectedMember = event.attendees?.some(
-        attendee => attendee.id === selectedMember || attendee.name === selectedMember
-      );
-      
-      if (!hasSelectedMember && !event.childName && !event.assignedTo) {
-        return false;
-      }
-    }
-    
-    return true;
-  });
-};
+      return true;
+    });
+  };
   
-  // Filter events based on the current view type
+  /**
+   * Filter events based on the current view type including AI parsed events
+   * @param {Array} events - Events to filter
+   * @returns {Array} Filtered events
+   */
   const filterEventsByView = (events) => {
     return events.filter(event => 
       view === 'all' || 
       (view === 'appointments' && (event.category === 'medical' || event.eventType === 'appointment')) ||
       (view === 'activities' && (event.category === 'activity' || event.eventType === 'activity')) ||
       (view === 'tasks' && (event.category === 'task' || event.eventType === 'task' || event.eventType === 'homework')) ||
-      (view === 'meetings' && (event.category === 'meeting' || event.eventType === 'meeting'))
+      (view === 'meetings' && (event.category === 'meeting' || event.eventType === 'meeting')) ||
+      (view === 'ai-parsed' && event.extraDetails?.parsedWithAI)
     );
   };
   
-  // Get upcoming events, filtered by view and member
+  /**
+   * Get upcoming events, filtered by view and member
+   * @returns {Array} Upcoming filtered events
+   */
   const getUpcomingEvents = () => {
     // Apply member filter
     let filtered = allEvents.filter(event => {
@@ -654,26 +685,90 @@ const getEventsForSelectedDate = () => {
     filtered = filterEventsByView(filtered);
     
     // Sort by date (upcoming first)
-    return filtered.sort((a, b) => a.dateObj - b.dateObj).slice(0, 5);
+    return filtered.sort((a, b) => {
+      // Convert to date objects if they aren't already
+      const dateA = a.dateObj instanceof Date ? a.dateObj : new Date(a.dateObj);
+      const dateB = b.dateObj instanceof Date ? b.dateObj : new Date(b.dateObj);
+      return dateA - dateB;
+    }).slice(0, 5);
   };
   
-  // Get filtered task recommendations
-  const getFilteredTasks = () => {
-    if (!taskRecommendations) return [];
+  /**
+   * Check for scheduling conflicts for a given event
+   * @param {Object} event - Event to check for conflicts
+   * @returns {Promise<Array>} Conflicting events
+   */
+  const checkForEventConflicts = async (event) => {
+    if (!event) return [];
     
-    return taskRecommendations
-      .filter(task => !task.completed)
-      // Apply member filter for tasks
-      .filter(task => {
-        if (selectedMember === 'all') return true;
-        return selectedMember === task.assignedTo || selectedMember === task.assignedToName;
-      })
-      .slice(0, 3);
+    try {
+      // Get event date and time
+      let eventDate;
+      if (event.dateObj) {
+        eventDate = new Date(event.dateObj);
+      } else if (event.dateTime) {
+        eventDate = new Date(event.dateTime);
+      } else if (event.start?.dateTime) {
+        eventDate = new Date(event.start.dateTime);
+      } else {
+        return []; // No valid date to check
+      }
+      
+      // Define time window to check for conflicts (1 hour before to 1 hour after)
+      const startCheck = new Date(eventDate);
+      startCheck.setHours(startCheck.getHours() - 1);
+      
+      const endCheck = new Date(eventDate);
+      endCheck.setHours(endCheck.getHours() + 1);
+      
+      // Find events within the time window
+      return allEvents.filter(existingEvent => {
+        // Skip the event itself
+        if (existingEvent.id === event.id || 
+            existingEvent.firestoreId === event.firestoreId ||
+            existingEvent.universalId === event.universalId) {
+          return false;
+        }
+        
+        // Get event time
+        let existingDate;
+        if (existingEvent.dateObj) {
+          existingDate = existingEvent.dateObj;
+        } else if (existingEvent.dateTime) {
+          existingDate = new Date(existingEvent.dateTime);
+        } else if (existingEvent.start?.dateTime) {
+          existingDate = new Date(existingEvent.start.dateTime);
+        } else {
+          return false; // No valid date
+        }
+        
+        // Check if dates are on the same day
+        const sameDay = existingDate.getDate() === eventDate.getDate() &&
+                        existingDate.getMonth() === eventDate.getMonth() &&
+                        existingDate.getFullYear() === eventDate.getFullYear();
+        
+        if (!sameDay) return false;
+        
+        // Check if times overlap
+        const startTime = existingDate.getTime();
+        const endTime = existingDate.getTime() + 60 * 60 * 1000; // Add 1 hour
+        
+        return (startTime <= endCheck.getTime() && endTime >= startCheck.getTime());
+      });
+    } catch (error) {
+      console.error("Error checking for conflicts:", error);
+      return [];
+    }
   };
   
-  // Add generic event handlers
-  const handleEventClick = (event) => {
+  // Add event handlers
+  const handleEventClick = async (event) => {
     setSelectedEvent(event);
+    
+    // Check for conflicts when viewing event details
+    const conflicts = await checkForEventConflicts(event);
+    setConflictingEvents(conflicts);
+    
     setShowEventDetails(true);
     setIsEditingEvent(false);
     setEditedEvent(null);
@@ -705,33 +800,32 @@ const getEventsForSelectedDate = () => {
     }
   };
   
-  // Update the handleEventEdit function
-const handleEventEdit = (event) => {
-  // Create a properly formatted event object for the editor
-  const formattedEvent = {
-    ...event,
-    // Make sure we have these fields properly set
-    title: event.title || event.summary,
-    description: event.description || '',
-    location: event.location || '',
-    dateTime: event.dateObj?.toISOString() || event.start?.dateTime || new Date().toISOString(),
-    endDateTime: event.dateEndObj?.toISOString() || event.end?.dateTime,
-    childId: event.childId || null,
-    childName: event.childName || null,
-    attendingParentId: event.attendingParentId || null,
-    eventType: event.eventType || 'general',
-    category: event.category || 'general',
-    siblingIds: event.siblingIds || [],
-    siblingNames: event.siblingNames || [],
-    // Make sure we have the ID for updating
-    firestoreId: event.firestoreId || event.id
+  const handleEventEdit = (event) => {
+    // Create a properly formatted event object for the editor
+    const formattedEvent = {
+      ...event,
+      // Make sure we have these fields properly set
+      title: event.title || event.summary,
+      description: event.description || '',
+      location: event.location || '',
+      dateTime: event.dateObj?.toISOString() || event.start?.dateTime || new Date().toISOString(),
+      endDateTime: event.dateEndObj?.toISOString() || event.end?.dateTime,
+      childId: event.childId || null,
+      childName: event.childName || null,
+      attendingParentId: event.attendingParentId || null,
+      eventType: event.eventType || 'general',
+      category: event.category || 'general',
+      siblingIds: event.siblingIds || [],
+      siblingNames: event.siblingNames || [],
+      // Make sure we have the ID for updating
+      firestoreId: event.firestoreId || event.id
+    };
+    
+    setSelectedEvent(formattedEvent);
+    setShowEventDetails(false);
+    setIsEditingEvent(true);
+    setEditedEvent(formattedEvent);
   };
-  
-  setSelectedEvent(formattedEvent);
-  setShowEventDetails(false);
-  setIsEditingEvent(true);
-  setEditedEvent(formattedEvent);
-};
   
   // Add task to calendar
   const handleAddTaskToCalendar = async (task) => {
@@ -762,6 +856,14 @@ const handleEventEdit = (event) => {
       const result = await CalendarService.addEvent(event, currentUser.uid);
       
       if (result.success) {
+        // Add to cache to prevent duplicates
+        addEventToCache({
+          ...event,
+          id: result.eventId,
+          firestoreId: result.firestoreId,
+          universalId: result.universalId
+        });
+        
         // Mark as added
         setAddedEvents(prev => ({
           ...prev,
@@ -785,7 +887,6 @@ const handleEventEdit = (event) => {
         CalendarService.showNotification("Task added to calendar", "success");
         
         // Refresh events
-        await buildEventCache();
         setLastRefresh(Date.now());
       }
     } catch (error) {
@@ -815,6 +916,14 @@ const handleEventEdit = (event) => {
       const result = await CalendarService.addEvent(event, currentUser.uid);
       
       if (result.success) {
+        // Add to cache to prevent duplicates
+        addEventToCache({
+          ...event,
+          id: result.eventId,
+          firestoreId: result.firestoreId,
+          universalId: result.universalId
+        });
+        
         // Mark as added
         setAddedEvents(prev => ({
           ...prev,
@@ -838,7 +947,6 @@ const handleEventEdit = (event) => {
         CalendarService.showNotification("Meeting added to calendar", "success");
         
         // Refresh events
-        await buildEventCache();
         setLastRefresh(Date.now());
       }
     } catch (error) {
@@ -852,28 +960,39 @@ const handleEventEdit = (event) => {
     try {
       if (!currentUser || !event) return;
       
-      // The implementaiton would use CalendarService to add the proper event type
-      // For brevity, we're using a simplified version
-      
-      const calendarEvent = {
+      // Format child event using CalendarOperations
+      const calendarEvent = CalendarOperations.createStandardEvent({
         title: event.title,
         description: event.description || '',
+        startDate: event.dateObj || new Date(event.dateTime),
         location: event.location || '',
-        start: {
-          dateTime: event.dateObj.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        end: {
-          dateTime: new Date(event.dateObj.getTime() + 60*60000).toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        linkedEntity: event.linkedEntity
-      };
+        duration: 60, // Default to 1 hour
+        childId: event.childId,
+        childName: event.childName,
+        attendingParentId: event.attendingParentId,
+        eventType: event.eventType || 'other',
+        extraDetails: {
+          ...(event.extraDetails || {}),
+          parsedWithAI: event.extraDetails?.parsedWithAI || false,
+          extractionConfidence: event.extraDetails?.extractionConfidence || null,
+          parsedFromImage: event.extraDetails?.parsedFromImage || false,
+          originalText: event.extraDetails?.originalText || '',
+          creationSource: event.extraDetails?.creationSource || 'manual'
+        }
+      });
       
       // Add event to calendar
       const result = await CalendarService.addEvent(calendarEvent, currentUser.uid);
       
       if (result.success) {
+        // Add to cache to prevent duplicates
+        addEventToCache({
+          ...calendarEvent,
+          id: result.eventId,
+          firestoreId: result.firestoreId,
+          universalId: result.universalId
+        });
+        
         // Mark as added
         setAddedEvents(prev => ({
           ...prev,
@@ -898,7 +1017,6 @@ const handleEventEdit = (event) => {
         CalendarService.showNotification(`${eventDescription} added to calendar`, "success");
         
         // Refresh events
-        await buildEventCache();
         setLastRefresh(Date.now());
       }
     } catch (error) {
@@ -936,6 +1054,12 @@ const handleEventEdit = (event) => {
       const result = await CalendarService.deleteEvent(eventId, currentUser?.uid);
       
       if (result.success) {
+        // Remove from cache
+        const signature = createEventSignature(event);
+        const updatedCache = new Map(eventCache);
+        updatedCache.delete(signature);
+        setEventCache(updatedCache);
+        
         // Update local state
         setAddedEvents(prev => {
           const newState = {...prev};
@@ -956,7 +1080,6 @@ const handleEventEdit = (event) => {
         // Refresh events
         setTimeout(() => {
           setLastRefresh(Date.now());
-          buildEventCache();
         }, 300);
       } else {
         CalendarService.showNotification(result.error || "Failed to delete event", "error");
@@ -1003,6 +1126,16 @@ const handleEventEdit = (event) => {
         };
       }
       
+      // Ensure we preserve AI metadata
+      eventUpdate.extraDetails = {
+        ...(updatedEvent.extraDetails || {}),
+        parsedWithAI: updatedEvent.extraDetails?.parsedWithAI || false,
+        extractionConfidence: updatedEvent.extraDetails?.extractionConfidence || null,
+        parsedFromImage: updatedEvent.extraDetails?.parsedFromImage || false,
+        originalText: updatedEvent.extraDetails?.originalText || '',
+        creationSource: updatedEvent.extraDetails?.creationSource || 'manual'
+      };
+      
       // Update event using CalendarService
       const result = await CalendarService.updateEvent(updatedEvent.firestoreId, eventUpdate, currentUser?.uid);
       
@@ -1025,6 +1158,12 @@ const handleEventEdit = (event) => {
         
         // Show notification
         CalendarService.showNotification("Event updated successfully", "success");
+        
+        // Show success animation
+        setShowSuccess(true);
+        setTimeout(() => {
+          setShowSuccess(false);
+        }, 2000);
         
         // Refresh events
         setLastRefresh(Date.now());
@@ -1107,34 +1246,34 @@ const handleEventEdit = (event) => {
   }
   
   // Event date objects for calendar highlighting
-const eventDates = allEvents
-.filter(event => {
-  // Apply member filter
-  if (selectedMember !== 'all') {
-    // For child events
-    if (event.childName && selectedMember !== event.childId && selectedMember !== event.childName) {
-      return false;
-    }
-    // For tasks
-    if (event.assignedTo && selectedMember !== event.assignedTo && 
-        event.assignedToName && selectedMember !== event.assignedToName) {
-      return false;
-    }
-    // For other events, check attendees
-    if (!event.attendees?.some(a => a.id === selectedMember || a.name === selectedMember)) {
-      return false;
-    }
-  }
-  // Make sure the event has a valid dateObj before including it
-  return event.dateObj instanceof Date && !isNaN(event.dateObj);
-})
-.map(event => event.dateObj);
+  const eventDates = allEvents
+    .filter(event => {
+      // Apply member filter
+      if (selectedMember !== 'all') {
+        // For child events
+        if (event.childName && selectedMember !== event.childId && selectedMember !== event.childName) {
+          return false;
+        }
+        // For tasks
+        if (event.assignedTo && selectedMember !== event.assignedTo && 
+            event.assignedToName && selectedMember !== event.assignedToName) {
+          return false;
+        }
+        // For other events, check attendees
+        if (!event.attendees?.some(a => a.id === selectedMember || a.name === selectedMember)) {
+          return false;
+        }
+      }
+      // Make sure the event has a valid dateObj before including it
+      return event.dateObj instanceof Date && !isNaN(event.dateObj);
+    })
+    .map(event => event.dateObj);
   
   return (
     <div className="fixed bottom-4 left-4 z-40">
       <div 
         ref={widgetRef}
-        className="bg-white border border-black shadow-lg rounded-lg flex flex-col relative"
+        className="bg-white border border-black shadow-lg rounded-lg flex flex-col relative overflow-hidden"
         style={{ height: `${widgetHeight}rem`, width: `${widgetWidth}rem` }}
       >
         {/* Header Component */}
@@ -1173,42 +1312,47 @@ const eventDates = allEvents
             onMemberChange={handleMemberChange}
             familyMembers={familyMembers}
             onResetFilters={handleResetFilters}
+            // Add AI filtered view to the filter options
+            filterOptions={[
+              { id: 'all', label: 'All Events' },
+              { id: 'appointments', label: 'Appointments' },
+              { id: 'activities', label: 'Activities' },
+              { id: 'tasks', label: 'Tasks' },
+              { id: 'meetings', label: 'Meetings' },
+              { id: 'ai-parsed', label: 'AI Parsed' }
+            ]}
           />
+          
           {/* Add Event Button */}
-<div className="mb-4 mt-1">
-  <button
-    onClick={() => {
-      // Create a state variable for this at the top of the component
-      setShowEventManager(true);
-    }}
-    className="w-full py-2 px-3 bg-black text-white rounded text-sm hover:bg-gray-800 transition-colors flex items-center justify-center"
-  >
-    <PlusCircle size={16} className="mr-2" />
-    Add New Event
-  </button>
-</div>
-
-{/* Then add at the bottom of the component, just before the final closing div: */}
-{/* Event Manager Modal */}
-{showEventManager && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
-      <EnhancedEventManager
-        selectedDate={selectedDate}
-        onSave={(result) => {
-          setShowEventManager(false);
-          // Refresh events after saving
-          setLastRefresh(Date.now());
-          // Show success notification
-          if (result?.success) {
-            CalendarService.showNotification("Event added successfully", "success");
-          }
-        }}
-        onCancel={() => setShowEventManager(false)}
-      />
-    </div>
-  </div>
-)}
+          <div className="mb-4 mt-1">
+            <button
+              onClick={() => setShowEventManager(true)}
+              className="w-full py-2 px-3 bg-black text-white rounded text-sm hover:bg-gray-800 transition-colors flex items-center justify-center"
+            >
+              <PlusCircle size={16} className="mr-2" />
+              Add New Event
+            </button>
+          </div>
+          
+          {/* AI Parse Info Button - only show if we have AI parsed events */}
+          {allEvents.some(event => event.extraDetails?.parsedWithAI) && (
+            <div className="mb-4">
+              <button
+                onClick={() => setShowAiParseInfo(!showAiParseInfo)}
+                className={`w-full py-2 px-3 ${showAiParseInfo ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-800'} rounded text-xs hover:bg-purple-200 transition-colors flex items-center justify-center`}
+              >
+                <Info size={14} className="mr-1" />
+                {showAiParseInfo ? 'Hide AI Event Info' : 'What are AI Parsed Events?'}
+              </button>
+              
+              {showAiParseInfo && (
+                <div className="mt-2 p-2 bg-purple-50 rounded-md text-xs text-purple-800 border border-purple-200">
+                  <p className="mb-1"><span className="font-medium">AI Parsed Events</span> are automatically extracted from messages, images, or emails.</p>
+                  <p>We use AI to identify event details like dates, times, and locations from text. Look for the <span className="bg-purple-100 text-purple-800 px-1 rounded text-xs font-medium">AI</span> badge to see which events were created this way.</p>
+                </div>
+              )}
+            </div>
+          )}
           
           {/* Selected Date Events Component */}
           <EventsList
@@ -1222,8 +1366,51 @@ const eventDates = allEvents
             loading={loading}
             title={`Events for ${selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
             emptyMessage="No events scheduled for this date"
+            // Add enhanced badge rendering for AI parsed events
+            renderBadges={(event) => (
+              <>
+                {event.extraDetails?.parsedWithAI && (
+                  <span className="ml-1 bg-purple-100 text-purple-800 px-1 py-0.5 rounded text-xs font-medium flex items-center">
+                    <span className="mr-1">AI</span>
+                    {event.extraDetails.extractionConfidence && (
+                      <span className="text-xs">
+                        {Math.round(event.extraDetails.extractionConfidence * 100)}%
+                      </span>
+                    )}
+                  </span>
+                )}
+              </>
+            )}
           />
           
+          {/* Upcoming Events Component */}
+          <EventsList
+            events={getUpcomingEvents()}
+            onEventClick={handleEventClick}
+            onEventAdd={handleEventAdd}
+            onEventEdit={handleEventEdit}
+            onEventDelete={handleDeleteEvent}
+            addedEvents={addedEvents}
+            showAddedMessage={showAddedMessage}
+            loading={loading}
+            title="Upcoming Events"
+            emptyMessage="No upcoming events"
+            // Add enhanced badge rendering for AI parsed events
+            renderBadges={(event) => (
+              <>
+                {event.extraDetails?.parsedWithAI && (
+                  <span className="ml-1 bg-purple-100 text-purple-800 px-1 py-0.5 rounded text-xs font-medium flex items-center">
+                    <span className="mr-1">AI</span>
+                    {event.extraDetails.extractionConfidence && (
+                      <span className="text-xs">
+                        {Math.round(event.extraDetails.extractionConfidence * 100)}%
+                      </span>
+                    )}
+                  </span>
+                )}
+              </>
+            )}
+          />
           
         </div>
         
@@ -1265,49 +1452,84 @@ const eventDates = allEvents
         <Calendar size={24} />
       </button>
       
-      {/* Event Details Modal - Use EnhancedEventManager for editing */}
-{showEventDetails && selectedEvent && !isEditingEvent && (
-  <EventDetails
-    event={selectedEvent}
-    onClose={() => {
-      setShowEventDetails(false);
-      setIsEditingEvent(false);
-      setEditedEvent(null);
-    }}
-    onEdit={handleEventEdit}
-    onDelete={handleDeleteEvent}
-    familyMembers={familyMembers}
-    pendingAction={pendingAction}
-    showSuccess={false}
-  />
-)}
-
-{/* Separate EnhancedEventManager for edit mode */}
-{selectedEvent && isEditingEvent && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
-      <EnhancedEventManager
-        initialEvent={selectedEvent}
-        onSave={(result) => {
-          if (result?.success) {
-            // Close the editor
+      {/* Event Details Modal */}
+      {showEventDetails && selectedEvent && !isEditingEvent && (
+        <EventDetails
+          event={selectedEvent}
+          onClose={() => {
             setShowEventDetails(false);
-            setIsEditingEvent(false);
-            
-            // Update local data and refresh
-            setLastRefresh(Date.now());
-            CalendarService.showNotification("Event updated successfully", "success");
-          }
-        }}
-        onCancel={() => {
-          setShowEventDetails(false);
-          setIsEditingEvent(false);
-        }}
-        mode="edit"
-      />
-    </div>
-  </div>
-)}
+            setConflictingEvents([]);
+          }}
+          onEdit={handleEventEdit}
+          onDelete={handleDeleteEvent}
+          familyMembers={familyMembers}
+          pendingAction={pendingAction}
+          showSuccess={showSuccess}
+          // Add new props for enhanced details
+          conflictingEvents={conflictingEvents}
+          // Pass AI metadata
+          showAiMetadata={true}
+        />
+      )}
+
+      {/* Enhanced Event Manager for editing and creating */}
+      {(showEventManager || (selectedEvent && isEditingEvent)) && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <EnhancedEventManager
+              initialEvent={isEditingEvent ? selectedEvent : null}
+              selectedDate={selectedDate}
+              onSave={(result) => {
+                if (result?.success) {
+                  // Close the editor/creator
+                  setShowEventManager(false);
+                  setShowEventDetails(false);
+                  setIsEditingEvent(false);
+                  
+                  // Update local data and refresh
+                  setLastRefresh(Date.now());
+                  
+                  // Show success animation
+                  setShowSuccess(true);
+                  setTimeout(() => {
+                    setShowSuccess(false);
+                  }, 2000);
+                  
+                  CalendarService.showNotification(
+                    isEditingEvent ? "Event updated successfully" : "Event added successfully", 
+                    "success"
+                  );
+                }
+              }}
+              onCancel={() => {
+                setShowEventManager(false);
+                setShowEventDetails(false);
+                setIsEditingEvent(false);
+              }}
+              mode={isEditingEvent ? "edit" : "create"}
+            />
+          </div>
+        </div>
+      )}
+      
+      {/* Success animation */}
+      {showSuccess && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-20">
+          <div className="bg-white rounded-lg p-6 shadow-lg animate-bounce">
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto flex items-center justify-center rounded-full bg-green-100 mb-3">
+                <Check size={32} className="text-green-600" />
+              </div>
+              <h3 className="text-lg font-medium">
+                {isEditingEvent ? 'Event Updated!' : 'Event Added!'}
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Successfully {isEditingEvent ? 'updated in' : 'added to'} your calendar
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
