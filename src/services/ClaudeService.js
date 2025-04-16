@@ -440,34 +440,38 @@ async generateResponse(messages, context, options = {}) {
       }
     }
     
-    // Extract time
-    const timePatterns = [
-      /at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i,
-      /(\d{1,2}(?::\d{2})?\s*(?:am|pm))\s+(?:on|next)/i,
-      /(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i
-    ];
-    
-    for (const pattern of timePatterns) {
-      const match = message.match(pattern);
-      if (match) {
-        eventData.time = match[1];
-        break;
-      }
+    // Extract time with improved patterns
+  const timePatterns = [
+    /at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i,     // "at 3 pm" or "at 3:30 pm"
+    /(\d{1,2}(?::\d{2})?\s*(?:am|pm))\s+(?:on|next|with)/i,  // "3 pm on Friday" or "3 pm with doctor"
+    /(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i,           // Just "3 pm" anywhere
+    /at\s+(\d{1,2})(?:\s+o'?clock)?/i              // "at 3" or "at 3 o'clock"
+  ];
+  
+  for (const pattern of timePatterns) {
+    const match = message.match(pattern);
+    if (match) {
+      eventData.time = match[1].trim();
+      console.log("Extracted time:", eventData.time);
+      break;
     }
-    
-    // Extract location keywords (at Restaurant, in Central Park)
-    const locationPatterns = [
-      /at\s+([A-Za-z\s]+(?:restaurant|cafe|park|theater|cinema|mall|store))(?:\s+on|\s+at|\s+for)/i,
-      /in\s+([A-Za-z\s]+(?:park|mall|area|district|neighborhood))(?:\s+on|\s+at|\s+for)/i
-    ];
-    
-    for (const pattern of locationPatterns) {
-      const match = message.match(pattern);
-      if (match) {
-        eventData.location = match[1];
-        break;
-      }
+  }
+  
+  // Extract location keywords (at Restaurant, in Central Park)
+  const locationPatterns = [
+    /at\s+([A-Za-z\s]+(?:restaurant|cafe|park|theater|cinema|mall|store))(?:\s+on|\s+at|\s+for)/i,
+    /in\s+([A-Za-z\s]+(?:park|mall|area|district|neighborhood))(?:\s+on|\s+at|\s+for)/i,
+    /with\s+(?:doctor|dr\.?)\s+([A-Za-z\s]+)/i,   // "with doctor berry"
+    /at\s+([A-Za-z][A-Za-z\s'&]+)(?:\s|$)/i       // "at Mayo Clinic" (more general location)
+  ];
+  
+  for (const pattern of locationPatterns) {
+    const match = message.match(pattern);
+    if (match) {
+      eventData.location = match[1];
+      break;
     }
+  }
     
     // Extract food keywords for restaurant inference
     const foodKeywords = ['dinner', 'lunch', 'breakfast', 'brunch', 'chinese', 'italian', 'mexican', 'indian', 'sushi', 'thai', 'food'];
@@ -551,54 +555,77 @@ async generateResponse(messages, context, options = {}) {
         startDate.setDate(startDate.getDate() + 1);
       }
       
-      // Set time if provided
-      if (eventData.time) {
-        const timeMatch = eventData.time.match(/(\d{1,2})(?::(\d{1,2}))?\s*(am|pm)?/i);
-        if (timeMatch) {
-          let hour = parseInt(timeMatch[1]);
-          const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-          const period = timeMatch[3]?.toLowerCase();
-          
-          // Default to PM for dinner events if not specified
-          const isPM = period === 'pm' || 
-                   (!period && (hour < 8 || hour === 12) && 
-                    (eventData.title.toLowerCase().includes('dinner') || 
-                     eventData.title.toLowerCase().includes('lunch')));
-          
-          // Adjust for AM/PM
-          if (isPM && hour < 12) {
-            hour += 12;
-          } else if (period === 'am' && hour === 12) {
-            hour = 0;
-          }
-          
-          startDate.setHours(hour, minute, 0, 0);
-        } else {
-          // Default to 7 PM for dinner events, 12 PM for lunch, 8 AM for breakfast
-          if (eventData.title.toLowerCase().includes('dinner') || 
-              eventData.title.toLowerCase().includes('date')) {
-            startDate.setHours(19, 0, 0, 0);
-          } else if (eventData.title.toLowerCase().includes('lunch')) {
-            startDate.setHours(12, 0, 0, 0);
-          } else if (eventData.title.toLowerCase().includes('breakfast')) {
-            startDate.setHours(8, 0, 0, 0);
-          } else {
-            startDate.setHours(9, 0, 0, 0); // Default to 9 AM
-          }
-        }
-      } else {
-        // Default times based on event type
-        if (eventData.title.toLowerCase().includes('dinner') || 
-            eventData.title.toLowerCase().includes('date')) {
-          startDate.setHours(19, 0, 0, 0); // 7 PM for dinner events
-        } else if (eventData.title.toLowerCase().includes('lunch')) {
-          startDate.setHours(12, 0, 0, 0);
-        } else if (eventData.title.toLowerCase().includes('breakfast')) {
-          startDate.setHours(8, 0, 0, 0);
-        } else {
-          startDate.setHours(9, 0, 0, 0); // Default to 9 AM
+      // Set time if provided with improved parsing
+  if (eventData.time) {
+    const timeMatch = eventData.time.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+    if (timeMatch) {
+      let hour = parseInt(timeMatch[1]);
+      const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+      const period = timeMatch[3]?.toLowerCase();
+      
+      // Preserve explicit AM/PM specification
+      if (period === 'pm' && hour < 12) {
+        hour += 12;
+      } else if (period === 'am' && hour === 12) {
+        hour = 0;
+      } else if (!period) {
+        // If no AM/PM specified, consider the context
+        const messageText = message.toLowerCase();
+        const timeContext = messageText.substring(Math.max(0, messageText.indexOf(eventData.time) - 15), 
+                                               Math.min(messageText.length, messageText.indexOf(eventData.time) + 15));
+        
+        // Check if context contains AM/PM indicators
+        if (timeContext.includes('afternoon') || 
+            timeContext.includes('evening') || 
+            timeContext.includes('night') ||
+            (hour > 0 && hour < 7)) { // Assuming times like 3 without AM/PM are usually PM
+          if (hour < 12) hour += 12;
         }
       }
+      
+      console.log(`Setting time to ${hour}:${minute} based on extracted "${eventData.time}"`);
+      startDate.setHours(hour, minute, 0, 0);
+    } else {
+      // Default based on event type only if no specific time was found
+      console.log("No valid time format found, using event type defaults");
+      if (eventData.title.toLowerCase().includes('dinner') || 
+          eventData.title.toLowerCase().includes('date')) {
+        startDate.setHours(19, 0, 0, 0);
+      } else if (eventData.title.toLowerCase().includes('lunch')) {
+        startDate.setHours(12, 0, 0, 0);
+      } else if (eventData.title.toLowerCase().includes('breakfast')) {
+        startDate.setHours(8, 0, 0, 0);
+      } else {
+        startDate.setHours(9, 0, 0, 0); 
+      }
+    }
+  } else {
+    // No time was extracted, so check for time-related words in the message
+    const messageText = message.toLowerCase();
+    
+    // Look for time indicators
+    if (messageText.includes('afternoon')) {
+      startDate.setHours(14, 0, 0, 0); // 2 PM for afternoon
+    } else if (messageText.includes('evening')) {
+      startDate.setHours(18, 0, 0, 0); // 6 PM for evening
+    } else if (messageText.includes('morning')) {
+      startDate.setHours(9, 0, 0, 0);  // 9 AM for morning
+    } else if (eventData.title.toLowerCase().includes('dinner') || 
+        eventData.title.toLowerCase().includes('date')) {
+      startDate.setHours(19, 0, 0, 0); // 7 PM for dinner events
+    } else if (eventData.title.toLowerCase().includes('lunch')) {
+      startDate.setHours(12, 0, 0, 0);
+    } else if (eventData.title.toLowerCase().includes('breakfast')) {
+      startDate.setHours(8, 0, 0, 0);
+    } else if (messageText.includes('appt') || 
+               messageText.includes('appointment') || 
+               messageText.includes('doctor') || 
+               messageText.includes('doc')) {
+      startDate.setHours(14, 0, 0, 0); // 2 PM default for medical appointments
+    } else {
+      startDate.setHours(9, 0, 0, 0); // Default to 9 AM
+    }
+  }
       
       // Create end time (default 1.5 hours after start for meals, 1 hour for other events)
       const endDate = new Date(startDate);
@@ -611,18 +638,34 @@ async generateResponse(messages, context, options = {}) {
         endDate.setHours(endDate.getHours() + 1); // 1 hour default
       }
       
-      return {
-        type: eventData.title.toLowerCase().includes('date') ? 'date' : 'event',
-        title: eventData.title,
-        person: eventData.childName,
-        startDate,
-        endDate,
-        location: eventData.location || (eventData.title.toLowerCase().includes('dinner') ? 'Restaurant' : ''),
-        description: `Added from Allie chat: ${message}`
-      };
-    }
-    
-    return null;
+      // Create the final event data object
+  const finalEventData = {
+    type: eventData.title.toLowerCase().includes('date') ? 'date' : 
+          message.toLowerCase().includes('doctor') || message.toLowerCase().includes('appt') ? 'appointment' : 'event',
+    title: eventData.title,
+    person: eventData.childName,
+    startDate,
+    endDate,
+    location: eventData.location || (eventData.title.toLowerCase().includes('dinner') ? 'Restaurant' : ''),
+    description: `Added from Allie chat: ${message}`,
+    originalText: message  // Store original message for context
+  };
+
+  // Add detailed logging to debug time extraction issues
+  console.log("Final extracted calendar event:", {
+    type: finalEventData.type,
+    title: finalEventData.title,
+    startTime: startDate.toLocaleTimeString(),
+    extractedTime: eventData.time,
+    person: eventData.childName,
+    location: finalEventData.location,
+    originalMessage: message
+  });
+
+  return finalEventData;
+}
+
+return null;
   }
   
   /// Process calendar request and add event to calendar
@@ -665,44 +708,108 @@ async generateResponse(messages, context, options = {}) {
         eventDate.setDate(eventDate.getDate() + 1);
       }
       
-      // Set time if provided
-      if (eventData.time) {
-        // Parse time string (e.g., "3:00 PM", "14:00", "2pm")
-        const timeStr = eventData.time.toLowerCase();
-        const hour12Match = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/);
-        const hour24Match = timeStr.match(/(\d{1,2})(?::(\d{2}))?/);
+      // Set time if provided - enhanced version with better handling
+  if (eventData.time) {
+    // Parse time string (e.g., "3:00 PM", "14:00", "2pm")
+    const timeStr = eventData.time.toLowerCase();
+    const hour12Match = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/);
+    const hour24Match = timeStr.match(/(\d{1,2})(?::(\d{2}))?/);
+    
+    if (hour12Match) {
+      // 12-hour format
+      let hours = parseInt(hour12Match[1]);
+      const minutes = hour12Match[2] ? parseInt(hour12Match[2]) : 0;
+      const ampm = hour12Match[3];
+      
+      if (ampm === 'pm' && hours < 12) hours += 12;
+      if (ampm === 'am' && hours === 12) hours = 0;
+      
+      console.log(`Setting time to ${hours}:${minutes} (12-hour format from "${timeStr}")`);
+      eventDate.setHours(hours, minutes, 0, 0);
+    } else if (hour24Match) {
+      // 24-hour format
+      const hours = parseInt(hour24Match[1]);
+      const minutes = hour24Match[2] ? parseInt(hour24Match[2]) : 0;
+      
+      // If no AM/PM but hour is 1-7, assume PM (common assumption for appointments)
+      let adjustedHours = hours;
+      const originalMessage = eventData.originalText || '';
+      
+      if (hours > 0 && hours < 8 && !timeStr.includes('am') && 
+          !originalMessage.toLowerCase().includes('morning')) {
+        adjustedHours = hours + 12;
+        console.log(`Assuming PM for time ${hours}, adjusting to ${adjustedHours}`);
+      }
+      
+      console.log(`Setting time to ${adjustedHours}:${minutes} (24-hour format from "${timeStr}")`);
+      eventDate.setHours(adjustedHours, minutes, 0, 0);
+    } else {
+      // Try to extract numeric time without am/pm
+      const numericMatch = timeStr.match(/(\d{1,2})/);
+      if (numericMatch) {
+        let hours = parseInt(numericMatch[1]);
         
-        if (hour12Match) {
-          // 12-hour format
-          let hours = parseInt(hour12Match[1]);
-          const minutes = hour12Match[2] ? parseInt(hour12Match[2]) : 0;
-          const ampm = hour12Match[3];
-          
-          if (ampm === 'pm' && hours < 12) hours += 12;
-          if (ampm === 'am' && hours === 12) hours = 0;
-          
-          eventDate.setHours(hours, minutes, 0, 0);
-        } else if (hour24Match) {
-          // 24-hour format
-          const hours = parseInt(hour24Match[1]);
-          const minutes = hour24Match[2] ? parseInt(hour24Match[2]) : 0;
-          
-          eventDate.setHours(hours, minutes, 0, 0);
-        } else {
-          // Default to noon
-          eventDate.setHours(12, 0, 0, 0);
+        // If number is 1-7 without AM/PM, likely PM
+        if (hours > 0 && hours < 8) {
+          hours += 12;
         }
+        
+        console.log(`Setting time to ${hours}:00 (numeric-only time from "${timeStr}")`);
+        eventDate.setHours(hours, 0, 0, 0);
       } else {
-        // Set appropriate default time based on event type
-        const eventType = eventData.type?.toLowerCase() || '';
-        if (eventType === 'doctor' || eventType === 'dental' || eventType === 'appointment') {
-          eventDate.setHours(10, 0, 0, 0); // 10 AM for appointments
-        } else if (eventType === 'birthday' || eventType === 'party') {
-          eventDate.setHours(14, 0, 0, 0); // 2 PM for parties
+        // Check original message for context clues before defaulting
+        const originalMessage = eventData.originalText || '';
+        if (originalMessage.toLowerCase().includes('afternoon')) {
+          console.log('Setting time to 3:00 PM based on "afternoon" context');
+          eventDate.setHours(15, 0, 0, 0);
+        } else if (originalMessage.toLowerCase().includes('evening')) {
+          console.log('Setting time to 6:00 PM based on "evening" context');
+          eventDate.setHours(18, 0, 0, 0);
+        } else if (originalMessage.toLowerCase().includes('morning')) {
+          console.log('Setting time to 9:00 AM based on "morning" context');
+          eventDate.setHours(9, 0, 0, 0);
         } else {
-          eventDate.setHours(12, 0, 0, 0); // Noon default
+          // Set event-specific defaults as last resort
+          const eventType = eventData.type?.toLowerCase() || '';
+          console.log(`No time context found, using event type "${eventType}" for default`);
+          
+          if (eventType === 'doctor' || eventType === 'dental' || eventType === 'appointment') {
+            eventDate.setHours(14, 0, 0, 0); // 2 PM for appointments
+          } else if (eventType === 'birthday' || eventType === 'party') {
+            eventDate.setHours(14, 0, 0, 0); // 2 PM for parties
+          } else {
+            eventDate.setHours(12, 0, 0, 0); // Noon default
+          }
         }
       }
+    }
+  } else {
+    // No time information provided at all
+    // Look for time clues in original text
+    const originalMessage = eventData.originalText || '';
+    
+    if (originalMessage.toLowerCase().includes('afternoon')) {
+      console.log('Setting time to 3:00 PM based on "afternoon" context');
+      eventDate.setHours(15, 0, 0, 0);
+    } else if (originalMessage.toLowerCase().includes('evening')) {
+      console.log('Setting time to 6:00 PM based on "evening" context');
+      eventDate.setHours(18, 0, 0, 0);
+    } else if (originalMessage.toLowerCase().includes('morning')) {
+      console.log('Setting time to 9:00 AM based on "morning" context');
+      eventDate.setHours(9, 0, 0, 0);
+    } else {
+      // Set event-specific defaults as last resort
+      const eventType = eventData.type?.toLowerCase() || '';
+      
+      if (eventType === 'doctor' || eventType === 'dental' || eventType === 'appointment') {
+        eventDate.setHours(14, 0, 0, 0); // 2 PM for appointments
+      } else if (eventType === 'birthday' || eventType === 'party') {
+        eventDate.setHours(14, 0, 0, 0); // 2 PM for parties
+      } else {
+        eventDate.setHours(12, 0, 0, 0); // Noon default
+      }
+    }
+  }
       
       // Create end time (1 hour after start by default)
       const endDate = new Date(eventDate);
