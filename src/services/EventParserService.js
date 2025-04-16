@@ -13,96 +13,154 @@ class EventParserService {
   }
 
   /**
-   * Parse text to extract event details
-   * @param {string} text - Text to parse
-   * @param {object} familyContext - Family data for context
-   * @returns {object} Extracted event details
-   */
-  async parseEventText(text, familyContext) {
-    try {
-      console.log("Parsing event text:", text.substring(0, 100) + "...");
-      
-      // First, try to detect the language/region
-      const region = this.detectRegion(text);
-      console.log("Detected region:", region);
-      
-      // Extract event type (birthday, appointment, etc.)
-      const eventType = this.detectEventType(text);
-      console.log("Detected event type:", eventType);
-      
-      // Extract date and time, considering regional format
-      const dateTime = this.extractDateTime(text, region);
-      console.log("Extracted date/time:", dateTime);
-      
-      // Extract location
-      const location = this.extractLocation(text);
-      console.log("Extracted location:", location);
-      
-      // Extract child information
-      const childInfo = this.extractChildInfo(text, familyContext);
-      console.log("Extracted child info:", childInfo);
-      
-      // Extract host information
-      const hostInfo = this.extractHostInfo(text);
-      console.log("Extracted host info:", hostInfo);
-      
-      // Extract special information for birthdays
-      let birthdayInfo = null;
-      if (eventType === 'birthday') {
-        birthdayInfo = this.extractBirthdayInfo(text);
-        console.log("Extracted birthday info:", birthdayInfo);
-      }
-      
-      // Extract any special notes
-      const notes = this.extractNotes(text);
-      console.log("Extracted notes:", notes);
-      
-      // Determine if the child is hosting or attending the event
-      const eventRelationship = this.determineEventRelationship(text, childInfo.childName);
-      console.log("Determined event relationship:", eventRelationship);
-      
-      // Set the correct title based on whether the child is hosting or attending
-      let title;
-      if (eventRelationship.relationship === "attending" && eventRelationship.hostName) {
-        title = `${eventRelationship.hostName}'s ${eventType === 'birthday' ? 'Birthday Party' : 'Event'}`;
-        if (birthdayInfo?.age || hostInfo.birthdayChildAge) {
-          title += ` (${birthdayInfo?.age || hostInfo.birthdayChildAge})`;
-        }
-      } else {
-        title = this.generateEventTitle(eventType, childInfo, birthdayInfo || hostInfo);
-      }
-      
-      // Create a structured event object
-      const eventDetails = {
-        eventType: eventType,
-        title: title,
-        childId: childInfo.childId,
-        childName: childInfo.childName,
-        dateTime: dateTime,
-        location: location,
-        hostParent: hostInfo.name,
-        extraDetails: {
-          birthdayChildName: birthdayInfo?.name || hostInfo.birthdayChildName,
-          birthdayChildAge: birthdayInfo?.age || hostInfo.birthdayChildAge,
-          notes: notes,
-          eventRelationship: eventRelationship.relationship, // Add relationship info
-          hostName: eventRelationship.hostName || null // Add host name if available
-        },
-        attendingParentId: null, // To be filled in by user
-        creationSource: 'AI-parse-text',
-        region: region, // Store the detected region for reference
-        originalText: text, // Store original text for learning feedback
-        isInvitation: eventRelationship.relationship === "attending" // Flag if this is an invitation
-      };
-      
-      return eventDetails;
-    } catch (error) {
-      console.error("Error parsing event text:", error);
-      throw error;
+ * Parse text to extract event details
+ * @param {string} text - Text to parse
+ * @param {object} familyContext - Family data for context
+ * @returns {Promise<object>} Extracted event details
+ */
+async parseEventText(text, familyContext) {
+  try {
+    console.log("Parsing event text:", text.substring(0, 100) + "...");
+    
+    // First, try to detect the language/region
+    const region = this.detectRegion(text);
+    console.log("Detected region:", region);
+    
+    // Extract event type (birthday, appointment, etc.)
+    const eventType = this.detectEventType(text);
+    console.log("Detected event type:", eventType);
+    
+    // Extract date and time, considering regional format
+    const dateTime = await this.extractDateTime(text, region);
+    console.log("Extracted date/time:", dateTime);
+    
+    // Extract location
+    const location = this.extractLocation(text);
+    console.log("Extracted location:", location);
+    
+    // Extract child information
+    const childInfo = this.extractChildInfo(text, familyContext);
+    console.log("Extracted child info:", childInfo);
+    
+    // Extract host information
+    const hostInfo = this.extractHostInfo(text);
+    console.log("Extracted host info:", hostInfo);
+    
+    // Extract special information for birthdays
+    let birthdayInfo = null;
+    if (eventType === 'birthday') {
+      birthdayInfo = this.extractBirthdayInfo(text);
+      console.log("Extracted birthday info:", birthdayInfo);
     }
+    
+    // Extract any special notes
+    const notes = this.extractNotes(text);
+    console.log("Extracted notes:", notes);
+    
+    // Determine if the child is hosting or attending the event
+    const eventRelationship = this.determineEventRelationship(text, childInfo.childName);
+    console.log("Determined event relationship:", eventRelationship);
+    
+    // Set the correct title based on whether the child is hosting or attending
+    let title;
+    if (eventRelationship.relationship === "attending" && eventRelationship.hostName) {
+      title = `${eventRelationship.hostName}'s ${eventType === 'birthday' ? 'Birthday Party' : 'Event'}`;
+      if (birthdayInfo?.age || hostInfo.birthdayChildAge) {
+        title += ` (${birthdayInfo?.age || hostInfo.birthdayChildAge})`;
+      }
+    } else {
+      title = this.generateEventTitle(eventType, childInfo, birthdayInfo || hostInfo);
+    }
+    
+    // Create a structured event object
+    const eventDetails = {
+      eventType: eventType,
+      title: title,
+      childId: childInfo.childId,
+      childName: childInfo.childName,
+      dateTime: dateTime,
+      location: location,
+      hostParent: hostInfo.name,
+      extraDetails: {
+        birthdayChildName: birthdayInfo?.name || hostInfo.birthdayChildName,
+        birthdayChildAge: birthdayInfo?.age || hostInfo.birthdayChildAge,
+        notes: notes,
+        eventRelationship: eventRelationship.relationship,
+        hostName: eventRelationship.hostName || null
+      },
+      attendingParentId: null,
+      creationSource: 'AI-parse-text',
+      region: region,
+      originalText: text,
+      isInvitation: eventRelationship.relationship === "attending"
+    };
+    
+    return eventDetails;
+  } catch (error) {
+    console.error("Error parsing event text:", error);
+    throw error;
   }
+}
   
 // Add to src/services/EventParserService.js
+
+/**
+ * Extract date and time using Claude API
+ * @param {string} text - Text containing date/time information
+ * @returns {Promise<Date>} - Parsed date object
+ */
+async extractDateTimeUsingClaude(text) {
+  try {
+    console.log("Using Claude API to extract date/time from:", text);
+    
+    // Call Claude API
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.CLAUDE_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: "claude-3-sonnet-20240229",
+        max_tokens: 100,
+        system: "You are an expert at extracting date and time information from text. Extract the specific date and time mentioned in the user's text. Return ONLY an ISO-8601 formatted date-time string (YYYY-MM-DDTHH:MM:SS.sssZ). If no specific time is mentioned, use a reasonable default based on the type of event (evening for social events, morning for appointments, etc.). Always favor future dates over past dates.",
+        messages: [{
+          role: "user", 
+          content: `Extract the date and time from: "${text}"`
+        }]
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API request failed with status ${response.status}`);
+    }
+    
+    const result = await response.json();
+    
+    // Extract ISO date string from Claude's response
+    // Claude should respond with just an ISO string, but we'll handle other responses too
+    let isoDateString = result.content[0].text.trim();
+    
+    // Clean up the response if needed (remove quotes, etc.)
+    isoDateString = isoDateString.replace(/["'`]/g, '').trim();
+    
+    // Validate the date string
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$/.test(isoDateString)) {
+      console.warn("Claude didn't return a valid ISO date:", isoDateString);
+      throw new Error("Invalid date format returned");
+    }
+    
+    console.log("Claude parsed date/time:", isoDateString);
+    return new Date(isoDateString);
+  } catch (error) {
+    console.error("Error using Claude for date extraction:", error);
+    // Fallback to default
+    return this.getDefaultDateTime(text);
+  }
+}
+
+
 
 /**
  * Extract recurring event pattern from text
@@ -1060,49 +1118,67 @@ detectInvitation(text, familyMembers = []) {
     return 'event';
   }
   
-  extractDateTime(text, region = 'US') {
+ /**
+ * Extract date and time from text
+ * @param {string} text - Text to analyze
+ * @param {string} region - 'US' or 'SE' for regional date formats
+ * @returns {Promise<Date>} - Extracted date
+ */
+async extractDateTime(text, region = 'US') {
+  try {
+    console.log(`Extracting date/time with region: ${region} from text: "${text}"`);
+    
+    // First try using chrono-node
+    const refDate = new Date();
+    const options = { forwardDate: true };
+    
     try {
-      console.log(`Extracting date/time with region: ${region} from text: "${text}"`);
-      
-      // Set reference date to now
-      const refDate = new Date();
-      
-      // Create parsing options
-      const options = {
-        forwardDate: true // Always prefer future dates for events
-      };
-      
-      // Handle Swedish text by adding additional context if needed
+      // Handle Swedish text if needed
+      let processedText = text;
       if (region === 'SE') {
-        // Add context for Swedish day/month names if they appear in the text
-        // This helps chrono better understand Swedish references
         const swedishContext = this.detectSwedishDateContext(text);
         if (swedishContext) {
-          text = `${swedishContext} ${text}`;
+          processedText = `${swedishContext} ${text}`;
         }
       }
       
-      // Parse the text using chrono-node's natural language parsing
-      const parsedResults = chrono.parse(text, refDate, options);
+      // Parse with chrono-node
+      const parsedResults = chrono.parse(processedText, refDate, options);
       
-      // If parsing failed, use default date/time
-      if (!parsedResults || parsedResults.length === 0) {
-        console.log("Failed to parse date/time, using default");
-        return this.getDefaultDateTime(text);
+      if (parsedResults && parsedResults.length > 0) {
+        const parsedDate = parsedResults[0].start.date();
+        console.log(`Chrono-node extracted date/time: ${parsedDate.toISOString()}`);
+        
+        // Check if the time component seems correct (not defaulting to noon)
+        // Look for time indicators in the text
+        const timePatterns = [
+          /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i,
+          /\b(\d{1,2})(am|pm)\b/i,
+          /\b(?:at|@)?\s*(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)\b/i
+        ];
+        
+        const hasTimeIndicator = timePatterns.some(pattern => pattern.test(text));
+        const isParsedTimeDefault = parsedDate.getHours() === 12 && parsedDate.getMinutes() === 0;
+        
+        // If there's a time indicator but chrono defaulted to noon, don't trust it
+        if (!hasTimeIndicator || !isParsedTimeDefault) {
+          return parsedDate;
+        }
       }
       
-      // Get the first result (most likely match)
-      const parsedDate = parsedResults[0].start.date();
-      
-      // Log the extracted date for debugging
-      console.log(`Extracted date/time: ${parsedDate.toISOString()}`);
-      
-      return parsedDate;
-    } catch (error) {
-      console.error("Error in extractDateTime:", error);
-      return this.getDefaultDateTime(text); // Use default on error
+      // If chrono-node fails or returns suspicious results, fallback to Claude
+      console.log("Chrono-node failed or returned suspicious results, using Claude API");
+    } catch (chronoError) {
+      console.warn("Chrono-node parsing error:", chronoError);
     }
+    
+    // Use Claude API as a fallback
+    return await this.extractDateTimeUsingClaude(text);
+  } catch (error) {
+    console.error("Error in extractDateTime:", error);
+    return this.getDefaultDateTime(text); // Use default on error
   }
+}
   
   // Helper method for Swedish date context
   detectSwedishDateContext(text) {
