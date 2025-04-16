@@ -442,11 +442,44 @@ async generateResponse(messages, context, options = {}) {
     
     // Extract time with improved patterns
   const timePatterns = [
-    /at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i,     // "at 3 pm" or "at 3:30 pm"
-    /(\d{1,2}(?::\d{2})?\s*(?:am|pm))\s+(?:on|next|with)/i,  // "3 pm on Friday" or "3 pm with doctor"
-    /(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i,           // Just "3 pm" anywhere
-    /at\s+(\d{1,2})(?:\s+o'?clock)?/i              // "at 3" or "at 3 o'clock"
+    /at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm|[ap]\.m\.))/i,     // "at 3 pm" or "at 3:30 pm"
+    /(\d{1,2}(?::\d{2})?\s*(?:am|pm|[ap]\.m\.))\s+(?:on|next|with|at|for)/i,  // "3 pm on Friday" or "3 pm with doctor"
+    /(\d{1,2}(?::\d{2})?\s*(?:am|pm|[ap]\.m\.))/i,           // Just "3 pm" anywhere
+    /at\s+(\d{1,2})(?:\s+o'?clock)?/i,              // "at 3" or "at 3 o'clock"
+    /starts\s+at\s+(\d{1,2}(?::\d{2})?)/i,           // "starts at 3"
+    /begins\s+at\s+(\d{1,2}(?::\d{2})?)/i,           // "begins at 3"
+    /\s+at\s+(\d{1,2})(?:\s+|$)/i                   // Simple "at 3" pattern
   ];
+  
+  let timeFound = false;
+  for (const pattern of timePatterns) {
+    const match = message.match(pattern);
+    if (match && match[1]) {
+      eventData.time = match[1].trim();
+      console.log("Extracted time:", eventData.time);
+      timeFound = true;
+      break;
+    }
+  }
+  
+  // Special case for when exact patterns fail - look for numbers after time-related words
+  if (!timeFound) {
+    const simpleTimePatterns = [
+      /at\s+(\d{1,2})/i,
+      /starts\s+at\s+(\d{1,2})/i,
+      /(\d{1,2})\s*(?:pm|am)/i,
+      /(\d{1,2})\s+(?:o'?clock)/i
+    ];
+    
+    for (const pattern of simpleTimePatterns) {
+      const match = message.match(pattern);
+      if (match && match[1]) {
+        eventData.time = match[1].trim();
+        console.log("Extracted time using simple pattern:", eventData.time);
+        break;
+      }
+    }
+  }
   
   for (const pattern of timePatterns) {
     const match = message.match(pattern);

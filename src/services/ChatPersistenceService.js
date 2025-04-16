@@ -23,53 +23,114 @@ class ChatPersistenceService {
   }
   
   /**
-   * Save a chat message with enhanced metadata
-   * @param {object} message - The message to save
-   * @returns {Promise<object>} Result with success status and message ID
-   */
-  async saveMessage(message) {
-    try {
-      if (!message.familyId) {
-        console.error("Cannot save message without familyId", message);
-        return { success: false, error: "Missing familyId" };
-      }
-      
-      // Ensure required fields exist
-      const enhancedMessage = {
-        ...message,
-        text: message.text || "",
-        sender: message.sender || "unknown",
-        createdAt: serverTimestamp(),
-        timestamp: message.timestamp || new Date().toISOString(),
-        // Add a searchable field for full-text search
-        searchText: (message.text || "").toLowerCase(),
-        // Add message version for future format compatibility
-        messageVersion: 2,
-        // Add message hash for deduplication if needed
-        messageHash: this.generateMessageHash(message)
-      };
-      
-      // Save to Firestore
-      const docRef = await addDoc(collection(db, "chatMessages"), enhancedMessage);
-      
-      // Update family's last message timestamp
-      try {
-        const familyRef = doc(db, "families", message.familyId);
-        await setDoc(familyRef, {
-          lastChatActivity: serverTimestamp()
-        }, { merge: true });
-      } catch (e) {
-        console.warn("Failed to update family's last chat activity:", e);
-        // Non-critical error, don't fail the entire save operation
-      }
-      
-      console.log(`Message saved with ID: ${docRef.id}`);
-      return { success: true, messageId: docRef.id };
-    } catch (error) {
-      console.error("Error saving message:", error);
-      return { success: false, error: error.message };
+ * Save a chat message with enhanced metadata
+ * @param {object} message - The message to save
+ * @returns {Promise<object>} Result with success status and message ID
+ */
+async saveMessage(message) {
+  try {
+    // Add detailed logging for debugging
+    console.log("ChatPersistenceService.saveMessage called with:", {
+      text: message.text?.substring(0, 50) + "...",
+      sender: message.sender,
+      familyId: message.familyId,
+      timestamp: message.timestamp || new Date().toISOString()
+    });
+    
+    if (!message.familyId) {
+      console.error("Cannot save message without familyId", message);
+      return { success: false, error: "Missing familyId" };
     }
+    
+    // Ensure required fields exist
+    const enhancedMessage = {
+      ...message,
+      text: message.text || "",
+      sender: message.sender || "unknown",
+      createdAt: serverTimestamp(),
+      timestamp: message.timestamp || new Date().toISOString(),
+      // Add a searchable field for full-text search
+      searchText: (message.text || "").toLowerCase(),
+      // Add message version for future format compatibility
+      messageVersion: 2,
+      // Add message hash for deduplication if needed
+      messageHash: this.generateMessageHash(message)
+    };
+    
+    // Save to Firestore with retry logic
+    let docRef = null;
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries && !docRef) {
+      try {
+        docRef = await addDoc(collection(db, "chatMessages"), enhancedMessage);
+      } catch (saveError) {
+        retryCount++;
+        console.warn(`Chat message save attempt ${retryCount} failed:`, saveError);
+        if (retryCount >= maxRetries) throw saveError;
+        // Wait before retry (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 300 * Math.pow(2, retryCount)));
+      }
+    }
+    
+    // Update family's last message timestamp
+    try {
+      const familyRef = doc(db, "families", message.familyId);
+      await setDoc(familyRef, {
+        lastChatActivity: serverTimestamp(),
+        lastMessage: {
+          text: message.text?.substring(0, 100) || "",
+          sender: message.sender,
+          timestamp: serverTimestamp()
+        }
+      }, { merge: true });
+    } catch (e) {
+      console.warn("Failed to update family's last chat activity:", e);
+      // Non-critical error, don't fail the entire save operation
+    }
+    
+    console.log(`Message successfully saved with ID: ${docRef.id}`);
+    
+    // Update cache immediately for fast local access
+    this.addToMessageCache(message.familyId, {
+      id: docRef.id,
+      ...enhancedMessage
+    });
+    
+    return { success: true, messageId: docRef.id };
+  } catch (error) {
+    console.error("Error saving message:", error);
+    return { success: false, error: error.message };
   }
+}
+
+/**
+ * Helper method to add message to local cache
+ * @param {string} familyId - Family ID
+ * @param {Object} message - Message to add to cache
+ * @private
+ */
+addToMessageCache(familyId, message) {
+  if (!this.messageCache[familyId]) {
+    this.messageCache[familyId] = [];
+  }
+  
+  // Add to cache if not already present
+  const messageExists = this.messageCache[familyId].some(m => 
+    m.id === message.id || m.messageHash === message.messageHash
+  );
+  
+  if (!messageExists) {
+    this.messageCache[familyId].push(message);
+    // Sort by timestamp
+    this.messageCache[familyId].sort((a, b) => {
+      const timeA = new Date(a.timestamp);
+      const timeB = new Date(b.timestamp);
+      return timeA - timeB;
+    });
+  }
+}
   
   /**
    * Load messages with pagination support
