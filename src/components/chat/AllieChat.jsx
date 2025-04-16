@@ -18,6 +18,8 @@ import DocumentProcessingService from '../../services/DocumentProcessingService'
 import DocumentCategoryService from '../../services/DocumentCategoryService';
 import DocumentOCRService from '../../services/DocumentOCRService';
 import ChatPersistenceService from '../../services/ChatPersistenceService';
+import UnifiedParserService from '../../services/UnifiedParserService';
+
 
 
 
@@ -694,129 +696,257 @@ const processMessageForEvents = async (text) => {
         parents: familyMembers.filter(m => m.role === 'parent')
       };
       
-      // Extract people mentioned in the text
-      const mentionedPeople = this.extractMentionedPeople(text, familyMembers);
+      // Use our new UnifiedParserService to parse the event
+      const parsedEvent = await UnifiedParserService.parseEvent(text, familyContext);
       
-      // Try to parse the text as an event
-      try {
-        // Use the EventParserService to parse the text
-        const parsedEvent = await EventParserService.parseEventText(text, familyContext);
+      if (parsedEvent && (parsedEvent.title || parsedEvent.eventType)) {
+        console.log("Successfully parsed event:", parsedEvent);
         
-        if (parsedEvent && (parsedEvent.title || parsedEvent.eventType)) {
-          console.log("Successfully parsed event:", parsedEvent);
+        // Add source tracking for learning feedback
+        parsedEvent.creationSource = 'text';
+        // Add user and family IDs
+        parsedEvent.userId = selectedUser.id;
+        parsedEvent.familyId = familyId;
+        
+        // Extract mentioned people
+        const mentionedPeople = extractMentionedPeople(text, familyMembers);
+        
+        // Add mentioned people as attendees
+        if (mentionedPeople && mentionedPeople.length > 0) {
+          parsedEvent.attendees = mentionedPeople.map(person => ({
+            id: person.id || null,
+            name: person.name,
+            role: person.role || null
+          }));
           
-          // Add source tracking for learning feedback
-          parsedEvent.creationSource = 'text';
-          // Add user and family IDs
-          parsedEvent.userId = selectedUser.id;
-          parsedEvent.familyId = familyId;
+          // If "me" is mentioned, add the current user
+          if (text.toLowerCase().includes(' me ') || 
+              text.toLowerCase().includes('for me') || 
+              text.toLowerCase().startsWith('me ')) {
+            const currentUser = familyMembers.find(m => m.id === selectedUser.id);
+            if (currentUser && !parsedEvent.attendees.some(a => a.id === currentUser.id)) {
+              parsedEvent.attendees.push({
+                id: currentUser.id,
+                name: currentUser.name,
+                role: currentUser.role
+              });
+            }
+          }
           
-          // Add mentioned people as attendees
-          if (mentionedPeople && mentionedPeople.length > 0) {
-            parsedEvent.attendees = mentionedPeople.map(person => ({
-              id: person.id || null,
-              name: person.name,
-              role: person.role || null
-            }));
+          // If "wife" or "husband" is mentioned, try to find the spouse
+          const spouseTerms = ['wife', 'husband', 'spouse', 'partner'];
+          const hasSpouseTerm = spouseTerms.some(term => text.toLowerCase().includes(term));
+          
+          if (hasSpouseTerm) {
+            const currentUser = familyMembers.find(m => m.id === selectedUser.id);
+            const spouses = familyMembers.filter(m => 
+              m.role === 'parent' && m.id !== currentUser.id
+            );
             
-            // If "me" is mentioned, add the current user
-            if (text.toLowerCase().includes(' me ') || 
-                text.toLowerCase().includes('for me') || 
-                text.toLowerCase().startsWith('me ')) {
-              const currentUser = familyMembers.find(m => m.id === selectedUser.id);
-              if (currentUser && !parsedEvent.attendees.some(a => a.id === currentUser.id)) {
+            if (spouses.length > 0) {
+              const spouse = spouses[0];
+              if (!parsedEvent.attendees.some(a => a.id === spouse.id)) {
                 parsedEvent.attendees.push({
-                  id: currentUser.id,
-                  name: currentUser.name,
-                  role: currentUser.role
+                  id: spouse.id,
+                  name: spouse.name,
+                  role: spouse.role
                 });
               }
             }
-            
-            // If "wife" or "husband" is mentioned, try to find the spouse
-            const spouseTerms = ['wife', 'husband', 'spouse', 'partner'];
-            const hasSpouseTerm = spouseTerms.some(term => text.toLowerCase().includes(term));
-            
-            if (hasSpouseTerm) {
-              const currentUser = familyMembers.find(m => m.id === selectedUser.id);
-              const spouses = familyMembers.filter(m => 
-                m.role === 'parent' && m.id !== currentUser.id
-              );
-              
-              if (spouses.length > 0) {
-                const spouse = spouses[0];
-                if (!parsedEvent.attendees.some(a => a.id === spouse.id)) {
-                  parsedEvent.attendees.push({
-                    id: spouse.id,
-                    name: spouse.name,
-                    role: spouse.role
-                  });
-                }
-              }
-            }
           }
+        }
+        
+        // If this is a personal event for adults (like a date night), set appropriate properties
+        if (text.toLowerCase().includes('date night') || 
+            text.toLowerCase().includes('plan a date') || 
+            text.toLowerCase().includes('night out')) {
+          parsedEvent.eventType = 'date';
+          parsedEvent.category = 'relationship';
           
-          // If this is a personal event for adults (like a date night), set appropriate properties
-          if (text.toLowerCase().includes('date night') || 
-              text.toLowerCase().includes('plan a date') || 
-              text.toLowerCase().includes('night out')) {
-            parsedEvent.eventType = 'date';
-            parsedEvent.category = 'relationship';
-            
-            // Make sure both parents are included
-            const parents = familyMembers.filter(m => m.role === 'parent');
-            if (parents.length > 0) {
-              parsedEvent.attendees = parents.map(parent => ({
-                id: parent.id,
-                name: parent.name,
-                role: parent.role
-              }));
-            }
+          // Make sure both parents are included
+          const parents = familyMembers.filter(m => m.role === 'parent');
+          if (parents.length > 0) {
+            parsedEvent.attendees = parents.map(parent => ({
+              id: parent.id,
+              name: parent.name,
+              role: parent.role
+            }));
           }
-          
-          // Now that we have all the details, create the event directly
-          const response = await createCalendarEventDirectly(parsedEvent);
+        }
+        
+        // Now that we have all the details, create the event directly
+        const response = await createCalendarEventDirectly(parsedEvent);
 
+        
+        if (response.success) {
+          // Send success message
+          const successMessage = {
+            familyId,
+            sender: 'allie',
+            userName: 'Allie',
+            text: `I've added the following event to your family's shared calendar:\n\nEvent: ${parsedEvent.title}\nDate: ${new Date(parsedEvent.dateTime).toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric'})}\nTime: ${new Date(parsedEvent.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}\nLocation: ${parsedEvent.location || 'Not specified'}\n\nThis has been added to your family's shared calendar. You can view and manage this in your calendar.`,
+            timestamp: new Date().toISOString()
+          };
           
-          if (response.success) {
-            // Send success message
+          setMessages(prev => [...prev, successMessage]);
+          return true;
+        } else {
+          // If direct creation failed, show the event parser UI
+          setParsedEventDetails(parsedEvent);
+          setShowEventParser(true);
+          setEventParsingSource('text');
+          
+          const helperMessage = {
+            familyId,
+            sender: 'allie',
+            userName: 'Allie',
+            text: `I've extracted event details from your message. Please review before adding to your calendar.`,
+            timestamp: new Date().toISOString()
+          };
+          
+          setMessages(prev => [...prev, helperMessage]);
+          return true;
+        }
+      }
+    }
+    
+    // Check for todo-related requests
+    const todoKeywords = ['todo', 'to-do', 'to do', 'add a task', 'create a task', 'make a task'];
+    const isTodoRequest = todoKeywords.some(keyword => text.toLowerCase().includes(keyword));
+    
+    if (isTodoRequest || text.toLowerCase().includes('create') && text.toLowerCase().includes('for')) {
+      // Get family context for better parsing
+      const familyContext = {
+        familyId,
+        familyMembers: familyMembers
+      };
+      
+      // Use new UnifiedParserService to parse todo
+      const parsedTodo = await UnifiedParserService.parseTodo(text, familyContext);
+      
+      if (parsedTodo && parsedTodo.text) {
+        // Try to handle as a shared todo request
+        const todoData = {
+          text: parsedTodo.text,
+          completed: false,
+          familyId: familyId,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          createdBy: selectedUser.id || 'allie-chat',
+          assignedTo: null,
+          category: parsedTodo.category || 'general',
+          position: 0,
+          notes: parsedTodo.notes || 'Added via Allie Chat',
+          dueDate: parsedTodo.dueDate || null
+        };
+        
+        // If we have an assignee, find the corresponding family member
+        if (parsedTodo.assignedTo) {
+          const assignee = familyMembers.find(member => 
+            member.name.toLowerCase() === parsedTodo.assignedTo.toLowerCase()
+          );
+          
+          if (assignee) {
+            todoData.assignedTo = assignee.id;
+          }
+        }
+        
+        try {
+          // Add to Firestore
+          const docRef = await addDoc(collection(db, "relationshipTodos"), todoData);
+          
+          // Trigger update event for the UI
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('todo-added', { 
+              detail: { todoId: docRef.id }
+            }));
+          }
+          
+          // Success message
+          const successMessage = {
+            familyId,
+            sender: 'allie',
+            userName: 'Allie',
+            text: `Perfect! I've added "${todoData.text}" to your todo list. ${todoData.assignedTo ? `It's assigned to ${familyMembers.find(m => m.id === todoData.assignedTo)?.name || 'the assigned person'}. ` : ''}${todoData.dueDate ? `It's due by ${new Date(todoData.dueDate).toLocaleDateString()}. ` : ''}You can find it in the To-Do List section where you can edit, assign, or mark it complete.`,
+            timestamp: new Date().toISOString()
+          };
+          
+          setMessages(prev => [...prev, successMessage]);
+          return true;
+        } catch (error) {
+          console.error("Error creating todo item:", error);
+          // Error message will be handled by the catch block below
+        }
+      }
+    }
+    
+    // Check for provider-related requests
+    const providerKeywords = ['doctor', 'dentist', 'teacher', 'provider', 'specialist', 'tutor'];
+    const isProviderRequest = 
+      intent.startsWith('provider.') || 
+      providerKeywords.some(keyword => text.toLowerCase().includes(keyword)) &&
+      (text.toLowerCase().includes('add') || text.toLowerCase().includes('new'));
+      
+    if (isProviderRequest) {
+      // Get family context for better parsing
+      const familyContext = {
+        familyId,
+        familyMembers: familyMembers
+      };
+      
+      // Use new UnifiedParserService to parse provider
+      const providerDetails = await UnifiedParserService.parseProvider(text, familyContext);
+      
+      if (providerDetails && providerDetails.name) {
+        try {
+          // Load ProviderService dynamically if needed
+          const ProviderService = (await import('../../services/ProviderService')).default;
+          
+          // Add family ID
+          providerDetails.familyId = familyId;
+          
+          // Save provider to database
+          const result = await ProviderService.saveProvider(familyId, providerDetails);
+          
+          if (result.success) {
+            // Trigger UI update event
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('provider-added'));
+            }
+            
+            // Success message
             const successMessage = {
               familyId,
               sender: 'allie',
               userName: 'Allie',
-              text: `I've added the following event to your family's shared calendar:\n\nEvent: ${parsedEvent.title}\nDate: ${new Date(parsedEvent.dateTime).toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric'})}\nTime: ${new Date(parsedEvent.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}\nLocation: ${parsedEvent.location || 'Not specified'}\n\nThis has been added to your family's shared calendar. You can view and manage this in your calendar.`,
+              text: `Successfully added ${providerDetails.type === 'education' ? 'teacher' : 'provider'} ${providerDetails.name} to your provider directory. ${providerDetails.forChild ? `I've noted that this is for ${providerDetails.forChild}.` : ''}`,
               timestamp: new Date().toISOString()
             };
             
             setMessages(prev => [...prev, successMessage]);
             return true;
-          } else {
-            // If direct creation failed, show the event parser UI
-            setParsedEventDetails(parsedEvent);
-            setShowEventParser(true);
-            setEventParsingSource('text');
-            
-            const helperMessage = {
-              familyId,
-              sender: 'allie',
-              userName: 'Allie',
-              text: `I've extracted event details from your message. Please review before adding to your calendar.`,
-              timestamp: new Date().toISOString()
-            };
-            
-            setMessages(prev => [...prev, helperMessage]);
-            return true;
           }
+        } catch (error) {
+          console.error("Error saving provider:", error);
+          // Error message will be handled by the catch block below
         }
-      } catch (parseError) {
-        console.error("Error in event parsing:", parseError);
-        // Continue with normal processing if parsing fails
       }
     }
     
     return false;
   } catch (error) {
     console.error("Error parsing event from message:", error);
+    
+    // Send error message
+    const errorMessage = {
+      familyId,
+      sender: 'allie',
+      userName: 'Allie',
+      text: `I'm sorry, I had trouble processing that request. Could you try rephrasing it or providing more details?`,
+      timestamp: new Date().toISOString()
+    };
+    
+    setMessages(prev => [...prev, errorMessage]);
     return false;
   }
 };
@@ -1181,86 +1311,85 @@ const checkMessageHistoryForEvents = () => {
     }
   };
   
-  // Update this function in src/components/chat/AllieChat.jsx
-const handleImageProcessForEvent = async (file) => {
-  try {
-    setLoading(true);
-    
-    // Add a processing message to give user feedback
-    const processingMessage = {
-      familyId,
-      sender: 'allie',
-      userName: 'Allie',
-      text: `I'm analyzing the image to see if it contains event information...`,
-      timestamp: new Date().toISOString()
-    };
-    
-    setMessages(prev => [...prev, processingMessage]);
-    
-    // Check if file is an image
-    if (!file.type.startsWith('image/')) {
-      throw new Error("File must be an image");
-    }
-    
-    // Get family context for better parsing
-    const familyContext = {
-      familyId,
-      children: familyMembers.filter(m => m.role === 'child')
-    };
-    
-    // Try to parse the image as an event
-    const eventDetails = await EventParserService.parseEventImage(file, familyContext);
-    
-    if (eventDetails && (eventDetails.title || eventDetails.eventType)) {
-      // We successfully parsed an event
-      eventDetails.creationSource = 'image';
-      setParsedEventDetails(eventDetails);
-      setShowEventParser(true);
-      setEventParsingSource('image');
+  const handleImageProcessForEvent = async (file) => {
+    try {
+      setLoading(true);
       
-      // Add a message about what we found
-      const infoMessage = {
+      // Add a processing message to give user feedback
+      const processingMessage = {
         familyId,
         sender: 'allie',
         userName: 'Allie',
-        text: `I found what looks like an event in your image! I've extracted these details: ${eventDetails.title || eventDetails.eventType} ${eventDetails.dateTime ? `on ${new Date(eventDetails.dateTime).toLocaleDateString()}` : ''}. Would you like to add this to your calendar?`,
+        text: `I'm analyzing the image to see if it contains event information...`,
         timestamp: new Date().toISOString()
       };
       
-      setMessages(prev => [...prev, infoMessage]);
-      return true;
-    } else {
-      // Could not parse an event
+      setMessages(prev => [...prev, processingMessage]);
+      
+      // Check if file is an image
+      if (!file.type.startsWith('image/')) {
+        throw new Error("File must be an image");
+      }
+      
+      // Get family context for better parsing
+      const familyContext = {
+        familyId,
+        children: familyMembers.filter(m => m.role === 'child')
+      };
+      
+      // Use our new UnifiedParserService to parse the image
+      const eventDetails = await UnifiedParserService.parseImage(file, 'event', familyContext);
+      
+      if (eventDetails && (eventDetails.title || eventDetails.eventType)) {
+        // We successfully parsed an event
+        eventDetails.creationSource = 'image';
+        setParsedEventDetails(eventDetails);
+        setShowEventParser(true);
+        setEventParsingSource('image');
+        
+        // Add a message about what we found
+        const infoMessage = {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `I found what looks like an event in your image! I've extracted these details: ${eventDetails.title || eventDetails.eventType} ${eventDetails.dateTime ? `on ${new Date(eventDetails.dateTime).toLocaleDateString()}` : ''}. Would you like to add this to your calendar?`,
+          timestamp: new Date().toISOString()
+        };
+        
+        setMessages(prev => [...prev, infoMessage]);
+        return true;
+      } else {
+        // Could not parse an event
+        const errorMessage = {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `I analyzed the image but couldn't find clear event details. If this is an invitation, you can describe the event to me and I'll help you add it to your calendar.`,
+          timestamp: new Date().toISOString()
+        };
+        
+        setMessages(prev => [...prev, errorMessage]);
+        return false;
+      }
+    } catch (error) {
+      console.error("Error processing image for event:", error);
+      
+      // Error message
       const errorMessage = {
         familyId,
         sender: 'allie',
         userName: 'Allie',
-        text: `I analyzed the image but couldn't find clear event details. If this is an invitation, you can describe the event to me and I'll help you add it to your calendar.`,
+        text: `I had trouble analyzing that image. If it contains an event invitation, you can tell me about the event directly and I'll help you add it to your calendar.`,
         timestamp: new Date().toISOString()
       };
       
       setMessages(prev => [...prev, errorMessage]);
+      setLoading(false);
       return false;
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error("Error processing image for event:", error);
-    
-    // Error message
-    const errorMessage = {
-      familyId,
-      sender: 'allie',
-      userName: 'Allie',
-      text: `I had trouble analyzing that image. If it contains an event invitation, you can tell me about the event directly and I'll help you add it to your calendar.`,
-      timestamp: new Date().toISOString()
-    };
-    
-    setMessages(prev => [...prev, errorMessage]);
-    setLoading(false);
-    return false;
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
 
 // Detect document type based on content and metadata

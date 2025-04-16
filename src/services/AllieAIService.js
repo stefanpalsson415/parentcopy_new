@@ -2,6 +2,7 @@
 // Consolidated AI service combining EnhancedAIService and AllieAIEngineService
 
 import ClaudeService from './ClaudeService';
+import UnifiedParserService from './UnifiedParserService';
 import ProviderService from './ProviderService';
 import CalendarService from './CalendarService';
 import { db } from './firebase';
@@ -312,64 +313,76 @@ async processProviderFromChat(message, familyId) {
     
     console.log("Processing provider from chat:", message);
     
-    // Load ProviderService dynamically if needed
-    let ProviderService;
+    // Get family context
+    const familyContext = {
+      familyId,
+      // We'll add more context if available
+    };
+    
     try {
-      ProviderService = (await import('./ProviderService')).default;
-    } catch (error) {
-      console.error("Failed to import ProviderService:", error);
-      // Create an inline version if import fails
-      ProviderService = {
-        saveProvider: async (familyId, providerData) => {
-          try {
-            const providersRef = collection(db, "providers");
-            const docRef = await addDoc(providersRef, {
-              ...providerData,
-              familyId,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp()
-            });
-            return { success: true, providerId: docRef.id, isNew: true };
-          } catch (error) {
-            console.error("Error saving provider:", error);
-            return { success: false, error: error.message };
+      // Use our new UnifiedParserService to extract provider details
+      const providerDetails = await UnifiedParserService.parseProvider(message, familyContext);
+      
+      if (!providerDetails.name || providerDetails.name === "Unknown Provider") {
+        return { 
+          success: false, 
+          error: "Could not determine the provider's name from your message" 
+        };
+      }
+      
+      console.log("Saving provider details:", providerDetails);
+      
+      // Load ProviderService dynamically if needed
+      let ProviderService;
+      try {
+        ProviderService = (await import('./ProviderService')).default;
+      } catch (error) {
+        console.error("Failed to import ProviderService:", error);
+        // Create an inline version if import fails
+        ProviderService = {
+          saveProvider: async (familyId, providerData) => {
+            try {
+              const providersRef = collection(db, "providers");
+              const docRef = await addDoc(providersRef, {
+                ...providerData,
+                familyId,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              });
+              return { success: true, providerId: docRef.id, isNew: true };
+            } catch (error) {
+              console.error("Error saving provider:", error);
+              return { success: false, error: error.message };
+            }
           }
+        };
+      }
+      
+      // Save provider to database
+      providerDetails.familyId = familyId;
+      const result = await ProviderService.saveProvider(familyId, providerDetails);
+      
+      if (result.success) {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('provider-added'));
         }
-      };
-    }
-    
-    // Extract provider details from message
-    const providerDetails = await this.extractProviderDetails(message);
-    
-    // Make sure we have a name
-    if (!providerDetails.name || providerDetails.name === "Unknown Provider") {
-      return { 
-        success: false, 
-        error: "Could not determine the provider's name from your message" 
-      };
-    }
-    
-    console.log("Saving provider details:", providerDetails);
-    
-    // Save provider to database
-    providerDetails.familyId = familyId;
-    const result = await ProviderService.saveProvider(familyId, providerDetails);
-    
-    if (result.success) {
-      window.dispatchEvent(new CustomEvent('provider-added'));
 
-      return { 
-        success: true, 
-        providerId: result.providerId,
-        providerDetails: providerDetails,
-        isNew: result.isNew,
-        message: `Successfully added ${providerDetails.type === 'education' ? 'teacher' : 'provider'} ${providerDetails.name} to your provider directory.`
-      };
-    } else {
-      return { 
-        success: false, 
-        error: result.error || "Failed to create provider" 
-      };
+        return { 
+          success: true, 
+          providerId: result.providerId,
+          providerDetails: providerDetails,
+          isNew: result.isNew,
+          message: `Successfully added ${providerDetails.type === 'education' ? 'teacher' : 'provider'} ${providerDetails.name} to your provider directory.`
+        };
+      } else {
+        return { 
+          success: false, 
+          error: result.error || "Failed to create provider" 
+        };
+      }
+    } catch (error) {
+      console.error("Error processing provider details:", error);
+      return { success: false, error: error.message };
     }
   } catch (error) {
     console.error("Error processing provider from chat:", error);

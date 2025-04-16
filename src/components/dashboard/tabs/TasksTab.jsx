@@ -441,16 +441,33 @@ setHasCompletedSurvey(userHasCompletedSurvey);
         
         setCanScheduleMeeting(allSurveysCompleted);
         
-        // Update global survey availability for ALL family members
-        const parentsCompletedHabits = familyMembers
-          .filter(m => m.role === 'parent')
-          .every(parent => {
-            const parentProgress = progress[parent.id];
-            return parentProgress && parentProgress.step >= 2;
-          });
-        
-        // Make survey available if parents have completed habits
-        setCanTakeSurvey(parentsCompletedHabits);
+        // Update cycle step based on global progress
+if (allCompletedSurveys) {
+  currentFamilyStep = 3; // Ready for family meeting
+} else if (allCompletedHabits) {
+  currentFamilyStep = 2; // Survey phase
+} else {
+  currentFamilyStep = 1; // Habit building phase
+}
+
+setCycleStep(currentFamilyStep);
+
+
+
+// Update survey availability based on user role
+if (selectedUser?.role === 'parent') {
+  // For parents: Check if this specific parent has completed enough habits
+  const currentUserProgress = progress[selectedUser.id];
+  setCanTakeSurvey(currentUserProgress && currentUserProgress.step >= 2);
+} else if (selectedUser?.role === 'child') {
+  // For children: Make survey available if ANY parent has completed their habits
+  // or if the overall cycle step is at least 2
+  const anyParentCompleted = familyMembers
+    .filter(m => m.role === 'parent')
+    .some(parent => progress[parent.id]?.step >= 2);
+  
+  setCanTakeSurvey(anyParentCompleted || currentFamilyStep >= 2);
+}
       }
     } catch (error) {
       console.error("Error loading cycle progress:", error);
@@ -759,43 +776,80 @@ const recordHabitInstance = async (habitId, reflectionNote = "") => {
       }
       
       // Milestone reached - exactly 5 completions
-      if (updatedInstances.length === 5) {
-        try {
-          // Update the parent's cycle step in Firebase
-          const familyRef = doc(db, "families", familyId);
-          await updateDoc(familyRef, {
-            [`cycleProgress.${currentWeek}.memberProgress.${selectedUser.id}.step`]: 2
-          });
-          
-          // Update local state
-          setMemberProgress(prev => ({
-            ...prev,
-            [selectedUser.id]: {
-              ...prev[selectedUser.id],
-              step: 2
-            }
-          }));
-          
-          // Trigger cycle progress refresh
-          loadCycleProgress();
-        } catch (error) {
-          console.error("Error updating cycle progress:", error);
-        }
-        
-        // Launch confetti
-        launchConfetti();
-        
-        // Enable survey
-        setCanTakeSurvey(true);
-        
-        // Show special celebration
-        createCelebration("Survey Unlocked!", true, "You've completed a habit 5 times!");
-        
-        // Auto-open the family meeting after a short delay
-        setTimeout(() => {
-          onStartWeeklyCheckIn();
-        }, 2000);
+if (updatedInstances.length === 5) {
+  try {
+    // Update the parent's cycle step in Firebase
+    const familyRef = doc(db, "families", familyId);
+    
+    // First, get current cycle progress
+    const familyDoc = await getDoc(familyRef);
+    const currentCycleProgress = familyDoc.data()?.cycleProgress || {};
+    const cycleProgressData = currentCycleProgress[currentWeek] || {
+      step: 1,
+      memberProgress: {}
+    };
+    
+    // Update this parent's progress
+    cycleProgressData.memberProgress = {
+      ...(cycleProgressData.memberProgress || {}),
+      [selectedUser.id]: {
+        ...(cycleProgressData.memberProgress?.[selectedUser.id] || {}),
+        step: 2
       }
+    };
+    
+    // Check if all parents have reached step 2
+    const allParents = familyMembers.filter(m => m.role === 'parent');
+    const allParentsReady = allParents.every(parent => {
+      // Either this parent we're updating, or already at step 2+
+      return parent.id === selectedUser.id || 
+             (cycleProgressData.memberProgress?.[parent.id]?.step >= 2);
+    });
+    
+    // If all parents have reached 5 completions, move whole cycle to step 2
+    if (allParentsReady) {
+      cycleProgressData.step = 2;
+    }
+    
+    // Save to Firebase
+    await updateDoc(familyRef, {
+      [`cycleProgress.${currentWeek}`]: cycleProgressData
+    });
+    
+    // Update local state
+    setMemberProgress(prev => ({
+      ...prev,
+      [selectedUser.id]: {
+        ...prev[selectedUser.id],
+        step: 2
+      }
+    }));
+    
+    // If moved to step 2, update cycle step
+    if (allParentsReady) {
+      setCycleStep(2);
+    }
+    
+    // Trigger cycle progress refresh
+    loadCycleProgress();
+  } catch (error) {
+    console.error("Error updating cycle progress:", error);
+  }
+  
+  // Launch confetti
+  launchConfetti();
+  
+  // Enable survey
+  setCanTakeSurvey(true);
+  
+  // Show special celebration
+  createCelebration("Survey Unlocked!", true, "You've completed a habit 5 times!");
+  
+  // Auto-open the family meeting after a short delay
+  setTimeout(() => {
+    onStartWeeklyCheckIn();
+  }, 2000);
+}
       // Other milestone - 11 completions (mastery)
       else if (updatedInstances.length === 11) {
         launchConfetti();
@@ -1038,6 +1092,7 @@ const createNewHabit = async (isRefresh = false) => {
   };
 
   // Start the survey
+// Start the survey
 const handleStartSurvey = () => {
   // Already completed check
   if (hasCompletedSurvey) {
