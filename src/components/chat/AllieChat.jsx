@@ -19,6 +19,8 @@ import DocumentCategoryService from '../../services/DocumentCategoryService';
 import DocumentOCRService from '../../services/DocumentOCRService';
 import ChatPersistenceService from '../../services/ChatPersistenceService';
 import UnifiedParserService from '../../services/UnifiedParserService';
+import { addDoc, collection } from 'firebase/firestore';
+import { db } from '../../services/firebase';
 
 
 
