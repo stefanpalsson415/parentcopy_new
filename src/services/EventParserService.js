@@ -302,7 +302,7 @@ detectTextRegion(text) {
       console.log("OCR extracted text:", extractedText.substring(0, 100) + "...");
       
       // Parse the extracted text
-      return this.parseEventText(extractedText, familyContext);
+      return await this.parseEventText(extractedText, familyContext);
     } catch (error) {
       console.error("Error parsing event image:", error);
       throw error;
@@ -523,7 +523,7 @@ async parseInvitationText(text, familyContext) {
   } catch (error) {
     console.error("Error parsing invitation text:", error);
     // Fall back to standard parsing
-    return this.parseEventText(text, familyContext);
+    return await this.parseEventText(text, familyContext);
   }
 }
 
