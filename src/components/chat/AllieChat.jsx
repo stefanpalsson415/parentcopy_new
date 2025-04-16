@@ -453,7 +453,6 @@ const loadMessages = async (loadMore = false) => {
   </div>
 )}
 
-// Replace the handleSend function in AllieChat.jsx
 const handleSend = async () => {
   if (input.trim() && canUseChat && selectedUser && familyId) {
     try {
@@ -508,6 +507,16 @@ const handleSend = async () => {
       // Always try to parse the message as an event first
       const isEvent = await processMessageForEvents(input);
       
+      const processingMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I'm analyzing your event details using AI. This might take a moment...`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, processingMessage]);
+
       // Check if this is a response to document action options
       const lastMessage = messages[messages.length - 1];
       if (lastMessage && (lastMessage.documentFile || lastMessage.awaitingChildSelection)) {

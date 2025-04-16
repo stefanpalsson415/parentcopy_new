@@ -208,7 +208,15 @@ class CalendarService {
         siblingIds: event.siblingIds || [],
         siblingNames: event.siblingNames || [],
         eventType: event.eventType || 'general',
-        extraDetails: event.extraDetails || {},
+        extraDetails: {
+          ...(event.extraDetails || {}),
+          // Preserve parsing metadata
+          parsedWithAI: event.parsedWithAI || false,
+          extractionConfidence: event.extractionConfidence || null,
+          parsedFromImage: event.parsedFromImage || false,
+          originalText: event.originalText || '',
+          creationSource: event.creationSource || 'manual'
+        },
         // Always include these fields
         userId,
         familyId: event.familyId || null,
