@@ -239,14 +239,41 @@ if (selectedUser && selectedUser.role === 'parent') {
     instances.some(instance => instance.userId === selectedUser.id));
   const hasEnoughCompletions = parentHabits.some(instances => instances.length >= 5);
   setCanTakeSurvey(hasEnoughCompletions);
-} else if (selectedUser && selectedUser.role === 'child') {
-  // For children, they can take survey if ANY parent has completed habits
+} else // For children: Check if parents have completed their habits OR surveys
+if (selectedUser && selectedUser.role === 'child') {
+  // For children, they can take survey if ANY of these conditions are true:
+  // 1. Any parent has completed enough habits (step >= 2)
+  // 2. Any parent has completed their survey
+  // 3. Overall cycle step is at least 2
   const parents = familyMembers.filter(m => m.role === 'parent');
   const anyParentCompleted = parents.some(parent => {
-    // Check member progress from the context
-    return memberProgress[parent.id]?.step >= 2;
+    // Check various parent progress indicators:
+    // 1. Member progress step is 2 or higher
+    const hasProgressStep = memberProgress[parent.id]?.step >= 2;
+    // 2. Survey is marked as completed in member progress
+    const hasSurveyCompleted = memberProgress[parent.id]?.completedSurvey;
+    // 3. Weekly completed array shows survey done
+    const hasWeeklyCompleted = parent.weeklyCompleted && 
+                               parent.weeklyCompleted[currentWeek-1]?.completed;
+    // 4. Parent's UI shows "Survey Done" text
+    const hasUISurveyDone = parent.role === 'parent' && 
+                           (parent.surveyDone || parent.status === 'Survey Done');
+    
+    return hasProgressStep || hasSurveyCompleted || hasWeeklyCompleted || hasUISurveyDone;
   });
-  setCanTakeSurvey(anyParentCompleted);
+  
+  // If any parent completed OR cycle is in survey phase, enable survey for child
+  const shouldAllowSurvey = anyParentCompleted || cycleStep >= 2;
+  
+  // Debug log
+  console.log("Child survey eligibility check:", {
+    parents: parents.map(p => p.name),
+    anyParentCompleted,
+    cycleStep,
+    shouldAllowSurvey
+  });
+  
+  setCanTakeSurvey(shouldAllowSurvey);
 }
 
 // Check if current user has already completed the survey for this week
