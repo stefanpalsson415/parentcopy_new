@@ -248,6 +248,29 @@ useEffect(() => {
   synchronizeDueDateFromCalendar();
 }, [familyId, currentUser, currentWeek]);
 
+// Add to the main useEffect that loads habits and data
+useEffect(() => {
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      // ... existing code ...
+      
+      // Add this at the end of the function:
+      // Force sync from calendar to fix date discrepancies
+      await forceCalendarDateSync();
+      
+      setLoading(false);
+    } catch (error) {
+      console.error("Error loading habits:", error);
+      setHabits([]);
+      setLoading(false);
+    }
+  };
+  
+  loadData();
+}, [familyId, currentWeek, selectedUser]);
+
+
 
     // Load habits and cycle data
   useEffect(() => {
@@ -868,6 +891,58 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
   }
 };
   
+// Add this function to TasksTab.jsx - much simpler and more direct approach
+const forceCalendarDateSync = async () => {
+  try {
+    // Get events directly from CalendarService
+    const events = await CalendarService.getEventsForUser(
+      currentUser.uid,
+      new Date(new Date().setDate(new Date().getDate() - 90)), // 90 days ago
+      new Date(new Date().setDate(new Date().getDate() + 180))  // 180 days ahead
+    );
+    
+    console.log("Attempting direct calendar sync with", events.length, "events");
+    
+    // Find cycle due date event for current week
+    const dueEvent = events.find(event => 
+      (event.category === 'cycle-due-date' || event.eventType === 'cycle-due-date') && 
+      (event.cycleNumber === currentWeek || 
+      (event.title && event.title.includes(`Cycle ${currentWeek}`)))
+    );
+    
+    if (dueEvent) {
+      console.log("Found calendar event for sync:", dueEvent);
+      
+      // Get the date from the event
+      let eventDate;
+      if (dueEvent.start?.dateTime) {
+        eventDate = new Date(dueEvent.start.dateTime);
+      } else if (dueEvent.dateTime) {
+        eventDate = new Date(dueEvent.dateTime);
+      } else if (dueEvent.dateObj) {
+        eventDate = new Date(dueEvent.dateObj);
+      }
+      
+      if (eventDate && !isNaN(eventDate.getTime())) {
+        console.log("Directly setting surveyDue to calendar date:", eventDate);
+        setSurveyDue(eventDate);
+        
+        // Force refresh UI
+        setTimeout(() => {
+          calculateNextSurveyDue();
+        }, 100);
+        
+        return eventDate;
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error("Error in direct calendar sync:", error);
+    return null;
+  }
+};
+
+
   // Create a celebration notification
   const createCelebration = (habitTitle, success = true, customMessage = null) => {
     const newCelebration = {
@@ -1621,44 +1696,51 @@ const createNewHabit = async (isRefresh = false) => {
 </button>
           
 <div className="flex items-center">
-  <button
-    onClick={async () => {
-      try {
-        // Set default date with safer date manipulation
-        const today = new Date();
-        let defaultDate;
+<button
+  onClick={async () => {
+    try {
+      // First, try to force calendar date sync
+      const calendarDate = await forceCalendarDateSync();
+      
+      // Then set up date picker with the right date
+      const today = new Date();
+      let defaultDate;
+      
+      if (calendarDate) {
+        // Priority 1: Use the date directly from calendar
+        defaultDate = calendarDate;
+        console.log("Using calendar date for editing:", defaultDate);
+      } else if (surveyDue instanceof Date && !isNaN(surveyDue.getTime())) {
+        // Priority 2: Use surveyDue if valid
+        defaultDate = surveyDue;
         
-        if (surveyDue instanceof Date && !isNaN(surveyDue.getTime())) {
-          defaultDate = surveyDue;
-          
-          // Check if date is in the past
-          if (defaultDate < today) {
-            createCelebration("Date Update Needed", false, "The meeting date is in the past. Please set a new date.");
-            // Set to a reasonable future date (e.g., tomorrow)
-            defaultDate = new Date(today.getTime() + (24 * 60 * 60 * 1000));
-          }
-        } else {
-          // Create a new date 7 days in the future safely
-          defaultDate = new Date(today.getTime() + (7 * 24 * 60 * 60 * 1000));
+        // Check if date is in the past
+        if (defaultDate < today) {
+          // Notify but still use the date
+          createCelebration("Date Update Needed", false, "The meeting date is in the past. Please set a new date.");
         }
-        
-        setDatePickerDate(defaultDate);
-        
-        // Find existing event
-        const existingEvent = await findExistingDueDateEvent();
-        setExistingDueDateEvent(existingEvent);
-        
-        setShowCalendar(true);
-      } catch (error) {
-        console.error("Error preparing calendar:", error);
-        createCelebration("Error", false, "Could not open calendar. Please try again.");
+      } else {
+        // Priority 3: Use tomorrow as fallback
+        defaultDate = new Date(today.getTime() + (24 * 60 * 60 * 1000));
       }
-    }}
-    className="px-4 py-2 border border-gray-300 rounded-md flex items-center hover:bg-gray-50"
-  >
-    <Clock size={18} className="mr-2" />
-    Change Due Date
-  </button>
+      
+      setDatePickerDate(defaultDate);
+      
+      // Find existing event
+      const existingEvent = await findExistingDueDateEvent();
+      setExistingDueDateEvent(existingEvent);
+      
+      setShowCalendar(true);
+    } catch (error) {
+      console.error("Error preparing calendar:", error);
+      createCelebration("Error", false, "Could not open calendar. Please try again.");
+    }
+  }}
+  className="px-4 py-2 border border-gray-300 rounded-md flex items-center hover:bg-gray-50"
+>
+  <Clock size={18} className="mr-2" />
+  Change Due Date
+</button>
   
   {surveyDue && (
     <div className="ml-2 text-sm bg-gray-100 px-3 py-1 rounded-md">
@@ -2143,7 +2225,6 @@ const createNewHabit = async (isRefresh = false) => {
         </div>
       )}
       
-      // In TasksTab.jsx - Update the Calendar floating widget section (around line 1450-1500)
 
 {/* Calendar floating widget with embedded event editor */}
 {showCalendar && (
