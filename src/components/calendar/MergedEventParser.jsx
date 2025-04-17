@@ -9,6 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import EventParserService from '../../services/EventParserService';
 import CalendarService from '../../services/CalendarService';
 import UserAvatar from '../common/UserAvatar';
+import { useEvents } from '../../contexts/EventContext';
 
 
 
@@ -52,6 +53,8 @@ const MergedEventParser = ({
   const [selectedSiblings, setSelectedSiblings] = useState([]);
   const [pendingAction, setPendingAction] = useState(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const { addEvent } = useEvents();
+
   
   // Refs for DOM manipulation
   const fileInputRef = useRef(null);
@@ -506,7 +509,7 @@ const [familyAvailability, setFamilyAvailability] = useState({});
       );
       
       // Add the event to the calendar
-      const result = await CalendarService.addEvent(calendarEvent, currentUserId);
+      const result = await addEvent(calendarEvent);
       
       // If siblings are selected, create separate events for them too
       if (selectedSiblings && selectedSiblings.length > 0 && result.success) {
