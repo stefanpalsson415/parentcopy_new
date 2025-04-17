@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  FileText, Image, FileIcon, Calendar, User, Users, Clock, MapPin, Tag, X, Check, AlertCircle, Info 
+  FileText, Image, FileIcon, Calendar, User, Users, Clock, MapPin, Tag, X, Check, AlertCircle, Info, Edit
 } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -1056,8 +1056,12 @@ Object.keys(calendarEvent).forEach(key => {
     <button
       type="button"
       onClick={() => {
-        // Switch to edit mode
-        setMode('edit');
+        // Since we can't directly modify mode state in this component,
+        // We need to tell the parent to change to edit mode - if onSave is provided
+        if (onSave) {
+          // Signal to parent that user wants to edit
+          onSave({ requestEdit: true });
+        }
       }}
       className="px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 flex items-center"
     >
