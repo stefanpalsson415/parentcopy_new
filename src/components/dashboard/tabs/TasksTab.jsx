@@ -15,7 +15,7 @@ import confetti from 'canvas-confetti';
 import { EventManager as EnhancedEventManager, FloatingCalendar } from '../../../components/calendar';
 import CalendarService from '../../../services/CalendarService';
 import { useAuth } from '../../../contexts/AuthContext';
-import { useEvents } from '../../contexts/EventContext';
+import { useEvents } from '../../../contexts/EventContext';
 
 
 // Helper function to format dates consistently
@@ -757,7 +757,7 @@ if (selectedUser?.role === 'parent') {
     }
   };
   
-  // Inside the TasksTab component
+ // Find the updateCycleDueDate function (around line 780) and replace it with this version:
 const updateCycleDueDate = async (newDate, eventDetails = {}) => {
   if (!familyId || !currentUser) return false;
   
@@ -774,49 +774,53 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
     // 1. First update survey schedule in database
     await updateSurveySchedule(currentWeek, newDate);
     
-    // 2. Use EventContext to handle the calendar event
-    // Import dynamically to avoid circular dependencies
-    const { useEvents } = await import('../../contexts/EventContext');
-    const { getEventsByCycle, addEvent, updateEvent } = useEvents();
+    // 2. Find the existing due date event
+    const existingDueDateEvent = await findExistingDueDateEvent();
     
-    // Find existing event for this cycle
-    const existingEvents = getEventsByCycle(currentWeek).filter(
-      e => e.category === 'cycle-due-date' || e.eventType === 'cycle-due-date'
-    );
-    
+    // 3. Update or create calendar event - without using hooks
     let result;
-    if (existingEvents.length > 0 && existingEvents[0].id) {
+    if (existingDueDateEvent && existingDueDateEvent.firestoreId) {
       // Update existing event
-      result = await updateEvent(existingEvents[0].id, {
-        title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
-        description: eventDetails.description || `Due date for Cycle ${currentWeek} activities`,
-        start: {
-          dateTime: newDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      result = await CalendarService.updateEvent(
+        existingDueDateEvent.firestoreId, 
+        {
+          title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
+          description: eventDetails.description || `Due date for Cycle ${currentWeek} activities`,
+          start: {
+            dateTime: newDate.toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          },
+          end: {
+            dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          },
+          category: 'cycle-due-date',
+          eventType: 'cycle-due-date',
+          cycleNumber: currentWeek
         },
-        end: {
-          dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        }
-      });
+        currentUser.uid
+      );
     } else {
       // Create new event
-      result = await addEvent({
-        title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
-        description: eventDetails.description || `Due date for Cycle ${currentWeek} activities`,
-        start: {
-          dateTime: newDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      result = await CalendarService.addEvent(
+        {
+          title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
+          description: eventDetails.description || `Due date for Cycle ${currentWeek} activities`,
+          start: {
+            dateTime: newDate.toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          },
+          end: {
+            dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          },
+          category: 'cycle-due-date',
+          eventType: 'cycle-due-date',
+          cycleNumber: currentWeek,
+          universalId: `cycle-due-date-${familyId}-${currentWeek}`
         },
-        end: {
-          dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        category: 'cycle-due-date',
-        eventType: 'cycle-due-date',
-        cycleNumber: currentWeek,
-        universalId: `cycle-due-date-${familyId}-${currentWeek}`
-      });
+        currentUser.uid
+      );
     }
     
     if (!result.success) {
@@ -839,6 +843,11 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
       weekStatus: updatedStatus,
       updatedAt: new Date().toISOString()
     }, familyId);
+    
+    // Force refresh of calendar components
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+    }
     
     // Success message
     createCelebration(
