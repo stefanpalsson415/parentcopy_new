@@ -1,7 +1,9 @@
+// src/components/calendar/EventsList.jsx
 import React from 'react';
-import { AlertCircle, Activity, BookOpen, Bell, Users, Heart, Clock, Calendar, Check, Edit, Trash2 } from 'lucide-react';
+import { AlertCircle, Activity, BookOpen, Bell, Users, Heart, Clock, Calendar, Check, Edit, Trash2, MapPin } from 'lucide-react';
 import UserAvatar from '../common/UserAvatar';
 import EventSourceBadge from './EventSourceBadge';
+import CalendarOperations from '../../utils/CalendarOperations';
 
 /**
  * Event list component to display calendar events
@@ -88,9 +90,17 @@ const EventsList = ({
     });
   };
   
+  // Format time for display
+  const formatTime = (dateString) => {
+    if (!dateString) return "";
+    
+    const date = new Date(dateString);
+    return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  };
+  
   const AttendeeAvatars = ({ attendees = [], max = 3 }) => {
     return (
-      <div className="flex -space-x-2 ml-2 items-center">
+      <div className="flex -space-x-2 items-center">
         {attendees.slice(0, max).map((attendee, i) => (
           <div 
             key={i} 
@@ -185,52 +195,91 @@ const EventsList = ({
       
       {events.length > 0 ? (
         <div className="space-y-2">
-          {events.map((event, index) => (
-            <div 
-              key={index} 
-              className="border rounded-lg p-2 hover:bg-gray-50 cursor-pointer"
-              onClick={() => onEventClick(event)}
-            >
-              <div className="flex justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center">
-                    {getEventIcon(event)}
-                    <p className="text-sm font-medium font-roboto">{event.title}</p>
-                    
-                    {/* Display source badge */}
-                    <div className="ml-2">
-                      <EventSourceBadge 
-                        event={event} 
-                        size="sm"
-                        showDetails={false}
-                      />
+          {events.map((event, index) => {
+            // Get formatted date and time
+            const dateObj = event.dateObj || new Date(event.start?.dateTime || event.dateTime || event.date);
+            const formattedDate = CalendarOperations.formatDate(dateObj, 'medium');
+            const formattedTime = CalendarOperations.formatTime(dateObj);
+            
+            return (
+              <div 
+                key={index} 
+                className="border rounded-lg p-3 hover:bg-gray-50 cursor-pointer"
+                onClick={() => onEventClick(event)}
+              >
+                <div className="flex justify-between">
+                  <div className="flex-1">
+                    {/* Title row with badges */}
+                    <div className="flex items-center mb-1">
+                      {getEventIcon(event)}
+                      <p className="text-sm font-medium font-roboto">{event.title}</p>
+                      
+                      {/* Display source badge */}
+                      <div className="ml-2">
+                        <EventSourceBadge 
+                          event={event} 
+                          size="sm"
+                          showDetails={false}
+                        />
+                      </div>
+                      
+                      {/* Custom badges if provided */}
+                      {renderBadges && renderBadges(event)}
                     </div>
                     
-                    {/* Custom badges if provided */}
-                    {renderBadges && renderBadges(event)}
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <p className="text-xs text-gray-500 font-roboto">
-                      {event.time || event.dateObj?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                      {event.location && ` - ${event.location}`}
-                    </p>
+                    {/* Date & Time row */}
+                    <div className="flex items-center text-xs text-gray-500 font-roboto mb-1">
+                      <Clock size={12} className="mr-1" />
+                      <span>
+                        {formattedDate} • {formattedTime}
+                        {event.end?.dateTime && ` - ${CalendarOperations.formatTime(new Date(event.end.dateTime))}`}
+                      </span>
+                    </div>
                     
-                    {/* Always show attendee avatars if available */}
-                    {event.attendees && event.attendees.length > 0 && (
-                      <AttendeeAvatars attendees={event.attendees} />
+                    {/* Location row if available */}
+                    {event.location && (
+                      <div className="flex items-center text-xs text-gray-500 font-roboto mb-1">
+                        <MapPin size={12} className="mr-1" />
+                        <span className="truncate max-w-xs">{event.location}</span>
+                      </div>
+                    )}
+                    
+                    {/* Description row - truncated */}
+                    {event.description && (
+                      <div className="text-xs text-gray-600 font-roboto mt-1 line-clamp-2 max-w-xs">
+                        {event.description}
+                      </div>
+                    )}
+                    
+                    {/* Bottom row with attendees and actions */}
+                    <div className="flex justify-between items-center mt-2">
+                      {/* Show attendee avatars if available */}
+                      {event.attendees && event.attendees.length > 0 && (
+                        <AttendeeAvatars attendees={event.attendees} max={4} />
+                      )}
+                      {/* Show child avatar if it's a child event */}
+                      {event.childId && event.childName && !event.attendees && (
+                        <AttendeeAvatars 
+                          attendees={[{id: event.childId, name: event.childName}]} 
+                          max={1} 
+                        />
+                      )}
+                      
+                      {/* Add spacer if no attendees */}
+                      {(!event.attendees || event.attendees.length === 0) && !event.childId && <div></div>}
+                    </div>
+                  </div>
+                  
+                  {/* Action buttons */}
+                  <div className="ml-2 flex items-center self-start">
+                    {onEventAdd && onEventEdit && onEventDelete && (
+                      <EventActions event={event} />
                     )}
                   </div>
                 </div>
-                
-                {/* Action buttons */}
-                <div className="ml-2 flex items-center">
-                  {onEventAdd && onEventEdit && onEventDelete && (
-                    <EventActions event={event} />
-                  )}
-                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="text-center p-3 bg-gray-50 rounded-lg">

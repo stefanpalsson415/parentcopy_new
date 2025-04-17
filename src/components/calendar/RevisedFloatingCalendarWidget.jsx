@@ -259,17 +259,39 @@ const RevisedFloatingCalendarWidget = () => {
   };
   
   // Add event handlers
-  const handleEventClick = async (event) => {
-    setSelectedEvent(event);
-    
-    // Check for conflicts when viewing event details
-    const conflicts = await checkForEventConflicts(event);
-    setConflictingEvents(conflicts);
-    
-    setShowEventDetails(true);
-    setIsEditingEvent(false);
-    setEditedEvent(null);
+  // In RevisedFloatingCalendarWidget.jsx
+const handleEventClick = async (event) => {
+  // Create a properly formatted event object for the editor
+  const formattedEvent = {
+    ...event,
+    // Make sure we have these fields properly set
+    title: event.title || event.summary,
+    description: event.description || '',
+    location: event.location || '',
+    dateTime: event.dateObj?.toISOString() || event.start?.dateTime || new Date().toISOString(),
+    endDateTime: event.dateEndObj?.toISOString() || event.end?.dateTime,
+    childId: event.childId || null,
+    childName: event.childName || null,
+    attendingParentId: event.attendingParentId || null,
+    eventType: event.eventType || 'general',
+    category: event.category || 'general',
+    siblingIds: event.siblingIds || [],
+    siblingNames: event.siblingNames || [],
+    // Make sure we have the ID for updating
+    firestoreId: event.firestoreId || event.id
   };
+  
+  setSelectedEvent(formattedEvent);
+  
+  // Check for conflicts
+  const conflicts = await checkForEventConflicts(event);
+  setConflictingEvents(conflicts);
+  
+  // Skip EventDetails and go directly to EnhancedEventManager
+  setShowEventDetails(false);
+  setIsEditingEvent(true);
+  setEditedEvent(formattedEvent);
+};
   
   const handleEventAdd = async (event) => {
     try {
@@ -1143,25 +1165,48 @@ const RevisedFloatingCalendarWidget = () => {
         <Calendar size={24} />
       </button>
       
-      {/* Event Details Modal */}
-      {showEventDetails && selectedEvent && !isEditingEvent && (
-        <EventDetails
-          event={selectedEvent}
-          onClose={() => {
+      {/* Enhanced Event Manager - handles both creating new events and viewing/editing existing ones */}
+{(showEventManager || (selectedEvent && isEditingEvent)) && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <EnhancedEventManager
+        initialEvent={isEditingEvent ? selectedEvent : null}
+        selectedDate={selectedDate}
+        onSave={(result) => {
+          if (result?.success) {
+            // Close the editor/creator
+            setShowEventManager(false);
             setShowEventDetails(false);
-            setConflictingEvents([]);
-          }}
-          onEdit={handleEventEdit}
-          onDelete={handleDeleteEvent}
-          familyMembers={familyMembers}
-          pendingAction={pendingAction}
-          showSuccess={showSuccess}
-          // Add new props for enhanced details
-          conflictingEvents={conflictingEvents}
-          // Pass AI metadata
-          showAiMetadata={true}
-        />
-      )}
+            setIsEditingEvent(false);
+            
+            // Update local data and refresh
+            setLastRefresh(Date.now());
+            
+            // Show success animation
+            setShowSuccess(true);
+            setTimeout(() => {
+              setShowSuccess(false);
+            }, 2000);
+            
+            CalendarService.showNotification(
+              isEditingEvent ? "Event updated successfully" : "Event added successfully", 
+              "success"
+            );
+          }
+        }}
+        onCancel={() => {
+          setShowEventManager(false);
+          setShowEventDetails(false);
+          setIsEditingEvent(false);
+        }}
+        mode={isEditingEvent ? (selectedEvent.viewOnly ? "view" : "edit") : "create"}
+        conflictingEvents={conflictingEvents}
+        showAiMetadata={true}
+        onDelete={isEditingEvent ? handleDeleteEvent : null}
+      />
+    </div>
+  </div>
+)}
 
       {/* Enhanced Event Manager for editing and creating */}
       {(showEventManager || (selectedEvent && isEditingEvent)) && (

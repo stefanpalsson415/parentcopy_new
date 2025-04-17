@@ -33,7 +33,8 @@ const EnhancedEventManager = ({
   eventType = 'general',
   selectedDate = null,
   isCompact = false,
-  mode = 'create'
+  mode = 'create', // 'create', 'edit', or 'view'
+
 }) => {
   const { familyMembers, familyId } = useFamily();
   const { currentUser } = useAuth();
@@ -1040,36 +1041,50 @@ Object.keys(calendarEvent).forEach(key => {
         )}
         
         {/* Action Buttons */}
-        <div className="flex justify-end pt-2">
-          {onCancel && (
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="px-4 py-2 border rounded-md text-sm mr-3 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-          )}
-          
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={loading}
-            className="px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 disabled:bg-gray-400 flex items-center"
-          >
-            {loading ? (
-              <>
-                <div className="w-4 h-4 mr-2 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
-                Saving...
-              </>
-            ) : (
-              <>
-                <Calendar size={16} className="mr-2" />
-                {mode === 'edit' ? 'Update Event' : 'Add to Calendar'}
-              </>
-            )}
-          </button>
-        </div>
+<div className="flex justify-end pt-2">
+  {onCancel && (
+    <button
+      type="button"
+      onClick={handleCancel}
+      className="px-4 py-2 border rounded-md text-sm mr-3 hover:bg-gray-50"
+    >
+      Cancel
+    </button>
+  )}
+  
+  {mode === 'view' ? (
+    <button
+      type="button"
+      onClick={() => {
+        // Switch to edit mode
+        setMode('edit');
+      }}
+      className="px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 flex items-center"
+    >
+      <Edit size={16} className="mr-2" />
+      Edit Event
+    </button>
+  ) : (
+    <button
+      type="button"
+      onClick={handleSave}
+      disabled={loading}
+      className="px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 disabled:bg-gray-400 flex items-center"
+    >
+      {loading ? (
+        <>
+          <div className="w-4 h-4 mr-2 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
+          Saving...
+        </>
+      ) : (
+        <>
+          <Calendar size={16} className="mr-2" />
+          {mode === 'edit' ? 'Update Event' : 'Add to Calendar'}
+        </>
+      )}
+    </button>
+  )}
+</div>
       </div>
       
       {/* Success Animation */}
