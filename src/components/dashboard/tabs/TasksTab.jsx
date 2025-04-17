@@ -713,6 +713,8 @@ if (selectedUser?.role === 'parent') {
   
  // src/components/dashboard/tabs/TasksTab.jsx (replace updateCycleDueDate function)
 
+// src/components/dashboard/tabs/TasksTab.jsx (replace updateCycleDueDate function)
+
 const updateCycleDueDate = async (newDate, eventDetails = {}) => {
   if (!familyId || !currentUser) return false;
   
@@ -732,45 +734,61 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
     // 2. Find the existing due date event
     const existingDueDateEvent = await findExistingDueDateEvent();
     
-    // Create consistent event data
-    const eventData = {
-      title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
-      description: eventDetails.description || `Due date for Cycle ${currentWeek} activities`,
-      start: {
-        dateTime: newDate.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      end: {
-        dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      category: 'cycle-due-date',
-      eventType: 'cycle-due-date',
-      cycleNumber: currentWeek,
-      // This is key for preventing duplicates
-      universalId: `cycle-due-date-${familyId}-${currentWeek}`
-    };
-    
-    // 3. Use the EventContext methods directly
-    const { addEvent, updateEvent } = useEvents();
-    
+    // 3. Use CalendarService directly instead of EventContext
     let result;
     if (existingDueDateEvent && existingDueDateEvent.firestoreId) {
       // Update existing event
-      result = await updateEvent(existingDueDateEvent.firestoreId, eventData);
+      result = await CalendarService.updateEvent(
+        existingDueDateEvent.firestoreId, 
+        {
+          title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
+          description: eventDetails.description || `Due date for Cycle ${currentWeek} activities`,
+          start: {
+            dateTime: newDate.toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          },
+          end: {
+            dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          },
+          category: 'cycle-due-date',
+          eventType: 'cycle-due-date',
+          cycleNumber: currentWeek,
+          universalId: `cycle-due-date-${familyId}-${currentWeek}`
+        },
+        currentUser.uid
+      );
     } else {
       // Create new event
-      result = await addEvent(eventData);
+      result = await CalendarService.addEvent(
+        {
+          title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
+          description: eventDetails.description || `Due date for Cycle ${currentWeek} activities`,
+          start: {
+            dateTime: newDate.toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          },
+          end: {
+            dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          },
+          category: 'cycle-due-date',
+          eventType: 'cycle-due-date',
+          cycleNumber: currentWeek,
+          universalId: `cycle-due-date-${familyId}-${currentWeek}`
+        },
+        currentUser.uid
+      );
     }
     
     if (!result.success) {
       throw new Error(result.error || "Failed to update calendar");
     }
     
-    // 3. Update UI state
+    // 4. Update UI state
     setSurveyDue(newDate);
     
-    // 4. Update week status for consistency
+    // 5. Update week status for consistency
     const updatedStatus = {
       ...weekStatus,
       [currentWeek]: {

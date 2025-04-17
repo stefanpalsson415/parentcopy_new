@@ -34,7 +34,8 @@ const EventsList = ({
   title = "Events",
   emptyMessage = "No events scheduled",
   renderBadges,
-  showActionButtons = false // Added this prop with default value false
+  showActionButtons = false, // Added this prop with default value false
+  familyMembers = [] // Add this prop with default empty array
 }) => {
   
   // Helper function to get a unique key for an event
@@ -92,6 +93,10 @@ const EventsList = ({
     });
   };
   
+  const findFamilyMember = (id) => {
+    return familyMembers.find(member => member.id === id);
+  };
+
   // Format time for display
   const formatTime = (dateString) => {
     if (!dateString) return "";
@@ -103,18 +108,24 @@ const EventsList = ({
   const AttendeeAvatars = ({ attendees = [], max = 3 }) => {
     return (
       <div className="flex -space-x-2 items-center">
-        {attendees.slice(0, max).map((attendee, i) => (
-          <div 
-            key={i} 
-            className="w-6 h-6 rounded-full overflow-hidden border border-white shadow-sm"
-            title={attendee.name}
-          >
-            <UserAvatar 
-              user={attendee}
-              size={24}
-            />
-          </div>
-        ))}
+        {attendees.slice(0, max).map((attendee, i) => {
+          // Try to find the complete family member data if we only have an ID
+          const memberData = attendee.id && !attendee.profilePicture ? 
+            findFamilyMember(attendee.id) : attendee;
+            
+          return (
+            <div 
+              key={i} 
+              className="w-6 h-6 rounded-full overflow-hidden border border-white shadow-sm"
+              title={attendee.name || memberData?.name}
+            >
+              <UserAvatar 
+                user={memberData || attendee}
+                size={24}
+              />
+            </div>
+          );
+        })}
         {attendees.length > max && (
           <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center border border-white shadow-sm text-xs" title={`${attendees.length - max} more attendees`}>
             +{attendees.length - max}
@@ -272,9 +283,14 @@ const EventsList = ({
                         ) : event.childId && event.childName ? (
                           /* Show child avatar if it's a child event */
                           <AttendeeAvatars 
-                            attendees={[{id: event.childId, name: event.childName}]} 
-                            max={1} 
-                          />
+    attendees={[{
+      id: event.childId, 
+      name: event.childName,
+      // Try to get full data from family members
+      ...(familyMembers.find(m => m.id === event.childId) || {})
+    }]} 
+    max={1} 
+  />
                         ) : event.attendingParentId && event.attendingParentId !== 'undecided' ? (
                           /* Show attending parent avatar if available */
                           <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 text-xs">
