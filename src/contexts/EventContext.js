@@ -58,8 +58,10 @@ export function EventProvider({ children }) {
     return () => unsubscribe();
   }, [currentUser, familyId]);
 
-  // Standardize event format to ensure consistency
-  const standardizeEvent = (event) => {
+  // src/contexts/EventContext.js (partial update)
+// Add this improved version of standardizeEvent method
+
+const standardizeEvent = (event) => {
     // Check if already in standard format
     if (event.standardized) return event;
     
@@ -91,11 +93,19 @@ export function EventProvider({ children }) {
       endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
     }
     
+    // Always prioritize universalId if available to help with deduplication
+    const universalId = event.universalId || event.id || event.firestoreId || 
+      `event-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Ensure consistent category and eventType 
+    const category = event.category || event.eventType || "general";
+    const eventType = event.eventType || event.category || "general";
+    
     // Return standardized event
     return {
       id: event.id || event.firestoreId || `event-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       firestoreId: event.firestoreId || event.id,
-      universalId: event.universalId || event.id,
+      universalId: universalId,
       title: event.title || event.summary || "Untitled Event",
       summary: event.summary || event.title || "Untitled Event",
       description: event.description || "",
@@ -110,8 +120,8 @@ export function EventProvider({ children }) {
       dateObj: startDate, // For easy access
       dateEndObj: endDate, // For easy access
       location: event.location || "",
-      category: event.category || "general",
-      eventType: event.eventType || "general",
+      category: category,
+      eventType: eventType,
       childId: event.childId || null,
       childName: event.childName || null,
       attendingParentId: event.attendingParentId || null,
@@ -122,7 +132,9 @@ export function EventProvider({ children }) {
       extraDetails: event.extraDetails || {},
       userId: event.userId || currentUser?.uid,
       familyId: event.familyId || familyId,
-      standardized: true // Mark as standardized
+      standardized: true, // Mark as standardized
+      // Preserve cycle-specific data
+      cycleNumber: event.cycleNumber || null
     };
   };
 

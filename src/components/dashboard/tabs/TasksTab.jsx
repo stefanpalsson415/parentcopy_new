@@ -188,67 +188,6 @@ useEffect(() => {
 }, [familyId, currentUser, currentWeek]);
   
 
-// Add this useEffect near other useEffects in TasksTab.jsx
-useEffect(() => {
-  // Check if we need to synchronize the due date from calendar events
-  const synchronizeDueDateFromCalendar = async () => {
-    if (!familyId || !currentUser) return;
-    
-    try {
-      // Find the existing due date event
-      const existingEvent = await findExistingDueDateEvent();
-      
-      if (existingEvent) {
-        // Extract date from event
-        let eventDate;
-        if (existingEvent.start?.dateTime) {
-          eventDate = new Date(existingEvent.start.dateTime);
-        } else if (existingEvent.dateTime) {
-          eventDate = new Date(existingEvent.dateTime);
-        } else if (existingEvent.dateObj) {
-          eventDate = new Date(existingEvent.dateObj);
-        }
-        
-        // If we found a valid date and it's different from the current surveyDue
-        if (eventDate && (!surveyDue || 
-            Math.abs(eventDate.getTime() - (surveyDue?.getTime() || 0)) > 60000)) {
-          console.log("Synchronizing due date from calendar event:", 
-                     eventDate, "Current surveyDue:", surveyDue);
-          
-          // Update our local state
-          setSurveyDue(eventDate);
-          
-          // Also update the database to maintain consistency
-          try {
-            await updateSurveySchedule(currentWeek, eventDate);
-            
-            // Update week status as well
-            const updatedStatus = {
-              ...weekStatus,
-              [currentWeek]: {
-                ...weekStatus[currentWeek],
-                scheduledDate: eventDate.toISOString()
-              }
-            };
-            
-            await DatabaseService.saveFamilyData({
-              weekStatus: updatedStatus,
-              updatedAt: new Date().toISOString()
-            }, familyId);
-            
-            console.log("Successfully synchronized due date from calendar");
-          } catch (updateError) {
-            console.error("Error synchronizing due date:", updateError);
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error checking for calendar event sync:", error);
-    }
-  };
-  
-  synchronizeDueDateFromCalendar();
-}, [familyId, currentUser, currentWeek]);
 
 // Add to the main useEffect that loads habits and data
 useEffect(() => {
@@ -478,64 +417,79 @@ setHasCompletedSurvey(userHasCompletedSurvey);
     }
   };
   
-  const findExistingDueDateEvent = async () => {
-    if (!familyId || !currentUser) return null;
+ // src/components/dashboard/tabs/TasksTab.jsx (replace findExistingDueDateEvent function)
+
+const findExistingDueDateEvent = async () => {
+  if (!familyId || !currentUser) return null;
+  
+  try {
+    // Get all events from CalendarService with a wider date range
+    const events = await CalendarService.getEventsForUser(
+      currentUser.uid,
+      new Date(new Date().setDate(new Date().getDate() - 90)), // 90 days ago
+      new Date(new Date().setDate(new Date().getDate() + 180))  // 180 days ahead
+    );
     
-    try {
-      // Get all events from CalendarService with a wider date range
-      const events = await CalendarService.getEventsForUser(
-        currentUser.uid,
-        new Date(new Date().setDate(new Date().getDate() - 90)), // 90 days ago
-        new Date(new Date().setDate(new Date().getDate() + 180))  // 180 days ahead
-      );
-      
-      console.log("All calendar events found:", events.length);
-      
-      // First try to find by universalId - most reliable method
-      const universalIdToFind = `cycle-due-date-${familyId}-${currentWeek}`;
-      let dueDateEvent = events.find(event => event.universalId === universalIdToFind);
-      
-      if (dueDateEvent) {
-        console.log("Found due date event by universalId:", dueDateEvent);
-        setExistingDueDateEvent(dueDateEvent);
-        return dueDateEvent;
-      }
-      
-      // Fallback to multiple criteria search
-      const dueDateEvents = events.filter(event => {
-        // Check for cycle due date in category or eventType
-        const isCycleDueDate = 
-          event.category === 'cycle-due-date' || 
-          event.eventType === 'cycle-due-date';
-          
-        // Check for current cycle number in various fields
-        const isCurrentCycle = 
-          event.cycleNumber === currentWeek || 
-          (event.universalId && event.universalId.includes(`-${currentWeek}`));
-          
-        return isCycleDueDate && isCurrentCycle;
+    console.log("All calendar events found:", events.length);
+    
+    // FIRST PRIORITY: Look for universalId with specific format
+    const universalIdToFind = `cycle-due-date-${familyId}-${currentWeek}`;
+    let dueDateEvent = events.find(event => event.universalId === universalIdToFind);
+    
+    if (dueDateEvent) {
+      console.log("Found due date event by universalId:", dueDateEvent);
+      setExistingDueDateEvent(dueDateEvent);
+      return dueDateEvent;
+    }
+    
+    // SECOND PRIORITY: Search by title containing "Cycle X Due Date"
+    const titlePattern = new RegExp(`Cycle\\s*${currentWeek}\\s*Due\\s*Date`, 'i');
+    dueDateEvent = events.find(event => 
+      (event.title && titlePattern.test(event.title)) || 
+      (event.summary && titlePattern.test(event.summary))
+    );
+    
+    if (dueDateEvent) {
+      console.log("Found due date event by title pattern:", dueDateEvent);
+      setExistingDueDateEvent(dueDateEvent);
+      return dueDateEvent;
+    }
+    
+    // THIRD PRIORITY: Check for cycle due date in category and current cycle number
+    const dueDateEvents = events.filter(event => {
+      // Check for cycle due date in category or eventType
+      const isCycleDueDate = 
+        event.category === 'cycle-due-date' || 
+        event.eventType === 'cycle-due-date';
+        
+      // Check for current cycle number in various fields
+      const isCurrentCycle = 
+        event.cycleNumber === currentWeek || 
+        (event.universalId && event.universalId.includes(`-${currentWeek}`));
+        
+      return isCycleDueDate && isCurrentCycle;
+    });
+    
+    if (dueDateEvents.length > 0) {
+      // Sort by recency (most recently updated first)
+      dueDateEvents.sort((a, b) => {
+        const dateA = a.updatedAt ? new Date(a.updatedAt) : new Date(0);
+        const dateB = b.updatedAt ? new Date(b.updatedAt) : new Date(0);
+        return dateB - dateA;
       });
       
-      if (dueDateEvents.length > 0) {
-        // Sort by recency (most recently updated first)
-        dueDateEvents.sort((a, b) => {
-          const dateA = a.updatedAt ? new Date(a.updatedAt) : new Date(0);
-          const dateB = b.updatedAt ? new Date(b.updatedAt) : new Date(0);
-          return dateB - dateA;
-        });
-        
-        console.log("Found existing due date event:", dueDateEvents[0]);
-        setExistingDueDateEvent(dueDateEvents[0]);
-        return dueDateEvents[0];
-      }
-      
-      console.log("No existing due date event found for cycle", currentWeek);
-      return null;
-    } catch (error) {
-      console.error("Error finding existing due date event:", error);
-      return null;
+      console.log("Found existing due date event:", dueDateEvents[0]);
+      setExistingDueDateEvent(dueDateEvents[0]);
+      return dueDateEvents[0];
     }
-  };
+    
+    console.log("No existing due date event found for cycle", currentWeek);
+    return null;
+  } catch (error) {
+    console.error("Error finding existing due date event:", error);
+    return null;
+  }
+};
   
 
 
@@ -757,7 +711,8 @@ if (selectedUser?.role === 'parent') {
     }
   };
   
- /// New code for TasksTab.jsx - enhanced updateCycleDueDate function
+ // src/components/dashboard/tabs/TasksTab.jsx (replace updateCycleDueDate function)
+
 const updateCycleDueDate = async (newDate, eventDetails = {}) => {
   if (!familyId || !currentUser) return false;
   
@@ -777,62 +732,35 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
     // 2. Find the existing due date event
     const existingDueDateEvent = await findExistingDueDateEvent();
     
-    // Create attendees array with all family members
-    const allFamilyAttendees = familyMembers.map(member => ({
-      id: member.id,
-      name: member.name,
-      profilePicture: member.profilePicture,
-      role: member.role
-    }));
+    // Create consistent event data
+    const eventData = {
+      title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
+      description: eventDetails.description || `Due date for Cycle ${currentWeek} activities`,
+      start: {
+        dateTime: newDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      category: 'cycle-due-date',
+      eventType: 'cycle-due-date',
+      cycleNumber: currentWeek,
+      // This is key for preventing duplicates
+      universalId: `cycle-due-date-${familyId}-${currentWeek}`
+    };
     
-    // 3. Update or create calendar event - without using hooks
+    // 3. Use the EventContext methods directly
+    const { addEvent, updateEvent } = useEvents();
+    
     let result;
     if (existingDueDateEvent && existingDueDateEvent.firestoreId) {
       // Update existing event
-      result = await CalendarService.updateEvent(
-        existingDueDateEvent.firestoreId, 
-        {
-          title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
-          description: eventDetails.description || `Due date for Cycle ${currentWeek} activities and family meeting`,
-          start: {
-            dateTime: newDate.toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          end: {
-            dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          category: 'meeting', // Changed to meeting category
-          eventType: 'meeting', // Changed to meeting type
-          cycleNumber: currentWeek,
-          attendees: allFamilyAttendees, // Include all family members
-          attendingParentId: 'both' // Include both parents
-        },
-        currentUser.uid
-      );
+      result = await updateEvent(existingDueDateEvent.firestoreId, eventData);
     } else {
       // Create new event
-      result = await CalendarService.addEvent(
-        {
-          title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
-          description: eventDetails.description || `Due date for Cycle ${currentWeek} activities and family meeting`,
-          start: {
-            dateTime: newDate.toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          end: {
-            dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          category: 'meeting', // Changed to meeting category
-          eventType: 'meeting', // Changed to meeting type
-          cycleNumber: currentWeek,
-          universalId: `cycle-due-date-${familyId}-${currentWeek}`,
-          attendees: allFamilyAttendees, // Include all family members
-          attendingParentId: 'both' // Include both parents
-        },
-        currentUser.uid
-      );
+      result = await addEvent(eventData);
     }
     
     if (!result.success) {
@@ -877,7 +805,77 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
     return false;
   }
 };
+
+// src/components/dashboard/tabs/TasksTab.jsx (add this new function)
+
+const cleanupDuplicateDueDateEvents = async () => {
+  if (!familyId || !currentUser) return;
   
+  try {
+    console.log("Running duplicate event cleanup");
+    
+    // Get all events from CalendarService
+    const events = await CalendarService.getEventsForUser(
+      currentUser.uid,
+      new Date(new Date().setDate(new Date().getDate() - 90)), // 90 days ago
+      new Date(new Date().setDate(new Date().getDate() + 180))  // 180 days ahead
+    );
+    
+    // Filter for current cycle due date events
+    const titlePattern = new RegExp(`Cycle\\s*${currentWeek}\\s*Due\\s*Date`, 'i');
+    const dueDateEvents = events.filter(event => 
+      (event.category === 'cycle-due-date' || event.eventType === 'cycle-due-date' ||
+       (event.title && titlePattern.test(event.title)) || 
+       (event.summary && titlePattern.test(event.summary)))
+    );
+    
+    if (dueDateEvents.length <= 1) {
+      console.log("No duplicate events found. Nothing to clean up.");
+      return;
+    }
+    
+    console.log(`Found ${dueDateEvents.length} due date events for cycle ${currentWeek}. Keeping the newest.`);
+    
+    // Sort by date (most recent first)
+    dueDateEvents.sort((a, b) => {
+      // If there's a date difference, use that
+      if (a.dateObj && b.dateObj) {
+        return new Date(b.dateObj) - new Date(a.dateObj);
+      }
+      
+      // Otherwise sort by creation/update time
+      const timeA = a.updatedAt || a.createdAt || 0;
+      const timeB = b.updatedAt || b.createdAt || 0;
+      return new Date(timeB) - new Date(timeA);
+    });
+    
+    // Keep the first (newest) event, delete others
+    const keepEvent = dueDateEvents[0];
+    const deleteEvents = dueDateEvents.slice(1);
+    
+    console.log(`Keeping event: ${keepEvent.title} (${keepEvent.firestoreId || keepEvent.id})`);
+    console.log(`Deleting ${deleteEvents.length} duplicate events`);
+    
+    // Delete duplicates
+    for (const event of deleteEvents) {
+      if (event.firestoreId) {
+        await CalendarService.deleteEvent(event.firestoreId, currentUser.uid);
+        console.log(`Deleted duplicate event: ${event.title} (${event.firestoreId})`);
+      }
+    }
+    
+    // Force refresh calendar
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+    }
+    
+    console.log("Duplicate cleanup complete");
+  } catch (error) {
+    console.error("Error cleaning up duplicate events:", error);
+  }
+};
+
+
 // Add this function to TasksTab.jsx - much simpler and more direct approach
 const forceCalendarDateSync = async () => {
   try {
