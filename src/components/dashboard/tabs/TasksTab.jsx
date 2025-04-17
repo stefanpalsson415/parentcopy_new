@@ -578,6 +578,7 @@ if (selectedUser?.role === 'parent') {
   };
   
   // Replace the updateCycleDueDate function in TasksTab.jsx (around line 300-350)
+
 const updateCycleDueDate = async (newDate, eventDetails = {}) => {
   if (!familyId || !currentUser) return false;
   
@@ -590,11 +591,20 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
       throw new Error("Invalid date provided");
     }
     
-    // Format the date for display
+    // Check if the date is in the past
+    const now = new Date();
+    if (newDate < now) {
+      console.warn("Meeting date is in the past, but proceeding as requested:", newDate);
+      // Note: We allow past dates but warn about them in the UI
+    }
+    
+    // Format the date for display (including time)
     const formattedDate = newDate.toLocaleDateString('en-US', {
       weekday: 'long',
       month: 'long',
-      day: 'numeric'
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
     
     // Update survey schedule in database
@@ -675,7 +685,12 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
       updatedAt: new Date().toISOString()
     }, familyId);
     
-    createCelebration(`Cycle ${currentWeek} due date updated to ${formattedDate}`, true);
+    // Show a more detailed celebration with time included
+    createCelebration(
+      `Meeting ${newDate < now ? 'Updated' : 'Scheduled'}`, 
+      true, 
+      `Cycle ${currentWeek} ${newDate < now ? 'date updated to' : 'scheduled for'} ${formattedDate}`
+    );
     
     setIsProcessing(false);
     return true;
@@ -1428,48 +1443,72 @@ const createNewHabit = async (isRefresh = false) => {
   {hasCompletedSurvey ? 'Survey Completed' : 'Take Survey'}
 </button>
           
-          <button
-            onClick={onOpenFamilyMeeting}
-            disabled={!canScheduleMeeting}
-            className={`px-4 py-2 rounded-md flex items-center ${
-              canScheduleMeeting ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-            }`}
-          >
-            <Calendar size={18} className="mr-2" />
-            Schedule Meeting
-          </button>
-          
-          <button
-  onClick={async () => {
-    try {
-      // Set default date with safer date manipulation
-      const today = new Date();
-      let defaultDate;
-      
-      if (surveyDue instanceof Date && !isNaN(surveyDue.getTime())) {
-        defaultDate = surveyDue;
-      } else {
-        // Create a new date 7 days in the future safely
-        defaultDate = new Date(today.getTime() + (7 * 24 * 60 * 60 * 1000));
-      }
-      
-      setDatePickerDate(defaultDate);
-      
-      // Find existing event
-      const existingEvent = await findExistingDueDateEvent();
-      setExistingDueDateEvent(existingEvent);
-      
-      setShowCalendar(true);
-    } catch (error) {
-      console.error("Error preparing calendar:", error);
-      createCelebration("Error", false, "Could not open calendar. Please try again.");
-    }
-  }}
-  className="px-4 py-2 border border-gray-300 rounded-md flex items-center hover:bg-gray-50"
+<button
+  onClick={onOpenFamilyMeeting}
+  disabled={!canScheduleMeeting}
+  className={`px-4 py-2 rounded-md flex items-center ${
+    canScheduleMeeting ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+  }`}
 >
-  <Clock size={18} className="mr-2" />
-  Change Due Date
+  <Calendar size={18} className="mr-2" />
+  {canScheduleMeeting ? 'Take Meeting' : 'Schedule Meeting'} 
 </button>
+          
+<div className="flex items-center">
+  <button
+    onClick={async () => {
+      try {
+        // Set default date with safer date manipulation
+        const today = new Date();
+        let defaultDate;
+        
+        if (surveyDue instanceof Date && !isNaN(surveyDue.getTime())) {
+          defaultDate = surveyDue;
+          
+          // Check if date is in the past
+          if (defaultDate < today) {
+            createCelebration("Date Update Needed", false, "The meeting date is in the past. Please set a new date.");
+            // Set to a reasonable future date (e.g., tomorrow)
+            defaultDate = new Date(today.getTime() + (24 * 60 * 60 * 1000));
+          }
+        } else {
+          // Create a new date 7 days in the future safely
+          defaultDate = new Date(today.getTime() + (7 * 24 * 60 * 60 * 1000));
+        }
+        
+        setDatePickerDate(defaultDate);
+        
+        // Find existing event
+        const existingEvent = await findExistingDueDateEvent();
+        setExistingDueDateEvent(existingEvent);
+        
+        setShowCalendar(true);
+      } catch (error) {
+        console.error("Error preparing calendar:", error);
+        createCelebration("Error", false, "Could not open calendar. Please try again.");
+      }
+    }}
+    className="px-4 py-2 border border-gray-300 rounded-md flex items-center hover:bg-gray-50"
+  >
+    <Clock size={18} className="mr-2" />
+    Change Due Date
+  </button>
+  
+  {surveyDue && (
+    <div className="ml-2 text-sm bg-gray-100 px-3 py-1 rounded-md">
+      {surveyDue.toLocaleDateString('en-US', { 
+        weekday: 'short',
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })}
+      {surveyDue < new Date() && (
+        <span className="ml-1 text-red-600 font-medium">(Past due)</span>
+      )}
+    </div>
+  )}
+</div>
         </div>
         
         {/* Cycle Information */}
@@ -1938,14 +1977,16 @@ const createNewHabit = async (isRefresh = false) => {
         </div>
       )}
       
-      {/* Calendar floating widget with embedded event editor */}
+      // In TasksTab.jsx - Update the Calendar floating widget section (around line 1450-1500)
+
+{/* Calendar floating widget with embedded event editor */}
 {showCalendar && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
       <EnhancedEventManager
         initialEvent={existingDueDateEvent || {
-          title: `Cycle ${currentWeek} Due Date`,
-          description: `Due date for completing Cycle ${currentWeek} activities including surveys and tasks.`,
+          title: `Cycle ${currentWeek} Meeting`,
+          description: `Family meeting for Cycle ${currentWeek} to discuss survey results and set goals.`,
           dateTime: datePickerDate instanceof Date && !isNaN(datePickerDate.getTime()) 
             ? datePickerDate.toISOString() 
             : new Date().toISOString(),
@@ -1995,7 +2036,7 @@ const createNewHabit = async (isRefresh = false) => {
           }
         }}
         onCancel={() => setShowCalendar(false)}
-        eventType="cycle-due-date"
+        eventType="family-meeting"
         selectedDate={datePickerDate instanceof Date && !isNaN(datePickerDate.getTime()) 
           ? datePickerDate 
           : new Date()}
