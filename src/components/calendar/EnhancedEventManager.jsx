@@ -82,119 +82,142 @@ const EnhancedEventManager = ({
   const children = familyMembers.filter(m => m.role === 'child');
   const parents = familyMembers.filter(m => m.role === 'parent');
   
-  // Update childName when childId changes
-  useEffect(() => {
-    if (event.childId) {
-      const child = children.find(c => c.id === event.childId);
-      if (child && child.name !== event.childName) {
-        setEvent(prev => ({ ...prev, childName: child.name }));
-      }
+  // New code - Enhanced useEffect for proper initialization
+useEffect(() => {
+  // Properly initialize child name if childId exists
+  if (event.childId) {
+    const child = children.find(c => c.id === event.childId);
+    if (child && child.name !== event.childName) {
+      setEvent(prev => ({ ...prev, childName: child.name }));
     }
-  }, [event.childId, children]);
-
-  // Initialize Google Places PlaceAutocompleteElement
-  useEffect(() => {
-    // Function to initialize PlaceAutocompleteElement
-    const initPlacesAutocomplete = () => {
-      if (!window.google || !window.google.maps || !window.google.maps.places || 
-          !window.google.maps.places.PlaceAutocompleteElement) {
-        console.log("Places API or PlaceAutocompleteElement not available");
-        return false;
-      }
-
-      try {
-        if (placesContainerRef.current) {
-          // Clear any existing content
-          placesContainerRef.current.innerHTML = '';
-          
-          const placeAutocompleteElement = new window.google.maps.places.PlaceAutocompleteElement({
-            types: ['address', 'establishment']
-            // Remove the inputPlaceholder property completely
-          });
-          
-          // Add the element to the container
-          placesContainerRef.current.appendChild(placeAutocompleteElement);
-          
-          // Store reference to the element
-          placeAutocompleteElementRef.current = placeAutocompleteElement;
-          
-          // Add event listener for place selection
-placeAutocompleteElement.addEventListener('gmp-placeautocomplete-place-changed', () => {
-  try {
-    const place = placeAutocompleteElement.getPlace();
-    if (place) {
-      // Try to get a well-formatted address using available properties
-      let locationText = '';
-      
-      if (place.formattedAddress) {
-        locationText = place.formattedAddress;
-      } else if (place.formatted_address) {
-        locationText = place.formatted_address;
-      } else if (place.vicinity) {
-        locationText = place.vicinity;
-      } else if (place.address) {
-        locationText = place.address;
-      }
-      
-      // If we have a name and it's different from the address, include it
-      if (place.name && place.name !== locationText && locationText) {
-        locationText = `${place.name}, ${locationText}`;
-      } else if (place.name && !locationText) {
-        locationText = place.name;
-      }
-      
-      // Only update the event if we have some location text
-      if (locationText) {
-        setEvent(prev => ({ ...prev, location: locationText }));
-      }
-    }
-  } catch (error) {
-    console.warn("Error handling place selection:", error);
   }
-});
-          
-          return true;
-        }
-        return false;
-      } catch (error) {
-        console.warn("Error initializing PlaceAutocompleteElement:", error);
-        return false;
-      }
-    };
+  
+  // Ensure event type is properly set for cycle due date events
+  if (initialEvent && mode === 'edit') {
+    if ((initialEvent.title && initialEvent.title.includes('Cycle') && initialEvent.title.includes('Due Date')) || 
+        (initialEvent.category === 'cycle-due-date' || initialEvent.eventType === 'cycle-due-date')) {
+      setEvent(prev => ({ 
+        ...prev, 
+        category: 'meeting',
+        eventType: 'meeting'
+      }));
+    }
+  }
+}, [event.childId, children, initialEvent, mode]);
+  // Initialize Google Places PlaceAutocompleteElement
+// Updated initialization code in useEffect
+useEffect(() => {
+  // Function to initialize PlaceAutocompleteElement
+  const initPlacesAutocomplete = () => {
+    if (!window.google || !window.google.maps || !window.google.maps.places || 
+        !window.google.maps.places.PlaceAutocompleteElement) {
+      console.log("Places API or PlaceAutocompleteElement not available");
+      return false;
+    }
 
-    // Check if Google Maps API is loaded and initialize if it is
+    try {
+      if (placesContainerRef.current) {
+        // Clear any existing content
+        placesContainerRef.current.innerHTML = '';
+        
+        const placeAutocompleteElement = new window.google.maps.places.PlaceAutocompleteElement({
+          types: ['address', 'establishment']
+        });
+        
+        // Add styling to make it match our UI
+        placeAutocompleteElement.style.width = '100%';
+        placeAutocompleteElement.style.border = 'none';
+        placeAutocompleteElement.style.padding = '8px';
+        
+        // Add the element to the container
+        placesContainerRef.current.appendChild(placeAutocompleteElement);
+        
+        // Store reference to the element
+        placeAutocompleteElementRef.current = placeAutocompleteElement;
+        
+        // Add event listener for place selection
+        placeAutocompleteElement.addEventListener('gmp-placeautocomplete-place-changed', () => {
+          try {
+            const place = placeAutocompleteElement.getPlace();
+            if (place) {
+              // Try to get a well-formatted address using available properties
+              let locationText = '';
+              
+              if (place.formattedAddress) {
+                locationText = place.formattedAddress;
+              } else if (place.formatted_address) {
+                locationText = place.formatted_address;
+              } else if (place.vicinity) {
+                locationText = place.vicinity;
+              } else if (place.address) {
+                locationText = place.address;
+              }
+              
+              // If we have a name and it's different from the address, include it
+              if (place.name && place.name !== locationText && locationText) {
+                locationText = `${place.name}, ${locationText}`;
+              } else if (place.name && !locationText) {
+                locationText = place.name;
+              }
+              
+              // Only update the event if we have some location text
+              if (locationText) {
+                setEvent(prev => ({ ...prev, location: locationText }));
+              }
+            }
+          } catch (error) {
+            console.warn("Error handling place selection:", error);
+          }
+        });
+        
+        // Set initial value if the event already has a location
+        if (event.location && placeAutocompleteElement.querySelector('input')) {
+          const input = placeAutocompleteElement.querySelector('input');
+          input.value = event.location;
+        }
+        
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.warn("Error initializing PlaceAutocompleteElement:", error);
+      return false;
+    }
+  };
+
+  // Check if Google Maps API is loaded and initialize if it is
+  if (window.google && window.google.maps && window.google.maps.places && 
+      window.google.maps.places.PlaceAutocompleteElement && !placesInitialized) {
+    const success = initPlacesAutocomplete();
+    setPlacesInitialized(success);
+  }
+  
+  // Set up a handler for when the API loads
+  const handleMapsApiLoaded = () => {
     if (window.google && window.google.maps && window.google.maps.places && 
         window.google.maps.places.PlaceAutocompleteElement && !placesInitialized) {
       const success = initPlacesAutocomplete();
       setPlacesInitialized(success);
     }
-    
-    // Set up a handler for when the API loads
-    const handleMapsApiLoaded = () => {
-      if (window.google && window.google.maps && window.google.maps.places && 
-          window.google.maps.places.PlaceAutocompleteElement && !placesInitialized) {
-        const success = initPlacesAutocomplete();
-        setPlacesInitialized(success);
-      }
-    };
-    
-    // Add event listener for when the Google Maps API loads
-    window.addEventListener('google-maps-api-loaded', handleMapsApiLoaded);
-    
-    // Also check again in a short timeout in case the API is loaded but the event hasn't fired
-    const timeoutId = setTimeout(() => {
-      if (window.google && window.google.maps && window.google.maps.places && 
-          window.google.maps.places.PlaceAutocompleteElement && !placesInitialized) {
-        const success = initPlacesAutocomplete();
-        setPlacesInitialized(success);
-      }
-    }, 1000);
-    
-    return () => {
-      window.removeEventListener('google-maps-api-loaded', handleMapsApiLoaded);
-      clearTimeout(timeoutId);
-    };
-  }, [placesInitialized]);
+  };
+  
+  // Add event listener for when the Google Maps API loads
+  window.addEventListener('google-maps-api-loaded', handleMapsApiLoaded);
+  
+  // Also check again in a short timeout in case the API is loaded but the event hasn't fired
+  const timeoutId = setTimeout(() => {
+    if (window.google && window.google.maps && window.google.maps.places && 
+        window.google.maps.places.PlaceAutocompleteElement && !placesInitialized) {
+      const success = initPlacesAutocomplete();
+      setPlacesInitialized(success);
+    }
+  }, 1000);
+  
+  return () => {
+    window.removeEventListener('google-maps-api-loaded', handleMapsApiLoaded);
+    clearTimeout(timeoutId);
+  };
+}, [placesInitialized, event.location]);
 
   // Set initial value for the location field if editing
   useEffect(() => {
@@ -210,6 +233,40 @@ placeAutocompleteElement.addEventListener('gmp-placeautocomplete-place-changed',
       }
     }
   }, [event.location, placesInitialized]);
+
+
+// Add this useEffect to EnhancedEventManager.jsx (after other useEffects)
+// New code to ensure proper event initialization
+useEffect(() => {
+  // This effect runs when the component mounts or when initialEvent changes
+  if (initialEvent && mode === 'edit') {
+    // Ensure dateTime is properly handled
+    if (initialEvent.dateObj && !initialEvent.dateTime) {
+      setEvent(prev => ({
+        ...prev,
+        dateTime: initialEvent.dateObj.toISOString()
+      }));
+    } else if (initialEvent.start?.dateTime && !initialEvent.dateTime) {
+      setEvent(prev => ({
+        ...prev,
+        dateTime: initialEvent.start.dateTime
+      }));
+    }
+    
+    // Handle cycle due date specific settings
+    if (initialEvent.title?.includes('Cycle') && initialEvent.title?.includes('Due Date')) {
+      // For cycle due dates, set category and type to meeting
+      setEvent(prev => ({
+        ...prev,
+        category: 'meeting',
+        eventType: 'meeting',
+        // Ensure both parents are attending
+        attendingParentId: 'both'
+      }));
+    }
+  }
+}, [initialEvent, mode]);
+
 
   // Manual location input for fallback
   const handleManualLocationInput = (value) => {
@@ -566,31 +623,42 @@ Object.keys(calendarEvent).forEach(key => {
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700">
-              Date*
-            </label>
-            <input
-              type="date"
-              value={event.dateTime ? new Date(event.dateTime).toISOString().split('T')[0] : ''}
-              onChange={(e) => {
-                const date = new Date(event.dateTime || new Date());
-                const newDate = new Date(e.target.value);
-                date.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
-                
-                // Also update end time to match start date
-                let endDate = event.endDateTime ? new Date(event.endDateTime) : new Date(date);
-                endDate.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
-                
-                setEvent(prev => ({ 
-                  ...prev, 
-                  dateTime: date.toISOString(),
-                  endDateTime: endDate.toISOString()
-                }));
-              }}
-              className="w-full border rounded-md p-2 text-sm"
-            />
-          </div>
+<div>
+  <label className="block text-sm font-medium mb-1 text-gray-700">
+    Date*
+  </label>
+  <input
+    type="date"
+    value={event.dateTime ? new Date(event.dateTime).toISOString().split('T')[0] : ''}
+    onChange={(e) => {
+      const date = new Date(event.dateTime || new Date());
+      const newDate = new Date(e.target.value);
+      date.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+      
+      // Also update end time to match start date
+      let endDate = event.endDateTime ? new Date(event.endDateTime) : new Date(date);
+      endDate.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+      
+      setEvent(prev => ({ 
+        ...prev, 
+        dateTime: date.toISOString(),
+        endDateTime: endDate.toISOString()
+      }));
+    }}
+    className="w-full border rounded-md p-2 text-sm"
+    required
+  />
+  {event.dateTime && (
+    <div className="text-xs text-gray-500 mt-1">
+      {new Date(event.dateTime).toLocaleDateString('en-US', { 
+        weekday: 'short',
+        month: 'short', 
+        day: 'numeric',
+        year: 'numeric' 
+      })}
+    </div>
+  )}
+</div>
           
           <div>
             <label className="block text-sm font-medium mb-1 text-gray-700">
@@ -683,44 +751,40 @@ Object.keys(calendarEvent).forEach(key => {
         
         {/* Location Section */}
 <div>
+{/* Location Section - Using Google Places with fallback */}
+<div>
   <label className="block text-sm font-medium mb-1 text-gray-700">
     Location
   </label>
 
-  {/* Always show manual input field for location */}
-  <div className="flex items-center border rounded-md overflow-hidden mb-2">
-    <div className="p-2 text-gray-400">
-      <MapPin size={16} />
-    </div>
-    <input
-      type="text"
-      value={event.location || ''}
-      onChange={(e) => handleManualLocationInput(e.target.value)}
-      className="w-full p-2 text-sm border-0 focus:ring-0"
-      placeholder="Where is this event happening?"
-    />
+  {/* Google Places Autocomplete container */}
+  <div ref={placesContainerRef} className="mb-2 rounded-md border overflow-hidden">
+    {/* PlaceAutocompleteElement will be inserted here if available */}
   </div>
   
-  {/* PlaceAutocompleteElement container - only try to load if not already failed */}
-  {!window.googleMapsAuthFailed && !window.googleMapsLoadFailed && (
-    <div ref={placesContainerRef} className="mb-2 mt-2">
-      {/* PlaceAutocompleteElement will be inserted here if available */}
-      {placesInitialized && (
-        <div className="text-xs text-green-600 pl-2">
-          Location suggestions are available. Type to see suggestions.
-        </div>
-      )}
+  {/* When Google Places is not available, fallback to manual input */}
+  {(window.googleMapsAuthFailed || window.googleMapsLoadFailed || !placesInitialized) && (
+    <div className="flex items-center border rounded-md overflow-hidden mt-2">
+      <div className="p-2 text-gray-400">
+        <MapPin size={16} />
+      </div>
+      <input
+        type="text"
+        value={event.location || ''}
+        onChange={(e) => handleManualLocationInput(e.target.value)}
+        className="w-full p-2 text-sm border-0 focus:ring-0"
+        placeholder="Where is this event happening?"
+      />
     </div>
   )}
   
-  {/* Notice when API is unavailable */}
-  {(window.googleMapsAuthFailed || window.googleMapsLoadFailed) && (
-    <div className="text-xs text-amber-600 mt-1 pl-2">
-      Location suggestions unavailable. Please type the full address.
+  {/* Current location value display (for visibility) */}
+  {event.location && (
+    <div className="text-xs text-blue-600 mt-1 pl-2">
+      Current location: {event.location}
     </div>
   )}
-</div>
-        
+</div>        
         {/* Child Selection */}
         <div>
           <label className="block text-sm font-medium mb-1 text-gray-700">
@@ -1109,6 +1173,7 @@ Object.keys(calendarEvent).forEach(key => {
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 };

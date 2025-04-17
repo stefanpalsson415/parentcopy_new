@@ -757,7 +757,7 @@ if (selectedUser?.role === 'parent') {
     }
   };
   
- // Find the updateCycleDueDate function (around line 780) and replace it with this version:
+ /// New code for TasksTab.jsx - enhanced updateCycleDueDate function
 const updateCycleDueDate = async (newDate, eventDetails = {}) => {
   if (!familyId || !currentUser) return false;
   
@@ -777,6 +777,14 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
     // 2. Find the existing due date event
     const existingDueDateEvent = await findExistingDueDateEvent();
     
+    // Create attendees array with all family members
+    const allFamilyAttendees = familyMembers.map(member => ({
+      id: member.id,
+      name: member.name,
+      profilePicture: member.profilePicture,
+      role: member.role
+    }));
+    
     // 3. Update or create calendar event - without using hooks
     let result;
     if (existingDueDateEvent && existingDueDateEvent.firestoreId) {
@@ -785,7 +793,7 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
         existingDueDateEvent.firestoreId, 
         {
           title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
-          description: eventDetails.description || `Due date for Cycle ${currentWeek} activities`,
+          description: eventDetails.description || `Due date for Cycle ${currentWeek} activities and family meeting`,
           start: {
             dateTime: newDate.toISOString(),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -794,9 +802,11 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
             dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
           },
-          category: 'cycle-due-date',
-          eventType: 'cycle-due-date',
-          cycleNumber: currentWeek
+          category: 'meeting', // Changed to meeting category
+          eventType: 'meeting', // Changed to meeting type
+          cycleNumber: currentWeek,
+          attendees: allFamilyAttendees, // Include all family members
+          attendingParentId: 'both' // Include both parents
         },
         currentUser.uid
       );
@@ -805,7 +815,7 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
       result = await CalendarService.addEvent(
         {
           title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
-          description: eventDetails.description || `Due date for Cycle ${currentWeek} activities`,
+          description: eventDetails.description || `Due date for Cycle ${currentWeek} activities and family meeting`,
           start: {
             dateTime: newDate.toISOString(),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -814,10 +824,12 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
             dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
           },
-          category: 'cycle-due-date',
-          eventType: 'cycle-due-date',
+          category: 'meeting', // Changed to meeting category
+          eventType: 'meeting', // Changed to meeting type
           cycleNumber: currentWeek,
-          universalId: `cycle-due-date-${familyId}-${currentWeek}`
+          universalId: `cycle-due-date-${familyId}-${currentWeek}`,
+          attendees: allFamilyAttendees, // Include all family members
+          attendingParentId: 'both' // Include both parents
         },
         currentUser.uid
       );
