@@ -833,8 +833,25 @@ async saveAppointmentToDatabase(familyId, childId, appointmentDetails) {
   }
 }
 
-// NEW CODE - part of processAppointmentFromChat in AllieAIService.js
-// Add appointment to calendar
+// Original code (around line 879):
+async addAppointmentToCalendar(appointmentDetails) {
+  try {
+    // ...existing code...
+    
+    // Import dynamically to avoid circular dependencies
+    const { useEvents } = await import('../../contexts/EventContext');
+    const { addEvent } = useEvents();
+    
+    // Add to calendar using EventContext
+    const result = await addEvent(calendarEvent);
+    return result.success;
+  } catch (error) {
+    console.error("Error adding appointment to calendar:", error);
+    return false;
+  }
+}
+
+// Replace with:
 async addAppointmentToCalendar(appointmentDetails) {
   try {
     // Parse date and time
@@ -874,12 +891,8 @@ async addAppointmentToCalendar(appointmentDetails) {
       uniqueId: `appointment-${appointmentDetails.childId}-${Date.now()}`
     };
     
-    // Import dynamically to avoid circular dependencies
-    const { useEvents } = await import('../../contexts/EventContext');
-    const { addEvent } = useEvents();
-    
-    // Add to calendar using EventContext
-    const result = await addEvent(calendarEvent);
+    // Use CalendarService directly
+    const result = await CalendarService.addEvent(calendarEvent, appointmentDetails.userId);
     return result.success;
   } catch (error) {
     console.error("Error adding appointment to calendar:", error);

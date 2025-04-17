@@ -232,61 +232,60 @@ const FamilyMeetingScreen = ({ onClose }) => {
   }, [familyId, currentWeek]);
 
   // Replace the addMeetingToCalendar function in FamilyMeetingScreen.jsx:
-const addMeetingToCalendar = async () => {
-  try {
-    setIsAddingToCalendar(true);
-    
-    // Create a meeting date (default to next day)
-    const meetingDate = new Date();
-    meetingDate.setDate(meetingDate.getDate() + 1);
-    meetingDate.setHours(19, 0, 0, 0); // 7 PM
-    
-    // Use EventContext to add event
-    const { useEvents } = await import('../../contexts/EventContext');
-    const { addEvent } = useEvents();
-    
-    // Add to calendar through context
-    const result = await addEvent({
-      title: `Family Meeting - Cycle ${currentWeek}`,
-      summary: `Family Meeting - Cycle ${currentWeek}`,
-      description: 'Weekly family meeting to discuss task balance and set goals for the coming week.',
-      start: {
-        dateTime: meetingDate.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      end: {
-        dateTime: new Date(meetingDate.getTime() + 30 * 60 * 1000).toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      category: 'meeting',
-      eventType: 'meeting',
-      linkedEntity: {
-        type: 'meeting',
-        id: currentWeek
-      },
-      // Add all family members as attendees
-      attendees: familyMembers.map(member => ({
-        id: member.id,
-        name: member.name,
-        profilePicture: member.profilePicture,
-        role: member.role
-      })),
-      attendingParentId: 'both',
-      universalId: `family-meeting-${familyId}-${currentWeek}`
-    });
-    
-    if (result.success) {
-      alert("Family meeting added to your calendar!");
-    } else {
-      alert("Couldn't add to calendar. Please try again.");
+  const addMeetingToCalendar = async () => {
+    try {
+      setIsAddingToCalendar(true);
+      
+      // Create a meeting date (default to next day)
+      const meetingDate = new Date();
+      meetingDate.setDate(meetingDate.getDate() + 1);
+      meetingDate.setHours(19, 0, 0, 0); // 7 PM
+      
+      // Use CalendarService instead of direct hook access
+      const result = await CalendarService.addEvent(
+        {
+          title: `Family Meeting - Cycle ${currentWeek}`,
+          summary: `Family Meeting - Cycle ${currentWeek}`,
+          description: 'Weekly family meeting to discuss task balance and set goals for the coming week.',
+          start: {
+            dateTime: meetingDate.toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          },
+          end: {
+            dateTime: new Date(meetingDate.getTime() + 30 * 60 * 1000).toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          },
+          category: 'meeting',
+          eventType: 'meeting',
+          linkedEntity: {
+            type: 'meeting',
+            id: currentWeek
+          },
+          // Add all family members as attendees
+          attendees: familyMembers.map(member => ({
+            id: member.id,
+            name: member.name,
+            profilePicture: member.profilePicture,
+            role: member.role
+          })),
+          attendingParentId: 'both',
+          universalId: `family-meeting-${familyId}-${currentWeek}`
+        },
+        currentUser.uid
+      );
+      
+      if (result.success) {
+        alert("Family meeting added to your calendar!");
+      } else {
+        alert("Couldn't add to calendar. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error adding meeting to calendar:", error);
+      alert("There was an error adding the meeting to your calendar.");
+    } finally {
+      setIsAddingToCalendar(false);
     }
-  } catch (error) {
-    console.error("Error adding meeting to calendar:", error);
-    alert("There was an error adding the meeting to your calendar.");
-  } finally {
-    setIsAddingToCalendar(false);
-  }
-};
+  };
 
   // Generate weekly report data
   const generateWeeklyReport = () => {

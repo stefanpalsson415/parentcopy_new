@@ -254,9 +254,8 @@ const RevisedFloatingCalendarWidget = () => {
   
   // Handle form cancellation
   const handleCancel = () => {
-    if (onCancel) {
-      onCancel();
-    }
+    // Simply close the widget, since there's no onCancel prop
+    setIsOpen(false);
   };
   
   // Add event handlers
