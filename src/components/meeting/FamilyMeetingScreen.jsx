@@ -7,6 +7,8 @@ import { useFamily } from '../../contexts/FamilyContext';
 import { useSurvey } from '../../contexts/SurveyContext';
 import AllieAIService from '../../services/AllieAIService';
 import CalendarService from '../../services/CalendarService';
+import { useAuth } from '../../contexts/AuthContext';
+
 
 // Confetti effect component for celebration
 const Fireworks = () => {
@@ -92,6 +94,8 @@ const FamilyMeetingScreen = ({ onClose }) => {
   } = useFamily();
   
   const { fullQuestionSet } = useSurvey();
+  const { currentUser } = useAuth();
+
   
   const [meetingNotes, setMeetingNotes] = useState({
     wentWell: '',
@@ -106,6 +110,7 @@ const FamilyMeetingScreen = ({ onClose }) => {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+
   
   // New state for suggested items
   const [suggestedActionItems, setSuggestedActionItems] = useState([]);

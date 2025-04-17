@@ -833,24 +833,6 @@ async saveAppointmentToDatabase(familyId, childId, appointmentDetails) {
   }
 }
 
-// Original code (around line 879):
-async addAppointmentToCalendar(appointmentDetails) {
-  try {
-    // ...existing code...
-    
-    // Import dynamically to avoid circular dependencies
-    const { useEvents } = await import('../../contexts/EventContext');
-    const { addEvent } = useEvents();
-    
-    // Add to calendar using EventContext
-    const result = await addEvent(calendarEvent);
-    return result.success;
-  } catch (error) {
-    console.error("Error adding appointment to calendar:", error);
-    return false;
-  }
-}
-
 // Replace with:
 async addAppointmentToCalendar(appointmentDetails) {
   try {
