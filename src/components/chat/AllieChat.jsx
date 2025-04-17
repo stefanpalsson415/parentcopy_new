@@ -22,43 +22,41 @@ import UnifiedParserService from '../../services/UnifiedParserService';
 import { addDoc, collection } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 
-
-
-
 const AllieChat = () => {
   // Utility function to format message dates into readable groups
-const formatMessageDate = (timestamp) => {
-  const messageDate = new Date(timestamp);
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  
-  // Reset hours to compare dates only
-  const messageDay = new Date(messageDate.getFullYear(), messageDate.getMonth(), messageDate.getDate());
-  const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const yesterdayDay = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
-  
-  if (messageDay.getTime() === todayDay.getTime()) {
-    return "Today";
-  } else if (messageDay.getTime() === yesterdayDay.getTime()) {
-    return "Yesterday";
-  } else {
-    return messageDate.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      year: messageDay.getFullYear() !== todayDay.getFullYear() ? 'numeric' : undefined
-    });
-  }
-};
+  const formatMessageDate = (timestamp) => {
+    const messageDate = new Date(timestamp);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    // Reset hours to compare dates only
+    const messageDay = new Date(messageDate.getFullYear(), messageDate.getMonth(), messageDate.getDate());
+    const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const yesterdayDay = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+    
+    if (messageDay.getTime() === todayDay.getTime()) {
+      return "Today";
+    } else if (messageDay.getTime() === yesterdayDay.getTime()) {
+      return "Yesterday";
+    } else {
+      return messageDate.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        year: messageDay.getFullYear() !== todayDay.getFullYear() ? 'numeric' : undefined
+      });
+    }
+  };
 
-// Date header component for message groups
-const DateHeader = ({ date }) => (
-  <div className="flex justify-center my-4">
-    <div className="bg-gray-200 text-gray-600 text-xs px-3 py-1 rounded-full font-roboto">
-      {date}
+  // Date header component for message groups
+  const DateHeader = ({ date }) => (
+    <div className="flex justify-center my-4">
+      <div className="bg-gray-200 text-gray-600 text-xs px-3 py-1 rounded-full font-roboto">
+        {date}
+      </div>
     </div>
-  </div>
-);
+  );
+  
   const { familyId, selectedUser, familyMembers, updateMemberProfile, familyName, currentWeek, completedWeeks } = useFamily();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -71,12 +69,12 @@ const DateHeader = ({ date }) => (
   const [imagePreview, setImagePreview] = useState(null);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [chatHeight, setChatHeight] = useState(45); // Default height (in rems)
-const [chatWidth, setChatWidth] = useState(60); // Default width (in rems) for desktop
+  const [chatWidth, setChatWidth] = useState(60); // Default width (in rems) for desktop
   const [promptChips, setPromptChips] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
-const [dragCounter, setDragCounter] = useState(0);
-const childEventDetector = useRef(null);
-const childTrackingService = useRef(null);
+  const [dragCounter, setDragCounter] = useState(0);
+  const childEventDetector = useRef(null);
+  const childTrackingService = useRef(null);
   
   // Enhanced state variables
   const [showInsights, setShowInsights] = useState(false);
@@ -92,7 +90,7 @@ const childTrackingService = useRef(null);
   const [detectedEventDetails, setDetectedEventDetails] = useState(null);
   const [showEventConfirmation, setShowEventConfirmation] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
-const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   
   // Event parsing variables
   const [parsedEventDetails, setParsedEventDetails] = useState(null);
@@ -373,547 +371,313 @@ const [loadingMore, setLoadingMore] = useState(false);
     }
   }, [isOpen, shouldAutoOpen, initialMessageSent, location.pathname, familyId, familyMembers, selectedUser]);
   
-
-/// Replace the loadMessages function in AllieChat.jsx with this improved version
-const loadMessages = async (loadMore = false) => {
-  try {
-    if (!selectedUser || !familyId) {
-      console.warn("loadMessages called without selectedUser or familyId", { selectedUser, familyId });
-      return;
-    }
-    
-    if (loadMore) {
-      setLoadingMore(true);
-    } else {
-      setLoading(true);
-    }
-    
-    console.log(`Attempting to load messages for family ${familyId}`, { loadMore });
-    
-    const result = await ChatPersistenceService.loadMessages(familyId, {
-      pageSize: 25,
-      loadMore,
-      includeMetadata: false
-    });
-    
-    console.log("Message loading result:", result);
-    
-    if (result.error) {
-      console.error("Error from ChatPersistenceService:", result.error);
-      throw new Error(result.error);
-    }
-    
-    setHasMoreMessages(result.hasMore);
-    
-    if (loadMore) {
-      // Prepend the older messages to the current list
-      setMessages(prev => [...result.messages, ...prev]);
-    } else {
-      // Replace all messages
-      setMessages(result.messages || []);
-    }
-  } catch (error) {
-    console.error("Error loading chat messages:", error, {
-      stack: error.stack,
-      familyId,
-      selectedUser: selectedUser?.id
-    });
-    
-    // Only show error message if we're not loading more
-    if (!loadMore) {
-      setMessages([{
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: "I had trouble loading your conversation history. Please try again or check your connection.",
-        timestamp: new Date().toISOString(),
-        error: true
-      }]);
-    }
-  } finally {
-    setLoading(false);
-    setLoadingMore(false);
-  }
-};
-
-// Add a "Load More" button at the top of the messages section
-// In the chat messages div, add at the top:
-{hasMoreMessages && (
-  <div className="text-center py-2">
-    <button 
-      onClick={() => loadMessages(true)} 
-      disabled={loadingMore}
-      className="text-xs text-blue-600 hover:text-blue-800 flex items-center justify-center mx-auto"
-    >
-      {loadingMore ? (
-        <>
-          <div className="w-3 h-3 border-2 border-t-0 border-blue-500 rounded-full animate-spin mr-2"></div>
-          Loading more...
-        </>
-      ) : (
-        'Load earlier messages'
-      )}
-    </button>
-  </div>
-)}
-
-const handleSend = async () => {
-  if (input.trim() && canUseChat && selectedUser && familyId) {
+  // Load messages with retry capability
+  const loadMessages = async (loadMore = false) => {
     try {
-      // Process with NLU first to show insights
-      const intent = nlu.current.detectIntent(input);
-      const entities = nlu.current.extractEntities(input, familyMembers);
-      
-      // Update NLU insights
-      setDetectedIntent(intent);
-      setExtractedEntities(entities);
-      
-      // Create user message
-      const userMessage = {
-        familyId,
-        sender: selectedUser.id,
-        userName: selectedUser.name,
-        userImage: selectedUser.profilePicture,
-        text: input,
-        timestamp: new Date().toISOString()
-      };
-      
-      // Optimistically add message to UI
-      setMessages(prev => [...prev, userMessage]);
-      setInput('');
-      setTranscription('');
-      setLoading(true);
-      
-      // Reset image if any
-      if (imageFile) {
-        setImageFile(null);
-        setImagePreview(null);
+      if (!selectedUser || !familyId) {
+        console.warn("loadMessages called without selectedUser or familyId", { selectedUser, familyId });
+        return;
       }
       
-      // Save message to database first (we'll handle AI response after event processing if needed)
-      const savedMessage = await ChatPersistenceService.saveMessage(userMessage);
+      if (loadMore) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
       
-      // If saving failed, show error
-      if (!savedMessage.success) {
-        console.error("Failed to save message:", savedMessage.error);
+      console.log(`Attempting to load messages for family ${familyId}`, { loadMore });
+      
+      const result = await ChatPersistenceService.loadMessages(familyId, {
+        pageSize: 25,
+        loadMore,
+        includeMetadata: false
+      });
+      
+      console.log("Message loading result:", result);
+      
+      if (result.error) {
+        console.error("Error from ChatPersistenceService:", result.error);
+        throw new Error(result.error);
+      }
+      
+      setHasMoreMessages(result.hasMore);
+      
+      if (loadMore) {
+        // Prepend the older messages to the current list
+        setMessages(prev => [...result.messages, ...prev]);
+      } else {
+        // Replace all messages
+        setMessages(result.messages || []);
+      }
+    } catch (error) {
+      console.error("Error loading chat messages:", error, {
+        stack: error.stack,
+        familyId,
+        selectedUser: selectedUser?.id
+      });
+      
+      // Only show error message if we're not loading more
+      if (!loadMore) {
+        setMessages([{
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: "I had trouble loading your conversation history. Please try again or check your connection.",
+          timestamp: new Date().toISOString(),
+          error: true
+        }]);
+      }
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  // Retry loading messages on failure
+  const retryLoadMessages = (attempts = 3, delay = 1000) => {
+    let retryCount = 0;
+    
+    const attemptLoad = async () => {
+      try {
+        await loadMessages();
+        console.log("Successfully loaded messages after retry");
+      } catch (error) {
+        retryCount++;
+        console.log(`Attempt ${retryCount} failed, ${attempts - retryCount} attempts remaining`);
+        
+        if (retryCount < attempts) {
+          setTimeout(attemptLoad, delay);
+        } else {
+          console.error("All retry attempts failed");
+        }
+      }
+    };
+    
+    attemptLoad();
+  };
+
+  // Helper function to get recent messages for context
+  const getRecentMessages = (count = 3) => {
+    // Get the most recent messages, excluding AI processing messages
+    return messages
+      .filter(msg => !msg.text?.includes('analyzing') && !msg.text?.includes('I\'m processing'))
+      .slice(-count);
+  };
+
+  // Main send handler
+  const handleSend = async () => {
+    if (input.trim() && canUseChat && selectedUser && familyId) {
+      try {
+        // Save the current message text before clearing it for UI
+        const currentMessageText = input.trim();
+        
+        // Process with NLU first to show insights
+        const intent = nlu.current.detectIntent(currentMessageText);
+        const entities = nlu.current.extractEntities(currentMessageText, familyMembers);
+        
+        // Update NLU insights
+        setDetectedIntent(intent);
+        setExtractedEntities(entities);
+        
+        // Create user message
+        const userMessage = {
+          familyId,
+          sender: selectedUser.id,
+          userName: selectedUser.name,
+          userImage: selectedUser.profilePicture,
+          text: currentMessageText,
+          timestamp: new Date().toISOString()
+        };
+        
+        // Optimistically add message to UI
+        setMessages(prev => [...prev, userMessage]);
+        setInput('');
+        setTranscription('');
+        setLoading(true);
+        
+        // Reset image if any
+        if (imageFile) {
+          setImageFile(null);
+          setImagePreview(null);
+        }
+        
+        // Save message to database first
+        const savedMessage = await ChatPersistenceService.saveMessage(userMessage);
+        
+        // If saving failed, show error
+        if (!savedMessage.success) {
+          console.error("Failed to save message:", savedMessage.error);
+          setMessages(prev => [...prev, {
+            familyId,
+            sender: 'allie',
+            userName: 'Allie',
+            text: "I couldn't save your message. Please try again in a moment.",
+            timestamp: new Date().toISOString(),
+            error: true
+          }]);
+          setLoading(false);
+          return;
+        }
+        
+        // Show processing message while we analyze the input
+        const processingMessage = {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `I'm analyzing your request...`,
+          timestamp: new Date().toISOString()
+        };
+        
+        setMessages(prev => [...prev, processingMessage]);
+        
+        // Check for document action responses
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage && (lastMessage.documentFile || lastMessage.awaitingChildSelection)) {
+          const isDocumentResponse = await handleDocumentActionSelection(currentMessageText, lastMessage);
+          
+          if (isDocumentResponse) {
+            // Remove processing message
+            setMessages(prev => prev.filter(msg => msg !== processingMessage));
+            setLoading(false);
+            return;
+          }
+        }
+        
+        // Try to process specialized requests
+        let handled = false;
+        
+        // Check for todos
+        if (currentMessageText.toLowerCase().includes('todo') || 
+            currentMessageText.toLowerCase().includes('to-do') ||
+            currentMessageText.toLowerCase().includes('task')) {
+          handled = await processSpecificRequest(currentMessageText, 'todo');
+        }
+        
+        // Check for provider-related requests
+        if (!handled && (
+            currentMessageText.toLowerCase().includes('provider') ||
+            currentMessageText.toLowerCase().includes('doctor') ||
+            currentMessageText.toLowerCase().includes('dentist') ||
+            currentMessageText.toLowerCase().includes('teacher'))) {
+          handled = await processProviderRequest(currentMessageText);
+        }
+        
+        // Check for calendar/event related requests
+        if (!handled && (
+            currentMessageText.toLowerCase().includes('appointment') ||
+            currentMessageText.toLowerCase().includes('schedule') ||
+            currentMessageText.toLowerCase().includes('calendar') ||
+            currentMessageText.toLowerCase().includes('event'))) {
+          handled = await processMessageForEvents(currentMessageText);
+        }
+        
+        // If we handled the request with a specialized parser, we're done
+        if (handled) {
+          setLoading(false);
+          // Remove the processing message
+          setMessages(prev => prev.filter(msg => msg !== processingMessage));
+          return;
+        }
+        
+        // If we get here, we need to use the general AI response
+        // Remove the processing message first
+        setMessages(prev => prev.filter(msg => msg !== processingMessage));
+        
+        // Get AI response for general messages
+        const aiResponse = await EnhancedChatService.getAIResponse(
+          currentMessageText, 
+          familyId, 
+          [...messages, userMessage]
+        );
+        
+        // Add AI response to messages
+        const allieMessage = {
+          id: Date.now().toString(), // Temporary ID 
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: aiResponse,
+          timestamp: new Date().toISOString()
+        };
+        
+        // Save AI message to database
+        const savedAIMessage = await ChatPersistenceService.saveMessage(allieMessage);
+        if (savedAIMessage.success && savedAIMessage.messageId) {
+          allieMessage.id = savedAIMessage.messageId;
+        }
+        
+        // Update messages state with AI response
+        setMessages(prev => [...prev, allieMessage]);
+        
+        setLoading(false);
+      } catch (error) {
+        console.error("Error sending message:", error);
+        setLoading(false);
+        
+        // Show error message
         setMessages(prev => [...prev, {
           familyId,
           sender: 'allie',
           userName: 'Allie',
-          text: "I couldn't save your message. Please try again in a moment.",
+          text: "I'm having trouble processing your request right now. Please try again in a moment.",
           timestamp: new Date().toISOString(),
           error: true
         }]);
-        setLoading(false);
-        return;
-      }
-      
-      // Always try to parse the message as an event first
-      const isEvent = await processMessageForEvents(input);
-      
-      const processingMessage = {
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: `I'm analyzing your event details using AI. This might take a moment...`,
-        timestamp: new Date().toISOString()
-      };
-      
-      setMessages(prev => [...prev, processingMessage]);
-
-      // Check if this is a response to document action options
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage && (lastMessage.documentFile || lastMessage.awaitingChildSelection)) {
-        const isDocumentResponse = handleDocumentActionSelection(input, lastMessage);
-        
-        if (isDocumentResponse) {
-          // If we handled the document action, don't send to AI
-          setLoading(false);
-          return;
-        }
-      }
-      
-      // Check if this is a profile picture request
-      const isProfileRequest = 
-        input.toLowerCase().includes('profile picture') || 
-        input.toLowerCase().includes('profile photo') ||
-        input.toLowerCase().includes('upload picture') ||
-        input.toLowerCase().includes('add picture') ||
-        input.toLowerCase().includes('change picture');
-        
-      // Handle profile upload request
-      if (isProfileRequest) {
-        // Profile handling code
-        setLoading(false);
-        return;
-      }
-      
-      // If event was successfully processed, don't get AI response
-      if (isEvent) {
-        setLoading(false);
-        return;
-      }
-      
-      // Update conversation context
-      const updatedContext = EnhancedChatService.updateConversationContext(familyId, {
-        query: input,
-        intent,
-        entities
-      });
-      
-      setConversationContext(updatedContext?.recentTopics || []);
-      
-      // Get AI response for normal messages
-      const aiResponse = await EnhancedChatService.getAIResponse(
-        input, 
-        familyId, 
-        [...messages, userMessage]
-      );
-      
-      // Add AI response to messages
-      const allieMessage = {
-        id: Date.now().toString(), // Temporary ID 
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: aiResponse,
-        timestamp: new Date().toISOString()
-      };
-      
-      // Save AI message to database
-      const savedAIMessage = await ChatPersistenceService.saveMessage(allieMessage);
-      if (savedAIMessage.success && savedAIMessage.messageId) {
-        allieMessage.id = savedAIMessage.messageId;
-      }
-      
-      // Update messages state with AI response
-      setMessages(prev => [...prev, allieMessage]);
-      
-      setLoading(false);
-    } catch (error) {
-      console.error("Error sending message:", error);
-      setLoading(false);
-      
-      // Show error message
-      setMessages(prev => [...prev, {
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: "I'm having trouble processing your request right now. Please try again in a moment.",
-        timestamp: new Date().toISOString(),
-        error: true
-      }]);
-    }
-  }
-};
-  
-  const tryParseCalendarEvent = async (messageText) => {
-    if (!messageText.trim()) return false;
-    
-    // Get family context for parsing
-    const familyContext = {
-      familyId,
-      children: familyMembers.filter(m => m.role === 'child')
-    };
-    
-    try {
-      console.log("Attempting to parse potential calendar event from message");
-      
-      // Use the EventParserService to parse the text
-      const eventDetails = await EventParserService.parseEventText(messageText, familyContext);
-      
-      // If we got valid event details, show the event parser UI
-      if (eventDetails && (eventDetails.title || eventDetails.eventType)) {
-        console.log("Successfully parsed calendar event:", eventDetails);
-        setParsedEventDetails(eventDetails);
-        setShowEventParser(true);
-        setEventParsingSource('text');
-        return true;
-      }
-    } catch (error) {
-      console.error("Error parsing potential calendar event:", error);
-    }
-    
-    return false;
-  };
-
-
-// Add this function to AllieChat.jsx
-const retryLoadMessages = (attempts = 3, delay = 1000) => {
-  let retryCount = 0;
-  
-  const attemptLoad = async () => {
-    try {
-      await loadMessages();
-      console.log("Successfully loaded messages after retry");
-    } catch (error) {
-      retryCount++;
-      console.log(`Attempt ${retryCount} failed, ${attempts - retryCount} attempts remaining`);
-      
-      if (retryCount < attempts) {
-        setTimeout(attemptLoad, delay);
-      } else {
-        console.error("All retry attempts failed");
       }
     }
   };
-  
-  attemptLoad();
-};
 
-// Then modify the useEffect that loads messages:
-useEffect(() => {
-  if (selectedUser && familyId) {
-    retryLoadMessages();
-  }
-}, [selectedUser, familyId]);
-
-const processMessageForEvents = async (text) => {
-  try {
-    // Only try to parse events if we have family context
-    if (!familyId || !selectedUser) return false;
-    
-    // Get basic NLU analysis
-    const intentObj = nlu.current.detectIntent(text);
-    const intent = intentObj?.intent || '';
-    const entities = nlu.current.extractEntities(text, familyMembers);
-    
-    // Enhanced detection for calendar-related content
-    const isCalendarRelated = 
-      intent.startsWith('calendar.') || 
-      text.toLowerCase().includes('calendar') ||
-      text.toLowerCase().includes('appointment') ||
-      text.toLowerCase().includes('event') ||
-      text.toLowerCase().includes('schedule') ||
-      text.toLowerCase().includes('plan a') ||
-      text.toLowerCase().includes('date') ||
-      text.toLowerCase().includes('meet');
-    
-    // If this appears to be calendar-related, try to parse it as an event
-    if (isCalendarRelated) {
-      // Get family context for better parsing
+  // Process specific request types with focused context
+  const processSpecificRequest = async (messageText, type) => {
+    try {
+      // Get family context but keep it minimal
       const familyContext = {
         familyId,
-        children: familyMembers.filter(m => m.role === 'child'),
-        parents: familyMembers.filter(m => m.role === 'parent')
+        familyMembers: familyMembers
       };
       
-      // Use our new UnifiedParserService to parse the event
-      const parsedEvent = await UnifiedParserService.parseEvent(text, familyContext);
+      // Get recent relevant messages for context
+      const recentMessages = getRecentMessages(3);
       
-      if (parsedEvent && (parsedEvent.title || parsedEvent.eventType)) {
-        console.log("Successfully parsed event:", parsedEvent);
+      if (type === 'todo') {
+        const todoData = await UnifiedParserService.parseTodo(messageText, familyContext, recentMessages);
         
-        // Add source tracking for learning feedback
-        parsedEvent.creationSource = 'text';
-        // Add user and family IDs
-        parsedEvent.userId = selectedUser.id;
-        parsedEvent.familyId = familyId;
-        
-        // Extract mentioned people
-        const mentionedPeople = extractMentionedPeople(text, familyMembers);
-        
-        // Add mentioned people as attendees
-        if (mentionedPeople && mentionedPeople.length > 0) {
-          parsedEvent.attendees = mentionedPeople.map(person => ({
-            id: person.id || null,
-            name: person.name,
-            role: person.role || null
-          }));
-          
-          // If "me" is mentioned, add the current user
-          if (text.toLowerCase().includes(' me ') || 
-              text.toLowerCase().includes('for me') || 
-              text.toLowerCase().startsWith('me ')) {
-            const currentUser = familyMembers.find(m => m.id === selectedUser.id);
-            if (currentUser && !parsedEvent.attendees.some(a => a.id === currentUser.id)) {
-              parsedEvent.attendees.push({
-                id: currentUser.id,
-                name: currentUser.name,
-                role: currentUser.role
-              });
-            }
-          }
-          
-          // If "wife" or "husband" is mentioned, try to find the spouse
-          const spouseTerms = ['wife', 'husband', 'spouse', 'partner'];
-          const hasSpouseTerm = spouseTerms.some(term => text.toLowerCase().includes(term));
-          
-          if (hasSpouseTerm) {
-            const currentUser = familyMembers.find(m => m.id === selectedUser.id);
-            const spouses = familyMembers.filter(m => 
-              m.role === 'parent' && m.id !== currentUser.id
-            );
+        if (todoData && todoData.text) {
+          try {
+            // Create todo object
+            const todoItem = {
+              text: todoData.text,
+              completed: false,
+              familyId,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              createdBy: selectedUser?.id || 'allie-chat',
+              assignedTo: null,
+              category: todoData.category || 'general',
+              position: 0, // Will be at the top of the list
+              notes: todoData.notes || 'Added via Allie Chat',
+              dueDate: todoData.dueDate || null
+            };
             
-            if (spouses.length > 0) {
-              const spouse = spouses[0];
-              if (!parsedEvent.attendees.some(a => a.id === spouse.id)) {
-                parsedEvent.attendees.push({
-                  id: spouse.id,
-                  name: spouse.name,
-                  role: spouse.role
-                });
+            // Try to match assignee to a family member
+            if (todoData.assignedTo) {
+              const assignee = familyMembers.find(member => 
+                member.name.toLowerCase() === todoData.assignedTo.toLowerCase()
+              );
+              
+              if (assignee) {
+                todoItem.assignedTo = assignee.id;
               }
             }
-          }
-        }
-        
-        // If this is a personal event for adults (like a date night), set appropriate properties
-        if (text.toLowerCase().includes('date night') || 
-            text.toLowerCase().includes('plan a date') || 
-            text.toLowerCase().includes('night out')) {
-          parsedEvent.eventType = 'date';
-          parsedEvent.category = 'relationship';
-          
-          // Make sure both parents are included
-          const parents = familyMembers.filter(m => m.role === 'parent');
-          if (parents.length > 0) {
-            parsedEvent.attendees = parents.map(parent => ({
-              id: parent.id,
-              name: parent.name,
-              role: parent.role
-            }));
-          }
-        }
-        
-        // Now that we have all the details, create the event directly
-        const response = await createCalendarEventDirectly(parsedEvent);
-
-        
-        if (response.success) {
-          // Send success message
-          const successMessage = {
-            familyId,
-            sender: 'allie',
-            userName: 'Allie',
-            text: `I've added the following event to your family's shared calendar:\n\nEvent: ${parsedEvent.title}\nDate: ${new Date(parsedEvent.dateTime).toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric'})}\nTime: ${new Date(parsedEvent.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}\nLocation: ${parsedEvent.location || 'Not specified'}\n\nThis has been added to your family's shared calendar. You can view and manage this in your calendar.`,
-            timestamp: new Date().toISOString()
-          };
-          
-          setMessages(prev => [...prev, successMessage]);
-          return true;
-        } else {
-          // If direct creation failed, show the event parser UI
-          setParsedEventDetails(parsedEvent);
-          setShowEventParser(true);
-          setEventParsingSource('text');
-          
-          const helperMessage = {
-            familyId,
-            sender: 'allie',
-            userName: 'Allie',
-            text: `I've extracted event details from your message. Please review before adding to your calendar.`,
-            timestamp: new Date().toISOString()
-          };
-          
-          setMessages(prev => [...prev, helperMessage]);
-          return true;
-        }
-      }
-    }
-    
-    // Check for todo-related requests
-    const todoKeywords = ['todo', 'to-do', 'to do', 'add a task', 'create a task', 'make a task'];
-    const isTodoRequest = todoKeywords.some(keyword => text.toLowerCase().includes(keyword));
-    
-    if (isTodoRequest || text.toLowerCase().includes('create') && text.toLowerCase().includes('for')) {
-      // Get family context for better parsing
-      const familyContext = {
-        familyId,
-        familyMembers: familyMembers
-      };
-      
-      // Use new UnifiedParserService to parse todo
-      const parsedTodo = await UnifiedParserService.parseTodo(text, familyContext);
-      
-      if (parsedTodo && parsedTodo.text) {
-        // Try to handle as a shared todo request
-        const todoData = {
-          text: parsedTodo.text,
-          completed: false,
-          familyId: familyId,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          createdBy: selectedUser.id || 'allie-chat',
-          assignedTo: null,
-          category: parsedTodo.category || 'general',
-          position: 0,
-          notes: parsedTodo.notes || 'Added via Allie Chat',
-          dueDate: parsedTodo.dueDate || null
-        };
-        
-        // If we have an assignee, find the corresponding family member
-        if (parsedTodo.assignedTo) {
-          const assignee = familyMembers.find(member => 
-            member.name.toLowerCase() === parsedTodo.assignedTo.toLowerCase()
-          );
-          
-          if (assignee) {
-            todoData.assignedTo = assignee.id;
-          }
-        }
-        
-        try {
-          // Add to Firestore
-          const docRef = await addDoc(collection(db, "relationshipTodos"), todoData);
-          
-          // Trigger update event for the UI
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('todo-added', { 
-              detail: { todoId: docRef.id }
-            }));
-          }
-          
-          // Success message
-          const successMessage = {
-            familyId,
-            sender: 'allie',
-            userName: 'Allie',
-            text: `Perfect! I've added "${todoData.text}" to your todo list. ${todoData.assignedTo ? `It's assigned to ${familyMembers.find(m => m.id === todoData.assignedTo)?.name || 'the assigned person'}. ` : ''}${todoData.dueDate ? `It's due by ${new Date(todoData.dueDate).toLocaleDateString()}. ` : ''}You can find it in the To-Do List section where you can edit, assign, or mark it complete.`,
-            timestamp: new Date().toISOString()
-          };
-          
-          setMessages(prev => [...prev, successMessage]);
-          return true;
-        } catch (error) {
-          console.error("Error creating todo item:", error);
-          // Error message will be handled by the catch block below
-        }
-      }
-    }
-    
-    // Check for provider-related requests
-    const providerKeywords = ['doctor', 'dentist', 'teacher', 'provider', 'specialist', 'tutor'];
-    const isProviderRequest = 
-      intent.startsWith('provider.') || 
-      providerKeywords.some(keyword => text.toLowerCase().includes(keyword)) &&
-      (text.toLowerCase().includes('add') || text.toLowerCase().includes('new'));
-      
-    if (isProviderRequest) {
-      // Get family context for better parsing
-      const familyContext = {
-        familyId,
-        familyMembers: familyMembers
-      };
-      
-      // Use new UnifiedParserService to parse provider
-      const providerDetails = await UnifiedParserService.parseProvider(text, familyContext);
-      
-      if (providerDetails && providerDetails.name) {
-        try {
-          // Load ProviderService dynamically if needed
-          const ProviderService = (await import('../../services/ProviderService')).default;
-          
-          // Add family ID
-          providerDetails.familyId = familyId;
-          
-          // Save provider to database
-          const result = await ProviderService.saveProvider(familyId, providerDetails);
-          
-          if (result.success) {
-            // Trigger UI update event
+            
+            // Add to Firestore
+            const docRef = await addDoc(collection(db, "relationshipTodos"), todoItem);
+            
+            // Trigger update event for the UI
             if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('provider-added'));
+              window.dispatchEvent(new CustomEvent('todo-added', { 
+                detail: { todoId: docRef.id }
+              }));
             }
             
             // Success message
@@ -921,350 +685,895 @@ const processMessageForEvents = async (text) => {
               familyId,
               sender: 'allie',
               userName: 'Allie',
-              text: `Successfully added ${providerDetails.type === 'education' ? 'teacher' : 'provider'} ${providerDetails.name} to your provider directory. ${providerDetails.forChild ? `I've noted that this is for ${providerDetails.forChild}.` : ''}`,
+              text: `Perfect! I've added "${todoItem.text}" to your todo list. ${todoItem.assignedTo ? `It's assigned to ${familyMembers.find(m => m.id === todoItem.assignedTo)?.name || 'the assigned person'}. ` : ''}${todoItem.dueDate ? `It's due by ${new Date(todoItem.dueDate).toLocaleDateString()}. ` : ''}You can find it in the To-Do List section where you can edit, assign, or mark it complete.`,
               timestamp: new Date().toISOString()
             };
             
-            setMessages(prev => [...prev, successMessage]);
+            setMessages(prev => prev.filter(m => !m.text?.includes('analyzing')).concat(successMessage));
             return true;
+          } catch (error) {
+            console.error("Error creating todo item:", error);
+            
+            // Error message
+            const errorMessage = {
+              familyId,
+              sender: 'allie',
+              userName: 'Allie',
+              text: `I had trouble adding the todo item. Please try again or add it directly from the To-Do List section.`,
+              timestamp: new Date().toISOString()
+            };
+            
+            setMessages(prev => prev.filter(m => !m.text?.includes('analyzing')).concat(errorMessage));
+            return false;
+          }
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error(`Error processing ${type} request:`, error);
+      return false;
+    }
+  };
+
+  // Process provider requests with focused context
+  const processProviderRequest = async (messageText) => {
+    try {
+      // Get minimal context
+      const familyContext = {
+        familyId,
+        familyMembers
+      };
+      
+      // Get recent relevant messages
+      const recentMessages = getRecentMessages(3);
+      
+      // Extract provider info using the dedicated method
+      const providerDetails = await UnifiedParserService.parseProvider(messageText, familyContext, recentMessages);
+      
+      if (providerDetails && providerDetails.name && providerDetails.name !== "Unknown Provider") {
+        console.log("Successfully parsed provider:", providerDetails);
+        
+        try {
+          // Load ProviderService dynamically
+          const ProviderService = (await import('../../services/ProviderService')).default;
+          
+          // Add family ID
+          providerDetails.familyId = familyId;
+          
+          // Save to database
+          const result = await ProviderService.saveProvider(familyId, providerDetails);
+          
+          if (result.success) {
+            // Trigger UI update
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('provider-added'));
+            }
+            
+            // Send success message
+            const successMessage = {
+              familyId,
+              sender: 'allie',
+              userName: 'Allie',
+              text: `I've added ${providerDetails.name} as a ${providerDetails.specialty || providerDetails.type || 'provider'} to your provider directory${providerDetails.forChild ? ` for ${providerDetails.forChild}` : ''}.`,
+              timestamp: new Date().toISOString()
+            };
+            
+            setMessages(prev => prev.filter(m => !m.text?.includes('analyzing')).concat(successMessage));
+            return true;
+          } else {
+            throw new Error(result.error || "Failed to save provider");
           }
         } catch (error) {
           console.error("Error saving provider:", error);
-          // Error message will be handled by the catch block below
+          
+          // Error message
+          const errorMessage = {
+            familyId,
+            sender: 'allie',
+            userName: 'Allie',
+            text: `I had trouble adding the provider. Please try again or add it directly from the Provider Directory.`,
+            timestamp: new Date().toISOString()
+          };
+          
+          setMessages(prev => prev.filter(m => !m.text?.includes('analyzing')).concat(errorMessage));
+          return false;
         }
       }
-    }
-    
-    return false;
-  } catch (error) {
-    console.error("Error parsing event from message:", error);
-    
-    // Send error message
-    const errorMessage = {
-      familyId,
-      sender: 'allie',
-      userName: 'Allie',
-      text: `I'm sorry, I had trouble processing that request. Could you try rephrasing it or providing more details?`,
-      timestamp: new Date().toISOString()
-    };
-    
-    setMessages(prev => [...prev, errorMessage]);
-    return false;
-  }
-};
-
-// Helper method to extract mentioned people
-const extractMentionedPeople = (text, familyMembers) => {
-  if (!text || !familyMembers || familyMembers.length === 0) {
-    return [];
-  }
-  
-  const mentionedPeople = [];
-  
-  // Check for each family member by name
-  familyMembers.forEach(member => {
-    const namePattern = new RegExp(`\\b${member.name}\\b`, 'i');
-    if (namePattern.test(text)) {
-      mentionedPeople.push({
-        id: member.id,
-        name: member.name,
-        role: member.role
-      });
-    }
-  });
-  
-  // Check for "me" references
-  if (text.toLowerCase().includes(' me ') || 
-      text.toLowerCase().includes(' my ') || 
-      text.toLowerCase().includes('for me') || 
-      text.toLowerCase().startsWith('me ')) {
-    const currentUser = familyMembers.find(m => m.id === selectedUser.id);
-    if (currentUser && !mentionedPeople.some(p => p.id === currentUser.id)) {
-      mentionedPeople.push({
-        id: currentUser.id,
-        name: currentUser.name,
-        role: currentUser.role
-      });
-    }
-  }
-  
-  // Check for spouse references
-  if (text.toLowerCase().includes('wife') || 
-      text.toLowerCase().includes('husband') || 
-      text.toLowerCase().includes('spouse') || 
-      text.toLowerCase().includes('partner')) {
-    
-    // Find the spouse (assuming the other parent is the spouse)
-    const currentUser = familyMembers.find(m => m.id === selectedUser.id);
-    const spouse = familyMembers.find(m => 
-      m.role === 'parent' && m.id !== currentUser?.id
-    );
-    
-    if (spouse && !mentionedPeople.some(p => p.id === spouse.id)) {
-      mentionedPeople.push({
-        id: spouse.id,
-        name: spouse.name,
-        role: spouse.role
-      });
-    }
-  }
-  
-  return mentionedPeople;
-};
-
-// Helper method to create calendar event directly
-const createCalendarEventDirectly = async (eventDetails) => {
-  try {
-    if (!eventDetails || !selectedUser) {
-      return { success: false, error: "Missing event details or user" };
-    }
-    
-    // Format and standardize the event
-    const startDate = eventDetails.dateTime instanceof Date ? 
-      eventDetails.dateTime : new Date(eventDetails.dateTime);
-    
-    const endDate = new Date(startDate);
-    endDate.setHours(startDate.getHours() + 1); // Default 1 hour event
-    
-    // Check if "me and wife" or similar phrases are in the original text
-    const hasSpouse = eventDetails.originalText?.toLowerCase().includes('wife') || 
-                     eventDetails.originalText?.toLowerCase().includes('husband') ||
-                     eventDetails.originalText?.toLowerCase().includes('spouse') ||
-                     eventDetails.originalText?.toLowerCase().includes('partner');
-    
-    // Extract mentioned people
-    const attendees = [];
-    
-    // Add current user (me)
-    if (selectedUser) {
-      attendees.push({
-        id: selectedUser.id,
-        name: selectedUser.name,
-        role: selectedUser.role
-      });
-    }
-    
-    // Add spouse if mentioned
-    if (hasSpouse) {
-      const spouse = familyMembers.find(m => 
-        m.role === 'parent' && m.id !== selectedUser.id
-      );
       
-      if (spouse) {
-        attendees.push({
-          id: spouse.id,
-          name: spouse.name,
-          role: spouse.role
-        });
-      }
+      return false;
+    } catch (error) {
+      console.error("Error processing provider:", error);
+      return false;
     }
-    
-    // Include any attendees from event details
-    if (eventDetails.attendees && eventDetails.attendees.length > 0) {
-      eventDetails.attendees.forEach(attendee => {
-        // Only add if not already in the list
-        if (!attendees.some(a => a.id === attendee.id)) {
-          attendees.push(attendee);
+  };
+
+  // Process messages for calendar events
+  const processMessageForEvents = async (text) => {
+    try {
+      if (!text || !familyId || !selectedUser) return false;
+      
+      console.log("Processing potential event:", text);
+      
+      // Get minimal family context for parsing
+      const familyContext = {
+        familyId,
+        children: familyMembers.filter(m => m.role === 'child'),
+        parents: familyMembers.filter(m => m.role === 'parent')
+      };
+      
+      // Get recent relevant messages for context
+      const recentMessages = getRecentMessages(3);
+      
+      // Use UnifiedParserService with recent context
+      const parsedEvent = await UnifiedParserService.parseEvent(text, familyContext, recentMessages);
+      
+      if (parsedEvent && (parsedEvent.title || parsedEvent.eventType)) {
+        console.log("Successfully parsed event:", parsedEvent);
+        
+        // Add metadata
+        parsedEvent.creationSource = 'text';
+        parsedEvent.userId = selectedUser.id;
+        parsedEvent.familyId = familyId;
+        
+        // Create the event
+        const response = await createCalendarEventDirectly(parsedEvent);
+        
+        if (response.success) {
+          // Format a nice date string
+          const dateString = new Date(parsedEvent.dateTime).toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'long', 
+            day: 'numeric'
+          });
+          
+          const timeString = new Date(parsedEvent.dateTime).toLocaleTimeString([], {
+            hour: 'numeric',
+            minute: '2-digit'
+          });
+          
+          // Send success message - replace any processing message first
+          const successMessage = {
+            familyId,
+            sender: 'allie',
+            userName: 'Allie',
+            text: `I've added the following event to your calendar:
+
+Event: ${parsedEvent.title || parsedEvent.eventType}
+Date: ${dateString}
+Time: ${timeString}
+${parsedEvent.location ? `Location: ${parsedEvent.location}` : ''}
+${parsedEvent.childName ? `For: ${parsedEvent.childName}` : ''}
+
+You can view and manage this in your calendar.`,
+            timestamp: new Date().toISOString()
+          };
+          
+          // Replace the processing message with the success message
+          setMessages(prev => prev.filter(m => !m.text?.includes('analyzing')).concat(successMessage));
+          
+          // Trigger calendar refresh
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+          }
+          
+          return true;
+        } else {
+          // Show the event parser UI if direct creation failed
+          setParsedEventDetails(parsedEvent);
+          setShowEventParser(true);
+          setEventParsingSource('text');
+          
+          // Replace the processing message
+          const helperMessage = {
+            familyId,
+            sender: 'allie',
+            userName: 'Allie',
+            text: `I've extracted these event details from your message. Please review them before I add this to your calendar.`,
+            timestamp: new Date().toISOString()
+          };
+          
+          setMessages(prev => prev.filter(m => !m.text?.includes('analyzing')).concat(helperMessage));
+          return true;
         }
-      });
-    }
-    
-    // Create event object with explicit structure
-    const event = {
-      summary: eventDetails.title,
-      title: eventDetails.title,
-      description: eventDetails.description || `Added from Allie chat`,
-      location: eventDetails.location || '',
-      start: {
-        dateTime: startDate.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      end: {
-        dateTime: endDate.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      // Add all metadata
-      familyId: familyId,
-      eventType: eventDetails.eventType || 'general',
-      category: eventDetails.category || 'general',
-      // Include attendee information
-      attendees: attendees,
-      // Track source
-      source: 'chat',
-      creationSource: 'direct_creation',
-      originalText: eventDetails.originalText || ''
-    };
-    
-    // Add the event to the calendar
-    const result = await CalendarService.addEvent(event, selectedUser.id);
-    
-    if (result.success) {
-      // Force calendar refresh
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
       }
       
-      return { 
-        success: true, 
-        eventId: result.eventId || result.firestoreId,
-        message: "Event added successfully"
-      };
-    } else {
-      return { 
-        success: false, 
-        error: result.error || "Failed to add event to calendar" 
-      };
-    }
-  } catch (error) {
-    console.error("Error creating calendar event:", error);
-    return { 
-      success: false, 
-      error: error.message || "Error creating calendar event" 
-    };
-  }
-}
-  
-// Add this helper function to src/components/chat/AllieChat.jsx
-
-// UPDATED addChildEventToTracking function to remove setError call
-
-// Add child event to both calendar and child tracking
-const addChildEventToTracking = async (eventDetails) => {
-  try {
-    if (!eventDetails || !selectedUser) return false;
-    
-    // Ensure we have required details
-    if (!eventDetails.childId || !eventDetails.trackingType) {
-      // Add error message directly instead of using setError
-      setMessages(prev => [...prev, {
+      return false;
+    } catch (error) {
+      console.error("Error processing event from message:", error);
+      // Add error message
+      const errorMessage = {
         familyId,
         sender: 'allie',
         userName: 'Allie',
-        text: `I couldn't add this event because some required information is missing. Please make sure you've selected a child and event type.`,
+        text: `I had trouble understanding the event details. Could you please try describing it again with the date, time, and location?`,
         timestamp: new Date().toISOString()
-      }]);
+      };
+      
+      // Replace processing message with error
+      setMessages(prev => prev.filter(m => !m.text?.includes('analyzing')).concat(errorMessage));
+      return false;
+    }
+  };
+
+  // Create event directly from parsed data
+  const createCalendarEventDirectly = async (eventDetails) => {
+    try {
+      if (!eventDetails || !selectedUser) {
+        return { success: false, error: "Missing event details or user" };
+      }
+      
+      // Format and standardize the event
+      const startDate = eventDetails.dateTime instanceof Date ? 
+        eventDetails.dateTime : new Date(eventDetails.dateTime);
+      
+      const endDate = new Date(startDate);
+      endDate.setHours(startDate.getHours() + 1); // Default 1 hour event
+      
+      // Check if "me and wife" or similar phrases are in the original text
+      const hasSpouse = eventDetails.originalText?.toLowerCase().includes('wife') || 
+                      eventDetails.originalText?.toLowerCase().includes('husband') ||
+                      eventDetails.originalText?.toLowerCase().includes('spouse') ||
+                      eventDetails.originalText?.toLowerCase().includes('partner');
+      
+      // Extract mentioned people
+      const attendees = [];
+      
+      // Add current user (me)
+      if (selectedUser) {
+        attendees.push({
+          id: selectedUser.id,
+          name: selectedUser.name,
+          role: selectedUser.role
+        });
+      }
+      
+      // Add spouse if mentioned
+      if (hasSpouse) {
+        const spouse = familyMembers.find(m => 
+          m.role === 'parent' && m.id !== selectedUser.id
+        );
+        
+        if (spouse) {
+          attendees.push({
+            id: spouse.id,
+            name: spouse.name,
+            role: spouse.role
+          });
+        }
+      }
+      
+      // Include any attendees from event details
+      if (eventDetails.attendees && eventDetails.attendees.length > 0) {
+        eventDetails.attendees.forEach(attendee => {
+          // Only add if not already in the list
+          if (!attendees.some(a => a.id === attendee.id)) {
+            attendees.push(attendee);
+          }
+        });
+      }
+      
+      // Create event object for the calendar
+      const event = {
+        summary: eventDetails.title,
+        title: eventDetails.title,
+        description: eventDetails.description || `Added from Allie chat`,
+        location: eventDetails.location || '',
+        start: {
+          dateTime: startDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: endDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        // Add all metadata
+        familyId: familyId,
+        eventType: eventDetails.eventType || 'general',
+        category: eventDetails.category || 'general',
+        // Include attendee information
+        attendees: attendees,
+        // Track source
+        source: 'chat',
+        creationSource: 'direct_creation',
+        originalText: eventDetails.originalText || '',
+        // Add child ID and name if present
+        childId: eventDetails.childId,
+        childName: eventDetails.childName
+      };
+      
+      // Add the event to the calendar
+      const result = await CalendarService.addEvent(event, selectedUser.id);
+      
+      if (result.success) {
+        // Force calendar refresh
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        }
+        
+        return { 
+          success: true, 
+          eventId: result.eventId || result.firestoreId,
+          message: "Event added successfully"
+        };
+      } else {
+        return { 
+          success: false, 
+          error: result.error || "Failed to add event to calendar" 
+        };
+      }
+    } catch (error) {
+      console.error("Error creating calendar event:", error);
+      return { 
+        success: false, 
+        error: error.message || "Error creating calendar event" 
+      };
+    }
+  };
+
+  // Handle image processing for event extraction
+  const handleImageProcessForEvent = async (file) => {
+    try {
+      setLoading(true);
+      
+      // Add a processing message to give user feedback
+      const processingMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I'm analyzing the image to see if it contains event information...`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, processingMessage]);
+      
+      // Check if file is an image
+      if (!file.type.startsWith('image/')) {
+        throw new Error("File must be an image");
+      }
+      
+      // Get family context for better parsing
+      const familyContext = {
+        familyId,
+        children: familyMembers.filter(m => m.role === 'child')
+      };
+      
+      // Use our new UnifiedParserService to parse the image
+      const eventDetails = await UnifiedParserService.parseImage(file, 'event', familyContext);
+      
+      if (eventDetails && (eventDetails.title || eventDetails.eventType)) {
+        // We successfully parsed an event
+        eventDetails.creationSource = 'image';
+        setParsedEventDetails(eventDetails);
+        setShowEventParser(true);
+        setEventParsingSource('image');
+        
+        // Add a message about what we found
+        const infoMessage = {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `I found what looks like an event in your image! I've extracted these details: ${eventDetails.title || eventDetails.eventType} ${eventDetails.dateTime ? `on ${new Date(eventDetails.dateTime).toLocaleDateString()}` : ''}. Would you like to add this to your calendar?`,
+          timestamp: new Date().toISOString()
+        };
+        
+        setMessages(prev => [...prev.filter(m => m !== processingMessage), infoMessage]);
+        return true;
+      } else {
+        // Could not parse an event
+        const errorMessage = {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `I analyzed the image but couldn't find clear event details. If this is an invitation, you can describe the event to me and I'll help you add it to your calendar.`,
+          timestamp: new Date().toISOString()
+        };
+        
+        setMessages(prev => [...prev.filter(m => m !== processingMessage), errorMessage]);
+        return false;
+      }
+    } catch (error) {
+      console.error("Error processing image for event:", error);
+      
+      // Error message
+      const errorMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I had trouble analyzing that image. If it contains an event invitation, you can tell me about the event directly and I'll help you add it to your calendar.`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev.filter(m => m.text?.includes('analyzing')), errorMessage]);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add child event to both calendar and child tracking
+  const addChildEventToTracking = async (eventDetails) => {
+    try {
+      if (!eventDetails || !selectedUser) return false;
+      
+      // Ensure we have required details
+      if (!eventDetails.childId || !eventDetails.trackingType) {
+        // Add error message
+        setMessages(prev => [...prev, {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `I couldn't add this event because some required information is missing. Please make sure you've selected a child and event type.`,
+          timestamp: new Date().toISOString()
+        }]);
+        return false;
+      }
+      
+      // Make sure we have the ChildTrackingService
+      if (!childTrackingService.current) {
+        const ChildTracking = (await import('../services/ChildTrackingService')).default;
+        childTrackingService.current = ChildTracking;
+      }
+      
+      // Determine if this is a medical appointment or activity
+      let result;
+      let eventType;
+      
+      if (eventDetails.trackingType === 'medical') {
+        // It's a medical appointment
+        result = await childTrackingService.current.addMedicalAppointment(
+          familyId,
+          eventDetails.childId,
+          eventDetails,
+          true // Add to calendar too
+        );
+        eventType = "medical appointment";
+      } else {
+        // It's an activity
+        result = await childTrackingService.current.addActivity(
+          familyId,
+          eventDetails.childId,
+          eventDetails,
+          true // Add to calendar too
+        );
+        eventType = "activity";
+      }
+      
+      if (result.success) {
+        // Success message
+        const successMessage = {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `Great! I've added the ${eventType} "${eventDetails.title}" for ${eventDetails.childName} on ${new Date(eventDetails.dateTime).toLocaleDateString()} at ${new Date(eventDetails.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}. This has been added to both your family calendar and ${eventDetails.childName}'s ${eventDetails.trackingType === 'medical' ? 'medical records' : 'activities'}.`,
+          timestamp: new Date().toISOString()
+        };
+        
+        setMessages(prev => [...prev, successMessage]);
+        
+        // Force calendar refresh
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+          
+          // Dispatch child tracking update event
+          window.dispatchEvent(new CustomEvent('child-tracking-updated', {
+            detail: { 
+              childId: eventDetails.childId,
+              type: eventDetails.trackingType
+            }
+          }));
+        }
+        
+        return true;
+      } else {
+        throw new Error(result.error || "Failed to add event to tracking");
+      }
+    } catch (error) {
+      console.error("Error adding child event to tracking:", error);
+      
+      // Error message
+      const errorMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I'm sorry, I couldn't add this event to tracking. ${error.message || "Please try again or add it manually through the Children tab."}`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+      return false;
+    }
+  };
+
+  // Handle document processing
+  const handleDocumentProcess = async (file, detectedType) => {
+    setLoading(true);
+    
+    try {
+      // Add a processing message to give user feedback
+      const processingMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I'm analyzing your ${detectedType.primaryType}...`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, processingMessage]);
+      
+      // Use the DocumentProcessingService to process the document
+      const result = await DocumentProcessingService.processDocument(file, familyId, selectedUser.id);
+      
+      if (!result.success) {
+        throw new Error(result.error || "Error processing document");
+      }
+      
+      const document = result.documentData;
+      
+      // Determine response based on document category
+      let responseText = "";
+      
+      switch (document.category) {
+        case 'medical':
+          const children = familyMembers.filter(m => m.role === 'child');
+          
+          responseText = "I processed your medical document. Would you like me to:";
+          
+          if (children.length === 1) {
+            responseText += `\n1. Add it to ${children[0].name}'s medical records`;
+          } else if (children.length > 1) {
+            responseText += "\n1. Add it to a child's medical records";
+          }
+          
+          responseText += "\n2. Save it to your document library";
+          responseText += "\n3. Check if it contains appointment information";
+          break;
+          
+        case 'school':
+          responseText = "I analyzed this school document. Would you like me to:";
+          responseText += "\n1. Add it to a child's school records";
+          responseText += "\n2. Extract homework or assignment details";
+          responseText += "\n3. Save it to your document library";
+          break;
+          
+        case 'event':
+          responseText = "This looks like an event or invitation! I've extracted the following details:";
+          
+          if (document.entities && document.entities.dates && document.entities.dates.length > 0) {
+            responseText += `\nDate: ${document.entities.dates[0]}`;
+          }
+          
+          if (document.entities && document.entities.addresses && document.entities.addresses.length > 0) {
+            responseText += `\nLocation: ${document.entities.addresses[0]}`;
+          }
+          
+          responseText += "\n\nWould you like me to add this to your calendar?";
+          
+          // Try to extract calendar event
+          const eventDetails = await EventParserService.parseEventFromDocument(document);
+          if (eventDetails) {
+            setParsedEventDetails(eventDetails);
+            setShowEventParser(true);
+            setEventParsingSource('document');
+          }
+          break;
+          
+        default:
+          responseText = `I've processed your ${document.category} document and saved it to your library. You can view and manage it in the Document Library section.`;
+          
+          // Include extracted details if available
+          if (document.entities) {
+            const entityCounts = Object.entries(document.entities)
+              .filter(([_, values]) => values && values.length > 0)
+              .map(([type, values]) => `${type}: ${values.length}`);
+              
+            if (entityCounts.length > 0) {
+              responseText += `\n\nI extracted the following information: ${entityCounts.join(', ')}.`;
+            }
+          }
+      }
+      
+      // Remove processing message
+      setMessages(prev => prev.filter(m => m !== processingMessage));
+      
+      // Add response message
+      const responseMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: responseText,
+        timestamp: new Date().toISOString(),
+        documentId: document.id,
+        documentData: document,
+        documentFile: file
+      };
+      
+      setMessages(prev => [...prev, responseMessage]);
+      return;
+    } catch (error) {
+      console.error("Error processing document:", error);
+      
+      // Error message
+      const errorMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I had trouble processing your document: ${error.message}. Please try uploading it directly to the Document Library.`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev.filter(m => m.text?.includes('analyzing')), errorMessage]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Detect document type from file
+  const detectDocumentType = async (file) => {
+    try {
+      // First check by file type
+      const fileType = file.type.toLowerCase();
+      
+      // Image types - could be events, medical records, school flyers, etc.
+      if (fileType.startsWith('image/')) {
+        // For images, we need to look at content to determine type
+        return {
+          primaryType: 'image',
+          possibleTypes: ['event', 'medical', 'school', 'general']
+        };
+      }
+      
+      // PDF documents
+      if (fileType === 'application/pdf') {
+        return {
+          primaryType: 'document',
+          possibleTypes: ['medical', 'school', 'event', 'general']
+        };
+      }
+      
+      // Word documents
+      if (fileType.includes('word') || 
+          fileType.includes('document') || 
+          fileType.includes('msword') || 
+          fileType.includes('officedocument')) {
+        return {
+          primaryType: 'document',
+          possibleTypes: ['medical', 'school', 'general']
+        };
+      }
+      
+      // Text files
+      if (fileType.includes('text') || fileType === 'text/plain') {
+        return {
+          primaryType: 'text',
+          possibleTypes: ['note', 'general']
+        };
+      }
+      
+      // CSV or Excel files
+      if (fileType.includes('csv') || 
+          fileType.includes('excel') || 
+          fileType.includes('spreadsheet')) {
+        return {
+          primaryType: 'spreadsheet',
+          possibleTypes: ['growth', 'schedule', 'general']
+        };
+      }
+      
+      // Default for unknown types
+      return {
+        primaryType: 'unknown',
+        possibleTypes: ['general']
+      };
+    } catch (error) {
+      console.error("Error detecting document type:", error);
+      return {
+        primaryType: 'unknown',
+        possibleTypes: ['general']
+      };
+    }
+  };
+
+  // Get document type from file
+  const getDocumentTypeFromFile = async (file) => {
+    try {
+      // Use the document type detection from the DocumentProcessingService
+      const validationResult = DocumentProcessingService.validateDocument(file);
+      if (!validationResult.valid) {
+        return {
+          primaryType: 'unsupported',
+          possibleTypes: ['general'],
+          error: validationResult.error
+        };
+      }
+      
+      // Determine main type based on file type
+      const fileType = file.type.toLowerCase();
+      
+      // Image types - could be events, medical records, school flyers, etc.
+      if (fileType.startsWith('image/')) {
+        return {
+          primaryType: 'image',
+          possibleTypes: ['event', 'medical', 'school', 'general']
+        };
+      }
+      
+      // PDF documents
+      if (fileType === 'application/pdf') {
+        return {
+          primaryType: 'document',
+          possibleTypes: ['medical', 'school', 'event', 'general']
+        };
+      }
+      
+      // Word documents
+      if (fileType.includes('word') || 
+          fileType.includes('document') || 
+          fileType.includes('msword') || 
+          fileType.includes('officedocument')) {
+        return {
+          primaryType: 'document',
+          possibleTypes: ['medical', 'school', 'general']
+        };
+      }
+      
+      // Text files
+      if (fileType.includes('text') || fileType === 'text/plain') {
+        return {
+          primaryType: 'text',
+          possibleTypes: ['note', 'general']
+        };
+      }
+      
+      // CSV or Excel files
+      if (fileType.includes('csv') || 
+          fileType.includes('excel') || 
+          fileType.includes('spreadsheet')) {
+        return {
+          primaryType: 'spreadsheet',
+          possibleTypes: ['growth', 'schedule', 'general']
+        };
+      }
+      
+      // Default for unknown types
+      return {
+        primaryType: 'unknown',
+        possibleTypes: ['general']
+      };
+    } catch (error) {
+      console.error("Error detecting document type:", error);
+      return {
+        primaryType: 'unknown',
+        possibleTypes: ['general'],
+        error: error.message
+      };
+    }
+  };
+
+  // Handle user selection for document actions
+  const handleDocumentActionSelection = async (text, messageWithDocument) => {
+    if (!messageWithDocument || !messageWithDocument.documentFile) {
       return false;
     }
     
-    // Make sure we have the ChildTrackingService
-    if (!childTrackingService.current) {
-      const ChildTracking = (await import('../services/ChildTrackingService')).default;
-      childTrackingService.current = ChildTracking;
+    const file = messageWithDocument.documentFile;
+    const documentType = messageWithDocument.documentType || 'general';
+    
+    // Check which option was selected
+    if (text.includes("1") || text.toLowerCase().includes("add to") || text.toLowerCase().includes("medical records") || text.toLowerCase().includes("school records")) {
+      // Show child selection for adding to records
+      const children = familyMembers.filter(m => m.role === 'child');
+      
+      if (children.length === 0) {
+        const noChildMessage = {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `I don't see any children in your family profile. Let's save the document to your library instead.`,
+          timestamp: new Date().toISOString()
+        };
+        
+        setMessages(prev => [...prev, noChildMessage]);
+        saveDocumentToLibrary(file, documentType);
+        return true;
+      } else if (children.length === 1) {
+        // Only one child, save directly
+        saveDocumentToLibrary(file, documentType, children[0].id);
+        return true;
+      } else {
+        // Multiple children, ask which one
+        const childSelectMessage = {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `Which child would you like to connect this document to?\n${children.map((child, index) => `${index + 1}. ${child.name}`).join('\n')}`,
+          timestamp: new Date().toISOString(),
+          documentFile: file,
+          documentType,
+          awaitingChildSelection: true
+        };
+        
+        setMessages(prev => [...prev, childSelectMessage]);
+        return true;
+      }
+    } else if (text.includes("2") || text.toLowerCase().includes("save to") || text.toLowerCase().includes("document library")) {
+      // Save to document library
+      saveDocumentToLibrary(file, documentType);
+      return true;
+    } else if (text.includes("3") || text.toLowerCase().includes("check") || text.toLowerCase().includes("event information")) {
+      // Try to parse as event
+      handleImageProcessForEvent(file);
+      return true;
     }
     
-    // Determine if this is a medical appointment or activity
-    let result;
-    let eventType;
-    
-    if (eventDetails.trackingType === 'medical') {
-      // It's a medical appointment
-      result = await childTrackingService.current.addMedicalAppointment(
+    return false;
+  };
+
+  // Save document to the document library
+  const saveDocumentToLibrary = async (file, category = 'general', childId = null) => {
+    try {
+      setLoading(true);
+      
+      // Create storage reference
+      const storagePath = `family-documents/${familyId}/${childId || 'general'}/${Date.now()}_${file.name}`;
+      const storageRef = ref(storage, storagePath);
+      
+      // Upload file
+      await uploadBytes(storageRef, file);
+      
+      // Get download URL
+      const downloadURL = await getDownloadURL(storageRef);
+      
+      // Create document metadata
+      const documentData = {
+        title: file.name,
+        description: `Added from Allie Chat`,
+        category: category,
+        childId: childId,
         familyId,
-        eventDetails.childId,
-        eventDetails,
-        true // Add to calendar too
-      );
-      eventType = "medical appointment";
-    } else {
-      // It's an activity
-      result = await childTrackingService.current.addActivity(
-        familyId,
-        eventDetails.childId,
-        eventDetails,
-        true // Add to calendar too
-      );
-      eventType = "activity";
-    }
-    
-    if (result.success) {
+        fileName: file.name,
+        filePath: storagePath,
+        fileUrl: downloadURL,
+        fileType: file.type,
+        fileSize: file.size,
+        uploadedBy: selectedUser?.id,
+        uploadedAt: new Date().toISOString()
+      };
+      
+      // Add document to Firestore
+      await DatabaseService.saveDocument(documentData);
+      
       // Success message
       const successMessage = {
         familyId,
         sender: 'allie',
         userName: 'Allie',
-        text: `Great! I've added the ${eventType} "${eventDetails.title}" for ${eventDetails.childName} on ${new Date(eventDetails.dateTime).toLocaleDateString()} at ${new Date(eventDetails.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}. This has been added to both your family calendar and ${eventDetails.childName}'s ${eventDetails.trackingType === 'medical' ? 'medical records' : 'activities'}.`,
+        text: `I've saved the document to your library${childId ? ` and connected it to ${familyMembers.find(m => m.id === childId)?.name || 'child'}'s profile` : ''}. You can view it in the Document Library.`,
         timestamp: new Date().toISOString()
       };
       
       setMessages(prev => [...prev, successMessage]);
-      
-      // Force calendar refresh
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-        
-        // Dispatch child tracking update event
-        window.dispatchEvent(new CustomEvent('child-tracking-updated', {
-          detail: { 
-            childId: eventDetails.childId,
-            type: eventDetails.trackingType
-          }
-        }));
-      }
-      
+      setLoading(false);
       return true;
-    } else {
-      throw new Error(result.error || "Failed to add event to tracking");
+    } catch (error) {
+      console.error("Error saving document to library:", error);
+      
+      // Error message
+      const errorMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I had trouble saving your document to the library. Please try uploading it directly from the Document Library.`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+      setLoading(false);
+      return false;
     }
-  } catch (error) {
-    console.error("Error adding child event to tracking:", error);
-    
-    // Error message
-    const errorMessage = {
-      familyId,
-      sender: 'allie',
-      userName: 'Allie',
-      text: `I'm sorry, I couldn't add this event to tracking. ${error.message || "Please try again or add it manually through the Children tab."}`,
-      timestamp: new Date().toISOString()
-    };
-    
-    setMessages(prev => [...prev, errorMessage]);
-    return false;
-  }
-};
-// Check message history for potential calendar events
-const checkMessageHistoryForEvents = () => {
-  // Only check if no event parser is already showing
-  if (showEventParser || !messages.length) return;
-  
-  // Get the last few messages to analyze
-  const recentMessages = messages.slice(-5);
-  
-  // Check if any recent messages might contain calendar events
-  const calendarMessages = recentMessages.filter(msg => {
-    const text = msg.text.toLowerCase();
-    return (
-      text.includes('birthday') ||
-      text.includes('party') ||
-      text.includes('invite') ||
-      (text.includes('calendar') && text.includes('add')) ||
-      (text.includes('event') && (text.includes('add') || text.includes('create')))
-    );
-  });
-  
-  // If we found potential calendar messages, offer to extract events
-  if (calendarMessages.length > 0) {
-    // Get the most recent calendar-related message
-    const latestCalendarMessage = calendarMessages[calendarMessages.length - 1];
-    
-    // Add a suggestion to the message list
-    const suggestionMessage = {
-      familyId,
-      sender: 'allie',
-      userName: 'Allie',
-      text: "I noticed we were discussing something that might be an event. Would you like me to help add it to your calendar?",
-      timestamp: new Date().toISOString(),
-      suggestion: true,
-      originalMessageId: latestCalendarMessage.id
-    };
-    
-    setMessages(prev => [...prev, suggestionMessage]);
-  }
-};
+  };
 
-
-
-
-  // Handle image file from message
+  // Handle image file from message for profile picture
   const handleImageFileFromMessage = async (file, memberId) => {
     if (!file || !memberId) return false;
     
@@ -1312,746 +1621,301 @@ const checkMessageHistoryForEvents = () => {
       return false;
     }
   };
-  
-  const handleImageProcessForEvent = async (file) => {
+
+  // Add event to calendar
+  const addEventToCalendar = async (eventDetails) => {
     try {
-      setLoading(true);
+      if (!eventDetails || !selectedUser) return false;
       
-      // Add a processing message to give user feedback
-      const processingMessage = {
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: `I'm analyzing the image to see if it contains event information...`,
-        timestamp: new Date().toISOString()
-      };
+      // Ensure we have a valid Date object
+      const startDate = eventDetails.dateTime ? 
+        (eventDetails.dateTime instanceof Date ? 
+          eventDetails.dateTime : 
+          new Date(eventDetails.dateTime)) : 
+        new Date();
+        
+      // Log the date conversion for debugging
+      console.log("Event date conversion:", {
+        original: eventDetails.dateTime,
+        converted: startDate,
+        iso: startDate.toISOString()
+      });
       
-      setMessages(prev => [...prev, processingMessage]);
+      const endDate = new Date(startDate);
+      endDate.setHours(startDate.getHours() + 1); // Default 1 hour event
       
-      // Check if file is an image
-      if (!file.type.startsWith('image/')) {
-        throw new Error("File must be an image");
+      // Determine event title
+      let eventTitle = eventDetails.title || 'New Event';
+      
+      // Determine if this is an invitation (child attending) or an event (child hosting)
+      const isInvitation = eventDetails.isInvitation || 
+                          (eventDetails.extraDetails?.eventRelationship === "attending");
+      
+      // Add more context to title based on event type and relationship
+      if (eventDetails.eventType === 'birthday') {
+        if (isInvitation && eventDetails.extraDetails?.hostName) {
+          const childAge = eventDetails.extraDetails.birthdayChildAge 
+            ? ` (${eventDetails.extraDetails.birthdayChildAge})` 
+            : '';
+          eventTitle = `${eventDetails.extraDetails.hostName}'s Birthday Party${childAge}`;
+        } else if (eventDetails.extraDetails?.birthdayChildName) {
+          const childAge = eventDetails.extraDetails.birthdayChildAge 
+            ? ` (${eventDetails.extraDetails.birthdayChildAge})` 
+            : '';
+          eventTitle = `${eventDetails.extraDetails.birthdayChildName}'s Birthday${childAge}`;
+        }
       }
       
-      // Get family context for better parsing
-      const familyContext = {
-        familyId,
-        children: familyMembers.filter(m => m.role === 'child')
+      // If it's an invitation, make sure to reflect that in the title
+      if (isInvitation && eventDetails.childName) {
+        if (!eventTitle.includes("'s")) {
+          // If no specific host is in the title, add context that this is an invitation
+          eventTitle = `${eventDetails.childName} attending: ${eventTitle}`;
+        } else if (!eventTitle.includes(eventDetails.childName)) {
+          // If host is in title but not the child, add that info
+          eventTitle = `${eventDetails.childName} invited to ${eventTitle}`;
+        }
+      } else if (!isInvitation && eventDetails.childName && !eventTitle.includes(eventDetails.childName)) {
+        // For hosted events, add child name if not already in title
+        eventTitle = `${eventTitle} - ${eventDetails.childName}`;
+      }
+      
+      // Create event object with explicit structure
+      const event = {
+        summary: eventTitle,
+        title: eventTitle, // Include both for compatibility
+        description: eventDetails.extraDetails?.notes || `Added from Allie chat`,
+        location: eventDetails.location || '',
+        start: {
+          dateTime: startDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: endDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        reminders: {
+          useDefault: true
+        },
+        // Add additional metadata
+        familyId: familyId,
+        eventType: eventDetails.eventType || 'general',
+        childId: eventDetails.childId,
+        childName: eventDetails.childName,
+        extraDetails: eventDetails.extraDetails || {},
+        // Include attendee information if available
+        attendingParentId: eventDetails.attendingParentId || null,
+        // Include sibling information if available
+        siblingIds: eventDetails.siblingIds || [],
+        siblingNames: eventDetails.siblingNames || [],
+        // Track source of event creation
+        source: 'chat',
+        // Include original text for reference
+        originalText: eventDetails.originalText || '',
+        // Flag if this is an invitation vs. a hosted event
+        isInvitation: isInvitation
       };
       
-      // Use our new UnifiedParserService to parse the image
-      const eventDetails = await UnifiedParserService.parseImage(file, 'event', familyContext);
+      console.log("Adding event to calendar:", event);
       
-      if (eventDetails && (eventDetails.title || eventDetails.eventType)) {
-        // We successfully parsed an event
-        eventDetails.creationSource = 'image';
-        setParsedEventDetails(eventDetails);
-        setShowEventParser(true);
-        setEventParsingSource('image');
+      // Add event to calendar
+      const result = await CalendarService.addEvent(event, selectedUser.id);
+      
+      if (result.success) {
+        // Success message - adjusted based on invitation vs. hosted event
+        let successText;
+        if (isInvitation) {
+          successText = `Great! I've added "${eventTitle}" to your calendar for ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.${eventDetails.location ? ` Location: ${eventDetails.location}.` : ''} This has been added as an invitation for ${eventDetails.childName} to attend.`;
+        } else {
+          successText = `Great! I've added "${eventTitle}" to your calendar for ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.${eventDetails.location ? ` Location: ${eventDetails.location}.` : ''}`;
+        }
         
-        // Add a message about what we found
-        const infoMessage = {
+        const successMessage = {
           familyId,
           sender: 'allie',
           userName: 'Allie',
-          text: `I found what looks like an event in your image! I've extracted these details: ${eventDetails.title || eventDetails.eventType} ${eventDetails.dateTime ? `on ${new Date(eventDetails.dateTime).toLocaleDateString()}` : ''}. Would you like to add this to your calendar?`,
+          text: successText,
           timestamp: new Date().toISOString()
         };
         
-        setMessages(prev => [...prev, infoMessage]);
+        setMessages(prev => [...prev, successMessage]);
+        
+        // Force calendar refresh with multiple events to ensure it's caught
+        if (typeof window !== 'undefined') {
+          // Create event detail with important metadata
+          const eventDetail = {
+            eventId: result.eventId || result.firestoreId,
+            universalId: result.universalId,
+            title: eventTitle,
+            time: startDate.toISOString(),
+            childId: eventDetails.childId,
+            childName: eventDetails.childName,
+            isInvitation: isInvitation
+          };
+          
+          // First dispatch the standard event
+          const calendarEvent = new CustomEvent('calendar-event-added', {
+            detail: eventDetail
+          });
+          window.dispatchEvent(calendarEvent);
+          
+          // Additional event for child-specific handling
+          if (eventDetails.childId) {
+            window.dispatchEvent(new CustomEvent('calendar-child-event-added', {
+              detail: eventDetail
+            }));
+          }
+          
+          // Then dispatch the force refresh event with a slight delay
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+          }, 300);
+        }
+        
         return true;
       } else {
-        // Could not parse an event
-        const errorMessage = {
-          familyId,
-          sender: 'allie',
-          userName: 'Allie',
-          text: `I analyzed the image but couldn't find clear event details. If this is an invitation, you can describe the event to me and I'll help you add it to your calendar.`,
-          timestamp: new Date().toISOString()
-        };
-        
-        setMessages(prev => [...prev, errorMessage]);
-        return false;
+        throw new Error("Failed to add event to calendar");
       }
     } catch (error) {
-      console.error("Error processing image for event:", error);
+      console.error("Error adding event to calendar:", error);
       
       // Error message
       const errorMessage = {
         familyId,
         sender: 'allie',
         userName: 'Allie',
-        text: `I had trouble analyzing that image. If it contains an event invitation, you can tell me about the event directly and I'll help you add it to your calendar.`,
+        text: `I'm sorry, I couldn't add the event to your calendar. Please try again or add it manually through the calendar page.`,
         timestamp: new Date().toISOString()
       };
       
       setMessages(prev => [...prev, errorMessage]);
-      setLoading(false);
       return false;
     } finally {
-      setLoading(false);
+      setDetectedEventDetails(null);
+      setShowEventConfirmation(false);
     }
   };
 
-
-// Detect document type based on content and metadata
-const detectDocumentType = async (file) => {
-  try {
-    // First check by file type
-    const fileType = file.type.toLowerCase();
+  // Format date for display
+  const formatEventDate = (date) => {
+    if (!date) return 'Unknown date';
     
-    // Image types - could be events, medical records, school flyers, etc.
-    if (fileType.startsWith('image/')) {
-      // For images, we need to look at content to determine type
-      return {
-        primaryType: 'image',
-        possibleTypes: ['event', 'medical', 'school', 'general']
-      };
-    }
+    // Try to convert string to date if needed
+    const eventDate = typeof date === 'string' ? new Date(date) : date;
     
-    // PDF documents
-    if (fileType === 'application/pdf') {
-      return {
-        primaryType: 'document',
-        possibleTypes: ['medical', 'school', 'event', 'general']
-      };
-    }
+    // Check if valid date
+    if (isNaN(eventDate.getTime())) return 'Unknown date';
     
-    // Word documents
-    if (fileType.includes('word') || 
-        fileType.includes('document') || 
-        fileType.includes('msword') || 
-        fileType.includes('officedocument')) {
-      return {
-        primaryType: 'document',
-        possibleTypes: ['medical', 'school', 'general']
-      };
-    }
-    
-    // Text files
-    if (fileType.includes('text') || fileType === 'text/plain') {
-      return {
-        primaryType: 'text',
-        possibleTypes: ['note', 'general']
-      };
-    }
-    
-    // CSV or Excel files
-    if (fileType.includes('csv') || 
-        fileType.includes('excel') || 
-        fileType.includes('spreadsheet')) {
-      return {
-        primaryType: 'spreadsheet',
-        possibleTypes: ['growth', 'schedule', 'general']
-      };
-    }
-    
-    // Default for unknown types
-    return {
-      primaryType: 'unknown',
-      possibleTypes: ['general']
-    };
-  } catch (error) {
-    console.error("Error detecting document type:", error);
-    return {
-      primaryType: 'unknown',
-      possibleTypes: ['general']
-    };
-  }
-};
-
-
-
-// Updated code for AllieChat.jsx - document processing related functions
-
-// Replace the existing handleDocumentProcess function with this improved version:
-const handleDocumentProcess = async (file, detectedType) => {
-  setLoading(true);
-  
-  try {
-    // Add a processing message to give user feedback
-    const processingMessage = {
-      familyId,
-      sender: 'allie',
-      userName: 'Allie',
-      text: `I'm analyzing your ${detectedType.primaryType}...`,
-      timestamp: new Date().toISOString()
-    };
-    
-    setMessages(prev => [...prev, processingMessage]);
-    
-    // Use the new DocumentProcessingService to process the document
-    const result = await DocumentProcessingService.processDocument(file, familyId, selectedUser.id);
-    
-    if (!result.success) {
-      throw new Error(result.error || "Error processing document");
-    }
-    
-    const document = result.documentData;
-    
-    // Determine response based on document category
-    let responseText = "";
-    
-    switch (document.category) {
-      case 'medical':
-        const children = familyMembers.filter(m => m.role === 'child');
-        
-        responseText = "I processed your medical document. Would you like me to:";
-        
-        if (children.length === 1) {
-          responseText += `\n1. Add it to ${children[0].name}'s medical records`;
-        } else if (children.length > 1) {
-          responseText += "\n1. Add it to a child's medical records";
-        }
-        
-        responseText += "\n2. Save it to your document library";
-        responseText += "\n3. Check if it contains appointment information";
-        break;
-        
-      case 'school':
-        responseText = "I analyzed this school document. Would you like me to:";
-        responseText += "\n1. Add it to a child's school records";
-        responseText += "\n2. Extract homework or assignment details";
-        responseText += "\n3. Save it to your document library";
-        break;
-        
-      case 'event':
-        responseText = "This looks like an event or invitation! I've extracted the following details:";
-        
-        if (document.entities && document.entities.dates && document.entities.dates.length > 0) {
-          responseText += `\nDate: ${document.entities.dates[0]}`;
-        }
-        
-        if (document.entities && document.entities.addresses && document.entities.addresses.length > 0) {
-          responseText += `\nLocation: ${document.entities.addresses[0]}`;
-        }
-        
-        responseText += "\n\nWould you like me to add this to your calendar?";
-        
-        // Try to extract calendar event
-        const eventDetails = await EventParserService.parseEventFromDocument(document);
-        if (eventDetails) {
-          setParsedEventDetails(eventDetails);
-          setShowEventParser(true);
-          setEventParsingSource('document');
-        }
-        break;
-        
-      default:
-        responseText = `I've processed your ${document.category} document and saved it to your library. You can view and manage it in the Document Library section.`;
-        
-        // Include extracted details if available
-        if (document.entities) {
-          const entityCounts = Object.entries(document.entities)
-            .filter(([_, values]) => values && values.length > 0)
-            .map(([type, values]) => `${type}: ${values.length}`);
-            
-          if (entityCounts.length > 0) {
-            responseText += `\n\nI extracted the following information: ${entityCounts.join(', ')}.`;
-          }
-        }
-    }
-    
-    // Add response message
-    const responseMessage = {
-      familyId,
-      sender: 'allie',
-      userName: 'Allie',
-      text: responseText,
-      timestamp: new Date().toISOString(),
-      documentId: document.id,
-      documentData: document
-    };
-    
-    setMessages(prev => [...prev, responseMessage]);
-    return;
-  } catch (error) {
-    console.error("Error processing document:", error);
-    
-    // Error message
-    const errorMessage = {
-      familyId,
-      sender: 'allie',
-      userName: 'Allie',
-      text: `I had trouble processing your document: ${error.message}. Please try uploading it directly to the Document Library.`,
-      timestamp: new Date().toISOString()
-    };
-    
-    setMessages(prev => [...prev, errorMessage]);
-  } finally {
-    setLoading(false);
-  }
-};
-
-const getDocumentTypeFromFile = async (file) => {
-  try {
-    // Use the document type detection from the DocumentProcessingService
-    const validationResult = DocumentProcessingService.validateDocument(file);
-    if (!validationResult.valid) {
-      return {
-        primaryType: 'unsupported',
-        possibleTypes: ['general'],
-        error: validationResult.error
-      };
-    }
-    
-    // Determine main type based on file type
-    const fileType = file.type.toLowerCase();
-    
-    // Image types - could be events, medical records, school flyers, etc.
-    if (fileType.startsWith('image/')) {
-      return {
-        primaryType: 'image',
-        possibleTypes: ['event', 'medical', 'school', 'general']
-      };
-    }
-    
-    // PDF documents
-    if (fileType === 'application/pdf') {
-      return {
-        primaryType: 'document',
-        possibleTypes: ['medical', 'school', 'event', 'general']
-      };
-    }
-    
-    // Word documents
-    if (fileType.includes('word') || 
-        fileType.includes('document') || 
-        fileType.includes('msword') || 
-        fileType.includes('officedocument')) {
-      return {
-        primaryType: 'document',
-        possibleTypes: ['medical', 'school', 'general']
-      };
-    }
-    
-    // Text files
-    if (fileType.includes('text') || fileType === 'text/plain') {
-      return {
-        primaryType: 'text',
-        possibleTypes: ['note', 'general']
-      };
-    }
-    
-    // CSV or Excel files
-    if (fileType.includes('csv') || 
-        fileType.includes('excel') || 
-        fileType.includes('spreadsheet')) {
-      return {
-        primaryType: 'spreadsheet',
-        possibleTypes: ['growth', 'schedule', 'general']
-      };
-    }
-    
-    // Default for unknown types
-    return {
-      primaryType: 'unknown',
-      possibleTypes: ['general']
-    };
-  } catch (error) {
-    console.error("Error detecting document type:", error);
-    return {
-      primaryType: 'unknown',
-      possibleTypes: ['general'],
-      error: error.message
-    };
-  }
-};
-
-
-
-// Handle user selection for document actions
-const handleDocumentActionSelection = (text, messageWithDocument) => {
-  if (!messageWithDocument || !messageWithDocument.documentFile) {
-    return false;
-  }
-  
-  const file = messageWithDocument.documentFile;
-  const documentType = messageWithDocument.documentType || 'general';
-  
-  // Check which option was selected
-  if (text.includes("1") || text.toLowerCase().includes("add to") || text.toLowerCase().includes("medical records") || text.toLowerCase().includes("school records")) {
-    // Show child selection for adding to records
-    const children = familyMembers.filter(m => m.role === 'child');
-    
-    if (children.length === 0) {
-      const noChildMessage = {
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: `I don't see any children in your family profile. Let's save the document to your library instead.`,
-        timestamp: new Date().toISOString()
-      };
-      
-      setMessages(prev => [...prev, noChildMessage]);
-      saveDocumentToLibrary(file, documentType);
-      return true;
-    } else if (children.length === 1) {
-      // Only one child, save directly
-      saveDocumentToLibrary(file, documentType, children[0].id);
-      return true;
-    } else {
-      // Multiple children, ask which one
-      const childSelectMessage = {
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: `Which child would you like to connect this document to?\n${children.map((child, index) => `${index + 1}. ${child.name}`).join('\n')}`,
-        timestamp: new Date().toISOString(),
-        documentFile: file,
-        documentType,
-        awaitingChildSelection: true
-      };
-      
-      setMessages(prev => [...prev, childSelectMessage]);
-      return true;
-    }
-  } else if (text.includes("2") || text.toLowerCase().includes("save to") || text.toLowerCase().includes("document library")) {
-    // Save to document library
-    saveDocumentToLibrary(file, documentType);
-    return true;
-  } else if (text.includes("3") || text.toLowerCase().includes("check") || text.toLowerCase().includes("event information")) {
-    // Try to parse as event
-    handleImageProcessForEvent(file);
-    return true;
-  }
-  
-  return false;
-};
-
-
-// Save document to the document library
-const saveDocumentToLibrary = async (file, category = 'general', childId = null) => {
-  try {
-    setLoading(true);
-    
-    // Create storage reference
-    const storagePath = `family-documents/${familyId}/${childId || 'general'}/${Date.now()}_${file.name}`;
-    const storageRef = ref(storage, storagePath);
-    
-    // Upload file
-    await uploadBytes(storageRef, file);
-    
-    // Get download URL
-    const downloadURL = await getDownloadURL(storageRef);
-    
-    // Create document metadata
-    const documentData = {
-      title: file.name,
-      description: `Added from Allie Chat`,
-      category: category,
-      childId: childId,
-      familyId,
-      fileName: file.name,
-      filePath: storagePath,
-      fileUrl: downloadURL,
-      fileType: file.type,
-      fileSize: file.size,
-      uploadedBy: selectedUser?.id,
-      uploadedAt: new Date().toISOString()
-    };
-    
-    // Add document to Firestore
-    await DatabaseService.saveDocument(documentData);
-    
-    // Success message
-    const successMessage = {
-      familyId,
-      sender: 'allie',
-      userName: 'Allie',
-      text: `I've saved the document to your library${childId ? ` and connected it to ${familyMembers.find(m => m.id === childId)?.name || 'child'}'s profile` : ''}. You can view it in the Document Library.`,
-      timestamp: new Date().toISOString()
-    };
-    
-    setMessages(prev => [...prev, successMessage]);
-    setLoading(false);
-    return true;
-  } catch (error) {
-    console.error("Error saving document to library:", error);
-    
-    // Error message
-    const errorMessage = {
-      familyId,
-      sender: 'allie',
-      userName: 'Allie',
-      text: `I had trouble saving your document to the library. Please try uploading it directly from the Document Library.`,
-      timestamp: new Date().toISOString()
-    };
-    
-    setMessages(prev => [...prev, errorMessage]);
-    setLoading(false);
-    return false;
-  }
-};
-
-
-// Add these drag event handlers before the return statement (around line 670)
-// NEW CODE - Improved drag handlers
-const handleDragEnter = (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  setDragCounter(prev => prev + 1);
-  if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
-    setIsDragging(true);
-  }
-};
-
-const handleDragLeave = (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  setDragCounter(prev => prev - 1);
-  // Only set isDragging to false when the counter reaches 0
-  // This prevents the overlay from flickering when dragging over child elements
-  if (dragCounter - 1 === 0) {
-    setIsDragging(false);
-  }
-};
-
-const handleDragOver = (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  // Always set this to true for consistent behavior
-  setIsDragging(true);
-};
-const handleDrop = async (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  setIsDragging(false);
-  setDragCounter(0);
-  
-  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-    const droppedFile = e.dataTransfer.files[0];
-    
-    // Detect the document type
-    const documentType = await detectDocumentType(droppedFile);
-    
-    // Check if it's an image
-    if (droppedFile.type.startsWith('image/')) {
-      // Create a preview URL
-      const previewUrl = URL.createObjectURL(droppedFile);
-      setImageFile(droppedFile);
-      setImagePreview(previewUrl);
-      
-      // If we have a profile upload target, process the image
-      if (profileUploadTarget) {
-        handleImageFileFromMessage(droppedFile, profileUploadTarget.id);
-      } else {
-        // Process the document based on its detected type
-        await handleDocumentProcess(droppedFile, documentType);
-      }
-    } else if (droppedFile.type === 'application/pdf' || 
-              droppedFile.type.includes('text') || 
-              droppedFile.type.includes('document') ||
-              droppedFile.type.includes('spreadsheet') ||
-              droppedFile.type.includes('excel') ||
-              droppedFile.type.includes('csv')) {
-      // Handle document files
-      const processingMessage = {
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: `I see you've shared a document. I'm analyzing it now...`,
-        timestamp: new Date().toISOString()
-      };
-      
-      setMessages(prev => [...prev, processingMessage]);
-      
-      // Process the document based on its detected type
-      await handleDocumentProcess(droppedFile, documentType);
-    } else {
-      // Unsupported file type
-      const errorMessage = {
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: `Sorry, I can't process this type of file (${droppedFile.type}). I can work with images, PDFs, text documents, and spreadsheets.`,
-        timestamp: new Date().toISOString()
-      };
-      
-      setMessages(prev => [...prev, errorMessage]);
-    }
-  }
-};
-  
-  // In AllieChat.jsx - Update the addEventToCalendar function
-  // src/components/chat/AllieChat.jsx - Update the addEventToCalendar function
-  
-// In src/components/chat/AllieChat.jsx - Update the addEventToCalendar function
-const addEventToCalendar = async (eventDetails) => {
-  try {
-    if (!eventDetails || !selectedUser) return false;
-    
-    // Ensure we have a valid Date object
-    const startDate = eventDetails.dateTime ? 
-      (eventDetails.dateTime instanceof Date ? 
-        eventDetails.dateTime : 
-        new Date(eventDetails.dateTime)) : 
-      new Date();
-      
-    // Log the date conversion for debugging
-    console.log("Event date conversion:", {
-      original: eventDetails.dateTime,
-      converted: startDate,
-      iso: startDate.toISOString()
+    // Format as "Tuesday, April 9 at 2:00 PM"
+    return eventDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric'
+    }) + ' at ' + eventDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit'
     });
-    
-    const endDate = new Date(startDate);
-    endDate.setHours(startDate.getHours() + 1); // Default 1 hour event
-    
-    // Determine event title
-    let eventTitle = eventDetails.title || 'New Event';
-    
-    // Determine if this is an invitation (child attending) or an event (child hosting)
-    const isInvitation = eventDetails.isInvitation || 
-                         (eventDetails.extraDetails?.eventRelationship === "attending");
-    
-    // Add more context to title based on event type and relationship
-    if (eventDetails.eventType === 'birthday') {
-      if (isInvitation && eventDetails.extraDetails?.hostName) {
-        const childAge = eventDetails.extraDetails.birthdayChildAge 
-          ? ` (${eventDetails.extraDetails.birthdayChildAge})` 
-          : '';
-        eventTitle = `${eventDetails.extraDetails.hostName}'s Birthday Party${childAge}`;
-      } else if (eventDetails.extraDetails?.birthdayChildName) {
-        const childAge = eventDetails.extraDetails.birthdayChildAge 
-          ? ` (${eventDetails.extraDetails.birthdayChildAge})` 
-          : '';
-        eventTitle = `${eventDetails.extraDetails.birthdayChildName}'s Birthday${childAge}`;
-      }
+  };
+
+  // Drag event handlers
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragCounter(prev => prev + 1);
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
     }
-    
-    // If it's an invitation, make sure to reflect that in the title
-    if (isInvitation && eventDetails.childName) {
-      if (!eventTitle.includes("'s")) {
-        // If no specific host is in the title, add context that this is an invitation
-        eventTitle = `${eventDetails.childName} attending: ${eventTitle}`;
-      } else if (!eventTitle.includes(eventDetails.childName)) {
-        // If host is in title but not the child, add that info
-        eventTitle = `${eventDetails.childName} invited to ${eventTitle}`;
-      }
-    } else if (!isInvitation && eventDetails.childName && !eventTitle.includes(eventDetails.childName)) {
-      // For hosted events, add child name if not already in title
-      eventTitle = `${eventTitle} - ${eventDetails.childName}`;
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragCounter(prev => prev - 1);
+    // Only set isDragging to false when the counter reaches 0
+    // This prevents the overlay from flickering when dragging over child elements
+    if (dragCounter - 1 === 0) {
+      setIsDragging(false);
     }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Always set this to true for consistent behavior
+    setIsDragging(true);
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    setDragCounter(0);
     
-    // Create event object with explicit structure
-    const event = {
-      summary: eventTitle,
-      title: eventTitle, // Include both for compatibility
-      description: eventDetails.extraDetails?.notes || `Added from Allie chat`,
-      location: eventDetails.location || '',
-      start: {
-        dateTime: startDate.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      end: {
-        dateTime: endDate.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      reminders: {
-        useDefault: true
-      },
-      // Add additional metadata
-      familyId: familyId,
-      eventType: eventDetails.eventType || 'general',
-      childId: eventDetails.childId,
-      childName: eventDetails.childName,
-      extraDetails: eventDetails.extraDetails || {},
-      // Include attendee information if available
-      attendingParentId: eventDetails.attendingParentId || null,
-      // Include sibling information if available
-      siblingIds: eventDetails.siblingIds || [],
-      siblingNames: eventDetails.siblingNames || [],
-      // Track source of event creation
-      source: 'chat',
-      // Include original text for reference
-      originalText: eventDetails.originalText || '',
-      // Flag if this is an invitation vs. a hosted event
-      isInvitation: isInvitation
-    };
-    
-    console.log("Adding event to calendar:", event);
-    
-    // Add event to calendar
-    const result = await CalendarService.addEvent(event, selectedUser.id);
-    
-    if (result.success) {
-      // Success message - adjusted based on invitation vs. hosted event
-      let successText;
-      if (isInvitation) {
-        successText = `Great! I've added "${eventTitle}" to your calendar for ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.${eventDetails.location ? ` Location: ${eventDetails.location}.` : ''} This has been added as an invitation for ${eventDetails.childName} to attend.`;
-      } else {
-        successText = `Great! I've added "${eventTitle}" to your calendar for ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.${eventDetails.location ? ` Location: ${eventDetails.location}.` : ''}`;
-      }
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const droppedFile = e.dataTransfer.files[0];
       
-      const successMessage = {
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: successText,
-        timestamp: new Date().toISOString()
-      };
+      // Detect the document type
+      const documentType = await detectDocumentType(droppedFile);
       
-      setMessages(prev => [...prev, successMessage]);
-      
-      // Force calendar refresh with multiple events to ensure it's caught
-      if (typeof window !== 'undefined') {
-        // Create event detail with important metadata
-        const eventDetail = {
-          eventId: result.eventId || result.firestoreId,
-          universalId: result.universalId,
-          title: eventTitle,
-          time: startDate.toISOString(),
-          childId: eventDetails.childId,
-          childName: eventDetails.childName,
-          isInvitation: isInvitation
+      // Check if it's an image
+      if (droppedFile.type.startsWith('image/')) {
+        // Create a preview URL
+        const previewUrl = URL.createObjectURL(droppedFile);
+        setImageFile(droppedFile);
+        setImagePreview(previewUrl);
+        
+        // If we have a profile upload target, process the image
+        if (profileUploadTarget) {
+          handleImageFileFromMessage(droppedFile, profileUploadTarget.id);
+        } else {
+          // Process the document based on its detected type
+          await handleDocumentProcess(droppedFile, documentType);
+        }
+      } else if (droppedFile.type === 'application/pdf' || 
+                droppedFile.type.includes('text') || 
+                droppedFile.type.includes('document') ||
+                droppedFile.type.includes('spreadsheet') ||
+                droppedFile.type.includes('excel') ||
+                droppedFile.type.includes('csv')) {
+        // Handle document files
+        const processingMessage = {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `I see you've shared a document. I'm analyzing it now...`,
+          timestamp: new Date().toISOString()
         };
         
-        // First dispatch the standard event
-        const calendarEvent = new CustomEvent('calendar-event-added', {
-          detail: eventDetail
-        });
-        window.dispatchEvent(calendarEvent);
+        setMessages(prev => [...prev, processingMessage]);
         
-        // Additional event for child-specific handling
-        if (eventDetails.childId) {
-          window.dispatchEvent(new CustomEvent('calendar-child-event-added', {
-            detail: eventDetail
-          }));
-        }
+        // Process the document based on its detected type
+        await handleDocumentProcess(droppedFile, documentType);
+      } else {
+        // Unsupported file type
+        const errorMessage = {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: `Sorry, I can't process this type of file (${droppedFile.type}). I can work with images, PDFs, text documents, and spreadsheets.`,
+          timestamp: new Date().toISOString()
+        };
         
-        // Then dispatch the force refresh event with a slight delay
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-        }, 300);
+        setMessages(prev => [...prev, errorMessage]);
       }
-      
-      return true;
-    } else {
-      throw new Error("Failed to add event to calendar");
     }
-  } catch (error) {
-    console.error("Error adding event to calendar:", error);
-    
-    // Error message
-    const errorMessage = {
-      familyId,
-      sender: 'allie',
-      userName: 'Allie',
-      text: `I'm sorry, I couldn't add the event to your calendar. Please try again or add it manually through the calendar page.`,
-      timestamp: new Date().toISOString()
-    };
-    
-    setMessages(prev => [...prev, errorMessage]);
-    return false;
-  } finally {
-    setDetectedEventDetails(null);
-    setShowEventConfirmation(false);
-  }
-};
-  
-  
-  
+  };
+
+  // Toggle chat open/closed
+  const toggleChat = () => {
+    setIsOpen(!isOpen);
+    // If user is closing the chat, remember this choice
+    if (isOpen) {
+      setUserClosedChat(true);
+      localStorage.setItem('allieChat_userClosed', 'true');
+    }
+  };
+
+  // Handle using a prompt chip
   const handleUsePrompt = (promptText, memberId) => {
     if (memberId) {
       // This is a member profile prompt
@@ -2085,7 +1949,8 @@ const addEventToCalendar = async (eventDetails) => {
     // Focus on the textarea after setting the input
     textareaRef.current?.focus();
   };
-  
+
+  // Toggle microphone for voice input
   const handleToggleMic = () => {
     if (isListening) {
       if (recognition.current) {
@@ -2101,14 +1966,16 @@ const addEventToCalendar = async (eventDetails) => {
       }
     }
   };
-  
+
+  // Handle enter key for sending
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
-  
+
+  // Handle file upload
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     
@@ -2134,11 +2001,13 @@ const addEventToCalendar = async (eventDetails) => {
       }
     }
   };
-  
+
+  // Handle attaching an image
   const handleAttachImage = () => {
     fileInputRef.current?.click();
   };
-  
+
+  // Handle removing an image
   const handleRemoveImage = () => {
     setImageFile(null);
     setImagePreview(null);
@@ -2147,7 +2016,7 @@ const addEventToCalendar = async (eventDetails) => {
       URL.revokeObjectURL(imagePreview);
     }
   };
-  
+
   // Resize button handler (upward/downward adjustment)
   const handleResize = (direction) => {
     const minHeight = 50; // Min height in rems
@@ -2159,7 +2028,7 @@ const addEventToCalendar = async (eventDetails) => {
       setChatHeight(chatHeight + 5);
     }
   };
-  
+
   // Start resize drag operation
   const handleStartResize = (e, type) => {
     e.preventDefault();
@@ -2180,7 +2049,7 @@ const addEventToCalendar = async (eventDetails) => {
       document.body.style.cursor = 'nwse-resize';
     }
   };
-  
+
   // Open camera for profile picture
   const openCameraForProfile = () => {
     if (!profileUploadTarget) {
@@ -2281,43 +2150,12 @@ const addEventToCalendar = async (eventDetails) => {
         setMessages(prev => [...prev, errorMessage]);
       });
   };
-  
-  // Format date for display
-  const formatEventDate = (date) => {
-    if (!date) return 'Unknown date';
-    
-    // Try to convert string to date if needed
-    const eventDate = typeof date === 'string' ? new Date(date) : date;
-    
-    // Check if valid date
-    if (isNaN(eventDate.getTime())) return 'Unknown date';
-    
-    // Format as "Tuesday, April 9 at 2:00 PM"
-    return eventDate.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric'
-    }) + ' at ' + eventDate.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit'
-    });
-  };
-  
-  // Toggle chat open/closed
-  const toggleChat = () => {
-    setIsOpen(!isOpen);
-    // If user is closing the chat, remember this choice
-    if (isOpen) {
-      setUserClosedChat(true);
-      localStorage.setItem('allieChat_userClosed', 'true');
-    }
-  };
-  
+
   // Make sure the chat doesn't render without a user
   if (!selectedUser && !familyId) {
     return null;
   }
-  
+
   // Render the chat component
   return (
     <div className="fixed bottom-0 right-0 z-50 md:w-auto w-full flex flex-col">
@@ -2344,40 +2182,31 @@ const addEventToCalendar = async (eventDetails) => {
       
       {/* Full chat interface (shown when open) */}
       {isOpen && (
-        // In src/components/chat/AllieChat.jsx
-
-// First, find the main chat container div (around line 570)
-// The ref={chatContainerRef} div should have these event handlers added:
-
-// NEW CODE - Remove the permanent drop box
-<div 
-  ref={chatContainerRef}
-  className="bg-white shadow-xl rounded-t-lg mx-4 flex flex-col transition-all duration-300 font-roboto relative overflow-hidden"
-  style={{ 
-    height: `${chatHeight}vh`, 
-    width: `${chatWidth}rem`, 
-    maxWidth: '95vw',
-    boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.1)'
-  }}
-  onDragEnter={handleDragEnter}
-  onDragOver={handleDragOver}
-  onDragLeave={handleDragLeave}
-  onDrop={handleDrop}
->
-  {/* Drag overlay - shows only when dragging files */}
-  {isDragging && (
-    <div className="absolute inset-0 bg-blue-500 bg-opacity-80 flex items-center justify-center z-50 backdrop-blur-sm">
-      <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-        <Upload size={32} className="mx-auto text-blue-500 mb-2" />
-        <p className="text-lg font-medium">Drop files here</p>
-        <p className="text-sm text-gray-500 mt-1">Images & documents accepted</p>
-      </div>
-    </div>
-  )}
-  
-  {/* Rest of the chat content */}
-  {/* Removed the permanent drop box that was here */}    
-  
+        <div 
+          ref={chatContainerRef}
+          className="bg-white shadow-xl rounded-t-lg mx-4 flex flex-col transition-all duration-300 font-roboto relative overflow-hidden"
+          style={{ 
+            height: `${chatHeight}vh`, 
+            width: `${chatWidth}rem`, 
+            maxWidth: '95vw',
+            boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.1)'
+          }}
+          onDragEnter={handleDragEnter}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {/* Drag overlay - shows only when dragging files */}
+          {isDragging && (
+            <div className="absolute inset-0 bg-blue-500 bg-opacity-80 flex items-center justify-center z-50 backdrop-blur-sm">
+              <div className="bg-white p-6 rounded-lg shadow-lg text-center">
+                <Upload size={32} className="mx-auto text-blue-500 mb-2" />
+                <p className="text-lg font-medium">Drop files here</p>
+                <p className="text-sm text-gray-500 mt-1">Images & documents accepted</p>
+              </div>
+            </div>
+          )}
+          
           {/* Chat header */}
           <div className="p-3 border-b flex items-center justify-between">
             <div className="flex items-center">
@@ -2432,7 +2261,27 @@ const addEventToCalendar = async (eventDetails) => {
           
           {/* Chat messages */}
           <div className="flex-1 overflow-y-auto p-3">
-          {/* Welcome message if no messages */}
+            {/* Load more button */}
+            {hasMoreMessages && (
+              <div className="text-center py-2">
+                <button 
+                  onClick={() => loadMessages(true)} 
+                  disabled={loadingMore}
+                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center justify-center mx-auto"
+                >
+                  {loadingMore ? (
+                    <>
+                      <div className="w-3 h-3 border-2 border-t-0 border-blue-500 rounded-full animate-spin mr-2"></div>
+                      Loading more...
+                    </>
+                  ) : (
+                    'Load earlier messages'
+                  )}
+                </button>
+              </div>
+            )}
+            
+            {/* Welcome message if no messages */}
             {messages.length === 0 && (
               <div className="bg-blue-50 p-3 rounded-lg">
                 <div className="flex items-center mb-1">
@@ -2446,68 +2295,26 @@ const addEventToCalendar = async (eventDetails) => {
             )}
             
             {/* Render messages with date headers */}
-{(() => {
-  let currentDate = null;
-  return messages.map((msg, index) => {
-    const messageDate = new Date(msg.timestamp);
-    const messageDateStr = formatMessageDate(messageDate);
-    
-    // Check if this message is from a different date than the previous one
-    const showDateHeader = currentDate !== messageDateStr;
-    if (showDateHeader) {
-      currentDate = messageDateStr;
-    }
-    
-    return (
-      <React.Fragment key={index}>
-        {showDateHeader && <DateHeader date={currentDate} />}
-        <div className={`flex mb-4 ${msg.sender === 'allie' ? 'justify-start' : 'justify-end'}`}>
-          {msg.sender === 'allie' && (
-            <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center mr-2 flex-shrink-0">
-              <span className="text-xs font-bold">A</span>
-            </div>
-          )}
-          
-          <div className={`max-w-[80%] p-3 rounded-lg ${
-            msg.sender === 'allie' 
-              ? 'bg-white border border-gray-100 shadow-sm' 
-              : 'bg-blue-600 text-white'
-          } transition-all duration-200 hover:shadow-md`}>
-          
-            <div className="flex justify-between items-start">
-              {!msg.sender !== 'allie' && (
-                <div className="font-medium text-xs mb-1">{msg.userName}</div>
-              )}
-              {msg.sender === 'allie' && (
-                <div className="font-medium text-xs mb-1">Allie</div>
-              )}
-              <div className="text-xs text-gray-500 ml-2">
-                {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-              </div>
-            </div>
-            
-            <div className="text-sm whitespace-pre-wrap">{msg.text}</div>
-            
-            {/* Add feedback component for Allie messages */}
-            {msg.sender === 'allie' && msg.id && (
-              <ChatFeedback messageId={msg.id} familyId={familyId} />
-            )}
-          </div>
-          
-          {msg.sender !== 'allie' && msg.userImage && (
-            <div className="h-8 w-8 rounded-full overflow-hidden ml-2 flex-shrink-0">
-              <img 
-                src={msg.userImage} 
-                alt={msg.userName}
-                className="w-full h-full object-cover"
-              />
-            </div>
-          )}
-        </div>
-      </React.Fragment>
-    );
-  });
-})()}
+            {(() => {
+              let currentDate = null;
+              return messages.map((msg, index) => {
+                const messageDate = new Date(msg.timestamp);
+                const messageDateStr = formatMessageDate(messageDate);
+                
+                // Check if this message is from a different date than the previous one
+                const showDateHeader = currentDate !== messageDateStr;
+                if (showDateHeader) {
+                  currentDate = messageDateStr;
+                }
+                
+                return (
+                  <React.Fragment key={index}>
+                    {showDateHeader && <DateHeader date={currentDate} />}
+                    <ChatMessage message={msg} />
+                  </React.Fragment>
+                );
+              });
+            })()}
             
             {/* Event confirmation UI */}
             {showEventConfirmation && detectedEventDetails && (
@@ -2555,69 +2362,61 @@ const addEventToCalendar = async (eventDetails) => {
               </div>
             )}
             
-            
-
-{/* Event Parser UI */}
-{showEventParser && (
-  <div className="bg-blue-50 p-3 rounded-lg ml-4">
-    <div className="mb-2 text-sm font-medium flex items-center">
-      <Calendar size={14} className="mr-1 text-blue-600" />
-      <span>Let's add this event to your {parsedEventDetails?.trackingType ? `calendar and ${parsedEventDetails.childName}'s records` : 'calendar'}</span>
-    </div>
-    
-    <EventParser 
-  initialEvent={parsedEventDetails || detectedEventDetails}
-  onParseSuccess={(event) => {
-        // Check if this is a child tracking event
-        if (event.trackingType === 'medical' || event.trackingType === 'activity') {
-          // Add to both calendar and child tracking
-          addChildEventToTracking(event).then(() => {
-            // Close event parser
-            setShowEventParser(false);
-            setParsedEventDetails(null);
-            setDetectedEventDetails(null);
-          });
-        } else {
-          // Regular calendar event - add success message
-          setMessages(prev => [...prev, {
-            familyId,
-            sender: 'allie',
-            userName: 'Allie',
-            text: `I've added "${event.title}" to your calendar on ${new Date(event.dateTime || event.startDate).toLocaleDateString()} at ${new Date(event.dateTime || event.startDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.`,
-            timestamp: new Date().toISOString()
-          }]);
-          
-          // Close event parser
-          setShowEventParser(false);
-          setParsedEventDetails(null);
-          setDetectedEventDetails(null);
-        }
-      }}
-      onEdit={(updatedEvent) => {
-        if (parsedEventDetails) {
-          setParsedEventDetails(updatedEvent);
-        } else {
-          setDetectedEventDetails(updatedEvent);
-        }
-      }}
-      onCancel={() => {
-        setShowEventParser(false);
-        setParsedEventDetails(null);
-        setDetectedEventDetails(null);
-        
-        // Add message that user cancelled
-        setMessages(prev => [...prev, {
-          familyId,
-          sender: 'allie',
-          userName: 'Allie',
-          text: `No problem! I won't add that event to your calendar. Is there anything else I can help with?`,
-          timestamp: new Date().toISOString()
-        }]);
-      }}
-      familyId={familyId}
-    />
-  </div>
-)}
+            {/* Event Parser UI */}
+            {showEventParser && (
+              <div className="bg-blue-50 p-3 rounded-lg ml-4">
+                <div className="mb-2 text-sm font-medium flex items-center">
+                  <Calendar size={14} className="mr-1 text-blue-600" />
+                  <span>Let's add this event to your {parsedEventDetails?.trackingType ? `calendar and ${parsedEventDetails.childName}'s records` : 'calendar'}</span>
+                </div>
+                
+                <EventParser 
+                  initialEvent={parsedEventDetails || detectedEventDetails}
+                  onParseSuccess={(event) => {
+                    // Check if this is a child tracking event
+                    if (event.trackingType === 'medical' || event.trackingType === 'activity') {
+                      // Add to both calendar and child tracking
+                      addChildEventToTracking(event).then(() => {
+                        // Close event parser
+                        setShowEventParser(false);
+                        setParsedEventDetails(null);
+                        setDetectedEventDetails(null);
+                      });
+                    } else {
+                      // Regular calendar event
+                      addEventToCalendar(event).then(() => {
+                        // Close event parser
+                        setShowEventParser(false);
+                        setParsedEventDetails(null);
+                        setDetectedEventDetails(null);
+                      });
+                    }
+                  }}
+                  onEdit={(updatedEvent) => {
+                    if (parsedEventDetails) {
+                      setParsedEventDetails(updatedEvent);
+                    } else {
+                      setDetectedEventDetails(updatedEvent);
+                    }
+                  }}
+                  onCancel={() => {
+                    setShowEventParser(false);
+                    setParsedEventDetails(null);
+                    setDetectedEventDetails(null);
+                    
+                    // Add message that user cancelled
+                    setMessages(prev => [...prev, {
+                      familyId,
+                      sender: 'allie',
+                      userName: 'Allie',
+                      text: `No problem! I won't add that event to your calendar. Is there anything else I can help with?`,
+                      timestamp: new Date().toISOString()
+                    }]);
+                  }}
+                  familyId={familyId}
+                />
+              </div>
+            )}
             
             {/* Profile upload UI */}
             {showProfileUploadHelp && profileUploadTarget && (
@@ -2667,52 +2466,51 @@ const addEventToCalendar = async (eventDetails) => {
             <div ref={messagesEndRef} />
           </div>
           
-          
-{/* NLU insights panel */}
-{showInsights && (
-  <div className="border-t p-2 bg-gray-50 text-xs overflow-y-auto max-h-40">
-    {detectedIntent ? (
-      <div className="mb-2">
-        <span className="font-medium">Intent:</span>
-        <span className="ml-1 font-mono">{detectedIntent}</span>
-      </div>
-    ) : (
-      <div className="mb-2 text-gray-500">No intent detected yet. Send a message to see intent analysis.</div>
-    )}
-    
-    {extractedEntities && Object.keys(extractedEntities).length > 0 ? (
-      <div>
-        <span className="font-medium">Entities:</span>
-        <div className="bg-white p-1 rounded border mt-1 overflow-x-auto">
-          <pre className="text-xs">{JSON.stringify(extractedEntities, null, 2)}</pre>
-        </div>
-      </div>
-    ) : (
-      <div className="mb-2 text-gray-500">No entities detected in recent messages.</div>
-    )}
-    
-    {conversationContext && conversationContext.length > 0 ? (
-      <div className="mt-2">
-        <span className="font-medium">Recent Context:</span>
-        <ul className="list-disc list-inside pl-2 mt-1">
-          {conversationContext.slice(0, 3).map((topic, idx) => (
-            <li key={idx} className="truncate">
-              {topic.query || "Previous topic"}
-            </li>
-          ))}
-        </ul>
-      </div>
-    ) : (
-      <div className="mt-2 text-gray-500">No conversation context available yet.</div>
-    )}
-    
-    <div className="mt-3 pt-2 border-t border-gray-200">
-      <span className="text-xs text-gray-500">
-        This panel shows Allie's understanding of your messages through natural language processing.
-      </span>
-    </div>
-  </div>
-)}
+          {/* NLU insights panel */}
+          {showInsights && (
+            <div className="border-t p-2 bg-gray-50 text-xs overflow-y-auto max-h-40">
+              {detectedIntent ? (
+                <div className="mb-2">
+                  <span className="font-medium">Intent:</span>
+                  <span className="ml-1 font-mono">{detectedIntent}</span>
+                </div>
+              ) : (
+                <div className="mb-2 text-gray-500">No intent detected yet. Send a message to see intent analysis.</div>
+              )}
+              
+              {extractedEntities && Object.keys(extractedEntities).length > 0 ? (
+                <div>
+                  <span className="font-medium">Entities:</span>
+                  <div className="bg-white p-1 rounded border mt-1 overflow-x-auto">
+                    <pre className="text-xs">{JSON.stringify(extractedEntities, null, 2)}</pre>
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-2 text-gray-500">No entities detected in recent messages.</div>
+              )}
+              
+              {conversationContext && conversationContext.length > 0 ? (
+                <div className="mt-2">
+                  <span className="font-medium">Recent Context:</span>
+                  <ul className="list-disc list-inside pl-2 mt-1">
+                    {conversationContext.slice(0, 3).map((topic, idx) => (
+                      <li key={idx} className="truncate">
+                        {topic.query || "Previous topic"}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="mt-2 text-gray-500">No conversation context available yet.</div>
+              )}
+              
+              <div className="mt-3 pt-2 border-t border-gray-200">
+                <span className="text-xs text-gray-500">
+                  This panel shows Allie's understanding of your messages through natural language processing.
+                </span>
+              </div>
+            </div>
+          )}
           
           {/* Prompt chips */}
           <div className="px-3 py-2 flex flex-wrap gap-2">
@@ -2754,78 +2552,78 @@ const addEventToCalendar = async (eventDetails) => {
             </div>
           )}
           
-          {/* Replace the input area (around line 966) */}
-<div className="p-3 border-t mt-auto">
-  {!canUseChat ? (
-    <div className="bg-amber-50 p-2 rounded-md text-xs text-amber-800 mb-2">
-      Chat is disabled for children. Please ask a parent to enable this feature.
-    </div>
-  ) : (
-    <>
-      <div className="flex items-end">
-        <div className="flex-1 relative">
-          <textarea
-            ref={textareaRef}
-            value={isListening ? transcription : input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Message Allie..."
-            className="w-full border rounded-l-md p-3 pl-4 focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm resize-none font-roboto"
-            style={{ height: `${textareaHeight}px`, maxHeight: '150px' }}
-            rows="1"
-            disabled={isListening}
-          ></textarea>
-        </div>
-        <div className="flex bg-white rounded-r-md border-t border-r border-b">
-          <button
-            onClick={handleToggleMic}
-            className={`p-3 ${isListening ? 'text-red-500' : 'text-gray-500 hover:text-gray-700'} transition-colors`}
-            title={isListening ? "Stop recording" : "Record voice"}
-          >
-            <Mic size={18} />
-          </button>
-          <button
-            onClick={handleAttachImage}
-            className="p-3 text-gray-500 hover:text-gray-700 transition-colors"
-            title="Upload image"
-          >
-            <Upload size={18} />
-          </button>
-          <button
-            onClick={handleSend}
-            disabled={(!input.trim() && !imageFile) || loading}
-            className="bg-blue-600 text-white p-3 rounded-r-md hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
-            title="Send message"
-          >
-            <Send size={18} />
-          </button>
-        </div>
-        {/* Hidden file input */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileUpload}
-          accept="image/*"
-          className="hidden"
-        />
-      </div>
-      {isListening && (
-        <p className="text-xs text-red-500 mt-1 animate-pulse">
-          Listening... speak now
-        </p>
-      )}
-    </>
-  )}
-</div>
+          {/* Input area */}
+          <div className="p-3 border-t mt-auto">
+            {!canUseChat ? (
+              <div className="bg-amber-50 p-2 rounded-md text-xs text-amber-800 mb-2">
+                Chat is disabled for children. Please ask a parent to enable this feature.
+              </div>
+            ) : (
+              <>
+                <div className="flex items-end">
+                  <div className="flex-1 relative">
+                    <textarea
+                      ref={textareaRef}
+                      value={isListening ? transcription : input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      placeholder="Message Allie..."
+                      className="w-full border rounded-l-md p-3 pl-4 focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm resize-none font-roboto"
+                      style={{ height: `${textareaHeight}px`, maxHeight: '150px' }}
+                      rows="1"
+                      disabled={isListening}
+                    ></textarea>
+                  </div>
+                  <div className="flex bg-white rounded-r-md border-t border-r border-b">
+                    <button
+                      onClick={handleToggleMic}
+                      className={`p-3 ${isListening ? 'text-red-500' : 'text-gray-500 hover:text-gray-700'} transition-colors`}
+                      title={isListening ? "Stop recording" : "Record voice"}
+                    >
+                      <Mic size={18} />
+                    </button>
+                    <button
+                      onClick={handleAttachImage}
+                      className="p-3 text-gray-500 hover:text-gray-700 transition-colors"
+                      title="Upload image"
+                    >
+                      <Upload size={18} />
+                    </button>
+                    <button
+                      onClick={handleSend}
+                      disabled={(!input.trim() && !imageFile) || loading}
+                      className="bg-blue-600 text-white p-3 rounded-r-md hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
+                      title="Send message"
+                    >
+                      <Send size={18} />
+                    </button>
+                  </div>
+                  {/* Hidden file input */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                </div>
+                {isListening && (
+                  <p className="text-xs text-red-500 mt-1 animate-pulse">
+                    Listening... speak now
+                  </p>
+                )}
+              </>
+            )}
+          </div>
           
           {/* Resize handles */}
-<div 
-  className="absolute top-0 left-0 w-5 h-5 cursor-nwse-resize" 
-  onMouseDown={(e) => handleStartResize(e, 'both')}
-  title="Resize chat"
->
-  <div className="w-3 h-3 border-t-2 border-l-2 border-gray-400 absolute top-1 left-1"></div>
-</div>
+          <div 
+            className="absolute top-0 left-0 w-5 h-5 cursor-nwse-resize" 
+            onMouseDown={(e) => handleStartResize(e, 'both')}
+            title="Resize chat"
+          >
+            <div className="w-3 h-3 border-t-2 border-l-2 border-gray-400 absolute top-1 left-1"></div>
+          </div>
           
           <div 
             className="absolute top-0 right-0 bottom-0 w-2 cursor-ew-resize"

@@ -389,24 +389,30 @@ setHasCompletedSurvey(userHasCompletedSurvey);
             completedMeeting: false
           };
           
-          // For parents, check if they've completed habits requirement
-          if (member.role === 'parent') {
-            // Check if this parent has habits with 5+ completions
-            const parentHabits = Object.values(completedHabitInstances)
-              .filter(instances => instances.some(instance => 
-                instance.userId === member.id));
-            
-            const hasCompletedHabits = parentHabits.some(instances => instances.length >= 5);
-            
-            // Update step based on habits and survey completion
-            if (memberData.completedSurvey) {
-              memberData.step = 3; // Ready for family meeting
-            } else if (hasCompletedHabits) {
-              memberData.step = 2; // Ready for survey
-            } else {
-              memberData.step = 1; // Still doing habits
-            }
-          }
+         // For parents, check if they've completed habits requirement and surveys
+if (member.role === 'parent') {
+  // First check if surveys are completed
+  if (memberData.completedSurvey || member.weeklyCompleted?.[currentWeek-1]?.completed) {
+    // If survey is completed, set to step 3 (meeting phase)
+    memberData.step = 3;
+    memberData.completedSurvey = true;
+  } 
+  // Then check for habit completions
+  else {
+    // Check if this parent has habits with 5+ completions
+    const parentHabits = Object.values(completedHabitInstances)
+      .filter(instances => instances.some(instance => 
+        instance.userId === member.id));
+    
+    const hasCompletedHabits = parentHabits.some(instances => instances.length >= 5);
+    
+    if (hasCompletedHabits) {
+      memberData.step = 2; // Ready for survey
+    } else {
+      memberData.step = 1; // Still doing habits
+    }
+  }
+}
           // For children, always unlock survey if parents have completed habits
           else if (member.role === 'child') {
             // Child's step is based on survey completion
@@ -460,13 +466,26 @@ if (selectedUser?.role === 'parent') {
   const currentUserProgress = progress[selectedUser.id];
   setCanTakeSurvey(currentUserProgress && currentUserProgress.step >= 2);
 } else if (selectedUser?.role === 'child') {
-  // For children: Make survey available if ANY parent has completed their habits
-  // or if the overall cycle step is at least 2
+  // For children: Always allow taking survey if ANY of these conditions are true:
+  // 1. Any parent has completed habits (step >= 2)
+  // 2. Overall cycle step is at least 2
+  // 3. Any parent has completed survey 
   const anyParentCompleted = familyMembers
     .filter(m => m.role === 'parent')
-    .some(parent => progress[parent.id]?.step >= 2);
+    .some(parent => 
+      progress[parent.id]?.step >= 2 || 
+      progress[parent.id]?.completedSurvey ||
+      parent.weeklyCompleted?.[currentWeek-1]?.completed
+    );
   
   setCanTakeSurvey(anyParentCompleted || currentFamilyStep >= 2);
+  
+  // Log debug info
+  console.log("Child survey availability:", {
+    anyParentCompleted,
+    currentFamilyStep,
+    canTakeSurvey: anyParentCompleted || currentFamilyStep >= 2
+  });
 }
       }
     } catch (error) {
@@ -1091,35 +1110,45 @@ const createNewHabit = async (isRefresh = false) => {
     return (completedHabitInstances[habitId]?.length || 0) > 0;
   };
 
-  // Start the survey
-// Start the survey
-const handleStartSurvey = () => {
-  // Already completed check
-  if (hasCompletedSurvey) {
-    createCelebration("Already Completed", false, "You've already completed the survey for this cycle.");
-    return;
-  }
-  
-  if (selectedUser.role === 'parent') {
-    // For parents: Check if they personally have enough habits
-    const parentHabits = Object.values(completedHabitInstances).filter(instances => 
-      instances.some(instance => instance.userId === selectedUser.id));
-    const hasEnoughCompletions = parentHabits.some(instances => instances.length >= 5);
+  const handleStartSurvey = () => {
+    // Already completed check
+    if (hasCompletedSurvey) {
+      createCelebration("Already Completed", false, "You've already completed the survey for this cycle.");
+      return;
+    }
     
-    if (hasEnoughCompletions) {
-      onStartWeeklyCheckIn();
+    if (selectedUser.role === 'parent') {
+      // For parents: Check if they personally have enough habits
+      const parentHabits = Object.values(completedHabitInstances).filter(instances => 
+        instances.some(instance => instance.userId === selectedUser.id));
+      const hasEnoughCompletions = parentHabits.some(instances => instances.length >= 5);
+      
+      if (hasEnoughCompletions) {
+        onStartWeeklyCheckIn();
+      } else {
+        createCelebration("Not Ready Yet", false, "Complete a habit at least 5 times to unlock the survey.");
+      }
     } else {
-      createCelebration("Not Ready Yet", false, "Complete a habit at least 5 times to unlock the survey.");
+      // For children: They can take the survey if ANY of these are true:
+      // 1. Cycle is in step 2+
+      // 2. Any parent has reached step 2+
+      // 3. canTakeSurvey is true (which can be set by other conditions)
+      const anyParentCompleted = familyMembers
+        .filter(m => m.role === 'parent')
+        .some(parent => {
+          const progress = memberProgress[parent.id] || {};
+          return progress.step >= 2 || 
+                 progress.completedSurvey || 
+                 parent.weeklyCompleted?.[currentWeek-1]?.completed;
+        });
+      
+      if (cycleStep >= 2 || anyParentCompleted || canTakeSurvey) {
+        onStartWeeklyCheckIn();
+      } else {
+        createCelebration("Not Ready Yet", false, "Parents need to complete their habits first.");
+      }
     }
-  } else {
-    // For children: They can take the survey if cycle is in step 2 or higher
-    if (cycleStep >= 2) {
-      onStartWeeklyCheckIn();
-    } else {
-      createCelebration("Not Ready Yet", false, "Parents need to complete their habits first.");
-    }
-  }
-};
+  };
   
   // Trigger Allie chat
   const triggerAllieChat = (message) => {
