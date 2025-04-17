@@ -1,10 +1,11 @@
+// src/components/calendar/RevisedFloatingCalendarWidget.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, PlusCircle, Filter, X, Check, AlertCircle, Info } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useEvents } from '../../contexts/EventContext'; // Import EventContext
 import CalendarService from '../../services/CalendarService';
 import CalendarErrorHandler from '../../utils/CalendarErrorHandler';
-import CalendarOperations from '../../utils/CalendarOperations';
 import { useNavigate } from 'react-router-dom';
 
 // Import sub-components
@@ -32,6 +33,15 @@ const RevisedFloatingCalendarWidget = () => {
     coupleCheckInData
   } = useFamily();
   
+  // Get events from EventContext
+  const { 
+    events, 
+    loading: eventsLoading, 
+    addEvent, 
+    updateEvent, 
+    deleteEvent 
+  } = useEvents();
+  
   // UI State
   const [isOpen, setIsOpen] = useState(false);
   const [widgetHeight, setWidgetHeight] = useState(45);
@@ -51,8 +61,7 @@ const RevisedFloatingCalendarWidget = () => {
   const [showAiParseInfo, setShowAiParseInfo] = useState(false);
 
   // Event collections
-  const [allEvents, setAllEvents] = useState([]);
-  const [eventCache, setEventCache] = useState(new Map()); // Changed to Map for better uniqueness checking
+  const [eventCache, setEventCache] = useState(new Map()); // Cache for deduplication
   const [addedEvents, setAddedEvents] = useState({});
   const [showAddedMessage, setShowAddedMessage] = useState({});
   const [conflictingEvents, setConflictingEvents] = useState([]);
@@ -87,13 +96,6 @@ const RevisedFloatingCalendarWidget = () => {
       return () => clearInterval(refreshInterval);
     }
   }, [isOpen]);
-  
-  // Load events when widget opens or refresh is triggered
-  useEffect(() => {
-    if (isOpen && familyId) {
-      loadAllEvents();
-    }
-  }, [isOpen, familyId, lastRefresh, selectedDate]);
   
   // Listen for calendar update events
   useEffect(() => {
@@ -250,341 +252,583 @@ const RevisedFloatingCalendarWidget = () => {
     return key.toLowerCase().replace(/\s+/g, '-');
   };
   
-  /**
-   * Load all calendar events with improved deduplication
-   */
-  const loadAllEvents = async () => {
+  // Handle form cancellation
+  const handleCancel = () => {
+    if (onCancel) {
+      onCancel();
+    }
+  };
+  
+  // Add event handlers
+  const handleEventClick = async (event) => {
+    setSelectedEvent(event);
+    
+    // Check for conflicts when viewing event details
+    const conflicts = await checkForEventConflicts(event);
+    setConflictingEvents(conflicts);
+    
+    setShowEventDetails(true);
+    setIsEditingEvent(false);
+    setEditedEvent(null);
+  };
+  
+  const handleEventAdd = async (event) => {
     try {
-      setLoading(true);
-      console.log("Loading all calendar events...");
-      
-      // Ensure we have the current user ID
-      if (!currentUser?.uid) {
-        console.warn("No user ID available, cannot load events");
-        setLoading(false);
+      // Check if event already exists
+      if (eventExists(event)) {
+        console.log("Event already exists in calendar, preventing duplicate");
+        CalendarService.showNotification("Event already exists in your calendar", "info");
         return;
       }
       
-      // Get general calendar events
-      const generalEvents = await CalendarService.getEventsForUser(
-        currentUser.uid, 
-        new Date(new Date().setDate(new Date().getDate() - 30)), // 30 days ago
-        new Date(new Date().setDate(new Date().getDate() + 60)) // 60 days ahead
-      );
+      // Add the event using EventContext
+      const result = await addEvent(event);
       
-      console.log(`Loaded ${generalEvents.length} general calendar events`);
-      
-      // Process events to ensure they all have dateObj and deduplication
-      const dedupMap = new Map();
-      
-      const processedGeneralEvents = generalEvents
-        .map(event => {
-          let dateObj = null;
-          
-          // Try to get a valid date from various possible fields
-          if (event.start?.dateTime) {
-            dateObj = new Date(event.start.dateTime);
-          } else if (event.start?.date) {
-            dateObj = new Date(event.start.date);
-          } else if (event.dateTime) {
-            dateObj = new Date(event.dateTime);
-          } else if (event.date) {
-            dateObj = new Date(event.date);
-          }
-          
-          // Skip events with invalid dates
-          if (!dateObj || isNaN(dateObj.getTime())) {
-            console.warn("Event has invalid date, using current date as fallback:", event.title || event.summary);
-            dateObj = new Date();
-          }
-          
-          // Create enhanced event object
-          return {
-            ...event,
-            dateObj,
-            // Add missing title/summary if needed
-            title: event.title || event.summary || "Untitled Event",
-            summary: event.summary || event.title || "Untitled Event",
-            // Ensure we have extraDetails and process AI metadata
-            extraDetails: {
-              ...(event.extraDetails || {}),
-              parsedWithAI: event.extraDetails?.parsedWithAI || event.parsedWithAI || false, 
-              extractionConfidence: event.extraDetails?.extractionConfidence || event.extractionConfidence || null,
-              parsedFromImage: event.extraDetails?.parsedFromImage || event.parsedFromImage || false,
-              creationSource: event.extraDetails?.creationSource || event.creationSource || 'manual'
-            }
-          };
-        })
-        .filter(event => {
-          // Create a deduplication signature
-          const signature = createEventSignature(event);
-          
-          // If we've already seen this event, skip it
-          if (dedupMap.has(signature)) return false;
-          
-          // Otherwise, add it to our deduplication map and keep it
-          dedupMap.set(signature, true);
-          return true;
+      if (result.success) {
+        // Add to cache to prevent duplicates
+        addEventToCache({
+          ...event,
+          id: result.eventId,
+          firestoreId: result.firestoreId,
+          universalId: result.universalId
         });
-      
-      // Generate family events
-      const familyMeetings = getUpcomingMeetings();
-      const taskEvents = getTaskEvents();
-      
-      // Combine all events with deduplication
-      const allProcessedEvents = [
-        ...processedGeneralEvents,
-        ...familyMeetings,
-        ...taskEvents
-      ]
-      .filter(event => {
-        // One final deduplication pass after merging all sources
-        const signature = createEventSignature(event);
-        if (eventCache.has(signature)) return false;
         
-        // Add to our event cache and keep the event
-        addEventToCache(event);
-        return true;
-      });
-      
-      // Process attendees for each event 
-      const eventsWithAttendees = allProcessedEvents.map(event => ({
-        ...event,
-        attendees: getEventAttendees(event)
-      }));
-      
-      // Track already added events
-      const addedEventsMap = {};
-      eventsWithAttendees.forEach(event => {
-        const eventKey = getEventKey(event);
-        if (eventKey) {
-          addedEventsMap[eventKey] = true;
-        }
-      });
-      
-      setAddedEvents(addedEventsMap);
-      setAllEvents(eventsWithAttendees);
-      setLoading(false);
-      
-      console.log(`Final combined events: ${eventsWithAttendees.length}`);
+        // Mark as added
+        setAddedEvents(prev => ({
+          ...prev,
+          [getEventKey(event)]: true
+        }));
+        
+        // Show "Added" message temporarily
+        setShowAddedMessage(prev => ({
+          ...prev,
+          [getEventKey(event)]: true
+        }));
+        
+        setTimeout(() => {
+          setShowAddedMessage(prev => ({
+            ...prev,
+            [getEventKey(event)]: false
+          }));
+        }, 3000);
+        
+        // Show notification
+        CalendarService.showNotification("Event added to calendar", "success");
+        
+        // Refresh events
+        setLastRefresh(Date.now());
+      }
     } catch (error) {
-      console.error("Error loading events:", error);
-      setLoading(false);
+      console.error("Error adding event:", error);
+      CalendarService.showNotification("Failed to add event to calendar", "error");
     }
   };
   
-  /**
-   * Get upcoming family meetings
-   * @returns {Array} Meeting events
-   */
-  const getUpcomingMeetings = () => {
-    const meetings = [];
+  const handleEventEdit = (event) => {
+    // Create a properly formatted event object for the editor
+    const formattedEvent = {
+      ...event,
+      // Make sure we have these fields properly set
+      title: event.title || event.summary,
+      description: event.description || '',
+      location: event.location || '',
+      dateTime: event.dateObj?.toISOString() || event.start?.dateTime || new Date().toISOString(),
+      endDateTime: event.dateEndObj?.toISOString() || event.end?.dateTime,
+      childId: event.childId || null,
+      childName: event.childName || null,
+      attendingParentId: event.attendingParentId || null,
+      eventType: event.eventType || 'general',
+      category: event.category || 'general',
+      siblingIds: event.siblingIds || [],
+      siblingNames: event.siblingNames || [],
+      // Make sure we have the ID for updating
+      firestoreId: event.firestoreId || event.id
+    };
     
-    // Get family meeting for the current week if not completed
-    if (weekStatus && weekStatus[currentWeek] && !weekStatus[currentWeek].completed) {
-      const meetingDate = new Date();
-      // If today is Sunday, set to today, otherwise set to next Sunday
-      if (meetingDate.getDay() !== 0) {
-        meetingDate.setDate(meetingDate.getDate() + (7 - meetingDate.getDay())); // Next Sunday
+    setSelectedEvent(formattedEvent);
+    setShowEventDetails(false);
+    setIsEditingEvent(true);
+    setEditedEvent(formattedEvent);
+  };
+  
+  // Add task to calendar
+  const handleAddTaskToCalendar = async (task) => {
+    try {
+      if (!currentUser || !task) return;
+      
+      // Create event from task
+      const event = CalendarService.createEventFromTask(task);
+      
+      // Use selected date
+      if (selectedDate) {
+        const customDate = new Date(selectedDate);
+        customDate.setHours(10, 0, 0, 0); // Set to 10 AM
+        
+        event.start.dateTime = customDate.toISOString();
+        const endTime = new Date(customDate);
+        endTime.setHours(endTime.getHours() + 1);
+        event.end.dateTime = endTime.toISOString();
       }
-      meetingDate.setHours(19, 0, 0, 0); // 7:00 PM
       
-      // Create attendees list from all family members
-      const attendees = familyMembers.map(member => ({
-        id: member.id,
-        name: member.name,
-        profilePicture: member.profilePicture,
-        role: member.role
-      }));
+      // Add task's linkedEntity information
+      event.linkedEntity = {
+        type: 'task',
+        id: task.id
+      };
       
-      meetings.push({
-        id: `meeting-${currentWeek}`,
-        title: `Cycle ${currentWeek} Family Meeting`,
-        date: meetingDate.toISOString(),
-        dateObj: meetingDate,
-        category: 'meeting',
-        eventType: 'meeting',
-        weekNumber: currentWeek,
-        linkedEntity: {
-          type: 'meeting',
-          id: currentWeek
-        },
-        attendees: attendees,
-        attendingParentId: 'both',
+      // Add event using EventContext
+      const result = await addEvent(event);
+      
+      if (result.success) {
+        // Add to cache to prevent duplicates
+        addEventToCache({
+          ...event,
+          id: result.eventId,
+          firestoreId: result.firestoreId,
+          universalId: result.universalId
+        });
+        
+        // Mark as added
+        setAddedEvents(prev => ({
+          ...prev,
+          [getEventKey(task)]: true
+        }));
+        
+        // Show "Added" message temporarily
+        setShowAddedMessage(prev => ({
+          ...prev,
+          [getEventKey(task)]: true
+        }));
+        
+        setTimeout(() => {
+          setShowAddedMessage(prev => ({
+            ...prev,
+            [getEventKey(task)]: false
+          }));
+        }, 3000);
+        
+        // Show notification
+        CalendarService.showNotification("Task added to calendar", "success");
+        
+        // Refresh events
+        setLastRefresh(Date.now());
+      }
+    } catch (error) {
+      console.error("Error adding task to calendar:", error);
+      CalendarService.showNotification("Failed to add task to calendar", "error");
+    }
+  };
+  
+  // Add meeting to calendar
+  const handleAddMeetingToCalendar = async (meeting) => {
+    try {
+      if (!currentUser || !meeting) return;
+      
+      // Create event from meeting
+      const event = CalendarService.createFamilyMeetingEvent(meeting.weekNumber, meeting.dateObj);
+      
+      // Rename from "Week" to "Cycle" in the title
+      event.summary = event.summary.replace("Week", "Cycle");
+      
+      // Add meeting's linkedEntity information
+      event.linkedEntity = meeting.linkedEntity || {
+        type: 'meeting',
+        id: meeting.weekNumber
+      };
+      
+      // Add event using EventContext
+      const result = await addEvent(event);
+      
+      if (result.success) {
+        // Add to cache to prevent duplicates
+        addEventToCache({
+          ...event,
+          id: result.eventId,
+          firestoreId: result.firestoreId,
+          universalId: result.universalId
+        });
+        
+        // Mark as added
+        setAddedEvents(prev => ({
+          ...prev,
+          [getEventKey(meeting)]: true
+        }));
+        
+        // Show "Added" message temporarily
+        setShowAddedMessage(prev => ({
+          ...prev,
+          [getEventKey(meeting)]: true
+        }));
+        
+        setTimeout(() => {
+          setShowAddedMessage(prev => ({
+            ...prev,
+            [getEventKey(meeting)]: false
+          }));
+        }, 3000);
+        
+        // Show notification
+        CalendarService.showNotification("Meeting added to calendar", "success");
+        
+        // Refresh events
+        setLastRefresh(Date.now());
+      }
+    } catch (error) {
+      console.error("Error adding meeting to calendar:", error);
+      CalendarService.showNotification("Failed to add meeting to calendar", "error");
+    }
+  };
+  
+  // Add child event to calendar
+  const handleAddChildEventToCalendar = async (event) => {
+    try {
+      if (!currentUser || !event) return;
+      
+      // Format child event using CalendarOperations
+      const calendarEvent = {
+        title: event.title,
+        description: event.description || '',
+        dateTime: event.dateObj || new Date(event.dateTime),
+        location: event.location || '',
+        duration: 60, // Default to 1 hour
+        childId: event.childId,
+        childName: event.childName,
+        attendingParentId: event.attendingParentId,
+        eventType: event.eventType || 'other',
         extraDetails: {
-          creationSource: 'system',
-          parsedWithAI: false
+          ...(event.extraDetails || {}),
+          parsedWithAI: event.extraDetails?.parsedWithAI || false,
+          extractionConfidence: event.extraDetails?.extractionConfidence || null,
+          parsedFromImage: event.extraDetails?.parsedFromImage || false,
+          originalText: event.extraDetails?.originalText || '',
+          creationSource: event.extraDetails?.creationSource || 'manual'
         }
-      });
-    }
-    
-    return meetings;
-  };
-  
-  /**
-   * Get task-based events
-   * @returns {Array} Task events
-   */
-  const getTaskEvents = () => {
-    const events = [];
-    
-    // Convert task recommendations to calendar events
-    if (taskRecommendations && taskRecommendations.length > 0) {
-      taskRecommendations.forEach(task => {
-        if (task.dueDate && !task.completed) {
-          const dueDate = new Date(task.dueDate);
-          
-          events.push({
-            id: `task-${task.id}`,
-            title: `Task Due: ${task.title}`,
-            date: task.dueDate,
-            dateObj: dueDate,
-            category: 'task',
-            eventType: 'task',
-            assignedTo: task.assignedTo,
-            assignedToName: task.assignedToName,
-            linkedEntity: {
-              type: 'task',
-              id: task.id
-            },
-            extraDetails: {
-              creationSource: 'task-system',
-              parsedWithAI: false
-            }
-          });
-        }
-      });
-    }
-    
-    return events;
-  };
-  
-  /**
-   * Generate attendee list for an event
-   * @param {Object} event - Event to get attendees for 
-   * @returns {Array} Attendee information
-   */
-  const getEventAttendees = (event) => {
-    let attendees = [];
-    
-    // For child events
-    if (event.childName) {
-      const child = familyMembers.find(m => m.id === event.childId || m.name === event.childName);
-      if (child) {
-        attendees.push({
-          id: child.id,
-          name: child.name,
-          profilePicture: child.profilePicture,
-          role: 'child'
-        });
-      } else if (event.childName) {
-        attendees.push({
-          id: event.childId || `child-${event.childName}`,
-          name: event.childName,
-          profilePicture: null,
-          role: 'child'
-        });
-      }
-    }
-    
-    // For siblings
-    if (event.siblingIds && event.siblingIds.length > 0) {
-      event.siblingIds.forEach(sibId => {
-        const sibling = familyMembers.find(m => m.id === sibId);
-        if (sibling && !attendees.some(a => a.id === sibling.id)) {
-          attendees.push({
-            id: sibling.id,
-            name: sibling.name,
-            profilePicture: sibling.profilePicture,
-            role: 'child'
-          });
-        }
-      });
-    } else if (event.siblingNames && event.siblingNames.length > 0) {
-      event.siblingNames.forEach(name => {
-        const sibling = familyMembers.find(m => m.role === 'child' && m.name === name);
-        if (sibling && !attendees.some(a => a.id === sibling.id)) {
-          attendees.push({
-            id: sibling.id,
-            name: sibling.name,
-            profilePicture: sibling.profilePicture,
-            role: 'child'
-          });
-        } else if (!attendees.some(a => a.name === name)) {
-          attendees.push({
-            id: `sibling-${name}`,
-            name: name,
-            profilePicture: null,
-            role: 'child'
-          });
-        }
-      });
-    }
-    
-    // For attendingParent
-    if (event.attendingParentId) {
-      if (event.attendingParentId === 'both') {
-        // Add both parents
-        const parents = familyMembers.filter(m => m.role === 'parent');
-        parents.forEach(parent => {
-          if (!attendees.some(a => a.id === parent.id)) {
-            attendees.push({
-              id: parent.id,
-              name: parent.name,
-              profilePicture: parent.profilePicture,
-              role: 'parent'
-            });
-          }
-        });
-      } else if (event.attendingParentId !== 'undecided') {
-        const parent = familyMembers.find(m => m.id === event.attendingParentId);
-        if (parent && !attendees.some(a => a.id === parent.id)) {
-          attendees.push({
-            id: parent.id,
-            name: parent.name,
-            profilePicture: parent.profilePicture,
-            role: 'parent'
-          });
-        }
-      }
-    }
-
-    // For host parent (if available)
-    if (event.hostParent) {
-      // Try to find a parent with this name
-      const hostParentName = event.hostParent;
-      const hostParent = familyMembers.find(m => 
-        m.role === 'parent' && m.name === hostParentName
-      );
+      };
       
-      if (hostParent && !attendees.some(a => a.id === hostParent.id)) {
-        attendees.push({
-          id: hostParent.id,
-          name: hostParent.name,
-          profilePicture: hostParent.profilePicture,
-          role: 'parent'
+      // Add event using EventContext
+      const result = await addEvent(calendarEvent);
+      
+      if (result.success) {
+        // Add to cache to prevent duplicates
+        addEventToCache({
+          ...calendarEvent,
+          id: result.eventId,
+          firestoreId: result.firestoreId,
+          universalId: result.universalId
         });
-      } else if (!attendees.some(a => a.name === hostParentName)) {
-        attendees.push({
-          id: `host-${hostParentName}`,
-          name: hostParentName,
-          profilePicture: null,
-          role: 'host'
-        });
+        
+        // Mark as added
+        setAddedEvents(prev => ({
+          ...prev,
+          [getEventKey(event)]: true
+        }));
+        
+        // Show "Added" message temporarily
+        setShowAddedMessage(prev => ({
+          ...prev,
+          [getEventKey(event)]: true
+        }));
+        
+        setTimeout(() => {
+          setShowAddedMessage(prev => ({
+            ...prev,
+            [getEventKey(event)]: false
+          }));
+        }, 3000);
+        
+        // Show notification
+        const eventDescription = event.childName ? `${event.childName}'s ${event.title}` : event.title;
+        CalendarService.showNotification(`${eventDescription} added to calendar`, "success");
+        
+        // Refresh events
+        setLastRefresh(Date.now());
       }
+    } catch (error) {
+      console.error("Error adding event to calendar:", error);
+      CalendarService.showNotification("Failed to add event to calendar", "error");
+    }
+  };
+  
+  // Delete event
+  const handleDeleteEvent = async (event) => {
+    try {
+      setPendingAction('delete');
+      
+      if (!event) {
+        CalendarService.showNotification("No event selected to delete", "error");
+        setPendingAction(null);
+        return;
+      }
+      
+      if (!window.confirm("Are you sure you want to delete this event?")) {
+        setPendingAction(null);
+        return;
+      }
+      
+      // Use Firestore ID if available, or universal ID, or regular ID
+      const eventId = event.firestoreId || event.universalId || event.id;
+      
+      if (!eventId) {
+        CalendarService.showNotification("Cannot delete this event - no valid ID found", "error");
+        setPendingAction(null);
+        return;
+      }
+      
+      // Delete using EventContext
+      const result = await deleteEvent(eventId);
+      
+      if (result.success) {
+        // Remove from cache
+        const signature = createEventSignature(event);
+        const updatedCache = new Map(eventCache);
+        updatedCache.delete(signature);
+        setEventCache(updatedCache);
+        
+        // Update local state
+        setAddedEvents(prev => {
+          const newState = {...prev};
+          delete newState[getEventKey(event)];
+          return newState;
+        });
+        
+        // Close the details modal
+        setShowEventDetails(false);
+        
+        // Refresh events
+        setTimeout(() => {
+          setLastRefresh(Date.now());
+        }, 300);
+      } else {
+        CalendarService.showNotification(result.error || "Failed to delete event", "error");
+      }
+      
+      setPendingAction(null);
+    } catch (error) {
+      console.error("Error deleting event:", error);
+      CalendarService.showNotification("Failed to delete event: " + error.message, "error");
+      setPendingAction(null);
+    }
+  };
+  
+  // Update event
+  const handleUpdateEvent = async (updatedEvent) => {
+    try {
+      setPendingAction('update');
+      
+      if (!updatedEvent || !updatedEvent.firestoreId) {
+        CalendarService.showNotification("Cannot update this event - no valid ID found", "error");
+        setPendingAction(null);
+        return;
+      }
+      
+      // Create updated event object with required fields
+      const eventUpdate = {
+        summary: updatedEvent.title,
+        description: updatedEvent.description || '',
+        location: updatedEvent.location || '',
+      };
+      
+      // Add date/time if available
+      if (updatedEvent.dateObj) {
+        eventUpdate.start = {
+          dateTime: updatedEvent.dateObj.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        };
+        
+        // Calculate end time
+        const endDate = updatedEvent.dateEndObj || new Date(updatedEvent.dateObj.getTime() + 60 * 60 * 1000);
+        eventUpdate.end = {
+          dateTime: endDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        };
+      }
+      
+      // Ensure we preserve AI metadata
+      eventUpdate.extraDetails = {
+        ...(updatedEvent.extraDetails || {}),
+        parsedWithAI: updatedEvent.extraDetails?.parsedWithAI || false,
+        extractionConfidence: updatedEvent.extraDetails?.extractionConfidence || null,
+        parsedFromImage: updatedEvent.extraDetails?.parsedFromImage || false,
+        originalText: updatedEvent.extraDetails?.originalText || '',
+        creationSource: updatedEvent.extraDetails?.creationSource || 'manual'
+      };
+      
+      // Update event using EventContext
+      const result = await updateEvent(updatedEvent.firestoreId, eventUpdate);
+      
+      if (result.success) {
+        // Close edit mode and update selected event
+        setIsEditingEvent(false);
+        setSelectedEvent({
+          ...selectedEvent,
+          ...updatedEvent
+        });
+        
+        // Show notification
+        CalendarService.showNotification("Event updated successfully", "success");
+        
+        // Show success animation
+        setShowSuccess(true);
+        setTimeout(() => {
+          setShowSuccess(false);
+        }, 2000);
+        
+        // Refresh events
+        setLastRefresh(Date.now());
+      } else {
+        CalendarService.showNotification(result.error || "Failed to update event", "error");
+      }
+      
+      setPendingAction(null);
+    } catch (error) {
+      console.error("Error updating event:", error);
+      CalendarService.showNotification("Failed to update event: " + error.message, "error");
+      setPendingAction(null);
+    }
+  };
+  
+  // Navigate to a different view based on the event's linked entity
+  const navigateToLinkedEntity = (event) => {
+    if (!event.linkedEntity) return;
+    
+    const { type, id } = event.linkedEntity;
+    
+    switch(type) {
+      case 'task':
+        navigate('/dashboard?tab=tasks');
+        break;
+      case 'relationship':
+        navigate('/dashboard?tab=relationship');
+        break;
+      case 'child':
+        navigate('/dashboard?tab=children');
+        break;
+      case 'meeting':
+        if (typeof window !== 'undefined') {
+          if (window.openFamilyMeeting) {
+            window.openFamilyMeeting();
+          } else {
+            const meetingEvent = new CustomEvent('open-family-meeting', { 
+              detail: { weekNumber: id } 
+            });
+            window.dispatchEvent(meetingEvent);
+            navigate('/dashboard?tab=tasks');
+          }
+        } else {
+          navigate('/dashboard?tab=tasks');
+        }
+        break;
+      default:
+        // Do nothing
     }
     
-    return attendees;
+    // Close the details modal
+    setShowEventDetails(false);
   };
-
+  
   /**
-   * Get events for currently selected date with improved filtering
+   * Check for scheduling conflicts for a given event
+   * @param {Object} event - Event to check for conflicts
+   * @returns {Promise<Array>} Conflicting events
+   */
+  const checkForEventConflicts = async (event) => {
+    if (!event) return [];
+    
+    try {
+      // Get event date and time
+      let eventDate;
+      if (event.dateObj) {
+        eventDate = new Date(event.dateObj);
+      } else if (event.dateTime) {
+        eventDate = new Date(event.dateTime);
+      } else if (event.start?.dateTime) {
+        eventDate = new Date(event.start.dateTime);
+      } else {
+        return []; // No valid date to check
+      }
+      
+      // Define time window to check for conflicts (1 hour before to 1 hour after)
+      const startCheck = new Date(eventDate);
+      startCheck.setHours(startCheck.getHours() - 1);
+      
+      const endCheck = new Date(eventDate);
+      endCheck.setHours(endCheck.getHours() + 1);
+      
+      // Find events within the time window - use events from context
+      return events.filter(existingEvent => {
+        // Skip the event itself
+        if (existingEvent.id === event.id || 
+            existingEvent.firestoreId === event.firestoreId ||
+            existingEvent.universalId === event.universalId) {
+          return false;
+        }
+        
+        // Get event time
+        let existingDate;
+        if (existingEvent.dateObj) {
+          existingDate = existingEvent.dateObj;
+        } else if (existingEvent.dateTime) {
+          existingDate = new Date(existingEvent.dateTime);
+        } else if (existingEvent.start?.dateTime) {
+          existingDate = new Date(existingEvent.start.dateTime);
+        } else {
+          return false; // No valid date
+        }
+        
+        // Check if dates are on the same day
+        const sameDay = existingDate.getDate() === eventDate.getDate() &&
+                        existingDate.getMonth() === eventDate.getMonth() &&
+                        existingDate.getFullYear() === eventDate.getFullYear();
+        
+        if (!sameDay) return false;
+        
+        // Check if times overlap
+        const startTime = existingDate.getTime();
+        const endTime = existingDate.getTime() + 60 * 60 * 1000; // Add 1 hour
+        
+        return (startTime <= endCheck.getTime() && endTime >= startCheck.getTime());
+      });
+    } catch (error) {
+      console.error("Error checking for conflicts:", error);
+      return [];
+    }
+  };
+  
+  // Handle filter changes
+  const handleViewChange = (newView) => {
+    setView(newView);
+  };
+  
+  const handleMemberChange = (memberId) => {
+    setSelectedMember(memberId);
+  };
+  
+  const handleResetFilters = () => {
+    setView('all');
+    setSelectedMember('all');
+  };
+  
+  if (!isOpen) {
+    return (
+      <div className="fixed bottom-4 left-4 z-40">
+        <button
+          onClick={() => setIsOpen(true)}
+          className="bg-black text-white p-3 rounded-full hover:bg-gray-800 shadow-lg"
+        >
+          <Calendar size={24} />
+        </button>
+      </div>
+    );
+  }
+  
+  /**
+   * Get events for currently selected date with filtering
    * @returns {Array} Filtered events for selected date
    */
   const getEventsForSelectedDate = () => {
     if (!selectedDate) return [];
     
-    return allEvents.filter(event => {
+    return events.filter(event => {
       // Ensure we have a valid date object
       let eventDate = null;
       
@@ -662,7 +906,7 @@ const RevisedFloatingCalendarWidget = () => {
    */
   const getUpcomingEvents = () => {
     // Apply member filter
-    let filtered = allEvents.filter(event => {
+    let filtered = events.filter(event => {
       if (selectedMember === 'all') return true;
       
       // For child events
@@ -693,560 +937,8 @@ const RevisedFloatingCalendarWidget = () => {
     }).slice(0, 5);
   };
   
-  /**
-   * Check for scheduling conflicts for a given event
-   * @param {Object} event - Event to check for conflicts
-   * @returns {Promise<Array>} Conflicting events
-   */
-  const checkForEventConflicts = async (event) => {
-    if (!event) return [];
-    
-    try {
-      // Get event date and time
-      let eventDate;
-      if (event.dateObj) {
-        eventDate = new Date(event.dateObj);
-      } else if (event.dateTime) {
-        eventDate = new Date(event.dateTime);
-      } else if (event.start?.dateTime) {
-        eventDate = new Date(event.start.dateTime);
-      } else {
-        return []; // No valid date to check
-      }
-      
-      // Define time window to check for conflicts (1 hour before to 1 hour after)
-      const startCheck = new Date(eventDate);
-      startCheck.setHours(startCheck.getHours() - 1);
-      
-      const endCheck = new Date(eventDate);
-      endCheck.setHours(endCheck.getHours() + 1);
-      
-      // Find events within the time window
-      return allEvents.filter(existingEvent => {
-        // Skip the event itself
-        if (existingEvent.id === event.id || 
-            existingEvent.firestoreId === event.firestoreId ||
-            existingEvent.universalId === event.universalId) {
-          return false;
-        }
-        
-        // Get event time
-        let existingDate;
-        if (existingEvent.dateObj) {
-          existingDate = existingEvent.dateObj;
-        } else if (existingEvent.dateTime) {
-          existingDate = new Date(existingEvent.dateTime);
-        } else if (existingEvent.start?.dateTime) {
-          existingDate = new Date(existingEvent.start.dateTime);
-        } else {
-          return false; // No valid date
-        }
-        
-        // Check if dates are on the same day
-        const sameDay = existingDate.getDate() === eventDate.getDate() &&
-                        existingDate.getMonth() === eventDate.getMonth() &&
-                        existingDate.getFullYear() === eventDate.getFullYear();
-        
-        if (!sameDay) return false;
-        
-        // Check if times overlap
-        const startTime = existingDate.getTime();
-        const endTime = existingDate.getTime() + 60 * 60 * 1000; // Add 1 hour
-        
-        return (startTime <= endCheck.getTime() && endTime >= startCheck.getTime());
-      });
-    } catch (error) {
-      console.error("Error checking for conflicts:", error);
-      return [];
-    }
-  };
-  
-  // Add event handlers
-  const handleEventClick = async (event) => {
-    setSelectedEvent(event);
-    
-    // Check for conflicts when viewing event details
-    const conflicts = await checkForEventConflicts(event);
-    setConflictingEvents(conflicts);
-    
-    setShowEventDetails(true);
-    setIsEditingEvent(false);
-    setEditedEvent(null);
-  };
-  
-  const handleEventAdd = async (event) => {
-    try {
-      // Check if event already exists
-      if (eventExists(event)) {
-        console.log("Event already exists in calendar, preventing duplicate");
-        CalendarService.showNotification("Event already exists in your calendar", "info");
-        return;
-      }
-      
-      // Determine event type and call appropriate handler
-      if (event.eventType === 'appointment' || event.eventType === 'activity' || 
-          event.eventType === 'event' || event.eventType === 'homework') {
-        await handleAddChildEventToCalendar(event);
-      } else if (event.eventType === 'meeting') {
-        await handleAddMeetingToCalendar(event);
-      } else if (event.eventType === 'task') {
-        await handleAddTaskToCalendar(event);
-      } else {
-        await handleAddChildEventToCalendar(event);
-      }
-    } catch (error) {
-      console.error("Error adding event:", error);
-      CalendarService.showNotification("Failed to add event to calendar", "error");
-    }
-  };
-  
-  const handleEventEdit = (event) => {
-    // Create a properly formatted event object for the editor
-    const formattedEvent = {
-      ...event,
-      // Make sure we have these fields properly set
-      title: event.title || event.summary,
-      description: event.description || '',
-      location: event.location || '',
-      dateTime: event.dateObj?.toISOString() || event.start?.dateTime || new Date().toISOString(),
-      endDateTime: event.dateEndObj?.toISOString() || event.end?.dateTime,
-      childId: event.childId || null,
-      childName: event.childName || null,
-      attendingParentId: event.attendingParentId || null,
-      eventType: event.eventType || 'general',
-      category: event.category || 'general',
-      siblingIds: event.siblingIds || [],
-      siblingNames: event.siblingNames || [],
-      // Make sure we have the ID for updating
-      firestoreId: event.firestoreId || event.id
-    };
-    
-    setSelectedEvent(formattedEvent);
-    setShowEventDetails(false);
-    setIsEditingEvent(true);
-    setEditedEvent(formattedEvent);
-  };
-  
-  // Add task to calendar
-  const handleAddTaskToCalendar = async (task) => {
-    try {
-      if (!currentUser || !task) return;
-      
-      // Create event from task
-      const event = CalendarService.createEventFromTask(task);
-      
-      // Use selected date
-      if (selectedDate) {
-        const customDate = new Date(selectedDate);
-        customDate.setHours(10, 0, 0, 0); // Set to 10 AM
-        
-        event.start.dateTime = customDate.toISOString();
-        const endTime = new Date(customDate);
-        endTime.setHours(endTime.getHours() + 1);
-        event.end.dateTime = endTime.toISOString();
-      }
-      
-      // Add task's linkedEntity information
-      event.linkedEntity = {
-        type: 'task',
-        id: task.id
-      };
-      
-      // Add event to calendar
-      const result = await CalendarService.addEvent(event, currentUser.uid);
-      
-      if (result.success) {
-        // Add to cache to prevent duplicates
-        addEventToCache({
-          ...event,
-          id: result.eventId,
-          firestoreId: result.firestoreId,
-          universalId: result.universalId
-        });
-        
-        // Mark as added
-        setAddedEvents(prev => ({
-          ...prev,
-          [getEventKey(task)]: true
-        }));
-        
-        // Show "Added" message temporarily
-        setShowAddedMessage(prev => ({
-          ...prev,
-          [getEventKey(task)]: true
-        }));
-        
-        setTimeout(() => {
-          setShowAddedMessage(prev => ({
-            ...prev,
-            [getEventKey(task)]: false
-          }));
-        }, 3000);
-        
-        // Show notification
-        CalendarService.showNotification("Task added to calendar", "success");
-        
-        // Refresh events
-        setLastRefresh(Date.now());
-      }
-    } catch (error) {
-      console.error("Error adding task to calendar:", error);
-      CalendarService.showNotification("Failed to add task to calendar", "error");
-    }
-  };
-  
-  // Add meeting to calendar
-  const handleAddMeetingToCalendar = async (meeting) => {
-    try {
-      if (!currentUser || !meeting) return;
-      
-      // Create event from meeting
-      const event = CalendarService.createFamilyMeetingEvent(meeting.weekNumber, meeting.dateObj);
-      
-      // Rename from "Week" to "Cycle" in the title
-      event.summary = event.summary.replace("Week", "Cycle");
-      
-      // Add meeting's linkedEntity information
-      event.linkedEntity = meeting.linkedEntity || {
-        type: 'meeting',
-        id: meeting.weekNumber
-      };
-      
-      // Add event to calendar
-      const result = await CalendarService.addEvent(event, currentUser.uid);
-      
-      if (result.success) {
-        // Add to cache to prevent duplicates
-        addEventToCache({
-          ...event,
-          id: result.eventId,
-          firestoreId: result.firestoreId,
-          universalId: result.universalId
-        });
-        
-        // Mark as added
-        setAddedEvents(prev => ({
-          ...prev,
-          [getEventKey(meeting)]: true
-        }));
-        
-        // Show "Added" message temporarily
-        setShowAddedMessage(prev => ({
-          ...prev,
-          [getEventKey(meeting)]: true
-        }));
-        
-        setTimeout(() => {
-          setShowAddedMessage(prev => ({
-            ...prev,
-            [getEventKey(meeting)]: false
-          }));
-        }, 3000);
-        
-        // Show notification
-        CalendarService.showNotification("Meeting added to calendar", "success");
-        
-        // Refresh events
-        setLastRefresh(Date.now());
-      }
-    } catch (error) {
-      console.error("Error adding meeting to calendar:", error);
-      CalendarService.showNotification("Failed to add meeting to calendar", "error");
-    }
-  };
-  
-  // Add child event to calendar
-  const handleAddChildEventToCalendar = async (event) => {
-    try {
-      if (!currentUser || !event) return;
-      
-      // Format child event using CalendarOperations
-      const calendarEvent = CalendarOperations.createStandardEvent({
-        title: event.title,
-        description: event.description || '',
-        startDate: event.dateObj || new Date(event.dateTime),
-        location: event.location || '',
-        duration: 60, // Default to 1 hour
-        childId: event.childId,
-        childName: event.childName,
-        attendingParentId: event.attendingParentId,
-        eventType: event.eventType || 'other',
-        extraDetails: {
-          ...(event.extraDetails || {}),
-          parsedWithAI: event.extraDetails?.parsedWithAI || false,
-          extractionConfidence: event.extraDetails?.extractionConfidence || null,
-          parsedFromImage: event.extraDetails?.parsedFromImage || false,
-          originalText: event.extraDetails?.originalText || '',
-          creationSource: event.extraDetails?.creationSource || 'manual'
-        }
-      });
-      
-      // Add event to calendar
-      const result = await CalendarService.addEvent(calendarEvent, currentUser.uid);
-      
-      if (result.success) {
-        // Add to cache to prevent duplicates
-        addEventToCache({
-          ...calendarEvent,
-          id: result.eventId,
-          firestoreId: result.firestoreId,
-          universalId: result.universalId
-        });
-        
-        // Mark as added
-        setAddedEvents(prev => ({
-          ...prev,
-          [getEventKey(event)]: true
-        }));
-        
-        // Show "Added" message temporarily
-        setShowAddedMessage(prev => ({
-          ...prev,
-          [getEventKey(event)]: true
-        }));
-        
-        setTimeout(() => {
-          setShowAddedMessage(prev => ({
-            ...prev,
-            [getEventKey(event)]: false
-          }));
-        }, 3000);
-        
-        // Show notification
-        const eventDescription = event.childName ? `${event.childName}'s ${event.title}` : event.title;
-        CalendarService.showNotification(`${eventDescription} added to calendar`, "success");
-        
-        // Refresh events
-        setLastRefresh(Date.now());
-      }
-    } catch (error) {
-      console.error("Error adding event to calendar:", error);
-      CalendarService.showNotification("Failed to add event to calendar", "error");
-    }
-  };
-  
-  // Delete event
-  const handleDeleteEvent = async (event) => {
-    try {
-      setPendingAction('delete');
-      
-      if (!event) {
-        CalendarService.showNotification("No event selected to delete", "error");
-        setPendingAction(null);
-        return;
-      }
-      
-      if (!window.confirm("Are you sure you want to delete this event?")) {
-        setPendingAction(null);
-        return;
-      }
-      
-      // Use Firestore ID if available, or universal ID, or regular ID
-      const eventId = event.firestoreId || event.universalId || event.id;
-      
-      if (!eventId) {
-        CalendarService.showNotification("Cannot delete this event - no valid ID found", "error");
-        setPendingAction(null);
-        return;
-      }
-      
-      // Delete using CalendarService
-      const result = await CalendarService.deleteEvent(eventId, currentUser?.uid);
-      
-      if (result.success) {
-        // Remove from cache
-        const signature = createEventSignature(event);
-        const updatedCache = new Map(eventCache);
-        updatedCache.delete(signature);
-        setEventCache(updatedCache);
-        
-        // Update local state
-        setAddedEvents(prev => {
-          const newState = {...prev};
-          delete newState[getEventKey(event)];
-          return newState;
-        });
-        
-        // Remove from all events array
-        setAllEvents(prev => prev.filter(e => 
-          e.firestoreId !== eventId && 
-          e.universalId !== (event.universalId || eventId) && 
-          e.id !== eventId
-        ));
-        
-        // Close the details modal
-        setShowEventDetails(false);
-        
-        // Refresh events
-        setTimeout(() => {
-          setLastRefresh(Date.now());
-        }, 300);
-      } else {
-        CalendarService.showNotification(result.error || "Failed to delete event", "error");
-      }
-      
-      setPendingAction(null);
-    } catch (error) {
-      console.error("Error deleting event:", error);
-      CalendarService.showNotification("Failed to delete event: " + error.message, "error");
-      setPendingAction(null);
-    }
-  };
-  
-  // Update event
-  const handleUpdateEvent = async (updatedEvent) => {
-    try {
-      setPendingAction('update');
-      
-      if (!updatedEvent || !updatedEvent.firestoreId) {
-        CalendarService.showNotification("Cannot update this event - no valid ID found", "error");
-        setPendingAction(null);
-        return;
-      }
-      
-      // Create updated event object with required fields
-      const eventUpdate = {
-        summary: updatedEvent.title,
-        description: updatedEvent.description || '',
-        location: updatedEvent.location || '',
-      };
-      
-      // Add date/time if available
-      if (updatedEvent.dateObj) {
-        eventUpdate.start = {
-          dateTime: updatedEvent.dateObj.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        };
-        
-        // Calculate end time
-        const endDate = updatedEvent.dateEndObj || new Date(updatedEvent.dateObj.getTime() + 60 * 60 * 1000);
-        eventUpdate.end = {
-          dateTime: endDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        };
-      }
-      
-      // Ensure we preserve AI metadata
-      eventUpdate.extraDetails = {
-        ...(updatedEvent.extraDetails || {}),
-        parsedWithAI: updatedEvent.extraDetails?.parsedWithAI || false,
-        extractionConfidence: updatedEvent.extraDetails?.extractionConfidence || null,
-        parsedFromImage: updatedEvent.extraDetails?.parsedFromImage || false,
-        originalText: updatedEvent.extraDetails?.originalText || '',
-        creationSource: updatedEvent.extraDetails?.creationSource || 'manual'
-      };
-      
-      // Update event using CalendarService
-      const result = await CalendarService.updateEvent(updatedEvent.firestoreId, eventUpdate, currentUser?.uid);
-      
-      if (result.success) {
-        // Update local state
-        setAllEvents(prev => 
-          prev.map(event => 
-            event.firestoreId === updatedEvent.firestoreId 
-              ? { ...event, ...updatedEvent } 
-              : event
-          )
-        );
-        
-        // Close edit mode and update selected event
-        setIsEditingEvent(false);
-        setSelectedEvent({
-          ...selectedEvent,
-          ...updatedEvent
-        });
-        
-        // Show notification
-        CalendarService.showNotification("Event updated successfully", "success");
-        
-        // Show success animation
-        setShowSuccess(true);
-        setTimeout(() => {
-          setShowSuccess(false);
-        }, 2000);
-        
-        // Refresh events
-        setLastRefresh(Date.now());
-      } else {
-        CalendarService.showNotification(result.error || "Failed to update event", "error");
-      }
-      
-      setPendingAction(null);
-    } catch (error) {
-      console.error("Error updating event:", error);
-      CalendarService.showNotification("Failed to update event: " + error.message, "error");
-      setPendingAction(null);
-    }
-  };
-  
-  // Navigate to a different view based on the event's linked entity
-  const navigateToLinkedEntity = (event) => {
-    if (!event.linkedEntity) return;
-    
-    const { type, id } = event.linkedEntity;
-    
-    switch(type) {
-      case 'task':
-        navigate('/dashboard?tab=tasks');
-        break;
-      case 'relationship':
-        navigate('/dashboard?tab=relationship');
-        break;
-      case 'child':
-        navigate('/dashboard?tab=children');
-        break;
-      case 'meeting':
-        if (typeof window !== 'undefined') {
-          if (window.openFamilyMeeting) {
-            window.openFamilyMeeting();
-          } else {
-            const meetingEvent = new CustomEvent('open-family-meeting', { 
-              detail: { weekNumber: id } 
-            });
-            window.dispatchEvent(meetingEvent);
-            navigate('/dashboard?tab=tasks');
-          }
-        } else {
-          navigate('/dashboard?tab=tasks');
-        }
-        break;
-      default:
-        // Do nothing
-    }
-    
-    // Close the details modal
-    setShowEventDetails(false);
-  };
-  
-  // Handle filter changes
-  const handleViewChange = (newView) => {
-    setView(newView);
-  };
-  
-  const handleMemberChange = (memberId) => {
-    setSelectedMember(memberId);
-  };
-  
-  const handleResetFilters = () => {
-    setView('all');
-    setSelectedMember('all');
-  };
-  
-  if (!isOpen) {
-    return (
-      <div className="fixed bottom-4 left-4 z-40">
-        <button
-          onClick={() => setIsOpen(true)}
-          className="bg-black text-white p-3 rounded-full hover:bg-gray-800 shadow-lg"
-        >
-          <Calendar size={24} />
-        </button>
-      </div>
-    );
-  }
-  
   // Event date objects for calendar highlighting
-  const eventDates = allEvents
+  const eventDates = events
     .filter(event => {
       // Apply member filter
       if (selectedMember !== 'all') {
@@ -1335,7 +1027,7 @@ const RevisedFloatingCalendarWidget = () => {
           </div>
           
           {/* AI Parse Info Button - only show if we have AI parsed events */}
-          {allEvents.some(event => event.extraDetails?.parsedWithAI) && (
+          {events.some(event => event.extraDetails?.parsedWithAI) && (
             <div className="mb-4">
               <button
                 onClick={() => setShowAiParseInfo(!showAiParseInfo)}
@@ -1363,7 +1055,7 @@ const RevisedFloatingCalendarWidget = () => {
             onEventDelete={handleDeleteEvent}
             addedEvents={addedEvents}
             showAddedMessage={showAddedMessage}
-            loading={loading}
+            loading={eventsLoading || loading}
             title={`Events for ${selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
             emptyMessage="No events scheduled for this date"
             // Add enhanced badge rendering for AI parsed events
@@ -1392,7 +1084,7 @@ const RevisedFloatingCalendarWidget = () => {
             onEventDelete={handleDeleteEvent}
             addedEvents={addedEvents}
             showAddedMessage={showAddedMessage}
-            loading={loading}
+            loading={eventsLoading || loading}
             title="Upcoming Events"
             emptyMessage="No upcoming events"
             // Add enhanced badge rendering for AI parsed events

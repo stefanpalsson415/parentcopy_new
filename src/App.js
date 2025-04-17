@@ -30,6 +30,8 @@ import RevisedFloatingCalendarWidget from './components/calendar/RevisedFloating
 import EmailOptIn from './components/marketing/EmailOptIn';
 import ClaudeDebugger from './components/debug/ClaudeDebugger';
 import './styles/atomicHabits.css';
+import { EventProvider } from './contexts/EventContext';
+
 
 // New code for App.js (GoogleMapsApiLoader component)
 function GoogleMapsApiLoader() {
@@ -252,9 +254,13 @@ function App() {
         <AuthProvider>
           <FamilyProvider>
             <SurveyProvider>
+            <EventProvider>
+
               <div className="App">
                 <AppRoutes />
               </div>
+              </EventProvider>
+
             </SurveyProvider>
           </FamilyProvider>
         </AuthProvider>
