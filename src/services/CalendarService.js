@@ -82,10 +82,23 @@ class CalendarService {
       
       console.log("Updating calendar event:", { eventId, updateFields: Object.keys(updateData) });
       
+      // First, get the existing event to preserve critical identifiers
+      const docRef = doc(db, "calendar_events", eventId);
+      const existingEvent = await getDoc(docRef);
+      
+      if (!existingEvent.exists()) {
+        throw new Error(`Event with ID ${eventId} not found`);
+      }
+      
+      const existingData = existingEvent.data();
+      
       // Standardize the update data
       const updates = {
         ...updateData,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        // Preserve critical identifiers
+        firestoreId: eventId,
+        universalId: existingData.universalId || eventId
       };
       
       // If there are changes to title/summary, ensure both fields are updated
@@ -95,15 +108,30 @@ class CalendarService {
         updates.title = updates.summary;
       }
       
+      // Make sure event type and category remain consistent
+      if (!updates.eventType && existingData.eventType) {
+        updates.eventType = existingData.eventType;
+      }
+      
+      if (!updates.category && existingData.category) {
+        updates.category = existingData.category;
+      }
+      
       // Update in Firestore
-      const docRef = doc(db, "calendar_events", eventId);
       await updateDoc(docRef, updates);
       
-      // Dispatch events for UI refresh
+      // Dispatch events for UI refresh with comprehensive details
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
         window.dispatchEvent(new CustomEvent('calendar-event-updated', {
-          detail: { eventId }
+          detail: { 
+            eventId,
+            firestoreId: eventId,
+            universalId: updates.universalId,
+            title: updates.title || updates.summary,
+            category: updates.category,
+            eventType: updates.eventType
+          }
         }));
       }
       
@@ -111,7 +139,9 @@ class CalendarService {
       
       return {
         success: true,
-        eventId
+        eventId,
+        firestoreId: eventId,
+        universalId: updates.universalId
       };
     } catch (error) {
       console.error("Error updating event:", error);
@@ -500,88 +530,6 @@ async createRecurringEvents(baseEvent, userId, universalId) {
   }
 }
 
-// Replace the updateEvent method with this enhanced version
-async updateEvent(eventId, updateData, userId) {
-  try {
-    if (!eventId || !userId) {
-      throw new Error("Event ID and User ID are required to update events");
-    }
-    
-    console.log("Updating calendar event:", { eventId, updateFields: Object.keys(updateData) });
-    
-    // First, get the existing event to merge data properly
-    const docRef = doc(db, "calendar_events", eventId);
-    const eventDoc = await getDoc(docRef);
-    
-    if (!eventDoc.exists()) {
-      throw new Error(`Event with ID ${eventId} not found`);
-    }
-    
-    const existingEvent = eventDoc.data();
-    
-    // Standardize the update data
-    const updates = {
-      ...updateData,
-      updatedAt: serverTimestamp()
-    };
-    
-    // If there are changes to title/summary, ensure both fields are updated
-    if (updates.title && !updates.summary) {
-      updates.summary = updates.title;
-    } else if (updates.summary && !updates.title) {
-      updates.title = updates.summary;
-    }
-    
-    // Preserve important metadata if not being explicitly updated
-    const keysToPreserve = [
-      'childId', 'childName', 'attendingParentId', 'siblingIds', 
-      'siblingNames', 'eventType', 'extraDetails', 'familyId',
-      'universalId', 'source'
-    ];
-    
-    keysToPreserve.forEach(key => {
-      if (existingEvent[key] && !updates[key]) {
-        updates[key] = existingEvent[key];
-      }
-    });
-    
-    // Update in Firestore
-    await updateDoc(docRef, updates);
-    
-    // Dispatch events for UI refresh - include all important details
-    if (typeof window !== 'undefined') {
-      const eventDetail = {
-        eventId: eventId,
-        universalId: existingEvent.universalId || eventId,
-        title: updates.title || existingEvent.title,
-        childId: updates.childId || existingEvent.childId,
-        childName: updates.childName || existingEvent.childName,
-        // Include all attendees for proper UI updates
-        attendees: [
-          ...(updates.siblingIds || existingEvent.siblingIds || []),
-          updates.childId || existingEvent.childId
-        ].filter(Boolean)
-      };
-      
-      window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-      window.dispatchEvent(new CustomEvent('calendar-event-updated', {
-        detail: eventDetail
-      }));
-    }
-    
-    this.showNotification("Event updated successfully", "success");
-    
-    return {
-      success: true,
-      eventId,
-      universalId: existingEvent.universalId || eventId
-    };
-  } catch (error) {
-    console.error("Error updating event:", error);
-    this.showNotification("Failed to update event", "error");
-    return { success: false, error: error.message || "Unknown error" };
-  }
-}
 
 // Replace the deleteEvent method with this enhanced version
 async deleteEvent(eventId, userId) {
@@ -659,7 +607,6 @@ async deleteEvent(eventId, userId) {
   }
 }
 
-// Replace getEventsForUser method to properly handle rich event data
 async getEventsForUser(userId, timeMin, timeMax) {
   try {
     if (!userId) {
@@ -707,19 +654,55 @@ async getEventsForUser(userId, timeMin, timeMax) {
         return;
       }
       
+      let endTime = null;
+      if (eventData.end?.dateTime) {
+        endTime = new Date(eventData.end.dateTime);
+      } else if (eventData.end?.date) {
+        endTime = new Date(eventData.end.date);
+      } else if (eventData.endDateTime) {
+        endTime = new Date(eventData.endDateTime);
+      } else if (eventData.endDate) {
+        endTime = new Date(eventData.endDate);
+      } else {
+        // Default to 1 hour after start
+        endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+      }
+      
+      // IMPORTANT: Always ensure title and summary are in sync
+      const eventTitle = eventData.title || eventData.summary || 'Untitled Event';
+      const eventSummary = eventData.summary || eventData.title || 'Untitled Event';
+      
+      // Ensure universalId is consistent
+      const universalId = eventData.universalId || doc.id;
+      
       // Filter by date range
       if (startTime >= timeMin && startTime <= timeMax) {
         events.push({
+          // Critical identifiers - always ensure these are consistent
           id: doc.id,
-          universalId: eventData.universalId || doc.id,
-          title: eventData.summary || eventData.title || 'Untitled Event',
-          summary: eventData.summary || eventData.title || 'Untitled Event',
+          firestoreId: doc.id,  // Always use Firestore doc ID as firestoreId
+          universalId: universalId,
+          
+          // Basic event information (standardized naming)
+          title: eventTitle,
+          summary: eventSummary,
           description: eventData.description || '',
+          
+          // Date information (standardized formats)
           date: eventData.start?.dateTime || eventData.start?.date || eventData.date || eventData.dateTime,
           dateObj: startTime,
           time: startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+          start: {
+            dateTime: startTime.toISOString(),
+            timeZone: eventData.start?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone
+          },
+          end: {
+            dateTime: endTime.toISOString(),
+            timeZone: eventData.end?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone
+          },
+          dateEndObj: endTime,
           
-          // Include all metadata
+          // Classification information
           category: eventData.category || 'calendar',
           eventType: eventData.eventType || 'general',
           location: eventData.location || '',
@@ -732,22 +715,20 @@ async getEventsForUser(userId, timeMin, timeMax) {
           siblingNames: eventData.siblingNames || [],
           attendees: eventData.attendees || [],
           
-          // Include extra details
+          // Special fields for cycle events
+          cycleNumber: eventData.cycleNumber || null,
+          
+          // Extra information
           extraDetails: eventData.extraDetails || {},
-          
-          // Important IDs for CRUD operations
-          firestoreId: doc.id,
-          universalId: eventData.universalId || doc.id,
-          
-          // Source information
           source: eventData.source || 'manual',
           
-          // End date/time
-          dateEndObj: eventData.end?.dateTime ? new Date(eventData.end.dateTime) : null,
-          
-          // Linkage
+          // Linkage information
           linkedEntity: eventData.linkedEntity || null,
-          linkedToEventId: eventData.linkedToEventId || null
+          linkedToEventId: eventData.linkedToEventId || null,
+          
+          // Timestamps for sorting
+          createdAt: eventData.createdAt || null,
+          updatedAt: eventData.updatedAt || null
         });
       }
     });
@@ -760,7 +741,7 @@ async getEventsForUser(userId, timeMin, timeMax) {
     console.error("Error getting events:", error);
     return [];
   }
-}
+} 
 
 /// In CalendarService.js - Find the addChildEvent method and replace it with this:
 // Fix for CalendarService.js - replace the addChildEvent method
@@ -976,45 +957,6 @@ formatDateForDisplay(date, region = 'US') {
   }
 }
 
-
-
-
-  // Get events for a user
-  async getEventsForUser(userId, timeMin, timeMax) {
-    try {
-      if (!userId) {
-        throw new Error("User ID is required to get events");
-      }
-      
-      const eventsQuery = query(
-        collection(db, "calendar_events"),
-        where("userId", "==", userId)
-      );
-      
-      const querySnapshot = await getDocs(eventsQuery);
-      const events = [];
-      
-      querySnapshot.forEach((doc) => {
-        const eventData = doc.data();
-        
-        // Filter by date range
-        const startTime = new Date(eventData.start.dateTime || eventData.start.date);
-        const endTime = new Date(eventData.end.dateTime || eventData.end.date);
-        
-        if (startTime >= timeMin && startTime <= timeMax) {
-          events.push({
-            id: doc.id,
-            ...eventData
-          });
-        }
-      });
-      
-      return events;
-    } catch (error) {
-      console.error("Error getting events:", error);
-      throw error;
-    }
-  }
 
   // Generate an ICS file for download
   async generateICSFile(event) {

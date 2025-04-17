@@ -476,51 +476,64 @@ setHasCompletedSurvey(userHasCompletedSurvey);
     }
   };
   
-  // Replace the findExistingDueDateEvent function in TasksTab.jsx
-const findExistingDueDateEvent = async () => {
-  if (!familyId || !currentUser) return null;
-  
-  try {
-    // Get all events from CalendarService with a wider date range
-    const events = await CalendarService.getEventsForUser(
-      currentUser.uid,
-      new Date(new Date().setDate(new Date().getDate() - 90)), // 90 days ago
-      new Date(new Date().setDate(new Date().getDate() + 180))  // 180 days ahead
-    );
+  const findExistingDueDateEvent = async () => {
+    if (!familyId || !currentUser) return null;
     
-    console.log("All calendar events found:", events.length);
-    
-    // Use multiple match criteria for more reliable finding
-    const dueDateEvents = events.filter(event => {
-      // Check for cycle due date in category, eventType, or universalId
-      const isCycleDueDate = 
-        event.category === 'cycle-due-date' || 
-        event.eventType === 'cycle-due-date' ||
-        (event.universalId && event.universalId.includes('cycle-due-date'));
+    try {
+      // Get all events from CalendarService with a wider date range
+      const events = await CalendarService.getEventsForUser(
+        currentUser.uid,
+        new Date(new Date().setDate(new Date().getDate() - 90)), // 90 days ago
+        new Date(new Date().setDate(new Date().getDate() + 180))  // 180 days ahead
+      );
+      
+      console.log("All calendar events found:", events.length);
+      
+      // First try to find by universalId - most reliable method
+      const universalIdToFind = `cycle-due-date-${familyId}-${currentWeek}`;
+      let dueDateEvent = events.find(event => event.universalId === universalIdToFind);
+      
+      if (dueDateEvent) {
+        console.log("Found due date event by universalId:", dueDateEvent);
+        setExistingDueDateEvent(dueDateEvent);
+        return dueDateEvent;
+      }
+      
+      // Fallback to multiple criteria search
+      const dueDateEvents = events.filter(event => {
+        // Check for cycle due date in category or eventType
+        const isCycleDueDate = 
+          event.category === 'cycle-due-date' || 
+          event.eventType === 'cycle-due-date';
+          
+        // Check for current cycle number in various fields
+        const isCurrentCycle = 
+          event.cycleNumber === currentWeek || 
+          (event.universalId && event.universalId.includes(`-${currentWeek}`));
+          
+        return isCycleDueDate && isCurrentCycle;
+      });
+      
+      if (dueDateEvents.length > 0) {
+        // Sort by recency (most recently updated first)
+        dueDateEvents.sort((a, b) => {
+          const dateA = a.updatedAt ? new Date(a.updatedAt) : new Date(0);
+          const dateB = b.updatedAt ? new Date(b.updatedAt) : new Date(0);
+          return dateB - dateA;
+        });
         
-      // Check for current cycle number in various fields
-      const isCurrentCycle = 
-        event.cycleNumber === currentWeek || 
-        (event.title && event.title.includes(`Cycle ${currentWeek}`)) || 
-        (event.summary && event.summary.includes(`Cycle ${currentWeek}`)) ||
-        (event.universalId && event.universalId.includes(`-${currentWeek}`));
-        
-      return isCycleDueDate && isCurrentCycle;
-    });
-    
-    if (dueDateEvents.length > 0) {
-      console.log("Found existing due date event:", dueDateEvents[0]);
-      setExistingDueDateEvent(dueDateEvents[0]);
-      return dueDateEvents[0];
+        console.log("Found existing due date event:", dueDateEvents[0]);
+        setExistingDueDateEvent(dueDateEvents[0]);
+        return dueDateEvents[0];
+      }
+      
+      console.log("No existing due date event found for cycle", currentWeek);
+      return null;
+    } catch (error) {
+      console.error("Error finding existing due date event:", error);
+      return null;
     }
-    
-    console.log("No existing due date event found for cycle", currentWeek);
-    return null;
-  } catch (error) {
-    console.error("Error finding existing due date event:", error);
-    return null;
-  }
-};
+  };
   
 
 
@@ -742,52 +755,47 @@ if (selectedUser?.role === 'parent') {
     }
   };
   
-  // Replace the updateCycleDueDate function in TasksTab.jsx
-const updateCycleDueDate = async (newDate, eventDetails = {}) => {
-  if (!familyId || !currentUser) return false;
-  
-  try {
-    setIsProcessing(true);
+  const updateCycleDueDate = async (newDate, eventDetails = {}) => {
+    if (!familyId || !currentUser) return false;
     
-    // Validate the date - ensure it's a valid Date object
-    if (!(newDate instanceof Date) || isNaN(newDate.getTime())) {
-      console.error("Invalid date provided to updateCycleDueDate:", newDate);
-      throw new Error("Invalid date provided");
-    }
-    
-    // Format the date for display (including time)
-    const formattedDate = newDate.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-    
-    console.log(`Updating cycle due date to: ${formattedDate}`, {
-      familyId,
-      currentWeek,
-      eventId: eventDetails.eventId || "new event"
-    });
-    
-    // 1. First update survey schedule in database - this affects the task tab display
     try {
-      await updateSurveySchedule(currentWeek, newDate);
-      console.log("Survey schedule updated successfully");
-    } catch (scheduleError) {
-      console.error("Error updating survey schedule:", scheduleError);
-      throw new Error("Failed to update family schedule");
-    }
-    
-    // 2. Now handle the calendar event
-    let result;
-    try {
-      // Check if we're updating an existing event
-      if (eventDetails.eventId) {
-        console.log("Updating existing event:", eventDetails.eventId);
-        
-        // Create event update object with complete required fields
-        const eventUpdate = {
+      setIsProcessing(true);
+      
+      // Validate the date - ensure it's a valid Date object
+      if (!(newDate instanceof Date) || isNaN(newDate.getTime())) {
+        console.error("Invalid date provided to updateCycleDueDate:", newDate);
+        throw new Error("Invalid date provided");
+      }
+      
+      // Format the date for display (including time)
+      const formattedDate = newDate.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      console.log(`Updating cycle due date to: ${formattedDate}`, {
+        familyId,
+        currentWeek,
+        eventId: eventDetails.eventId || "new event"
+      });
+      
+      // 1. First update survey schedule in database - this affects the task tab display
+      try {
+        await updateSurveySchedule(currentWeek, newDate);
+        console.log("Survey schedule updated successfully");
+      } catch (scheduleError) {
+        console.error("Error updating survey schedule:", scheduleError);
+        throw new Error("Failed to update family schedule");
+      }
+      
+      // 2. Now handle the calendar event
+      let result;
+      try {
+        // Standardized event object for either create or update
+        const eventObject = {
           title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
           summary: eventDetails.title || `Cycle ${currentWeek} Due Date`,
           description: eventDetails.description || `Due date for completing Cycle ${currentWeek} activities including surveys and tasks.`,
@@ -802,94 +810,102 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
           },
           category: 'cycle-due-date',
           eventType: 'cycle-due-date',
-          cycleNumber: currentWeek
-        };
-        
-        // Update the existing event
-        result = await CalendarService.updateEvent(eventDetails.eventId, eventUpdate, currentUser.uid);
-      } else {
-        // Create new event data with consistent universalId
-        const eventData = {
-          title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
-          description: eventDetails.description || `Due date for completing Cycle ${currentWeek} activities including surveys and tasks.`,
-          start: {
-            dateTime: newDate.toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          end: {
-            dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          location: eventDetails.location || '',
-          category: 'cycle-due-date',
-          eventType: 'cycle-due-date',
           cycleNumber: currentWeek,
-          // Add a consistent universalId to help prevent duplicates
+          // Always set the universalId to ensure consistency
           universalId: `cycle-due-date-${familyId}-${currentWeek}`
         };
         
-        // Add new event to calendar
-        result = await CalendarService.addEvent(eventData, currentUser.uid);
+        // Check if we're updating an existing event
+        if (eventDetails.eventId || eventDetails.firestoreId) {
+          const updateId = eventDetails.eventId || eventDetails.firestoreId;
+          console.log("Updating existing event:", updateId);
+          
+          // Update the existing event
+          result = await CalendarService.updateEvent(updateId, eventObject, currentUser.uid);
+        } else {
+          // Create new event
+          result = await CalendarService.addEvent(eventObject, currentUser.uid);
+        }
+        
+        console.log("Calendar update result:", result);
+        
+        if (!result.success) {
+          throw new Error(result.error || "Failed to update cycle date in calendar");
+        }
+        
+        // Store the event ID for future reference
+        if (result.firestoreId) {
+          setExistingDueDateEvent({
+            ...eventObject,
+            id: result.eventId || result.firestoreId,
+            firestoreId: result.firestoreId,
+            universalId: eventObject.universalId
+          });
+        }
+      } catch (calendarError) {
+        console.error("Calendar service error:", calendarError);
+        throw new Error("Failed to update calendar: " + (calendarError.message || "Unknown error"));
       }
       
-      console.log("Calendar update result:", result);
+      // 3. Update the UI state
+      setSurveyDue(newDate);
       
-      if (!result.success) {
-        throw new Error(result.error || "Failed to update cycle date in calendar");
+      // 4. Update the week status to maintain consistency across components
+      const updatedStatus = {
+        ...weekStatus,
+        [currentWeek]: {
+          ...weekStatus[currentWeek],
+          scheduledDate: newDate.toISOString()
+        }
+      };
+      
+      // 5. Save all updates to Firebase to ensure data consistency
+      try {
+        await DatabaseService.saveFamilyData({
+          weekStatus: updatedStatus,
+          updatedAt: new Date().toISOString()
+        }, familyId);
+        console.log("Family data updated with new schedule");
+      } catch (dbError) {
+        console.error("Database error updating family data:", dbError);
+        // Continue anyway since the main update succeeded
       }
-    } catch (calendarError) {
-      console.error("Calendar service error:", calendarError);
-      throw new Error("Failed to update calendar: " + (calendarError.message || "Unknown error"));
-    }
-    
-    // 3. Update the UI state
-    setSurveyDue(newDate);
-    
-    // 4. Update the week status to maintain consistency across components
-    const updatedStatus = {
-      ...weekStatus,
-      [currentWeek]: {
-        ...weekStatus[currentWeek],
-        scheduledDate: newDate.toISOString()
+      
+      // 6. Force refresh all calendar views
+      if (typeof window !== 'undefined') {
+        // Dispatch a thorough force-refresh event for all calendar components
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        
+        // Add a short delay and dispatch again to ensure late-binding components catch it
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        }, 300);
       }
-    };
-    
-    // 5. Save all updates to Firebase to ensure data consistency
-    try {
-      await DatabaseService.saveFamilyData({
-        weekStatus: updatedStatus,
-        updatedAt: new Date().toISOString()
-      }, familyId);
-      console.log("Family data updated with new schedule");
-    } catch (dbError) {
-      console.error("Database error updating family data:", dbError);
-      // Continue anyway since the main update succeeded
+      
+      // Show a success message
+      createCelebration(
+        `Meeting Scheduled`, 
+        true, 
+        `Cycle ${currentWeek} meeting scheduled for ${formattedDate}`
+      );
+      
+      // Success!
+      setIsProcessing(false);
+      return true;
+    } catch (error) {
+      console.error("Error updating cycle due date:", error);
+      
+      // Detailed error message
+      createCelebration(
+        "Update Failed", 
+        false, 
+        `Failed to update due date: ${error.message || "Unknown error"}`
+      );
+      
+      setIsProcessing(false);
+      return false;
     }
-    
-    // Show a success message
-    createCelebration(
-      `Meeting Scheduled`, 
-      true, 
-      `Cycle ${currentWeek} meeting scheduled for ${formattedDate}`
-    );
-    
-    // Success!
-    setIsProcessing(false);
-    return true;
-  } catch (error) {
-    console.error("Error updating cycle due date:", error);
-    
-    // Detailed error message
-    createCelebration(
-      "Update Failed", 
-      false, 
-      `Failed to update due date: ${error.message || "Unknown error"}`
-    );
-    
-    setIsProcessing(false);
-    return false;
-  }
-};
+  };
   
 // Add this function to TasksTab.jsx - much simpler and more direct approach
 const forceCalendarDateSync = async () => {
@@ -2249,33 +2265,32 @@ const createNewHabit = async (isRefresh = false) => {
             let newDate;
             
             // Try all possible date fields with detailed logging
-            // Try all possible date fields with detailed logging
-if (event.start?.dateTime) {
-  newDate = new Date(event.start.dateTime);
-  console.log("Using start.dateTime:", event.start.dateTime);
-} else if (event.dateTime) {
-  newDate = new Date(event.dateTime);
-  console.log("Using dateTime:", event.dateTime);
-} else if (event.date) {
-  newDate = new Date(event.date);
-  console.log("Using date:", event.date);
-} else if (event.start?.date) {
-  newDate = new Date(event.start.date);
-  console.log("Using start.date:", event.start.date);
-} else {
-  // As a last resort, try to extract date from the form fields directly
-  const dateField = document.querySelector('input[type="date"]');
-  const timeField = document.querySelector('input[type="time"]');
-  
-  if (dateField && dateField.value && timeField && timeField.value) {
-    const dateTimeStr = `${dateField.value}T${timeField.value}`;
-    newDate = new Date(dateTimeStr);
-    console.log("Using form fields:", dateTimeStr);
-  } else {
-    newDate = new Date();
-    console.warn("No date found anywhere, using current date");
-  }
-}
+            if (event.start?.dateTime) {
+              newDate = new Date(event.start.dateTime);
+              console.log("Using start.dateTime:", event.start.dateTime);
+            } else if (event.dateTime) {
+              newDate = new Date(event.dateTime);
+              console.log("Using dateTime:", event.dateTime);
+            } else if (event.date) {
+              newDate = new Date(event.date);
+              console.log("Using date:", event.date);
+            } else if (event.start?.date) {
+              newDate = new Date(event.start.date);
+              console.log("Using start.date:", event.start.date);
+            } else {
+              // As a last resort, try to extract date from the form fields directly
+              const dateField = document.querySelector('input[type="date"]');
+              const timeField = document.querySelector('input[type="time"]');
+              
+              if (dateField && dateField.value && timeField && timeField.value) {
+                const dateTimeStr = `${dateField.value}T${timeField.value}`;
+                newDate = new Date(dateTimeStr);
+                console.log("Using form fields:", dateTimeStr);
+              } else {
+                newDate = new Date();
+                console.warn("No date found anywhere, using current date");
+              }
+            }
             
             // Ensure the date is valid
             if (isNaN(newDate.getTime())) {
@@ -2286,22 +2301,48 @@ if (event.start?.dateTime) {
             
             console.log("Saving event with date:", newDate, "Event:", event);
             
-            const success = await updateCycleDueDate(newDate, {
+            // Create a comprehensive event details object with ALL properties
+            const eventDetails = {
               title: event.title || event.summary,
+              summary: event.summary || event.title,
               description: event.description,
               location: event.location,
-              eventId: existingDueDateEvent?.firestoreId || existingDueDateEvent?.id
-            });
+              // Pass ALL possible IDs to ensure we find the right event
+              id: event.id,
+              eventId: event.id || event.eventId,
+              firestoreId: event.firestoreId || existingDueDateEvent?.firestoreId,
+              universalId: event.universalId || existingDueDateEvent?.universalId,
+              // Always include category and eventType  
+              category: 'cycle-due-date',
+              eventType: 'cycle-due-date',
+              // Always include cycle number
+              cycleNumber: currentWeek
+            };
+            
+            const success = await updateCycleDueDate(newDate, eventDetails);
             
             if (success) {
-              // Force refresh of calendar components
+              // Force refresh of calendar components with greater reliability
               if (typeof window !== 'undefined') {
+                // Immediate refresh
                 window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+                
+                // Delayed refresh to catch components that might initialize later
+                setTimeout(() => {
+                  window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+                }, 300);
               }
               
               // Also update our local UI immediately
               setSurveyDue(newDate);
               calculateNextSurveyDue();
+              
+              // Force a refresh of the existingDueDateEvent
+              findExistingDueDateEvent().then(() => {
+                console.log("Re-fetched event after update");
+              }).catch(error => {
+                console.warn("Error re-fetching event:", error);
+              });
               
               setShowCalendar(false);
             }
