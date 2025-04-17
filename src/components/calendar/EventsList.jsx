@@ -20,6 +20,7 @@ import CalendarOperations from '../../utils/CalendarOperations';
  * @param {string} props.title - Optional title for the events list
  * @param {string} props.emptyMessage - Message to show when no events are found
  * @param {Function} props.renderBadges - Optional function to render custom badges
+ * @param {Boolean} props.showActionButtons - Whether to show action buttons (default: false for upcoming events)
  */
 const EventsList = ({ 
   events = [], 
@@ -32,7 +33,8 @@ const EventsList = ({
   loading = false,
   title = "Events",
   emptyMessage = "No events scheduled",
-  renderBadges
+  renderBadges,
+  showActionButtons = false // Added this prop with default value false
 }) => {
   
   // Helper function to get a unique key for an event
@@ -125,6 +127,11 @@ const EventsList = ({
   // Render event action buttons
   const EventActions = ({ event }) => {
     const eventKey = getEventKey(event);
+    
+    // Only show action buttons if specifically enabled (for event lists that need them)
+    if (!showActionButtons) {
+      return null; // Don't show any action buttons for upcoming events
+    }
     
     if (!addedEvents[eventKey]) {
       return (
@@ -250,30 +257,36 @@ const EventsList = ({
                         {event.description}
                       </div>
                     )}
-                    
-                    {/* Bottom row with attendees and actions */}
-                    <div className="flex justify-between items-center mt-2">
-                      {/* Show attendee avatars if available */}
-                      {event.attendees && event.attendees.length > 0 && (
-                        <AttendeeAvatars attendees={event.attendees} max={4} />
-                      )}
-                      {/* Show child avatar if it's a child event */}
-                      {event.childId && event.childName && !event.attendees && (
-                        <AttendeeAvatars 
-                          attendees={[{id: event.childId, name: event.childName}]} 
-                          max={1} 
-                        />
-                      )}
-                      
-                      {/* Add spacer if no attendees */}
-                      {(!event.attendees || event.attendees.length === 0) && !event.childId && <div></div>}
-                    </div>
                   </div>
                   
-                  {/* Action buttons */}
+                  {/* Action buttons or attendee avatars */}
                   <div className="ml-2 flex items-center self-start">
-                    {onEventAdd && onEventEdit && onEventDelete && (
+                    {showActionButtons && onEventAdd && onEventEdit && onEventDelete ? (
                       <EventActions event={event} />
+                    ) : (
+                      // Always show avatars for events without action buttons
+                      <>
+                        {/* Show attendee avatars if available */}
+                        {event.attendees && event.attendees.length > 0 ? (
+                          <AttendeeAvatars attendees={event.attendees} max={3} />
+                        ) : event.childId && event.childName ? (
+                          /* Show child avatar if it's a child event */
+                          <AttendeeAvatars 
+                            attendees={[{id: event.childId, name: event.childName}]} 
+                            max={1} 
+                          />
+                        ) : event.attendingParentId && event.attendingParentId !== 'undecided' ? (
+                          /* Show attending parent avatar if available */
+                          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 text-xs">
+                            <Users size={14} />
+                          </div>
+                        ) : (
+                          /* Generic calendar icon as fallback */
+                          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 text-xs">
+                            <Calendar size={14} />
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

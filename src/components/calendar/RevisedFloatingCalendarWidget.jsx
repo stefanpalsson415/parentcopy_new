@@ -1068,62 +1068,62 @@ const handleEventClick = async (event) => {
           )}
           
           {/* Selected Date Events Component */}
-          <EventsList
-            events={filterEventsByView(getEventsForSelectedDate())}
-            onEventClick={handleEventClick}
-            onEventAdd={handleEventAdd}
-            onEventEdit={handleEventEdit}
-            onEventDelete={handleDeleteEvent}
-            addedEvents={addedEvents}
-            showAddedMessage={showAddedMessage}
-            loading={eventsLoading || loading}
-            title={`Events for ${selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
-            emptyMessage="No events scheduled for this date"
-            // Add enhanced badge rendering for AI parsed events
-            renderBadges={(event) => (
-              <>
-                {event.extraDetails?.parsedWithAI && (
-                  <span className="ml-1 bg-purple-100 text-purple-800 px-1 py-0.5 rounded text-xs font-medium flex items-center">
-                    <span className="mr-1">AI</span>
-                    {event.extraDetails.extractionConfidence && (
-                      <span className="text-xs">
-                        {Math.round(event.extraDetails.extractionConfidence * 100)}%
-                      </span>
-                    )}
-                  </span>
-                )}
-              </>
-            )}
-          />
-          
-          {/* Upcoming Events Component */}
-          <EventsList
-            events={getUpcomingEvents()}
-            onEventClick={handleEventClick}
-            onEventAdd={handleEventAdd}
-            onEventEdit={handleEventEdit}
-            onEventDelete={handleDeleteEvent}
-            addedEvents={addedEvents}
-            showAddedMessage={showAddedMessage}
-            loading={eventsLoading || loading}
-            title="Upcoming Events"
-            emptyMessage="No upcoming events"
-            // Add enhanced badge rendering for AI parsed events
-            renderBadges={(event) => (
-              <>
-                {event.extraDetails?.parsedWithAI && (
-                  <span className="ml-1 bg-purple-100 text-purple-800 px-1 py-0.5 rounded text-xs font-medium flex items-center">
-                    <span className="mr-1">AI</span>
-                    {event.extraDetails.extractionConfidence && (
-                      <span className="text-xs">
-                        {Math.round(event.extraDetails.extractionConfidence * 100)}%
-                      </span>
-                    )}
-                  </span>
-                )}
-              </>
-            )}
-          />
+<EventsList
+  events={filterEventsByView(getEventsForSelectedDate())}
+  onEventClick={handleEventClick}
+  onEventAdd={handleEventAdd}
+  onEventEdit={handleEventEdit}
+  onEventDelete={handleDeleteEvent}
+  addedEvents={addedEvents}
+  showAddedMessage={showAddedMessage}
+  loading={eventsLoading || loading}
+  title={`Events for ${selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+  emptyMessage="No events scheduled for this date"
+  showActionButtons={true} /* Show action buttons for selected date events */
+  renderBadges={(event) => (
+    <>
+      {event.extraDetails?.parsedWithAI && (
+        <span className="ml-1 bg-purple-100 text-purple-800 px-1 py-0.5 rounded text-xs font-medium flex items-center">
+          <span className="mr-1">AI</span>
+          {event.extraDetails.extractionConfidence && (
+            <span className="text-xs">
+              {Math.round(event.extraDetails.extractionConfidence * 100)}%
+            </span>
+          )}
+        </span>
+      )}
+    </>
+  )}
+/>
+
+{/* Upcoming Events Component */}
+<EventsList
+  events={getUpcomingEvents()}
+  onEventClick={handleEventClick}
+  onEventAdd={handleEventAdd}
+  onEventEdit={handleEventEdit}
+  onEventDelete={handleDeleteEvent}
+  addedEvents={addedEvents}
+  showAddedMessage={showAddedMessage}
+  loading={eventsLoading || loading}
+  title="Upcoming Events"
+  emptyMessage="No upcoming events"
+  showActionButtons={false} /* Don't show action buttons for upcoming events */
+  renderBadges={(event) => (
+    <>
+      {event.extraDetails?.parsedWithAI && (
+        <span className="ml-1 bg-purple-100 text-purple-800 px-1 py-0.5 rounded text-xs font-medium flex items-center">
+          <span className="mr-1">AI</span>
+          {event.extraDetails.extractionConfidence && (
+            <span className="text-xs">
+              {Math.round(event.extraDetails.extractionConfidence * 100)}%
+            </span>
+          )}
+        </span>
+      )}
+    </>
+  )}
+/>
           
         </div>
         
