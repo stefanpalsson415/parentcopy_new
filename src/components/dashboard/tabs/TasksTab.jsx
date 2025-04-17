@@ -440,11 +440,21 @@ if (member.role === 'parent') {
     }
   }
 }
-          // For children, always unlock survey if parents have completed habits
-          else if (member.role === 'child') {
-            // Child's step is based on survey completion
-            memberData.step = memberData.completedSurvey ? 3 : 2;
-          }
+          // For children, check if they've completed their survey
+else if (member.role === 'child') {
+  // Child's step is based on survey completion - check multiple indicators
+  const surveyCompleted = 
+    memberData.completedSurvey || 
+    member.weeklyCompleted?.[currentWeek-1]?.completed ||
+    (member.status && member.status.toLowerCase().includes("survey done"));
+  
+  if (surveyCompleted) {
+    memberData.step = 3; // Move to step 3 if survey completed
+    memberData.completedSurvey = true; // Make sure this is set
+  } else {
+    memberData.step = 2; // Otherwise remain at step 2 (survey phase)
+  }
+}
           
           progress[member.id] = memberData;
         });
