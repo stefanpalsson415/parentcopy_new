@@ -262,19 +262,20 @@ placeAutocompleteElement.addEventListener('gmp-placeautocomplete-place-changed',
       
       let result;
 
-      if (!standardizedEvent.reminders || standardizedEvent.reminders.useDefault === undefined) {
-        standardizedEvent.reminders = {
-          useDefault: true,
-          overrides: []
-        };
-      }
-      
-      // Make sure the event doesn't have any undefined values before saving
-      Object.keys(standardizedEvent).forEach(key => {
-        if (standardizedEvent[key] === undefined) {
-          delete standardizedEvent[key]; // Remove any undefined properties
-        }
-      });
+      // Add reminders if we have any
+if (!calendarEvent.reminders || calendarEvent.reminders.useDefault === undefined) {
+  calendarEvent.reminders = {
+    useDefault: true,
+    overrides: []
+  };
+}
+
+// Make sure the event doesn't have any undefined values before saving
+Object.keys(calendarEvent).forEach(key => {
+  if (calendarEvent[key] === undefined) {
+    delete calendarEvent[key]; // Remove any undefined properties
+  }
+});
       
       // Handle recurring events if applicable
       if (event.isRecurring && event.recurrence.days.length > 0) {
