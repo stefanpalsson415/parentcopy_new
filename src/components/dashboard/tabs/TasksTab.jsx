@@ -2243,17 +2243,36 @@ const createNewHabit = async (isRefresh = false) => {
         }}
         onSave={async (event) => {
           try {
-            // Extract and validate the date from the event
+            // More robust date extraction
+            console.log("Raw event for saving:", event);
+            
             let newDate;
             
+            // Try all possible date fields with detailed logging
             if (event.start?.dateTime) {
               newDate = new Date(event.start.dateTime);
+              console.log("Using start.dateTime:", event.start.dateTime);
             } else if (event.dateTime) {
               newDate = new Date(event.dateTime);
+              console.log("Using dateTime:", event.dateTime);
+            } else if (event.date) {
+              newDate = new Date(event.date);
+              console.log("Using date:", event.date);
+            } else if (event.start?.date) {
+              newDate = new Date(event.start.date);
+              console.log("Using start.date:", event.start.date);
             } else {
-              // Fallback to current date if no date is found
-              newDate = new Date();
-              console.warn("No date found in event, using current date");
+              // As a last resort, try to extract date from the form fields directly
+              const dateField = document.querySelector('input[type="date"]');
+              const timeField = document.querySelector('input[type="time"]');
+              
+              if (dateField && dateField.value && timeField && timeField.value) {
+                const dateTimeStr = `${dateField.value}T${timeField.value}`;
+                newDate = new Date(dateTimeStr);
+                console.log("Using form fields:", dateTimeStr);
+              } else {
+                newDate = new Date();
+                console.warn("No date found anywhere, using current date");
             }
             
             // Ensure the date is valid

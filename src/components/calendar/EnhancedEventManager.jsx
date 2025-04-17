@@ -106,10 +106,9 @@ const EnhancedEventManager = ({
           // Clear any existing content
           placesContainerRef.current.innerHTML = '';
           
-          // Create a new PlaceAutocompleteElement
           const placeAutocompleteElement = new window.google.maps.places.PlaceAutocompleteElement({
-            types: ['address', 'establishment'],
-            inputPlaceholder: 'Where is this event happening?',
+            types: ['address', 'establishment']
+            // Remove the inputPlaceholder property completely
           });
           
           // Add the element to the container
@@ -262,6 +261,20 @@ placeAutocompleteElement.addEventListener('gmp-placeautocomplete-place-changed',
       };
       
       let result;
+
+      if (!standardizedEvent.reminders || standardizedEvent.reminders.useDefault === undefined) {
+        standardizedEvent.reminders = {
+          useDefault: true,
+          overrides: []
+        };
+      }
+      
+      // Make sure the event doesn't have any undefined values before saving
+      Object.keys(standardizedEvent).forEach(key => {
+        if (standardizedEvent[key] === undefined) {
+          delete standardizedEvent[key]; // Remove any undefined properties
+        }
+      });
       
       // Handle recurring events if applicable
       if (event.isRecurring && event.recurrence.days.length > 0) {
