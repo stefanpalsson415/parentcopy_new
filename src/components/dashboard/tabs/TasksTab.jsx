@@ -440,7 +440,7 @@ if (member.role === 'parent') {
     }
   }
 }
-          // For children, check if they've completed their survey
+ // For children, check if they've completed their survey
 else if (member.role === 'child') {
   // Child's step is based on survey completion - check multiple indicators
   const surveyCompleted = 
@@ -478,11 +478,34 @@ else if (member.role === 'child') {
         setCycleStep(currentFamilyStep);
         
         // Check if all family members have completed surveys to enable meeting
-        const allSurveysCompleted = familyMembers.every(member => 
-          progress[member.id]?.completedSurvey
-        );
-        
-        setCanScheduleMeeting(allSurveysCompleted);
+const allSurveysCompleted = familyMembers.every(member => {
+  // Check multiple indicators of survey completion
+  const hasCompletedSurvey = 
+    progress[member.id]?.completedSurvey || 
+    member.weeklyCompleted?.[currentWeek-1]?.completed ||
+    (member.status && member.status.toLowerCase().includes("survey done"));
+  
+  return hasCompletedSurvey;
+});
+
+setCanScheduleMeeting(allSurveysCompleted);
+
+// Update cycle progress data in Firebase if needed
+if (allSurveysCompleted && cycleStep < 3) {
+  try {
+    const familyRef = doc(db, "families", familyId);
+    
+    // Update the cycle progress to move to step 3
+    await updateDoc(familyRef, {
+      [`cycleProgress.${currentWeek}.step`]: 3
+    });
+    
+    // Also update local state
+    setCycleStep(3);
+  } catch (error) {
+    console.error("Error updating cycle progress:", error);
+  }
+}
         
         // Update cycle step based on global progress
 if (allCompletedSurveys) {
@@ -1468,17 +1491,27 @@ const createNewHabit = async (isRefresh = false) => {
               </div>
               
               <div className="mt-1 flex items-center">
-                <div className={`w-4 h-4 rounded-full flex items-center justify-center mr-2 ${
-                  Object.values(memberProgress).every(p => p.completedSurvey) 
-                    ? 'bg-green-500 text-white' 
-                    : 'bg-gray-300'
-                }`}>
-                  {Object.values(memberProgress).every(p => p.completedSurvey) && <Check size={12} />}
-                </div>
-                <span className={Object.values(memberProgress).every(p => p.completedSurvey) ? 'text-green-700' : ''}>
-                  All family members complete the survey
-                </span>
-              </div>
+  <div className={`w-4 h-4 rounded-full flex items-center justify-center mr-2 ${
+    familyMembers.every(member => 
+      memberProgress[member.id]?.completedSurvey || 
+      member.weeklyCompleted?.[currentWeek-1]?.completed ||
+      (member.status && member.status.toLowerCase().includes("survey done"))
+    ) ? 'bg-green-500 text-white' : 'bg-gray-300'
+  }`}>
+    {familyMembers.every(member => 
+      memberProgress[member.id]?.completedSurvey || 
+      member.weeklyCompleted?.[currentWeek-1]?.completed ||
+      (member.status && member.status.toLowerCase().includes("survey done"))
+    ) && <Check size={12} />}
+  </div>
+  <span className={familyMembers.every(member => 
+    memberProgress[member.id]?.completedSurvey || 
+    member.weeklyCompleted?.[currentWeek-1]?.completed ||
+    (member.status && member.status.toLowerCase().includes("survey done"))
+  ) ? 'text-green-700' : ''}>
+    All family members complete the survey
+  </span>
+</div>
               
               <div className="mt-1 flex items-center">
                 <div className={`w-4 h-4 rounded-full flex items-center justify-center mr-2 ${
