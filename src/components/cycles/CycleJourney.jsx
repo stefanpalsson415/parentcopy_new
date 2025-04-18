@@ -47,8 +47,8 @@ const CycleJourney = ({
     return member.role === 'child' ? 'child' : 'parent';
   };
   
- // Check if the current user has completed a specific step
- const hasUserCompletedStep = (stepNumber) => {
+  // Check if the current user has completed a specific step
+  const hasUserCompletedStep = (stepNumber) => {
     if (!currentUser) return false;
     
     // Get current user's progress
@@ -64,13 +64,12 @@ const CycleJourney = ({
              userProgress.step >= 3;
     }
     else if (stepNumber === 3) {
-      return userProgress.completedMeeting || cycleData?.meeting?.completed;
+      // Be more strict about meeting completion - must be explicitly marked as completed
+      return userProgress.completedMeeting === true || cycleData?.meeting?.completed === true;
     }
     
     return false;
   };
-
-
 
   // Initialize steps based on cycle type
   useEffect(() => {
@@ -186,7 +185,9 @@ const CycleJourney = ({
         stepsCompleted.push(2);
       }
       
-      if (cycleData.meeting?.completed) {
+      // ONLY mark step 3 as completed if the meeting is explicitly completed
+      // Not just because it's scheduled or available
+      if (cycleData.meeting?.completed === true) {
         highestCompletedStep = 3;
         stepsCompleted.push(3);
       }
@@ -202,19 +203,8 @@ const CycleJourney = ({
     
   }, [cycleData, cycleType, familyMembers, memberProgress, currentCycle]);
   
-  // Format date for display
-  const formatDate = (date) => {
-    if (!date) return 'Not scheduled';
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
-    return dateObj.toLocaleDateString('en-US', { 
-      weekday: 'long',
-      month: 'long', 
-      day: 'numeric'
-    });
-  };
-  
   // Determine if current user can take a specific step
-const canTakeStep = (stepNumber) => {
+  const canTakeStep = (stepNumber) => {
     if (!currentUser) return false;
     
     // For relationship cycles, only parents can participate
@@ -233,28 +223,6 @@ const canTakeStep = (stepNumber) => {
     // Get current user's progress
     const userProgress = memberProgress[currentUser.id] || {};
     
-// Check if the current user has completed a specific step
-const hasUserCompletedStep = (stepNumber) => {
-    if (!currentUser) return false;
-    
-    // Get current user's progress
-    const userProgress = memberProgress[currentUser.id] || {};
-    
-    if (stepNumber === 1) {
-      return userProgress.step >= 2;
-    } 
-    else if (stepNumber === 2) {
-      return userProgress.completedSurvey || 
-             currentUser.weeklyCompleted?.[currentCycle-1]?.completed ||
-             userProgress.step >= 3;
-    }
-    else if (stepNumber === 3) {
-      return userProgress.completedMeeting || cycleData.meeting?.completed;
-    }
-    
-    return false;
-  };
-
     // Check if the current user has completed this specific step
     const hasCompletedThisStep = stepNumber === 2 && 
       (userProgress.completedSurvey || 
@@ -273,6 +241,17 @@ const hasUserCompletedStep = (stepNumber) => {
     // Other steps require previous step completion
     return completedSteps.includes(stepNumber - 1) && 
            !completedSteps.includes(stepNumber);
+  };
+  
+  // Format date for display
+  const formatDate = (date) => {
+    if (!date) return 'Not scheduled';
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return dateObj.toLocaleDateString('en-US', { 
+      weekday: 'long',
+      month: 'long', 
+      day: 'numeric'
+    });
   };
   
   if (loading) {
@@ -405,7 +384,7 @@ const hasUserCompletedStep = (stepNumber) => {
             )
             .map((member) => {
               const memberPathType = getPathType(member);
-              const isCurrentUser = currentUser && member.id === currentUser.uid;
+              const isCurrentUser = currentUser && member.id === currentUser.id;
               const memberProgressData = memberProgress[member.id] || { step: 1 };
               const memberStep = memberProgressData.step || 1;
               
@@ -523,27 +502,27 @@ const hasUserCompletedStep = (stepNumber) => {
                 </p>
                 
                 <button
-  onClick={() => onStartStep(step.action, step.number)}
-  disabled={!canStart || hasUserCompletedStep(step.number)}
-  className={`px-4 py-2 rounded-lg flex items-center justify-center ${
-    isCompleted || hasUserCompletedStep(step.number)
-      ? 'bg-green-100 text-green-700 cursor-default'
-      : canStart
-        ? `bg-gradient-to-r ${step.color} text-white shadow-md hover:shadow-lg`
-        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-  }`}
->
-  {isCompleted || hasUserCompletedStep(step.number)
-    ? <>
-        <CheckCircle size={16} className="mr-2" />
-        Completed
-      </>
-    : <>
-        {step.icon && React.cloneElement(step.icon, { size: 16, className: "mr-2" })}
-        {step.buttonText}
-      </>
-  }
-</button>
+                  onClick={() => onStartStep(step.action, step.number)}
+                  disabled={!canStart || hasUserCompletedStep(step.number)}
+                  className={`px-4 py-2 rounded-lg flex items-center justify-center ${
+                    isCompleted || hasUserCompletedStep(step.number)
+                      ? 'bg-green-100 text-green-700 cursor-default'
+                      : canStart
+                        ? `bg-gradient-to-r ${step.color} text-white shadow-md hover:shadow-lg`
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  {isCompleted || hasUserCompletedStep(step.number)
+                    ? <>
+                        <CheckCircle size={16} className="mr-2" />
+                        Completed
+                      </>
+                    : <>
+                        {step.icon && React.cloneElement(step.icon, { size: 16, className: "mr-2" })}
+                        {step.buttonText}
+                      </>
+                  }
+                </button>
               </div>
             </motion.div>
           );

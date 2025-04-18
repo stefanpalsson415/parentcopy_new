@@ -1855,6 +1855,8 @@ const extractAIPreferencesFromSurvey = (responses) => {
         surveySchedule: updatedSurveySchedule,
         taskEffectiveness: updatedEffectivenessData,
         impactInsights: updatedImpactInsights,
+        [`cycleProgress.${currentWeek}.meeting.completed`]: true,
+  [`cycleProgress.${currentWeek}.step`]: 3,
         updatedAt: new Date().toISOString()
       }, familyId);
 

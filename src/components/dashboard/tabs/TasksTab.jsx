@@ -621,6 +621,7 @@ else if (member.role === 'child') {
         setCycleStep(currentFamilyStep);
         
         // Check if all family members have completed surveys to enable meeting
+// Check if all family members have completed surveys to enable meeting
 const allSurveysCompleted = familyMembers.every(member => {
   // Check multiple indicators of survey completion
   const hasCompletedSurvey = 
@@ -634,13 +635,17 @@ const allSurveysCompleted = familyMembers.every(member => {
 setCanScheduleMeeting(allSurveysCompleted);
 
 // Update cycle progress data in Firebase if needed
+// This only updates step to 3 to make the meeting available
+// It does NOT mark the meeting as completed!
 if (allSurveysCompleted && cycleStep < 3) {
   try {
     const familyRef = doc(db, "families", familyId);
     
     // Update the cycle progress to move to step 3
     await updateDoc(familyRef, {
-      [`cycleProgress.${currentWeek}.step`]: 3
+      [`cycleProgress.${currentWeek}.step`]: 3,
+      // Explicitly set meeting.completed to false to clear any incorrect state
+      [`cycleProgress.${currentWeek}.meeting.completed`]: false
     });
     
     // Also update local state
