@@ -220,6 +220,39 @@ const CycleManager = ({ cycle }) => {
     
     loadCycleData();
   }, [cycle, familyId, getRelationshipCycleData]);
+// Add this right after the first useEffect in CycleManager
+useEffect(() => {
+  // Refresh cycle data if both parents have completed assessments but flag isn't set
+  const checkAndUpdateAssessmentsComplete = async () => {
+    if (!cycleData || loading) return;
+    
+    const myComplete = isCurrentUserComplete('assessments');
+    const partnerComplete = isPartnerComplete('assessments');
+    
+    // If both are complete but flag is not set, refresh data
+    if (myComplete && partnerComplete && !cycleData.assessmentsCompleted) {
+      console.log("Both assessments complete but flag not set, refreshing data...");
+      
+      try {
+        const freshData = await getRelationshipCycleData(cycle);
+        if (freshData) {
+          setCycleData(freshData);
+        } else {
+          // Force the flag if database fetch fails
+          setCycleData(prev => ({
+            ...prev,
+            assessmentsCompleted: true,
+            assessmentsCompletedDate: new Date().toISOString()
+          }));
+        }
+      } catch (err) {
+        console.error("Error refreshing cycle data:", err);
+      }
+    }
+  };
+  
+  checkAndUpdateAssessmentsComplete();
+}, [cycleData, loading, isCurrentUserComplete, isPartnerComplete, getRelationshipCycleData, cycle]);
 
   // REPLACE the useEffect that checks for currentUser (around line 467)
 useEffect(() => {
@@ -277,48 +310,56 @@ useEffect(() => {
     }
   };
 
- // New fixed code:
-const handleAssessmentSubmit = async (responses) => {
-  try {
-    // Get the currentUser.uid directly and add proper null checking
-    if (!currentUser || !currentUser.uid) {
-      setError("You need to be signed in to complete the assessment.");
+  const handleAssessmentSubmit = async (responses) => {
+    try {
+      // Get the currentUser.uid directly and add proper null checking
+      if (!currentUser || !currentUser.uid) {
+        setError("You need to be signed in to complete the assessment.");
+        return false;
+      }
+      
+      const userId = currentUser.uid;
+      
+      // First save to database
+      await completeRelationshipAssessment(cycle, responses);
+      
+      // Fetch the latest data after saving to ensure we have the most up-to-date state
+      const latestCycleData = await getRelationshipCycleData(cycle);
+      
+      // If we successfully got updated data, use it - otherwise update locally
+      if (latestCycleData) {
+        setCycleData(latestCycleData);
+      } else {
+        // Update local state as fallback
+        const updatedData = { ...cycleData };
+        if (!updatedData.assessments) updatedData.assessments = {};
+        
+        updatedData.assessments[userId] = {
+          completed: true,
+          completedDate: new Date().toISOString(),
+          responses: responses
+        };
+        
+        const bothComplete = parentIds.every(id => 
+          updatedData.assessments[id]?.completed || (id === userId)
+        );
+        
+        if (bothComplete) {
+          updatedData.assessmentsCompleted = true;
+          updatedData.assessmentsCompletedDate = new Date().toISOString();
+        }
+        
+        setCycleData(updatedData);
+      }
+      
+      setShowAssessment(false);
+      return true;
+    } catch (err) {
+      console.error("Error completing assessment:", err);
+      setError("Error completing assessment. Please try again.");
       return false;
     }
-    
-    const userId = currentUser.uid;
-    
-    await completeRelationshipAssessment(cycle, responses);
-    
-    // Update local state
-    const updatedData = { ...cycleData };
-    if (!updatedData.assessments) updatedData.assessments = {};
-    
-    updatedData.assessments[userId] = {
-      completed: true,
-      completedDate: new Date().toISOString(),
-      responses: responses
-    };
-    
-    const bothComplete = parentIds.every(id => 
-      updatedData.assessments[id]?.completed
-    );
-    
-    if (bothComplete) {
-      updatedData.assessmentsCompleted = true;
-      updatedData.assessmentsCompletedDate = new Date().toISOString();
-    }
-    
-    setCycleData(updatedData);
-    setShowAssessment(false);
-    
-    return true;
-  } catch (err) {
-    console.error("Error completing assessment:", err);
-    setError("Error completing assessment. Please try again.");
-    return false;
-  }
-};
+  };
   
   // Handle prework completion with added null check
 const handlePreworkSubmit = async (preworkData) => {
@@ -897,6 +938,8 @@ const RelationshipTab = () => {
     
     loadRelationshipData();
   }, [familyId, currentCycle]);
+
+  
   
   // Load cycle history
   const loadCycleHistory = async () => {
