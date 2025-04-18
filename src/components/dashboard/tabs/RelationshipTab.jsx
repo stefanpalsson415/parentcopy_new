@@ -254,6 +254,42 @@ useEffect(() => {
   checkAndUpdateAssessmentsComplete();
 }, [cycleData, loading, isCurrentUserComplete, isPartnerComplete, getRelationshipCycleData, cycle]);
 
+// Add this useEffect right after the first useEffect in CycleManager component in RelationshipTab.jsx
+// (around line 446, after the first useEffect that loads cycle data)
+
+useEffect(() => {
+  // Refresh cycle data if both parents have completed assessments but flag isn't set
+  const checkAndUpdateAssessmentsComplete = async () => {
+    if (!cycleData || loading) return;
+    
+    const myComplete = isCurrentUserComplete('assessments');
+    const partnerComplete = isPartnerComplete('assessments');
+    
+    // If both are complete but flag is not set, refresh data
+    if (myComplete && partnerComplete && !cycleData.assessmentsCompleted) {
+      console.log("Both assessments complete but flag not set, refreshing data...");
+      
+      try {
+        const freshData = await getRelationshipCycleData(cycle);
+        if (freshData) {
+          setCycleData(freshData);
+        } else {
+          // Force the flag if database fetch fails
+          setCycleData(prev => ({
+            ...prev,
+            assessmentsCompleted: true,
+            assessmentsCompletedDate: new Date().toISOString()
+          }));
+        }
+      } catch (err) {
+        console.error("Error refreshing cycle data:", err);
+      }
+    }
+  };
+  
+  checkAndUpdateAssessmentsComplete();
+}, [cycleData, loading, isCurrentUserComplete, isPartnerComplete, getRelationshipCycleData, cycle]);
+
   // REPLACE the useEffect that checks for currentUser (around line 467)
 useEffect(() => {
   // Check for all required data
