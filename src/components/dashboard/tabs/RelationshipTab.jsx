@@ -24,6 +24,8 @@ import CouplesMeeting from '../../relationship/CouplesMeeting';
 import UserAvatar from '../../common/UserAvatar';
 import RelationshipEventCard from '../../calendar';
 import { useAuth } from '../../../contexts/AuthContext';
+import CycleJourney from '../../cycles/CycleJourney';
+
 
 
 
@@ -1223,8 +1225,30 @@ if (!canAccessFeatures) {
           </div>
         </div>
 
-        {/* Cycle Manager */}
-        <CycleManager cycle={currentCycle} />
+        {/* Replace CycleManager with CycleJourney */}
+<CycleJourney
+  cycleType="relationship"
+  currentCycle={currentCycle}
+  cycleData={cycleData || {}}
+  familyMembers={familyMembers}
+  currentUser={currentUser}
+  memberProgress={memberProgress}
+  onStartStep={(action, step) => {
+    if (action === "assessment") setShowAssessment(true);
+    else if (action === "prework") setShowPrework(true);
+    else if (action === "meeting") {
+      if (cycleData?.meeting?.scheduled) {
+        setShowMeeting(true);
+      } else {
+        setShowScheduleMeeting(true);
+      }
+    }
+  }}
+  dueDate={cycleData?.meeting?.scheduledDate ? new Date(cycleData.meeting.scheduledDate) : null}
+  onChangeDueDate={() => setShowScheduleMeeting(true)}
+  loading={isLoadingData}
+  error={hasError}
+/>
       </div>
 
       {/* AI Insights Section */}

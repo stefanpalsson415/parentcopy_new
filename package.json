@@ -17,6 +17,7 @@
     "express": "^4.21.2",
     "firebase": "^10.14.1",
     "firebase-functions": "^6.3.2",
+    "framer-motion": "^12.7.4",
     "lodash": "^4.17.21",
     "lucide-react": "^0.330.0",
     "node-fetch": "^3.3.2",

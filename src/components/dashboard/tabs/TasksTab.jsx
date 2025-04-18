@@ -16,7 +16,7 @@ import { EventManager as EnhancedEventManager, FloatingCalendar } from '../../..
 import CalendarService from '../../../services/CalendarService';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useEvents } from '../../../contexts/EventContext';
-import CycleJourney from '../../../cycles/CycleJourney';
+import CycleJourney from '../../cycles/CycleJourney';
 
 
 
@@ -115,6 +115,8 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   const [showEditEvent, setShowEditEvent] = useState(false);
   const { currentUser } = useAuth();
   const [existingDueDateEvent, setExistingDueDateEvent] = useState(null);
+  const [cycleData, setCycleData] = useState(null);
+const [meetingDate, setMeetingDate] = useState(null);
 
 
   
