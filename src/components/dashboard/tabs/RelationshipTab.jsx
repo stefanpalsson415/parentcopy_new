@@ -651,6 +651,84 @@ const handlePreworkSubmit = async (preworkData) => {
         </div>
       </div>          
   
+
+{/* Step Buttons */}
+<div className="flex flex-col gap-4 mt-6 mb-2">
+  <h5 className="text-sm font-medium text-gray-600 font-roboto">Cycle Steps:</h5>
+  <div className="grid grid-cols-3 gap-3">
+    {/* Assessment Button */}
+    <button 
+      onClick={() => setShowAssessment(true)}
+      disabled={myAssessmentComplete}
+      className={`relative p-4 rounded-lg flex flex-col items-center ${
+        myAssessmentComplete 
+          ? 'bg-gray-100 text-gray-500' 
+          : 'bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-md hover:shadow-lg'
+      }`}
+    >
+      <Shield size={20} className="mb-2" />
+      <span className="text-sm font-medium">Take Assessment</span>
+      {myAssessmentComplete && (
+        <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center shadow">
+          <CheckCircle size={14} className="text-white" />
+        </div>
+      )}
+    </button>
+
+    {/* Pre-work Button */}
+    <button 
+      onClick={() => setShowPrework(true)}
+      disabled={!assessmentsComplete || myPreworkComplete}
+      className={`relative p-4 rounded-lg flex flex-col items-center ${
+        myPreworkComplete 
+          ? 'bg-gray-100 text-gray-500'
+          : assessmentsComplete
+            ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md hover:shadow-lg'
+            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+      }`}
+    >
+      <Brain size={20} className="mb-2" />
+      <span className="text-sm font-medium">Complete Pre-work</span>
+      {myPreworkComplete && (
+        <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center shadow">
+          <CheckCircle size={14} className="text-white" />
+        </div>
+      )}
+    </button>
+
+    {/* Meeting Button */}
+    <button 
+      onClick={() => meetingScheduled ? setShowMeeting(true) : setShowScheduleMeeting(true)}
+      disabled={!preworkComplete || meetingComplete}
+      className={`relative p-4 rounded-lg flex flex-col items-center ${
+        meetingComplete 
+          ? 'bg-gray-100 text-gray-500'
+          : preworkComplete
+            ? 'bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-md hover:shadow-lg'
+            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+      }`}
+    >
+      <Users size={20} className="mb-2" />
+      <span className="text-sm font-medium">{meetingScheduled ? 'Start Meeting' : 'Schedule Meeting'}</span>
+      {meetingComplete && (
+        <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center shadow">
+          <CheckCircle size={14} className="text-white" />
+        </div>
+      )}
+    </button>
+  </div>
+
+  {/* Meeting Status Message */}
+  {meetingScheduled && !meetingComplete && (
+    <div className="text-sm mt-1 text-amber-700 bg-amber-50 p-2 rounded-lg text-center">
+      <Calendar size={14} className="inline mr-1" />
+      Meeting scheduled for: {formatDate(meetingDate)}
+    </div>
+  )}
+</div>
+
+
+
       {/* Action Buttons - Shows different options based on progress */}
 <div className="flex flex-wrap justify-center mt-4 gap-4">
   {/* Step 1: Assessment */}
