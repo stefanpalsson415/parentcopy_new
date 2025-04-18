@@ -24,7 +24,6 @@ import CouplesMeeting from '../../relationship/CouplesMeeting';
 import UserAvatar from '../../common/UserAvatar';
 import RelationshipEventCard from '../../calendar';
 import { useAuth } from '../../../contexts/AuthContext';
-import CycleJourney from '../../cycles/CycleJourney';
 
 
 
@@ -1225,50 +1224,8 @@ if (!canAccessFeatures) {
         </div>
 
         {/* Cycle Manager */}
-        {/* Cycle Manager */}
-<CycleJourney
-  cycleType="relationship"
-  currentCycle={currentCycle}
-  cycleData={{
-    assessmentsCompleted: cycleData?.assessmentsCompleted || false,
-    preworkCompleted: cycleData?.preworkCompleted || false,
-    meeting: {
-      scheduled: cycleData?.meeting?.scheduled || false,
-      scheduledDate: cycleData?.meeting?.scheduledDate || null,
-      completed: cycleData?.meeting?.completed || false
-    }
-  }}
-  familyMembers={familyMembers.filter(m => m.role === 'parent')}
-  currentUser={currentUser ? familyMembers.find(m => m.id === currentUser.uid) : null}
-  memberProgress={Object.fromEntries(
-    familyMembers
-      .filter(m => m.role === 'parent')
-      .map(parent => {
-        const id = parent.id;
-        return [id, {
-          step: isCurrentUserComplete('assessments') ? 
-                (isCurrentUserComplete('prework') ? 3 : 2) : 1,
-          completedSurvey: isCurrentUserComplete('assessments'),
-          completedPrework: isCurrentUserComplete('prework')
-        }];
-      })
-  )}
-  onStartStep={(action, step) => {
-    if (action === "assessment") setShowAssessment(true);
-    else if (action === "prework") setShowPrework(true);
-    else if (action === "meeting") {
-      if (cycleData?.meeting?.scheduled) {
-        setShowMeeting(true);
-      } else {
-        setShowScheduleMeeting(true);
-      }
-    }
-  }}
-  dueDate={cycleData?.meeting?.scheduledDate ? new Date(cycleData.meeting.scheduledDate) : null}
-  onChangeDueDate={() => setShowScheduleMeeting(true)}
-  loading={isLoadingData}
-  error={hasError}
-/>
+        <CycleManager cycle={currentCycle} />
+      </div>
 
       {/* AI Insights Section */}
       {renderSectionHeader(
