@@ -1,22 +1,42 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
-  Clock, Download, X, ChevronDown, ChevronUp, Sparkles, Star, 
-  Users, RefreshCw, User, Calendar, CheckCircle, Trash2, Edit 
+  Calendar, CheckCircle, X, Clock, Sparkles, Star, 
+  Users, ChevronRight, ChevronLeft, User, Save, 
+  MessageSquare, Award, Download, CheckCheck, Info
 } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useSurvey } from '../../contexts/SurveyContext';
 import AllieAIService from '../../services/AllieAIService';
 import CalendarService from '../../services/CalendarService';
 import { useAuth } from '../../contexts/AuthContext';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import confetti from 'canvas-confetti';
+import DatabaseService from '../../services/DatabaseService';
 
+// Save indicator component for autosave functionality
+const SaveIndicator = ({ saving, saved }) => (
+  <div className="flex items-center text-xs animate-fade-in">
+    {saving ? (
+      <span className="text-blue-600 flex items-center">
+        <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-1"></div>
+        Saving...
+      </span>
+    ) : saved ? (
+      <span className="text-green-600 flex items-center">
+        <CheckCircle size={12} className="mr-1" />
+        Saved
+      </span>
+    ) : null}
+  </div>
+);
 
-// Confetti effect component for celebration
+// Confetti effect component for celebration moments
 const Fireworks = () => {
   useEffect(() => {
-    // Create confetti effect
+    // Create confetti effect with various colors
+    const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
+    
     const createConfetti = () => {
-      const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
-      
       for (let i = 0; i < 150; i++) {
         const confetti = document.createElement('div');
         confetti.className = 'confetti';
@@ -36,10 +56,14 @@ const Fireworks = () => {
     // Create confetti at regular intervals
     const interval = setInterval(createConfetti, 300);
     
-    // Play celebration sound
-    const audio = new Audio('/sounds/celebration.mp3');
-    audio.volume = 0.6;
-    audio.play().catch(e => console.log("Audio play failed:", e));
+    // Play celebration sound if available
+    try {
+      const audio = new Audio('/sounds/celebration.mp3');
+      audio.volume = 0.6;
+      audio.play().catch(e => console.log("Audio play failed:", e));
+    } catch (e) {
+      console.log("Audio not available");
+    }
     
     // Cleanup
     return () => {
@@ -83,174 +107,532 @@ const Fireworks = () => {
   );
 };
 
+// Family balance chart component
+const FamilyBalanceChart = ({ weekHistory, completedWeeks }) => {
+  // Generate chart data from week history
+  const generateChartData = () => {
+    const data = [];
+    
+    // Add initial point if available
+    if (weekHistory.initial) {
+      data.push({
+        point: 'Initial',
+        mama: weekHistory.initial?.balance?.mama || 50,
+        papa: weekHistory.initial?.balance?.papa || 50,
+        tasks: 0
+      });
+    }
+    
+    // Add data for each completed week
+    completedWeeks.forEach(week => {
+      const weekData = weekHistory[`week${week}`];
+      if (weekData) {
+        data.push({
+          point: `Week ${week}`,
+          mama: weekData?.balance?.mama || 50,
+          papa: weekData?.balance?.papa || 50,
+          tasks: (weekData?.tasks?.filter(t => t.completed)?.length || 0)
+        });
+      }
+    });
+    
+    return data;
+  };
+  
+  const data = generateChartData();
+  
+  if (data.length < 2) {
+    return (
+      <div className="bg-blue-50 p-4 rounded-lg text-center">
+        <p className="text-blue-800 font-medium">Not enough data yet for a meaningful chart.</p>
+        <p className="text-blue-600 text-sm mt-1">Complete more weekly meetings to see your family journey!</p>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="bg-white rounded-lg shadow p-4 h-64">
+      <h3 className="text-lg font-bold mb-2 font-roboto">Family Balance Journey</h3>
+      <ResponsiveContainer width="100%" height="85%">
+        <AreaChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="point" />
+          <YAxis />
+          <Tooltip />
+          <Area type="monotone" dataKey="mama" stackId="1" stroke="#8884d8" fill="#8884d8" name="Mama %" />
+          <Area type="monotone" dataKey="papa" stackId="1" stroke="#82ca9d" fill="#82ca9d" name="Papa %" />
+          <Area type="monotone" dataKey="tasks" stroke="#ffc658" fill="#ffc658" name="Completed Tasks" />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+// Main component for the family meeting
 const FamilyMeetingScreen = ({ onClose }) => {
+  // Contexts
   const { 
     currentWeek, 
     saveFamilyMeetingNotes, 
     familyMembers, 
     surveyResponses,
+    completedWeeks,
     completeWeek,
-    familyId
+    familyId,
+    weekHistory,
+    taskRecommendations
   } = useFamily();
   
   const { fullQuestionSet } = useSurvey();
   const { currentUser } = useAuth();
 
+  // Screen state
+  const [currentScreen, setCurrentScreen] = useState('intro'); // 'intro', 'meeting', or 'summary'
   
+  // Meeting notes state
   const [meetingNotes, setMeetingNotes] = useState({
     wentWell: '',
     couldImprove: '',
     actionItems: '',
     nextWeekGoals: '',
-    additionalNotes: ''
+    additionalNotes: '',
+    kidsInput: '', // New field for kids section
+    balanceReflection: '' // New field for balance reflection
   });
-  const [expandedSection, setExpandedSection] = useState('wentWell'); // Default expanded section
-  const [viewMode, setViewMode] = useState('agenda'); // 'agenda' or 'report'
-  const [isSaving, setIsSaving] = useState(false);
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const [isCompleting, setIsCompleting] = useState(false);
-  const [showCelebration, setShowCelebration] = useState(false);
-
   
-  // New state for suggested items
-  const [suggestedActionItems, setSuggestedActionItems] = useState([]);
-  const [suggestedGoals, setSuggestedGoals] = useState([]);
+  // Current section for the meeting screen
+  const [activeSection, setActiveSection] = useState('wentWell');
+  
+  // State for selected items from suggestions
   const [selectedActionItems, setSelectedActionItems] = useState([]);
   const [selectedGoals, setSelectedGoals] = useState([]);
-  const [isAddingToCalendar, setIsAddingToCalendar] = useState(false);
+  
+  // Operation states
+  const [saving, setSaving] = useState(false);
+  const [savedRecently, setSavedRecently] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
   const [agenda, setAgenda] = useState(null);
+  const [loadingAgenda, setLoadingAgenda] = useState(true);
+  const [loadingError, setLoadingError] = useState(null);
+  const [isAddingToCalendar, setIsAddingToCalendar] = useState(false);
   
-  // Generate agenda topics based on family data
-  const generateAgendaTopics = () => {
-    // Analyze survey data to find insights (in a real app, this would be more sophisticated)
-    const insights = analyzeData();
-    
-    return [
-      {
-        id: 'wentWell',
-        title: '1. What Went Well',
-        duration: '10 min',
-        description: 'Celebrate your family\'s wins this week',
-        guideQuestions: [
-          'What tasks did each parent successfully complete?',
-          'What worked well in terms of sharing responsibilities?',
-          'When did you feel most balanced as a family this week?'
-        ],
-        insights: insights.successInsights
-      },
-      {
-        id: 'couldImprove',
-        title: '2. What Could Improve',
-        duration: '10 min',
-        description: 'Identify opportunities for better balance',
-        guideQuestions: [
-          'What challenges did you face with task completion?',
-          'Where did the workload feel unbalanced?',
-          'What obstacles prevented better sharing of responsibilities?'
-        ],
-        insights: insights.challengeInsights
-      },
-      {
-        id: 'actionItems',
-        title: '3. Action Items for Next Week',
-        duration: '10 min',
-        description: 'Commit to specific improvements',
-        guideQuestions: [
-          'What specific tasks will each parent take ownership of?',
-          'How will you address the challenges identified earlier?',
-          'What support does each family member need next week?'
-        ],
-        insights: insights.actionInsights
-      }
-    ];
-  };
-  
-  // Analyze family data to generate insights
-  const analyzeData = () => {
-    // In a real app, this would analyze actual survey responses to find patterns
-    return {
-      successInsights: [
-        "Papa completed 2 of 3 assigned tasks this week",
-        "Mama successfully took on more meal planning",
-        "The family had more balanced evenings together"
-      ],
-      challengeInsights: [
-        "School-related communication is still 80% handled by Mama",
-        "Morning routines remain unbalanced",
-        "Unexpected work demands made task completion difficult"
-      ],
-      actionInsights: [
-        "Focus on evening routine sharing",
-        "Papa can take lead on school communications next week",
-        "Set up family calendar to better coordinate schedules"
-      ]
-    };
-  };
-  
-  // Generate suggested action items based on family data
-  const generateSuggestedItems = () => {
-    // This would use actual data in a real app
-    return {
-      actionItems: [
-        "Papa to take over all school communications for the week",
-        "Mama to teach Papa how to handle doctor appointments",
-        "Create a shared digital calendar for all family activities",
-        "Implement a 15-minute daily cleanup where everyone participates",
-        "Set up a meal planning session with both parents involved"
-      ],
-      goals: [
-        "Reduce Mama's mental load from 75% to 60% this week",
-        "Make sure both parents attend at least one school function",
-        "Complete morning routines without reminders from Mama",
-        "Create a rotating schedule for managing household finances",
-        "Have Papa handle emotional support for at least one child crisis"
-      ]
-    };
-  };
-  
-  // Initialize suggested items
-  useEffect(() => {
-    const suggestions = generateSuggestedItems();
-    setSuggestedActionItems(suggestions.actionItems);
-    setSuggestedGoals(suggestions.goals);
-  }, []);
-  
-  // Add this useEffect hook after your existing useEffect hooks
+  // Refs
+  const saveTimeoutRef = useRef(null);
+  const autoSaveIntervalRef = useRef(null);
+
+  // Load meeting agenda
   useEffect(() => {
     const loadAgenda = async () => {
       if (!familyId || !currentWeek) return;
       
       try {
-        console.log("Loading AI meeting agenda...");
+        setLoadingAgenda(true);
+        setLoadingError(null);
+        
+        // Get AI generated meeting agenda
         const meetingAgenda = await AllieAIService.generateFamilyMeetingAgenda(
           familyId,
           currentWeek
         );
+        
         setAgenda(meetingAgenda);
-        console.log("AI agenda loaded:", meetingAgenda);
+        setLoadingAgenda(false);
       } catch (error) {
         console.error("Error loading meeting agenda:", error);
+        setLoadingError("Failed to load meeting agenda. Please try again.");
+        setLoadingAgenda(false);
       }
     };
     
     loadAgenda();
+    
+    // Check for existing meeting notes to restore
+    const checkExistingNotes = async () => {
+      try {
+        const existingNotes = await DatabaseService.getFamilyMeetingNotes(familyId, currentWeek);
+        if (existingNotes) {
+          // Restore notes
+          setMeetingNotes(prev => ({
+            ...prev,
+            ...existingNotes
+          }));
+          
+          // Restore selected items if they exist
+          const actionItems = existingNotes.actionItems?.split('\n').filter(Boolean) || [];
+          const goals = existingNotes.nextWeekGoals?.split('\n').filter(Boolean) || [];
+          
+          setSelectedActionItems(actionItems);
+          setSelectedGoals(goals);
+          
+          console.log("Restored existing meeting notes");
+        }
+      } catch (error) {
+        console.error("Error checking existing notes:", error);
+      }
+    };
+    
+    checkExistingNotes();
+    
+    // Setup autosave interval
+    autoSaveIntervalRef.current = setInterval(() => {
+      handleAutosave();
+    }, 30000); // Autosave every 30 seconds
+    
+    return () => {
+      // Clean up
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (autoSaveIntervalRef.current) clearInterval(autoSaveIntervalRef.current);
+    };
   }, [familyId, currentWeek]);
 
-  // Replace the addMeetingToCalendar function in FamilyMeetingScreen.jsx:
+  // Generate data for AI insights from tasks, surveys, and history
+  const generateAIInsights = useCallback(() => {
+    // Analyze survey data to find insights based on actual data
+    const insights = {
+      successInsights: [],
+      challengeInsights: [],
+      actionInsights: []
+    };
+    
+    try {
+      // Check for task completion patterns
+      const completedTasks = taskRecommendations?.filter(t => t.completed) || [];
+      const incompleteTasks = taskRecommendations?.filter(t => !t.completed) || [];
+      
+      if (completedTasks.length > 0) {
+        // Success insights based on completed tasks
+        insights.successInsights.push(
+          `${completedTasks.length} of ${taskRecommendations?.length || 0} tasks completed this week`
+        );
+        
+        // Check which parent completed more tasks
+        const mamaCompletedCount = completedTasks.filter(t => t.assignedTo === 'Mama').length;
+        const papaCompletedCount = completedTasks.filter(t => t.assignedTo === 'Papa').length;
+        
+        if (mamaCompletedCount > papaCompletedCount) {
+          insights.successInsights.push(`Mama completed ${mamaCompletedCount} tasks this week`);
+        } else if (papaCompletedCount > mamaCompletedCount) {
+          insights.successInsights.push(`Papa completed ${papaCompletedCount} tasks this week`);
+        } else if (mamaCompletedCount > 0) {
+          insights.successInsights.push(`Both parents completed an equal number of tasks`);
+        }
+      }
+      
+      // Analyze balance changes from survey data
+      if (weekHistory && Object.keys(weekHistory).length > 1) {
+        // Get last two weeks of data to compare
+        const weeks = Object.keys(weekHistory)
+          .filter(key => key.startsWith('week'))
+          .map(key => parseInt(key.replace('week', '')))
+          .sort((a, b) => b - a); // Sort descending
+        
+        if (weeks.length >= 2) {
+          const currentWeekData = weekHistory[`week${weeks[0]}`];
+          const prevWeekData = weekHistory[`week${weeks[1]}`];
+          
+          if (currentWeekData?.balance && prevWeekData?.balance) {
+            const currentImbalance = Math.abs(currentWeekData.balance.mama - 50);
+            const prevImbalance = Math.abs(prevWeekData.balance.mama - 50);
+            
+            if (currentImbalance < prevImbalance) {
+              insights.successInsights.push(
+                `Family balance improved by ${(prevImbalance - currentImbalance).toFixed(1)}% since last week`
+              );
+            } else if (currentImbalance > prevImbalance) {
+              insights.challengeInsights.push(
+                `Balance decreased by ${(currentImbalance - prevImbalance).toFixed(1)}% since last week`
+              );
+            }
+          }
+        }
+      }
+      
+      // Analyze incomplete tasks for challenges
+      if (incompleteTasks.length > 0) {
+        const categories = incompleteTasks.map(t => t.category || 'Other');
+        const categoryCounts = {};
+        
+        categories.forEach(cat => {
+          categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+        });
+        
+        // Find most challenging category
+        const sortedCategories = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1]);
+        if (sortedCategories.length > 0) {
+          insights.challengeInsights.push(
+            `${sortedCategories[0][0]} has the most incomplete tasks (${sortedCategories[0][1]})`
+          );
+        }
+      }
+      
+      // Generate action insights based on our analysis
+      if (insights.challengeInsights.length > 0) {
+        // Create actions based on challenges
+        insights.actionInsights.push(
+          "Focus on better sharing of tasks in the most imbalanced category"
+        );
+      }
+      
+      // Add general improvement actions if we don't have specific ones
+      if (insights.actionInsights.length === 0) {
+        insights.actionInsights.push(
+          "Continue building positive habits for better family balance",
+          "Try weekly check-ins to discuss workload distribution"
+        );
+      }
+    } catch (error) {
+      console.error("Error generating insights:", error);
+      // Provide fallback insights
+      insights.successInsights = ["Completing family meetings consistently is a success"];
+      insights.challengeInsights = ["Improving balance requires consistent effort"];
+      insights.actionInsights = ["Set specific goals for the coming week"];
+    }
+    
+    return insights;
+  }, [weekHistory, taskRecommendations]);
+
+  // Generate suggested action items based on family data
+  const getSuggestedActionItems = useCallback(() => {
+    const insights = generateAIInsights();
+    
+    // Create specific action items based on insights and incomplete tasks
+    const actionItems = [];
+    
+    // Add insight-based actions
+    insights.actionInsights.forEach(insight => {
+      actionItems.push(insight);
+    });
+    
+    // Add task-based actions
+    const incompleteTasks = taskRecommendations?.filter(t => !t.completed) || [];
+    incompleteTasks.slice(0, 2).forEach(task => {
+      actionItems.push(`Complete "${task.title}" together as a family`);
+    });
+    
+    // Add some standard action items if we don't have enough
+    if (actionItems.length < 5) {
+      const standardItems = [
+        "Schedule a weekly 15-minute planning session",
+        "Create a shared digital calendar for all family activities",
+        "Implement a 15-minute daily cleanup where everyone participates",
+        "Set up a meal planning session with both parents involved",
+        "Review the family calendar together every Sunday evening"
+      ];
+      
+      // Add standard items until we have 5
+      for (let i = 0; i < standardItems.length && actionItems.length < 5; i++) {
+        if (!actionItems.includes(standardItems[i])) {
+          actionItems.push(standardItems[i]);
+        }
+      }
+    }
+    
+    return actionItems;
+  }, [taskRecommendations, generateAIInsights]);
+
+  // Generate suggested goals based on family data
+  const getSuggestedGoals = useCallback(() => {
+    // Analyze survey data to create personalized goals
+    const goals = [];
+    
+    // Try to extract imbalanced categories from survey data
+    try {
+      if (surveyResponses) {
+        // Count responses by category
+        const categories = {
+          "Visible Household Tasks": { mama: 0, papa: 0, total: 0 },
+          "Invisible Household Tasks": { mama: 0, papa: 0, total: 0 },
+          "Visible Parental Tasks": { mama: 0, papa: 0, total: 0 },
+          "Invisible Parental Tasks": { mama: 0, papa: 0, total: 0 }
+        };
+        
+        // Analyze survey responses to determine balance by category
+        Object.entries(surveyResponses).forEach(([key, value]) => {
+          if (value !== 'Mama' && value !== 'Papa') return;
+          
+          // Find question category from fullQuestionSet if possible
+          const questionId = key.includes('-') ? key.split('-').pop() : key;
+          const question = fullQuestionSet.find(q => q.id === questionId);
+          
+          if (question && categories[question.category]) {
+            categories[question.category].total++;
+            if (value === 'Mama') {
+              categories[question.category].mama++;
+            }
+          }
+        });
+        
+        // Calculate imbalance for each category
+        const imbalances = [];
+        Object.entries(categories).forEach(([category, counts]) => {
+          if (counts.total > 0) {
+            const mamaPercent = Math.round((counts.mama / counts.total) * 100);
+            const papaPercent = 100 - mamaPercent;
+            const imbalance = Math.abs(mamaPercent - 50);
+            
+            imbalances.push({
+              category,
+              mamaPercent,
+              papaPercent,
+              imbalance,
+              dominant: mamaPercent > 50 ? 'Mama' : 'Papa'
+            });
+          }
+        });
+        
+        // Sort by imbalance (highest first)
+        imbalances.sort((a, b) => b.imbalance - a.imbalance);
+        
+        // Create goals based on imbalances
+        if (imbalances.length > 0) {
+          const topImbalance = imbalances[0];
+          
+          if (topImbalance.imbalance > 20) {
+            const lessDoingParent = topImbalance.dominant === 'Mama' ? 'Papa' : 'Mama';
+            
+            goals.push(
+              `Reduce ${topImbalance.dominant}'s ${topImbalance.category} workload by 10% this week`,
+              `Have ${lessDoingParent} take the lead on 2 ${topImbalance.category.toLowerCase()} this week`
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error analyzing survey data for goals:", error);
+    }
+    
+    // Add goals based on tasks if available
+    if (taskRecommendations && taskRecommendations.length > 0) {
+      goals.push(`Complete at least ${Math.ceil(taskRecommendations.length * 0.8)} tasks this week`);
+    }
+    
+    // Add some standard goals if we don't have enough
+    if (goals.length < 5) {
+      const standardGoals = [
+        "Have one parent take a full day off from household responsibilities",
+        "Create a rotating schedule for managing household finances",
+        "Complete morning routines without reminders from either parent",
+        "Make sure both parents attend at least one school function",
+        "Have Papa handle emotional support for at least one child crisis",
+        "Have Mama take a break from planning activities for one full day"
+      ];
+      
+      // Add standard goals until we have 5
+      for (let i = 0; i < standardGoals.length && goals.length < 5; i++) {
+        if (!goals.includes(standardGoals[i])) {
+          goals.push(standardGoals[i]);
+        }
+      }
+    }
+    
+    return goals;
+  }, [surveyResponses, fullQuestionSet, taskRecommendations]);
+
+  // Handle input changes
+  const handleInputChange = (section, value) => {
+    setMeetingNotes(prev => ({
+      ...prev,
+      [section]: value
+    }));
+    
+    // Schedule autosave
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    
+    saveTimeoutRef.current = setTimeout(() => {
+      handleAutosave();
+    }, 2000); // Debounce for 2 seconds
+  };
+  
+  // Handle autosave
+  const handleAutosave = useCallback(async () => {
+    if (!familyId || !currentWeek) return;
+    
+    try {
+      setSaving(true);
+      
+      // Combine selected and custom action items and goals
+      const formattedNotes = {
+        ...meetingNotes,
+        actionItems: [...selectedActionItems, meetingNotes.actionItems].filter(Boolean).join('\n'),
+        nextWeekGoals: [...selectedGoals, meetingNotes.nextWeekGoals].filter(Boolean).join('\n')
+      };
+      
+      await saveFamilyMeetingNotes(currentWeek, formattedNotes);
+      
+      setSaving(false);
+      setSavedRecently(true);
+      
+      // Reset saved indicator after 3 seconds
+      setTimeout(() => {
+        setSavedRecently(false);
+      }, 3000);
+    } catch (error) {
+      console.error("Error autosaving meeting notes:", error);
+      setSaving(false);
+    }
+  }, [familyId, currentWeek, meetingNotes, selectedActionItems, selectedGoals, saveFamilyMeetingNotes]);
+
+  // Manual save
+  const handleSave = async () => {
+    await handleAutosave();
+  };
+  
+  // Navigation between sections
+  const navigateToSection = (section) => {
+    // Save current state first
+    handleAutosave();
+    
+    // Then navigate
+    setActiveSection(section);
+    
+    // Scroll to top
+    window.scrollTo(0, 0);
+  };
+  
+  // Navigate to next screen
+  const goToNextScreen = () => {
+    handleAutosave(); // Save first
+    
+    if (currentScreen === 'intro') {
+      setCurrentScreen('meeting');
+    } else if (currentScreen === 'meeting') {
+      setCurrentScreen('summary');
+    }
+    
+    // Scroll to top
+    window.scrollTo(0, 0);
+  };
+  
+  // Navigate to previous screen
+  const goToPreviousScreen = () => {
+    handleAutosave(); // Save first
+    
+    if (currentScreen === 'summary') {
+      setCurrentScreen('meeting');
+    } else if (currentScreen === 'meeting') {
+      setCurrentScreen('intro');
+    }
+    
+    // Scroll to top
+    window.scrollTo(0, 0);
+  };
+  
+  // Add meeting to calendar
   const addMeetingToCalendar = async () => {
     try {
       setIsAddingToCalendar(true);
       
-      // Create a meeting date (default to next day)
+      // Create a meeting date (default to next week, same day)
       const meetingDate = new Date();
-      meetingDate.setDate(meetingDate.getDate() + 1);
+      meetingDate.setDate(meetingDate.getDate() + 7); // One week later
       meetingDate.setHours(19, 0, 0, 0); // 7 PM
       
-      // Use CalendarService instead of direct hook access
+      // Use CalendarService to add the event
       const result = await CalendarService.addEvent(
         {
-          title: `Family Meeting - Cycle ${currentWeek}`,
-          summary: `Family Meeting - Cycle ${currentWeek}`,
+          title: `Family Meeting - Cycle ${currentWeek + 1}`,
+          summary: `Family Meeting - Cycle ${currentWeek + 1}`,
           description: 'Weekly family meeting to discuss task balance and set goals for the coming week.',
           start: {
             dateTime: meetingDate.toISOString(),
@@ -264,7 +646,7 @@ const FamilyMeetingScreen = ({ onClose }) => {
           eventType: 'meeting',
           linkedEntity: {
             type: 'meeting',
-            id: currentWeek
+            id: currentWeek + 1
           },
           // Add all family members as attendees
           attendees: familyMembers.map(member => ({
@@ -274,197 +656,30 @@ const FamilyMeetingScreen = ({ onClose }) => {
             role: member.role
           })),
           attendingParentId: 'both',
-          universalId: `family-meeting-${familyId}-${currentWeek}`
+          universalId: `family-meeting-${familyId}-${currentWeek + 1}`
         },
         currentUser.uid
       );
       
+      setIsAddingToCalendar(false);
+      
       if (result.success) {
-        alert("Family meeting added to your calendar!");
+        alert("Next family meeting added to your calendar!");
       } else {
         alert("Couldn't add to calendar. Please try again.");
       }
     } catch (error) {
       console.error("Error adding meeting to calendar:", error);
       alert("There was an error adding the meeting to your calendar.");
-    } finally {
       setIsAddingToCalendar(false);
     }
   };
-
-  // Generate weekly report data
-  const generateWeeklyReport = () => {
-    // This would use actual data in a real app
-    return {
-      balanceScore: {
-        mama: 65,
-        papa: 35
-      },
-      tasks: {
-        mama: {
-          completed: 1,
-          total: 2,
-          items: [
-            { title: "Manage Home Repairs", status: 'completed' },
-            { title: "Plan Family Activities", status: 'incomplete' }
-          ]
-        },
-        papa: {
-          completed: 2,
-          total: 3,
-          items: [
-            { title: "Meal Planning", status: 'completed' },
-            { title: "Childcare Coordination", status: 'completed' },
-            { title: "Family Calendar Management", status: 'incomplete' }
-          ]
-        }
-      },
-      surveyHighlights: [
-        "Papa has taken over meal planning for the week",
-        "Visible household tasks are becoming more balanced",
-        "Children report improvement in Papa's involvement with homework"
-      ],
-      discrepancies: [
-        "Parents disagree on who handled doctor appointments this week",
-        "Children perceive Mama is still managing most invisible tasks",
-        "There's disagreement about who should coordinate school activities"
-      ]
-    };
-  };
   
-  // Get agenda topics
-  const agendaTopics = generateAgendaTopics();
-  
-  // Get weekly report data
-  const weeklyReport = generateWeeklyReport();
-  
-  // Handle input changes
-  const handleInputChange = (section, value) => {
-    setMeetingNotes({
-      ...meetingNotes,
-      [section]: value
-    });
-  };
-  
-  // Toggle section expansion
-  const toggleSection = (sectionId) => {
-    if (expandedSection === sectionId) {
-      setExpandedSection(null);
-    } else {
-      setExpandedSection(sectionId);
-    }
-  };
-  
-  // Helper function to analyze weekly trends in survey data
-  const analyzeWeeklyTrends = () => {
-    // In a real implementation, this would analyze actual survey data
-    return {
-      mostImprovedArea: "Visible Household Tasks",
-      leastImprovedArea: "Invisible Parental Tasks",
-      biggestImbalance: 25,
-      overallTrend: "improving"
-    };
-  };
-
-  // Helper function to analyze task completion patterns
-  const analyzeTaskCompletionPatterns = () => {
-    // In a real implementation, this would analyze actual task data
-    return {
-      completionRate: 68,
-      bestCompleter: "Papa",
-      incompleteReason: "Lack of time",
-      recommendedTaskType: "Visible Household"
-    };
-  };
-
-  // Add this function to generate better meeting agenda topics
-  const generateEnhancedAgendaTopics = () => {
-    // Get survey data trends
-    const trends = analyzeWeeklyTrends();
-    
-    // Get task completion analysis
-    const taskAnalysis = analyzeTaskCompletionPatterns();
-    
-    return [
-      {
-        id: 'wentWell',
-        title: '1. Celebrate Progress',
-        duration: '10 min',
-        description: "Acknowledge improvements and wins from this week",
-        guideQuestions: [
-          'Which tasks did each person successfully complete?',
-          `In which area have we improved the most? (${trends.mostImprovedArea})`,
-          'What new balance strategies worked well this week?'
-        ],
-        insights: [
-          `Your family improved most in ${trends.mostImprovedArea} this week`,
-          `${taskAnalysis.bestCompleter} completed the most tasks this week!`,
-          `You've maintained a ${taskAnalysis.completionRate}% task completion rate`
-        ]
-      },
-      {
-        id: 'couldImprove',
-        title: '2. Address Challenges',
-        duration: '10 min',
-        description: "Identify what's still not working well",
-        guideQuestions: [
-          `Why does ${trends.leastImprovedArea} remain challenging?`,
-          'What obstacles prevented task completion this week?',
-          'Which responsibilities still feel unbalanced?'
-        ],
-        insights: [
-          `${trends.leastImprovedArea} still shows a ${trends.biggestImbalance}% imbalance`,
-          `${taskAnalysis.incompleteReason} was the most common reason tasks weren't completed`,
-          'Tasks in the morning routines category had the lowest completion rate'
-        ]
-      },
-      {
-        id: 'actionItems',
-        title: "3. Next Week's Plan",
-        duration: '10 min',
-        description: "Create specific actions for next week based on data",
-        guideQuestions: [
-          `How can we better balance ${trends.leastImprovedArea}?`,
-          'Which new tasks would have the biggest impact?',
-          'What support does each family member need next week?'
-        ],
-        insights: [
-          `Based on your patterns, ${taskAnalysis.recommendedTaskType} tasks are most effective for your family`,
-          'Morning routines need special attention next week',
-          'Consider redistributing the emotional support tasks which are currently 70% handled by Mama'
-        ]
-      }
-    ];
-  };
-  
-  // Handle meeting completion
+  // Complete family meeting and cycle
   const handleCompleteMeeting = async () => {
-    setIsSaving(true);
+    // Save one last time
+    await handleAutosave();
     
-    try {
-      // Combine selected and custom action items and goals
-      const combinedNotes = {
-        ...meetingNotes,
-        actionItems: selectedActionItems.join('\n') + 
-          (meetingNotes.actionItems ? '\n' + meetingNotes.actionItems : ''),
-        nextWeekGoals: selectedGoals.join('\n') + 
-          (meetingNotes.nextWeekGoals ? '\n' + meetingNotes.nextWeekGoals : '')
-      };
-      
-      // Save meeting notes to database
-      await saveFamilyMeetingNotes(currentWeek, combinedNotes);
-      
-      // Show confirmation dialog
-      setShowConfirmation(true);
-      setIsSaving(false);
-    } catch (error) {
-      console.error("Error saving meeting notes:", error);
-      alert("There was an error saving your meeting notes. Please try again.");
-      setIsSaving(false);
-    }
-  };
-  
-  const handleCompleteWeekTogether = async () => {
     setIsCompleting(true);
     
     try {
@@ -494,43 +709,93 @@ const FamilyMeetingScreen = ({ onClose }) => {
     }
   };
   
-  // Handle downloadable report
-  const handleDownloadReport = () => {
-    // In a real app, this would generate a PDF or similar document
-    console.log('Downloading report...');
-    // For now, we'll just fake it with an alert
-    alert('Report downloaded successfully!');
+  // Handle downloadable summary
+  const handleDownloadSummary = () => {
+    try {
+      // Create a text summary of the meeting
+      let summary = `# Family Meeting Summary - Week ${currentWeek}\n\n`;
+      summary += `Date: ${new Date().toLocaleDateString()}\n\n`;
+      
+      summary += `## What Went Well\n${meetingNotes.wentWell || "No notes"}\n\n`;
+      summary += `## What Could Improve\n${meetingNotes.couldImprove || "No notes"}\n\n`;
+      
+      summary += "## Action Items\n";
+      const actionItems = [...selectedActionItems];
+      if (meetingNotes.actionItems) actionItems.push(meetingNotes.actionItems);
+      actionItems.forEach(item => {
+        summary += `- ${item}\n`;
+      });
+      summary += "\n";
+      
+      summary += "## Next Week's Goals\n";
+      const goals = [...selectedGoals];
+      if (meetingNotes.nextWeekGoals) goals.push(meetingNotes.nextWeekGoals);
+      goals.forEach(goal => {
+        summary += `- ${goal}\n`;
+      });
+      summary += "\n";
+      
+      if (meetingNotes.kidsInput) {
+        summary += `## Kids' Corner\n${meetingNotes.kidsInput}\n\n`;
+      }
+      
+      if (meetingNotes.additionalNotes) {
+        summary += `## Additional Notes\n${meetingNotes.additionalNotes}\n\n`;
+      }
+      
+      // Create a blob and download it
+      const blob = new Blob([summary], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Family-Meeting-Week-${currentWeek}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      // Show feedback
+      alert("Summary downloaded successfully!");
+    } catch (error) {
+      console.error("Error downloading summary:", error);
+      alert("There was an error downloading the summary.");
+    }
+  };
+
+  // Launch confetti effect
+  const launchConfetti = () => {
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { y: 0.6 }
+    });
   };
   
+  // The UI will render different screens based on the currentScreen state
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+        {/* Header - consistent across screens */}
+        <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
           <div>
             <h2 className="text-xl font-bold font-roboto">Week {currentWeek} Family Meeting</h2>
             <div className="flex items-center text-gray-600 text-sm">
               <Clock size={16} className="mr-1" />
               <span className="font-roboto">30 minutes</span>
+              <div className="ml-4">
+                <SaveIndicator saving={saving} saved={savedRecently} />
+              </div>
             </div>
           </div>
           
           <div className="flex items-center space-x-2">
-            <button 
-              className={`px-3 py-1 rounded-md text-sm font-medium font-roboto ${
-                viewMode === 'agenda' ? 'bg-blue-600 text-white' : 'bg-gray-200'
-              }`}
-              onClick={() => setViewMode('agenda')}
+            <button
+              onClick={handleSave}
+              className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-md text-sm flex items-center"
+              title="Save your progress"
             >
-              Agenda
-            </button>
-            <button 
-              className={`px-3 py-1 rounded-md text-sm font-medium font-roboto ${
-                viewMode === 'report' ? 'bg-blue-600 text-white' : 'bg-gray-200'
-              }`}
-              onClick={() => setViewMode('report')}
-            >
-              Weekly Report
+              <Save size={16} className="mr-1" />
+              Save
             </button>
             <button
               onClick={onClose}
@@ -541,34 +806,165 @@ const FamilyMeetingScreen = ({ onClose }) => {
           </div>
         </div>
         
-        {viewMode === 'agenda' ? (
-          /* Agenda View */
-          <div className="p-4 space-y-4">
-            <div className="bg-blue-50 p-4 rounded mb-4">
-              <h3 className="font-medium text-blue-800 font-roboto">Meeting Purpose</h3>
-              <p className="text-sm mt-1 font-roboto">
-                This family meeting helps you discuss your progress in balancing family responsibilities 
-                and set goals for the upcoming week. Use the discussion points below for a productive conversation.
+        {/* Content area - changes based on current screen */}
+        {currentScreen === 'intro' && (
+          /* Introduction Screen */
+          <div className="p-6 space-y-6">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-bold mb-2">Welcome to Your Family Meeting</h2>
+              <p className="text-gray-600 text-sm max-w-lg mx-auto">
+                This meeting will help your family celebrate wins, address challenges, 
+                and plan improvements for better balance in the upcoming week.
               </p>
             </div>
             
-            {/* Family Retrospective Info */}
-            <div className="p-4 border rounded-lg mb-4 bg-gradient-to-r from-blue-50 to-indigo-50">
-              <h4 className="font-medium mb-3 text-blue-800 font-roboto">About Sprint Retrospectives</h4>
-              <p className="text-sm text-blue-700 mb-2 font-roboto">
-                We're using a format that professional teams use to improve how they work together! This simple 
-                structure helps families reflect on what's working and what needs improvement.
-              </p>
-              <div className="flex flex-wrap gap-2 mt-3">
-                <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded font-roboto">✓ What Went Well</span>
-                <span className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-roboto">⚠ What Could Improve</span>
-                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-roboto">→ Action Items</span>
+            {loadingAgenda ? (
+              <div className="flex justify-center py-8">
+                <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
+            ) : loadingError ? (
+              <div className="bg-red-50 p-4 rounded-lg text-red-700 text-center">
+                {loadingError}
+                <button 
+                  className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 block mx-auto"
+                  onClick={() => window.location.reload()}
+                >
+                  Try Again
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* AI-Generated Agenda Preview */}
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg shadow-sm">
+                  <div className="flex items-start mb-4">
+                    <div className="bg-blue-500 p-2 rounded-lg mr-3">
+                      <Sparkles className="text-white" size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-blue-800">AI-Generated Meeting Agenda</h3>
+                      <p className="text-sm text-blue-600">
+                        Based on your family's survey data and task history, we've created a personalized meeting agenda.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 space-y-3">
+                    {agenda?.sections?.map((section, index) => (
+                      <div key={index} className="bg-white rounded p-3 shadow-sm">
+                        <h4 className="font-medium mb-1">{section.title}</h4>
+                        <p className="text-sm text-gray-600">{section.description || ""}</p>
+                      </div>
+                    ))}
+                    
+                    {!agenda?.sections && (
+                      <div className="bg-white p-4 rounded-lg">
+                        <p className="text-center text-gray-600">Your agenda is still being prepared.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Balance Chart */}
+                <div className="mt-6">
+                  <h3 className="text-lg font-bold mb-3">Your Family Balance Journey</h3>
+                  <FamilyBalanceChart 
+                    weekHistory={weekHistory}
+                    completedWeeks={completedWeeks}
+                  />
+                  <p className="text-sm text-gray-500 mt-2">
+                    This chart shows your progress toward a balanced workload in your family.
+                  </p>
+                </div>
+                
+                {/* Sprint Retrospective Explanation */}
+                <div className="border p-4 rounded-lg mt-6">
+                  <h3 className="font-bold mb-2">About Sprint Retrospectives</h3>
+                  <p className="text-sm text-gray-600 mb-3">
+                    We use a "sprint retrospective" format that professional teams use to improve how they work together.
+                    This simple structure helps families reflect on what's working and what needs improvement.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">✓ What Went Well</span>
+                    <span className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded">⚠ What Could Improve</span>
+                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">→ Action Items</span>
+                  </div>
+                </div>
+              </>
+            )}
+            
+            {/* Navigation Buttons */}
+            <div className="flex justify-end pt-6">
+              <button
+                onClick={goToNextScreen}
+                disabled={loadingAgenda}
+                className="flex items-center bg-black text-white px-6 py-3 rounded hover:bg-gray-800 disabled:bg-gray-400"
+              >
+                Start Meeting
+                <ChevronRight size={18} className="ml-1" />
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {currentScreen === 'meeting' && (
+          /* Interactive Meeting Screen */
+          <div className="p-6">
+            {/* Progress Tabs */}
+            <div className="flex border-b mb-6">
+              <button
+                onClick={() => navigateToSection('wentWell')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 ${
+                  activeSection === 'wentWell' 
+                    ? 'border-green-500 text-green-600' 
+                    : 'border-transparent hover:border-gray-300'
+                }`}
+              >
+                What Went Well
+              </button>
+              <button
+                onClick={() => navigateToSection('couldImprove')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 ${
+                  activeSection === 'couldImprove' 
+                    ? 'border-amber-500 text-amber-600' 
+                    : 'border-transparent hover:border-gray-300'
+                }`}
+              >
+                What Could Improve
+              </button>
+              <button
+                onClick={() => navigateToSection('actionItems')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 ${
+                  activeSection === 'actionItems' 
+                    ? 'border-blue-500 text-blue-600' 
+                    : 'border-transparent hover:border-gray-300'
+                }`}
+              >
+                Action Items
+              </button>
+              <button
+                onClick={() => navigateToSection('kidsCorner')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 ${
+                  activeSection === 'kidsCorner' 
+                    ? 'border-purple-500 text-purple-600' 
+                    : 'border-transparent hover:border-gray-300'
+                }`}
+              >
+                Kids' Corner
+              </button>
+              <button
+                onClick={() => navigateToSection('nextWeekGoals')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 ${
+                  activeSection === 'nextWeekGoals' 
+                    ? 'border-indigo-500 text-indigo-600' 
+                    : 'border-transparent hover:border-gray-300'
+                }`}
+              >
+                Next Week's Goals
+              </button>
             </div>
             
-            {/* Retrospective Sections */}
-            <div className="space-y-6">
-              {/* What Went Well Section */}
+            {/* Active Section Content */}
+            {activeSection === 'wentWell' && (
               <div className="p-4 border rounded-lg bg-green-50">
                 <h4 className="font-medium mb-2 flex items-center text-green-800 font-roboto">
                   <span className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center mr-2 text-green-600">✓</span>
@@ -577,86 +973,41 @@ const FamilyMeetingScreen = ({ onClose }) => {
                 <p className="text-sm text-green-700 mb-3 font-roboto">
                   Celebrate your family's wins this week! What are you proud of? What balanced tasks did you accomplish?
                 </p>
+                
+                {/* AI Suggested Discussion Points */}
+                <div className="mb-4 p-3 bg-white rounded-lg border border-green-200">
+                  <h5 className="text-sm font-medium text-green-800 mb-2">Discussion Points:</h5>
+                  <ul className="list-disc pl-5 space-y-1">
+                    {agenda?.sections?.find(s => s.title?.includes("Went Well"))?.items?.map((item, i) => (
+                      <li key={i} className="text-sm">{item}</li>
+                    )) || generateAIInsights().successInsights.map((insight, i) => (
+                      <li key={i} className="text-sm">{insight}</li>
+                    ))}
+                  </ul>
+                </div>
+                
                 <textarea
                   placeholder="Share your family's successes this week..."
-                  className="w-full p-3 border border-green-200 rounded-md h-24 bg-white font-roboto"
+                  className="w-full p-3 border border-green-200 rounded-md h-32 bg-white font-roboto"
                   value={meetingNotes.wentWell || ''}
                   onChange={(e) => handleInputChange('wentWell', e.target.value)}
                 />
-              </div>
-              
-              {/* AI-Generated Agenda */}
-              {agenda && (
-                <div className="mb-6">
-                  <h3 className="text-xl font-bold mb-4 font-roboto">This Week's Agenda</h3>
-                  
-                  <div className="bg-white rounded-lg shadow-sm p-6">
-                    <p className="text-gray-700 mb-4 font-roboto">{agenda.introduction}</p>
-                    
-                    {agenda.timeEstimate && (
-                      <div className="mb-4">
-                        <div className="flex items-center mb-2">
-                          <Clock className="text-gray-500 mr-2" size={18} />
-                          <span className="text-gray-500 font-roboto">Suggested time: {agenda.timeEstimate}</span>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {agenda.sections && agenda.sections.map((section, index) => (
-                      <div key={index} className="mb-6">
-                        <h4 className="font-bold text-lg mb-2 font-roboto">{section.title}</h4>
-                        <ul className="list-disc pl-5 space-y-1">
-                          {section.items && section.items.map((item, itemIndex) => (
-                            <li key={itemIndex} className="text-gray-700 font-roboto">{item}</li>
-                          ))}
-                        </ul>
-                        {section.notes && (
-                          <p className="text-sm text-gray-500 mt-2 italic font-roboto">{section.notes}</p>
-                        )}
-                      </div>
-                    ))}
-                    
-                    {agenda.discussionQuestions && agenda.discussionQuestions.length > 0 && (
-                      <div className="mb-6">
-                        <h4 className="font-bold text-lg mb-2 font-roboto">Discussion Questions</h4>
-                        <ul className="list-disc pl-5 space-y-1">
-                          {agenda.discussionQuestions.map((question, index) => (
-                            <li key={index} className="text-gray-700 font-roboto">{question}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    
-                    {agenda.closingThoughts && (
-                      <div className="p-4 bg-gray-50 rounded border">
-                        <p className="text-gray-700 font-roboto">{agenda.closingThoughts}</p>
-                      </div>
-                    )}
-                    
-                    <div className="mt-4 flex justify-end">
-                      <button
-                        onClick={addMeetingToCalendar}
-                        disabled={isAddingToCalendar}
-                        className="flex items-center px-4 py-2 bg-black text-white rounded font-roboto"
-                      >
-                        {isAddingToCalendar ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                            Adding to Calendar...
-                          </>
-                        ) : (
-                          <>
-                            <Calendar size={16} className="mr-2" />
-                            Add to Calendar
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
+                
+                {/* Navigation Buttons */}
+                <div className="flex justify-between mt-4">
+                  <div></div> {/* Empty div for spacing */}
+                  <button
+                    onClick={() => navigateToSection('couldImprove')}
+                    className="flex items-center bg-gray-800 text-white px-4 py-2 rounded hover:bg-black"
+                  >
+                    Next Section
+                    <ChevronRight size={16} className="ml-1" />
+                  </button>
                 </div>
-              )}
-
-              {/* What Could Improve Section */}
+              </div>
+            )}
+            
+            {activeSection === 'couldImprove' && (
               <div className="p-4 border rounded-lg bg-amber-50">
                 <h4 className="font-medium mb-2 flex items-center text-amber-800 font-roboto">
                   <span className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center mr-2 text-amber-600">⚠</span>
@@ -665,15 +1016,47 @@ const FamilyMeetingScreen = ({ onClose }) => {
                 <p className="text-sm text-amber-700 mb-3 font-roboto">
                   What challenges did your family face? Where do you see room for better balance?
                 </p>
+                
+                {/* AI Suggested Discussion Points */}
+                <div className="mb-4 p-3 bg-white rounded-lg border border-amber-200">
+                  <h5 className="text-sm font-medium text-amber-800 mb-2">Discussion Points:</h5>
+                  <ul className="list-disc pl-5 space-y-1">
+                    {agenda?.sections?.find(s => s.title?.includes("Improve") || s.title?.includes("Challenge"))?.items?.map((item, i) => (
+                      <li key={i} className="text-sm">{item}</li>
+                    )) || generateAIInsights().challengeInsights.map((insight, i) => (
+                      <li key={i} className="text-sm">{insight}</li>
+                    ))}
+                  </ul>
+                </div>
+                
                 <textarea
                   placeholder="Discuss areas where your family could improve next week..."
-                  className="w-full p-3 border border-amber-200 rounded-md h-24 bg-white font-roboto"
+                  className="w-full p-3 border border-amber-200 rounded-md h-32 bg-white font-roboto"
                   value={meetingNotes.couldImprove || ''}
                   onChange={(e) => handleInputChange('couldImprove', e.target.value)}
                 />
+                
+                {/* Navigation Buttons */}
+                <div className="flex justify-between mt-4">
+                  <button
+                    onClick={() => navigateToSection('wentWell')}
+                    className="flex items-center bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300"
+                  >
+                    <ChevronLeft size={16} className="mr-1" />
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => navigateToSection('actionItems')}
+                    className="flex items-center bg-gray-800 text-white px-4 py-2 rounded hover:bg-black"
+                  >
+                    Next Section
+                    <ChevronRight size={16} className="ml-1" />
+                  </button>
+                </div>
               </div>
-              
-              {/* Action Items Section */}
+            )}
+            
+            {activeSection === 'actionItems' && (
               <div className="p-4 border rounded-lg bg-blue-50">
                 <h4 className="font-medium mb-2 flex items-center text-blue-800 font-roboto">
                   <span className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center mr-2 text-blue-600">→</span>
@@ -687,7 +1070,7 @@ const FamilyMeetingScreen = ({ onClose }) => {
                 <div className="mb-4">
                   <h5 className="text-sm font-medium mb-2 font-roboto">Suggested Action Items (Select up to 3):</h5>
                   <div className="space-y-2">
-                    {suggestedActionItems.map((item, index) => (
+                    {getSuggestedActionItems().map((item, index) => (
                       <div 
                         key={index}
                         className={`p-2 rounded border cursor-pointer ${
@@ -723,41 +1106,90 @@ const FamilyMeetingScreen = ({ onClose }) => {
                   value={meetingNotes.actionItems || ''}
                   onChange={(e) => handleInputChange('actionItems', e.target.value)}
                 />
-              </div>
-              
-              {/* Add this new component to the Family Meeting Screen */}
-              <div className="p-4 border rounded-lg mb-4 bg-gradient-to-r from-purple-50 to-blue-50">
-                <h4 className="font-medium mb-3 text-purple-800 font-roboto">Weight-Based Insights</h4>
-                <p className="text-sm text-purple-700 mb-2 font-roboto">
-                  Our advanced task weight analysis has identified high-impact areas to focus on:
-                </p>
                 
-                <div className="space-y-3 mt-4">
-                  <div className="p-3 bg-white rounded-lg border border-purple-200">
-                    <h5 className="text-sm font-medium font-roboto">Highest Weighted Imbalance</h5>
-                    <p className="text-xs mt-1 font-roboto">
-                      Emotional Labor tasks (weighted heavily for invisibility and mental load)
-                      show a 50% imbalance. Consider discussing ways to share these responsibilities.
-                    </p>
-                  </div>
-                  
-                  <div className="p-3 bg-white rounded-lg border border-purple-200">
-                    <h5 className="text-sm font-medium font-roboto">Child Development Impact</h5>
-                    <p className="text-xs mt-1 font-roboto">
-                      Tasks with high visibility to children have a strong impact on future expectations.
-                      Currently, these tasks have a 20% imbalance.
-                    </p>
-                  </div>
+                {/* Navigation Buttons */}
+                <div className="flex justify-between mt-4">
+                  <button
+                    onClick={() => navigateToSection('couldImprove')}
+                    className="flex items-center bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300"
+                  >
+                    <ChevronLeft size={16} className="mr-1" />
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => navigateToSection('kidsCorner')}
+                    className="flex items-center bg-gray-800 text-white px-4 py-2 rounded hover:bg-black"
+                  >
+                    Next Section
+                    <ChevronRight size={16} className="ml-1" />
+                  </button>
                 </div>
               </div>
-
-              {/* Next Week Goals Section */}
+            )}
+            
+            {activeSection === 'kidsCorner' && (
               <div className="p-4 border rounded-lg bg-purple-50">
                 <h4 className="font-medium mb-2 flex items-center text-purple-800 font-roboto">
-                  <span className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center mr-2 text-purple-600">🎯</span>
-                  Next Week's Goals
+                  <span className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center mr-2 text-purple-600">🙂</span>
+                  Kids' Corner
                 </h4>
                 <p className="text-sm text-purple-700 mb-3 font-roboto">
+                  Get your kids involved! These fun questions help children understand family balance.
+                </p>
+                
+                {/* Kid-friendly questions */}
+                <div className="mb-4 bg-white p-4 rounded-lg border border-purple-200">
+                  <h5 className="text-base font-medium text-purple-800 mb-3">Ask your kids:</h5>
+                  <div className="space-y-3">
+                    <div className="p-3 bg-purple-100 rounded-lg">
+                      <p className="text-sm font-medium">If our family was a sports team, what position would each person play?</p>
+                    </div>
+                    <div className="p-3 bg-blue-100 rounded-lg">
+                      <p className="text-sm font-medium">What's one thing you wish mom and dad would do more together?</p>
+                    </div>
+                    <div className="p-3 bg-green-100 rounded-lg">
+                      <p className="text-sm font-medium">What's your favorite family chore to help with?</p>
+                    </div>
+                    <div className="p-3 bg-yellow-100 rounded-lg">
+                      <p className="text-sm font-medium">If you could change one family rule, what would it be?</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <textarea
+                  placeholder="Write down what your kids say here..."
+                  className="w-full p-3 border border-purple-200 rounded-md h-32 bg-white font-roboto"
+                  value={meetingNotes.kidsInput || ''}
+                  onChange={(e) => handleInputChange('kidsInput', e.target.value)}
+                />
+                
+                {/* Navigation Buttons */}
+                <div className="flex justify-between mt-4">
+                  <button
+                    onClick={() => navigateToSection('actionItems')}
+                    className="flex items-center bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300"
+                  >
+                    <ChevronLeft size={16} className="mr-1" />
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => navigateToSection('nextWeekGoals')}
+                    className="flex items-center bg-gray-800 text-white px-4 py-2 rounded hover:bg-black"
+                  >
+                    Next Section
+                    <ChevronRight size={16} className="ml-1" />
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {activeSection === 'nextWeekGoals' && (
+              <div className="p-4 border rounded-lg bg-indigo-50">
+                <h4 className="font-medium mb-2 flex items-center text-indigo-800 font-roboto">
+                  <span className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center mr-2 text-indigo-600">🎯</span>
+                  Next Week's Goals
+                </h4>
+                <p className="text-sm text-indigo-700 mb-3 font-roboto">
                   What would a successful Week {currentWeek + 1} look like for your family?
                 </p>
                 
@@ -765,13 +1197,13 @@ const FamilyMeetingScreen = ({ onClose }) => {
                 <div className="mb-4">
                   <h5 className="text-sm font-medium mb-2 font-roboto">Suggested Goals (Select up to 2):</h5>
                   <div className="space-y-2">
-                    {suggestedGoals.map((goal, index) => (
+                    {getSuggestedGoals().map((goal, index) => (
                       <div 
                         key={index}
                         className={`p-2 rounded border cursor-pointer ${
                           selectedGoals.includes(goal) 
-                            ? 'bg-purple-100 border-purple-400' 
-                            : 'bg-white hover:bg-purple-50'
+                            ? 'bg-indigo-100 border-indigo-400' 
+                            : 'bg-white hover:bg-indigo-50'
                         }`}
                         onClick={() => {
                           if (selectedGoals.includes(goal)) {
@@ -783,7 +1215,7 @@ const FamilyMeetingScreen = ({ onClose }) => {
                       >
                         <div className="flex items-center">
                           <div className={`w-5 h-5 rounded-full border flex items-center justify-center mr-2 ${
-                            selectedGoals.includes(goal) ? 'bg-purple-500 border-purple-500 text-white' : 'border-gray-400'
+                            selectedGoals.includes(goal) ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-gray-400'
                           }`}>
                             {selectedGoals.includes(goal) && '✓'}
                           </div>
@@ -796,182 +1228,203 @@ const FamilyMeetingScreen = ({ onClose }) => {
                 
                 <textarea
                   placeholder="Add your own goals here..."
-                  className="w-full p-3 border border-purple-200 rounded-md h-24 bg-white font-roboto"
+                  className="w-full p-3 border border-indigo-200 rounded-md h-24 bg-white font-roboto"
                   value={meetingNotes.nextWeekGoals || ''}
                   onChange={(e) => handleInputChange('nextWeekGoals', e.target.value)}
                 />
-              </div>
-              
-              {/* Additional Notes */}
-              <div className="p-4 border rounded-lg">
-                <h4 className="font-medium mb-2 font-roboto">Additional Notes</h4>
-                <textarea
-                  placeholder="Any other comments or observations from the family meeting..."
-                  className="w-full p-3 border rounded-md h-24 font-roboto"
-                  value={meetingNotes.additionalNotes}
-                  onChange={(e) => handleInputChange('additionalNotes', e.target.value)}
-                />
-              </div>
-            </div>
-            
-            {/* Action Buttons */}
-            <div className="flex justify-end pt-4 space-x-3">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-gray-700 border rounded-md hover:bg-gray-50 font-roboto"
-                disabled={isSaving}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCompleteMeeting}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-roboto"
-                disabled={isSaving}
-              >
-                {isSaving ? 'Saving...' : 'Complete Meeting'}
-              </button>
-            </div>
-          </div>
-        ) : (
-          /* Report View */
-          <div className="p-4 space-y-4">
-            <div className="flex justify-end mb-2">
-              <button
-                onClick={handleDownloadReport}
-                className="flex items-center text-sm text-blue-600 font-roboto"
-              >
-                <Download size={16} className="mr-1" />
-                Download Report
-              </button>
-            </div>
-            
-            {/* Balance Score Card */}
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="font-medium mb-3 font-roboto">Weekly Balance Score</h3>
-              <div className="mb-4">
-                <div className="flex justify-between mb-1">
-                  <span className="font-medium font-roboto">Mama ({weeklyReport.balanceScore.mama}%)</span>
-                  <span className="font-medium font-roboto">Papa ({weeklyReport.balanceScore.papa}%)</span>
-                </div>
-                <div className="h-2 bg-gray-200 rounded overflow-hidden">
-                  <div 
-                    className="h-full bg-blue-500" 
-                    style={{ width: `${weeklyReport.balanceScore.mama}%` }} 
+                
+                {/* Additional Notes */}
+                <div className="mt-4">
+                  <h5 className="text-sm font-medium mb-2 font-roboto">Additional Notes (Optional):</h5>
+                  <textarea
+                    placeholder="Any other comments or observations from the family meeting..."
+                    className="w-full p-3 border rounded-md h-24 bg-white font-roboto"
+                    value={meetingNotes.additionalNotes || ''}
+                    onChange={(e) => handleInputChange('additionalNotes', e.target.value)}
                   />
                 </div>
+                
+                {/* Navigation Buttons */}
+                <div className="flex justify-between mt-4">
+                  <button
+                    onClick={() => navigateToSection('kidsCorner')}
+                    className="flex items-center bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300"
+                  >
+                    <ChevronLeft size={16} className="mr-1" />
+                    Previous
+                  </button>
+                  <button
+                    onClick={goToNextScreen}
+                    className="flex items-center bg-gray-800 text-white px-4 py-2 rounded hover:bg-black"
+                  >
+                    Summary
+                    <ChevronRight size={16} className="ml-1" />
+                  </button>
+                </div>
               </div>
-              
-              <p className="text-sm text-gray-800 font-roboto">
-                This week's balance shows Mama handling {weeklyReport.balanceScore.mama}% of the family tasks.
-                {weeklyReport.balanceScore.mama > 60 
-                  ? " There's still room for improvement in balancing responsibilities."
-                  : " Great progress on achieving a more balanced distribution!"
-                }
-              </p>
-            </div>
+            )}
             
-            {/* Task Completion Summary */}
-            <div className="border rounded-lg p-4">
-              <h3 className="font-medium mb-3 font-roboto">Task Completion</h3>
-              <div className="space-y-2">
-                {Object.entries(weeklyReport.tasks).map(([parent, data]) => (
-                  <div key={parent} className="flex justify-between items-center">
-                    <span className="capitalize font-roboto">{parent}</span>
-                    <div className="flex items-center">
-                      <span className="mr-2 font-roboto">
-                        {data.completed} of {data.total} tasks completed
-                      </span>
-                      <div className="w-32 h-2 bg-gray-200 rounded overflow-hidden">
-                        <div 
-                          className="h-full bg-green-500" 
-                          style={{ width: `${(data.completed / data.total) * 100}%` }} 
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            {/* Survey Highlights */}
-            <div className="border rounded-lg p-4">
-              <h3 className="font-medium mb-3 font-roboto">Survey Highlights</h3>
-              <ul className="list-disc pl-5 space-y-1 text-sm font-roboto">
-                {weeklyReport.surveyHighlights.map((highlight, idx) => (
-                  <li key={idx}>{highlight}</li>
-                ))}
-              </ul>
-            </div>
-            
-            {/* Areas for Improvement */}
-            <div className="border rounded-lg p-4">
-              <h3 className="font-medium mb-3 font-roboto">Areas for Discussion</h3>
-              <ul className="list-disc pl-5 space-y-1 text-sm font-roboto">
-                {weeklyReport.discrepancies.map((item, idx) => (
-                  <li key={idx}>{item}</li>
-                ))}
-              </ul>
-            </div>
-            
-            {/* Action Buttons for Report View */}
-            <div className="flex justify-end pt-4 space-x-3">
+            {/* Continue/Back Navigation */}
+            <div className="flex justify-between mt-6">
               <button
-                onClick={onClose}
-                className="px-4 py-2 text-gray-700 border rounded-md hover:bg-gray-50 font-roboto"
+                onClick={goToPreviousScreen}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 flex items-center"
               >
-                Close
+                <ChevronLeft size={18} className="mr-1" />
+                Back to Intro
               </button>
               <button
-                onClick={() => setViewMode('agenda')}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-roboto"
+                onClick={goToNextScreen}
+                className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 flex items-center"
               >
-                Back to Agenda
+                Continue to Summary
+                <ChevronRight size={18} className="ml-1" />
               </button>
             </div>
           </div>
         )}
         
-        {/* Confirmation Dialog */}
-        {showConfirmation && (
-          <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Sparkles size={24} className="text-green-600" />
+        {currentScreen === 'summary' && (
+          /* Summary Screen */
+          <div className="p-6">
+            <h3 className="text-xl font-bold mb-6 text-center">Meeting Summary</h3>
+            
+            {/* All sections summary */}
+            <div className="space-y-6 mb-8">
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h4 className="font-medium flex items-center mb-2">
+                  <CheckCircle size={18} className="mr-2 text-green-600" />
+                  What Went Well
+                </h4>
+                <p className="text-sm whitespace-pre-line">
+                  {meetingNotes.wentWell || "No notes recorded."}
+                </p>
               </div>
               
-              <h3 className="text-xl font-bold mb-2 font-roboto">Family Meeting Complete!</h3>
-              <p className="text-gray-600 mb-6 font-roboto">
-                Your family has completed the meeting for Week {currentWeek}. Ready to wrap up the week together?
-              </p>
+              <div className="bg-amber-50 p-4 rounded-lg">
+                <h4 className="font-medium flex items-center mb-2">
+                  <Info size={18} className="mr-2 text-amber-600" />
+                  What Could Improve
+                </h4>
+                <p className="text-sm whitespace-pre-line">
+                  {meetingNotes.couldImprove || "No notes recorded."}
+                </p>
+              </div>
               
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-medium flex items-center mb-2">
+                  <CheckCheck size={18} className="mr-2 text-blue-600" />
+                  Action Items
+                </h4>
+                <ul className="list-disc pl-5 space-y-1 text-sm">
+                  {selectedActionItems.map((item, index) => (
+                    <li key={index}>{item}</li>
+                  ))}
+                  {meetingNotes.actionItems && (
+                    <li className="whitespace-pre-line">{meetingNotes.actionItems}</li>
+                  )}
+                  {selectedActionItems.length === 0 && !meetingNotes.actionItems && (
+                    <li className="text-gray-500">No action items recorded.</li>
+                  )}
+                </ul>
+              </div>
+              
+              {meetingNotes.kidsInput && (
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <h4 className="font-medium flex items-center mb-2">
+                    <Users size={18} className="mr-2 text-purple-600" />
+                    Kids' Corner
+                  </h4>
+                  <p className="text-sm whitespace-pre-line">
+                    {meetingNotes.kidsInput}
+                  </p>
+                </div>
+              )}
+              
+              <div className="bg-indigo-50 p-4 rounded-lg">
+                <h4 className="font-medium flex items-center mb-2">
+                  <Award size={18} className="mr-2 text-indigo-600" />
+                  Next Week's Goals
+                </h4>
+                <ul className="list-disc pl-5 space-y-1 text-sm">
+                  {selectedGoals.map((goal, index) => (
+                    <li key={index}>{goal}</li>
+                  ))}
+                  {meetingNotes.nextWeekGoals && (
+                    <li className="whitespace-pre-line">{meetingNotes.nextWeekGoals}</li>
+                  )}
+                  {selectedGoals.length === 0 && !meetingNotes.nextWeekGoals && (
+                    <li className="text-gray-500">No goals recorded.</li>
+                  )}
+                </ul>
+              </div>
+              
+              {meetingNotes.additionalNotes && (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-medium mb-2">Additional Notes</h4>
+                  <p className="text-sm whitespace-pre-line">
+                    {meetingNotes.additionalNotes}
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            {/* Action buttons */}
+            <div className="flex flex-col space-y-4">
               <button
-                onClick={handleCompleteWeekTogether}
-                className="w-full py-3 px-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-md text-lg font-bold flex items-center justify-center hover:from-blue-600 hover:to-purple-700 transition-all font-roboto"
-                disabled={isCompleting}
+                onClick={addMeetingToCalendar}
+                disabled={isAddingToCalendar}
+                className="w-full py-3 bg-blue-600 text-white rounded-lg flex items-center justify-center hover:bg-blue-700 disabled:bg-blue-300"
               >
-                {isCompleting ? (
-                  <span className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Processing...
-                  </span>
+                {isAddingToCalendar ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Adding to Calendar...
+                  </>
                 ) : (
                   <>
-                    <Star className="mr-2" size={20} />
-                    Complete Week Together!
-                    <Users className="ml-2" size={20} />
+                    <Calendar size={20} className="mr-2" />
+                    Schedule Next Meeting
                   </>
                 )}
               </button>
               
               <button
-                onClick={() => setShowConfirmation(false)}
-                className="mt-4 text-gray-600 hover:text-gray-800 font-roboto"
-                disabled={isCompleting}
+                onClick={handleDownloadSummary}
+                className="w-full py-3 border border-gray-300 rounded-lg flex items-center justify-center hover:bg-gray-50"
               >
-                Not yet
+                <Download size={20} className="mr-2" />
+                Download Summary
+              </button>
+              
+              <button
+                onClick={handleCompleteMeeting}
+                disabled={isCompleting}
+                className="w-full py-3 px-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg flex items-center justify-center hover:from-blue-600 hover:to-purple-700 transition-all"
+              >
+                {isCompleting ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Completing Week {currentWeek}...
+                  </>
+                ) : (
+                  <>
+                    <Star className="mr-2" size={20} />
+                    Complete Week Together
+                    <Users className="ml-2" size={20} />
+                  </>
+                )}
+              </button>
+            </div>
+            
+            {/* Navigation Back */}
+            <div className="flex justify-start mt-6">
+              <button
+                onClick={goToPreviousScreen}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 flex items-center"
+              >
+                <ChevronLeft size={18} className="mr-1" />
+                Back to Meeting
               </button>
             </div>
           </div>

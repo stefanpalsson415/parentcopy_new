@@ -125,6 +125,29 @@ class DatabaseService {
     }
   }
 
+
+  // Add this method to your DatabaseService class/object
+/**
+ * Get family meeting notes for a specific week
+ * @param {string} familyId - Family ID
+ * @param {number} weekNumber - Week number
+ * @returns {Promise<object|null>} Meeting notes or null if not found
+ */
+async getFamilyMeetingNotes(familyId, weekNumber) {
+  try {
+    if (!familyId) throw new Error("No family ID available");
+    
+    const notesDoc = await getDoc(doc(db, "families", familyId, "meetingNotes", `week${weekNumber}`));
+    if (notesDoc.exists()) {
+      return notesDoc.data();
+    }
+    return null;
+  } catch (error) {
+    console.error("Error getting family meeting notes:", error);
+    return null;
+  }
+}
+
   // Load all survey responses for a family
   async loadSurveyResponses(familyId) {
     try {
