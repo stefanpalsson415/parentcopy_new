@@ -1117,8 +1117,8 @@ const recordHabitInstance = async (habitId, reflectionNote = "") => {
         console.error("Error updating habit streaks:", streakError);
       }
       
-      // Milestone reached - exactly 5 completions
-if (updatedInstances.length === 5) {
+      // Milestone reached - 5 or more completions
+if (updatedInstances.length >= 5) {
   try {
     // Update the parent's cycle step in Firebase
     const familyRef = doc(db, "families", familyId);
