@@ -189,7 +189,7 @@ const CycleJourney = ({
   };
   
   // Determine if current user can take a specific step
-  const canTakeStep = (stepNumber) => {
+const canTakeStep = (stepNumber) => {
     if (!currentUser) return false;
     
     // For relationship cycles, only parents can participate
@@ -203,6 +203,41 @@ const CycleJourney = ({
         currentUser.role === 'child' && 
         stepNumber === 1) {
       return false;
+    }
+  
+    // Get current user's progress
+    const userProgress = memberProgress[currentUser.id] || {};
+    
+// Check if the current user has completed a specific step
+const hasUserCompletedStep = (stepNumber) => {
+    if (!currentUser) return false;
+    
+    // Get current user's progress
+    const userProgress = memberProgress[currentUser.id] || {};
+    
+    if (stepNumber === 1) {
+      return userProgress.step >= 2;
+    } 
+    else if (stepNumber === 2) {
+      return userProgress.completedSurvey || 
+             currentUser.weeklyCompleted?.[currentCycle-1]?.completed ||
+             userProgress.step >= 3;
+    }
+    else if (stepNumber === 3) {
+      return userProgress.completedMeeting || cycleData.meeting?.completed;
+    }
+    
+    return false;
+  };
+
+    // Check if the current user has completed this specific step
+    const hasCompletedThisStep = stepNumber === 2 && 
+      (userProgress.completedSurvey || 
+       currentUser.weeklyCompleted?.[currentCycle-1]?.completed ||
+       userProgress.step > 2);
+    
+    if (hasCompletedThisStep) {
+      return false; // Step already completed
     }
     
     // Step 1 is always available unless completed
@@ -463,27 +498,27 @@ const CycleJourney = ({
                 </p>
                 
                 <button
-                  onClick={() => onStartStep(step.action, step.number)}
-                  disabled={!canStart}
-                  className={`px-4 py-2 rounded-lg flex items-center justify-center ${
-                    isCompleted
-                      ? 'bg-green-100 text-green-700 cursor-default'
-                      : canStart
-                        ? `bg-gradient-to-r ${step.color} text-white shadow-md hover:shadow-lg`
-                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  }`}
-                >
-                  {isCompleted 
-                    ? <>
-                        <CheckCircle size={16} className="mr-2" />
-                        Completed
-                      </>
-                    : <>
-                        {step.icon && React.cloneElement(step.icon, { size: 16, className: "mr-2" })}
-                        {step.buttonText}
-                      </>
-                  }
-                </button>
+  onClick={() => onStartStep(step.action, step.number)}
+  disabled={!canStart || hasUserCompletedStep(step.number)}
+  className={`px-4 py-2 rounded-lg flex items-center justify-center ${
+    isCompleted || hasUserCompletedStep(step.number)
+      ? 'bg-green-100 text-green-700 cursor-default'
+      : canStart
+        ? `bg-gradient-to-r ${step.color} text-white shadow-md hover:shadow-lg`
+        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+  }`}
+>
+  {isCompleted || hasUserCompletedStep(step.number)
+    ? <>
+        <CheckCircle size={16} className="mr-2" />
+        Completed
+      </>
+    : <>
+        {step.icon && React.cloneElement(step.icon, { size: 16, className: "mr-2" })}
+        {step.buttonText}
+      </>
+  }
+</button>
               </div>
             </motion.div>
           );

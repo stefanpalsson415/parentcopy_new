@@ -555,12 +555,17 @@ const findExistingDueDateEvent = async () => {
           };
           
          // For parents, check if they've completed habits requirement and surveys
-if (member.role === 'parent') {
-  // First check if surveys are completed
-  if (memberData.completedSurvey || member.weeklyCompleted?.[currentWeek-1]?.completed) {
-    // If survey is completed, set to step 3 (meeting phase)
-    memberData.step = 3;
-    memberData.completedSurvey = true;
+         if (member.role === 'parent') {
+          // First check if surveys are completed - using multiple indicators
+          const surveyCompleted = 
+            memberData.completedSurvey || 
+            member.weeklyCompleted?.[currentWeek-1]?.completed ||
+            (member.status && member.status.toLowerCase().includes("survey done"));
+          
+          if (surveyCompleted) {
+            // If survey is completed, set to step 3 (meeting phase)
+            memberData.step = 3;
+            memberData.completedSurvey = true;
   } 
   // Then check for habit completions
   else {
@@ -1434,8 +1439,15 @@ const createNewHabit = async (isRefresh = false) => {
   };
 
   const handleStartSurvey = () => {
+    // More robust completion check that aligns with CycleJourney
+    const userProgress = memberProgress[selectedUser.id] || {};
+    const hasCompleted = userProgress.completedSurvey || 
+                         (selectedUser.weeklyCompleted && 
+                          selectedUser.weeklyCompleted[currentWeek-1]?.completed) ||
+                         userProgress.step >= 3;
+    
     // Already completed check
-    if (hasCompletedSurvey) {
+    if (hasCompleted) {
       createCelebration("Already Completed", false, "You've already completed the survey for this cycle.");
       return;
     }
