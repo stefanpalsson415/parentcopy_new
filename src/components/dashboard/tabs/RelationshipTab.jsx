@@ -1211,45 +1211,55 @@ if (!canAccessFeatures) {
   return (
     <div className="space-y-6">
       {/* Introduction Card */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-start mb-4">
-          <div className="mr-4 flex-shrink-0">
-            <Heart size={32} className="text-pink-500" />
-          </div>
-          <div>
-            <h3 className="text-xl font-bold mb-2 font-roboto">Relationship Strength</h3>
-            <p className="text-gray-600 font-roboto">
-              Research shows that a strong parental relationship directly impacts family balance and children's wellbeing. 
-              Use these tools to nurture your partnership while balancing family responsibilities.
-            </p>
-          </div>
-        </div>
+<div className="bg-white rounded-lg shadow p-6">
+  <div className="flex items-start mb-4">
+    <div className="mr-4 flex-shrink-0">
+      <Heart size={32} className="text-pink-500" />
+    </div>
+    <div>
+      <h3 className="text-xl font-bold mb-2 font-roboto">Relationship Strength</h3>
+      <p className="text-gray-600 font-roboto">
+        Research shows that a strong parental relationship directly impacts family balance and children's wellbeing. 
+        Use these tools to nurture your partnership while balancing family responsibilities.
+      </p>
+    </div>
+  </div>
 
-        {/* Replace CycleManager with CycleJourney */}
-<CycleJourney
-  cycleType="relationship"
-  currentCycle={currentCycle}
-  cycleData={cycleData || {}}
-  familyMembers={familyMembers}
-  currentUser={currentUser}
-  memberProgress={memberProgress}
-  onStartStep={(action, step) => {
-    if (action === "assessment") setShowAssessment(true);
-    else if (action === "prework") setShowPrework(true);
-    else if (action === "meeting") {
-      if (cycleData?.meeting?.scheduled) {
-        setShowMeeting(true);
-      } else {
-        setShowScheduleMeeting(true);
+  {/* Replace the old CycleManager with CycleJourney */}
+  <CycleJourney
+    cycleType="relationship"
+    currentCycle={currentCycle}
+    cycleData={{
+      assessmentsCompleted: !!familyData?.cycleProgress?.[currentCycle]?.assessmentsCompleted,
+      preworkCompleted: !!familyData?.cycleProgress?.[currentCycle]?.preworkCompleted,
+      meeting: {
+        scheduled: !!familyData?.cycleProgress?.[currentCycle]?.meeting?.scheduled,
+        scheduledDate: familyData?.cycleProgress?.[currentCycle]?.meeting?.scheduledDate,
+        completed: !!familyData?.cycleProgress?.[currentCycle]?.meeting?.completed
       }
-    }
-  }}
-  dueDate={cycleData?.meeting?.scheduledDate ? new Date(cycleData.meeting.scheduledDate) : null}
-  onChangeDueDate={() => setShowScheduleMeeting(true)}
-  loading={isLoadingData}
-  error={hasError}
-/>
-      </div>
+    }}
+    familyMembers={familyMembers}
+    currentUser={currentUser}
+    memberProgress={familyData?.cycleProgress?.[currentCycle]?.memberProgress || {}}
+    onStartStep={(action, step) => {
+      if (action === "assessment") {
+        setShowAssessment(true);
+      } else if (action === "prework") {
+        setShowPrework(true);
+      } else if (action === "meeting") {
+        if (familyData?.cycleProgress?.[currentCycle]?.meeting?.scheduled) {
+          setShowMeeting(true);
+        } else {
+          setShowScheduleMeeting(true);
+        }
+      }
+    }}
+    dueDate={familyData?.cycleProgress?.[currentCycle]?.meeting?.scheduledDate ? 
+      new Date(familyData.cycleProgress[currentCycle].meeting.scheduledDate) : null}
+    onChangeDueDate={() => setShowScheduleMeeting(true)}
+    loading={loading}
+  />
+</div>
 
       {/* AI Insights Section */}
       {renderSectionHeader(
