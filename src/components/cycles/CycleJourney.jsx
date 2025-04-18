@@ -47,6 +47,31 @@ const CycleJourney = ({
     return member.role === 'child' ? 'child' : 'parent';
   };
   
+ // Check if the current user has completed a specific step
+ const hasUserCompletedStep = (stepNumber) => {
+    if (!currentUser) return false;
+    
+    // Get current user's progress
+    const userProgress = memberProgress[currentUser.id] || {};
+    
+    if (stepNumber === 1) {
+      return userProgress.step >= 2;
+    } 
+    else if (stepNumber === 2) {
+      return userProgress.completedSurvey || 
+             (currentUser.weeklyCompleted && 
+              currentUser.weeklyCompleted[currentCycle-1]?.completed) ||
+             userProgress.step >= 3;
+    }
+    else if (stepNumber === 3) {
+      return userProgress.completedMeeting || cycleData?.meeting?.completed;
+    }
+    
+    return false;
+  };
+
+
+
   // Initialize steps based on cycle type
   useEffect(() => {
     if (cycleType === 'relationship') {
