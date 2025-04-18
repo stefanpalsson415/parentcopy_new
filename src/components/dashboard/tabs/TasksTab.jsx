@@ -16,6 +16,8 @@ import { EventManager as EnhancedEventManager, FloatingCalendar } from '../../..
 import CalendarService from '../../../services/CalendarService';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useEvents } from '../../../contexts/EventContext';
+import CycleJourney from '../../../cycles/CycleJourney';
+
 
 
 // Helper function to format dates consistently
@@ -1511,318 +1513,53 @@ const createNewHabit = async (isRefresh = false) => {
   
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden font-roboto">
-      {/* Header with cycle information */}
-      <div className="bg-black text-white p-4">
-        <div className="flex justify-between items-center">
-          <div>
-            <h2 className="text-xl font-medium">Family Cycle {currentWeek}</h2>
-            <p className="text-sm text-gray-300 mt-1">
-              Complete habits, take surveys, and hold family meetings to improve balance
-            </p>
-          </div>
-          <div className="flex items-center">
-            <div className="bg-white bg-opacity-10 rounded-lg px-3 py-2 text-center">
-              <div className="flex items-center">
-                <Flame className="text-orange-400 mr-1" size={18} />
-                <span className="text-lg font-bold">{familyStreak}</span>
-              </div>
-              <p className="text-xs">Streak</p>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Progress Steps */}
-<div className="p-4 border-b">
-  <div className="flex justify-between mb-6 relative">
-    {/* Define color styles for each step */}
-    {(() => {
-      // Define step colors - specific colors that correlate to the steps
-      const stepColors = {
-        1: { bg: 'bg-blue-500', text: 'text-blue-500', light: 'bg-blue-100' },
-        2: { bg: 'bg-green-500', text: 'text-green-500', light: 'bg-green-100' },
-        3: { bg: 'bg-purple-500', text: 'text-purple-500', light: 'bg-purple-100' }
-      };
-      
-      // Default color for inactive steps
-      const inactiveColor = { bg: 'bg-gray-200', text: 'text-gray-500', light: 'bg-gray-100' };
-      
-      // Get color for current step
-      const currentStepColor = stepColors[cycleStep] || stepColors[1];
-      
-      return (
-        <>
-          {/* Step 1 */}
-          <div className="flex flex-col items-center relative z-10">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-medium transition-colors duration-300 ${
-              cycleStep >= 1 
-                ? (cycleStep === 1 ? stepColors[1].bg + ' text-white' : 'bg-black text-white')
-                : inactiveColor.bg + ' ' + inactiveColor.text
-            }`}>
-              1
-            </div>
-            <div className={`text-xs mt-2 text-center transition-colors duration-300 ${
-              cycleStep === 1 ? stepColors[1].text + ' font-medium' : ''
-            }`}>
-              <div className="font-medium">STEP 1</div>
-              <div>Habit Building</div>
-            </div>
-          </div>
-          
-          {/* Step 2 */}
-          <div className="flex flex-col items-center relative z-10">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-medium transition-colors duration-300 ${
-              cycleStep >= 2 
-                ? (cycleStep === 2 ? stepColors[2].bg + ' text-white' : 'bg-black text-white')
-                : inactiveColor.bg + ' ' + inactiveColor.text
-            }`}>
-              2
-            </div>
-            <div className={`text-xs mt-2 text-center transition-colors duration-300 ${
-              cycleStep === 2 ? stepColors[2].text + ' font-medium' : ''
-            }`}>
-              <div className="font-medium">STEP 2</div>
-              <div>Family Survey</div>
-            </div>
-          </div>
-          
-          {/* Step 3 */}
-          <div className="flex flex-col items-center relative z-10">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-medium transition-colors duration-300 ${
-              cycleStep >= 3 
-                ? (cycleStep === 3 ? stepColors[3].bg + ' text-white' : 'bg-black text-white')
-                : inactiveColor.bg + ' ' + inactiveColor.text
-            }`}>
-              3
-            </div>
-            <div className={`text-xs mt-2 text-center transition-colors duration-300 ${
-              cycleStep === 3 ? stepColors[3].text + ' font-medium' : ''
-            }`}>
-              <div className="font-medium">STEP 3</div>
-              <div>Family Meeting</div>
-            </div>
-          </div>
-          
-          {/* Progress line - now with gradient colors */}
-          <div className="absolute left-0 top-5 h-0.5 bg-gray-200 w-full -z-0"></div>
-          <div 
-            className={`absolute left-0 top-5 h-1 ${
-              cycleStep === 1 ? 'bg-blue-500' : 
-              cycleStep === 2 ? 'bg-gradient-to-r from-blue-500 to-green-500' :
-              cycleStep === 3 ? 'bg-gradient-to-r from-blue-500 via-green-500 to-purple-500' : 'bg-black'
-            } -z-0 transition-all duration-500 rounded-full`}
-            style={{ 
-              width: `${((cycleStep - 1) / 2) * 100}%`,
-            }}
-          />
-        </>
-      );
-    })()}
-  </div>
-  
-  {/* Family Member Progress */}
-  <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-    {displayedMembers.map(member => {
-      const progress = memberProgress[member.id] || { step: 1, completedSurvey: false };
-      // Determine progress color based on step
-      const stepColorClass = 
-        progress.step === 1 ? 'bg-blue-500 text-white' :
-        progress.step === 2 ? 'bg-green-500 text-white' :
-        progress.step === 3 ? 'bg-purple-500 text-white' : 
-        'bg-gray-200 text-gray-500';
-      
-      return (
-        <div key={member.id} className="flex flex-col items-center">
-          <div className="relative">
-            <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-gray-200">
-              {member.profilePicture ? (
-                <img 
-                  src={member.profilePicture} 
-                  alt={member.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div 
-                  className="w-full h-full flex items-center justify-center text-white"
-                  style={{ backgroundColor: getAvatarColor(member.name) }}
-                >
-                  {getInitials(member.name)}
-                </div>
-              )}
-            </div>
-            <div className={`absolute -right-1 -bottom-1 w-6 h-6 rounded-full flex items-center justify-center text-xs ${
-              member.role === 'child' ? 'bg-green-500 text-white' : stepColorClass
-            }`}>
-              {member.role === 'child' ? '2' : progress.step}
-            </div>
-          </div>
-          <div className="mt-2 text-center">
-            <div className="text-sm font-medium">{member.name}</div>
-            <div className="text-xs text-gray-500">
-              {member.role === 'child' 
-                ? 'Step 2: Survey' 
-                : progress.completedSurvey ? 'Survey Done' : 'Step 1: Habits'}
-            </div>
-          </div>
-        </div>
-      );
-    })}
-  
-</div>
-        
-        {/* Action Buttons */}
-        <div className="mt-6 flex flex-wrap gap-3 justify-center">
-        <button
-  onClick={handleStartSurvey}
-  disabled={!canTakeSurvey || hasCompletedSurvey}
-  className={`px-4 py-2 rounded-md flex items-center ${
-    hasCompletedSurvey
-      ? 'bg-green-600 text-white'
-      : canTakeSurvey
-        ? 'bg-blue-600 text-white hover:bg-blue-700'
-        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-  }`}
->
-  <CheckCircle size={18} className="mr-2" />
-  {hasCompletedSurvey ? 'Survey Completed' : 'Take Survey'}
-</button>
-          
-<button
-  onClick={onOpenFamilyMeeting}
-  disabled={!canScheduleMeeting}
-  className={`px-4 py-2 rounded-md flex items-center ${
-    canScheduleMeeting ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-  }`}
->
-  <Calendar size={18} className="mr-2" />
-  {canScheduleMeeting ? 'Take Meeting' : 'Schedule Meeting'} 
-</button>
-          
-<div className="flex items-center">
-<button
-  onClick={async () => {
-    try {
-      // First, try to force calendar date sync
-      const calendarDate = await forceCalendarDateSync();
-      
-      // Then set up date picker with the right date
-      const today = new Date();
-      let defaultDate;
-      
-      if (calendarDate) {
-        // Priority 1: Use the date directly from calendar
-        defaultDate = calendarDate;
-        console.log("Using calendar date for editing:", defaultDate);
-      } else if (surveyDue instanceof Date && !isNaN(surveyDue.getTime())) {
-        // Priority 2: Use surveyDue if valid
-        defaultDate = surveyDue;
-        
-        // Check if date is in the past
-        if (defaultDate < today) {
-          // Notify but still use the date
-          createCelebration("Date Update Needed", false, "The meeting date is in the past. Please set a new date.");
-        }
-      } else {
-        // Priority 3: Use tomorrow as fallback
-        defaultDate = new Date(today.getTime() + (24 * 60 * 60 * 1000));
-      }
-      
-      setDatePickerDate(defaultDate);
-      
-      // Find existing event
-      const existingEvent = await findExistingDueDateEvent();
-      setExistingDueDateEvent(existingEvent);
-      
-      setShowCalendar(true);
-    } catch (error) {
-      console.error("Error preparing calendar:", error);
-      createCelebration("Error", false, "Could not open calendar. Please try again.");
+      {/* Replace with CycleJourney component */}
+<CycleJourney
+  cycleType="family"
+  currentCycle={currentWeek}
+  cycleData={{
+    balance: {
+      mama: surveyDue ? (cycleData?.surveyData?.mamaPercentage || 50) : 50,
+      papa: surveyDue ? (100 - (cycleData?.surveyData?.mamaPercentage || 50)) : 50
+    },
+    meeting: {
+      scheduled: !!meetingDate,
+      scheduledDate: meetingDate || null,
+      completed: cycleStep >= 3
     }
   }}
-  className="px-4 py-2 border border-gray-300 rounded-md flex items-center hover:bg-gray-50"
->
-  <Clock size={18} className="mr-2" />
-  Change Due Date
-</button>
-  
-  {surveyDue && (
-    <div className="ml-2 text-sm bg-gray-100 px-3 py-1 rounded-md">
-      {surveyDue.toLocaleDateString('en-US', { 
-        weekday: 'short',
-        month: 'short', 
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })}
-      {surveyDue < new Date() && (
-        <span className="ml-1 text-red-600 font-medium">(Past due)</span>
-      )}
-    </div>
-  )}
-</div>
-        </div>
-        
-        {/* Cycle Information */}
-        <div className="mt-6 p-3 bg-gray-50 rounded-lg text-sm border border-gray-100">
-          <div className="flex items-start">
-            <Info size={16} className="mr-2 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <h4 className="font-medium">Cycle Progress</h4>
-              
-              <div className="mt-2 flex items-center">
-                <div className={`w-4 h-4 rounded-full flex items-center justify-center mr-2 ${
-                  canTakeSurvey ? 'bg-green-500 text-white' : 'bg-gray-300'
-                }`}>
-                  {canTakeSurvey && <Check size={12} />}
-                </div>
-                <span className={canTakeSurvey ? 'text-green-700' : ''}>
-                  Complete a habit at least 5 times
-                </span>
-              </div>
-              
-              <div className="mt-1 flex items-center">
-  <div className={`w-4 h-4 rounded-full flex items-center justify-center mr-2 ${
-    familyMembers.every(member => 
-      memberProgress[member.id]?.completedSurvey || 
-      member.weeklyCompleted?.[currentWeek-1]?.completed ||
-      (member.status && member.status.toLowerCase().includes("survey done"))
-    ) ? 'bg-green-500 text-white' : 'bg-gray-300'
-  }`}>
-    {familyMembers.every(member => 
-      memberProgress[member.id]?.completedSurvey || 
-      member.weeklyCompleted?.[currentWeek-1]?.completed ||
-      (member.status && member.status.toLowerCase().includes("survey done"))
-    ) && <Check size={12} />}
-  </div>
-  <span className={familyMembers.every(member => 
-    memberProgress[member.id]?.completedSurvey || 
-    member.weeklyCompleted?.[currentWeek-1]?.completed ||
-    (member.status && member.status.toLowerCase().includes("survey done"))
-  ) ? 'text-green-700' : ''}>
-    All family members complete the survey
-  </span>
-</div>
-              
-              <div className="mt-1 flex items-center">
-                <div className={`w-4 h-4 rounded-full flex items-center justify-center mr-2 ${
-                  cycleStep >= 3 ? 'bg-green-500 text-white' : 'bg-gray-300'
-                }`}>
-                  {cycleStep >= 3 && <Check size={12} />}
-                </div>
-                <span className={cycleStep >= 3 ? 'text-green-700' : ''}>
-                  Hold a family meeting to review progress
-                </span>
-              </div>
-              
-              <div className="mt-2 text-gray-500 flex items-center text-xs">
-                <Clock size={12} className="mr-1" />
-                Due date: {surveyDue ? formatDate(surveyDue) : 'Not scheduled yet'}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+  familyMembers={familyMembers}
+  currentUser={selectedUser}
+  memberProgress={memberProgress}
+  onStartStep={(action, step) => {
+    if (action === "habit") {
+      // Find first uncompleted habit
+      const firstHabit = habits.find(h => !h.completed);
+      if (firstHabit) {
+        setSelectedHabit(firstHabit);
+        setShowHabitDetail(firstHabit.id);
+      } else {
+        createNewHabit();
+      }
+    }
+    else if (action === "survey") handleStartSurvey();
+    else if (action === "meeting") onOpenFamilyMeeting();
+  }}
+  dueDate={surveyDue}
+  onChangeDueDate={() => setShowCalendar(true)}
+  loading={loading}
+/>
 
+{/* Keep the streak indicator if you want */}
+<div className="flex justify-end p-4">
+  <div className="bg-gray-100 rounded-lg px-3 py-2 text-center">
+    <div className="flex items-center">
+      <Flame className="text-orange-400 mr-1" size={18} />
+      <span className="text-lg font-bold">{familyStreak}</span>
+    </div>
+    <p className="text-xs">Current Streak</p>
+  </div>
+</div>
       {/* Current habits section */}
       <div className="p-4">
         <div className="flex justify-between items-center mb-4">
