@@ -419,6 +419,43 @@ const initialSyncDueDate = async () => {
   }
 };
 
+// In src/components/dashboard/tabs/TasksTab.jsx
+// Add this new useEffect near other useEffects
+
+useEffect(() => {
+  // Handle events from the calendar component
+  const handleCalendarUpdate = (e) => {
+    if (e.detail?.cycleUpdate) {
+      console.log("Received calendar cycle date update event");
+      // Immediately refresh survey due date
+      calculateNextSurveyDue();
+      // Reload cycle progress
+      loadCycleProgress();
+      // Force sync calendar data
+      forceCalendarDateSync();
+    }
+  };
+  
+  const handleCycleDateUpdate = (e) => {
+    if (e.detail?.date) {
+      console.log("Direct cycle date update:", e.detail.date);
+      // Immediately update the UI
+      setSurveyDue(e.detail.date);
+      // Also update in the DB for persistence
+      updateSurveySchedule(currentWeek, e.detail.date);
+    }
+  };
+  
+  // Add event listeners
+  window.addEventListener('calendar-event-updated', handleCalendarUpdate);
+  window.addEventListener('cycle-date-updated', handleCycleDateUpdate);
+  
+  // Cleanup
+  return () => {
+    window.removeEventListener('calendar-event-updated', handleCalendarUpdate);
+    window.removeEventListener('cycle-date-updated', handleCycleDateUpdate);
+  };
+}, [currentWeek]);
 
 // This is the fixed placement for the useEffect that was incorrectly inside loadData
 useEffect(() => {

@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import CalendarService from '../../services/CalendarService';
 import UserAvatar from '../common/UserAvatar';
@@ -36,7 +36,8 @@ const EnhancedEventManager = ({
   isCompact = false,
   mode = 'create', // 'create', 'edit', or 'view'
   conflictingEvents = [],
-  showAiMetadata = false
+  showAiMetadata = false,
+  currentWeek = null // Add this prop
 }) => {
 
   const { familyMembers, familyId } = useFamily();
@@ -278,6 +279,9 @@ useEffect(() => {
   };
 
 // Enhanced handleSave function with document and provider support
+// In src/components/calendar/EnhancedEventManager.jsx
+// Replace or modify the handleSave function (around line 216-366)
+
 const handleSave = async () => {
   try {
     setLoading(true);
@@ -452,14 +456,30 @@ const handleSave = async () => {
         results.push(dayResult);
       }
       
+      // Trigger immediate refresh on task tab (new code)
+      if (typeof window !== 'undefined') {
+        // Dispatch a custom event that TasksTab can listen for
+        window.dispatchEvent(new CustomEvent('calendar-event-updated', { 
+          detail: { 
+            updated: true,
+            cycleUpdate: calendarEvent.title?.includes("Cycle") && calendarEvent.category === 'meeting'
+          }
+        }));
+        // Force additional refresh of the calendar
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+      }
+      
+      // Call onSave immediately before showing animation
+      if (onSave) onSave({success: true, recurringResults: results});
+      
       // Show success animation
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
-        if (onSave) onSave({success: true, recurringResults: results});
       }, 1500);
+      
       setLoading(false);
-      return; // Stop execution since we've already handled saving
+      return; 
     }
     
     // Not recurring - handle as single event - USING useEvents HOOK
@@ -527,11 +547,79 @@ const handleSave = async () => {
       }
     }
     
-    // Show success animation
+    // NEW CODE: For Cycle due date updates, trigger IMMEDIATE refresh of TasksTab
+    const isCycleDueDate = calendarEvent.title?.includes("Cycle") && 
+                          (calendarEvent.category === 'meeting' || calendarEvent.eventType === 'meeting');
+    
+    if (mode === 'edit' && isCycleDueDate) {
+      // Update the surveySchedule in the database directly
+      try {
+        const cycleNumber = parseInt(calendarEvent.title.match(/Cycle\s*(\d+)/i)?.[1] || 
+                          calendarEvent.cycleNumber || 
+                          event.extraDetails?.cycleNumber || 
+                          "0");
+        
+        // Extract the date 
+        const newDate = new Date(calendarEvent.start.dateTime);
+        
+        // Update survey schedule directly
+        if (familyId && cycleNumber > 0) {
+          const familyRef = doc(db, "families", familyId);
+          await updateDoc(familyRef, {
+            [`surveySchedule.${cycleNumber}`]: newDate.toISOString(),
+            updatedAt: serverTimestamp()
+          });
+          
+          console.log(`Directly updated due date for cycle ${cycleNumber} to ${newDate.toISOString()}`);
+        }
+        
+        // Also update week status if it exists
+        const weekStatusRef = doc(db, "families", familyId);
+        const weekStatusDoc = await getDoc(weekStatusRef);
+        if (weekStatusDoc.exists()) {
+          const weekStatus = weekStatusDoc.data().weekStatus || {};
+          
+          if (weekStatus[cycleNumber]) {
+            await updateDoc(weekStatusRef, {
+              [`weekStatus.${cycleNumber}.scheduledDate`]: newDate.toISOString(),
+              updatedAt: serverTimestamp()
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Error updating cycle data directly:", err);
+        // Non-critical error, continue
+      }
+    }
+    
+    // Trigger immediate refresh on task tab (new code)
+    if (typeof window !== 'undefined') {
+      // Dispatch custom events that TasksTab can listen for
+      window.dispatchEvent(new CustomEvent('calendar-event-updated', { 
+        detail: { 
+          updated: true,
+          cycleUpdate: isCycleDueDate
+        }
+      }));
+      
+      // Force refresh of all calendar components
+      window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+      
+      // For cycle updates, dispatch special event
+      if (isCycleDueDate) {
+        window.dispatchEvent(new CustomEvent('cycle-date-updated', { 
+          detail: { date: new Date(calendarEvent.start.dateTime) }
+        }));
+      }
+    }
+    
+    // Call onSave immediately before animation
+    if (onSave) onSave(result);
+    
+    // Show success animation after results are saved
     setShowSuccess(true);
     setTimeout(() => {
       setShowSuccess(false);
-      if (onSave) onSave(result);
     }, 1500);
     
     setLoading(false);
