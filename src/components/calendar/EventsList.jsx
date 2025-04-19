@@ -1,6 +1,6 @@
 // src/components/calendar/EventsList.jsx
 import React from 'react';
-import { AlertCircle, Activity, BookOpen, Bell, Users, Heart, Clock, Calendar, Check, Edit, Trash2, MapPin } from 'lucide-react';
+import { AlertCircle, Activity, BookOpen, Bell, Users, FileText, User, Heart, Clock, Calendar, Check, Edit, Trash2, MapPin } from 'lucide-react';
 import UserAvatar from '../common/UserAvatar';
 import EventSourceBadge from './EventSourceBadge';
 import CalendarOperations from '../../utils/CalendarOperations';
