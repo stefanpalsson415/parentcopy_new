@@ -24,6 +24,8 @@ import CouplesMeeting from '../../relationship/CouplesMeeting';
 import UserAvatar from '../../common/UserAvatar';
 import RelationshipEventCard from '../../calendar';
 import { useAuth } from '../../../contexts/AuthContext';
+import CycleJourney from '../../cycles/CycleJourney';
+
 
 
 
@@ -157,11 +159,11 @@ const CycleManager = ({ cycle }) => {
     completeRelationshipAssessment,
     completeRelationshipPrework,
     scheduleCouplesMeeting,
-    completeCouplesMeeting
+    completeCouplesMeeting,
+    selectedUser
   } = useFamily();
 
   const { currentUser } = useAuth();
-
   
   const [cycleData, setCycleData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -173,6 +175,10 @@ const CycleManager = ({ cycle }) => {
   const [showPrework, setShowPrework] = useState(false);
   const [showMeeting, setShowMeeting] = useState(false);
   const [showScheduleMeeting, setShowScheduleMeeting] = useState(false);
+  
+  // State for CycleJourney component
+  const [memberProgress, setMemberProgress] = useState({});
+  const [formattedCycleData, setFormattedCycleData] = useState({});
   
   // Get parent IDs for tracking progress
   const parentIds = familyMembers
@@ -221,97 +227,107 @@ const CycleManager = ({ cycle }) => {
     
     loadCycleData();
   }, [cycle, familyId, getRelationshipCycleData]);
-// Add this right after the first useEffect in CycleManager
-useEffect(() => {
-  // Refresh cycle data if both parents have completed assessments but flag isn't set
-  const checkAndUpdateAssessmentsComplete = async () => {
+
+  // Prepare member progress for CycleJourney
+  useEffect(() => {
     if (!cycleData || loading) return;
     
-    const myComplete = isCurrentUserComplete('assessments');
-    const partnerComplete = isPartnerComplete('assessments');
+    const progress = {};
     
-    // If both are complete but flag is not set, refresh data
-    if (myComplete && partnerComplete && !cycleData.assessmentsCompleted) {
-      console.log("Both assessments complete but flag not set, refreshing data...");
-      
-      try {
-        const freshData = await getRelationshipCycleData(cycle);
-        if (freshData) {
-          setCycleData(freshData);
-        } else {
-          // Force the flag if database fetch fails
-          setCycleData(prev => ({
-            ...prev,
-            assessmentsCompleted: true,
-            assessmentsCompletedDate: new Date().toISOString()
-          }));
+    // Add progress for each parent
+    familyMembers
+      .filter(member => member.role === 'parent')
+      .forEach(member => {
+        const memberData = {
+          step: 1, // Start at step 1 (assessment)
+          completedAssessment: false,
+          completedPrework: false,
+          completedMeeting: false
+        };
+        
+        // Check assessment completion
+        if (cycleData.assessments?.[member.id]?.completed) {
+          memberData.completedAssessment = true;
+          memberData.step = 2; // Move to step 2 (prework)
         }
-      } catch (err) {
-        console.error("Error refreshing cycle data:", err);
+        
+        // Check prework completion
+        if (cycleData.prework?.[member.id]?.completed) {
+          memberData.completedPrework = true;
+          memberData.step = 3; // Move to step 3 (meeting)
+        }
+        
+        // Check meeting completion
+        if (cycleData.meeting?.completed) {
+          memberData.completedMeeting = true;
+        }
+        
+        progress[member.id] = memberData;
+      });
+    
+    setMemberProgress(progress);
+    
+    // Format cycle data for CycleJourney
+    setFormattedCycleData({
+      assessmentsCompleted: cycleData.assessmentsCompleted,
+      preworkCompleted: cycleData.preworkCompleted,
+      meeting: {
+        scheduled: cycleData.meeting?.scheduled || false,
+        scheduledDate: cycleData.meeting?.scheduledDate,
+        completed: cycleData.meeting?.completed || false
+      },
+      metrics: cycleData.metrics || null
+    });
+    
+  }, [cycleData, loading, familyMembers]);
+
+  useEffect(() => {
+    // Refresh cycle data if both parents have completed assessments but flag isn't set
+    const checkAndUpdateAssessmentsComplete = async () => {
+      if (!cycleData || loading) return;
+      
+      const myComplete = isCurrentUserComplete('assessments');
+      const partnerComplete = isPartnerComplete('assessments');
+      
+      // If both are complete but flag is not set, refresh data
+      if (myComplete && partnerComplete && !cycleData.assessmentsCompleted) {
+        console.log("Both assessments complete but flag not set, refreshing data...");
+        
+        try {
+          const freshData = await getRelationshipCycleData(cycle);
+          if (freshData) {
+            setCycleData(freshData);
+          } else {
+            // Force the flag if database fetch fails
+            setCycleData(prev => ({
+              ...prev,
+              assessmentsCompleted: true,
+              assessmentsCompletedDate: new Date().toISOString()
+            }));
+          }
+        } catch (err) {
+          console.error("Error refreshing cycle data:", err);
+        }
+      }
+    };
+    
+    checkAndUpdateAssessmentsComplete();
+  }, [cycleData, loading, isCurrentUserComplete, isPartnerComplete, getRelationshipCycleData, cycle]);
+
+  useEffect(() => {
+    // Check for all required data
+    if (!loading) {
+      if (!familyId) {
+        setError("Missing family data. Please try refreshing the page.");
+        return;
       }
     }
-  };
-  
-  checkAndUpdateAssessmentsComplete();
-}, [cycleData, loading, isCurrentUserComplete, isPartnerComplete, getRelationshipCycleData, cycle]);
-
-// Add this useEffect right after the first useEffect in CycleManager component in RelationshipTab.jsx
-// (around line 446, after the first useEffect that loads cycle data)
-
-useEffect(() => {
-  // Refresh cycle data if both parents have completed assessments but flag isn't set
-  const checkAndUpdateAssessmentsComplete = async () => {
-    if (!cycleData || loading) return;
     
-    const myComplete = isCurrentUserComplete('assessments');
-    const partnerComplete = isPartnerComplete('assessments');
-    
-    // If both are complete but flag is not set, refresh data
-    if (myComplete && partnerComplete && !cycleData.assessmentsCompleted) {
-      console.log("Both assessments complete but flag not set, refreshing data...");
-      
-      try {
-        const freshData = await getRelationshipCycleData(cycle);
-        if (freshData) {
-          setCycleData(freshData);
-        } else {
-          // Force the flag if database fetch fails
-          setCycleData(prev => ({
-            ...prev,
-            assessmentsCompleted: true,
-            assessmentsCompletedDate: new Date().toISOString()
-          }));
-        }
-      } catch (err) {
-        console.error("Error refreshing cycle data:", err);
-      }
+    // Clear any previous errors if we have the required data
+    if (familyId && error) {
+      setError(null);
     }
-  };
-  
-  checkAndUpdateAssessmentsComplete();
-}, [cycleData, loading, isCurrentUserComplete, isPartnerComplete, getRelationshipCycleData, cycle]);
-
-  // REPLACE the useEffect that checks for currentUser (around line 467)
-useEffect(() => {
-  // Check for all required data
-  if (!loading) {
-    if (!familyId) {
-      setError("Missing family data. Please try refreshing the page.");
-      return;
-    }
-    
-    // Remove this check to avoid the error message
-    /*if (!currentUser) {
-      setError("Please sign in to access relationship features.");
-      return;
-    }*/
-  }
-  
-  // Clear any previous errors if we have the required data
-  if (familyId && error) {
-    setError(null);
-  }
-}, [loading, familyId, error]);
+  }, [loading, familyId, error]);
 
   const handleScheduleMeeting = async (event) => {
     try {
@@ -399,43 +415,43 @@ useEffect(() => {
   };
   
   // Handle prework completion with added null check
-const handlePreworkSubmit = async (preworkData) => {
-  try {
-    if (!currentUser) {
-      setError("You need to be signed in to complete the pre-work.");
-      return false;
+  const handlePreworkSubmit = async (preworkData) => {
+    try {
+      if (!currentUser) {
+        setError("You need to be signed in to complete the pre-work.");
+        return false;
+      }
+      
+      await completeRelationshipPrework(cycle, preworkData);
+      
+      // Update local state
+      const updatedData = { ...cycleData };
+      if (!updatedData.prework) updatedData.prework = {};
+      
+      updatedData.prework[currentUser.uid] = {
+        completed: true,
+        completedDate: new Date().toISOString(),
+        ...preworkData
+      };
+      
+      const bothComplete = parentIds.every(id => 
+        updatedData.prework[id]?.completed
+      );
+      
+      if (bothComplete) {
+        updatedData.preworkCompleted = true;
+        updatedData.preworkCompletedDate = new Date().toISOString();
+      }
+      
+      setCycleData(updatedData);
+      setShowPrework(false);
+      
+      return true;
+    } catch (err) {
+      console.error("Error completing prework:", err);
+      throw err;
     }
-    
-    await completeRelationshipPrework(cycle, preworkData);
-    
-    // Update local state
-    const updatedData = { ...cycleData };
-    if (!updatedData.prework) updatedData.prework = {};
-    
-    updatedData.prework[currentUser.uid] = {
-      completed: true,
-      completedDate: new Date().toISOString(),
-      ...preworkData
-    };
-    
-    const bothComplete = parentIds.every(id => 
-      updatedData.prework[id]?.completed
-    );
-    
-    if (bothComplete) {
-      updatedData.preworkCompleted = true;
-      updatedData.preworkCompletedDate = new Date().toISOString();
-    }
-    
-    setCycleData(updatedData);
-    setShowPrework(false);
-    
-    return true;
-  } catch (err) {
-    console.error("Error completing prework:", err);
-    throw err;
-  }
-};
+  };
   
   // Handle meeting scheduling
   const processScheduleMeeting = async (eventData) => {
@@ -490,6 +506,27 @@ const handlePreworkSubmit = async (preworkData) => {
     }
   };
   
+  // Handler for CycleJourney onStartStep
+  const handleStartStep = (action, step) => {
+    switch(action) {
+      case "assessment":
+        setShowAssessment(true);
+        break;
+      case "prework":
+        setShowPrework(true);
+        break;
+      case "meeting":
+        if (cycleData?.meeting?.scheduled) {
+          setShowMeeting(true);
+        } else {
+          setShowScheduleMeeting(true);
+        }
+        break;
+      default:
+        console.log("Unknown action:", action);
+    }
+  };
+  
   if (loading) {
     return (
       <div className="bg-white rounded-lg shadow p-6 flex justify-center items-center">
@@ -514,303 +551,27 @@ const handlePreworkSubmit = async (preworkData) => {
     );
   }
   
-  const myAssessmentComplete = isCurrentUserComplete('assessments');
-  const partnerAssessmentComplete = isPartnerComplete('assessments');
-  const assessmentsComplete = isSectionComplete('assessments');
-  
-  const myPreworkComplete = isCurrentUserComplete('prework');
-  const partnerPreworkComplete = isPartnerComplete('prework');
-  const preworkComplete = isSectionComplete('prework');
-  
-  const meetingScheduled = cycleData?.meeting?.scheduled || false;
-  const meetingDate = cycleData?.meeting?.scheduledDate;
-  const meetingComplete = cycleData?.meeting?.completed || false;
+  // Get meeting date for use in CycleJourney
+  const meetingDate = cycleData?.meeting?.scheduledDate 
+    ? new Date(cycleData.meeting.scheduledDate) 
+    : null;
 
   return (
-    <div className="bg-white rounded-lg shadow p-6 mb-6">
-      <div className="flex justify-between items-center mb-4">
-        <div>
-          <h3 className="text-lg font-bold font-roboto">Relationship Cycle {cycle}</h3>
-          <p className="text-sm text-gray-600 font-roboto mt-1">
-            Complete your individual assessments, then work together to strengthen your relationship.
-          </p>
-        </div>
-        <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-1.5 rounded-full text-sm font-roboto shadow-md">
-          Current Cycle
-        </div>
-      </div>
-      
-      {/* Progress Indicator with Parent Profiles */}
-      <div className="mt-8 mb-8">
-        {/* Step Labels MOVED ABOVE the progress bar */}
-        <div className="flex justify-between mb-2">
-          <div className="text-center w-1/3">
-            <div className={`text-sm font-medium ${
-              myAssessmentComplete || partnerAssessmentComplete ? 'text-purple-600' : 'text-gray-500'
-            }`}>
-              STEP 1
-            </div>
-            <div className="text-xs text-gray-600">Assessments</div>
-          </div>
-          <div className="text-center w-1/3">
-            <div className={`text-sm font-medium ${preworkComplete ? 'text-purple-600' : 'text-gray-500'}`}>
-              STEP 2
-            </div>
-            <div className="text-xs text-gray-600">Pre-Meeting Work</div>
-          </div>
-          <div className="text-center w-1/3">
-            <div className={`text-sm font-medium ${meetingComplete ? 'text-purple-600' : 'text-gray-500'}`}>
-              STEP 3
-            </div>
-            <div className="text-xs text-gray-600">Couple Meeting</div>
-          </div>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="relative mb-10">
-          <div className="h-2 bg-gray-200 rounded-full w-full relative">
-            <div className={`absolute left-0 h-2 rounded-full transition-all duration-500 ${
-              meetingComplete ? 'w-full bg-gradient-to-r from-green-400 to-green-500' :
-              preworkComplete ? 'w-2/3 bg-gradient-to-r from-purple-500 to-pink-500' :
-              myAssessmentComplete && partnerAssessmentComplete ? 'w-1/3 bg-gradient-to-r from-blue-400 to-purple-500' :
-              'w-0'
-            }`}></div>
-          </div>
-          
-          {/* Step Number Markers */}
-          <div className="absolute top-0 left-0 transform -translate-y-1/2 w-full">
-            <div className="flex justify-between">
-              {/* Step 1 */}
-              <div className="relative flex flex-col items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md z-10 ${
-                  myAssessmentComplete || partnerAssessmentComplete 
-                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                    : 'bg-gray-300 text-gray-700'
-                }`}>
-                  1
-                </div>
-              </div>
-              
-              {/* Step 2 */}
-              <div className="relative flex flex-col items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md z-10 ${
-                  preworkComplete 
-                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                    : 'bg-gray-300 text-gray-700'
-                }`}>
-                  2
-                </div>
-              </div>
-              
-              {/* Step 3 */}
-              <div className="relative flex flex-col items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md z-10 ${
-                  meetingComplete 
-                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                    : 'bg-gray-300 text-gray-700'
-                }`}>
-                  3
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Parent Profile Pictures - Moved down and fixed position calculation */}
-        <div className="flex justify-center gap-4">
-          {familyMembers.filter(m => m.role === 'parent').map((parent, index) => {
-            const isCurrentUser = currentUser && parent.id === currentUser.uid;
-            const hasCompleted = isCurrentUser ? myAssessmentComplete : partnerAssessmentComplete;
-            
-            // Always show at step 1 before completing assessment
-            let stepPosition = 1;
-            if (hasCompleted) {
-              if (preworkComplete) stepPosition = 2;
-              if (meetingComplete) stepPosition = 3;
-            }
-            
-            return (
-              <div key={parent.id} className="flex flex-col items-center">
-                <div className="relative">
-                  <UserAvatar 
-                    user={parent} 
-                    size={40}
-                    className={`border-2 ${hasCompleted ? 'border-green-500' : 'border-gray-300'}`}
-                  />
-                  
-                  {hasCompleted && (
-                    <span className="absolute -top-1 -right-1">
-                      <CheckCircle size={16} className="text-green-500 bg-white rounded-full" />
-                    </span>
-                  )}
-                </div>
-                <span className="text-xs mt-1 font-medium">{parent.name}</span>
-                <span className="text-xs text-gray-500">Step {stepPosition}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>          
-  
-
-{/* Step Buttons */}
-<div className="flex flex-col gap-4 mt-6 mb-2">
-  <h5 className="text-sm font-medium text-gray-600 font-roboto">Cycle Steps:</h5>
-  <div className="grid grid-cols-3 gap-3">
-    {/* Assessment Button */}
-    <button 
-      onClick={() => setShowAssessment(true)}
-      disabled={myAssessmentComplete}
-      className={`relative p-4 rounded-lg flex flex-col items-center ${
-        myAssessmentComplete 
-          ? 'bg-gray-100 text-gray-500' 
-          : 'bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-md hover:shadow-lg'
-      }`}
-    >
-      <Shield size={20} className="mb-2" />
-      <span className="text-sm font-medium">Take Assessment</span>
-      {myAssessmentComplete && (
-        <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center shadow">
-          <CheckCircle size={14} className="text-white" />
-        </div>
-      )}
-    </button>
-
-    {/* Pre-work Button */}
-    <button 
-      onClick={() => setShowPrework(true)}
-      disabled={!assessmentsComplete || myPreworkComplete}
-      className={`relative p-4 rounded-lg flex flex-col items-center ${
-        myPreworkComplete 
-          ? 'bg-gray-100 text-gray-500'
-          : assessmentsComplete
-            ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md hover:shadow-lg'
-            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-      }`}
-    >
-      <Brain size={20} className="mb-2" />
-      <span className="text-sm font-medium">Complete Pre-work</span>
-      {myPreworkComplete && (
-        <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center shadow">
-          <CheckCircle size={14} className="text-white" />
-        </div>
-      )}
-    </button>
-
-    {/* Meeting Button */}
-    <button 
-      onClick={() => meetingScheduled ? setShowMeeting(true) : setShowScheduleMeeting(true)}
-      disabled={!preworkComplete || meetingComplete}
-      className={`relative p-4 rounded-lg flex flex-col items-center ${
-        meetingComplete 
-          ? 'bg-gray-100 text-gray-500'
-          : preworkComplete
-            ? 'bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-md hover:shadow-lg'
-            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-      }`}
-    >
-      <Users size={20} className="mb-2" />
-      <span className="text-sm font-medium">{meetingScheduled ? 'Start Meeting' : 'Schedule Meeting'}</span>
-      {meetingComplete && (
-        <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center shadow">
-          <CheckCircle size={14} className="text-white" />
-        </div>
-      )}
-    </button>
-  </div>
-
-  {/* Meeting Status Message */}
-  {meetingScheduled && !meetingComplete && (
-    <div className="text-sm mt-1 text-amber-700 bg-amber-50 p-2 rounded-lg text-center">
-      <Calendar size={14} className="inline mr-1" />
-      Meeting scheduled for: {formatDate(meetingDate)}
-    </div>
-  )}
-</div>
-
-
-
-      {/* Action Buttons - Shows different options based on progress */}
-<div className="flex flex-wrap justify-center mt-4 gap-4">
-  {/* Step 1: Assessment */}
-  {!myAssessmentComplete && (
-    <button 
-      className="px-4 py-2.5 rounded-lg font-medium font-roboto flex items-center shadow-md transition-all duration-300 bg-gradient-to-r from-purple-600 to-pink-500 text-white hover:shadow-lg"
-      onClick={() => setShowAssessment(true)}
-    >
-      <Shield size={16} className="mr-2" />
-      Complete Your Assessment
-    </button>
-  )}
-  
-  {myAssessmentComplete && !partnerAssessmentComplete && (
-    <div className="px-4 py-2.5 rounded-lg font-medium font-roboto flex items-center bg-gray-100 text-gray-500">
-      <CheckCircle size={16} className="mr-2" />
-      Your Assessment Complete
-      <span className="ml-2 text-xs">Waiting for partner</span>
-    </div>
-  )}
-        
-        {/* Step 2: Pre-Meeting Work */}
-        {assessmentsComplete && !myPreworkComplete && (
-          <button 
-            className="px-4 py-2.5 rounded-lg font-medium font-roboto flex items-center shadow-md transition-all duration-300 bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:shadow-lg"
-            onClick={() => setShowPrework(true)}
-          >
-            <Brain size={16} className="mr-2" />
-            Complete Pre-Meeting Work
-          </button>
-        )}
-        
-        {myPreworkComplete && !partnerPreworkComplete && (
-          <div className="px-4 py-2.5 rounded-lg font-medium font-roboto flex items-center bg-gray-100 text-gray-500">
-            <CheckCircle size={16} className="mr-2" />
-            Your Pre-Work Complete
-            <span className="ml-2 text-xs">Waiting for partner</span>
-          </div>
-        )}
-        
-        {/* Step 3: Couple Meeting */}
-        {preworkComplete && !meetingScheduled && (
-          <button 
-            className="px-4 py-2.5 rounded-lg font-medium font-roboto flex items-center shadow-md transition-all duration-300 bg-gradient-to-r from-indigo-500 to-blue-500 text-white hover:shadow-lg"
-            onClick={() => setShowScheduleMeeting(true)}
-          >
-            <Calendar size={16} className="mr-2" />
-            Schedule Couple Meeting
-          </button>
-        )}
-        
-        {meetingScheduled && !meetingComplete && (
-          <div className="flex flex-wrap gap-4 justify-center w-full">
-            <div className="px-4 py-2.5 rounded-lg font-medium font-roboto flex items-center bg-amber-100 text-amber-800">
-              <Calendar size={16} className="mr-2" />
-              Meeting Scheduled: {formatDate(meetingDate)}
-            </div>
-            
-            <button 
-              className="px-4 py-2.5 rounded-lg font-medium font-roboto flex items-center shadow-md transition-all duration-300 bg-gradient-to-r from-green-500 to-teal-500 text-white hover:shadow-lg"
-              onClick={() => setShowMeeting(true)}
-            >
-              <Users size={16} className="mr-2" />
-              Start Meeting Now
-            </button>
-          </div>
-        )}
-        
-        {/* Completed Cycle */}
-        {meetingComplete && (
-          <button 
-            className="px-4 py-2.5 bg-gradient-to-r from-green-400 to-green-500 text-white rounded-lg font-medium font-roboto flex items-center shadow-md hover:shadow-lg transition-all duration-300"
-            onClick={() => {
-              document.getElementById('relationship-charts')?.scrollIntoView({ behavior: 'smooth' });
-            }}
-          >
-            <Target size={16} className="mr-2" />
-            View Cycle Results
-          </button>
-        )}
-      </div>
+    <>
+      {/* CycleJourney Component */}
+      <CycleJourney
+        cycleType="relationship"
+        currentCycle={cycle}
+        cycleData={formattedCycleData}
+        familyMembers={familyMembers}
+        currentUser={selectedUser || currentUser}
+        memberProgress={memberProgress}
+        onStartStep={handleStartStep}
+        dueDate={meetingDate}
+        onChangeDueDate={() => setShowScheduleMeeting(true)}
+        loading={loading}
+        error={error}
+      />
       
       {/* Metrics Display if complete */}
       {cycleData?.metrics && (
@@ -866,7 +627,7 @@ const handlePreworkSubmit = async (preworkData) => {
               ]}
               onSubmit={handleAssessmentSubmit}
               cycle={cycle}
-              previousData={cycleData?.assessments?.[currentUser.uid] || null}
+              previousData={cycleData?.assessments?.[currentUser?.uid] || null}
               onCancel={() => setShowAssessment(false)}
             />
           </div>
@@ -908,7 +669,7 @@ const handlePreworkSubmit = async (preworkData) => {
                 eventType: 'couple-meeting',
               }}
               selectedDate={new Date()}
-              onSave={handleScheduleMeeting}
+              onSave={processScheduleMeeting}
               onCancel={() => setShowScheduleMeeting(false)}
               isCompact={true}
               mode="create"
@@ -930,7 +691,7 @@ const handlePreworkSubmit = async (preworkData) => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
