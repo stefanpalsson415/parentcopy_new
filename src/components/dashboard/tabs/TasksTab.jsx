@@ -540,6 +540,8 @@ const findExistingDueDateEvent = async () => {
           step: 1,
           memberProgress: {}
         };
+        setCycleData(cycleData);
+
         
         // Determine the current family-wide step based on progress
         let currentFamilyStep = cycleData.step || 1;
@@ -1533,7 +1535,7 @@ const createNewHabit = async (isRefresh = false) => {
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden font-roboto">
       {/* Replace with CycleJourney component */}
-<CycleJourney
+      <CycleJourney
   cycleType="family"
   currentCycle={currentWeek}
   cycleData={{
@@ -1544,7 +1546,7 @@ const createNewHabit = async (isRefresh = false) => {
     meeting: {
       scheduled: !!meetingDate,
       scheduledDate: meetingDate || null,
-      completed: cycleStep >= 3
+      completed: cycleData?.meeting?.completed === true
     }
   }}
   familyMembers={familyMembers}

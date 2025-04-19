@@ -21,6 +21,8 @@ import SurveyScreen from '../survey/SurveyScreen';
 //import ClaudeService from '../../services/ClaudeService';
 import { FloatingCalendar } from '../calendar';
 import UserAvatar from '../common/UserAvatar';
+import FamilyJourneyTab from './tabs/FamilyJourneyTab';
+
 
 
 
@@ -385,6 +387,8 @@ useEffect(() => {
         return <ChildrenTrackingTab />;
       case 'initial-survey':
         return <InitialSurveyTab />;
+        case 'family-journey':  // Add this new case
+      return <FamilyJourneyTab />;
       default:
         // Handle week history tabs
         if (activeTab.startsWith('week-')) {
@@ -537,6 +541,12 @@ useEffect(() => {
           >
             Initial Survey
           </button>
+          <button 
+  className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'family-journey' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+  onClick={() => setActiveTab('family-journey')}
+>
+  Family Journey
+</button>
 
           {/* Add completed weeks as tabs */}
           {weekTabs.map(tab => (
