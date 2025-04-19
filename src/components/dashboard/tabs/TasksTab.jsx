@@ -213,30 +213,6 @@ useEffect(() => {
   
 
 
-// Add to the main useEffect that loads habits and data
-useEffect(() => {
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      // ... existing code ...
-      
-      // Add this at the end of the function:
-      // Force sync from calendar to fix date discrepancies
-      await forceCalendarDateSync();
-      
-      setLoading(false);
-    } catch (error) {
-      console.error("Error loading habits:", error);
-      setHabits([]);
-      setLoading(false);
-    }
-  };
-  
-  loadData();
-}, [familyId, currentWeek, selectedUser]);
-
-
-
     // Load habits and cycle data
   useEffect(() => {
     const loadData = async () => {

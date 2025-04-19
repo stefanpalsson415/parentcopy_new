@@ -80,6 +80,8 @@ const EnhancedEventManager = ({
   const placesContainerRef = useRef(null);
   const [selectedReminders, setSelectedReminders] = useState([]);
   const { addEvent, updateEvent } = useEvents();
+  const [showSuccess, setShowSuccess] = useState(false);
+
 
 
   
