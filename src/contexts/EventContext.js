@@ -1,6 +1,6 @@
 // src/contexts/EventContext.js
 import React, { createContext, useContext } from 'react';
-import { useEvents as useEventsHook } from '../hooks/useEvent';
+import { useEvents } from '../hooks/useEvent'; // Changed this line - remove the "as useEventsHook"
 
 // Create the context
 const EventContext = createContext();
@@ -19,14 +19,10 @@ export function useEvents() {
 
 /**
  * Provider component that makes event data available to all child components
- * 
- * This is a thin wrapper around the useEvents hook from useEvent.js
- * which connects to the central EventStore service
  */
 export function EventProvider({ children }) {
-  // Use the hook directly - all state management and event operations
-  // are handled by the useEvents hook which connects to EventStore
-  const eventContext = useEventsHook();
+  // Use the hook from useEvent.js directly
+  const eventContext = useEvents(); // Changed this line - use the actual function name
   
   return (
     <EventContext.Provider value={eventContext}>
