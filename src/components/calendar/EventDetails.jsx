@@ -226,6 +226,97 @@ if (!event) {
                 </p>
               </div>
             </div>
+            {/* Attendees */}
+{(event.attendees && event.attendees.length > 0) && (
+  <div className="flex items-start">
+    <Users size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+    <div>
+      <p className="font-medium text-sm font-roboto">Attendees</p>
+      <div className="flex flex-wrap gap-1 mt-1">
+        {event.attendees.map((attendee, index) => (
+          <div key={index} className="flex items-center bg-gray-100 rounded-full px-2 py-1">
+            <div className="w-5 h-5 rounded-full overflow-hidden mr-1">
+              <UserAvatar
+                user={attendee}
+                size={20}
+              />
+            </div>
+            <span className="text-xs">{attendee.name}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Documents */}
+{(event.documents && event.documents.length > 0) && (
+  <div className="flex items-start">
+    <FileText size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+    <div>
+      <p className="font-medium text-sm font-roboto">Attached Documents</p>
+      <div className="space-y-1 mt-1">
+        {event.documents.map((doc, index) => (
+          <div key={index} className="flex items-center text-sm text-blue-600">
+            <FileText size={14} className="mr-1" />
+            <a 
+              href={doc.fileUrl} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="hover:underline text-xs"
+            >
+              {doc.title || doc.fileName}
+            </a>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Providers */}
+{(event.providers && event.providers.length > 0) && (
+  <div className="flex items-start">
+    <User size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+    <div>
+      <p className="font-medium text-sm font-roboto">Providers</p>
+      <div className="space-y-1 mt-1">
+        {event.providers.map((provider, index) => (
+          <div key={index} className="text-sm">
+            <p className="font-medium">{provider.name}</p>
+            {provider.specialty && (
+              <p className="text-xs text-gray-600">{provider.specialty}</p>
+            )}
+            {provider.phone && (
+              <p className="text-xs text-blue-600">
+                <a href={`tel:${provider.phone}`}>{provider.phone}</a>
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Reminders */}
+{event.reminders && event.reminders.overrides && event.reminders.overrides.length > 0 && (
+  <div className="flex items-start">
+    <Bell size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+    <div>
+      <p className="font-medium text-sm font-roboto">Reminders</p>
+      <div className="flex flex-wrap gap-1 mt-1">
+        {event.reminders.overrides.map((reminder, index) => (
+          <span key={index} className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-xs">
+            {reminder.minutes >= 1440 ? `${reminder.minutes / 1440} day(s)` : 
+             reminder.minutes >= 60 ? `${reminder.minutes / 60} hour(s)` : 
+             `${reminder.minutes} minute(s)`} before
+          </span>
+        ))}
+      </div>
+    </div>
+  </div>
+)}
             
             {/* Event Type specific details */}
             {event.eventType === 'birthday' && extraDetails && (

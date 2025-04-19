@@ -261,7 +261,24 @@ const EventsList = ({
                         <span className="truncate max-w-xs">{event.location}</span>
                       </div>
                     )}
-                    
+                    {/* Document and Provider info */}
+{(event.documents?.length > 0 || event.providers?.length > 0) && (
+  <div className="mt-1 flex flex-wrap gap-1">
+    {event.documents?.map((doc, index) => (
+      <span key={`doc-${index}`} className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700">
+        <FileText size={10} className="mr-1" />
+        {doc.title || doc.fileName || 'Document'}
+      </span>
+    ))}
+    
+    {event.providers?.map((provider, index) => (
+      <span key={`prov-${index}`} className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs bg-purple-50 text-purple-700">
+        <User size={10} className="mr-1" />
+        {provider.name || 'Provider'}
+      </span>
+    ))}
+  </div>
+)}
                     {/* Description row - truncated */}
                     {event.description && (
                       <div className="text-xs text-gray-600 font-roboto mt-1 line-clamp-2 max-w-xs">
@@ -271,40 +288,92 @@ const EventsList = ({
                   </div>
                   
                   {/* Action buttons or attendee avatars */}
-                  <div className="ml-2 flex items-center self-start">
-                    {showActionButtons && onEventAdd && onEventEdit && onEventDelete ? (
-                      <EventActions event={event} />
-                    ) : (
-                      // Always show avatars for events without action buttons
-                      <>
-                        {/* Show attendee avatars if available */}
-                        {event.attendees && event.attendees.length > 0 ? (
-                          <AttendeeAvatars attendees={event.attendees} max={3} />
-                        ) : event.childId && event.childName ? (
-                          /* Show child avatar if it's a child event */
-                          <AttendeeAvatars 
-    attendees={[{
-      id: event.childId, 
-      name: event.childName,
-      // Try to get full data from family members
-      ...(familyMembers.find(m => m.id === event.childId) || {})
-    }]} 
-    max={1} 
-  />
-                        ) : event.attendingParentId && event.attendingParentId !== 'undecided' ? (
-                          /* Show attending parent avatar if available */
-                          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 text-xs">
-                            <Users size={14} />
-                          </div>
-                        ) : (
-                          /* Generic calendar icon as fallback */
-                          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 text-xs">
-                            <Calendar size={14} />
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
+<div className="ml-2 flex items-center self-start">
+  {showActionButtons && onEventAdd && onEventEdit && onEventDelete ? (
+    <EventActions event={event} />
+  ) : (
+    // Always show avatars for events without action buttons
+    <>
+      {/* Show combined attendees for a better visualization */}
+      {(() => {
+        // Collect all attendees from various sources
+        const allAttendees = [
+          // If event has explicit attendees, use those
+          ...(event.attendees || []),
+          
+          // If not, try to collect from other properties
+          ...(!event.attendees || event.attendees.length === 0 ? [
+            // Add child if present
+            ...(event.childId ? [{
+              id: event.childId,
+              name: event.childName,
+              role: 'child',
+              // Try to get full data from family members
+              ...(familyMembers.find(m => m.id === event.childId) || {})
+            }] : []),
+            
+            // Add siblings if present
+            ...(event.siblingIds?.map((sibId, index) => {
+              const sibling = familyMembers.find(m => m.id === sibId);
+              return {
+                id: sibId,
+                name: event.siblingNames?.[index] || (sibling ? sibling.name : 'Sibling'),
+                role: 'child',
+                ...(sibling || {})
+              };
+            }) || []),
+            
+            // Add attending parent if specified
+            ...(event.attendingParentId ? (
+              event.attendingParentId === 'both' ?
+                // Add both parents
+                familyMembers.filter(m => m.role === 'parent').map(parent => ({
+                  id: parent.id,
+                  name: parent.name,
+                  role: 'parent',
+                  ...parent
+                })) :
+                // Add single parent
+                [{
+                  id: event.attendingParentId,
+                  name: familyMembers.find(m => m.id === event.attendingParentId)?.name || 'Parent',
+                  role: 'parent',
+                  ...(familyMembers.find(m => m.id === event.attendingParentId) || {})
+                }]
+            ) : [])
+          ] : [])
+        ];
+        
+        // If we have attendees, display them
+        if (allAttendees.length > 0) {
+          return <AttendeeAvatars attendees={allAttendees} max={3} />;
+        }
+        
+        // For events with no attendees, use event type icons
+        if (event.category === 'meeting') {
+          return (
+            <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-amber-800 text-xs">
+              <Users size={14} />
+            </div>
+          );
+        } else if (event.category === 'appointment') {
+          return (
+            <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center text-red-800 text-xs">
+              <AlertCircle size={14} />
+            </div>
+          );
+        } else {
+          // Generic calendar icon as fallback
+          return (
+            <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 text-xs">
+              <Calendar size={14} />
+            </div>
+          );
+        }
+      })()}
+    </>
+  )}
+</div>
                 </div>
               </div>
             );

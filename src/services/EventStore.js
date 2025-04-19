@@ -41,8 +41,27 @@ class EventStore {
       endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
     }
 
+    // Make sure startDate and endDate are valid dates
+    if (isNaN(startDate.getTime())) {
+      console.warn("Invalid start date detected, using current time instead");
+      startDate = new Date();
+    }
+
+    if (isNaN(endDate.getTime())) {
+      console.warn("Invalid end date detected, using start date + 1 hour instead");
+      endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+    }
+
     // Generate a unique, permanent ID if not provided
     const universalId = eventData.universalId || eventData.id || `event-${uuidv4()}`;
+
+    // Create signature for deduplication
+    const signatureBase = `${eventData.title || eventData.summary || ""}-${startDate.toISOString().split('T')[0]}-${
+      eventData.childId || eventData.childName || ""
+    }-${eventData.eventType || eventData.category || ""}`.toLowerCase();
+    
+    // Calculate a deterministic hash for this event to aid in deduplication
+    const eventSignature = `sig-${this.hashString(signatureBase)}`;
 
     // Return a fully standardized event object
     return {
@@ -50,6 +69,7 @@ class EventStore {
       id: eventData.id || eventData.firestoreId || universalId,
       firestoreId: eventData.firestoreId || eventData.id,
       universalId: universalId,
+      eventSignature: eventSignature,
       
       // Core event data
       title: eventData.title || eventData.summary || "Untitled Event",
@@ -85,15 +105,40 @@ class EventStore {
       siblingIds: eventData.siblingIds || [],
       siblingNames: eventData.siblingNames || [],
       
+      // Family members attending
+      attendees: eventData.attendees || [],
+      
+      // Document and provider relationships
+      documents: eventData.documents || [],
+      providers: eventData.providers || [],
+      
       // Additional metadata
       extraDetails: eventData.extraDetails || {},
       source: eventData.source || "manual",
       linkedEntity: eventData.linkedEntity || null,
       
+      // Enhanced context
+      reminders: eventData.reminders || {
+        useDefault: true,
+        overrides: []
+      },
+      notes: eventData.notes || eventData.extraDetails?.notes || "",
+      
       // Timestamps
       createdAt: eventData.createdAt || new Date().toISOString(),
       updatedAt: eventData.updatedAt || new Date().toISOString()
     };
+  }
+  
+  // Simple hash function for generating event signatures
+  hashString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(36);
   }
 
   // Add a new event
@@ -107,6 +152,32 @@ class EventStore {
         userId,
         familyId
       });
+      
+      // Check for duplicates by querying Firestore before saving
+      const eventsQuery = query(
+        collection(db, "events"),
+        where("eventSignature", "==", standardizedEvent.eventSignature),
+        where("userId", "==", userId)
+      );
+      
+      const querySnapshot = await getDocs(eventsQuery);
+      
+      // If we found a duplicate, return the existing event
+      if (!querySnapshot.empty) {
+        const existingEvent = querySnapshot.docs[0].data();
+        console.log("Duplicate event detected, returning existing event", existingEvent.firestoreId);
+        
+        // Update cache with the existing event
+        this.eventCache.set(existingEvent.universalId, existingEvent);
+        
+        return {
+          success: true,
+          eventId: existingEvent.firestoreId,
+          universalId: existingEvent.universalId,
+          isDuplicate: true,
+          existingEvent: existingEvent
+        };
+      }
       
       // Save to Firestore
       const eventCollection = collection(db, "events");

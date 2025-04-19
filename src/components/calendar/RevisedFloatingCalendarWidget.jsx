@@ -293,57 +293,75 @@ const handleEventClick = async (event) => {
   setEditedEvent(formattedEvent);
 };
   
-  const handleEventAdd = async (event) => {
-    try {
-      // Check if event already exists
-      if (eventExists(event)) {
-        console.log("Event already exists in calendar, preventing duplicate");
-        CalendarService.showNotification("Event already exists in your calendar", "info");
-        return;
-      }
-      
-      // Add the event using EventContext
-      const result = await addEvent(event);
-      
-      if (result.success) {
-        // Add to cache to prevent duplicates
-        addEventToCache({
-          ...event,
-          id: result.eventId,
-          firestoreId: result.firestoreId,
-          universalId: result.universalId
-        });
+const handleEventAdd = async (event) => {
+  try {
+    // Check if event already exists locally
+    if (eventExists(event)) {
+      console.log("Event already exists in calendar, preventing duplicate");
+      CalendarService.showNotification("Event already exists in your calendar", "info");
+      return;
+    }
+    
+    // Add the event using EventContext
+    const result = await addEvent(event);
+    
+    if (result.success) {
+      // Check if this was a duplicate detected server-side
+      if (result.isDuplicate) {
+        console.log("Server detected duplicate event:", result.existingEvent?.firestoreId);
         
-        // Mark as added
+        // Still mark as added to prevent further addition attempts
         setAddedEvents(prev => ({
           ...prev,
           [getEventKey(event)]: true
         }));
         
-        // Show "Added" message temporarily
+        // Show message but make it clear it was already there
+        CalendarService.showNotification("This event already exists in your calendar", "info");
+        
+        // Refresh events to make sure we show the existing event
+        setLastRefresh(Date.now());
+        return;
+      }
+      
+      // Add to cache to prevent duplicates
+      addEventToCache({
+        ...event,
+        id: result.eventId,
+        firestoreId: result.firestoreId,
+        universalId: result.universalId
+      });
+      
+      // Mark as added
+      setAddedEvents(prev => ({
+        ...prev,
+        [getEventKey(event)]: true
+      }));
+      
+      // Show "Added" message temporarily
+      setShowAddedMessage(prev => ({
+        ...prev,
+        [getEventKey(event)]: true
+      }));
+      
+      setTimeout(() => {
         setShowAddedMessage(prev => ({
           ...prev,
-          [getEventKey(event)]: true
+          [getEventKey(event)]: false
         }));
-        
-        setTimeout(() => {
-          setShowAddedMessage(prev => ({
-            ...prev,
-            [getEventKey(event)]: false
-          }));
-        }, 3000);
-        
-        // Show notification
-        CalendarService.showNotification("Event added to calendar", "success");
-        
-        // Refresh events
-        setLastRefresh(Date.now());
-      }
-    } catch (error) {
-      console.error("Error adding event:", error);
-      CalendarService.showNotification("Failed to add event to calendar", "error");
+      }, 3000);
+      
+      // Show notification
+      CalendarService.showNotification("Event added to calendar", "success");
+      
+      // Refresh events
+      setLastRefresh(Date.now());
     }
-  };
+  } catch (error) {
+    console.error("Error adding event:", error);
+    CalendarService.showNotification("Failed to add event to calendar", "error");
+  }
+};
   
   const handleEventEdit = (event) => {
     // Create a properly formatted event object for the editor
@@ -632,47 +650,80 @@ const handleEventClick = async (event) => {
   };
   
   // Update event
-  const handleUpdateEvent = async (updatedEvent) => {
-    try {
-      setPendingAction('update');
+  // Update event
+const handleUpdateEvent = async (updatedEvent) => {
+  try {
+    setPendingAction('update');
+    
+    if (!updatedEvent || !updatedEvent.firestoreId) {
+      CalendarService.showNotification("Cannot update this event - no valid ID found", "error");
+      setPendingAction(null);
+      return;
+    }
+    
+    // Create updated event object with required fields
+    const eventUpdate = {
+      summary: updatedEvent.title,
+      description: updatedEvent.description || '',
+      location: updatedEvent.location || '',
       
-      if (!updatedEvent || !updatedEvent.firestoreId) {
-        CalendarService.showNotification("Cannot update this event - no valid ID found", "error");
-        setPendingAction(null);
-        return;
-      }
+      // Include document and provider references
+      documents: updatedEvent.documents || [],
+      providers: updatedEvent.providers || [],
       
-      // Create updated event object with required fields
-      const eventUpdate = {
-        summary: updatedEvent.title,
-        description: updatedEvent.description || '',
-        location: updatedEvent.location || '',
+      // Include attendees
+      attendees: updatedEvent.attendees || [],
+      
+      // Child and parent associations
+      childId: updatedEvent.childId,
+      childName: updatedEvent.childName,
+      attendingParentId: updatedEvent.attendingParentId,
+      siblingIds: updatedEvent.siblingIds || [],
+      siblingNames: updatedEvent.siblingNames || [],
+      
+      // Reminders and additional context
+      reminders: updatedEvent.reminders,
+      notes: updatedEvent.notes || updatedEvent.extraDetails?.notes
+    };
+    
+    // Add date/time if available
+    if (updatedEvent.dateObj) {
+      eventUpdate.start = {
+        dateTime: updatedEvent.dateObj.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       };
       
-      // Add date/time if available
-      if (updatedEvent.dateObj) {
-        eventUpdate.start = {
-          dateTime: updatedEvent.dateObj.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        };
-        
-        // Calculate end time
-        const endDate = updatedEvent.dateEndObj || new Date(updatedEvent.dateObj.getTime() + 60 * 60 * 1000);
-        eventUpdate.end = {
-          dateTime: endDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        };
-      }
-      
-      // Ensure we preserve AI metadata
-      eventUpdate.extraDetails = {
-        ...(updatedEvent.extraDetails || {}),
-        parsedWithAI: updatedEvent.extraDetails?.parsedWithAI || false,
-        extractionConfidence: updatedEvent.extraDetails?.extractionConfidence || null,
-        parsedFromImage: updatedEvent.extraDetails?.parsedFromImage || false,
-        originalText: updatedEvent.extraDetails?.originalText || '',
-        creationSource: updatedEvent.extraDetails?.creationSource || 'manual'
+      // Calculate end time
+      const endDate = updatedEvent.dateEndObj || new Date(updatedEvent.dateObj.getTime() + 60 * 60 * 1000);
+      eventUpdate.end = {
+        dateTime: endDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       };
+    }
+    
+    // Ensure we preserve AI metadata
+    eventUpdate.extraDetails = {
+      ...(updatedEvent.extraDetails || {}),
+      parsedWithAI: updatedEvent.extraDetails?.parsedWithAI || false,
+      extractionConfidence: updatedEvent.extraDetails?.extractionConfidence || null,
+      parsedFromImage: updatedEvent.extraDetails?.parsedFromImage || false,
+      originalText: updatedEvent.extraDetails?.originalText || '',
+      creationSource: updatedEvent.extraDetails?.creationSource || 'manual',
+      
+      // Provider details for appointments
+      ...(updatedEvent.category === 'appointment' && updatedEvent.providers?.[0] ? {
+        providerName: updatedEvent.providers[0].name,
+        providerSpecialty: updatedEvent.providers[0].specialty,
+        providerPhone: updatedEvent.providers[0].phone,
+        providerAddress: updatedEvent.providers[0].address
+      } : {}),
+      
+      // Birthday details
+      ...(updatedEvent.category === 'birthday' ? {
+        birthdayChildName: updatedEvent.extraDetails?.birthdayChildName,
+        birthdayChildAge: updatedEvent.extraDetails?.birthdayChildAge
+      } : {})
+    };
       
       // Update event using EventContext
       const result = await updateEvent(updatedEvent.firestoreId, eventUpdate);
