@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Filter, Info, ChevronDown, ChevronUp, PieChart, Brain, Calendar, Heart, Scale, Clock, Users } from 'lucide-react';
+import { Filter, Info, ChevronDown, ChevronUp, PieChart, Brain, Calendar, Heart, Scale, Clock, Users, CheckCircle2, AlertTriangle, Lightbulb,  
+  MessageCircle, Star } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { useSurvey } from '../../../contexts/SurveyContext';
 import { calculateBalanceScores } from '../../../utils/TaskWeightCalculator';
@@ -24,7 +25,8 @@ const DashboardTab = () => {
     taskEffectivenessData,
     familyPriorities,
     weightedScores: globalWeightedScores,
-    setWeightedScores: setGlobalWeightedScores
+    setWeightedScores: setGlobalWeightedScores,
+    weekHistory
   } = useFamily();
   
   const { fullQuestionSet } = useSurvey();
@@ -64,6 +66,35 @@ const DashboardTab = () => {
     }));
   };
   
+  const [expandedJourneySections, setExpandedJourneySections] = useState({
+    journeyInsights: true,
+    familyMeeting: true
+  });
+  
+  // For handling selected cycle in journey view
+  const [selectedCycle, setSelectedCycle] = useState(1);
+  const [journeyData, setJourneyData] = useState([]);
+  
+  // Toggle section expansion for journey sections
+  const toggleJourneySection = (section) => {
+    setExpandedJourneySections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+  
+  // Format date helper
+  const formatDate = (date) => {
+    if (!date) return "Not available";
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return dateObj.toLocaleDateString('en-US', { 
+      weekday: 'short',
+      month: 'short', 
+      day: 'numeric'
+    });
+  };
+
+
   // Calculate time filter options based on completed weeks
   const getTimeFilterOptions = () => {
     const options = [];
@@ -175,6 +206,48 @@ const DashboardTab = () => {
     loadData();
   }, [timeFilter, radarFilter, fullQuestionSet, surveyResponses, familyPriorities, familyId, currentWeek, setGlobalWeightedScores]);
   
+
+  // Load cycle data and journey data
+useEffect(() => {
+  const loadJourneyData = async () => {
+    try {
+      // Load all completed cycles for journey data
+      const journeyEntries = [];
+      
+      // Add initial survey as "Cycle 0" if available
+      const initialData = await getWeekHistoryData(0);
+      if (initialData) {
+        journeyEntries.push({
+          cycleNumber: 0,
+          label: "Initial",
+          data: initialData,
+          completionDate: initialData.completionDate
+        });
+      }
+      
+      // Add all other completed cycles
+      for (const weekNum of completedWeeks) {
+        const weekData = await getWeekHistoryData(weekNum);
+        if (weekData) {
+          journeyEntries.push({
+            cycleNumber: weekNum,
+            label: `Cycle ${weekNum}`,
+            data: weekData,
+            completionDate: weekData.completionDate
+          });
+        }
+      }
+      
+      // Sort by cycle number for consistent display
+      journeyEntries.sort((a, b) => a.cycleNumber - b.cycleNumber);
+      setJourneyData(journeyEntries);
+    } catch (error) {
+      console.error(`Error loading journey data:`, error);
+    }
+  };
+  
+  loadJourneyData();
+}, [completedWeeks, getWeekHistoryData]);
   
   // Get filtered responses based on selected time period
   const getFilteredResponses = () => {
@@ -613,6 +686,159 @@ const DashboardTab = () => {
             ))}
           </select>
         </div>
+      </div>
+
+      {/* Task Category Distribution */}
+      <div className="bg-white rounded-lg shadow">
+        <div 
+          className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50"
+          onClick={() => toggleSection('categories')}
+        >
+          <h3 className="text-lg font-semibold">Task Category Distribution</h3>
+          {expandedSections.categories ? (
+            <ChevronUp size={20} className="text-gray-500" />
+          ) : (
+            <ChevronDown size={20} className="text-gray-500" />
+          )}
+        </div>
+        
+        {expandedSections.categories && (
+          <div className="p-6 pt-0">
+            {loading.categories ? (
+              <div className="h-48 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <p className="text-gray-500">Loading data...</p>
+                </div>
+              </div>
+            ) : !getRadarData() || getRadarData().every(item => item.mama === 0 && item.papa === 0) ? (
+              <div className="h-48 flex items-center justify-center">
+                <div className="text-center p-6 bg-gray-50 rounded-lg max-w-md">
+                  <p className="text-gray-600">
+                    Not enough data to display category distribution yet. Complete the initial survey to see the breakdown by task category.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-between items-center mb-4">
+                  <p className="text-sm text-gray-600">
+                    Distribution of responsibilities across four task categories
+                  </p>
+                  
+                  <div className="flex items-center text-sm">
+                    <span className="mr-2">View:</span>
+                    <div className="flex border rounded overflow-hidden">
+                      <button 
+                        className={`px-2 py-1 ${radarFilter === 'all' ? 'bg-blue-100 text-blue-700' : 'bg-white'}`}
+                        onClick={() => setRadarFilter('all')}
+                      >
+                        All
+                      </button>
+                      <button 
+                        className={`px-2 py-1 border-l ${radarFilter === 'parents' ? 'bg-blue-100 text-blue-700' : 'bg-white'}`}
+                        onClick={() => setRadarFilter('parents')}
+                      >
+                        Parents
+                      </button>
+                      <button 
+                        className={`px-2 py-1 border-l ${radarFilter === 'children' ? 'bg-blue-100 text-blue-700' : 'bg-white'}`}
+                        onClick={() => setRadarFilter('children')}
+                      >
+                        Children
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                  
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart outerRadius="80%" data={getRadarData()}>
+                      <PolarGrid />
+                      <PolarAngleAxis dataKey="category" />
+                      <PolarRadiusAxis angle={30} domain={[0, 100]} />
+                        
+                      <Radar
+                        name="Mama's Tasks"
+                        dataKey="mama"
+                        stroke={MAMA_COLOR}
+                        fill={MAMA_COLOR}
+                        fillOpacity={0.5}
+                      />
+                        
+                      <Radar
+                        name="Papa's Tasks"
+                        dataKey="papa"
+                        stroke={PAPA_COLOR}
+                        fill={PAPA_COLOR}
+                        fillOpacity={0.5}
+                      />
+                        
+                      <Legend />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+                  
+                <div className="mt-4 text-sm text-center text-gray-500">
+                  The chart shows what percentage of tasks in each category are handled by Mama vs Papa.
+                </div>
+
+                {/* Add a bar chart version for easier visual comparison */}
+                <div className="mt-6">
+                  <h4 className="font-medium mb-3">Category Breakdown</h4>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={getRadarData()}
+                        layout="vertical"
+                        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" domain={[0, 100]} />
+                        <YAxis dataKey="category" type="category" width={150} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Legend />
+                        <Bar dataKey="mama" name="Mama's Share" stackId="a" fill={MAMA_COLOR} />
+                        <Bar dataKey="papa" name="Papa's Share" stackId="a" fill={PAPA_COLOR} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Category Explanation */}
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-3 bg-blue-50 rounded-lg">
+                    <h5 className="font-medium text-blue-800 text-sm">Visible Household Tasks</h5>
+                    <p className="text-xs mt-1 text-blue-600">
+                      Tasks like cleaning, cooking, laundry, yard work, and home maintenance that are easily observable.
+                    </p>
+                  </div>
+                  
+                  <div className="p-3 bg-purple-50 rounded-lg">
+                    <h5 className="font-medium text-purple-800 text-sm">Invisible Household Tasks</h5>
+                    <p className="text-xs mt-1 text-purple-600">
+                      Tasks like planning, scheduling, budgeting, and household management that often go unnoticed.
+                    </p>
+                  </div>
+                  
+                  <div className="p-3 bg-green-50 rounded-lg">
+                    <h5 className="font-medium text-green-800 text-sm">Visible Parental Tasks</h5>
+                    <p className="text-xs mt-1 text-green-600">
+                      Direct childcare activities like helping with homework, driving kids, bathing, and bedtime routines.
+                    </p>
+                  </div>
+                  
+                  <div className="p-3 bg-red-50 rounded-lg">
+                    <h5 className="font-medium text-red-800 text-sm">Invisible Parental Tasks</h5>
+                    <p className="text-xs mt-1 text-red-600">
+                      Emotional labor, monitoring development, healthcare coordination, and anticipating children's needs.
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
       
       {/* AI Insights Section */}
@@ -1112,159 +1338,244 @@ const DashboardTab = () => {
           </div>
         )}
       </div>
-        
-      {/* Task Category Distribution */}
-      <div className="bg-white rounded-lg shadow">
-        <div 
-          className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50"
-          onClick={() => toggleSection('categories')}
-        >
-          <h3 className="text-lg font-semibold">Task Category Distribution</h3>
-          {expandedSections.categories ? (
-            <ChevronUp size={20} className="text-gray-500" />
-          ) : (
-            <ChevronDown size={20} className="text-gray-500" />
-          )}
-        </div>
-        
-        {expandedSections.categories && (
-          <div className="p-6 pt-0">
-            {loading.categories ? (
-              <div className="h-48 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                  <p className="text-gray-500">Loading data...</p>
-                </div>
-              </div>
-            ) : !getRadarData() || getRadarData().every(item => item.mama === 0 && item.papa === 0) ? (
-              <div className="h-48 flex items-center justify-center">
-                <div className="text-center p-6 bg-gray-50 rounded-lg max-w-md">
-                  <p className="text-gray-600">
-                    Not enough data to display category distribution yet. Complete the initial survey to see the breakdown by task category.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="flex justify-between items-center mb-4">
-                  <p className="text-sm text-gray-600">
-                    Distribution of responsibilities across four task categories
-                  </p>
-                  
-                  <div className="flex items-center text-sm">
-                    <span className="mr-2">View:</span>
-                    <div className="flex border rounded overflow-hidden">
-                      <button 
-                        className={`px-2 py-1 ${radarFilter === 'all' ? 'bg-blue-100 text-blue-700' : 'bg-white'}`}
-                        onClick={() => setRadarFilter('all')}
-                      >
-                        All
-                      </button>
-                      <button 
-                        className={`px-2 py-1 border-l ${radarFilter === 'parents' ? 'bg-blue-100 text-blue-700' : 'bg-white'}`}
-                        onClick={() => setRadarFilter('parents')}
-                      >
-                        Parents
-                      </button>
-                      <button 
-                        className={`px-2 py-1 border-l ${radarFilter === 'children' ? 'bg-blue-100 text-blue-700' : 'bg-white'}`}
-                        onClick={() => setRadarFilter('children')}
-                      >
-                        Children
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                  
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart outerRadius="80%" data={getRadarData()}>
-                      <PolarGrid />
-                      <PolarAngleAxis dataKey="category" />
-                      <PolarRadiusAxis angle={30} domain={[0, 100]} />
-                        
-                      <Radar
-                        name="Mama's Tasks"
-                        dataKey="mama"
-                        stroke={MAMA_COLOR}
-                        fill={MAMA_COLOR}
-                        fillOpacity={0.5}
-                      />
-                        
-                      <Radar
-                        name="Papa's Tasks"
-                        dataKey="papa"
-                        stroke={PAPA_COLOR}
-                        fill={PAPA_COLOR}
-                        fillOpacity={0.5}
-                      />
-                        
-                      <Legend />
-                    </RadarChart>
-                  </ResponsiveContainer>
-                </div>
-                  
-                <div className="mt-4 text-sm text-center text-gray-500">
-                  The chart shows what percentage of tasks in each category are handled by Mama vs Papa.
-                </div>
 
-                {/* Add a bar chart version for easier visual comparison */}
-                <div className="mt-6">
-                  <h4 className="font-medium mb-3">Category Breakdown</h4>
-                  <div className="h-64 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={getRadarData()}
-                        layout="vertical"
-                        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis type="number" domain={[0, 100]} />
-                        <YAxis dataKey="category" type="category" width={150} />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Legend />
-                        <Bar dataKey="mama" name="Mama's Share" stackId="a" fill={MAMA_COLOR} />
-                        <Bar dataKey="papa" name="Papa's Share" stackId="a" fill={PAPA_COLOR} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Category Explanation */}
-                <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-3 bg-blue-50 rounded-lg">
-                    <h5 className="font-medium text-blue-800 text-sm">Visible Household Tasks</h5>
-                    <p className="text-xs mt-1 text-blue-600">
-                      Tasks like cleaning, cooking, laundry, yard work, and home maintenance that are easily observable.
-                    </p>
-                  </div>
-                  
-                  <div className="p-3 bg-purple-50 rounded-lg">
-                    <h5 className="font-medium text-purple-800 text-sm">Invisible Household Tasks</h5>
-                    <p className="text-xs mt-1 text-purple-600">
-                      Tasks like planning, scheduling, budgeting, and household management that often go unnoticed.
-                    </p>
-                  </div>
-                  
-                  <div className="p-3 bg-green-50 rounded-lg">
-                    <h5 className="font-medium text-green-800 text-sm">Visible Parental Tasks</h5>
-                    <p className="text-xs mt-1 text-green-600">
-                      Direct childcare activities like helping with homework, driving kids, bathing, and bedtime routines.
-                    </p>
-                  </div>
-                  
-                  <div className="p-3 bg-red-50 rounded-lg">
-                    <h5 className="font-medium text-red-800 text-sm">Invisible Parental Tasks</h5>
-                    <p className="text-xs mt-1 text-red-600">
-                      Emotional labor, monitoring development, healthcare coordination, and anticipating children's needs.
-                    </p>
-                  </div>
-                </div>
-              </>
-            )}
+{/* Journey Insights Section */}
+<div className="bg-white rounded-lg shadow">
+  <div 
+    className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50"
+    onClick={() => toggleJourneySection('journeyInsights')}
+  >
+    <h3 className="text-lg font-semibold font-roboto">Journey Insights</h3>
+    {expandedJourneySections.journeyInsights ? (
+      <ChevronUp size={20} className="text-gray-500" />
+    ) : (
+      <ChevronDown size={20} className="text-gray-500" />
+    )}
+  </div>
+  
+  {expandedJourneySections.journeyInsights && (
+    <div className="p-6 pt-0">
+      <p className="text-sm text-gray-600 mb-4 font-roboto">
+        Actionable insights based on your family's journey data
+      </p>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {impactInsights && impactInsights.length > 0 ? impactInsights.map((insight, index) => (
+          <div 
+            key={index} 
+            className={`p-4 rounded-lg border ${
+              insight.type === 'success' ? 'border-green-200 bg-green-50' :
+              insight.type === 'warning' || insight.type === 'challenge' ? 'border-amber-200 bg-amber-50' :
+              insight.type === 'insight' ? 'border-blue-200 bg-blue-50' :
+              'border-purple-200 bg-purple-50'
+            }`}
+          >
+            <div className="flex items-start">
+              <div className="mt-1 mr-3">
+                {insight.type === 'success' ? (
+                  <CheckCircle2 size={20} className="text-green-600" />
+                ) : insight.type === 'warning' ? (
+                  <AlertTriangle size={20} className="text-amber-600" />
+                ) : (
+                  <Lightbulb size={20} className="text-blue-600" />
+                )}
+              </div>
+              <div>
+                <h4 className="font-medium text-sm">{insight.title || insight.category}</h4>
+                <p className="text-sm mt-1">{insight.description || insight.message}</p>
+              </div>
+            </div>
+          </div>
+        )) : (
+          <div className="col-span-3 text-center p-6 bg-gray-50 rounded-lg">
+            <p className="text-gray-500">Complete more weekly check-ins to see journey insights.</p>
           </div>
         )}
       </div>
+      
+      {/* Trend chart */}
+      {journeyData && journeyData.length > 1 && (
+        <div className="mt-6">
+          <h4 className="font-medium mb-3">Balance Trends Over Time</h4>
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={journeyData.map(cycle => {
+                // Get overall balance from cycle data
+                const balance = cycle.data && cycle.data.balance 
+                  ? cycle.data.balance
+                  : { mama: 50, papa: 50 };
+                
+                // Get category balance data
+                const categoryBalance = cycle.data && cycle.data.categoryBalance || {};
+                
+                return {
+                  name: cycle.cycleNumber === 0 ? "Initial" : `Cycle ${cycle.cycleNumber}`,
+                  cycleNumber: cycle.cycleNumber,
+                  mamaOverall: balance.mama || 50,
+                  papaOverall: balance.papa || 50,
+                  visibleHousehold: categoryBalance["Visible Household Tasks"]?.mamaPercent || 50,
+                  invisibleHousehold: categoryBalance["Invisible Household Tasks"]?.mamaPercent || 50,
+                  visibleParental: categoryBalance["Visible Parental Tasks"]?.mamaPercent || 50,
+                  invisibleParental: categoryBalance["Invisible Parental Tasks"]?.mamaPercent || 50,
+                };
+              })}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis domain={[0, 100]} />
+                <Tooltip />
+                <Legend />
+                <Line 
+                  name="Overall (Mama %)" 
+                  type="monotone" 
+                  dataKey="mamaOverall" 
+                  stroke="#8884d8" 
+                  activeDot={{ r: 8 }} 
+                />
+                <Line 
+                  name="Invisible Household" 
+                  type="monotone" 
+                  dataKey="invisibleHousehold" 
+                  stroke="#82ca9d" 
+                />
+                <Line 
+                  name="Invisible Parental" 
+                  type="monotone" 
+                  dataKey="invisibleParental" 
+                  stroke="#ff7300" 
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-xs text-gray-500 text-center mt-2">
+            This chart shows percentage of workload handled by Mama over time. Closer to 50% indicates better balance.
+          </p>
+        </div>
+      )}
+    </div>
+  )}
+</div>
+
+{/* Family Meeting Notes Section */}
+<div className="bg-white rounded-lg shadow">
+  <div 
+    className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50"
+    onClick={() => toggleJourneySection('familyMeeting')}
+  >
+    <h3 className="text-lg font-semibold flex items-center font-roboto">
+      <MessageCircle size={18} className="mr-2 text-amber-600" />
+      Recent Family Meeting
+    </h3>
+    {expandedJourneySections.familyMeeting ? (
+      <ChevronUp size={20} className="text-gray-500" />
+    ) : (
+      <ChevronDown size={20} className="text-gray-500" />
+    )}
+  </div>
+  
+  {expandedJourneySections.familyMeeting && (
+    <div className="p-6 pt-0">
+      {completedWeeks && completedWeeks.length > 0 ? (() => {
+        // Get most recent cycle data
+        const lastCycleNumber = Math.max(...completedWeeks);
+        const lastCycleData = weekHistory[`week${lastCycleNumber}`];
+        
+        if (lastCycleData?.meetingNotes) {
+          return (
+            <div className="border rounded-lg p-5 bg-white">
+              <h4 className="text-base font-medium mb-4 font-roboto">
+                Meeting Notes from Cycle {lastCycleNumber} 
+                <span className="text-sm font-normal text-gray-500 ml-2">
+                  {lastCycleData.completionDate ? `(${formatDate(lastCycleData.completionDate)})` : ''}
+                </span>
+              </h4>
+              
+              {/* What went well */}
+              {lastCycleData.meetingNotes.wentWell && (
+                <div className="mb-5">
+                  <div className="flex items-center mb-2">
+                    <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center mr-2 text-green-600">✓</div>
+                    <h5 className="font-medium text-green-800 font-roboto">What Went Well</h5>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded p-4 font-roboto ml-8">
+                    {lastCycleData.meetingNotes.wentWell}
+                  </div>
+                </div>
+              )}
+              
+              {/* What could improve */}
+              {lastCycleData.meetingNotes.couldImprove && (
+                <div className="mb-5">
+                  <div className="flex items-center mb-2">
+                    <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center mr-2 text-amber-600">⚠</div>
+                    <h5 className="font-medium text-amber-800 font-roboto">What Could Improve</h5>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded p-4 font-roboto ml-8">
+                    {lastCycleData.meetingNotes.couldImprove}
+                  </div>
+                </div>
+              )}
+              
+              {/* Action items */}
+              {lastCycleData.meetingNotes.actionItems && (
+                <div className="mb-5">
+                  <div className="flex items-center mb-2">
+                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center mr-2 text-blue-600">→</div>
+                    <h5 className="font-medium text-blue-800 font-roboto">Action Items</h5>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded p-4 font-roboto ml-8">
+                    {lastCycleData.meetingNotes.actionItems.split('\n').map((item, idx) => (
+                      item.trim() ? (
+                        <div key={idx} className="flex items-center mb-2">
+                          <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center mr-2 text-blue-600 border border-blue-300 text-xs">
+                            {idx + 1}
+                          </div>
+                          <span>{item}</span>
+                        </div>
+                      ) : null
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Next cycle goals */}
+              {lastCycleData.meetingNotes.nextWeekGoals && (
+                <div className="mb-5">
+                  <div className="flex items-center mb-2">
+                    <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center mr-2 text-purple-600">🎯</div>
+                    <h5 className="font-medium text-purple-800 font-roboto">Next Cycle Goals</h5>
+                  </div>
+                  <div className="bg-purple-50 border border-purple-200 rounded p-4 font-roboto ml-8">
+                    {lastCycleData.meetingNotes.nextWeekGoals.split('\n').map((goal, idx) => (
+                      goal.trim() ? (
+                        <div key={idx} className="flex items-start mb-2">
+                          <Star size={16} className="text-purple-600 mr-2 mt-0.5 flex-shrink-0" />
+                          <span>{goal}</span>
+                        </div>
+                      ) : null
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        } else {
+          return (
+            <div className="text-center py-6 bg-gray-50 rounded-lg">
+              <p className="text-gray-500 font-roboto">No family meeting notes found for the most recent cycle.</p>
+            </div>
+          );
+        }
+      })() : (
+        <div className="text-center py-6 bg-gray-50 rounded-lg">
+          <p className="text-gray-500 font-roboto">Complete your first cycle to see family meeting notes.</p>
+        </div>
+      )}
+    </div>
+  )}
+</div>
+
+
+      
     </div>
   );
 };

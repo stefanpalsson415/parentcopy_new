@@ -3,11 +3,9 @@ import { LogOut, Filter, Settings, Users, Heart, Info, Calendar, Bell } from 'lu
 import { useFamily } from '../../contexts/FamilyContext';
 import DashboardTab from './tabs/DashboardTab';
 import TasksTab from './tabs/TasksTab';
-import WeekHistoryTab from './tabs/WeekHistoryTab';
 import RelationshipTab from './tabs/RelationshipTab';
 import HowThisWorksScreen from '../education/HowThisWorksScreen';
 import PersonalizedApproachScreen from '../education/PersonalizedApproachScreen';
-import InitialSurveyTab from './tabs/InitialSurveyTab';
 import UserSettingsScreen from '../user/UserSettingsScreen';
 import FamilyMeetingScreen from '../meeting/FamilyMeetingScreen';
 import { useAuth } from '../../contexts/AuthContext';
@@ -21,7 +19,6 @@ import SurveyScreen from '../survey/SurveyScreen';
 //import ClaudeService from '../../services/ClaudeService';
 import { FloatingCalendar } from '../calendar';
 import UserAvatar from '../common/UserAvatar';
-import FamilyJourneyTab from './tabs/FamilyJourneyTab';
 
 
 
@@ -367,43 +364,29 @@ useEffect(() => {
     );
   }
   
-  // Generate tab content based on active tab
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case 'how-it-works':
-        return <HowThisWorksScreen />;
-      case 'personalized':
-        return <PersonalizedApproachScreen />;
-      case 'relationship':
-        return <RelationshipTab onOpenRelationshipMeeting={handleOpenRelationshipMeeting} />;
-      case 'dashboard':
-        return <DashboardTab />;
-      case 'tasks':
-        return <TasksTab 
-          onStartWeeklyCheckIn={handleStartWeeklyCheckIn} 
-          onOpenFamilyMeeting={handleOpenFamilyMeeting} 
-        />;
-      case 'children':
-        return <ChildrenTrackingTab />;
-      case 'initial-survey':
-        return <InitialSurveyTab />;
-        case 'family-journey':  // Add this new case
-      return <FamilyJourneyTab />;
-      default:
-        // Handle week history tabs
-        if (activeTab.startsWith('week-')) {
-          const weekNumber = parseInt(activeTab.split('-')[1]);
-          return <WeekHistoryTab weekNumber={weekNumber} />;
-        }
-        return <div>Select a tab</div>;
-    }
-  };
+  /// Generate tab content based on active tab
+const renderTabContent = () => {
+  switch (activeTab) {
+    case 'how-it-works':
+      return <HowThisWorksScreen />;
+    case 'personalized':
+      return <PersonalizedApproachScreen />;
+    case 'relationship':
+      return <RelationshipTab onOpenRelationshipMeeting={handleOpenRelationshipMeeting} />;
+    case 'dashboard':
+      return <DashboardTab />;
+    case 'tasks':
+      return <TasksTab 
+        onStartWeeklyCheckIn={handleStartWeeklyCheckIn} 
+        onOpenFamilyMeeting={handleOpenFamilyMeeting} 
+      />;
+    case 'children':
+      return <ChildrenTrackingTab />;
+    default:
+      return <div>Select a tab</div>;
+  }
+};
   
-  // Generate dynamic tabs for completed weeks
-  const weekTabs = completedWeeks.map(week => ({
-    id: `week-${week}`,
-    name: `Week ${week}`
-  }));
   
   // If no user is selected, return loading
   if (!selectedUser) {
@@ -485,82 +468,56 @@ useEffect(() => {
       
       {/* Navigation Tabs */}
       <div 
-        className="fixed left-0 right-0 z-10 bg-gray-50 border-b shadow-sm" 
-        style={{ top: headerHeight, height: navHeight }}
-      >
-        <div className="container mx-auto flex overflow-x-auto px-4 py-2">
-          <button 
-            id="tasks-tab"
-            className={`px-4 py-2 font-medium whitespace-nowrap font-roboto relative ${activeTab === 'tasks' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
-            onClick={() => setActiveTab('tasks')}
-          >
-            {selectedUser ? `${selectedUser.name}'s Tasks` : 'My Tasks'}
-            {notifications.tasks > 0 && (
-              <span className="absolute top-1 right-0 transform translate-x-1/2 -translate-y-1/4 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
-                {notifications.tasks}
-              </span>
-            )}
-          </button>
-          <button 
-            id="dashboard-tab"
-            className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'dashboard' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            Family Dashboard
-          </button>
-          
-          {/* Relationship Tab */}
-          {selectedUser && (
-            <button 
-              id="relationship-tab"
-              className={`px-4 py-2 font-medium whitespace-nowrap font-roboto relative ${activeTab === 'relationship' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
-              onClick={() => setActiveTab('relationship')}
-            >
-              Relationship
-              {notifications.relationships > 0 && selectedUser.role === 'parent' && (
-                <span className="absolute top-1 right-1 transform translate-x-1/2 -translate-y-1/4 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
-                  {notifications.relationships}
-                </span>
-              )}
-            </button>
-          )}
-          
-          {/* Children Tracking Tab */}
-          <button 
-            id="children-tab"
-            className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'children' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
-            onClick={() => setActiveTab('children')}
-          >
-              Family Command Center
-
-          </button>
-          
-          <button 
-            className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'initial-survey' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
-            onClick={() => setActiveTab('initial-survey')}
-          >
-            Initial Survey
-          </button>
-          <button 
-  className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'family-journey' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
-  onClick={() => setActiveTab('family-journey')}
+  className="fixed left-0 right-0 z-10 bg-gray-50 border-b shadow-sm" 
+  style={{ top: headerHeight, height: navHeight }}
 >
-  Family Journey
-</button>
-
-          {/* Add completed weeks as tabs */}
-          {weekTabs.map(tab => (
-            <button 
-              key={tab.id}
-              className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === tab.id ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.name.replace('Week', 'Cycle')}
-              <span className="text-xs block text-gray-500 font-roboto">Flexible timeframe</span>
-            </button>
-          ))}
-        </div>
-      </div>
+  <div className="container mx-auto flex overflow-x-auto px-4 py-2">
+    <button 
+      id="tasks-tab"
+      className={`px-4 py-2 font-medium whitespace-nowrap font-roboto relative ${activeTab === 'tasks' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+      onClick={() => setActiveTab('tasks')}
+    >
+      {selectedUser ? `${selectedUser.name}'s Tasks` : 'My Tasks'}
+      {notifications.tasks > 0 && (
+        <span className="absolute top-1 right-0 transform translate-x-1/2 -translate-y-1/4 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
+          {notifications.tasks}
+        </span>
+      )}
+    </button>
+    <button 
+      id="dashboard-tab"
+      className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'dashboard' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+      onClick={() => setActiveTab('dashboard')}
+    >
+      Family Dashboard
+    </button>
+    
+    {/* Relationship Tab */}
+    {selectedUser && (
+      <button 
+        id="relationship-tab"
+        className={`px-4 py-2 font-medium whitespace-nowrap font-roboto relative ${activeTab === 'relationship' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+        onClick={() => setActiveTab('relationship')}
+      >
+        Relationship
+        {notifications.relationships > 0 && selectedUser.role === 'parent' && (
+          <span className="absolute top-1 right-1 transform translate-x-1/2 -translate-y-1/4 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
+            {notifications.relationships}
+          </span>
+        )}
+      </button>
+    )}
+    
+    {/* Children Tracking Tab */}
+    <button 
+      id="children-tab"
+      className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'children' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+      onClick={() => setActiveTab('children')}
+    >
+        Family Command Center
+    </button>
+  </div>
+</div>
       
       {/* Main Content */}
       <div 
