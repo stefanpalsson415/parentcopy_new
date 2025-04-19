@@ -15,14 +15,14 @@ class ClaudeService {
     } else if (isLocalhost) {
       // For local development, use the port-specific proxy
       const port = window.location.port || '3001';
-this.proxyUrl = `http://localhost:${port === '3000' ? '3001' : port}/api/claude`;
+      this.proxyUrl = `http://localhost:${port === '3000' ? '3001' : port}/api/claude`;
     } else {
       // Fallback for any other environment
       this.proxyUrl = '/api/claude';
     }
       
     this.model = 'claude-3-7-sonnet-20250219'; // Latest model
-this.mockMode = false; // Explicitly disable mock mode
+    this.mockMode = false; // Explicitly disable mock mode
     
     console.log(`Claude service initialized to use ${isProduction ? 'production' : isLocalhost ? 'local' : 'unknown'} proxy server at ${this.proxyUrl}`);
   }
@@ -50,906 +50,825 @@ this.mockMode = false; // Explicitly disable mock mode
     }
   }
   
-// In ClaudeService.js
-async testProxyConnection() {
-  try {
-    console.log("Testing proxy connection at:", this.proxyUrl);
-    
-    const response = await fetch(`${this.proxyUrl}/test`, {
-      method: 'GET'
-    });
-    
-    console.log("Proxy test response status:", response.status);
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log("Proxy test response data:", data);
-      return true;
-    } else {
-      console.error("Proxy test failed:", await response.text());
-      return false;
-    }
-  } catch (error) {
-    console.error("Error testing proxy connection:", error);
-    return false;
-  }
-}
-
-async generateResponse(messages, context, options = {}) {
-  try {
-    // Format system prompt with family context
-    const systemPrompt = this.formatSystemPrompt(context || {});
-    
-    // Log for debugging
-    console.log("Claude API request via proxy:", { 
-      messagesCount: messages.length, 
-      systemPromptLength: systemPrompt.length,
-      model: this.model,
-      mockMode: this.mockMode,
-      temperature: options.temperature ||.7,
-      maxTokens: options.maxTokens || 4000
-    });
-    
-    // Check if messages is an array of our internal message format
-    let formattedMessages;
-    if (messages.length > 0 && messages[0].sender) {
-      // Convert to Claude's expected format
-      formattedMessages = messages.map(msg => ({
-        role: msg.sender === 'allie' ? 'assistant' : 'user',
-        content: msg.text || ""
-      }));
-    } else {
-      // Assume messages are already in Claude's format
-      formattedMessages = messages;
-    }
-    
-    // Reduce context size if needed (Claude has token limits)
-    // Keep the most recent messages, ensuring we have context but don't exceed limits
-    if (formattedMessages.length > 20) {
-      const contextLimit = 20;
-      // Always keep the last message
-      const lastMessage = formattedMessages[formattedMessages.length - 1];
-      
-      // Pick a selection of older messages for context
-      // Get every other message from the rest to reduce context size
-      const oldMessages = formattedMessages.slice(0, formattedMessages.length - 1)
-        .filter((_, index) => index % 2 === 0)
-        .slice(-contextLimit + 1);
-      
-      formattedMessages = [...oldMessages, lastMessage];
-      
-      console.log(`Reduced message context from ${messages.length} to ${formattedMessages.length} messages`);
-    }
-    
-    // Check if this is a calendar-related request in the last message
-    const lastUserMessage = formattedMessages[formattedMessages.length - 1].content || "";
-    
-    // Check if the last message appears to be a standalone calendar request
-    const calendarIndicators = [
-      'add to calendar', 'schedule', 'appointment', 'meeting', 'event',
-      'create a', 'make a', 'add a', 'book a', 'plan a',
-      'dentist', 'doctor', 'birthday', 'party', 'invitation'
-    ];
-    
-    const isLikelyCalendarRequest = calendarIndicators.some(indicator => 
-      lastUserMessage.toLowerCase().includes(indicator)
-    );
-    
-    if (isLikelyCalendarRequest) {
-      console.log("Detected likely calendar request in latest message");
-      const calendarEventData = this.extractCalendarRequest(lastUserMessage);
-      
-      if (calendarEventData) {
-        // Process only the calendar request from the most recent message
-        console.log("Successfully extracted calendar data, processing only this request");
-        return this.processCalendarRequest(calendarEventData, context);
-      }
-    }
-    
-    // If we have too many messages, consider using a focused subset
-    // for non-calendar queries to avoid responding to everything at once
-    if (formattedMessages.length > 5) {
-      // Check if the last message is a specific, standalone question
-      const standaloneIndicators = [
-        'what', 'why', 'how', 'when', 'who', 
-        'can you', 'could you', 'will you', 'would you',
-        '?'
-      ];
-      
-      const isLikelyStandaloneQuestion = standaloneIndicators.some(indicator => 
-        lastUserMessage.toLowerCase().includes(indicator)
-      );
-      
-      if (isLikelyStandaloneQuestion) {
-        console.log("Detected standalone question, focusing response on latest message");
-        // Create a focused subset of messages: some context + latest message
-        const focusedMessages = [
-          ...formattedMessages.slice(-3, -1), // Some context
-          formattedMessages[formattedMessages.length - 1] // Latest message
-        ];
-        
-        // Update for logging
-        console.log(`Using focused context of ${focusedMessages.length} messages`);
-        formattedMessages = focusedMessages;
-      }
-    }
-    
-    // Prepare request payload for Claude API
-    const payload = {
-      model: this.model,
-      max_tokens: options.maxTokens || 4000,
-      temperature: options.temperature || 0.7,
-      messages: formattedMessages,
-      system: systemPrompt
-    };
-    
-    // Add a timeout to the API call
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000); // Increased timeout to 45 seconds
-    
-    // Make the API call through our proxy server with better error handling
-    console.log("Attempting to connect to proxy at:", this.proxyUrl);
+  // In ClaudeService.js
+  async testProxyConnection() {
     try {
-      const response = await fetch(this.proxyUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal
+      console.log("Testing proxy connection at:", this.proxyUrl);
+      
+      const response = await fetch(`${this.proxyUrl}/test`, {
+        method: 'GET'
       });
       
-      clearTimeout(timeoutId);
+      console.log("Proxy test response status:", response.status);
       
-      if (!response.ok) {
-        console.warn("Claude proxy returned error status:", response.status);
-        // Try to get more details about the error
-        let errorDetails = "";
-        try {
-          const errorText = await response.text();
-          errorDetails = errorText.substring(0, 200); // Get first 200 chars of error
-          console.warn("Error details from proxy:", errorDetails);
-        } catch (e) {}
-        
-        // Return a personalized response
-        return this.createPersonalizedResponse(lastUserMessage, context);
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Proxy test response data:", data);
+        return true;
+      } else {
+        console.error("Proxy test failed:", await response.text());
+        return false;
       }
-      
-      // Try to parse the JSON with better error handling
-      let result;
-      try {
-        result = await response.json();
-      } catch (jsonError) {
-        console.error("Error parsing JSON from Claude API:", jsonError);
-        // Try to get the raw text to see what's wrong
-        const rawText = await response.text();
-        console.warn("Raw response text (first 200 chars):", rawText.substring(0, 200));
-        return this.createPersonalizedResponse(lastUserMessage, context);
-      }
-      
-      // Check for valid response
-      if (!result || !result.content || !result.content[0]) {
-        console.error("Invalid response format from Claude API:", result);
-        return this.createPersonalizedResponse(lastUserMessage, context);
-      }
-      
-      return result.content[0].text;
     } catch (error) {
-      clearTimeout(timeoutId);
-      console.error("Error in Claude API call:", error.message);
-      
-      // Only use fallback for certain errors
-      if (error.message?.includes("timeout") || error.message?.includes("network")) {
-        console.log("Using fallback response due to network/timeout error");
-        return this.createPersonalizedResponse(
-          typeof messages[messages.length - 1] === 'object' 
-            ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "") 
-            : "", 
-          context
-        );
-      }
-      
-      // For other errors, retry with simpler prompt
-      try {
-        console.log("Retrying with simplified prompt...");
-        // Create a more focused system prompt
-        const simplifiedSystemPrompt = `You are Allie, an AI assistant focused on family workload balance.
-        Today's date is ${new Date().toLocaleDateString()}.
-        
-        IMPORTANT: Give specific answers about the family data you have access to:
-        - Family: ${context.familyName || 'Unknown'}
-        - Survey data: ${context.surveyData?.mamaPercentage ? `Mama: ${context.surveyData.mamaPercentage.toFixed(1)}%, Papa: ${(100 - context.surveyData.mamaPercentage).toFixed(1)}%` : 'Not yet available'}
-        - Tasks: ${context.tasks?.length || 0} active tasks
-        
-        REMEMBER: Always be specific and precise when referring to this family's data.
-        DO NOT say "I have access to the family's data" - instead SHOW that access by mentioning specific data points.
-        
-        ABOUT SURVEY QUESTIONS: Be informative about all survey questions. Explain why they're asked, how their weights are calculated, and the impact of each factor (frequency, invisibility, emotional labor, child development) on task importance.`;
-        
-        // Extract last user message for the retry
-        const lastMessageContent = typeof messages[messages.length - 1] === 'object'
-          ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
-          : "";
-        
-        // Make a simpler request
-        const response = await fetch(this.proxyUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: this.model,
-            max_tokens: 2000,
-            temperature: 0.7,
-            messages: [{ role: "user", content: lastMessageContent }],
-            system: simplifiedSystemPrompt
-          })
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          if (result && result.content && result.content[0]) {
-            return result.content[0].text;
-          }
-        }
-        
-        // If retry fails, fall back to default response
-        return this.createPersonalizedResponse(
-          lastMessageContent, 
-          context
-        );
-      } catch (retryError) {
-        console.error("Retry also failed:", retryError);
-        return this.createPersonalizedResponse(
-          typeof messages[messages.length - 1] === 'object'
-            ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
-            : "",
-          context
-        );
-      }
-    }
-  } catch (error) {
-    console.error("Error in Claude API call:", error.message);
-    
-    // Return fallback response
-    return this.createPersonalizedResponse(
-      typeof messages[messages.length - 1] === 'object'
-        ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
-        : "",
-      context
-    );
-  }
-}
-  
-  // Extract calendar event data from user message
-  extractCalendarRequest(message) {
-    // Check if this is a calendar-related request
-    const calendarKeywords = [
-      'add to calendar', 'schedule', 'appointment', 'meeting', 'event', 
-      'calendar', 'book', 'plan', 'sync', 'reminder', 'save date', 'date'
-    ];
-    
-    const isCalendarRequest = calendarKeywords.some(keyword => 
-      message.toLowerCase().includes(keyword)
-    );
-    
-    if (!isCalendarRequest) return null;
-    
-    // If it's a calendar request, try to extract details
-    const eventData = {
-      title: '',
-      date: '',
-      time: '',
-      location: '',
-      description: '',
-      childName: null
-    };
-    
-    // Extract title - check for date/dinner context first
-    if (message.toLowerCase().includes('date') && 
-        !message.toLowerCase().includes('date for') && 
-        !message.toLowerCase().includes('date with')) {
-      eventData.title = 'Dinner Date';
-    }
-    
-    // Extract title from common patterns
-    const titlePatterns = [
-      /(?:add|create|schedule|book)\s+(?:a|an)\s+([a-z\s]+)(?:\s+with|\s+for|\s+on|\s+at)/i,
-      /(?:add|create|schedule|book)\s+(?:a|an)\s+([a-z\s]+)/i,
-    ];
-    
-    for (const pattern of titlePatterns) {
-      const match = message.match(pattern);
-      if (match) {
-        eventData.title = match[1].trim();
-        // If we found "date" as the title
-        if (eventData.title.toLowerCase() === 'date') {
-          eventData.title = 'Dinner Date';
-        }
-        break;
-      }
-    }
-    
-    // If no title found but message mentions date night, dinner, etc.
-    if (!eventData.title && (
-      message.toLowerCase().includes('dinner') || 
-      message.toLowerCase().includes('date night') ||
-      message.toLowerCase().includes('date with')
-    )) {
-      eventData.title = 'Dinner Date';
-    }
-    
-    // Extract relative date keywords (today, tomorrow, next week, this weekend)
-    if (message.toLowerCase().includes('tomorrow')) {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      eventData.date = tomorrow.toISOString().split('T')[0];
-    } else if (message.toLowerCase().includes('today')) {
-      const today = new Date();
-      eventData.date = today.toISOString().split('T')[0];
-    } else if (message.toLowerCase().includes('next week')) {
-      const nextWeek = new Date();
-      nextWeek.setDate(nextWeek.getDate() + 7);
-      eventData.date = nextWeek.toISOString().split('T')[0];
-    } else if (message.toLowerCase().includes('this weekend')) {
-      const thisWeekend = new Date();
-      // Find next Saturday
-      const daysToSaturday = 6 - thisWeekend.getDay();
-      thisWeekend.setDate(thisWeekend.getDate() + daysToSaturday);
-      eventData.date = thisWeekend.toISOString().split('T')[0];
-    }
-    
-    // Extract specific days of week (next Monday, Tuesday, etc.)
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    for (let i = 0; i < dayNames.length; i++) {
-      const dayName = dayNames[i];
-      if (message.toLowerCase().includes(`next ${dayName}`)) {
-        const date = new Date();
-        const currentDay = date.getDay();
-        let daysToAdd = i - currentDay;
-        if (daysToAdd <= 0) daysToAdd += 7;
-        date.setDate(date.getDate() + daysToAdd);
-        eventData.date = date.toISOString().split('T')[0];
-        break;
-      } else if (message.toLowerCase().includes(dayName) && 
-               (message.toLowerCase().includes('this') || 
-                !message.toLowerCase().includes('next'))) {
-        // "This Thursday" or just "Thursday"
-        const date = new Date();
-        const currentDay = date.getDay();
-        let daysToAdd = i - currentDay;
-        if (daysToAdd < 0) daysToAdd += 7;
-        date.setDate(date.getDate() + daysToAdd);
-        eventData.date = date.toISOString().split('T')[0];
-        break;
-      }
-    }
-    
-    // Extract specific dates (April 15, 4/15, etc.)
-    if (!eventData.date) {
-      const datePatterns = [
-        /(?:on|for)\s+(\w+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i,
-        /(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i,
-        /(\w+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i
-      ];
-      
-      for (const pattern of datePatterns) {
-        const match = message.match(pattern);
-        if (match) {
-          eventData.date = match[1];
-          break;
-        }
-      }
-    }
-    
-    // Extract time with improved patterns
-  const timePatterns = [
-    /at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm|[ap]\.m\.))/i,     // "at 3 pm" or "at 3:30 pm"
-    /(\d{1,2}(?::\d{2})?\s*(?:am|pm|[ap]\.m\.))\s+(?:on|next|with|at|for)/i,  // "3 pm on Friday" or "3 pm with doctor"
-    /(\d{1,2}(?::\d{2})?\s*(?:am|pm|[ap]\.m\.))/i,           // Just "3 pm" anywhere
-    /at\s+(\d{1,2})(?:\s+o'?clock)?/i,              // "at 3" or "at 3 o'clock"
-    /starts\s+at\s+(\d{1,2}(?::\d{2})?)/i,           // "starts at 3"
-    /begins\s+at\s+(\d{1,2}(?::\d{2})?)/i,           // "begins at 3"
-    /\s+at\s+(\d{1,2})(?:\s+|$)/i                   // Simple "at 3" pattern
-  ];
-  
-  let timeFound = false;
-  for (const pattern of timePatterns) {
-    const match = message.match(pattern);
-    if (match && match[1]) {
-      eventData.time = match[1].trim();
-      console.log("Extracted time:", eventData.time);
-      timeFound = true;
-      break;
+      console.error("Error testing proxy connection:", error);
+      return false;
     }
   }
-  
-  // Special case for when exact patterns fail - look for numbers after time-related words
-  if (!timeFound) {
-    const simpleTimePatterns = [
-      /at\s+(\d{1,2})/i,
-      /starts\s+at\s+(\d{1,2})/i,
-      /(\d{1,2})\s*(?:pm|am)/i,
-      /(\d{1,2})\s+(?:o'?clock)/i
-    ];
-    
-    for (const pattern of simpleTimePatterns) {
-      const match = message.match(pattern);
-      if (match && match[1]) {
-        eventData.time = match[1].trim();
-        console.log("Extracted time using simple pattern:", eventData.time);
-        break;
-      }
-    }
-  }
-  
-  for (const pattern of timePatterns) {
-    const match = message.match(pattern);
-    if (match) {
-      eventData.time = match[1].trim();
-      console.log("Extracted time:", eventData.time);
-      break;
-    }
-  }
-  
-  // Extract location keywords (at Restaurant, in Central Park)
-  const locationPatterns = [
-    /at\s+([A-Za-z\s]+(?:restaurant|cafe|park|theater|cinema|mall|store))(?:\s+on|\s+at|\s+for)/i,
-    /in\s+([A-Za-z\s]+(?:park|mall|area|district|neighborhood))(?:\s+on|\s+at|\s+for)/i,
-    /with\s+(?:doctor|dr\.?)\s+([A-Za-z\s]+)/i,   // "with doctor berry"
-    /at\s+([A-Za-z][A-Za-z\s'&]+)(?:\s|$)/i       // "at Mayo Clinic" (more general location)
-  ];
-  
-  for (const pattern of locationPatterns) {
-    const match = message.match(pattern);
-    if (match) {
-      eventData.location = match[1];
-      break;
-    }
-  }
-    
-    // Extract food keywords for restaurant inference
-    const foodKeywords = ['dinner', 'lunch', 'breakfast', 'brunch', 'chinese', 'italian', 'mexican', 'indian', 'sushi', 'thai', 'food'];
-    for (const food of foodKeywords) {
-      if (message.toLowerCase().includes(food)) {
-        if (!eventData.location) eventData.location = 'Restaurant';
-        if (!eventData.title) eventData.title = `${food.charAt(0).toUpperCase() + food.slice(1)} Date`;
-        break;
-      }
-    }
-    
-    // Extract participants (who is involved)
-    const personPatterns = [
-      /with\s+(\w+)(?:\s+and\s+(\w+))?/i,
-      /for\s+(\w+)(?:\s+and\s+(\w+))?/i,
-      /(\w+)\s+and\s+(\w+)/i
-    ];
-    
-    for (const pattern of personPatterns) {
-      const match = message.match(pattern);
-      if (match) {
-        // Ignore common words that might match this pattern
-        const commonWords = ['me', 'myself', 'you', 'my', 'the', 'our', 'us', 'this', 'that', 'these', 'those'];
-        if (match[1] && !commonWords.includes(match[1].toLowerCase())) {
-          eventData.childName = match[1];
-        }
-        break;
-      }
-    }
-    
-    // Process the extracted data to create a valid event
-    if (eventData.title || eventData.date || eventData.time) {
-      // Default title if none provided
-      if (!eventData.title) {
-        eventData.title = 'New Event';
-      }
-      
-      // Convert relative date to actual date object
-      let startDate;
-      
-      if (eventData.date) {
-        try {
-          // Try to parse the date string
-          startDate = new Date(eventData.date);
-          
-          // If date is invalid, try a more flexible approach
-          if (isNaN(startDate.getTime())) {
-            // Try to parse with Date.parse
-            const timestamp = Date.parse(eventData.date);
-            if (!isNaN(timestamp)) {
-              startDate = new Date(timestamp);
-            } else {
-              // If still invalid, default to tomorrow
-              startDate = new Date();
-              startDate.setDate(startDate.getDate() + 1);
-            }
-          }
-          
-          // Ensure the date is in the future
-          const now = new Date();
-          if (startDate < now && startDate.getDate() === now.getDate()) {
-            // Same day but earlier time, keep the date
-          } else if (startDate < now) {
-            // If date is in the past, adjust to next occurrence
-            const currentYear = now.getFullYear();
-            startDate.setFullYear(currentYear);
-            
-            // If still in the past, add a year
-            if (startDate < now) {
-              startDate.setFullYear(currentYear + 1);
-            }
-          }
-        } catch (e) {
-          console.error("Error parsing date:", e);
-          startDate = new Date();
-          startDate.setDate(startDate.getDate() + 1); // Default to tomorrow
-        }
-      } else {
-        // No date provided, default to tomorrow
-        startDate = new Date();
-        startDate.setDate(startDate.getDate() + 1);
-      }
-      
-      // Set time if provided with improved parsing
-  if (eventData.time) {
-    const timeMatch = eventData.time.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
-    if (timeMatch) {
-      let hour = parseInt(timeMatch[1]);
-      const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-      const period = timeMatch[3]?.toLowerCase();
-      
-      // Preserve explicit AM/PM specification
-      if (period === 'pm' && hour < 12) {
-        hour += 12;
-      } else if (period === 'am' && hour === 12) {
-        hour = 0;
-      } else if (!period) {
-        // If no AM/PM specified, consider the context
-        const messageText = message.toLowerCase();
-        const timeContext = messageText.substring(Math.max(0, messageText.indexOf(eventData.time) - 15), 
-                                               Math.min(messageText.length, messageText.indexOf(eventData.time) + 15));
-        
-        // Check if context contains AM/PM indicators
-        if (timeContext.includes('afternoon') || 
-            timeContext.includes('evening') || 
-            timeContext.includes('night') ||
-            (hour > 0 && hour < 7)) { // Assuming times like 3 without AM/PM are usually PM
-          if (hour < 12) hour += 12;
-        }
-      }
-      
-      console.log(`Setting time to ${hour}:${minute} based on extracted "${eventData.time}"`);
-      startDate.setHours(hour, minute, 0, 0);
-    } else {
-      // Default based on event type only if no specific time was found
-      console.log("No valid time format found, using event type defaults");
-      if (eventData.title.toLowerCase().includes('dinner') || 
-          eventData.title.toLowerCase().includes('date')) {
-        startDate.setHours(19, 0, 0, 0);
-      } else if (eventData.title.toLowerCase().includes('lunch')) {
-        startDate.setHours(12, 0, 0, 0);
-      } else if (eventData.title.toLowerCase().includes('breakfast')) {
-        startDate.setHours(8, 0, 0, 0);
-      } else {
-        startDate.setHours(9, 0, 0, 0); 
-      }
-    }
-  } else {
-    // No time was extracted, so check for time-related words in the message
-    const messageText = message.toLowerCase();
-    
-    // Look for time indicators
-    if (messageText.includes('afternoon')) {
-      startDate.setHours(14, 0, 0, 0); // 2 PM for afternoon
-    } else if (messageText.includes('evening')) {
-      startDate.setHours(18, 0, 0, 0); // 6 PM for evening
-    } else if (messageText.includes('morning')) {
-      startDate.setHours(9, 0, 0, 0);  // 9 AM for morning
-    } else if (eventData.title.toLowerCase().includes('dinner') || 
-        eventData.title.toLowerCase().includes('date')) {
-      startDate.setHours(19, 0, 0, 0); // 7 PM for dinner events
-    } else if (eventData.title.toLowerCase().includes('lunch')) {
-      startDate.setHours(12, 0, 0, 0);
-    } else if (eventData.title.toLowerCase().includes('breakfast')) {
-      startDate.setHours(8, 0, 0, 0);
-    } else if (messageText.includes('appt') || 
-               messageText.includes('appointment') || 
-               messageText.includes('doctor') || 
-               messageText.includes('doc')) {
-      startDate.setHours(14, 0, 0, 0); // 2 PM default for medical appointments
-    } else {
-      startDate.setHours(9, 0, 0, 0); // Default to 9 AM
-    }
-  }
-      
-      // Create end time (default 1.5 hours after start for meals, 1 hour for other events)
-      const endDate = new Date(startDate);
-      if (eventData.title.toLowerCase().includes('dinner') || 
-          eventData.title.toLowerCase().includes('lunch') ||
-          eventData.title.toLowerCase().includes('breakfast') ||
-          eventData.title.toLowerCase().includes('date')) {
-        endDate.setMinutes(endDate.getMinutes() + 90); // 1.5 hours for meals
-      } else {
-        endDate.setHours(endDate.getHours() + 1); // 1 hour default
-      }
-      
-      // Create the final event data object
-  const finalEventData = {
-    type: eventData.title.toLowerCase().includes('date') ? 'date' : 
-          message.toLowerCase().includes('doctor') || message.toLowerCase().includes('appt') ? 'appointment' : 'event',
-    title: eventData.title,
-    person: eventData.childName,
-    startDate,
-    endDate,
-    location: eventData.location || (eventData.title.toLowerCase().includes('dinner') ? 'Restaurant' : ''),
-    description: `Added from Allie chat: ${message}`,
-    originalText: message  // Store original message for context
-  };
 
-  // Add detailed logging to debug time extraction issues
-  console.log("Final extracted calendar event:", {
-    type: finalEventData.type,
-    title: finalEventData.title,
-    startTime: startDate.toLocaleTimeString(),
-    extractedTime: eventData.time,
-    person: eventData.childName,
-    location: finalEventData.location,
-    originalMessage: message
-  });
-
-  return finalEventData;
-}
-
-return null;
-  }
-  
-  /// Process calendar request and add event to calendar
-  async processCalendarRequest(eventData, context) {
+  async generateResponse(messages, context, options = {}) {
     try {
-      console.log("Processing calendar request with data:", JSON.stringify(eventData, null, 2));
+      // Format system prompt with family context
+      const systemPrompt = this.formatSystemPrompt(context || {});
       
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
-        return "I need you to be logged in to add events to your calendar. Please log in and try again.";
-      }
+      // Log for debugging
+      console.log("Claude API request via proxy:", { 
+        messagesCount: messages.length, 
+        systemPromptLength: systemPrompt.length,
+        model: this.model,
+        mockMode: this.mockMode,
+        temperature: options.temperature ||.7,
+        maxTokens: options.maxTokens || 4000
+      });
       
-      // Get family ID from context or currentUser
-      const familyId = context?.familyId || '';
-      
-      // Parse date and time
-      let eventDate;
-      if (eventData.date) {
-        // Try to parse date string
-        eventDate = new Date(eventData.date);
-        // If date is invalid, try a more flexible approach
-        if (isNaN(eventDate.getTime())) {
-          const dateStr = eventData.date.replace(/(st|nd|rd|th)/, '');
-          eventDate = new Date(dateStr);
-          
-          // If still invalid, try to extract date parts
-          if (isNaN(eventDate.getTime())) {
-            console.warn("Could not parse date directly:", eventData.date);
-            // Default to tomorrow
-            eventDate = new Date();
-            eventDate.setDate(eventDate.getDate() + 1);
-          }
-        }
-      } else if (eventData.startDate) {
-        // Use startDate if provided
-        eventDate = new Date(eventData.startDate);
+      // Check if messages is an array of our internal message format
+      let formattedMessages;
+      if (messages.length > 0 && messages[0].sender) {
+        // Convert to Claude's expected format
+        formattedMessages = messages.map(msg => ({
+          role: msg.sender === 'allie' ? 'assistant' : 'user',
+          content: msg.text || ""
+        }));
       } else {
-        // Default to tomorrow if no date provided
-        eventDate = new Date();
-        eventDate.setDate(eventDate.getDate() + 1);
+        // Assume messages are already in Claude's format
+        formattedMessages = messages;
       }
       
-      // Set time if provided - enhanced version with better handling
-  if (eventData.time) {
-    // Parse time string (e.g., "3:00 PM", "14:00", "2pm")
-    const timeStr = eventData.time.toLowerCase();
-    const hour12Match = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/);
-    const hour24Match = timeStr.match(/(\d{1,2})(?::(\d{2}))?/);
-    
-    if (hour12Match) {
-      // 12-hour format
-      let hours = parseInt(hour12Match[1]);
-      const minutes = hour12Match[2] ? parseInt(hour12Match[2]) : 0;
-      const ampm = hour12Match[3];
-      
-      if (ampm === 'pm' && hours < 12) hours += 12;
-      if (ampm === 'am' && hours === 12) hours = 0;
-      
-      console.log(`Setting time to ${hours}:${minutes} (12-hour format from "${timeStr}")`);
-      eventDate.setHours(hours, minutes, 0, 0);
-    } else if (hour24Match) {
-      // 24-hour format
-      const hours = parseInt(hour24Match[1]);
-      const minutes = hour24Match[2] ? parseInt(hour24Match[2]) : 0;
-      
-      // If no AM/PM but hour is 1-7, assume PM (common assumption for appointments)
-      let adjustedHours = hours;
-      const originalMessage = eventData.originalText || '';
-      
-      if (hours > 0 && hours < 8 && !timeStr.includes('am') && 
-          !originalMessage.toLowerCase().includes('morning')) {
-        adjustedHours = hours + 12;
-        console.log(`Assuming PM for time ${hours}, adjusting to ${adjustedHours}`);
-      }
-      
-      console.log(`Setting time to ${adjustedHours}:${minutes} (24-hour format from "${timeStr}")`);
-      eventDate.setHours(adjustedHours, minutes, 0, 0);
-    } else {
-      // Try to extract numeric time without am/pm
-      const numericMatch = timeStr.match(/(\d{1,2})/);
-      if (numericMatch) {
-        let hours = parseInt(numericMatch[1]);
+      // Reduce context size if needed (Claude has token limits)
+      // Keep the most recent messages, ensuring we have context but don't exceed limits
+      if (formattedMessages.length > 20) {
+        const contextLimit = 20;
+        // Always keep the last message
+        const lastMessage = formattedMessages[formattedMessages.length - 1];
         
-        // If number is 1-7 without AM/PM, likely PM
-        if (hours > 0 && hours < 8) {
-          hours += 12;
-        }
+        // Pick a selection of older messages for context
+        // Get every other message from the rest to reduce context size
+        const oldMessages = formattedMessages.slice(0, formattedMessages.length - 1)
+          .filter((_, index) => index % 2 === 0)
+          .slice(-contextLimit + 1);
         
-        console.log(`Setting time to ${hours}:00 (numeric-only time from "${timeStr}")`);
-        eventDate.setHours(hours, 0, 0, 0);
-      } else {
-        // Check original message for context clues before defaulting
-        const originalMessage = eventData.originalText || '';
-        if (originalMessage.toLowerCase().includes('afternoon')) {
-          console.log('Setting time to 3:00 PM based on "afternoon" context');
-          eventDate.setHours(15, 0, 0, 0);
-        } else if (originalMessage.toLowerCase().includes('evening')) {
-          console.log('Setting time to 6:00 PM based on "evening" context');
-          eventDate.setHours(18, 0, 0, 0);
-        } else if (originalMessage.toLowerCase().includes('morning')) {
-          console.log('Setting time to 9:00 AM based on "morning" context');
-          eventDate.setHours(9, 0, 0, 0);
-        } else {
-          // Set event-specific defaults as last resort
-          const eventType = eventData.type?.toLowerCase() || '';
-          console.log(`No time context found, using event type "${eventType}" for default`);
+        formattedMessages = [...oldMessages, lastMessage];
+        
+        console.log(`Reduced message context from ${messages.length} to ${formattedMessages.length} messages`);
+      }
+      
+      // Check for calendar confirmation or calendar request  
+      const lastUserMessage = formattedMessages[formattedMessages.length - 1].content || "";
+
+      // Check if the previous message had a calendar confirmation token  
+      let previousMessage = "";  
+      if (formattedMessages.length > 1) {  
+        previousMessage = formattedMessages[formattedMessages.length - 2].content || "";  
+      }
+
+      const confirmationMatch = previousMessage.match(/\<calendar\_confirmation token="(\[^"\]+)"\>/);  
+      if (confirmationMatch && confirmationMatch[1]) {  
+        const confirmationToken = confirmationMatch[1];  
+        console.log("Found calendar confirmation token:", confirmationToken);  
           
-          if (eventType === 'doctor' || eventType === 'dental' || eventType === 'appointment') {
-            eventDate.setHours(14, 0, 0, 0); // 2 PM for appointments
-          } else if (eventType === 'birthday' || eventType === 'party') {
-            eventDate.setHours(14, 0, 0, 0); // 2 PM for parties
-          } else {
-            eventDate.setHours(12, 0, 0, 0); // Noon default
-          }
-        }
+        // Handle the confirmation response  
+        return this.handleCalendarConfirmation(lastUserMessage, confirmationToken, auth.currentUser?.uid);  
       }
-    }
-  } else {
-    // No time information provided at all
-    // Look for time clues in original text
-    const originalMessage = eventData.originalText || '';
-    
-    if (originalMessage.toLowerCase().includes('afternoon')) {
-      console.log('Setting time to 3:00 PM based on "afternoon" context');
-      eventDate.setHours(15, 0, 0, 0);
-    } else if (originalMessage.toLowerCase().includes('evening')) {
-      console.log('Setting time to 6:00 PM based on "evening" context');
-      eventDate.setHours(18, 0, 0, 0);
-    } else if (originalMessage.toLowerCase().includes('morning')) {
-      console.log('Setting time to 9:00 AM based on "morning" context');
-      eventDate.setHours(9, 0, 0, 0);
-    } else {
-      // Set event-specific defaults as last resort
-      const eventType = eventData.type?.toLowerCase() || '';
-      
-      if (eventType === 'doctor' || eventType === 'dental' || eventType === 'appointment') {
-        eventDate.setHours(14, 0, 0, 0); // 2 PM for appointments
-      } else if (eventType === 'birthday' || eventType === 'party') {
-        eventDate.setHours(14, 0, 0, 0); // 2 PM for parties
-      } else {
-        eventDate.setHours(12, 0, 0, 0); // Noon default
+
+      // Check if the last message appears to be a standalone calendar request  
+      const calendarIndicators = [  
+        'add to calendar', 'schedule', 'appointment', 'meeting', 'event',  
+        'create a', 'make a', 'add a', 'book a', 'plan a',  
+        'dentist', 'doctor', 'birthday', 'party', 'invitation'  
+      ];
+
+      const isLikelyCalendarRequest = calendarIndicators.some(indicator =>   
+        lastUserMessage.toLowerCase().includes(indicator)  
+      );
+
+      if (isLikelyCalendarRequest) {  
+        console.log("Detected likely calendar request in latest message");  
+          
+        // Use async/await with the new async extractCalendarRequest method  
+        try {  
+          const calendarEventData = await this.extractCalendarRequest(lastUserMessage);  
+            
+          if (calendarEventData) {  
+            // Process only the calendar request from the most recent message  
+            console.log("Successfully extracted calendar data, processing only this request");  
+            return this.processCalendarRequest(calendarEventData, context);  
+          }  
+        } catch (calendarError) {  
+          console.error("Error extracting calendar event:", calendarError);  
+          // Continue with normal Claude processing if calendar extraction fails  
+        }  
       }
-    }
-  }
       
-      // Create end time (1 hour after start by default)
-      const endDate = new Date(eventDate);
-      endDate.setHours(endDate.getHours() + 1);
-      
-      // Handle child-specific events
-      let childId = null;
-      let childName = null;
-      
-      // Try to find a matching child if a name or type is provided
-      if (eventData.person && context && context.children) {
-        // Look for child by name
-        const matchingChild = context.children.find(
-          child => child.name.toLowerCase() === eventData.person.toLowerCase()
+      // If we have too many messages, consider using a focused subset
+      // for non-calendar queries to avoid responding to everything at once
+      if (formattedMessages.length > 5) {
+        // Check if the last message is a specific, standalone question
+        const standaloneIndicators = [
+          'what', 'why', 'how', 'when', 'who', 
+          'can you', 'could you', 'will you', 'would you',
+          '?'
+        ];
+        
+        const isLikelyStandaloneQuestion = standaloneIndicators.some(indicator => 
+          lastUserMessage.toLowerCase().includes(indicator)
         );
         
-        if (matchingChild) {
-          childId = matchingChild.id;
-          childName = matchingChild.name;
+        if (isLikelyStandaloneQuestion) {
+          console.log("Detected standalone question, focusing response on latest message");
+          // Create a focused subset of messages: some context + latest message
+          const focusedMessages = [
+            ...formattedMessages.slice(-3, -1), // Some context
+            formattedMessages[formattedMessages.length - 1] // Latest message
+          ];
+          
+          // Update for logging
+          console.log(`Using focused context of ${focusedMessages.length} messages`);
+          formattedMessages = focusedMessages;
         }
       }
       
-      // Create calendar event object with enhanced metadata
-      const event = {
-        summary: eventData.title || 'New Event',
-        title: eventData.title || 'New Event', // Ensure both title and summary are set
-        description: eventData.description || `Event added via Allie chat`,
-        location: eventData.location || '',
-        start: {
-          dateTime: eventDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        end: {
-          dateTime: endDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        reminders: {
-          useDefault: true
-        },
-        // Add child metadata if available
-        childId: childId,
-        childName: childName || eventData.person,
-        // Add event type and category
-        eventType: eventData.type?.toLowerCase() || 'event',
-        category: eventData.type?.toLowerCase() || 'event',
-        // Include context
-        familyId: familyId,
-        // Add source information for tracking
-        source: 'chat',
-        // Add extra details and parsing metadata
-        extraDetails: {
-          creationSource: 'chat',
-          parsedWithAI: true,
-          extractionConfidence: 0.9,
-          originalText: eventData.originalText || (typeof eventData === 'object' ? JSON.stringify(eventData) : 'Unknown original text')
-        }
+      // Prepare request payload for Claude API
+      const payload = {
+        model: this.model,
+        max_tokens: options.maxTokens || 4000,
+        temperature: options.temperature || 0.7,
+        messages: formattedMessages,
+        system: systemPrompt
       };
       
-      console.log("Adding calendar event:", JSON.stringify(event, null, 2));
+      // Add a timeout to the API call
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // Increased timeout to 45 seconds
       
-      // Add event to calendar
-      const result = await CalendarService.addEvent(event, currentUser.uid);
-      console.log("Calendar add result:", result);
-      
-      // Format response
-      if (result && result.success) {
-        // Trigger a UI refresh
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-        }
-        
-        const formattedDate = eventDate.toLocaleDateString('en-US', { 
-          weekday: 'long', 
-          month: 'long', 
-          day: 'numeric' 
+      // Make the API call through our proxy server with better error handling
+      console.log("Attempting to connect to proxy at:", this.proxyUrl);
+      try {
+        const response = await fetch(this.proxyUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
         });
         
-        const formattedTime = eventDate.toLocaleTimeString('en-US', { 
-          hour: 'numeric', 
-          minute: '2-digit'
-        });
+        clearTimeout(timeoutId);
         
-        let response = `I've added the following event to your family's shared calendar:\n\n`;
-        response += `Event: ${eventData.title || 'New Event'}\n`;
-        response += `Date: ${formattedDate}\n`;
-        response += `Time: ${formattedTime}\n`;
-        
-        if (eventData.location) {
-          response += `Location: ${eventData.location}\n`;
+        if (!response.ok) {
+          console.warn("Claude proxy returned error status:", response.status);
+          // Try to get more details about the error
+          let errorDetails = "";
+          try {
+            const errorText = await response.text();
+            errorDetails = errorText.substring(0, 200); // Get first 200 chars of error
+            console.warn("Error details from proxy:", errorDetails);
+          } catch (e) {}
+          
+          // Return a personalized response
+          return this.createPersonalizedResponse(lastUserMessage, context);
         }
         
-        if (childName || eventData.person) {
-          response += `I've noted that this is for ${childName || eventData.person}.`;
+        // Try to parse the JSON with better error handling
+        let result;
+        try {
+          result = await response.json();
+        } catch (jsonError) {
+          console.error("Error parsing JSON from Claude API:", jsonError);
+          // Try to get the raw text to see what's wrong
+          const rawText = await response.text();
+          console.warn("Raw response text (first 200 chars):", rawText.substring(0, 200));
+          return this.createPersonalizedResponse(lastUserMessage, context);
         }
         
-        response += `\nThis has been added to your family's shared calendar. You can view and manage this in your calendar.`;
+        // Check for valid response
+        if (!result || !result.content || !result.content[0]) {
+          console.error("Invalid response format from Claude API:", result);
+          return this.createPersonalizedResponse(lastUserMessage, context);
+        }
         
-        return response;
-      } else {
-        return "I tried to add the event to your calendar, but encountered an issue. Please try again or add it manually through the calendar widget.";
+        return result.content[0].text;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        console.error("Error in Claude API call:", error.message);
+        
+        // Only use fallback for certain errors
+        if (error.message?.includes("timeout") || error.message?.includes("network")) {
+          console.log("Using fallback response due to network/timeout error");
+          return this.createPersonalizedResponse(
+            typeof messages[messages.length - 1] === 'object' 
+              ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "") 
+              : "", 
+            context
+          );
+        }
+        
+        // For other errors, retry with simpler prompt
+        try {
+          console.log("Retrying with simplified prompt...");
+          // Create a more focused system prompt
+          const simplifiedSystemPrompt = `You are Allie, an AI assistant focused on family workload balance.
+          Today's date is ${new Date().toLocaleDateString()}.
+          
+          IMPORTANT: Give specific answers about the family data you have access to:
+          - Family: ${context.familyName || 'Unknown'}
+          - Survey data: ${context.surveyData?.mamaPercentage ? `Mama: ${context.surveyData.mamaPercentage.toFixed(1)}%, Papa: ${(100 - context.surveyData.mamaPercentage).toFixed(1)}%` : 'Not yet available'}
+          - Tasks: ${context.tasks?.length || 0} active tasks
+          
+          REMEMBER: Always be specific and precise when referring to this family's data.
+          DO NOT say "I have access to the family's data" - instead SHOW that access by mentioning specific data points.
+          
+          ABOUT SURVEY QUESTIONS: Be informative about all survey questions. Explain why they're asked, how their weights are calculated, and the impact of each factor (frequency, invisibility, emotional labor, child development) on task importance.`;
+          
+          // Extract last user message for the retry
+          const lastMessageContent = typeof messages[messages.length - 1] === 'object'
+            ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
+            : "";
+          
+          // Make a simpler request
+          const response = await fetch(this.proxyUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: this.model,
+              max_tokens: 2000,
+              temperature: 0.7,
+              messages: [{ role: "user", content: lastMessageContent }],
+              system: simplifiedSystemPrompt
+            })
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            if (result && result.content && result.content[0]) {
+              return result.content[0].text;
+            }
+          }
+          
+          // If retry fails, fall back to default response
+          return this.createPersonalizedResponse(
+            lastMessageContent, 
+            context
+          );
+        } catch (retryError) {
+          console.error("Retry also failed:", retryError);
+          return this.createPersonalizedResponse(
+            typeof messages[messages.length - 1] === 'object'
+              ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
+              : "",
+            context
+          );
+        }
       }
     } catch (error) {
-      console.error("Error processing calendar request:", error);
-      return "I wasn't able to process your calendar request due to a technical issue. You can try again or add the event directly through the calendar widget.";
+      console.error("Error in Claude API call:", error.message);
+      
+      // Return fallback response
+      return this.createPersonalizedResponse(
+        typeof messages[messages.length - 1] === 'object'
+          ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
+          : "",
+        context
+      );
     }
   }
+
+  // New version using UnifiedParserService  
+  async extractCalendarRequest(message) {  
+    try {  
+      // Check if this is a calendar-related request first (keep this quick check)  
+      const calendarKeywords = [  
+        'add to calendar', 'schedule', 'appointment', 'meeting', 'event',   
+        'calendar', 'book', 'plan', 'sync', 'reminder', 'save date', 'date'  
+      ];  
+        
+      const isCalendarRequest = calendarKeywords.some(keyword =>   
+        message.toLowerCase().includes(keyword)  
+      );  
+        
+      if (!isCalendarRequest) return null;  
+        
+      // Use UnifiedParserService to extract event details  
+      const UnifiedParserService = (await import('./UnifiedParserService')).default;  
+      const parsedEvent = await UnifiedParserService.parseEvent(message);  
+        
+      if (!parsedEvent || !parsedEvent.title) {  
+        console.warn("UnifiedParserService failed to extract event details");  
+        return null;  
+      }  
+        
+      console.log("AI-parsed event:", parsedEvent);  
+        
+      // Convert the parsed event to the format expected by processCalendarRequest  
+      return {  
+        type: parsedEvent.eventType || 'event',  
+        title: parsedEvent.title || 'New Event',  
+        dateTime: parsedEvent.dateTime, // ISO date string  
+        endDateTime: parsedEvent.endDateTime,  
+        location: parsedEvent.location || '',  
+        description: parsedEvent.description || '',  
+        childName: parsedEvent.childName || null,  
+        childId: parsedEvent.childId || null,  
+        hostParent: parsedEvent.hostName || '',  
+        extraDetails: parsedEvent.extraDetails || {},  
+        originalText: message  
+      };  
+    } catch (error) {  
+      console.error("Error extracting calendar event with AI:", error);  
+      return null;  
+    }  
+  }
+
+  async processCalendarRequest(eventData, context) {  
+    try {  
+      if (!eventData) {  
+        return "I couldn't extract event details from your message. Could you provide more information?";  
+      }  
+        
+      console.log(`Processing calendar request with data:`, JSON.stringify(eventData, null, 2));  
+        
+      const currentUser = auth.currentUser;  
+      if (!currentUser) {  
+        return "I need you to be logged in to add events to your calendar. Please log in and try again.";  
+      }  
+        
+      // Get family ID from context or currentUser  
+      const familyId = context?.familyId || '';  
+        
+      // Parse date and time from dateTime provided by UnifiedParserService  
+      let eventDate;  
+      if (eventData.dateTime) {  
+        eventDate = new Date(eventData.dateTime);  
+          
+        // If date is invalid, use a fallback  
+        if (isNaN(eventDate.getTime())) {  
+          eventDate = new Date();  
+          eventDate.setDate(eventDate.getDate() + 1); // Default to tomorrow  
+          eventDate.setHours(10, 0, 0, 0); // Default to 10 AM  
+        }  
+      } else {  
+        // No date provided, default to tomorrow at 10 AM  
+        eventDate = new Date();  
+        eventDate.setDate(eventDate.getDate() + 1);  
+        eventDate.setHours(10, 0, 0, 0);  
+      }  
+        
+      // Create end time (1 hour after start by default)  
+      const endDate = eventData.endDateTime ? new Date(eventData.endDateTime) : new Date(eventDate);  
+      if (!eventData.endDateTime) {  
+        endDate.setHours(endDate.getHours() + 1);  
+      }  
+        
+      // Handle child-specific events  
+      let childId = eventData.childId;  
+      let childName = eventData.childName;  
+        
+      // Try to find a matching child if a name is provided but no ID  
+      if (!childId && childName && context && context.children) {  
+        // Look for child by name  
+        const matchingChild = context.children.find(  
+          child => child.name.toLowerCase() === childName.toLowerCase()  
+        );  
+          
+        if (matchingChild) {  
+          childId = matchingChild.id;  
+          childName = matchingChild.name; // Ensure we use the correct capitalization  
+        }  
+      }  
+        
+      // Check for provider information in the event  
+      let providerInfo = null;  
+      let existingProvider = null;  
+      let providerCreationMessage = "";  
+        
+      // Check if this is a medical/dental appointment that might need provider lookup  
+      const isMedicalEvent =   
+        eventData.type?.toLowerCase().includes('doctor') ||   
+        eventData.type?.toLowerCase().includes('dental') ||   
+        eventData.type?.toLowerCase().includes('appointment') ||  
+        eventData.title?.toLowerCase().includes('doctor') ||  
+        eventData.title?.toLowerCase().includes('dr.') ||  
+        eventData.title?.toLowerCase().includes('dentist');  
+        
+      // Extract potential provider name  
+      let providerName = null;  
+      if (isMedicalEvent) {  
+        // Look for doctor/dentist mention patterns in title or original message  
+        const doctorPatterns = [  
+          /(?:doctor|dr\.?|dentist)\s+([a-z]+(?:\s+[a-z]+)?)/i,  
+          /(?:with|see)\s+(?:doctor|dr\.?|dentist)\s+([a-z]+(?:\s+[a-z]+)?)/i  
+        ];  
+          
+        for (const pattern of doctorPatterns) {  
+          const match = (eventData.title?.match(pattern) || eventData.originalText?.match(pattern));  
+          if (match && match[1]) {  
+            providerName = match[1];  
+            break;  
+          }  
+        }  
+          
+        // Try to look up the provider in the directory  
+        if (providerName && familyId) {  
+          try {  
+            // Import provider service  
+            const ProviderService = (await import('./ProviderService')).default;  
+              
+            // Get providers for this family  
+            const providers = await ProviderService.getProviders(familyId);  
+              
+            // Find matching provider  
+            existingProvider = providers.find(p =>   
+              p.name.toLowerCase().includes(providerName.toLowerCase())  
+            );  
+              
+            // If no existing provider, create one  
+            if (!existingProvider && providerName) {  
+              // Create provider data  
+              const providerData = {  
+                name: providerName,  
+                type: 'medical',  
+                specialty: eventData.type?.toLowerCase().includes('dental') ? 'Dentist' : 'Doctor',  
+                familyId: familyId,  
+                email: '',  
+                phone: '',  
+                address: eventData.location || '',  
+                notes: `Added from calendar event: ${eventData.title}`  
+              };  
+                
+              // Save the provider  
+              const result = await ProviderService.saveProvider(familyId, providerData);  
+                
+              if (result.success) {  
+                existingProvider = {  
+                  id: result.providerId,  
+                  ...providerData  
+                };  
+                  
+                providerCreationMessage = `I've also added ${providerName} to your provider directory.`;  
+              }  
+            }  
+          } catch (error) {  
+            console.error("Error checking/creating provider:", error);  
+            // Continue with event creation even if provider check fails  
+          }  
+        }  
+      }  
+        
+      // Create calendar event object with provider info if available  
+      const event = {  
+        summary: eventData.title || 'New Event',  
+        description: eventData.description || `Event for ${childName || 'family'}`,  
+        location: eventData.location || '',  
+        start: {  
+          dateTime: eventDate.toISOString(),  
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone  
+        },  
+        end: {  
+          dateTime: endDate.toISOString(),  
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone  
+        },  
+        reminders: {  
+          useDefault: false,  
+          overrides: [  
+            {'method': 'popup', 'minutes': 30}  
+          ]  
+        },  
+        // Add child metadata if available  
+        childId: childId,  
+        childName: childName,  
+        // Add event type and category  
+        eventType: eventData.type?.toLowerCase() || 'event',  
+        category: eventData.type?.toLowerCase() || 'event',  
+        // Include context  
+        familyId: familyId,  
+        // Add source information  
+        source: 'chat',  
+        // Add extra details and parsing metadata  
+        extraDetails: {  
+          creationSource: 'chat',  
+          parsedWithAI: true,  
+          extractionConfidence: 0.9,  
+          originalText: eventData.originalText,  
+          providerId: existingProvider ? existingProvider.id : null,  
+          providerName: existingProvider ? existingProvider.name : null,  
+          notes: eventData.extraDetails?.notes || ''  
+        }  
+      };  
+        
+      console.log("Generated calendar event:", JSON.stringify(event, null, 2));  
+        
+      // Instead of immediately adding the event, return a confirmation message  
+      // Format the event details for the user to confirm  
+      const formattedDate = eventDate.toLocaleDateString('en-US', {   
+        weekday: 'long',   
+        month: 'long',   
+        day: 'numeric'   
+      });  
+        
+      const formattedTime = eventDate.toLocaleTimeString('en-US', {   
+        hour: 'numeric',   
+        minute: '2-digit'  
+      });  
+        
+      // Create a session token for this pending event  
+      const sessionToken = Date.now().toString(36) + Math.random().toString(36).substring(2);  
+        
+      // Store the event data in localStorage  
+      if (typeof window !== 'undefined') {  
+        try {  
+          const pendingEvents = JSON.parse(localStorage.getItem('pendingCalendarEvents') || '{}');  
+          pendingEvents[sessionToken] = {  
+            event,  
+            timestamp: Date.now()  
+          };  
+          localStorage.setItem('pendingCalendarEvents', JSON.stringify(pendingEvents));  
+        } catch (storageError) {  
+          console.error("Error storing pending event:", storageError);  
+        }  
+      }  
+        
+      // Create a confirmation message with event details  
+      let confirmationMessage = `I've extracted the following event details. Would you like me to add this to your calendar?\n\n`;  
+      confirmationMessage += `Event: ${eventData.title || 'New Event'}\n`;  
+      confirmationMessage += `Date: ${formattedDate}\n`;  
+      confirmationMessage += `Time: ${formattedTime}\n`;  
+        
+      if (eventData.location) {  
+        confirmationMessage += `Location: ${eventData.location}\n`;  
+      }  
+        
+      if (existingProvider) {  
+        confirmationMessage += `Provider: ${existingProvider.name}\n`;  
+      }  
+        
+      if (childName) {  
+        confirmationMessage += `For: ${childName}\n`;  
+      }  
+        
+      // Add provider creation message if applicable  
+      if (providerCreationMessage) {  
+        confirmationMessage += `\n${providerCreationMessage}\n`;  
+      }  
+        
+      // Add confirmation instructions  
+      confirmationMessage += `\nReply with "yes" to add this event, or let me know what needs to be corrected.`;  
+        
+      // Add a special marker to indicate this is a calendar confirmation  
+      confirmationMessage += `\n\n<calendar_confirmation token="${sessionToken}">`;  
+        
+      return confirmationMessage;  
+    } catch (error) {  
+      console.error("Error processing calendar request:", error);  
+      return "I wasn't able to process your calendar request due to a technical issue. You can try again or add the event directly through the calendar widget.";  
+    }  
+  }
+
+  // Add this new method to ClaudeService.js  
+  async handleCalendarConfirmation(message, token, userId) {  
+    try {  
+      // Check if we have a valid token and pending event  
+      if (!token || !userId) {  
+        return "I couldn't find the event you're referring to. Please try creating it again.";  
+      }  
+        
+      // Retrieve the pending event  
+      let pendingEvent = null;  
+      if (typeof window !== 'undefined') {  
+        try {  
+          const pendingEvents = JSON.parse(localStorage.getItem('pendingCalendarEvents') || '{}');  
+          pendingEvent = pendingEvents[token]?.event;  
+            
+          // Remove the pending event from storage  
+          delete pendingEvents[token];  
+          localStorage.setItem('pendingCalendarEvents', JSON.stringify(pendingEvents));  
+        } catch (storageError) {  
+          console.error("Error retrieving pending event:", storageError);  
+        }  
+      }  
+        
+      if (!pendingEvent) {  
+        return "I couldn't find the event you're referring to, or it may have expired. Please try creating it again.";  
+      }  
+        
+      // Check if the user wants to confirm or modify the event  
+      const lowerMessage = message.toLowerCase();  
+      const confirmTerms = ['yes', 'confirm', 'okay', 'ok', 'sure', 'add it', 'add to calendar', 'looks good', 'correct'];  
+        
+      // Check if any confirmation term is in the message  
+      const isConfirmed = confirmTerms.some(term =>   
+        lowerMessage.includes(term) || lowerMessage === term  
+      );  
+        
+      if (isConfirmed) {  
+        // User confirmed - add the event to the calendar  
+        const result = await CalendarService.addEvent(pendingEvent, userId);  
+          
+        if (result && result.success) {  
+          // Trigger a UI refresh  
+          if (typeof window !== 'undefined') {  
+            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));  
+          }  
+            
+          // Format the success message  
+          const eventDate = new Date(pendingEvent.start.dateTime);  
+          const formattedDate = eventDate.toLocaleDateString('en-US', {   
+            weekday: 'long',   
+            month: 'long',   
+            day: 'numeric'   
+          });  
+            
+          const formattedTime = eventDate.toLocaleTimeString('en-US', {   
+            hour: 'numeric',   
+            minute: '2-digit'  
+          });  
+            
+          let response = `I've added the following event to your family's shared calendar:\n\n`;  
+          response += `Event: ${pendingEvent.summary}\n`;  
+          response += `Date: ${formattedDate}\n`;  
+          response += `Time: ${formattedTime}\n`;  
+            
+          if (pendingEvent.location) {  
+            response += `Location: ${pendingEvent.location}\n`;  
+          }  
+            
+          if (pendingEvent.childName) {  
+            response += `For: ${pendingEvent.childName}\n`;  
+          }  
+            
+          if (pendingEvent.extraDetails?.providerName) {  
+            response += `Provider: ${pendingEvent.extraDetails.providerName}\n`;  
+          }  
+            
+          response += `\nThis has been added to your family's shared calendar. You can view and manage this in your calendar.`;  
+            
+          return response;  
+        } else {  
+          return "I tried to add the event to your calendar, but encountered an issue. Please try again or add it manually through the calendar widget.";  
+        }  
+      } else {  
+        // User wants to modify the event - try to understand what they want to change  
+        try {  
+          // Use UnifiedParserService to extract the updated event  
+          const UnifiedParserService = (await import('./UnifiedParserService')).default;  
+          const updatedEvent = await UnifiedParserService.parseEvent(message, {}, [  
+            { text: `Previous event: ${pendingEvent.summary} on ${pendingEvent.start.dateTime}` }  
+          ]);  
+            
+          // Check what was updated  
+          let changes = [];  
+            
+          // Check for date/time changes  
+          if (updatedEvent.dateTime) {  
+            const newDate = new Date(updatedEvent.dateTime);  
+            const oldDate = new Date(pendingEvent.start.dateTime);  
+              
+            if (newDate.toDateString() !== oldDate.toDateString() ||   
+                newDate.getHours() !== oldDate.getHours() ||   
+                newDate.getMinutes() !== oldDate.getMinutes()) {  
+                
+              // Update the event time  
+              pendingEvent.start.dateTime = newDate.toISOString();  
+                
+              // Update end time (maintain same duration)  
+              const oldEnd = new Date(pendingEvent.end.dateTime);  
+              const duration = oldEnd - oldDate;  
+                
+              const newEnd = new Date(newDate.getTime() + duration);  
+              pendingEvent.end.dateTime = newEnd.toISOString();  
+                
+              changes.push(`Date/time updated to ${newDate.toLocaleString()}`);  
+            }  
+          }  
+            
+          // Check for title changes  
+          if (updatedEvent.title && updatedEvent.title !== pendingEvent.summary) {  
+            pendingEvent.summary = updatedEvent.title;  
+            changes.push(`Title updated to "${updatedEvent.title}"`);  
+          }  
+            
+          // Check for location changes  
+          if (updatedEvent.location && updatedEvent.location !== pendingEvent.location) {  
+            pendingEvent.location = updatedEvent.location;  
+            changes.push(`Location updated to "${updatedEvent.location}"`);  
+          }  
+            
+          // Handle no changes detected  
+          if (changes.length === 0) {  
+            // No specific changes found, but user didn't confirm  
+            return "I'm not sure what changes you'd like to make. Please specify what you want to change, or reply with 'yes' to confirm the event.";  
+          }  
+            
+          // Create a new token for the updated event  
+          const newToken = Date.now().toString(36) + Math.random().toString(36).substring(2);  
+            
+          // Store the updated event  
+          if (typeof window !== 'undefined') {  
+            try {  
+              const pendingEvents = JSON.parse(localStorage.getItem('pendingCalendarEvents') || '{}');  
+              pendingEvents[newToken] = {  
+                event: pendingEvent,  
+                timestamp: Date.now()  
+              };  
+              localStorage.setItem('pendingCalendarEvents', JSON.stringify(pendingEvents));  
+            } catch (storageError) {  
+              console.error("Error storing updated pending event:", storageError);  
+            }  
+          }  
+            
+          // Format the updated event for confirmation  
+          const formattedDate = new Date(pendingEvent.start.dateTime).toLocaleDateString('en-US', {   
+            weekday: 'long',   
+            month: 'long',   
+            day: 'numeric'   
+          });  
+            
+          const formattedTime = new Date(pendingEvent.start.dateTime).toLocaleTimeString('en-US', {   
+            hour: 'numeric',   
+            minute: '2-digit'  
+          });  
+            
+          let responseMessage = `I've updated the event details:\n\n`;  
+          responseMessage += changes.join('\n') + '\n\n';  
+          responseMessage += `Updated details:\n`;  
+          responseMessage += `Event: ${pendingEvent.summary}\n`;  
+          responseMessage += `Date: ${formattedDate}\n`;  
+          responseMessage += `Time: ${formattedTime}\n`;  
+            
+          if (pendingEvent.location) {  
+            responseMessage += `Location: ${pendingEvent.location}\n`;  
+          }  
+            
+          if (pendingEvent.childName) {  
+            responseMessage += `For: ${pendingEvent.childName}\n`;  
+          }  
+            
+          if (pendingEvent.extraDetails?.providerName) {  
+            responseMessage += `Provider: ${pendingEvent.extraDetails.providerName}\n`;  
+          }  
+            
+          // Add confirmation instructions  
+          responseMessage += `\nDoes this look correct now? Reply with "yes" to add this event to your calendar.`;  
+            
+          // Add the confirmation token  
+          responseMessage += `\n\n<calendar_confirmation token="${newToken}">`;  
+            
+          return responseMessage;  
+        } catch (error) {  
+          console.error("Error processing event modifications:", error);  
+          return "I had trouble understanding your changes. Could you please specify exactly what you'd like to change about the event?";  
+        }  
+      }  
+    } catch (error) {  
+      console.error("Error handling calendar confirmation:", error);  
+      return "I encountered an issue processing your response. Please try creating the event again.";  
+    }  
+  }
   
+  // Extract provider details from text
+  extractProviderInfo(text) {
+    // Basic extraction of provider information from text
+    const type = text.toLowerCase().includes("teacher") ? "education" :
+                 text.toLowerCase().includes("dentist") ? "medical" :
+                 text.toLowerCase().includes("coach") || text.toLowerCase().includes("instructor") ? "activity" :
+                 "medical";
+    
+    const nameMatches = text.match(/(?:doctor|dr\.?|teacher|instructor|provider)\s+([a-z\s\.]+)/i);
+    const name = nameMatches ? nameMatches[1] : "Unknown Provider";
+    
+    const specialty = text.toLowerCase().includes("pediatrician") ? "Pediatrician" : 
+                     text.toLowerCase().includes("dentist") ? "Dentist" :
+                     text.toLowerCase().includes("guitar") ? "Guitar Teacher" :
+                     text.toLowerCase().includes("piano") ? "Piano Teacher" :
+                     text.toLowerCase().includes("music") ? "Music Teacher" :
+                     "";
+    
+    // Extract email if present
+    const emailMatch = text.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
+    const email = emailMatch ? emailMatch[1] : "";
+    
+    // Extract phone if present
+    const phoneMatch = text.match(/(?:\+\d{1,2}\s)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/);
+    const phone = phoneMatch ? phoneMatch[0] : "";
+    
+    return {
+      name,
+      type,
+      specialty,
+      email,
+      phone,
+      address: "",
+      notes: ""
+    };
+  }
+
   // Test Hello World function
   async testHelloWorld() {
     try {
