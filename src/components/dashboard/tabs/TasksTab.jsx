@@ -213,7 +213,6 @@ useEffect(() => {
   
 
 
-    // Load habits and cycle data
   useEffect(() => {
     const loadData = async () => {
       try {
