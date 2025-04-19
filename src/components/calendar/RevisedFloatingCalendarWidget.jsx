@@ -1097,7 +1097,6 @@ const handleEventClick = async (event) => {
 />
 
 {/* Upcoming Events Component */}
-// src/components/calendar/RevisedFloatingCalendarWidget.jsx (update EventsList for upcoming events)
 
 <EventsList
   events={getUpcomingEvents()}

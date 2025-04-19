@@ -22,6 +22,7 @@ import { useCycleDueDate } from '../../../hooks/useEvent';
 
 
 
+
 // Helper function to format dates consistently
 const formatDate = (date) => {
   if (!date) return "Not scheduled yet";
@@ -213,161 +214,178 @@ useEffect(() => {
   
 
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        console.log(`Loading habits for Week ${currentWeek}, user:`, selectedUser?.name);
+useEffect(() => {
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      console.log(`Loading habits for Week ${currentWeek}, user:`, selectedUser?.name);
+      
+      if (familyId) {
+        // Load tasks from database
+        const tasks = await loadCurrentWeekTasks();
         
-        if (familyId) {
-          // Load tasks from database
-          const tasks = await loadCurrentWeekTasks();
-          
-          // Filter to only adult habits
-          const adultHabits = tasks.filter(task => 
-            !task.category?.includes('Kid') && 
-            !task.title?.includes('Kid') &&
-            !task.title?.includes('Child')
-          );
-          
-          // Check for streak data in database
-          const streakData = await loadStreakData();
-          
-          // Transform tasks into habit format with completion tracking
-          const formattedHabits = await Promise.all(adultHabits.map(async (task) => {
-            // Skip tasks that are not for the current user
-            const isForSelectedUser = 
-              task.assignedTo === (selectedUser?.roleType || selectedUser?.role) || 
-              task.assignedToName === selectedUser?.name ||
-              task.assignedTo === "Everyone";
-              
-            if (!isForSelectedUser) {
-              return null;
-            }
+        // Filter to only adult habits
+        const adultHabits = tasks.filter(task => 
+          !task.category?.includes('Kid') && 
+          !task.title?.includes('Kid') &&
+          !task.title?.includes('Child')
+        );
+        
+        // Check for streak data in database
+        const streakData = await loadStreakData();
+        
+        // Transform tasks into habit format with completion tracking
+        const formattedHabits = await Promise.all(adultHabits.map(async (task) => {
+          // Skip tasks that are not for the current user
+          const isForSelectedUser = 
+            task.assignedTo === (selectedUser?.roleType || selectedUser?.role) || 
+            task.assignedToName === selectedUser?.name ||
+            task.assignedTo === "Everyone";
             
-            // Get streak data for this habit
-            const streak = streakData[task.id] || 0;
-            const record = streakData[`${task.id}_record`] || streak;
-            
-            // Calculate progress based on subtasks
-            const completedSubtasks = task.subTasks?.filter(st => st.completed)?.length || 0;
-            const totalSubtasks = task.subTasks?.length || 1;
-            const progress = task.completed ? 100 : Math.round((completedSubtasks / totalSubtasks) * 100);
-            
-            // Get completion instances for this habit
-            const completionInstances = await getHabitCompletionInstances(task.id) || [];
-            
-            // Create the habit object
-            return {
-              id: task.id,
-              title: task.title ? task.title.replace(/Week \d+: /g, '') : "Task",
-              description: task.description ? task.description.replace(/for this week/g, 'consistently') : "Description unavailable",
-              cue: task.subTasks?.[0]?.title || "After breakfast",
-              action: task.subTasks?.[1]?.title || task.title || "Complete task",
-              reward: task.subTasks?.[2]?.title || "Feel accomplished and balanced",
-              identity: task.focusArea 
-                ? `I am someone who values ${task.focusArea.toLowerCase()}` 
-                : "I am someone who values family balance",
-              assignedTo: task.assignedTo,
-              assignedToName: task.assignedToName,
-              category: task.category,
-              insight: task.insight || task.aiInsight || "",
-              completed: task.completed,
-              comments: task.comments || [],
-              streak: streak,
-              record: record,
-              progress: progress,
-              lastCompleted: task.completedDate || null,
-              atomicSteps: task.subTasks?.map(st => ({
-                id: st.id,
-                title: st.title,
-                description: st.description,
-                completed: st.completed || false
-              })) || [],
-              isUserGenerated: task.isUserGenerated || false,
-              completionInstances: completionInstances
-            };
-          }));
+          if (!isForSelectedUser) {
+            return null;
+          }
           
-          // Filter out null values
-const filteredAdultHabits = formattedHabits.filter(Boolean);
-      
-// Only show one system-generated habit plus any user-generated habits
-const systemHabit = filteredAdultHabits.find(h => !h.isUserGenerated);
-const userHabits = filteredAdultHabits.filter(h => h.isUserGenerated);
-      
-// Combine, putting uncompleted first
-const finalHabits = [systemHabit, ...userHabits].filter(Boolean).sort((a, b) => {
-  if (a.completed && !b.completed) return 1;
-  if (!a.completed && b.completed) return -1;
-  return 0;
-});
+          // Get streak data for this habit
+          const streak = streakData[task.id] || 0;
+          const record = streakData[`${task.id}_record`] || streak;
+          
+          // Calculate progress based on subtasks
+          const completedSubtasks = task.subTasks?.filter(st => st.completed)?.length || 0;
+          const totalSubtasks = task.subTasks?.length || 1;
+          const progress = task.completed ? 100 : Math.round((completedSubtasks / totalSubtasks) * 100);
+          
+          // Get completion instances for this habit
+          const completionInstances = await getHabitCompletionInstances(task.id) || [];
+          
+          // Create the habit object
+          return {
+            id: task.id,
+            title: task.title ? task.title.replace(/Week \d+: /g, '') : "Task",
+            description: task.description ? task.description.replace(/for this week/g, 'consistently') : "Description unavailable",
+            cue: task.subTasks?.[0]?.title || "After breakfast",
+            action: task.subTasks?.[1]?.title || task.title || "Complete task",
+            reward: task.subTasks?.[2]?.title || "Feel accomplished and balanced",
+            identity: task.focusArea 
+              ? `I am someone who values ${task.focusArea.toLowerCase()}` 
+              : "I am someone who values family balance",
+            assignedTo: task.assignedTo,
+            assignedToName: task.assignedToName,
+            category: task.category,
+            insight: task.insight || task.aiInsight || "",
+            completed: task.completed,
+            comments: task.comments || [],
+            streak: streak,
+            record: record,
+            progress: progress,
+            lastCompleted: task.completedDate || null,
+            atomicSteps: task.subTasks?.map(st => ({
+              id: st.id,
+              title: st.title,
+              description: st.description,
+              completed: st.completed || false
+            })) || [],
+            isUserGenerated: task.isUserGenerated || false,
+            completionInstances: completionInstances
+          };
+        }));
+        
+        // Filter out null values
+        const filteredAdultHabits = formattedHabits.filter(Boolean);
+            
+        // Only show one system-generated habit plus any user-generated habits
+        const systemHabit = filteredAdultHabits.find(h => !h.isUserGenerated);
+        const userHabits = filteredAdultHabits.filter(h => h.isUserGenerated);
+            
+        // Combine, putting uncompleted first
+        const finalHabits = [systemHabit, ...userHabits].filter(Boolean).sort((a, b) => {
+          if (a.completed && !b.completed) return 1;
+          if (!a.completed && b.completed) return -1;
+          return 0;
+        });
 
-setHabits(finalHabits);
-          
-          // Load family streaks
-          await loadFamilyStreaks();
-          
-          // Calculate when the next survey is due
-          calculateNextSurveyDue();
-          
-          // Load cycle progress
-          await loadCycleProgress();
-          
-          // Track habit completion instances
-          const allInstances = {};
-          filteredAdultHabits.forEach(habit => {
-            allInstances[habit.id] = habit.completionInstances || [];
+        setHabits(finalHabits);
+                
+        // Load family streaks
+        await loadFamilyStreaks();
+        
+        // Calculate when the next survey is due
+        calculateNextSurveyDue();
+        
+        // Load cycle progress
+        await loadCycleProgress();
+        
+        // Track habit completion instances
+        const allInstances = {};
+        filteredAdultHabits.forEach(habit => {
+          allInstances[habit.id] = habit.completionInstances || [];
+        });
+        setCompletedHabitInstances(allInstances);
+        
+        // For parents: Check if they have enough habit completions
+        // For children: Check if parents have completed their habits
+        if (selectedUser && selectedUser.role === 'parent') {
+          // Check this specific parent's habits
+          const parentHabits = Object.values(allInstances).filter(instances => 
+            instances.some(instance => instance.userId === selectedUser.id));
+          const hasEnoughCompletions = parentHabits.some(instances => instances.length >= 5);
+          setCanTakeSurvey(hasEnoughCompletions);
+        } else // For children: Check if parents have completed their habits OR surveys
+        if (selectedUser && selectedUser.role === 'child') {
+          // For children, they can take survey if ANY of these conditions are true:
+          // 1. Any parent has completed enough habits (step >= 2)
+          // 2. Any parent has completed their survey
+          // 3. Overall cycle step is at least 2
+          const parents = familyMembers.filter(m => m.role === 'parent');
+          const anyParentCompleted = parents.some(parent => {
+            // Check various parent progress indicators:
+            // 1. Member progress step is 2 or higher
+            const hasProgressStep = memberProgress[parent.id]?.step >= 2;
+            // 2. Survey is marked as completed in member progress
+            const hasSurveyCompleted = memberProgress[parent.id]?.completedSurvey;
+            // 3. Weekly completed array shows survey done
+            const hasWeeklyCompleted = parent.weeklyCompleted && 
+                                      parent.weeklyCompleted[currentWeek-1]?.completed;
+            // 4. Parent's UI shows "Survey Done" text
+            const hasUISurveyDone = parent.role === 'parent' && 
+                                  (parent.surveyDone || parent.status === 'Survey Done');
+            
+            return hasProgressStep || hasSurveyCompleted || hasWeeklyCompleted || hasUISurveyDone;
           });
-          setCompletedHabitInstances(allInstances);
           
-          // For parents: Check if they have enough habit completions
-// For children: Check if parents have completed their habits
-if (selectedUser && selectedUser.role === 'parent') {
-  // Check this specific parent's habits
-  const parentHabits = Object.values(allInstances).filter(instances => 
-    instances.some(instance => instance.userId === selectedUser.id));
-  const hasEnoughCompletions = parentHabits.some(instances => instances.length >= 5);
-  setCanTakeSurvey(hasEnoughCompletions);
-} else // For children: Check if parents have completed their habits OR surveys
-if (selectedUser && selectedUser.role === 'child') {
-  // For children, they can take survey if ANY of these conditions are true:
-  // 1. Any parent has completed enough habits (step >= 2)
-  // 2. Any parent has completed their survey
-  // 3. Overall cycle step is at least 2
-  const parents = familyMembers.filter(m => m.role === 'parent');
-  const anyParentCompleted = parents.some(parent => {
-    // Check various parent progress indicators:
-    // 1. Member progress step is 2 or higher
-    const hasProgressStep = memberProgress[parent.id]?.step >= 2;
-    // 2. Survey is marked as completed in member progress
-    const hasSurveyCompleted = memberProgress[parent.id]?.completedSurvey;
-    // 3. Weekly completed array shows survey done
-    const hasWeeklyCompleted = parent.weeklyCompleted && 
-                               parent.weeklyCompleted[currentWeek-1]?.completed;
-    // 4. Parent's UI shows "Survey Done" text
-    const hasUISurveyDone = parent.role === 'parent' && 
-                           (parent.surveyDone || parent.status === 'Survey Done');
-    
-    return hasProgressStep || hasSurveyCompleted || hasWeeklyCompleted || hasUISurveyDone;
-  });
-  
-  // If any parent completed OR cycle is in survey phase, enable survey for child
-  const shouldAllowSurvey = anyParentCompleted || cycleStep >= 2;
-  
-  // Debug log
-  console.log("Child survey eligibility check:", {
-    parents: parents.map(p => p.name),
-    anyParentCompleted,
-    cycleStep,
-    shouldAllowSurvey
-  });
-  
-  setCanTakeSurvey(shouldAllowSurvey);
-}
+          // If any parent completed OR cycle is in survey phase, enable survey for child
+          const shouldAllowSurvey = anyParentCompleted || cycleStep >= 2;
+          
+          // Debug log
+          console.log("Child survey eligibility check:", {
+            parents: parents.map(p => p.name),
+            anyParentCompleted,
+            cycleStep,
+            shouldAllowSurvey
+          });
+          
+          setCanTakeSurvey(shouldAllowSurvey);
+        }
 
+        // Check if current user has already completed the survey for this week
+        const userHasCompletedSurvey = selectedUser && 
+          selectedUser.weeklyCompleted && 
+          selectedUser.weeklyCompleted[currentWeek-1]?.completed;
+        setHasCompletedSurvey(userHasCompletedSurvey);
+                
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error("Error loading habits:", error);
+      setHabits([]);
+      setLoading(false);
+    }
+  };
+  
+  loadData();
+}, [familyId, currentWeek, selectedUser]);
 
-// Add this function to TasksTab.jsx
+// Add this near other utility functions in TasksTab.jsx (before the useEffect that calls it)
 const initialSyncDueDate = async () => {
   if (!familyId || !currentUser) return;
   
@@ -401,32 +419,13 @@ const initialSyncDueDate = async () => {
   }
 };
 
-// Add this useEffect after the component mounts
+
+// This is the fixed placement for the useEffect that was incorrectly inside loadData
 useEffect(() => {
   if (familyId && currentUser && currentWeek) {
     initialSyncDueDate();
   }
 }, [familyId, currentUser, currentWeek]);
-
-
-
-// Check if current user has already completed the survey for this week
-const userHasCompletedSurvey = selectedUser && 
-  selectedUser.weeklyCompleted && 
-  selectedUser.weeklyCompleted[currentWeek-1]?.completed;
-setHasCompletedSurvey(userHasCompletedSurvey);
-          
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error("Error loading habits:", error);
-        setHabits([]);
-        setLoading(false);
-      }
-    };
-    
-    loadData();
-  }, [familyId, currentWeek, selectedUser]);
   
   // Load streak data from database
   const loadStreakData = async () => {
