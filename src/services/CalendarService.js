@@ -1,6 +1,8 @@
 // src/services/CalendarService.js
 import { doc, getDoc, setDoc, updateDoc, collection, addDoc,deleteDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
+import eventStore from './EventStore';
+
 
 class CalendarService {
   constructor() {
@@ -74,336 +76,10 @@ class CalendarService {
   }
 
 
-  async updateEvent(eventId, updateData, userId) {
-    try {
-      if (!eventId || !userId) {
-        throw new Error("Event ID and User ID are required to update events");
-      }
-      
-      console.log("Updating calendar event:", { eventId, updateFields: Object.keys(updateData) });
-      
-      // First, get the existing event to preserve critical identifiers
-      const docRef = doc(db, "calendar_events", eventId);
-      const existingEvent = await getDoc(docRef);
-      
-      if (!existingEvent.exists()) {
-        throw new Error(`Event with ID ${eventId} not found`);
-      }
-      
-      const existingData = existingEvent.data();
-      
-      // Standardize the update data
-      const updates = {
-        ...updateData,
-        updatedAt: serverTimestamp(),
-        // Preserve critical identifiers
-        firestoreId: eventId,
-        universalId: existingData.universalId || eventId
-      };
-      
-      // If there are changes to title/summary, ensure both fields are updated
-      if (updates.title && !updates.summary) {
-        updates.summary = updates.title;
-      } else if (updates.summary && !updates.title) {
-        updates.title = updates.summary;
-      }
-      
-      // Make sure event type and category remain consistent
-      if (!updates.eventType && existingData.eventType) {
-        updates.eventType = existingData.eventType;
-      }
-      
-      if (!updates.category && existingData.category) {
-        updates.category = existingData.category;
-      }
-      
-      // Update in Firestore
-      await updateDoc(docRef, updates);
-      
-      // Dispatch events for UI refresh with comprehensive details
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-        window.dispatchEvent(new CustomEvent('calendar-event-updated', {
-          detail: { 
-            eventId,
-            firestoreId: eventId,
-            universalId: updates.universalId,
-            title: updates.title || updates.summary,
-            category: updates.category,
-            eventType: updates.eventType
-          }
-        }));
-      }
-      
-      this.showNotification("Event updated successfully", "success");
-      
-      return {
-        success: true,
-        eventId,
-        firestoreId: eventId,
-        universalId: updates.universalId
-      };
-    } catch (error) {
-      console.error("Error updating event:", error);
-      this.showNotification("Failed to update event", "error");
-      return { success: false, error: error.message || "Unknown error" };
-    }
-  }
   
-  // Enhanced delete method
-  async deleteEvent(eventId, userId) {
-    try {
-      if (!eventId || !userId) {
-        throw new Error("Event ID and User ID are required to delete events");
-      }
-      
-      console.log("Deleting calendar event:", { eventId });
-      
-      // Delete from Firestore
-      const docRef = doc(db, "calendar_events", eventId);
-      await deleteDoc(docRef);
-      
-      // Dispatch events for UI refresh
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-        window.dispatchEvent(new CustomEvent('calendar-event-deleted', {
-          detail: { eventId }
-        }));
-      }
-      
-      this.showNotification("Event deleted from calendar", "success");
-      
-      return {
-        success: true
-      };
-    } catch (error) {
-      console.error("Error deleting event:", error);
-      this.showNotification("Failed to delete event", "error");
-      return { success: false, error: error.message || "Unknown error" };
-    }
-  }
 
 
 
-
-
-  async addEvent(event, userId) {
-    try {
-      if (!userId) {
-        throw new Error("User ID is required to add events");
-      }
-      
-      // Generate a universal ID for the event
-      const universalId = `event-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
-      
-      // Enhanced logging for tracking event creation flow
-      console.log("Adding calendar event:", {
-        title: event.summary || event.title || 'Untitled',
-        hasStart: !!event.start,
-        hasDate: !!(event.start?.dateTime || event.start?.date),
-        childName: event.childName || 'None',
-        universalId,
-        userId,
-        attendees: event.attendees || [],
-        source: event.source || 'manual',
-        creationSource: event.extraDetails?.creationSource || 'manual',
-        eventType: event.eventType || 'general'
-      });
-      
-      // Validate required fields
-      if (!event.summary && !event.title) {
-        console.warn("Event missing title - setting default");
-        event.summary = "Untitled Event";
-      }
-      
-      // Validate and normalize date/time fields
-      let startDate, endDate;
-      
-      if (event.start?.dateTime) {
-        try {
-          startDate = new Date(event.start.dateTime);
-          if (isNaN(startDate.getTime())) {
-            throw new Error("Invalid start dateTime");
-          }
-        } catch (dateError) {
-          console.warn("Invalid start.dateTime, using current time:", dateError);
-          startDate = new Date();
-        }
-      } else if (event.dateTime) {
-        try {
-          startDate = new Date(event.dateTime);
-          if (isNaN(startDate.getTime())) {
-            throw new Error("Invalid dateTime");
-          }
-        } catch (dateError) {
-          console.warn("Invalid dateTime, using current time:", dateError);
-          startDate = new Date();
-        }
-      } else {
-        console.warn("No start date provided, using current time");
-        startDate = new Date();
-      }
-      
-      // Set end date - either from event or default to 1 hour after start
-      if (event.end?.dateTime) {
-        try {
-          endDate = new Date(event.end.dateTime);
-          if (isNaN(endDate.getTime())) {
-            throw new Error("Invalid end dateTime");
-          }
-        } catch (dateError) {
-          console.warn("Invalid end.dateTime, using start + 1 hour:", dateError);
-          endDate = new Date(startDate.getTime() + 60*60000);
-        }
-      } else if (event.endDateTime) {
-        try {
-          endDate = new Date(event.endDateTime);
-          if (isNaN(endDate.getTime())) {
-            throw new Error("Invalid endDateTime");
-          }
-        } catch (dateError) {
-          console.warn("Invalid endDateTime, using start + 1 hour:", dateError);
-          endDate = new Date(startDate.getTime() + 60*60000);
-        }
-      } else {
-        // Default to 1 hour duration
-        endDate = new Date(startDate.getTime() + 60*60000);
-      }
-      
-      // Ensure end is after start
-      if (endDate <= startDate) {
-        console.warn("End time is before or equal to start time, adjusting to be 1 hour later");
-        endDate = new Date(startDate.getTime() + 60*60000);
-      }
-      
-      // Standardize event format with robust validation
-      const standardizedEvent = {
-        ...event,
-        // Use universal ID as the primary identifier
-        universalId,
-        // Ensure both summary and title are set for compatibility
-        summary: event.summary || event.title || "Untitled Event",
-        title: event.title || event.summary || "Untitled Event",
-        description: event.description || '',
-        // Use validated start and end dates
-        start: {
-          dateTime: startDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        end: {
-          dateTime: endDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        // Preserve all metadata including attendees
-        attendees: event.attendees || [],
-        childId: event.childId || null,
-        childName: event.childName || null,
-        attendingParentId: event.attendingParentId || null,
-        siblingIds: event.siblingIds || [],
-        siblingNames: event.siblingNames || [],
-        eventType: event.eventType || 'general',
-        extraDetails: {
-          ...(event.extraDetails || {}),
-          // Preserve parsing metadata
-          parsedWithAI: event.extraDetails?.parsedWithAI || event.parsedWithAI || false,
-          extractionConfidence: event.extraDetails?.extractionConfidence || event.extractionConfidence || null,
-          parsedFromImage: event.extraDetails?.parsedFromImage || event.parsedFromImage || false,
-          originalText: event.extraDetails?.originalText || event.originalText || '',
-          creationSource: event.extraDetails?.creationSource || event.creationSource || 'manual',
-          // Add creation tracking for debugging
-          createdVia: event.source || 'manual',
-          dateAdded: new Date().toISOString()
-        },
-        // Always include these fields
-        userId,
-        familyId: event.familyId || null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        source: event.source || 'manual',
-        // Include the original text if available (for later reference)
-        originalText: event.originalText || ''
-      };
-      
-      // Log standardized event for debugging
-      console.log("Standardized event to be saved:", {
-        title: standardizedEvent.summary,
-        startDate: standardizedEvent.start.dateTime,
-        endDate: standardizedEvent.end.dateTime,
-        childId: standardizedEvent.childId,
-        childName: standardizedEvent.childName,
-        eventType: standardizedEvent.eventType,
-        familyId: standardizedEvent.familyId,
-        userId: standardizedEvent.userId
-      });
-      
-      // Save event to Firestore in the calendar_events collection
-      const eventRef = collection(db, "calendar_events");
-      const docRef = await addDoc(eventRef, standardizedEvent);
-      
-      // Update the document with its own ID for easy reference
-      await updateDoc(docRef, {
-        firestoreId: docRef.id,
-        // Include universalId again to ensure it's set
-        universalId: universalId
-      });
-      
-      console.log("Event successfully saved to Firestore with ID:", docRef.id, "and universalId:", universalId);
-      
-      // Multiple UI refresh approaches for maximum compatibility
-      if (typeof window !== 'undefined') {
-        // Ensure we use a consistent event structure with the universalId
-        const eventDetail = {
-          eventId: docRef.id,
-          universalId: universalId,
-          title: standardizedEvent.summary,
-          eventType: standardizedEvent.eventType,
-          childId: standardizedEvent.childId,
-          childName: standardizedEvent.childName,
-          attendees: standardizedEvent.attendees || [],
-          dateTime: standardizedEvent.start.dateTime
-        };
-        
-        // Immediate dispatch for urgent updates
-        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-        
-        // Also dispatch after a short delay to ensure components have mounted
-        setTimeout(() => {
-          console.log("Dispatching calendar update events");
-          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-          
-          // Also dispatch specific event type for more targeted refreshes
-          window.dispatchEvent(new CustomEvent('calendar-event-added', {
-            detail: eventDetail
-          }));
-          
-          if (standardizedEvent.childId) {
-            window.dispatchEvent(new CustomEvent('calendar-child-event-added', {
-              detail: eventDetail
-            }));
-          }
-          
-          // Third dispatch after slightly longer delay as a fallback
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-          }, 1000);
-        }, 300);
-      }
-      
-      // Show success notification
-      this.showNotification(`Event "${standardizedEvent.summary}" added to your calendar`, "success");
-      
-      return {
-        success: true,
-        eventId: docRef.id,
-        universalId: universalId,
-        firestoreId: docRef.id
-      };
-    } catch (error) {
-      console.error("Error adding event to calendar:", error, error.stack);
-      this.showNotification("Failed to add event to calendar", "error");
-      return { success: false, error: error.message || "Unknown error" };
-    }
-  }
 
 // Add a new method to handle recurring events
 async createRecurringEvents(baseEvent, userId, universalId) {
@@ -607,141 +283,92 @@ async deleteEvent(eventId, userId) {
   }
 }
 
+async addEvent(event, userId) {
+  try {
+    if (!userId) throw new Error("User ID is required");
+    
+    console.log("Adding calendar event:", {
+      title: event.summary || event.title || 'Untitled',
+      hasDate: !!(event.dateTime || event.start?.dateTime),
+      childName: event.childName || 'None'
+    });
+    
+    // Use the EventStore to add the event
+    const result = await eventStore.addEvent(event, userId, event.familyId);
+    
+    // Show notification
+    this.showNotification(`Event "${event.summary || event.title}" added to your calendar`, "success");
+    
+    return result;
+  } catch (error) {
+    console.error("Error adding event to calendar:", error);
+    this.showNotification("Failed to add event to calendar", "error");
+    return { success: false, error: error.message || "Unknown error" };
+  }
+}
+
+// Replace the updateEvent method
+async updateEvent(eventId, updateData, userId) {
+  try {
+    if (!eventId || !userId) {
+      throw new Error("Event ID and User ID are required to update events");
+    }
+    
+    console.log("Updating calendar event:", { eventId, updateFields: Object.keys(updateData) });
+    
+    // Use the EventStore to update the event
+    const result = await eventStore.updateEvent(eventId, updateData, userId);
+    
+    // Show notification
+    this.showNotification("Event updated successfully", "success");
+    
+    return result;
+  } catch (error) {
+    console.error("Error updating event:", error);
+    this.showNotification("Failed to update event", "error");
+    return { success: false, error: error.message || "Unknown error" };
+  }
+}
+
+// Replace the deleteEvent method
+async deleteEvent(eventId, userId) {
+  try {
+    if (!eventId || !userId) {
+      throw new Error("Event ID and User ID are required to delete events");
+    }
+    
+    console.log("Deleting calendar event:", { eventId });
+    
+    // Use the EventStore to delete the event
+    const result = await eventStore.deleteEvent(eventId, userId);
+    
+    // Show notification if successful
+    if (result.success) {
+      this.showNotification("Event deleted from calendar", "success");
+    }
+    
+    return result;
+  } catch (error) {
+    console.error("Error deleting event:", error);
+    this.showNotification("Failed to delete event", "error");
+    return { success: false, error: error.message || "Unknown error" };
+  }
+}
+
+// Replace the getEventsForUser method
 async getEventsForUser(userId, timeMin, timeMax) {
   try {
     if (!userId) {
       throw new Error("User ID is required to get events");
     }
     
-    // Default to 30 days range if not provided
-    if (!timeMin) {
-      timeMin = new Date();
-      timeMin.setDate(timeMin.getDate() - 30);
-    }
-    
-    if (!timeMax) {
-      timeMax = new Date();
-      timeMax.setDate(timeMax.getDate() + 60); // Show events two months ahead
-    }
-    
-    // Get all events from calendar service
-    const eventsQuery = query(
-      collection(db, "calendar_events"),
-      where("userId", "==", userId)
-    );
-    
-    const querySnapshot = await getDocs(eventsQuery);
-    const events = [];
-    
-    querySnapshot.forEach((doc) => {
-      const eventData = doc.data();
-      
-      // Get the start and end times - handle different formats
-      let startTime = null;
-      if (eventData.start?.dateTime) {
-        startTime = new Date(eventData.start.dateTime);
-      } else if (eventData.start?.date) {
-        startTime = new Date(eventData.start.date);
-      } else if (eventData.date) {
-        startTime = new Date(eventData.date);
-      } else if (eventData.dateTime) {
-        startTime = new Date(eventData.dateTime);
-      }
-      
-      // Skip events without valid dates
-      if (!startTime) {
-        console.warn(`Event ${doc.id} has no valid start date, skipping`);
-        return;
-      }
-      
-      let endTime = null;
-      if (eventData.end?.dateTime) {
-        endTime = new Date(eventData.end.dateTime);
-      } else if (eventData.end?.date) {
-        endTime = new Date(eventData.end.date);
-      } else if (eventData.endDateTime) {
-        endTime = new Date(eventData.endDateTime);
-      } else if (eventData.endDate) {
-        endTime = new Date(eventData.endDate);
-      } else {
-        // Default to 1 hour after start
-        endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
-      }
-      
-      // IMPORTANT: Always ensure title and summary are in sync
-      const eventTitle = eventData.title || eventData.summary || 'Untitled Event';
-      const eventSummary = eventData.summary || eventData.title || 'Untitled Event';
-      
-      // Ensure universalId is consistent
-      const universalId = eventData.universalId || doc.id;
-      
-      // Filter by date range
-      if (startTime >= timeMin && startTime <= timeMax) {
-        events.push({
-          // Critical identifiers - always ensure these are consistent
-          id: doc.id,
-          firestoreId: doc.id,  // Always use Firestore doc ID as firestoreId
-          universalId: universalId,
-          
-          // Basic event information (standardized naming)
-          title: eventTitle,
-          summary: eventSummary,
-          description: eventData.description || '',
-          
-          // Date information (standardized formats)
-          date: eventData.start?.dateTime || eventData.start?.date || eventData.date || eventData.dateTime,
-          dateObj: startTime,
-          time: startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-          start: {
-            dateTime: startTime.toISOString(),
-            timeZone: eventData.start?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          end: {
-            dateTime: endTime.toISOString(),
-            timeZone: eventData.end?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          dateEndObj: endTime,
-          
-          // Classification information
-          category: eventData.category || 'calendar',
-          eventType: eventData.eventType || 'general',
-          location: eventData.location || '',
-          
-          // Child and attendee information
-          childId: eventData.childId || null,
-          childName: eventData.childName || null,
-          attendingParentId: eventData.attendingParentId || null,
-          siblingIds: eventData.siblingIds || [],
-          siblingNames: eventData.siblingNames || [],
-          attendees: eventData.attendees || [],
-          
-          // Special fields for cycle events
-          cycleNumber: eventData.cycleNumber || null,
-          
-          // Extra information
-          extraDetails: eventData.extraDetails || {},
-          source: eventData.source || 'manual',
-          
-          // Linkage information
-          linkedEntity: eventData.linkedEntity || null,
-          linkedToEventId: eventData.linkedToEventId || null,
-          
-          // Timestamps for sorting
-          createdAt: eventData.createdAt || null,
-          updatedAt: eventData.updatedAt || null
-        });
-      }
-    });
-    
-    console.log(`Found ${events.length} events for user ${userId}`);
-    
-    // Sort by date
-    return events.sort((a, b) => a.dateObj - b.dateObj);
+    // Use the EventStore to get events
+    return await eventStore.getEventsForUser(userId, timeMin, timeMax);
   } catch (error) {
     console.error("Error getting events:", error);
     return [];
   }
-} 
+}
 
 /// In CalendarService.js - Find the addChildEvent method and replace it with this:
 // Fix for CalendarService.js - replace the addChildEvent method
