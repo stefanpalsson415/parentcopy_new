@@ -421,14 +421,25 @@ class EventStore {
     }
   }
 
-  // Force refresh all data
-  async refreshEvents(userId) {
+  // In EventStore.js, update the refreshEvents method to be more robust
+async refreshEvents(userId, familyId = null, cycleNumber = null) {
     if (!userId) return [];
+    
+    console.log("Forced refresh of events for user:", userId);
     
     // Clear cache
     this.eventCache.clear();
     
-    // Reload events
+    // If we have specific criteria, try to fetch that specific event first
+    if (familyId && cycleNumber) {
+      try {
+        await this.getCycleDueDateEvent(familyId, cycleNumber);
+      } catch (error) {
+        console.error("Error refreshing cycle due date:", error);
+      }
+    }
+    
+    // Then load all events
     return await this.getEventsForUser(userId);
   }
 }

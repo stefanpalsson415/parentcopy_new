@@ -391,6 +391,50 @@ if (selectedUser && selectedUser.role === 'child') {
   setCanTakeSurvey(shouldAllowSurvey);
 }
 
+
+// Add this function to TasksTab.jsx
+const initialSyncDueDate = async () => {
+  if (!familyId || !currentUser) return;
+  
+  try {
+    // Explicitly load the due date event from EventStore directly
+    const dueEvent = await eventStore.getCycleDueDateEvent(familyId, currentWeek);
+    
+    if (dueEvent) {
+      console.log("Initial sync found due date event:", dueEvent);
+      
+      // Extract date from the event
+      let eventDate;
+      if (dueEvent.start?.dateTime) {
+        eventDate = new Date(dueEvent.start.dateTime);
+      } else if (dueEvent.dateTime) {
+        eventDate = new Date(dueEvent.dateTime);
+      } else if (dueEvent.dateObj) {
+        eventDate = new Date(dueEvent.dateObj);
+      }
+      
+      if (eventDate && !isNaN(eventDate.getTime())) {
+        console.log("Setting surveyDue directly from event store:", eventDate);
+        setSurveyDue(eventDate);
+        
+        // Also update database for completeness
+        await updateSurveySchedule(currentWeek, eventDate);
+      }
+    }
+  } catch (error) {
+    console.error("Error in initial sync:", error);
+  }
+};
+
+// Add this useEffect after the component mounts
+useEffect(() => {
+  if (familyId && currentUser && currentWeek) {
+    initialSyncDueDate();
+  }
+}, [familyId, currentUser, currentWeek]);
+
+
+
 // Check if current user has already completed the survey for this week
 const userHasCompletedSurvey = selectedUser && 
   selectedUser.weeklyCompleted && 

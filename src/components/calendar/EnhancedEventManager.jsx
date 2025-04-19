@@ -9,6 +9,8 @@ import { db } from '../../services/firebase';
 import CalendarService from '../../services/CalendarService';
 import UserAvatar from '../common/UserAvatar';
 import SmartReminderSuggestions from './SmartReminderSuggestions';
+import { useEvents } from '../../contexts/EventContext';
+
 
 
 
@@ -77,6 +79,8 @@ const EnhancedEventManager = ({
   const placeAutocompleteElementRef = useRef(null);
   const placesContainerRef = useRef(null);
   const [selectedReminders, setSelectedReminders] = useState([]);
+  const { addEvent, updateEvent } = useEvents();
+
 
   
   const children = familyMembers.filter(m => m.role === 'child');
@@ -273,210 +277,212 @@ useEffect(() => {
     setEvent(prev => ({ ...prev, location: value }));
   };
 
-  // Handle event saving
-  const handleSave = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Validation
-      if (!event.title) {
-        setError("Please enter an event title");
-        setLoading(false);
-        return;
-      }
-      
-      if (!event.dateTime) {
-        setError("Please select a date and time");
-        setLoading(false);
-        return;
-      }
-      
-      // Format the event for the calendar service
-      const calendarEvent = {
-        ...event,
-        userId: currentUser.uid,
-        familyId,
-        source: 'unified-manager',
-        start: {
-          dateTime: new Date(event.dateTime).toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        end: {
-          dateTime: new Date(event.endDateTime || 
-                  new Date(new Date(event.dateTime).getTime() + 60 * 60 * 1000)
-                 ).toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        },
-        // Add reminders if we have any
-        reminders: selectedReminders.length > 0 ? {
-          useDefault: false,
-          overrides: selectedReminders.map(minutes => ({
-            method: 'popup',
-            minutes
-          }))
-        } : undefined
-      };
-      
-      let result;
 
+
+// Replace the handleSave function with this:
+const handleSave = async () => {
+  try {
+    setLoading(true);
+    setError(null);
+    
+    // Validation
+    if (!event.title) {
+      setError("Please enter an event title");
+      setLoading(false);
+      return;
+    }
+    
+    if (!event.dateTime) {
+      setError("Please select a date and time");
+      setLoading(false);
+      return;
+    }
+    
+    // Format the event for the calendar service
+    const calendarEvent = {
+      ...event,
+      userId: currentUser.uid,
+      familyId,
+      source: 'unified-manager',
+      start: {
+        dateTime: new Date(event.dateTime).toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: new Date(event.endDateTime || 
+                new Date(new Date(event.dateTime).getTime() + 60 * 60 * 1000)
+               ).toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
       // Add reminders if we have any
-if (!calendarEvent.reminders || calendarEvent.reminders.useDefault === undefined) {
-  calendarEvent.reminders = {
-    useDefault: true,
-    overrides: []
-  };
-}
+      reminders: selectedReminders.length > 0 ? {
+        useDefault: false,
+        overrides: selectedReminders.map(minutes => ({
+          method: 'popup',
+          minutes
+        }))
+      } : undefined
+    };
+    
+    let result;
 
-// Make sure the event doesn't have any undefined values before saving
-Object.keys(calendarEvent).forEach(key => {
-  if (calendarEvent[key] === undefined) {
-    delete calendarEvent[key]; // Remove any undefined properties
-  }
-});
+    // Add reminders if we have any
+    if (!calendarEvent.reminders || calendarEvent.reminders.useDefault === undefined) {
+      calendarEvent.reminders = {
+        useDefault: true,
+        overrides: []
+      };
+    }
+
+    // Make sure the event doesn't have any undefined values before saving
+    Object.keys(calendarEvent).forEach(key => {
+      if (calendarEvent[key] === undefined) {
+        delete calendarEvent[key]; // Remove any undefined properties
+      }
+    });
+    
+    // Handle recurring events if applicable
+    if (event.isRecurring && event.recurrence.days.length > 0) {
+      // Create multiple events for each day of the week
+      const results = [];
       
-      // Handle recurring events if applicable
-      if (event.isRecurring && event.recurrence.days.length > 0) {
-        // Create multiple events for each day of the week
-        const results = [];
+      for (const day of event.recurrence.days) {
+        // Calculate the next occurrence of this day
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const dayIndex = dayNames.indexOf(day);
+        if (dayIndex === -1) continue;
         
-        for (const day of event.recurrence.days) {
-          // Calculate the next occurrence of this day
-          const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-          const dayIndex = dayNames.indexOf(day);
-          if (dayIndex === -1) continue;
-          
-          const currentDay = new Date(event.dateTime).getDay(); // 0-6, Sunday-Saturday
-          let daysToAdd = (dayIndex - currentDay + 7) % 7;
-          if (daysToAdd === 0) daysToAdd = 7; // If same day, add a week
-          
-          // Create a new date for this day
-          const eventDate = new Date(event.dateTime);
-          eventDate.setDate(eventDate.getDate() + daysToAdd);
-          
-          // Create event for this specific day
-          const dayEvent = { 
-            ...calendarEvent,
-            title: `${calendarEvent.title} (${day})`,
-            start: {
-              dateTime: eventDate.toISOString(),
-              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-            },
-            end: {
-              dateTime: new Date(eventDate.getTime() + (event.duration || 60) * 60000).toISOString(),
-              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-            },
-            // Add a special flag to indicate this is part of a recurring series
-            isRecurringSeries: true,
-            recurrenceParent: event.isRecurring && event.firestoreId ? event.firestoreId : null,
-            recurrence: {
-              ...event.recurrence,
-              currentDay: day
-            }
-          };
-          
-          // Save to calendar
-          let dayResult;
-          if (mode === 'edit' && event.firestoreId && event.recurrence.currentDay === day) {
-            // Update existing event if this is the same day
-            dayResult = await CalendarService.updateEvent(event.firestoreId, dayEvent, currentUser.uid);
-          } else {
-            // Create new event
-            dayResult = await CalendarService.addEvent(dayEvent, currentUser.uid);
+        const currentDay = new Date(event.dateTime).getDay(); // 0-6, Sunday-Saturday
+        let daysToAdd = (dayIndex - currentDay + 7) % 7;
+        if (daysToAdd === 0) daysToAdd = 7; // If same day, add a week
+        
+        // Create a new date for this day
+        const eventDate = new Date(event.dateTime);
+        eventDate.setDate(eventDate.getDate() + daysToAdd);
+        
+        // Create event for this specific day
+        const dayEvent = { 
+          ...calendarEvent,
+          title: `${calendarEvent.title} (${day})`,
+          start: {
+            dateTime: eventDate.toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          },
+          end: {
+            dateTime: new Date(eventDate.getTime() + (event.duration || 60) * 60000).toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          },
+          // Add a special flag to indicate this is part of a recurring series
+          isRecurringSeries: true,
+          recurrenceParent: event.isRecurring && event.firestoreId ? event.firestoreId : null,
+          recurrence: {
+            ...event.recurrence,
+            currentDay: day
           }
-          
-          results.push(dayResult);
+        };
+        
+        // Save to calendar - USING useEvents HOOK
+        let dayResult;
+        if (mode === 'edit' && event.firestoreId && event.recurrence.currentDay === day) {
+          // Update existing event
+          dayResult = await updateEvent(event.firestoreId, dayEvent);
+        } else {
+          // Create new event
+          dayResult = await addEvent(dayEvent);
         }
         
-        // Show success animation
-        setSuccess(true);
-        setTimeout(() => {
-          setSuccess(false);
-          if (onSave) onSave({success: true, recurringResults: results});
-        }, 1500);
-        setLoading(false);
-        return; // Stop execution since we've already handled saving
-      }
-      
-      // Not recurring - handle as single event
-      if (mode === 'edit' && event.firestoreId) {
-        // Update existing event
-        result = await CalendarService.updateEvent(event.firestoreId, calendarEvent, currentUser.uid);
-      } else {
-        // Create new event
-        result = await CalendarService.addEvent(calendarEvent, currentUser.uid);
-      }
-      
-      // If this is an activity and for a child, also update the childrenData
-      if (event.category === 'activity' && event.childId && mode === 'create' && result.success) {
-        try {
-          // Create the activity data structure
-          const activityData = {
-            id: result.firestoreId || result.eventId || `activity-${Date.now()}`,
-            title: event.title,
-            type: event.eventType || 'activity',
-            date: new Date(event.dateTime).toISOString(),
-            location: event.location || '',
-            duration: event.duration || 60,
-            days: event.isRecurring ? event.recurrence.days : [],
-            notes: event.description || event.extraDetails?.notes || '',
-            startTime: new Date(event.dateTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false}),
-            endTime: event.endDateTime ? new Date(event.endDateTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false}) : '',
-            calendarId: result.firestoreId || result.eventId,
-            isRecurring: event.isRecurring,
-            createdAt: new Date().toISOString()
-          };
-          
-          // Get a reference to the family document
-          const familyRef = doc(db, "families", familyId);
-          
-          // Get current child data
-          const familyDoc = await getDoc(familyRef);
-          if (familyDoc.exists()) {
-            const childrenData = familyDoc.data().childrenData || {};
-            const childData = childrenData[event.childId] || {};
-            
-            // Add or update activities array
-            const activities = childData.routines || [];
-            
-            // Check if activity already exists
-            const existingIndex = activities.findIndex(a => a.id === activityData.id);
-            
-            if (existingIndex !== -1) {
-              // Update existing activity
-              activities[existingIndex] = activityData;
-            } else {
-              // Add new activity
-              activities.push(activityData);
-            }
-            
-            // Update the database
-            await updateDoc(familyRef, {
-              [`childrenData.${event.childId}.routines`]: activities
-            });
-            
-            console.log("Activity synchronized with child tracking data");
-          }
-        } catch (syncError) {
-          console.error("Error synchronizing activity:", syncError);
-          // Don't block the main success path
-        }
+        results.push(dayResult);
       }
       
       // Show success animation
-      setSuccess(true);
+      setShowSuccess(true);
       setTimeout(() => {
-        setSuccess(false);
-        if (onSave) onSave(result);
+        setShowSuccess(false);
+        if (onSave) onSave({success: true, recurringResults: results});
       }, 1500);
-      
       setLoading(false);
-    } catch (error) {
-      console.error("Error processing event:", error);
-      setError(error.message || "An error occurred while saving");
-      setLoading(false);
+      return; // Stop execution since we've already handled saving
     }
-  };
+    
+    // Not recurring - handle as single event - USING useEvents HOOK
+    if (mode === 'edit' && event.firestoreId) {
+      // Update existing event
+      result = await updateEvent(event.firestoreId, calendarEvent);
+    } else {
+      // Create new event
+      result = await addEvent(calendarEvent);
+    }
+    
+    // If this is an activity and for a child, also update the childrenData
+    if (event.category === 'activity' && event.childId && mode === 'create' && result.success) {
+      try {
+        // Create the activity data structure
+        const activityData = {
+          id: result.firestoreId || result.eventId || `activity-${Date.now()}`,
+          title: event.title,
+          type: event.eventType || 'activity',
+          date: new Date(event.dateTime).toISOString(),
+          location: event.location || '',
+          duration: event.duration || 60,
+          days: event.isRecurring ? event.recurrence.days : [],
+          notes: event.description || event.extraDetails?.notes || '',
+          startTime: new Date(event.dateTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false}),
+          endTime: event.endDateTime ? new Date(event.endDateTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false}) : '',
+          calendarId: result.firestoreId || result.eventId,
+          isRecurring: event.isRecurring,
+          createdAt: new Date().toISOString()
+        };
+        
+        // Get a reference to the family document
+        const familyRef = doc(db, "families", familyId);
+        
+        // Get current child data
+        const familyDoc = await getDoc(familyRef);
+        if (familyDoc.exists()) {
+          const childrenData = familyDoc.data().childrenData || {};
+          const childData = childrenData[event.childId] || {};
+          
+          // Add or update activities array
+          const activities = childData.routines || [];
+          
+          // Check if activity already exists
+          const existingIndex = activities.findIndex(a => a.id === activityData.id);
+          
+          if (existingIndex !== -1) {
+            // Update existing activity
+            activities[existingIndex] = activityData;
+          } else {
+            // Add new activity
+            activities.push(activityData);
+          }
+          
+          // Update the database
+          await updateDoc(familyRef, {
+            [`childrenData.${event.childId}.routines`]: activities
+          });
+          
+          console.log("Activity synchronized with child tracking data");
+        }
+      } catch (syncError) {
+        console.error("Error synchronizing activity:", syncError);
+        // Don't block the main success path
+      }
+    }
+    
+    // Show success animation
+    setShowSuccess(true);
+    setTimeout(() => {
+      setShowSuccess(false);
+      if (onSave) onSave(result);
+    }, 1500);
+    
+    setLoading(false);
+  } catch (error) {
+    console.error("Error processing event:", error);
+    setError(error.message || "An error occurred while saving");
+    setLoading(false);
+  }
+};
   
   const handleAddReminder = (minutes) => {
     if (minutes === 'custom') {
