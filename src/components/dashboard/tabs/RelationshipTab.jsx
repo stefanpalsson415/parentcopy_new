@@ -27,6 +27,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 
 
 
+
 // Lazy load heavy components to improve initial load performance
 const DailyCheckInTool = lazy(() => import('../DailyCheckInTool'));
 const GratitudeTracker = lazy(() => import('../GratitudeTracker'));
