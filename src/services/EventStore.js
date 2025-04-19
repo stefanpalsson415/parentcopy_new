@@ -153,31 +153,65 @@ class EventStore {
         familyId
       });
       
-      // Check for duplicates by querying Firestore before saving
-      const eventsQuery = query(
-        collection(db, "events"),
-        where("eventSignature", "==", standardizedEvent.eventSignature),
-        where("userId", "==", userId)
-      );
+      // Enhanced duplicate detection - check signature AND time proximity
+const eventsQuery = query(
+    collection(db, "events"),
+    where("eventSignature", "==", standardizedEvent.eventSignature),
+    where("userId", "==", userId)
+  );
+  
+  const querySnapshot = await getDocs(eventsQuery);
+  
+  // If we found potential duplicates, check for date/time proximity
+  if (!querySnapshot.empty) {
+    // Check each match to find true duplicates (same day or very close in time)
+    const matches = [];
+    
+    querySnapshot.forEach((docSnapshot) => {
+      const potentialDuplicate = docSnapshot.data();
       
-      const querySnapshot = await getDocs(eventsQuery);
+      // Get the start times for comparison
+      const newEventStart = new Date(standardizedEvent.start.dateTime);
+      const existingEventStart = new Date(potentialDuplicate.start.dateTime);
       
-      // If we found a duplicate, return the existing event
-      if (!querySnapshot.empty) {
-        const existingEvent = querySnapshot.docs[0].data();
-        console.log("Duplicate event detected, returning existing event", existingEvent.firestoreId);
-        
-        // Update cache with the existing event
-        this.eventCache.set(existingEvent.universalId, existingEvent);
-        
-        return {
-          success: true,
-          eventId: existingEvent.firestoreId,
-          universalId: existingEvent.universalId,
-          isDuplicate: true,
-          existingEvent: existingEvent
-        };
+      // Calculate time difference in hours
+      const timeDiff = Math.abs(newEventStart - existingEventStart) / (1000 * 60 * 60);
+      
+      // Check if events are on the same day or within 3 hours of each other
+      const sameDay = newEventStart.toISOString().split('T')[0] === 
+                     existingEventStart.toISOString().split('T')[0];
+                     
+      if (sameDay || timeDiff <= 3) {
+        matches.push(potentialDuplicate);
       }
+    });
+    
+    // If we have matches, return the closest one as the duplicate
+    if (matches.length > 0) {
+      // Sort by closeness in time if we have multiple matches
+      matches.sort((a, b) => {
+        const timeA = new Date(a.start.dateTime);
+        const timeB = new Date(b.start.dateTime);
+        const newTime = new Date(standardizedEvent.start.dateTime);
+        
+        return Math.abs(timeA - newTime) - Math.abs(timeB - newTime);
+      });
+      
+      const existingEvent = matches[0];
+      console.log("Duplicate event detected, returning existing event", existingEvent.firestoreId);
+      
+      // Update cache with the existing event
+      this.eventCache.set(existingEvent.universalId, existingEvent);
+      
+      return {
+        success: true,
+        eventId: existingEvent.firestoreId,
+        universalId: existingEvent.universalId,
+        isDuplicate: true,
+        existingEvent: existingEvent
+      };
+    }
+  }
       
       // Save to Firestore
       const eventCollection = collection(db, "events");

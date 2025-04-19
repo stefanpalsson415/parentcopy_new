@@ -290,14 +290,43 @@ async addEvent(event, userId) {
     console.log("Adding calendar event:", {
       title: event.summary || event.title || 'Untitled',
       hasDate: !!(event.dateTime || event.start?.dateTime),
-      childName: event.childName || 'None'
+      childName: event.childName || 'None',
+      documents: event.documents?.length || 0,
+      providers: event.providers?.length || 0
     });
     
-    // Use the EventStore to add the event
+    // Process any document references
+    if (event.documents && event.documents.length > 0) {
+      // Log document attachment
+      console.log(`Attaching ${event.documents.length} documents to event`);
+    }
+    
+    // Process any provider references
+    if (event.providers && event.providers.length > 0) {
+      // Log provider attachment
+      console.log(`Linking ${event.providers.length} providers to event`);
+    }
+    
+    // Use the EventStore to add the event (with enhanced metadata)
     const result = await eventStore.addEvent(event, userId, event.familyId);
     
-    // Show notification
-    this.showNotification(`Event "${event.summary || event.title}" added to your calendar`, "success");
+    // Check for duplicate detection
+    if (result.isDuplicate) {
+      this.showNotification(`This event already exists in your calendar`, "info");
+    } else {
+      this.showNotification(`Event "${event.summary || event.title}" added to your calendar`, "success");
+    }
+    
+    // Dispatch DOM event for components to refresh
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('calendar-event-added', {
+        detail: { 
+          eventId: result.eventId,
+          universalId: result.universalId,
+          isDuplicate: result.isDuplicate || false
+        }
+      }));
+    }
     
     return result;
   } catch (error) {
@@ -307,20 +336,44 @@ async addEvent(event, userId) {
   }
 }
 
-// Replace the updateEvent method
 async updateEvent(eventId, updateData, userId) {
   try {
     if (!eventId || !userId) {
       throw new Error("Event ID and User ID are required to update events");
     }
     
-    console.log("Updating calendar event:", { eventId, updateFields: Object.keys(updateData) });
+    console.log("Updating calendar event:", { 
+      eventId, 
+      updateFields: Object.keys(updateData),
+      hasDocuments: !!updateData.documents,
+      hasProviders: !!updateData.providers
+    });
+    
+    // Process document references if updated
+    if (updateData.documents) {
+      console.log(`Updating event with ${updateData.documents.length} document references`);
+    }
+    
+    // Process provider references if updated
+    if (updateData.providers) {
+      console.log(`Updating event with ${updateData.providers.length} provider references`);
+    }
     
     // Use the EventStore to update the event
     const result = await eventStore.updateEvent(eventId, updateData, userId);
     
     // Show notification
     this.showNotification("Event updated successfully", "success");
+    
+    // Dispatch DOM event for components to refresh
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('calendar-event-updated', {
+        detail: { 
+          eventId,
+          universalId: result.universalId
+        }
+      }));
+    }
     
     return result;
   } catch (error) {

@@ -493,19 +493,70 @@ const scheduleCouplesMeeting = async (cycleNumber, date) => {
     const cycleDocRef = doc(db, "relationshipCycles", `${familyId}-cycle${cycleNumber}`);
     await setDoc(cycleDocRef, cycleData, { merge: true });
     
-    // Create calendar event
+    // Create calendar event with enhanced metadata
     try {
+      // Get both parents to add as attendees
+      const parents = familyMembers.filter(m => m.role === 'parent');
+      const attendees = parents.map(parent => ({
+        id: parent.id,
+        name: parent.name,
+        role: 'parent'
+      }));
+      
+      // Prepare any documents to attach (assessment results, etc.)
+      const documents = [];
+      
+      // If we have assessment data, include it as a document reference
+      if (cycleData.assessmentsCompleted) {
+        try {
+          // For now, just reference an assessment document - in a real implementation,
+          // we'd create a PDF or other document with the assessment data
+          documents.push({
+            id: `assessment-cycle-${cycleNumber}`,
+            title: `Relationship Assessment - Cycle ${cycleNumber}`,
+            type: 'assessment',
+            category: 'relationship'
+          });
+        } catch (docError) {
+          console.warn("Could not attach assessment document:", docError);
+        }
+      }
+      
       const calendarEvent = {
         title: `Couple's Meeting - Cycle ${cycleNumber}`,
         description: "Relationship strengthening discussion based on your individual assessments.",
         startDate: date,
         endDate: new Date(date.getTime() + 60 * 60 * 1000), // 1 hour meeting
         eventType: 'couple-meeting',
-        category: 'relationship'
+        category: 'relationship',
+        attendees,
+        documents,
+        familyId,
+        // Add reminders
+        reminders: {
+          useDefault: false,
+          overrides: [
+            { method: 'popup', minutes: 30 },
+            { method: 'popup', minutes: 1440 } // 24 hours before
+          ]
+        },
+        // Add metadata for the new enhanced event structure
+        extraDetails: {
+          cycleNumber,
+          meetingType: 'relationship',
+          importanceLevel: 'high',
+          creationSource: 'relationship-system'
+        }
       };
       
       // Use CalendarService to add event
-      await CalendarService.addEvent(calendarEvent, currentUser.uid);
+      const result = await CalendarService.addEvent(calendarEvent, currentUser.uid);
+      
+      // Store the event ID in the cycle data for future reference
+      if (result.success) {
+        cycleData.meeting.calendarEventId = result.eventId;
+        await setDoc(cycleDocRef, cycleData, { merge: true });
+      }
     } catch (calendarError) {
       console.error("Error adding meeting to calendar:", calendarError);
     }

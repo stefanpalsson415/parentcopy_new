@@ -3,183 +3,234 @@ import { useState, useEffect, useCallback } from 'react';
 import eventStore from '../services/EventStore';
 import { useAuth } from '../contexts/AuthContext';
 
-export function useEvent(eventId) {
-  const [event, setEvent] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const { currentUser } = useAuth();
-
-  useEffect(() => {
-    if (!eventId || !currentUser) return;
-
-    let isMounted = true;
-    setLoading(true);
-
-    const loadEvent = async () => {
-      try {
-        const eventData = await eventStore.getEventById(eventId);
-        if (isMounted) {
-          setEvent(eventData);
-          setError(null);
-        }
-      } catch (err) {
-        if (isMounted) {
-          setError(err.message);
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadEvent();
-
-    // Subscribe to changes
-    const unsubscribe = eventStore.subscribe((action, updatedEvent) => {
-      if ((updatedEvent.id === eventId ||
-           updatedEvent.firestoreId === eventId ||
-           updatedEvent.universalId === eventId)) {
-        if (action === 'update' || action === 'add') {
-          setEvent(updatedEvent);
-        } else if (action === 'delete') {
-          setEvent(null);
-        }
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      unsubscribe();
-    };
-  }, [eventId, currentUser]);
-
-  // Update the event
-  const updateEvent = useCallback(async (updateData) => {
-    if (!event || !event.firestoreId) return { success: false, error: 'No event to update' };
-    return await eventStore.updateEvent(event.firestoreId, updateData, currentUser?.uid);
-  }, [event, currentUser]);
-
-  // Delete the event
-  const deleteEvent = useCallback(async () => {
-    if (!event || !event.firestoreId) return { success: false, error: 'No event to delete' };
-    return await eventStore.deleteEvent(event.firestoreId, currentUser?.uid);
-  }, [event, currentUser]);
-
-  return { event, loading, error, updateEvent, deleteEvent };
-}
-
 export function useEvents(options = {}) {
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const { currentUser } = useAuth();
-
-  const {
-    startDate = null,
-    endDate = null,
-    familyId = null,
-    cycleNumber = null
-  } = options;
-
-  useEffect(() => {
-    if (!currentUser) return;
-
-    let isMounted = true;
-    setLoading(true);
-
-    const loadEvents = async () => {
-      try {
-        let eventData;
-        
-        if (cycleNumber && familyId) {
-          // Get events for a specific cycle
-          eventData = await eventStore.getEventsForCycle(familyId, cycleNumber);
-        } else {
-          // Get all events for user
-          eventData = await eventStore.getEventsForUser(currentUser.uid, startDate, endDate);
+    const [events, setEvents] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const { currentUser } = useAuth();
+  
+    const {
+      startDate = null,
+      endDate = null,
+      familyId = null,
+      cycleNumber = null,
+      filterBy = null, // New option to filter by different criteria
+      childId = null,  // New option to filter by child
+      category = null  // New option to filter by category
+    } = options;
+  
+    useEffect(() => {
+      if (!currentUser) return;
+  
+      let isMounted = true;
+      setLoading(true);
+  
+      const loadEvents = async () => {
+        try {
+          let eventData;
+          
+          if (cycleNumber && familyId) {
+            // Get events for a specific cycle
+            eventData = await eventStore.getEventsForCycle(familyId, cycleNumber);
+          } else {
+            // Get all events for user
+            eventData = await eventStore.getEventsForUser(currentUser.uid, startDate, endDate);
+          }
+          
+          // Apply additional filters if specified
+          if (eventData.length > 0) {
+            if (childId) {
+              eventData = eventData.filter(event => 
+                event.childId === childId || 
+                (event.attendees && event.attendees.some(a => a.id === childId))
+              );
+            }
+            
+            if (category) {
+              eventData = eventData.filter(event => 
+                event.category === category || event.eventType === category
+              );
+            }
+            
+            // Custom filter function
+            if (filterBy && typeof filterBy === 'function') {
+              eventData = eventData.filter(filterBy);
+            }
+          }
+          
+          if (isMounted) {
+            setEvents(eventData);
+            setError(null);
+          }
+        } catch (err) {
+          if (isMounted) {
+            setError(err.message);
+          }
+        } finally {
+          if (isMounted) {
+            setLoading(false);
+          }
         }
-        
+      };
+  
+      loadEvents();
+  
+      // Subscribe to changes
+      const unsubscribe = eventStore.subscribe((action, updatedEvent) => {
+        if (action === 'add') {
+          // Apply filters to new events
+          let shouldAdd = true;
+          
+          if (childId && 
+              updatedEvent.childId !== childId && 
+              (!updatedEvent.attendees || !updatedEvent.attendees.some(a => a.id === childId))) {
+            shouldAdd = false;
+          }
+          
+          if (shouldAdd && category && 
+              updatedEvent.category !== category && 
+              updatedEvent.eventType !== category) {
+            shouldAdd = false;
+          }
+          
+          if (shouldAdd && filterBy && typeof filterBy === 'function' && !filterBy(updatedEvent)) {
+            shouldAdd = false;
+          }
+          
+          if (shouldAdd) {
+            setEvents(prev => [...prev, updatedEvent]);
+          }
+        } else if (action === 'update') {
+          setEvents(prev => prev.map(event => 
+            (event.id === updatedEvent.id || 
+             event.firestoreId === updatedEvent.firestoreId || 
+             event.universalId === updatedEvent.universalId) 
+              ? updatedEvent : event
+          ));
+        } else if (action === 'delete') {
+          setEvents(prev => prev.filter(event => 
+            event.id !== updatedEvent.id && 
+            event.firestoreId !== updatedEvent.firestoreId && 
+            event.universalId !== updatedEvent.universalId
+          ));
+        }
+      });
+  
+      // Also listen for DOM events (for backward compatibility)
+      const handleCalendarRefresh = () => {
         if (isMounted) {
-          setEvents(eventData);
-          setError(null);
+          loadEvents();
         }
-      } catch (err) {
-        if (isMounted) {
-          setError(err.message);
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+      };
+      
+      if (typeof window !== 'undefined') {
+        window.addEventListener('force-calendar-refresh', handleCalendarRefresh);
       }
-    };
-
-    loadEvents();
-
-    // Subscribe to changes
-    const unsubscribe = eventStore.subscribe((action, updatedEvent) => {
-      if (action === 'add') {
-        setEvents(prev => [...prev, updatedEvent]);
-      } else if (action === 'update') {
-        setEvents(prev => prev.map(event => 
-          (event.id === updatedEvent.id || 
-           event.firestoreId === updatedEvent.firestoreId || 
-           event.universalId === updatedEvent.universalId) 
-            ? updatedEvent : event
-        ));
-      } else if (action === 'delete') {
-        setEvents(prev => prev.filter(event => 
-          event.id !== updatedEvent.id && 
-          event.firestoreId !== updatedEvent.firestoreId && 
-          event.universalId !== updatedEvent.universalId
-        ));
+  
+      return () => {
+        isMounted = false;
+        unsubscribe();
+        if (typeof window !== 'undefined') {
+          window.removeEventListener('force-calendar-refresh', handleCalendarRefresh);
+        }
+      };
+    }, [currentUser, startDate, endDate, familyId, cycleNumber, childId, category, filterBy]);
+  
+    // Add a new event with enhanced handling for docs and providers
+    const addEvent = useCallback(async (eventData) => {
+      if (!currentUser) return { success: false, error: 'User not authenticated' };
+      
+      // Ensure we have arrays for documents and providers if they don't exist
+      const enhancedEventData = {
+        ...eventData,
+        documents: eventData.documents || [],
+        providers: eventData.providers || [],
+        // Standardize attendees format if provided
+        attendees: eventData.attendees ? eventData.attendees.map(attendee => {
+          // Ensure each attendee has id, name, role
+          if (typeof attendee === 'string') {
+            return { id: attendee, name: attendee, role: 'general' };
+          }
+          return {
+            id: attendee.id || 'unknown-id',
+            name: attendee.name || 'Unknown',
+            role: attendee.role || 'general',
+            ...attendee
+          };
+        }) : []
+      };
+      
+      return await eventStore.addEvent(enhancedEventData, currentUser.uid, familyId);
+    }, [currentUser, familyId]);
+  
+    // Update an event with enhanced handling
+    const updateEvent = useCallback(async (eventId, updateData) => {
+      if (!currentUser) return { success: false, error: 'User not authenticated' };
+      
+      // Process attendees if being updated
+      if (updateData.attendees) {
+        updateData.attendees = updateData.attendees.map(attendee => {
+          if (typeof attendee === 'string') {
+            return { id: attendee, name: attendee, role: 'general' };
+          }
+          return {
+            id: attendee.id || 'unknown-id',
+            name: attendee.name || 'Unknown',
+            role: attendee.role || 'general',
+            ...attendee
+          };
+        });
       }
-    });
-
-    return () => {
-      isMounted = false;
-      unsubscribe();
+      
+      return await eventStore.updateEvent(eventId, updateData, currentUser.uid);
+    }, [currentUser]);
+  
+    // Delete an event
+    const deleteEvent = useCallback(async (eventId) => {
+      if (!currentUser) return { success: false, error: 'User not authenticated' };
+      return await eventStore.deleteEvent(eventId, currentUser.uid);
+    }, [currentUser]);
+  
+    // Refresh events
+    const refreshEvents = useCallback(async () => {
+      if (!currentUser) return;
+      setLoading(true);
+      const refreshedEvents = await eventStore.refreshEvents(currentUser.uid);
+      
+      // Apply filters to refreshed events
+      let filteredEvents = refreshedEvents;
+      
+      if (childId) {
+        filteredEvents = filteredEvents.filter(event => 
+          event.childId === childId || 
+          (event.attendees && event.attendees.some(a => a.id === childId))
+        );
+      }
+      
+      if (category) {
+        filteredEvents = filteredEvents.filter(event => 
+          event.category === category || event.eventType === category
+        );
+      }
+      
+      if (filterBy && typeof filterBy === 'function') {
+        filteredEvents = filteredEvents.filter(filterBy);
+      }
+      
+      setEvents(filteredEvents);
+      setLoading(false);
+    }, [currentUser, childId, category, filterBy]);
+  
+    return {
+      events,
+      loading,
+      error,
+      addEvent,
+      updateEvent,
+      deleteEvent,
+      refreshEvents
     };
-  }, [currentUser, startDate, endDate, familyId, cycleNumber]);
-
-  // Add a new event
-  const addEvent = useCallback(async (eventData) => {
-    if (!currentUser) return { success: false, error: 'User not authenticated' };
-    return await eventStore.addEvent(eventData, currentUser.uid, familyId);
-  }, [currentUser, familyId]);
-
-  // Update an event
-  const updateEvent = useCallback(async (eventId, updateData) => {
-    if (!currentUser) return { success: false, error: 'User not authenticated' };
-    return await eventStore.updateEvent(eventId, updateData, currentUser.uid);
-  }, [currentUser]);
-
-  // Delete an event
-  const deleteEvent = useCallback(async (eventId) => {
-    if (!currentUser) return { success: false, error: 'User not authenticated' };
-    return await eventStore.deleteEvent(eventId, currentUser.uid);
-  }, [currentUser]);
-
-  // Refresh events
-  const refreshEvents = useCallback(async () => {
-    if (!currentUser) return;
-    setLoading(true);
-    const refreshedEvents = await eventStore.refreshEvents(currentUser.uid);
-    setEvents(refreshedEvents);
-    setLoading(false);
-  }, [currentUser]);
-
-  return {
-    events,
-    loading,
-    error,
-    addEvent,
-    updateEvent,
-    deleteEvent,
-    refreshEvents
-  };
-}
+  }
 
 // Special hook for cycle due date events
 export function useCycleDueDate(familyId, cycleNumber) {
