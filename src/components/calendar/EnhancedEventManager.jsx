@@ -1328,72 +1328,73 @@ const handleSave = async () => {
         )}
         
         {/* Action Buttons */}
-<div className="flex justify-between pt-2">
-  <div>
-    {mode === 'edit' && onDelete && (
-      <button
-        type="button"
-        onClick={() => onDelete(event)}
-        className="px-4 py-2 border border-red-500 text-red-500 rounded-md text-sm hover:bg-red-50 flex items-center"
-      >
-        <Trash2 size={16} className="mr-2" />
-        Delete
-      </button>
-    )}
-  </div>
-  
-  <div className="flex">
-    {onCancel && (
-      <button
-        type="button"
-        onClick={handleCancel}
-        className="px-4 py-2 border rounded-md text-sm mr-3 hover:bg-gray-50"
-      >
-        Cancel
-      </button>
-    )}
-    
-    {mode === 'view' ? (
-      <button
-        type="button"
-        onClick={() => {
-          // Since we can't directly modify mode state in this component,
-          // We need to tell the parent to change to edit mode - if onSave is provided
-          if (onSave) {
-            // Signal to parent that user wants to edit
-            onSave({ requestEdit: true });
-          }
-        }}
-        className="px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 flex items-center"
-      >
-        <Edit size={16} className="mr-2" />
-        Edit Event
-      </button>
-    ) : (
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={loading}
-        className="px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 disabled:bg-gray-400 flex items-center"
-      >
-        {loading ? (
-          <>
-            <div className="w-4 h-4 mr-2 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
-            Saving...
-          </>
-        ) : (
-          <>
-            <Calendar size={16} className="mr-2" />
-            {mode === 'edit' ? 'Update Event' : 'Add to Calendar'}
-          </>
-        )}
-      </button>
-    )}
-  </div>
-</div>
+        <div className="flex justify-between pt-2">
+          <div>
+            {mode === 'edit' && onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(event)}
+                className="px-4 py-2 border border-red-500 text-red-500 rounded-md text-sm hover:bg-red-50 flex items-center"
+              >
+                <Trash2 size={16} className="mr-2" />
+                Delete
+              </button>
+            )}
+          </div>
+          
+          <div className="flex">
+            {onCancel && (
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="px-4 py-2 border rounded-md text-sm mr-3 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            )}
+            
+            {mode === 'view' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  // Since we can't directly modify mode state in this component,
+                  // We need to tell the parent to change to edit mode - if onSave is provided
+                  if (onSave) {
+                    // Signal to parent that user wants to edit
+                    onSave({ requestEdit: true });
+                  }
+                }}
+                className="px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 flex items-center"
+              >
+                <Edit size={16} className="mr-2" />
+                Edit Event
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={loading}
+                className="px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 disabled:bg-gray-400 flex items-center"
+              >
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 mr-2 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Calendar size={16} className="mr-2" />
+                    {mode === 'edit' ? 'Update Event' : 'Add to Calendar'}
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
       
       {/* Success Animation */}
-      {success && (
+      {showSuccess && (
         <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-20">
           <div className="bg-white rounded-lg p-6 shadow-lg animate-bounce">
             <div className="text-center">
@@ -1410,7 +1411,6 @@ const handleSave = async () => {
           </div>
         </div>
       )}
-    </div>
     </div>
   );
 };
