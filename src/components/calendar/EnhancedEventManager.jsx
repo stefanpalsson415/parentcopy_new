@@ -11,9 +11,6 @@ import UserAvatar from '../common/UserAvatar';
 import SmartReminderSuggestions from './SmartReminderSuggestions';
 import { useEvents } from '../../contexts/EventContext';
 
-
-
-
 /**
  * Enhanced Event Manager - Universal component for creating and editing calendar events
  * 
@@ -85,9 +82,6 @@ const EnhancedEventManager = ({
   const [selectedReminders, setSelectedReminders] = useState([]);
   const { addEvent, updateEvent } = useEvents();
   const [showSuccess, setShowSuccess] = useState(false);
-
-
-
   
   const children = familyMembers.filter(m => m.role === 'child');
   const parents = familyMembers.filter(m => m.role === 'parent');
@@ -114,6 +108,7 @@ useEffect(() => {
     }
   }
 }, [event.childId, children, initialEvent, mode]);
+
   // Initialize Google Places PlaceAutocompleteElement
 // Updated initialization code in useEffect
 useEffect(() => {
@@ -244,7 +239,6 @@ useEffect(() => {
     }
   }, [event.location, placesInitialized]);
 
-
 // Add this useEffect to EnhancedEventManager.jsx (after other useEffects)
 // New code to ensure proper event initialization
 useEffect(() => {
@@ -282,8 +276,6 @@ useEffect(() => {
   const handleManualLocationInput = (value) => {
     setEvent(prev => ({ ...prev, location: value }));
   };
-
-
 
 // Enhanced handleSave function with document and provider support
 const handleSave = async () => {
@@ -822,41 +814,40 @@ const handleSave = async () => {
         </div>
         
         {/* Location Section */}
-<div>
-{/* Location Section - Using Google Places with fallback */}
-<div>
-  <label className="block text-sm font-medium mb-1 text-gray-700">
-    Location
-  </label>
+        <div>
+          <label className="block text-sm font-medium mb-1 text-gray-700">
+            Location
+          </label>
 
-  {/* Google Places Autocomplete container */}
-  <div ref={placesContainerRef} className="mb-2 rounded-md border overflow-hidden">
-    {/* PlaceAutocompleteElement will be inserted here if available */}
-  </div>
-  
-  {/* When Google Places is not available, fallback to manual input */}
-  {(window.googleMapsAuthFailed || window.googleMapsLoadFailed || !placesInitialized) && (
-    <div className="flex items-center border rounded-md overflow-hidden mt-2">
-      <div className="p-2 text-gray-400">
-        <MapPin size={16} />
-      </div>
-      <input
-        type="text"
-        value={event.location || ''}
-        onChange={(e) => handleManualLocationInput(e.target.value)}
-        className="w-full p-2 text-sm border-0 focus:ring-0"
-        placeholder="Where is this event happening?"
-      />
-    </div>
-  )}
-  
-  {/* Current location value display (for visibility) */}
-  {event.location && (
-    <div className="text-xs text-blue-600 mt-1 pl-2">
-      Current location: {event.location}
-    </div>
-  )}
-</div>        
+          {/* Google Places Autocomplete container */}
+          <div ref={placesContainerRef} className="mb-2 rounded-md border overflow-hidden">
+            {/* PlaceAutocompleteElement will be inserted here if available */}
+          </div>
+          
+          {/* When Google Places is not available, fallback to manual input */}
+          {(window.googleMapsAuthFailed || window.googleMapsLoadFailed || !placesInitialized) && (
+            <div className="flex items-center border rounded-md overflow-hidden mt-2">
+              <div className="p-2 text-gray-400">
+                <MapPin size={16} />
+              </div>
+              <input
+                type="text"
+                value={event.location || ''}
+                onChange={(e) => handleManualLocationInput(e.target.value)}
+                className="w-full p-2 text-sm border-0 focus:ring-0"
+                placeholder="Where is this event happening?"
+              />
+            </div>
+          )}
+          
+          {/* Current location value display (for visibility) */}
+          {event.location && (
+            <div className="text-xs text-blue-600 mt-1 pl-2">
+              Current location: {event.location}
+            </div>
+          )}
+        </div>
+        
         {/* Child Selection */}
         <div>
           <label className="block text-sm font-medium mb-1 text-gray-700">
@@ -993,158 +984,160 @@ const handleSave = async () => {
             </div>
           </div>
         )}
+        
         {/* Document Selection */}
-<div>
-  <label className="block text-sm font-medium mb-1 text-gray-700">
-    Attach Documents
-  </label>
-  <div className="p-3 bg-gray-50 rounded-md">
-    {event.documents?.length > 0 ? (
-      <div className="space-y-2">
-        {event.documents.map((doc, index) => (
-          <div key={index} className="flex items-center justify-between p-2 bg-white rounded border">
-            <div className="flex items-center">
-              <FileText size={16} className="text-blue-500 mr-2" />
-              <span className="text-sm truncate max-w-xs">{doc.title || doc.fileName}</span>
-            </div>
-            <button
-              onClick={() => setEvent(prev => ({
-                ...prev,
-                documents: prev.documents.filter((_, i) => i !== index)
-              }))}
-              className="text-red-500 hover:text-red-700"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        ))}
-        <button
-          onClick={() => {
-            // This would normally open a document picker
-            // For now we'll just navigate to document library
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('open-document-library', {
-                detail: { 
-                  childId: event.childId,
-                  onSelect: (selectedDoc) => {
-                    setEvent(prev => ({
-                      ...prev,
-                      documents: [...(prev.documents || []), selectedDoc]
+        <div>
+          <label className="block text-sm font-medium mb-1 text-gray-700">
+            Attach Documents
+          </label>
+          <div className="p-3 bg-gray-50 rounded-md">
+            {event.documents?.length > 0 ? (
+              <div className="space-y-2">
+                {event.documents.map((doc, index) => (
+                  <div key={index} className="flex items-center justify-between p-2 bg-white rounded border">
+                    <div className="flex items-center">
+                      <FileText size={16} className="text-blue-500 mr-2" />
+                      <span className="text-sm truncate max-w-xs">{doc.title || doc.fileName}</span>
+                    </div>
+                    <button
+                      onClick={() => setEvent(prev => ({
+                        ...prev,
+                        documents: prev.documents.filter((_, i) => i !== index)
+                      }))}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => {
+                    // This would normally open a document picker
+                    // For now we'll just navigate to document library
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new CustomEvent('open-document-library', {
+                        detail: { 
+                          childId: event.childId,
+                          onSelect: (selectedDoc) => {
+                            setEvent(prev => ({
+                              ...prev,
+                              documents: [...(prev.documents || []), selectedDoc]
+                            }));
+                          }
+                        }
+                      }));
+                    }
+                  }}
+                  className="w-full py-2 text-center text-sm text-blue-600 hover:text-blue-800"
+                >
+                  + Add More Documents
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  // This would normally open a document picker
+                  // For now we'll just navigate to document library
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('open-document-library', {
+                      detail: { 
+                        childId: event.childId,
+                        onSelect: (selectedDoc) => {
+                          setEvent(prev => ({
+                            ...prev,
+                            documents: [...(prev.documents || []), selectedDoc]
+                          }));
+                        }
+                      }
                     }));
                   }
-                }
-              }));
-            }
-          }}
-          className="w-full py-2 text-center text-sm text-blue-600 hover:text-blue-800"
-        >
-          + Add More Documents
-        </button>
-      </div>
-    ) : (
-      <button
-        onClick={() => {
-          // This would normally open a document picker
-          // For now we'll just navigate to document library
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('open-document-library', {
-              detail: { 
-                childId: event.childId,
-                onSelect: (selectedDoc) => {
-                  setEvent(prev => ({
-                    ...prev,
-                    documents: [...(prev.documents || []), selectedDoc]
-                  }));
-                }
-              }
-            }));
-          }
-        }}
-        className="w-full p-3 border border-dashed border-gray-300 rounded-md flex items-center justify-center"
-      >
-        <FileText size={20} className="text-gray-400 mr-2" />
-        <span className="text-sm text-gray-600">Select Documents</span>
-      </button>
-    )}
-  </div>
-</div>
+                }}
+                className="w-full p-3 border border-dashed border-gray-300 rounded-md flex items-center justify-center"
+              >
+                <FileText size={20} className="text-gray-400 mr-2" />
+                <span className="text-sm text-gray-600">Select Documents</span>
+              </button>
+            )}
+          </div>
+        </div>
 
-{/* Provider Selection */}
-<div>
-  <label className="block text-sm font-medium mb-1 text-gray-700">
-    Link to Provider
-  </label>
-  <div className="p-3 bg-gray-50 rounded-md">
-    {event.providers?.length > 0 ? (
-      <div className="space-y-2">
-        {event.providers.map((provider, index) => (
-          <div key={index} className="flex items-center justify-between p-2 bg-white rounded border">
-            <div className="flex items-center">
-              <User size={16} className="text-purple-500 mr-2" />
-              <span className="text-sm">{provider.name}</span>
-              {provider.specialty && (
-                <span className="text-xs text-gray-500 ml-2">({provider.specialty})</span>
-              )}
-            </div>
-            <button
-              onClick={() => setEvent(prev => ({
-                ...prev,
-                providers: prev.providers.filter((_, i) => i !== index)
-              }))}
-              className="text-red-500 hover:text-red-700"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        ))}
-        <button
-          onClick={() => {
-            // This would normally open a provider picker
-            // For now we'll just navigate to provider directory
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('open-provider-directory', {
-                detail: { 
-                  onSelect: (selectedProvider) => {
-                    setEvent(prev => ({
-                      ...prev,
-                      providers: [...(prev.providers || []), selectedProvider]
+        {/* Provider Selection */}
+        <div>
+          <label className="block text-sm font-medium mb-1 text-gray-700">
+            Link to Provider
+          </label>
+          <div className="p-3 bg-gray-50 rounded-md">
+            {event.providers?.length > 0 ? (
+              <div className="space-y-2">
+                {event.providers.map((provider, index) => (
+                  <div key={index} className="flex items-center justify-between p-2 bg-white rounded border">
+                    <div className="flex items-center">
+                      <User size={16} className="text-purple-500 mr-2" />
+                      <span className="text-sm">{provider.name}</span>
+                      {provider.specialty && (
+                        <span className="text-xs text-gray-500 ml-2">({provider.specialty})</span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setEvent(prev => ({
+                        ...prev,
+                        providers: prev.providers.filter((_, i) => i !== index)
+                      }))}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => {
+                    // This would normally open a provider picker
+                    // For now we'll just navigate to provider directory
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new CustomEvent('open-provider-directory', {
+                        detail: { 
+                          onSelect: (selectedProvider) => {
+                            setEvent(prev => ({
+                              ...prev,
+                              providers: [...(prev.providers || []), selectedProvider]
+                            }));
+                          }
+                        }
+                      }));
+                    }
+                  }}
+                  className="w-full py-2 text-center text-sm text-purple-600 hover:text-purple-800"
+                >
+                  + Add More Providers
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  // This would normally open a provider picker
+                  // For now we'll just navigate to provider directory
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('open-provider-directory', {
+                      detail: { 
+                        onSelect: (selectedProvider) => {
+                          setEvent(prev => ({
+                            ...prev,
+                            providers: [...(prev.providers || []), selectedProvider]
+                          }));
+                        }
+                      }
                     }));
                   }
-                }
-              }));
-            }
-          }}
-          className="w-full py-2 text-center text-sm text-purple-600 hover:text-purple-800"
-        >
-          + Add More Providers
-        </button>
-      </div>
-    ) : (
-      <button
-        onClick={() => {
-          // This would normally open a provider picker
-          // For now we'll just navigate to provider directory
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('open-provider-directory', {
-              detail: { 
-                onSelect: (selectedProvider) => {
-                  setEvent(prev => ({
-                    ...prev,
-                    providers: [...(prev.providers || []), selectedProvider]
-                  }));
-                }
-              }
-            }));
-          }
-        }}
-        className="w-full p-3 border border-dashed border-gray-300 rounded-md flex items-center justify-center"
-      >
-        <User size={20} className="text-gray-400 mr-2" />
-        <span className="text-sm text-gray-600">Select Provider</span>
-      </button>
-    )}
-  </div>
-</div>
+                }}
+                className="w-full p-3 border border-dashed border-gray-300 rounded-md flex items-center justify-center"
+              >
+                <User size={20} className="text-gray-400 mr-2" />
+                <span className="text-sm text-gray-600">Select Provider</span>
+              </button>
+            )}
+          </div>
+        </div>
+        
         {/* Recurring Event Toggle */}
         <div>
           <label className="flex items-center">
@@ -1259,31 +1252,31 @@ const handleSave = async () => {
           </div>
         )}
 
-<SmartReminderSuggestions 
-  eventType={event.eventType || eventType} 
-  onSelectReminder={handleAddReminder} 
-/>
+        <SmartReminderSuggestions 
+          eventType={event.eventType || eventType} 
+          onSelectReminder={handleAddReminder} 
+        />
 
-{selectedReminders.length > 0 && (
-  <div className="mb-4">
-    <h4 className="text-sm font-medium mb-2">Selected Reminders</h4>
-    <div className="flex flex-wrap gap-2">
-      {selectedReminders.map(minutes => (
-        <div key={minutes} className="flex items-center bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs">
-          {minutes >= 1440 ? `${minutes / 1440} day(s)` : 
-           minutes >= 60 ? `${minutes / 60} hour(s)` : 
-           `${minutes} minute(s)`} before
-          <button 
-            onClick={() => handleRemoveReminder(minutes)}
-            className="ml-1 text-blue-500 hover:text-blue-700"
-          >
-            <X size={12} />
-          </button>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
+        {selectedReminders.length > 0 && (
+          <div className="mb-4">
+            <h4 className="text-sm font-medium mb-2">Selected Reminders</h4>
+            <div className="flex flex-wrap gap-2">
+              {selectedReminders.map(minutes => (
+                <div key={minutes} className="flex items-center bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs">
+                  {minutes >= 1440 ? `${minutes / 1440} day(s)` : 
+                  minutes >= 60 ? `${minutes / 60} hour(s)` : 
+                  `${minutes} minute(s)`} before
+                  <button 
+                    onClick={() => handleRemoveReminder(minutes)}
+                    className="ml-1 text-blue-500 hover:text-blue-700"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         
         {/* Description */}
         <div>

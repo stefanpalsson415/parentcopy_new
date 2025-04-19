@@ -136,65 +136,51 @@ const EventsList = ({
   };
   
   // Render event action buttons
-  const EventActions = ({ event }) => {
-    const eventKey = getEventKey(event);
-    
-    // Only show action buttons if specifically enabled (for event lists that need them)
-    if (!showActionButtons) {
-      return null; // Don't show any action buttons for upcoming events
-    }
-    
-    if (!addedEvents[eventKey]) {
-      return (
-        <button 
-          onClick={(e) => {
-            e.stopPropagation(); // Prevent opening details modal
-            onEventAdd(event);
-          }}
-          className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
-        >
-          Add
-        </button>
-      );
-    }
-    
-    if (showAddedMessage[eventKey]) {
-      return (
-        <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded font-roboto flex items-center">
-          <Check size={12} className="mr-1" />
-          Added
-        </span>
-      );
-    }
-    
+const EventActions = ({ event }) => {
+  const eventKey = getEventKey(event);
+  
+  // Only show action buttons if specifically enabled (for event lists that need them)
+  if (!showActionButtons) {
+    return null; // Don't show any action buttons for upcoming events
+  }
+  
+  if (!addedEvents[eventKey]) {
     return (
-      <div className="flex space-x-1">
-        <button 
-          onClick={(e) => {
-            e.stopPropagation(); // Prevent opening details modal
-            onEventEdit(event);
-          }}
-          className="p-1 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100"
-          title="Edit event"
-        >
-          <Edit size={14} />
-        </button>
-        
-        {event.firestoreId && (
-          <button 
-            onClick={(e) => {
-              e.stopPropagation(); // Prevent opening details modal
-              onEventDelete(event);
-            }}
-            className="p-1 text-gray-500 hover:text-red-500 rounded-full hover:bg-gray-100"
-            title="Delete event"
-          >
-            <Trash2 size={14} />
-          </button>
-        )}
-      </div>
+      <button 
+        onClick={(e) => {
+          e.stopPropagation(); // Prevent opening details modal
+          onEventAdd(event);
+        }}
+        className="px-2 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 font-roboto"
+      >
+        Add
+      </button>
     );
-  };
+  }
+  
+  if (showAddedMessage[eventKey]) {
+    return (
+      <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded font-roboto flex items-center">
+        <Check size={12} className="mr-1" />
+        Added
+      </span>
+    );
+  }
+  
+  // If already in calendar, just show delete button
+  return (
+    <button 
+      onClick={(e) => {
+        e.stopPropagation(); // Prevent opening details modal
+        onEventDelete(event);
+      }}
+      className="p-1.5 text-gray-500 hover:text-red-500 rounded-full hover:bg-gray-100"
+      title="Delete event"
+    >
+      <Trash2 size={14} />
+    </button>
+  );
+};
   
   if (loading) {
     return (
@@ -296,7 +282,18 @@ const EventsList = ({
     <>
       {/* Show combined attendees for a better visualization */}
       {(() => {
-        // Collect all attendees from various sources
+        // Special handling for family meetings/cycle due dates
+        const isFamilyMeeting = 
+          (event.title && (event.title.includes('Cycle') && event.title.includes('Due Date'))) ||
+          (event.eventType === 'meeting' && event.category === 'meeting') ||
+          (event.linkedEntity?.type === 'meeting');
+        
+        // If it's a family meeting, show all family members
+        if (isFamilyMeeting && familyMembers.length > 0) {
+          return <AttendeeAvatars attendees={familyMembers} max={4} />;
+        }
+        
+        // For other events, follow normal logic
         const allAttendees = [
           // If event has explicit attendees, use those
           ...(event.attendees || []),
