@@ -17,6 +17,8 @@ import CalendarService from '../../../services/CalendarService';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useEvents } from '../../../contexts/EventContext';
 import CycleJourney from '../../cycles/CycleJourney';
+import eventStore from '../../../services/EventStore';
+import { useCycleDueDate } from '../../../hooks/useEvent';
 
 
 
@@ -117,6 +119,8 @@ const TasksTab = ({ onStartWeeklyCheckIn, onOpenFamilyMeeting }) => {
   const [existingDueDateEvent, setExistingDueDateEvent] = useState(null);
   const [cycleData, setCycleData] = useState(null);
 const [meetingDate, setMeetingDate] = useState(null);
+const { dueEvent, dueDate } = useCycleDueDate(familyId, currentWeek);
+
 
 
   
@@ -129,7 +133,23 @@ const [meetingDate, setMeetingDate] = useState(null);
     const [canScheduleMeeting, setCanScheduleMeeting] = useState(false);
 
   
-  // Add this useEffect near other useEffects in TasksTab.jsx
+ 
+    useEffect(() => {
+      // If we have a due date from the event hook and it's different from the survey due
+      if (dueDate && (!surveyDue || Math.abs(dueDate.getTime() - surveyDue.getTime()) > 60000)) {
+        console.log("Syncing date from calendar event:", dueDate, "Current state:", surveyDue);
+        
+        // Update the state
+        setSurveyDue(dueDate);
+        
+        // Also update database records
+        updateSurveySchedule(currentWeek, dueDate).catch(error => {
+          console.error("Error updating survey schedule:", error);
+        });
+      }
+    }, [dueDate, surveyDue, currentWeek]);
+ 
+    // Add this useEffect near other useEffects in TasksTab.jsx
 useEffect(() => {
   // Check if we need to synchronize the due date from calendar events
   const synchronizeDueDateFromCalendar = async () => {
@@ -727,9 +747,7 @@ if (selectedUser?.role === 'parent') {
     }
   };
   
- // src/components/dashboard/tabs/TasksTab.jsx (replace updateCycleDueDate function)
-
-// src/components/dashboard/tabs/TasksTab.jsx (replace updateCycleDueDate function)
+ // Replace the updateCycleDueDate function in src/components/dashboard/tabs/TasksTab.jsx
 
 const updateCycleDueDate = async (newDate, eventDetails = {}) => {
   if (!familyId || !currentUser) return false;
@@ -744,21 +762,25 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
     
     console.log(`Updating cycle due date to: ${newDate.toLocaleDateString()}`);
     
-    // 1. First update survey schedule in database
-    await updateSurveySchedule(currentWeek, newDate);
+    // Create a comprehensive event object
+    const dueDateEvent = {
+      title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
+      description: eventDetails.description || `Family meeting for Cycle ${currentWeek} to discuss survey results and set goals.`,
+      dateTime: newDate.toISOString(),
+      category: 'cycle-due-date',
+      eventType: 'cycle-due-date',
+      cycleNumber: currentWeek,
+      universalId: `cycle-due-date-${familyId}-${currentWeek}`
+    };
     
-    // 2. Find the existing due date event
-    const existingDueDateEvent = await findExistingDueDateEvent();
-    
-    // 3. Use CalendarService directly instead of EventContext
+    // Use the EventStore directly
     let result;
     if (existingDueDateEvent && existingDueDateEvent.firestoreId) {
       // Update existing event
-      result = await CalendarService.updateEvent(
+      result = await eventStore.updateEvent(
         existingDueDateEvent.firestoreId, 
         {
-          title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
-          description: eventDetails.description || `Due date for Cycle ${currentWeek} activities`,
+          ...dueDateEvent,
           start: {
             dateTime: newDate.toISOString(),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -766,45 +788,26 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
           end: {
             dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          category: 'cycle-due-date',
-          eventType: 'cycle-due-date',
-          cycleNumber: currentWeek,
-          universalId: `cycle-due-date-${familyId}-${currentWeek}`
+          }
         },
         currentUser.uid
       );
     } else {
       // Create new event
-      result = await CalendarService.addEvent(
-        {
-          title: eventDetails.title || `Cycle ${currentWeek} Due Date`,
-          description: eventDetails.description || `Due date for Cycle ${currentWeek} activities`,
-          start: {
-            dateTime: newDate.toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          end: {
-            dateTime: new Date(newDate.getTime() + 60 * 60 * 1000).toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          category: 'cycle-due-date',
-          eventType: 'cycle-due-date',
-          cycleNumber: currentWeek,
-          universalId: `cycle-due-date-${familyId}-${currentWeek}`
-        },
-        currentUser.uid
-      );
+      result = await eventStore.addEvent(dueDateEvent, currentUser.uid, familyId);
     }
     
     if (!result.success) {
       throw new Error(result.error || "Failed to update calendar");
     }
     
-    // 4. Update UI state
+    // Update UI state
     setSurveyDue(newDate);
     
-    // 5. Update week status for consistency
+    // Update survey schedule in database for consistency
+    await updateSurveySchedule(currentWeek, newDate);
+    
+    // Also update week status
     const updatedStatus = {
       ...weekStatus,
       [currentWeek]: {
@@ -817,11 +820,6 @@ const updateCycleDueDate = async (newDate, eventDetails = {}) => {
       weekStatus: updatedStatus,
       updatedAt: new Date().toISOString()
     }, familyId);
-    
-    // Force refresh of calendar components
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-    }
     
     // Success message
     createCelebration(

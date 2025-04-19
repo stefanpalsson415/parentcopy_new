@@ -5,11 +5,30 @@ import { collection, query, where, onSnapshot, doc, setDoc, updateDoc, deleteDoc
 import { useAuth } from './AuthContext';
 import { useFamily } from './FamilyContext';
 import CalendarOperations from '../utils/CalendarOperations';
+import React, { createContext, useContext } from 'react';
+import { useEvents } from '../hooks/useEvent';
+
 
 const EventContext = createContext();
 
 export function useEvents() {
   return useContext(EventContext);
+}
+
+export function useEvents() {
+  return useContext(EventContext);
+}
+
+// Provider component that makes Event data available
+export function EventProvider({ children }) {
+  // Use our new hook directly
+  const eventHook = useEvents();
+
+  return (
+    <EventContext.Provider value={eventHook}>
+      {children}
+    </EventContext.Provider>
+  );
 }
 
 export function EventProvider({ children }) {
