@@ -39,7 +39,8 @@ const RevisedFloatingCalendarWidget = () => {
     loading: eventsLoading, 
     addEvent, 
     updateEvent, 
-    deleteEvent 
+    deleteEvent,
+    refreshEvents 
   } = useEvents();
   
   // UI State
@@ -649,115 +650,164 @@ const handleEventAdd = async (event) => {
     }
   };
   
-  // Update event
-  // Update event
-const handleUpdateEvent = async (updatedEvent) => {
-  try {
-    setPendingAction('update');
-    
-    if (!updatedEvent || !updatedEvent.firestoreId) {
-      CalendarService.showNotification("Cannot update this event - no valid ID found", "error");
-      setPendingAction(null);
-      return;
-    }
-    
-    // Create updated event object with required fields
-    const eventUpdate = {
-      summary: updatedEvent.title,
-      description: updatedEvent.description || '',
-      location: updatedEvent.location || '',
+  const handleUpdateEvent = async (updatedEvent) => {
+    try {
+      setPendingAction('update');
       
-      // Include document and provider references
-      documents: updatedEvent.documents || [],
-      providers: updatedEvent.providers || [],
-      
-      // Include attendees
-      attendees: updatedEvent.attendees || [],
-      
-      // Child and parent associations
-      childId: updatedEvent.childId,
-      childName: updatedEvent.childName,
-      attendingParentId: updatedEvent.attendingParentId,
-      siblingIds: updatedEvent.siblingIds || [],
-      siblingNames: updatedEvent.siblingNames || [],
-      
-      // Reminders and additional context
-      reminders: updatedEvent.reminders,
-      notes: updatedEvent.notes || updatedEvent.extraDetails?.notes
-    };
-    
-    // Add date/time if available
-    if (updatedEvent.dateObj) {
-      eventUpdate.start = {
-        dateTime: updatedEvent.dateObj.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      };
-      
-      // Calculate end time
-      const endDate = updatedEvent.dateEndObj || new Date(updatedEvent.dateObj.getTime() + 60 * 60 * 1000);
-      eventUpdate.end = {
-        dateTime: endDate.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      };
-    }
-    
-    // Ensure we preserve AI metadata
-    eventUpdate.extraDetails = {
-      ...(updatedEvent.extraDetails || {}),
-      parsedWithAI: updatedEvent.extraDetails?.parsedWithAI || false,
-      extractionConfidence: updatedEvent.extraDetails?.extractionConfidence || null,
-      parsedFromImage: updatedEvent.extraDetails?.parsedFromImage || false,
-      originalText: updatedEvent.extraDetails?.originalText || '',
-      creationSource: updatedEvent.extraDetails?.creationSource || 'manual',
-      
-      // Provider details for appointments
-      ...(updatedEvent.category === 'appointment' && updatedEvent.providers?.[0] ? {
-        providerName: updatedEvent.providers[0].name,
-        providerSpecialty: updatedEvent.providers[0].specialty,
-        providerPhone: updatedEvent.providers[0].phone,
-        providerAddress: updatedEvent.providers[0].address
-      } : {}),
-      
-      // Birthday details
-      ...(updatedEvent.category === 'birthday' ? {
-        birthdayChildName: updatedEvent.extraDetails?.birthdayChildName,
-        birthdayChildAge: updatedEvent.extraDetails?.birthdayChildAge
-      } : {})
-    };
-      
-      // Update event using EventContext
-      const result = await updateEvent(updatedEvent.firestoreId, eventUpdate);
-      
-      if (result.success) {
-        // Close edit mode and update selected event
-        setIsEditingEvent(false);
-        setSelectedEvent({
-          ...selectedEvent,
-          ...updatedEvent
-        });
-        
-        // Show notification
-        CalendarService.showNotification("Event updated successfully", "success");
-        
-        // Show success animation
-        setShowSuccess(true);
-        setTimeout(() => {
-          setShowSuccess(false);
-        }, 2000);
-        
-        // Refresh events
-        setLastRefresh(Date.now());
-      } else {
-        CalendarService.showNotification(result.error || "Failed to update event", "error");
+      if (!updatedEvent || !updatedEvent.firestoreId) {
+        CalendarService.showNotification("Cannot update this event - no valid ID found", "error");
+        setPendingAction(null);
+        return;
       }
       
-      setPendingAction(null);
-    } catch (error) {
-      console.error("Error updating event:", error);
-      CalendarService.showNotification("Failed to update event: " + error.message, "error");
-      setPendingAction(null);
-    }
-  };
+      // Create updated event object with required fields
+      const eventUpdate = {
+        summary: updatedEvent.title,
+        description: updatedEvent.description || '',
+        location: updatedEvent.location || '',
+        
+        // Include document and provider references
+        documents: updatedEvent.documents || [],
+        providers: updatedEvent.providers || [],
+        
+        // Include attendees
+        attendees: updatedEvent.attendees || [],
+        
+        // Child and parent associations
+        childId: updatedEvent.childId,
+        childName: updatedEvent.childName,
+        attendingParentId: updatedEvent.attendingParentId,
+        siblingIds: updatedEvent.siblingIds || [],
+        siblingNames: updatedEvent.siblingNames || [],
+        
+        // Reminders and additional context
+        reminders: updatedEvent.reminders,
+        notes: updatedEvent.notes || updatedEvent.extraDetails?.notes
+      };
+      
+      // Add date/time if available - make sure to include ALL date formats
+      if (updatedEvent.dateObj || updatedEvent.dateTime || updatedEvent.start?.dateTime) {
+        // Get the new date from whatever format is available
+        let newDate;
+        if (updatedEvent.dateObj instanceof Date) {
+          newDate = updatedEvent.dateObj;
+        } else if (updatedEvent.dateTime) {
+          newDate = new Date(updatedEvent.dateTime);
+        } else if (updatedEvent.start?.dateTime) {
+          newDate = new Date(updatedEvent.start.dateTime);
+        } else {
+          newDate = new Date(); // Fallback
+        }
+        
+        // Calculate end time (preserve duration if possible)
+        let endDate;
+        if (updatedEvent.dateEndObj instanceof Date) {
+          endDate = updatedEvent.dateEndObj;
+        } else if (updatedEvent.endDateTime) {
+          endDate = new Date(updatedEvent.endDateTime);
+        } else if (updatedEvent.end?.dateTime) {
+          endDate = new Date(updatedEvent.end.dateTime);
+        } else {
+          // Default to 1 hour duration
+          endDate = new Date(newDate.getTime() + 60 * 60 * 1000);
+        }
+        
+        // Ensure all date formats are included for compatibility
+        eventUpdate.date = newDate.toISOString();
+        eventUpdate.dateTime = newDate.toISOString();
+        eventUpdate.dateObj = newDate;
+        eventUpdate.dateEndObj = endDate;
+        eventUpdate.endDateTime = endDate.toISOString();
+        eventUpdate.start = {
+          dateTime: newDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        };
+        eventUpdate.end = {
+          dateTime: endDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        };
+      }
+      
+      // Ensure we preserve AI metadata
+      eventUpdate.extraDetails = {
+        ...(updatedEvent.extraDetails || {}),
+        parsedWithAI: updatedEvent.extraDetails?.parsedWithAI || false,
+        extractionConfidence: updatedEvent.extraDetails?.extractionConfidence || null,
+        parsedFromImage: updatedEvent.extraDetails?.parsedFromImage || false,
+        originalText: updatedEvent.extraDetails?.originalText || '',
+        creationSource: updatedEvent.extraDetails?.creationSource || 'manual',
+        
+        // Provider details for appointments
+        ...(updatedEvent.category === 'appointment' && updatedEvent.providers?.[0] ? {
+          providerName: updatedEvent.providers[0].name,
+          providerSpecialty: updatedEvent.providers[0].specialty,
+          providerPhone: updatedEvent.providers[0].phone,
+          providerAddress: updatedEvent.providers[0].address
+        } : {}),
+        
+        // Birthday details
+        ...(updatedEvent.category === 'birthday' ? {
+          birthdayChildName: updatedEvent.extraDetails?.birthdayChildName,
+          birthdayChildAge: updatedEvent.extraDetails?.birthdayChildAge
+        } : {})
+      };
+        
+        // Update event using EventContext
+        const result = await updateEvent(updatedEvent.firestoreId, eventUpdate);
+        
+        if (result.success) {
+          // Close edit mode
+          setIsEditingEvent(false);
+          
+          // Update selected event with ALL date properties
+          setSelectedEvent(null); // Clear first to prevent stale data
+          
+          // Clear event cache to force reload with new data
+          resetEventCache();
+          
+          // Show notification
+          CalendarService.showNotification("Event updated successfully", "success");
+          
+          // Show success animation
+          setShowSuccess(true);
+          setTimeout(() => {
+            setShowSuccess(false);
+          }, 2000);
+          
+          // Trigger a comprehensive refresh strategy
+          
+          // 1. Try context's refresh function if available
+          if (typeof refreshEvents === 'function') {
+            try {
+              await refreshEvents();
+            } catch (refreshError) {
+              console.warn("Error using context refresh:", refreshError);
+            }
+          }
+          
+          // 2. Update last refresh timestamp to trigger re-renders
+          setLastRefresh(Date.now());
+          
+          // 3. Force DOM-level refresh for components not connected to context
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+            
+            // 4. Delayed refresh to catch any edge cases
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+            }, 500);
+          }
+        } else {
+          CalendarService.showNotification(result.error || "Failed to update event", "error");
+        }
+        
+        setPendingAction(null);
+      } catch (error) {
+        console.error("Error updating event:", error);
+        CalendarService.showNotification("Failed to update event: " + error.message, "error");
+        setPendingAction(null);
+      }
+    };
   
   // Navigate to a different view based on the event's linked entity
   const navigateToLinkedEntity = (event) => {
@@ -1136,7 +1186,7 @@ const getEventsForSelectedDate = () => {
             </div>
           )}
           
-          {/* Selected Date Events Component */}
+{/* Selected Date Events Component */}
 <EventsList
   events={filterEventsByView(getEventsForSelectedDate())}
   onEventClick={handleEventClick}
@@ -1148,7 +1198,7 @@ const getEventsForSelectedDate = () => {
   loading={eventsLoading || loading}
   title={`Events for ${selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
   emptyMessage="No events scheduled for this date"
-  showActionButtons={true} /* Show action buttons for selected date events */
+  showActionButtons={false} /* Changed to false - these events are already in the calendar */
   renderBadges={(event) => (
     <>
       {event.extraDetails?.parsedWithAI && (
@@ -1163,8 +1213,8 @@ const getEventsForSelectedDate = () => {
       )}
     </>
   )}
+  familyMembers={familyMembers} /* Added this for consistency */
 />
-
 {/* Upcoming Events Component */}
 
 <EventsList
