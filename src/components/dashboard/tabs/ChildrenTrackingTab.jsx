@@ -1384,14 +1384,29 @@ const handleProviderDelete = async (providerId) => {
 
  
 
-// Modified useEffect for safer AI insights loading
+// Modified useEffect for safer AI insights loading with debouncing
 useEffect(() => {
+  let isMounted = true; // Track if component is mounted
   const loadChildrenData = async () => {
     try {
       if (!familyId) return;
       
       setLoading(true);
       console.log("Loading children data...");
+      
+      // Set fallback insights immediately to ensure UI isn't empty
+      const fallbackInsights = [
+        {
+          title: "Getting Started",
+          type: "recommendation",
+          content: "Track your children's health, growth, and routines to get personalized insights.",
+          priority: "medium",
+          childId: null
+        }
+      ];
+      
+      // Set these fallback insights right away
+      setAiInsights(fallbackInsights);
       
       // Add a timeout to prevent UI freeze if Firebase is slow
       const timeoutPromise = new Promise((_, reject) => 
@@ -1452,67 +1467,80 @@ useEffect(() => {
       } catch (timeoutError) {
         console.warn("Children data loading timed out, showing empty state");
         childrenDataResult = {}; // Empty state if timeout
-        setTabError("Loading took too long. Some data may be unavailable.");
-      }
-      
-      // Set the children data
-      setChildrenData(childrenDataResult);
-      
-      // Set active child to the first child if none is selected
-      if (!activeChild && familyMembers.filter(m => m.role === 'child').length > 0) {
-        setActiveChild(familyMembers.filter(m => m.role === 'child')[0].id);
-      }
-      
-      // Update notification counts
-      updateNotificationCounts(childrenDataResult);
-      
-      // Set loading to false before AI generation
-      setLoading(false);
-      
-      // Generate fallback insights immediately instead of waiting for AI
-      const fallbackInsights = [
-        {
-          title: "Getting Started",
-          type: "recommendation",
-          content: "Track your children's health, growth, and routines to get personalized insights.",
-          priority: "medium",
-          childId: null
+        if (isMounted) {
+          setTabError("Loading took too long. Some data may be unavailable.");
         }
-      ];
+      }
       
-      setAiInsights(fallbackInsights);
+      // Set the children data if component is still mounted
+      if (isMounted) {
+        setChildrenData(childrenDataResult);
+        
+        // Set active child to the first child if none is selected
+        if (!activeChild && familyMembers.filter(m => m.role === 'child').length > 0) {
+          setActiveChild(familyMembers.filter(m => m.role === 'child')[0].id);
+        }
+        
+        // Update notification counts
+        updateNotificationCounts(childrenDataResult);
+        
+        // Set loading to false before AI generation
+        setLoading(false);
+      }
       
-      // Attempt to load AI insights in the background with explicit error handling
-      if (Object.keys(childrenDataResult).length > 0) {
-        try {
-          const localInsights = await AllieAIService.generateChildInsights(familyId, childrenDataResult);
-          if (localInsights && localInsights.length > 0) {
-            setAiInsights(localInsights);
+      // Use a debounced AI insights generation with a 5-second delay
+      // to prevent multiple simultaneous API calls
+      if (isMounted && Object.keys(childrenDataResult).length > 0) {
+        // Use localInsights instead of AI to prevent API overload
+        const localInsights = generateLocalInsights(childrenDataResult);
+        if (localInsights && localInsights.length > 0 && isMounted) {
+          setAiInsights(localInsights);
+        }
+        
+        // Optional: Load AI insights after a delay to avoid freezing
+        // setTimeout is less likely to cause infinite loops than direct API calls
+        setTimeout(() => {
+          if (isMounted) {
+            try {
+              // Use the synchronous local version instead of async AI call
+              // to prevent potential infinite loops
+              const enhancedInsights = generateLocalInsights(childrenDataResult);
+              if (enhancedInsights && enhancedInsights.length > 0 && isMounted) {
+                setAiInsights(enhancedInsights);
+              }
+            } catch (insightError) {
+              console.error("Failed to generate enhanced insights:", insightError);
+              // Already have fallback insights set
+            }
           }
-        } catch (insightError) {
-          console.error("Failed to generate AI insights:", insightError);
-          // We already have fallback insights set, so no need to do anything here
-        }
+        }, 5000); // 5-second delay
       }
     } catch (error) {
       console.error("Error loading children data:", error);
-      setLoading(false);
-      setTabError("There was an error loading children data. Please try refreshing the page.");
-      // Set fallback empty data
-      setChildrenData({});
-      // Set basic fallback insights
-      setAiInsights([{
-        title: "Getting Started",
-        type: "recommendation",
-        content: "Start tracking your children's health, growth, and routines to get personalized insights.",
-        priority: "medium",
-        childId: null
-      }]);
+      if (isMounted) {
+        setLoading(false);
+        setTabError("There was an error loading children data. Please try refreshing the page.");
+        // Set fallback empty data
+        setChildrenData({});
+        // Set basic fallback insights
+        setAiInsights([{
+          title: "Getting Started",
+          type: "recommendation",
+          content: "Start tracking your children's health, growth, and routines to get personalized insights.",
+          priority: "medium",
+          childId: null
+        }]);
+      }
     }
   };
   
   loadChildrenData();
-}, [familyId, familyMembers, activeChild, updateNotificationCounts]);
+  
+  // Cleanup function to prevent state updates after unmount
+  return () => {
+    isMounted = false;
+  };
+}, [familyId, familyMembers, activeChild, updateNotificationCounts, generateLocalInsights]);
   
   // Handle form submission for different data types
   const handleFormSubmit = async (formType) => {

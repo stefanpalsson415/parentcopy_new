@@ -76,60 +76,86 @@ class ClaudeService {
   }
 
   async generateResponse(messages, context, options = {}) {
-    try {
-      // Format system prompt with family context
-      const systemPrompt = this.formatSystemPrompt(context || {});
+  try {
+    // Add a call tracking mechanism to prevent infinite loops
+    if (!this._callTracker) {
+      this._callTracker = {
+        count: 0,
+        lastReset: Date.now()
+      };
+    }
+    
+    // Reset counter every 10 seconds
+    if (Date.now() - this._callTracker.lastReset > 10000) {
+      this._callTracker.count = 0;
+      this._callTracker.lastReset = Date.now();
+    }
+    
+    // Increment call count
+    this._callTracker.count++;
+    
+    // Prevent recursive calls that might cause freezing
+    if (this._callTracker.count > 5) {
+      console.warn("Too many API calls in a short period, throttling to prevent loops");
+      return "I'm processing multiple requests. Please wait a moment before asking another question.";
+    }
+    
+    // Format system prompt with family context
+    const systemPrompt = this.formatSystemPrompt(context || {});
+    
+    // Log for debugging
+    console.log("Claude API request via proxy:", { 
+      messagesCount: messages.length, 
+      systemPromptLength: systemPrompt.length,
+      model: this.model,
+      mockMode: this.mockMode,
+      temperature: options.temperature ||.7,
+      maxTokens: options.maxTokens || 4000
+    });
+    
+    // Check if messages is an array of our internal message format
+    let formattedMessages;
+    if (messages.length > 0 && messages[0].sender) {
+      // Convert to Claude's expected format
+      formattedMessages = messages.map(msg => ({
+        role: msg.sender === 'allie' ? 'assistant' : 'user',
+        content: msg.text || ""
+      }));
+    } else {
+      // Assume messages are already in Claude's format
+      formattedMessages = messages;
+    }
+    
+    // Reduce context size if needed (Claude has token limits)
+    // Keep the most recent messages, ensuring we have context but don't exceed limits
+    if (formattedMessages.length > 20) {
+      const contextLimit = 20;
+      // Always keep the last message
+      const lastMessage = formattedMessages[formattedMessages.length - 1];
       
-      // Log for debugging
-      console.log("Claude API request via proxy:", { 
-        messagesCount: messages.length, 
-        systemPromptLength: systemPrompt.length,
-        model: this.model,
-        mockMode: this.mockMode,
-        temperature: options.temperature ||.7,
-        maxTokens: options.maxTokens || 4000
-      });
+      // Pick a selection of older messages for context
+      // Get every other message from the rest to reduce context size
+      const oldMessages = formattedMessages.slice(0, formattedMessages.length - 1)
+        .filter((_, index) => index % 2 === 0)
+        .slice(-contextLimit + 1);
       
-      // Check if messages is an array of our internal message format
-      let formattedMessages;
-      if (messages.length > 0 && messages[0].sender) {
-        // Convert to Claude's expected format
-        formattedMessages = messages.map(msg => ({
-          role: msg.sender === 'allie' ? 'assistant' : 'user',
-          content: msg.text || ""
-        }));
-      } else {
-        // Assume messages are already in Claude's format
-        formattedMessages = messages;
-      }
+      formattedMessages = [...oldMessages, lastMessage];
       
-      // Reduce context size if needed (Claude has token limits)
-      // Keep the most recent messages, ensuring we have context but don't exceed limits
-      if (formattedMessages.length > 20) {
-        const contextLimit = 20;
-        // Always keep the last message
-        const lastMessage = formattedMessages[formattedMessages.length - 1];
-        
-        // Pick a selection of older messages for context
-        // Get every other message from the rest to reduce context size
-        const oldMessages = formattedMessages.slice(0, formattedMessages.length - 1)
-          .filter((_, index) => index % 2 === 0)
-          .slice(-contextLimit + 1);
-        
-        formattedMessages = [...oldMessages, lastMessage];
-        
-        console.log(`Reduced message context from ${messages.length} to ${formattedMessages.length} messages`);
-      }
-      
-      // Check for calendar confirmation or calendar request  
-      const lastUserMessage = formattedMessages[formattedMessages.length - 1].content || "";
+      console.log(`Reduced message context from ${messages.length} to ${formattedMessages.length} messages`);
+    }
+    
+    // Check for calendar confirmation or calendar request  
+    const lastUserMessage = formattedMessages[formattedMessages.length - 1].content || "";
 
-      // Check if the previous message had a calendar confirmation token  
-      let previousMessage = "";  
-      if (formattedMessages.length > 1) {  
-        previousMessage = formattedMessages[formattedMessages.length - 2].content || "";  
-      }
+    // Check if the previous message had a calendar confirmation token  
+    let previousMessage = "";  
+    if (formattedMessages.length > 1) {  
+      previousMessage = formattedMessages[formattedMessages.length - 2].content || "";  
+    }
 
+    // If a calendar request is being explicitly requested, process it.
+    // Otherwise skip the automatic detection to prevent recursive API calls
+    if (options.forceCalendarCheck) {
       const confirmationMatch = previousMessage.match(/\<calendar\_confirmation token="(\[^"\]+)"\>/);  
       if (confirmationMatch && confirmationMatch[1]) {  
         const confirmationToken = confirmationMatch[1];  
@@ -163,7 +189,7 @@ class ClaudeService {
             return this.processCalendarRequest(calendarEventData, context);  
           }  
         } catch (calendarError) {  
-          console.error("Error extracting calendar event:", calendarError);  
+          console.error("Error extracting calendar event:", calendarError);    
           // Continue with normal Claude processing if calendar extraction fails  
         }  
       }
@@ -341,51 +367,75 @@ class ClaudeService {
     }
   }
 
-  // New version using UnifiedParserService  
-  async extractCalendarRequest(message) {  
-    try {  
-      // Check if this is a calendar-related request first (keep this quick check)  
-      const calendarKeywords = [  
-        'add to calendar', 'schedule', 'appointment', 'meeting', 'event',   
-        'calendar', 'book', 'plan', 'sync', 'reminder', 'save date', 'date'  
-      ];  
-        
-      const isCalendarRequest = calendarKeywords.some(keyword =>   
-        message.toLowerCase().includes(keyword)  
-      );  
-        
-      if (!isCalendarRequest) return null;  
-        
-      // Use UnifiedParserService to extract event details  
-      const UnifiedParserService = (await import('./UnifiedParserService')).default;  
-      const parsedEvent = await UnifiedParserService.parseEvent(message);  
-        
-      if (!parsedEvent || !parsedEvent.title) {  
-        console.warn("UnifiedParserService failed to extract event details");  
-        return null;  
-      }  
-        
-      console.log("AI-parsed event:", parsedEvent);  
-        
-      // Convert the parsed event to the format expected by processCalendarRequest  
-      return {  
-        type: parsedEvent.eventType || 'event',  
-        title: parsedEvent.title || 'New Event',  
-        dateTime: parsedEvent.dateTime, // ISO date string  
-        endDateTime: parsedEvent.endDateTime,  
-        location: parsedEvent.location || '',  
-        description: parsedEvent.description || '',  
-        childName: parsedEvent.childName || null,  
-        childId: parsedEvent.childId || null,  
-        hostParent: parsedEvent.hostName || '',  
-        extraDetails: parsedEvent.extraDetails || {},  
-        originalText: message  
-      };  
-    } catch (error) {  
-      console.error("Error extracting calendar event with AI:", error);  
+  // Updated version with loop protection
+async extractCalendarRequest(message) {  
+  try {
+    // Check if we're already processing a calendar request to prevent recursion
+    if (this._processingCalendarRequest) {
+      console.log("Calendar request processing already in progress, skipping to prevent loops");
+      return null;
+    }
+    
+    // Set a flag to prevent recursive calls
+    this._processingCalendarRequest = true;
+    
+    // Add a timeout to force release the lock after 5 seconds
+    setTimeout(() => {
+      this._processingCalendarRequest = false;
+    }, 5000);
+
+    // Check if this is a calendar-related request first (keep this quick check)  
+    const calendarKeywords = [  
+      'add to calendar', 'schedule', 'appointment', 'meeting', 'event',   
+      'calendar', 'book', 'plan', 'sync', 'reminder', 'save date', 'date'  
+    ];  
+      
+    const isCalendarRequest = calendarKeywords.some(keyword =>   
+      message.toLowerCase().includes(keyword)  
+    );  
+      
+    if (!isCalendarRequest) {
+      this._processingCalendarRequest = false;
+      return null;  
+    }
+      
+    // Use UnifiedParserService to extract event details  
+    const UnifiedParserService = (await import('./UnifiedParserService')).default;  
+    const parsedEvent = await UnifiedParserService.parseEvent(message);  
+      
+    if (!parsedEvent || !parsedEvent.title) {  
+      console.warn("UnifiedParserService failed to extract event details");
+      this._processingCalendarRequest = false;
       return null;  
     }  
-  }
+      
+    console.log("AI-parsed event:", parsedEvent);  
+      
+    // Convert the parsed event to the format expected by processCalendarRequest  
+    const result = {  
+      type: parsedEvent.eventType || 'event',  
+      title: parsedEvent.title || 'New Event',  
+      dateTime: parsedEvent.dateTime, // ISO date string  
+      endDateTime: parsedEvent.endDateTime,  
+      location: parsedEvent.location || '',  
+      description: parsedEvent.description || '',  
+      childName: parsedEvent.childName || null,  
+      childId: parsedEvent.childId || null,  
+      hostParent: parsedEvent.hostName || '',  
+      extraDetails: parsedEvent.extraDetails || {},  
+      originalText: message  
+    };
+    
+    // Release the lock
+    this._processingCalendarRequest = false;
+    return result;
+  } catch (error) {  
+    console.error("Error extracting calendar event with AI:", error);
+    // Make sure to release the lock even if there's an error
+    this._processingCalendarRequest = false;
+    return null;  
+  }  
+}
 
   async processCalendarRequest(eventData, context) {  
     try {  
