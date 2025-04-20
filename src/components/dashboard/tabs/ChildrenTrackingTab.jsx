@@ -701,6 +701,51 @@ const getDefaultInsights = () => {
   ];
 };
 
+// Add this new function to ChildrenTrackingTab.jsx
+const handleVoiceTask = async (text) => {
+  try {
+    setAllieMessage({
+      type: 'info',
+      text: `Processing task: "${text}"`
+    });
+    
+    // Use the AllieAIService to process the task
+    const result = await AllieAIService.processTaskFromChat(
+      text,
+      familyId,
+      currentUser?.uid
+    );
+    
+    if (result.success) {
+      setAllieMessage({
+        type: 'success',
+        text: `Added "${result.task.title}" to your tasks${result.task.assignedToName ? ` and assigned it to ${result.task.assignedToName}` : ''}.`
+      });
+      
+      // Expand the task board section to show the new task
+      setExpandedSections(prev => ({...prev, taskBoard: true}));
+      
+      // Scroll to the task board
+      setTimeout(() => {
+        const taskBoardSection = document.querySelector('#task-board-section');
+        if (taskBoardSection) {
+          taskBoardSection.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 500);
+    } else {
+      setAllieMessage({
+        type: 'error',
+        text: `Sorry, I couldn't add that task: ${result.error}`
+      });
+    }
+  } catch (error) {
+    console.error("Error handling voice task:", error);
+    setAllieMessage({
+      type: 'error',
+      text: 'Sorry, there was an error processing your task. Please try again.'
+    });
+  }
+};
 
 const generateAiInsights = useCallback(async (data) => {
   try {
@@ -879,7 +924,10 @@ const generateAiInsights = useCallback(async (data) => {
       // Process the recorded text
       if (recordingText && recordingText !== 'Listening...') {
         processVoiceCommand(recordingText);
-      }
+      }else if (lowerText.includes('task') || lowerText.includes('todo') || 
+      lowerText.includes('remind me') || lowerText.includes('add to list')) {
+handleVoiceTask(text);
+}
     };
 
     recognition.start();
@@ -3625,14 +3673,14 @@ const handleRemoveItem = async (itemType, childId, itemId) => {
                                         )}
                                         
 {/* Family Task Board section - moved to top */}
-<div className="border border-gray-200 rounded-lg bg-white mb-6">
+<div id="task-board-section" className="border border-gray-200 rounded-lg bg-white mb-6">
   <button
     onClick={() => setExpandedSections(prev => ({...prev, taskBoard: !prev.taskBoard}))}
     className="w-full flex items-center justify-between p-3 font-medium font-roboto"
   >
     <div className="flex items-center">
       <GripVertical size={18} className="mr-2 text-gray-500" />
-      Family Task Board
+      <h2 className="text-xl font-bold font-roboto m-0">Family Task Board</h2>
     </div>
     {expandedSections.taskBoard ? (
       <ChevronUp size={18} className="text-gray-500" />

@@ -218,6 +218,41 @@ class ClaudeService {
           }  
         }
       }
+      // Check if the last message appears to be a task/todo request
+// This can be outside the calendar check condition as it's separate functionality
+const taskIndicators = [
+  'add task', 'add a task', 'create task', 'create a task',
+  'add todo', 'add a todo', 'create todo', 'create a todo',
+  'add to my list', 'add to list', 'add to tasks', 
+  'remind me to', 'don\'t forget to', 'need to', 'chore'
+];
+
+const isLikelyTaskRequest = taskIndicators.some(indicator =>
+  lastUserMessage.toLowerCase().includes(indicator)
+);
+
+if (isLikelyTaskRequest) {
+  console.log("Detected likely task request in latest message");
+  
+  try {
+    // Import AllieAIService dynamically
+    const AllieAIService = (await import('./AllieAIService')).default;
+    
+    // Process the task
+    const result = await AllieAIService.processTaskFromChat(
+      lastUserMessage,
+      context.familyId || '',
+      auth.currentUser?.uid
+    );
+    
+    if (result.success) {
+      return `I've added "${result.task.title}" to your tasks${result.task.assignedToName ? ` and assigned it to ${result.task.assignedToName}` : ''}. You'll find it in the ${result.task.column === 'this-week' ? 'This Week' : result.task.column === 'in-progress' ? 'In Progress' : 'Upcoming'} column on your task board.`;
+    }
+  } catch (taskError) {
+    console.error("Error processing task request:", taskError);
+    // Continue with normal Claude processing if task handling fails
+  }
+}
       
       // If we have too many messages, consider using a focused subset
       // for non-calendar queries to avoid responding to everything at once

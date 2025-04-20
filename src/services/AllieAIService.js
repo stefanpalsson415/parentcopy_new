@@ -833,6 +833,193 @@ async saveAppointmentToDatabase(familyId, childId, appointmentDetails) {
   }
 }
 
+
+// Add this new method to AllieAIService.js
+async processTaskFromChat(message, familyId, userId) {
+  try {
+    if (!familyId) return { success: false, error: "Family ID is required" };
+    
+    console.log("Processing task from chat:", message);
+    
+    // Get family context for additional info
+    const familyContext = await this.getFamilyContext(familyId);
+    
+    // Use UnifiedParserService to extract task details
+    const UnifiedParserService = (await import('./UnifiedParserService')).default;
+    const taskDetails = await UnifiedParserService.parseTodo(message, familyContext);
+    
+    if (!taskDetails || !taskDetails.text) {
+      return { 
+        success: false, 
+        error: "Could not determine task details from your message" 
+      };
+    }
+    
+    console.log("Parsed task details:", taskDetails);
+    
+    // Determine which family member this task is assigned to
+    let assignedTo = null;
+    let assignedToName = null;
+    
+    // Check if a specific family member was mentioned
+    if (taskDetails.assignedTo) {
+      // Check if this matches any family member
+      const familyMembers = familyContext.familyMembers || [];
+      const matchedMember = familyMembers.find(member => 
+        member.name.toLowerCase().includes(taskDetails.assignedTo.toLowerCase())
+      );
+      
+      if (matchedMember) {
+        assignedTo = matchedMember.id;
+        assignedToName = matchedMember.name;
+      }
+    }
+    
+    // Determine category based on parsed category or infer from content
+    let category = taskDetails.category || "household";
+    if (category === "general") {
+      // Try to infer a better category from the content
+      const taskText = taskDetails.text.toLowerCase();
+      if (taskText.includes("kid") || taskText.includes("child") || 
+          taskText.includes("school") || taskText.includes("homework")) {
+        category = "parenting";
+      } else if (taskText.includes("shop") || taskText.includes("buy") || 
+                taskText.includes("store") || taskText.includes("pick up")) {
+        category = "errands";
+      } else if (taskText.includes("talk") || taskText.includes("date") || 
+                taskText.includes("partner") || taskText.includes("spouse")) {
+        category = "relationship";
+      } else if (taskText.includes("work") || taskText.includes("office") || 
+                taskText.includes("email") || taskText.includes("boss")) {
+        category = "work";
+      }
+    }
+    
+    // Determine priority based on content and words like "urgent", "important", etc.
+    let priority = "medium";
+    const taskText = taskDetails.text.toLowerCase();
+    if (taskText.includes("urgent") || taskText.includes("emergency") || 
+        taskText.includes("asap") || taskText.includes("immediately")) {
+      priority = "high";
+    } else if (taskText.includes("low priority") || taskText.includes("when you get a chance") || 
+              taskText.includes("eventually") || taskText.includes("sometime")) {
+      priority = "low";
+    }
+    
+    // Determine which column to add the task to based on due date
+    let column = "upcoming";
+    if (taskDetails.dueDate) {
+      const dueDate = new Date(taskDetails.dueDate);
+      const today = new Date();
+      const oneWeekFromNow = new Date();
+      oneWeekFromNow.setDate(today.getDate() + 7);
+      
+      if (dueDate <= oneWeekFromNow) {
+        column = "this-week";
+      }
+      
+      // If due date is today or past due, put in "in-progress"
+      if (dueDate.setHours(0, 0, 0, 0) <= today.setHours(0, 0, 0, 0)) {
+        column = "in-progress";
+      }
+    }
+    
+    // Create the task object for Kanban
+    const task = {
+      title: taskDetails.text,
+      description: taskDetails.notes || "",
+      dueDate: taskDetails.dueDate,
+      priority: priority,
+      category: category,
+      assignedTo: assignedTo,
+      assignedToName: assignedToName,
+      column: column,
+      familyId: familyId,
+      createdAt: new Date().toISOString(),
+      createdBy: userId,
+      updatedAt: new Date().toISOString(),
+      subtasks: [],
+      comments: [],
+      completed: false
+    };
+    
+    // Add to Firestore kanbanTasks collection
+    try {
+      const db = (await import('./firebase')).db;
+      const { collection, addDoc } = (await import('firebase/firestore'));
+      
+      const docRef = await addDoc(collection(db, "kanbanTasks"), task);
+      console.log("Task added with ID:", docRef.id);
+      
+      // Add a calendar event if due date exists
+      if (taskDetails.dueDate) {
+        try {
+          const CalendarService = (await import('./CalendarService')).default;
+          
+          const dueDate = new Date(taskDetails.dueDate);
+          // Set to 9:00 AM if no specific time
+          if (dueDate.getHours() === 0 && dueDate.getMinutes() === 0) {
+            dueDate.setHours(9, 0, 0, 0);
+          }
+          
+          // End time is 30 minutes later
+          const endDate = new Date(dueDate);
+          endDate.setMinutes(endDate.getMinutes() + 30);
+          
+          const calendarEvent = {
+            title: `Task: ${taskDetails.text}`,
+            summary: `Task: ${taskDetails.text}`,
+            description: taskDetails.notes || `Task from Allie chat`,
+            location: '',
+            start: {
+              dateTime: dueDate.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            end: {
+              dateTime: endDate.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            category: "task",
+            eventType: "task",
+            familyId: familyId,
+            taskId: docRef.id,
+            reminders: {
+              useDefault: true
+            }
+          };
+          
+          await CalendarService.addEvent(calendarEvent, userId);
+        } catch (calendarError) {
+          console.error("Error creating calendar event for task:", calendarError);
+          // Continue - calendar event is not critical
+        }
+      }
+      
+      // Force a UI refresh by dispatching a custom event
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('kanban-task-added', {
+          detail: { taskId: docRef.id }
+        }));
+      }
+      
+      return { 
+        success: true, 
+        taskId: docRef.id,
+        task: task,
+        message: `Successfully added "${taskDetails.text}" to your tasks${assignedToName ? ` and assigned it to ${assignedToName}` : ''}.`
+      };
+    } catch (firestoreError) {
+      console.error("Error saving task to Firestore:", firestoreError);
+      return { success: false, error: firestoreError.message };
+    }
+  } catch (error) {
+    console.error("Error processing task from chat:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+
+
 // Replace with:
 async addAppointmentToCalendar(appointmentDetails) {
   try {

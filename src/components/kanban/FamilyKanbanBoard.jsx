@@ -113,7 +113,19 @@ const FamilyKanbanBoard = () => {
       }
     );
     
-    return () => unsubscribe();
+    // Also listen for custom event when task is added from chat
+  const handleTaskAdded = () => {
+    console.log("New task added from chat, refreshing...");
+    // No need to do anything as the Firestore listener will update automatically
+  };
+
+  window.addEventListener('kanban-task-added', handleTaskAdded);
+
+  return () => {
+    unsubscribe();
+    window.removeEventListener('kanban-task-added', handleTaskAdded);
+  };
+    
   }, [familyId]);
   
   // Filter tasks based on search and filters
