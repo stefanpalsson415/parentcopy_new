@@ -546,12 +546,15 @@ const AllieChat = () => {
         // Try to process specialized requests
         let handled = false;
         
-        // Check for todos
-        if (currentMessageText.toLowerCase().includes('todo') || 
-            currentMessageText.toLowerCase().includes('to-do') ||
-            currentMessageText.toLowerCase().includes('task')) {
-          handled = await processSpecificRequest(currentMessageText, 'todo');
-        }
+        // Check for todos - be more specific to avoid false positives
+if ((currentMessageText.toLowerCase().includes('add task') || 
+currentMessageText.toLowerCase().includes('create task') || 
+currentMessageText.toLowerCase().includes('new task') || 
+currentMessageText.toLowerCase().includes('add to-do') || 
+currentMessageText.toLowerCase().includes('add todo')) && 
+!currentMessageText.toLowerCase().includes('?')) {
+handled = await processSpecificRequest(currentMessageText, 'todo');
+}
         
         // Check for provider-related requests
         if (!handled && (
@@ -570,6 +573,19 @@ const AllieChat = () => {
             currentMessageText.toLowerCase().includes('event'))) {
           handled = await processMessageForEvents(currentMessageText);
         }
+
+        // Check for survey-related questions
+if (currentMessageText.toLowerCase().includes('survey') || 
+currentMessageText.toLowerCase().includes('invisible parentaltasks') || 
+currentMessageText.toLowerCase().includes('visible parentaltasks') || 
+currentMessageText.toLowerCase().includes('invisible household') || 
+currentMessageText.toLowerCase().includes('visible household') || 
+currentMessageText.toLowerCase().includes('cycle')) {
+// Don't try to parse this as a specialized request
+// Let the general AI response handler deal with this
+console.log("Detected survey-related question, using general AI response");
+handled = false;
+}
         
         // If we handled the request with a specialized parser, we're done
         if (handled) {

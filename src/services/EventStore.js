@@ -557,6 +557,24 @@ async refreshEvents(userId, familyId = null, cycleNumber = null) {
     // Process results
     querySnapshot.forEach((doc) => {
       const eventData = doc.data();
+      
+      // Convert string dates to Date objects for consistent handling
+      if (eventData.dateTime && !eventData.dateObj) {
+        eventData.dateObj = new Date(eventData.dateTime);
+      }
+      
+      if (eventData.endDateTime && !eventData.dateEndObj) {
+        eventData.dateEndObj = new Date(eventData.endDateTime);
+      }
+      
+      if (eventData.start?.dateTime && !eventData.dateObj) {
+        eventData.dateObj = new Date(eventData.start.dateTime);
+      }
+      
+      if (eventData.end?.dateTime && !eventData.dateEndObj) {
+        eventData.dateEndObj = new Date(eventData.end.dateTime);
+      }
+      
       const standardizedEvent = this.standardizeEvent({
         ...eventData,
         firestoreId: doc.id
@@ -581,10 +599,17 @@ async refreshEvents(userId, familyId = null, cycleNumber = null) {
       }
     }
     
-    // Notify listeners
-    events.forEach(event => {
-      this.notifyListeners('update', event);
-    });
+    // Notify listeners with a small delay to ensure event processing
+    setTimeout(() => {
+      events.forEach(event => {
+        this.notifyListeners('update', event);
+      });
+      
+      // Also dispatch a DOM event for overall refresh
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+      }
+    }, 50);
     
     return events;
   } catch (error) {

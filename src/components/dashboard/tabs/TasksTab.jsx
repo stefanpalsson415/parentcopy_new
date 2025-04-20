@@ -1602,10 +1602,6 @@ const createNewHabit = async (isRefresh = false) => {
   cycleType="family"
   currentCycle={currentWeek}
   cycleData={{
-    balance: {
-      mama: surveyDue ? (cycleData?.surveyData?.mamaPercentage || 50) : 50,
-      papa: surveyDue ? (100 - (cycleData?.surveyData?.mamaPercentage || 50)) : 50
-    },
     meeting: {
       scheduled: !!meetingDate,
       scheduledDate: meetingDate || null,

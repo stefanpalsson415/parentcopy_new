@@ -821,26 +821,57 @@ const handleSave = async () => {
     Date*
   </label>
   <input
-    type="date"
-    value={event.dateTime ? new Date(event.dateTime).toISOString().split('T')[0] : ''}
-    onChange={(e) => {
-      const date = new Date(event.dateTime || new Date());
-      const newDate = new Date(e.target.value);
-      date.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+  type="date"
+  value={event.dateTime ? new Date(event.dateTime).toISOString().split('T')[0] : ''}
+  onChange={(e) => {
+    // Create a valid date from the input value
+    const newDate = new Date(e.target.value);
+    if (isNaN(newDate.getTime())) {
+      console.error("Invalid date input:", e.target.value);
+      return; // Don't proceed with invalid date
+    }
+    
+    // Create a fresh date object based on the current date/time with updated year/month/day
+    const date = new Date(event.dateTime || new Date());
+    date.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+    
+    // Also create a fresh end date that preserves the original time
+    let endDate = event.endDateTime ? new Date(event.endDateTime) : new Date(date);
+    endDate.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+    
+    // Log what we're updating for debugging
+    console.log("Updating event date to:", date.toISOString());
+    
+    // IMPORTANT: Update ALL date-related fields for consistency
+    setEvent(prev => ({ 
+      ...prev, 
+      // ISO string formats
+      dateTime: date.toISOString(),
+      endDateTime: endDate.toISOString(),
+      date: date.toISOString(),
       
-      // Also update end time to match start date
-      let endDate = event.endDateTime ? new Date(event.endDateTime) : new Date(date);
-      endDate.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+      // Date objects
+      dateObj: date,
+      dateEndObj: endDate,
       
-      setEvent(prev => ({ 
-        ...prev, 
+      // Nested date formats
+      start: {
+        ...(prev.start || {}),
         dateTime: date.toISOString(),
-        endDateTime: endDate.toISOString()
-      }));
-    }}
-    className="w-full border rounded-md p-2 text-sm"
-    required
-  />
+        date: date.toISOString().split('T')[0],
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        ...(prev.end || {}),
+        dateTime: endDate.toISOString(),
+        date: endDate.toISOString().split('T')[0],
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      }
+    }));
+  }}
+  className="w-full border rounded-md p-2 text-sm"
+  required
+/>
   {event.dateTime && (
     <div className="text-xs text-gray-500 mt-1">
       {new Date(event.dateTime).toLocaleDateString('en-US', { 

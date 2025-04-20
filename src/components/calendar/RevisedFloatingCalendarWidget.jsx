@@ -663,27 +663,42 @@ const handleUpdateEvent = async (updatedEvent) => {
     
     console.log("Updating event with data:", updatedEvent);
     
-    // Get the new date from whatever format is available
-    let newDate;
-    if (updatedEvent.dateObj instanceof Date && !isNaN(updatedEvent.dateObj)) {
-      newDate = updatedEvent.dateObj;
-    } else if (updatedEvent.dateTime) {
-      newDate = new Date(updatedEvent.dateTime);
-    } else if (updatedEvent.start?.dateTime) {
-      newDate = new Date(updatedEvent.start.dateTime);
-    } else {
-      newDate = new Date(); // Fallback
-    }
-    
-    // Validate the date - this is critical for event updates
-    if (isNaN(newDate.getTime())) {
-      console.error("Invalid date for event update:", updatedEvent);
-      CalendarService.showNotification("Invalid date format for event update", "error");
-      setPendingAction(null);
-      return;
-    }
-    
-    console.log("Event update with date:", newDate.toISOString());
+    // IMPORTANT: Extract and validate date with detailed logging
+// We need to carefully track where the date is coming from
+let newDate, dateSrc;
+
+// Order of date sources by preference
+if (updatedEvent.dateObj instanceof Date && !isNaN(updatedEvent.dateObj.getTime())) {
+  newDate = updatedEvent.dateObj;
+  dateSrc = "dateObj";
+} else if (updatedEvent.dateTime) {
+  newDate = new Date(updatedEvent.dateTime);
+  dateSrc = "dateTime";
+} else if (updatedEvent.start?.dateTime) {
+  newDate = new Date(updatedEvent.start.dateTime);
+  dateSrc = "start.dateTime";
+} else if (updatedEvent.date) {
+  newDate = new Date(updatedEvent.date);
+  dateSrc = "date";
+} else {
+  newDate = new Date(); // Last resort fallback
+  dateSrc = "fallback";
+}
+
+// More detailed validation of the date - verify with explicit logging
+if (isNaN(newDate.getTime())) {
+  console.error("INVALID DATE DETECTED FOR EVENT UPDATE:", {
+    dateObj: updatedEvent.dateObj,
+    dateTime: updatedEvent.dateTime,
+    startDateTime: updatedEvent.start?.dateTime,
+    date: updatedEvent.date
+  });
+  CalendarService.showNotification("Invalid date format for event update", "error");
+  setPendingAction(null);
+  return;
+}
+
+console.log(`Event date update from source ${dateSrc}:`, newDate.toISOString());
     
     // Calculate end time (preserve duration if possible)
     let endDate;

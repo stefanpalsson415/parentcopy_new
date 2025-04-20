@@ -194,7 +194,6 @@ export function useEvents(options = {}) {
     // In src/hooks/useEvent.js
 // Enhance the refreshEvents function around line 180-200
 
-// NEW CODE
 const refreshEvents = useCallback(async () => {
   if (!currentUser) return;
   
@@ -202,15 +201,14 @@ const refreshEvents = useCallback(async () => {
   setLoading(true);
   
   try {
-    // First, clear any cached events in the EventStore
-    await eventStore.clearCache();
+    // First, explicitly clear the event cache in EventStore
+    eventStore.clearCache();
     
-    // Force reload from database with a clean slate
-    const refreshedEvents = await eventStore.getEventsForUser(
+    // Then force reload with a completely new fetch directly from DB
+    const refreshedEvents = await eventStore.refreshEvents(
       currentUser.uid, 
-      new Date(new Date().setDate(new Date().getDate() - 7)), // 7 days ago
-      new Date(new Date().setDate(new Date().getDate() + 90)), // 90 days ahead
-      true // force full reload
+      familyId, 
+      cycleNumber
     );
     
     console.log(`Refreshed ${refreshedEvents.length} events from database`);
@@ -235,17 +233,26 @@ const refreshEvents = useCallback(async () => {
       filteredEvents = filteredEvents.filter(filterBy);
     }
     
-    // Make sure we reset the state completely with the new data
+    // Completely reset the state to force rerender
     setEvents([]);
+    
+    // Small delay to ensure DOM updates before adding new events
     setTimeout(() => {
       setEvents(filteredEvents);
     }, 50);
+    
+    // Force additional DOM refresh with an event
+    if (typeof window !== 'undefined') {
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+      }, 100);
+    }
   } catch (error) {
     console.error("Error refreshing events:", error);
   } finally {
     setLoading(false);
   }
-}, [currentUser, childId, category, filterBy, familyId]);
+}, [currentUser, childId, category, filterBy, familyId, cycleNumber]);
   
     return {
       events,

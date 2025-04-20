@@ -1,3 +1,4 @@
+// src/components/dashboard/tabs/ChildrenTrackingTab.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Calendar, ChevronDown, ChevronUp, Clock, Heart, AlertCircle, 
@@ -20,13 +21,23 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import DatabaseService from '../../../services/DatabaseService';
-import CalendarService from '../../../services/CalendarService';
+// Remove direct CalendarService import
 import AllieAIService from '../../../services/AllieAIService';
+// Import CalendarOperations utilities
+import { 
+  standardizeDate, 
+  createStandardEvent, 
+  formatDate as formatCalendarDate, 
+  safeCalendarOperation 
+} from '../../../services/CalendarOperations';
 import UserAvatar from '../../common/UserAvatar';
 import EnhancedEventManager from '../../calendar/EnhancedEventManager';
 import DocumentLibrary from '../../document/DocumentLibrary';
 import ProviderDirectory from '../../document/ProviderDirectory';
 import FamilyKanbanBoard from '../../kanban/FamilyKanbanBoard';
+// Import useEvents from EventContext (make sure it's properly destructured below)
+import { useEvents } from '../../../contexts/EventContext';
+
 
 
 
@@ -78,6 +89,17 @@ const ChildrenTrackingTab = () => {
   const searchInputRef = useRef(null);
   const microphoneRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // Properly destructure all required methods
+const { 
+  events, 
+  loading: eventsLoading, 
+  error: eventsError, 
+  addEvent, 
+  updateEvent, 
+  deleteEvent, 
+  refreshEvents 
+} = useEvents();
   
   // Notification badge counts
   const [notifications, setNotifications] = useState({
@@ -86,81 +108,143 @@ const ChildrenTrackingTab = () => {
     routines: 0
   });
 
-  // Helper function to convert modal data to event format
-  const convertModalDataToEventFormat = (modalType, data) => {
-    const baseEvent = {
-      childId: data.childId,
-      childName: getChildName(data.childId)
-    };
-    
-    switch (modalType) {
-      case 'appointment':
-        return {
-          ...baseEvent,
-          ...data,
-          title: data.title || '',
-          description: data.notes || '',
-          location: data.location || '',
-          dateTime: data.date ? `${data.date}T${data.time || '09:00'}` : new Date().toISOString(),
-          category: 'medical',
-          eventType: 'appointment',
-          providerId: data.providerId,
-          providerDetails: data.providerDetails,
-          documents: data.documents || []
-        };
-        
-      case 'growth':
-        return {
-          ...baseEvent,
-          ...data,
-          title: `Growth Measurement - ${formatDate(data.date || new Date().toISOString())}`,
-          description: data.notes || '',
-          dateTime: data.date ? `${data.date}T12:00:00` : new Date().toISOString(),
-          category: 'growth',
-          eventType: 'growth',
-          height: data.height || '',
-          weight: data.weight || '',
-          shoeSize: data.shoeSize || '',
-          clothingSize: data.clothingSize || ''
-        };
-        
-      case 'routine':
-        return {
-          ...baseEvent,
-          ...data,
-          title: data.title || '',
-          description: data.notes || '',
-          dateTime: new Date().toISOString(),
-          category: 'activity',
-          eventType: 'activity',
-          isRecurring: (data.days || []).length > 0,
-          recurrence: {
-            frequency: 'weekly',
-            days: data.days || [],
-            endDate: ''
-          },
-          startTime: data.startTime || '09:00',
-          endTime: data.endTime || ''
-        };
-        
-      case 'handmedown':
-        return {
-          ...baseEvent,
-          ...data,
-          title: data.name || '',
-          description: data.description || '',
-          dateTime: data.readyDate ? `${data.readyDate}T12:00:00` : new Date().toISOString(),
-          category: 'clothes',
-          eventType: 'clothes',
-          size: data.size || '',
-          used: data.used || false,
-          imageUrl: data.imageUrl || ''
-        };
-        
-      default:
-        return { ...baseEvent };
-    }
+// Helper function to convert modal data to event format using CalendarOperations
+const convertModalDataToEventFormat = (modalType, data) => {
+  const baseEvent = {
+    childId: data.childId,
+    childName: getChildName(data.childId)
   };
+  
+  switch (modalType) {
+    case 'appointment': {
+      // Create date object from date and time using standardizeDate
+      let dateObj;
+      if (data.date) {
+        dateObj = new Date(data.date);
+        if (data.time) {
+          const [hours, minutes] = data.time.split(':');
+          dateObj.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+        } else {
+          dateObj.setHours(9, 0, 0, 0); // Default to 9:00 AM
+        }
+      } else {
+        dateObj = new Date();
+      }
+      
+      // Use standardizeDate to ensure valid date
+      const standardizedDate = standardizeDate(dateObj);
+      
+      // Create end date (30 minutes later)
+      const endDate = new Date(standardizedDate);
+      endDate.setMinutes(endDate.getMinutes() + 30);
+      
+      // Use createStandardEvent to ensure complete event structure
+      return createStandardEvent({
+        ...baseEvent,
+        title: data.title || 'New Appointment',
+        description: data.notes || '',
+        location: data.location || '',
+        start: standardizedDate,
+        end: endDate,
+        category: 'medical',
+        eventType: 'appointment',
+        providerId: data.providerId,
+        providerDetails: data.providerDetails,
+        documents: data.documents || []
+      });
+    }
+      
+    case 'growth': {
+      // Standardize date
+      let dateObj = data.date ? new Date(data.date) : new Date();
+      dateObj.setHours(12, 0, 0, 0); // Default to noon
+      const standardizedDate = standardizeDate(dateObj);
+      
+      // Create end date (30 minutes later)
+      const endDate = new Date(standardizedDate);
+      endDate.setMinutes(endDate.getMinutes() + 30);
+      
+      return createStandardEvent({
+        ...baseEvent,
+        title: `Growth Measurement - ${formatCalendarDate(standardizedDate, 'short')}`,
+        description: data.notes || '',
+        start: standardizedDate,
+        end: endDate,
+        category: 'growth',
+        eventType: 'growth',
+        height: data.height || '',
+        weight: data.weight || '',
+        shoeSize: data.shoeSize || '',
+        clothingSize: data.clothingSize || ''
+      });
+    }
+      
+    case 'routine': {
+      // Standardize date
+      const standardizedDate = standardizeDate(new Date());
+      
+      // Parse start and end times if available
+      let startDate = new Date(standardizedDate);
+      let endDate = new Date(standardizedDate);
+      
+      if (data.startTime) {
+        const [startHours, startMinutes] = data.startTime.split(':');
+        startDate.setHours(parseInt(startHours), parseInt(startMinutes), 0, 0);
+      }
+      
+      if (data.endTime) {
+        const [endHours, endMinutes] = data.endTime.split(':');
+        endDate.setHours(parseInt(endHours), parseInt(endMinutes), 0, 0);
+      } else {
+        // Default to 30 minutes if no end time
+        endDate.setTime(startDate.getTime() + 30 * 60 * 1000);
+      }
+      
+      return createStandardEvent({
+        ...baseEvent,
+        title: data.title || 'New Routine',
+        description: data.notes || '',
+        start: startDate,
+        end: endDate,
+        category: 'activity',
+        eventType: 'activity',
+        isRecurring: (data.days || []).length > 0,
+        recurrence: {
+          frequency: 'weekly',
+          days: data.days || [],
+          endDate: ''
+        }
+      });
+    }
+      
+    case 'handmedown': {
+      // Standardize date
+      let dateObj = data.readyDate ? new Date(data.readyDate) : new Date();
+      dateObj.setHours(12, 0, 0, 0); // Default to noon
+      const standardizedDate = standardizeDate(dateObj);
+      
+      // Create end date (30 minutes later)
+      const endDate = new Date(standardizedDate);
+      endDate.setMinutes(endDate.getMinutes() + 30);
+      
+      return createStandardEvent({
+        ...baseEvent,
+        title: data.name || 'New Hand-Me-Down',
+        description: data.description || '',
+        start: standardizedDate,
+        end: endDate,
+        category: 'clothes',
+        eventType: 'clothes',
+        size: data.size || '',
+        used: data.used || false,
+        imageUrl: data.imageUrl || ''
+      });
+    }
+      
+    default:
+      return createStandardEvent({ ...baseEvent });
+  }
+};
 
   // Helper function to convert event data back to modal format
   const convertEventToModalData = (modalType, result, originalData) => {
@@ -241,26 +325,35 @@ const ChildrenTrackingTab = () => {
         type: 'eventManager',
         props: {
           initialEvent: eventData,
-          initialChildId: data.childId,
-          eventType: modalType,
-          mode: data.id ? 'edit' : 'create',
+          eventType: 'appointment',
           onSave: (result) => {
             if (result.success) {
-              // Convert the event data back to our domain model
+              // The calendar event is already saved by EnhancedEventManager using addEvent/updateEvent
+              // We just need to convert the event data back to our domain model and save domain-specific data
               const savedData = convertEventToModalData(modalType, result, data);
               
-              // Update the database based on the event type
+              // Add the calendar event ID to the domain data
+              if (result.eventId || result.firestoreId || result.universalId) {
+                savedData.calendarId = result.eventId || result.firestoreId || result.universalId;
+              }
+              
+              // Update the database based on the event type - but don't try to create another calendar event
               switch (modalType) {
                 case 'appointment':
+                  // Skip calendar creation in handleAppointmentFormSubmit since EnhancedEventManager already did it
+                  savedData.skipCalendarCreation = true;
                   handleAppointmentFormSubmit(savedData);
                   break;
                 case 'growth':
+                  savedData.skipCalendarCreation = true;
                   handleGrowthFormSubmit(savedData);
                   break;
                 case 'routine':
+                  savedData.skipCalendarCreation = true;
                   handleRoutineFormSubmit(savedData);
                   break;
                 case 'handmedown':
+                  savedData.skipCalendarCreation = true;
                   handleHandMeDownFormSubmit(savedData);
                   break;
               }
@@ -274,8 +367,7 @@ const ChildrenTrackingTab = () => {
           },
           onCancel: () => setActiveComponent(null)
         }
-      });
-    } else {
+      });    } else {
       // For other types like 'provider', keep using the original modal
       setActiveModal(modalType);
       setModalData(data);
@@ -287,17 +379,15 @@ const ChildrenTrackingTab = () => {
     }
   };
 
-  // Format date for display
-  const formatDate = useCallback((dateString) => {
-    if (!dateString) return "Not scheduled";
-    
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  }, []);
+  // Format date for display using CalendarOperations
+const formatDate = useCallback((dateString) => {
+  if (!dateString) return "Not scheduled";
+  
+  // Use standardizeDate to ensure valid date
+  const date = standardizeDate(dateString);
+  // Use CalendarOperations formatDate with 'medium' format
+  return formatCalendarDate(date, 'medium');
+}, []);
 
   // Get child name by ID
   const getChildName = useCallback((childId) => {
@@ -1474,154 +1564,148 @@ useEffect(() => {
     }
   };
   
-  // Handle appointment form submission
-  const handleAppointmentFormSubmit = async (formData) => {
-    const { childId, id, providerId } = formData;
-    
-    // Validate required fields
-    if (!formData.title) {
-      throw new Error("Please enter an appointment title");
-    }
-    
-    if (!formData.date) {
-      throw new Error("Please select an appointment date");
-    }
-    
-    if (!formData.time) {
-      throw new Error("Please select an appointment time");
-    }
-    
-    // Format appointment data
-    const appointmentData = {
-      ...formData,
-      id: id || Date.now().toString(),
-      createdAt: new Date().toISOString()
-    };
-    
-    // If providerId is provided, get the provider data
-    if (providerId) {
-      const provider = healthcareProviders.find(p => p.id === providerId);
-      if (provider) {
-        appointmentData.doctor = provider.name;
-        appointmentData.providerDetails = {
-          id: provider.id,
-          name: provider.name,
-          specialty: provider.specialty,
-          phone: provider.phone,
-          email: provider.email,
-          address: provider.address
-        };
-      }
-    }
-    
-    // Update local state
-    const updatedData = {...childrenData};
-    
-    if (id) {
-      // Update existing appointment
-      const appointmentIndex = updatedData[childId].medicalAppointments.findIndex(
-        app => app.id === id
-      );
-      
-      if (appointmentIndex !== -1) {
-        updatedData[childId].medicalAppointments[appointmentIndex] = appointmentData;
-      }
-    } else {
-      // Add new appointment
-      if (!updatedData[childId].medicalAppointments) {
-        updatedData[childId].medicalAppointments = [];
-      }
-      
-      updatedData[childId].medicalAppointments.push(appointmentData);
-    }
-    
-    // Update state and save to Firebase
-    setChildrenData(updatedData);
-    
-    // Save to Firebase
-    const docRef = doc(db, "families", familyId);
-    await updateDoc(docRef, {
-      [`childrenData.${childId}.medicalAppointments`]: updatedData[childId].medicalAppointments
-    });
-    
-    // If the appointment has a future date, add it to the calendar
-    const appointmentDate = new Date(formData.date);
-    if (appointmentDate > new Date() && !formData.completed) {
-      try {
-        // Parse time strings
-        const [hours, minutes] = formData.time.split(':');
-        appointmentDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-        
-        // End time is 30 minutes after start
-        const endDate = new Date(appointmentDate);
-        endDate.setMinutes(endDate.getMinutes() + 30);
-        
-        // Get child name with proper formatting
-        const childName = getChildName(childId);
-        
-        // Create event object for the calendar with proper title formatting
-        const calendarEvent = {
-          summary: `${childName}'s ${formData.title}`,
-          title: `${childName}'s ${formData.title}`, // Add title for consistency
-          description: formData.notes || `Medical appointment: ${formData.title}`,
-          location: formData.providerDetails?.address || '',
-          start: {
-            dateTime: appointmentDate.toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          end: {
-            dateTime: endDate.toISOString(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          },
-          childId: childId,
-          childName: childName,
-          category: 'medical',
-          eventType: 'appointment',
-          familyId: familyId,
-          reminders: {
-            useDefault: false,
-            overrides: [
-              { method: 'popup', minutes: 24 * 60 }, // 1 day before
-              { method: 'popup', minutes: 60 } // 1 hour before
-            ]
-          },
-          // Add a unique identifier to prevent duplicates
-          uniqueId: `appointment-${childId}-${Date.now()}`
-        };
-        
-        console.log("Creating calendar event:", calendarEvent.summary);
-        
-        // Add to calendar using the standard addEvent method
-        if (CalendarService) {
-          const result = await CalendarService.addEvent(calendarEvent, currentUser?.uid);
-          
-          // If calendar event was created successfully, and we have an ID, store it with the appointment
-          if (result.success && (result.eventId || result.firestoreId)) {
-            const calendarId = result.eventId || result.firestoreId;
-            
-            // Find the appointment in the updated data and add the calendarId
-            const apptIndex = updatedData[childId].medicalAppointments.findIndex(
-              app => app.id === appointmentData.id
-            );
-            
-            if (apptIndex !== -1) {
-              updatedData[childId].medicalAppointments[apptIndex].calendarId = calendarId;
-              
-              // Update Firebase with the calendar reference
-              await updateDoc(docRef, {
-                [`childrenData.${childId}.medicalAppointments`]: updatedData[childId].medicalAppointments
-              });
-            }
-          }
-        }
-      } catch (calendarError) {
-        console.error("Error adding to calendar:", calendarError);
-        // Don't block the save if calendar fails
-      }
-    }
-    
-    return true;
+  // Handle appointment form submission - updated to use CalendarOperations and useEvents hook
+const handleAppointmentFormSubmit = async (formData) => {
+  const { childId, id, providerId, skipCalendarCreation } = formData;
+  
+  // Validate required fields
+  if (!formData.title) {
+    throw new Error("Please enter an appointment title");
+  }
+  
+  if (!formData.date) {
+    throw new Error("Please select an appointment date");
+  }
+  
+  if (!formData.time) {
+    throw new Error("Please select an appointment time");
+  }
+  
+  // Format appointment data
+  const appointmentData = {
+    ...formData,
+    id: id || Date.now().toString(),
+    createdAt: new Date().toISOString()
   };
+  
+  // If providerId is provided, get the provider data
+  if (providerId) {
+    const provider = healthcareProviders.find(p => p.id === providerId);
+    if (provider) {
+      appointmentData.doctor = provider.name;
+      appointmentData.providerDetails = {
+        id: provider.id,
+        name: provider.name,
+        specialty: provider.specialty,
+        phone: provider.phone,
+        email: provider.email,
+        address: provider.address
+      };
+    }
+  }
+  
+  // Update local state
+  const updatedData = {...childrenData};
+  
+  if (id) {
+    // Update existing appointment
+    const appointmentIndex = updatedData[childId].medicalAppointments.findIndex(
+      app => app.id === id
+    );
+    
+    if (appointmentIndex !== -1) {
+      updatedData[childId].medicalAppointments[appointmentIndex] = appointmentData;
+    }
+  } else {
+    // Add new appointment
+    if (!updatedData[childId].medicalAppointments) {
+      updatedData[childId].medicalAppointments = [];
+    }
+    
+    updatedData[childId].medicalAppointments.push(appointmentData);
+  }
+  
+  // Update state and save to Firebase
+  setChildrenData(updatedData);
+  
+  // Save to Firebase
+  const docRef = doc(db, "families", familyId);
+  await updateDoc(docRef, {
+    [`childrenData.${childId}.medicalAppointments`]: updatedData[childId].medicalAppointments
+  });
+  
+  // If the appointment has a future date and we're not skipping calendar creation
+  // (when EnhancedEventManager has already created the event)
+  const appointmentDate = new Date(formData.date);
+  if (appointmentDate > new Date() && !formData.completed && !skipCalendarCreation) {
+    try {
+      // Use standardizeDate to ensure valid date
+      const [hours, minutes] = formData.time.split(':');
+      appointmentDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+      const standardizedDate = standardizeDate(appointmentDate);
+      
+      // End time is 30 minutes after start
+      const endDate = new Date(standardizedDate);
+      endDate.setMinutes(endDate.getMinutes() + 30);
+      
+      // Get child name with proper formatting
+      const childName = getChildName(childId);
+      
+      // Create event object using createStandardEvent
+      const calendarEvent = createStandardEvent({
+        title: `${childName}'s ${formData.title}`,
+        summary: `${childName}'s ${formData.title}`,
+        description: formData.notes || `Medical appointment: ${formData.title}`,
+        location: formData.providerDetails?.address || '',
+        start: standardizedDate,
+        end: endDate,
+        childId: childId,
+        childName: childName,
+        category: 'medical',
+        eventType: 'appointment',
+        familyId: familyId,
+        reminders: {
+          useDefault: false,
+          overrides: [
+            { method: 'popup', minutes: 24 * 60 }, // 1 day before
+            { method: 'popup', minutes: 60 } // 1 hour before
+          ]
+        },
+        // Add a unique identifier to prevent duplicates
+        uniqueId: `appointment-${childId}-${Date.now()}`
+      });
+      
+      console.log("Creating calendar event:", calendarEvent.summary);
+      
+      // Use the addEvent from useEvents hook instead of CalendarService
+      const result = await addEvent(calendarEvent);
+      
+      // If calendar event was created successfully, update the appointment with the event ID
+      if (result.success && (result.eventId || result.firestoreId || result.universalId)) {
+        const calendarId = result.eventId || result.firestoreId || result.universalId;
+        
+        // Find the appointment in the updated data and add the calendarId
+        const apptIndex = updatedData[childId].medicalAppointments.findIndex(
+          app => app.id === appointmentData.id
+        );
+        
+        if (apptIndex !== -1) {
+          updatedData[childId].medicalAppointments[apptIndex].calendarId = calendarId;
+          
+          // Update Firebase with the calendar reference
+          await updateDoc(docRef, {
+            [`childrenData.${childId}.medicalAppointments`]: updatedData[childId].medicalAppointments
+          });
+        }
+      }
+    } catch (calendarError) {
+      console.error("Error adding to calendar:", calendarError);
+      // Don't block the save if calendar fails
+    }
+  }
+  
+  return true;
+};
 
   // Handle growth form submission
   const handleGrowthFormSubmit = async (formData) => {
@@ -1685,57 +1769,59 @@ useEffect(() => {
     return true;
   };
   
-  // Handle routine form submission
-  const handleRoutineFormSubmit = async (formData) => {
-    const { childId, id } = formData;
+  // Handle routine form submission - updated to use CalendarOperations and useEvents hook
+const handleRoutineFormSubmit = async (formData) => {
+  const { childId, id, skipCalendarCreation } = formData;
+  
+  // Validate required fields
+  if (!formData.title || formData.days.length === 0 || !formData.startTime) {
+    throw new Error("Please fill in title, days, and start time");
+  }
+  
+  // Format routine data
+  const routineData = {
+    ...formData,
+    id: id || Date.now().toString(),
+    createdAt: new Date().toISOString()
+  };
+  
+  // Update local state
+  const updatedData = {...childrenData};
+  
+  if (id) {
+    // Update existing routine
+    const routineIndex = updatedData[childId].routines.findIndex(
+      r => r.id === id
+    );
     
-    // Validate required fields
-    if (!formData.title || formData.days.length === 0 || !formData.startTime) {
-      throw new Error("Please fill in title, days, and start time");
+    if (routineIndex !== -1) {
+      updatedData[childId].routines[routineIndex] = routineData;
+    }
+  } else {
+    // Add new routine
+    if (!updatedData[childId].routines) {
+      updatedData[childId].routines = [];
     }
     
-    // Format routine data
-    const routineData = {
-      ...formData,
-      id: id || Date.now().toString(),
-      createdAt: new Date().toISOString()
-    };
-    
-    // Update local state
-    const updatedData = {...childrenData};
-    
-    if (id) {
-      // Update existing routine
-      const routineIndex = updatedData[childId].routines.findIndex(
-        r => r.id === id
-      );
-      
-      if (routineIndex !== -1) {
-        updatedData[childId].routines[routineIndex] = routineData;
-      }
-    } else {
-      // Add new routine
-      if (!updatedData[childId].routines) {
-        updatedData[childId].routines = [];
-      }
-      
-      updatedData[childId].routines.push(routineData);
-    }
-    
-    // Update state and save to Firebase
-    setChildrenData(updatedData);
-    
-    // Save to Firebase
-    const docRef = doc(db, "families", familyId);
-    await updateDoc(docRef, {
-      [`childrenData.${childId}.routines`]: updatedData[childId].routines
-    });
-    
-    // Try to add to calendar if it's a recurring event
-    if (formData.days.length > 0) {
-      try {
-        // For each day of the week, create a recurring event
-        formData.days.forEach(async (day) => {
+    updatedData[childId].routines.push(routineData);
+  }
+  
+  // Update state and save to Firebase
+  setChildrenData(updatedData);
+  
+  // Save to Firebase
+  const docRef = doc(db, "families", familyId);
+  await updateDoc(docRef, {
+    [`childrenData.${childId}.routines`]: updatedData[childId].routines
+  });
+  
+  // Try to add to calendar if it's a recurring event and we're not skipping calendar creation
+  if (formData.days.length > 0 && !skipCalendarCreation) {
+    try {
+      // For each day of the week, create a recurring event
+      for (const day of formData.days) {
+        // Safely execute calendar operations with error handling
+        await safeCalendarOperation(async () => {
           // Map day name to day number (0 = Sunday, 1 = Monday, etc.)
           const dayMap = {
             'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3,
@@ -1751,9 +1837,10 @@ useEffect(() => {
           const nextOccurrence = new Date();
           nextOccurrence.setDate(today.getDate() + daysUntilNext);
           
-          // Set the time
+          // Standardize date and set time
           const [hours, minutes] = formData.startTime.split(':');
           nextOccurrence.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+          const standardizedDate = standardizeDate(nextOccurrence);
           
           // Create end time (default to 30 minutes later if no end time)
           const endTime = formData.endTime 
@@ -1761,42 +1848,41 @@ useEffect(() => {
             : `${hours}:${parseInt(minutes) + 30}`;
           
           const [endHours, endMinutes] = endTime.split(':');
-          const endDate = new Date(nextOccurrence);
+          const endDate = new Date(standardizedDate);
           endDate.setHours(parseInt(endHours), parseInt(endMinutes), 0, 0);
           
-          // Create calendar event for recurring routine
-          const calendarEvent = {
+          // Create standard event object
+          const calendarEvent = createStandardEvent({
+            title: `${getChildName(childId)}'s ${formData.title}`,
             summary: `${getChildName(childId)}'s ${formData.title}`,
-            description: formData.description || `Regular routine: ${formData.title}`,
-            start: {
-              dateTime: nextOccurrence.toISOString(),
-              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-            },
-            end: {
-              dateTime: endDate.toISOString(),
-              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-            },
+            description: formData.notes || `Regular routine: ${formData.title}`,
+            start: standardizedDate,
+            end: endDate,
+            childId: childId,
+            childName: getChildName(childId),
+            category: 'activity',
+            eventType: 'activity',
+            familyId: familyId,
             recurrence: [
               `RRULE:FREQ=WEEKLY;BYDAY=${day.substring(0, 2).toUpperCase()}`
             ],
             reminders: {
               useDefault: true
             }
-          };
+          });
           
-          // Add to calendar
-          if (CalendarService) {
-            await CalendarService.addEvent(calendarEvent, currentUser?.uid);
-          }
+          // Use the addEvent from useEvents hook instead of CalendarService
+          await addEvent(calendarEvent);
         });
-      } catch (calendarError) {
-        console.error("Error adding routine to calendar:", calendarError);
-        // Don't block the save if calendar fails
       }
+    } catch (calendarError) {
+      console.error("Error adding routine to calendar:", calendarError);
+      // Don't block the save if calendar fails
     }
-    
-    return true;
-  };
+  }
+  
+  return true;
+};
 
   // Handle hand-me-down form submission
   const handleHandMeDownFormSubmit = async (formData) => {
@@ -1875,98 +1961,136 @@ useEffect(() => {
   };
   
   // Remove item (generic handle for deleting any type of data)
-  const handleRemoveItem = async (itemType, childId, itemId) => {
-    try {
-      if (!familyId) throw new Error("No family ID available");
-      
-      // Create a deep copy of the childrenData
-      const updatedData = JSON.parse(JSON.stringify(childrenData));
-      
-      // Different item types are stored in different paths
-      let path;
-      let updatedItems;
-      
-      switch (itemType) {
-        case 'appointment':
-          path = `medicalAppointments`;
-          updatedItems = updatedData[childId][path].filter(item => item.id !== itemId);
-          updatedData[childId][path] = updatedItems;
-          break;
-        
-        case 'growth':
-          path = `growthData`;
-          updatedItems = updatedData[childId][path].filter(item => item.id !== itemId);
-          updatedData[childId][path] = updatedItems;
-          break;
-        
-        case 'routine':
-          path = `routines`;
-          updatedItems = updatedData[childId][path].filter(item => item.id !== itemId);
-          updatedData[childId][path] = updatedItems;
-          break;
-        
-        case 'handmedown':
-          path = `clothesHandMeDowns`;
-          updatedItems = updatedData[childId][path].filter(item => item.id !== itemId);
-          updatedData[childId][path] = updatedItems;
-          break;
-        
-        default:
-          throw new Error(`Unknown item type: ${itemType}`);
-      }
-      
-      // Update state and save to Firebase
-      setChildrenData(updatedData);
-      
-      // Save to Firebase
-      const docRef = doc(db, "families", familyId);
-      await updateDoc(docRef, {
-        [`childrenData.${childId}.${path}`]: updatedData[childId][path]
-      });
-      
-      // If it's an appointment, delete any associated documents
-      if (itemType === 'appointment') {
-        try {
-          // Query documents for this appointment
-          const documentsRef = collection(db, "appointmentDocuments");
-          const q = query(
-            documentsRef, 
-            where("familyId", "==", familyId),
-            where("childId", "==", childId),
-            where("appointmentId", "==", itemId)
-          );
-          
-          const querySnapshot = await getDocs(q);
-          
-          // Delete each document
-          const deletePromises = [];
-          querySnapshot.forEach((doc) => {
-            deletePromises.push(
-              updateDoc(doc.ref, { deleted: true, deletedAt: serverTimestamp() })
-            );
-          });
-          
-          await Promise.all(deletePromises);
-        } catch (docError) {
-          console.error("Error deleting appointment documents:", docError);
-          // Don't block the main delete operation
+const handleRemoveItem = async (itemType, childId, itemId) => {
+  try {
+    if (!familyId) throw new Error("No family ID available");
+    
+    // Create a deep copy of the childrenData
+    const updatedData = JSON.parse(JSON.stringify(childrenData));
+    
+    // Different item types are stored in different paths
+    let path;
+    let updatedItems;
+    let calendarId; // Store calendarId if present to delete the calendar event
+    
+    switch (itemType) {
+      case 'appointment': {
+        path = `medicalAppointments`;
+        // Find the item before filtering to get its calendarId
+        const item = updatedData[childId][path].find(item => item.id === itemId);
+        if (item && item.calendarId) {
+          calendarId = item.calendarId;
         }
+        updatedItems = updatedData[childId][path].filter(item => item.id !== itemId);
+        updatedData[childId][path] = updatedItems;
+        break;
       }
       
-      // Success message
-      setAllieMessage({
-        type: 'success',
-        text: `Item removed successfully!`
-      });
+      case 'growth': {
+        path = `growthData`;
+        const item = updatedData[childId][path].find(item => item.id === itemId);
+        if (item && item.calendarId) {
+          calendarId = item.calendarId;
+        }
+        updatedItems = updatedData[childId][path].filter(item => item.id !== itemId);
+        updatedData[childId][path] = updatedItems;
+        break;
+      }
       
-    } catch (error) {
-      console.error(`Error removing ${itemType}:`, error);
-      setAllieMessage({
-        type: 'error',
-        text: `Failed to remove item: ${error.message}`
-      });
+      case 'routine': {
+        path = `routines`;
+        const item = updatedData[childId][path].find(item => item.id === itemId);
+        if (item && item.calendarId) {
+          calendarId = item.calendarId;
+        }
+        updatedItems = updatedData[childId][path].filter(item => item.id !== itemId);
+        updatedData[childId][path] = updatedItems;
+        break;
+      }
+      
+      case 'handmedown': {
+        path = `clothesHandMeDowns`;
+        const item = updatedData[childId][path].find(item => item.id === itemId);
+        if (item && item.calendarId) {
+          calendarId = item.calendarId;
+        }
+        updatedItems = updatedData[childId][path].filter(item => item.id !== itemId);
+        updatedData[childId][path] = updatedItems;
+        break;
+      }
+      
+      default:
+        throw new Error(`Unknown item type: ${itemType}`);
     }
-  };
+    
+    // Update state and save to Firebase
+    setChildrenData(updatedData);
+    
+    // Save to Firebase
+    const docRef = doc(db, "families", familyId);
+    await updateDoc(docRef, {
+      [`childrenData.${childId}.${path}`]: updatedData[childId][path]
+    });
+    
+    // If there's a calendar ID, delete the event using deleteEvent from useEvents
+    if (calendarId) {
+      try {
+        // Use safe operation to avoid blocking if calendar delete fails
+        await safeCalendarOperation(async () => {
+          await deleteEvent(calendarId);
+        });
+      } catch (calendarError) {
+        console.error("Error deleting calendar event:", calendarError);
+        // Don't block the main operation if calendar deletion fails
+      }
+    }
+    
+    // If it's an appointment, delete any associated documents
+    if (itemType === 'appointment') {
+      try {
+        // Query documents for this appointment
+        const documentsRef = collection(db, "appointmentDocuments");
+        const q = query(
+          documentsRef, 
+          where("familyId", "==", familyId),
+          where("childId", "==", childId),
+          where("appointmentId", "==", itemId)
+        );
+        
+        const querySnapshot = await getDocs(q);
+        
+        // Delete each document
+        const deletePromises = [];
+        querySnapshot.forEach((doc) => {
+          deletePromises.push(
+            updateDoc(doc.ref, { deleted: true, deletedAt: serverTimestamp() })
+          );
+        });
+        
+        await Promise.all(deletePromises);
+      } catch (docError) {
+        console.error("Error deleting appointment documents:", docError);
+        // Don't block the main delete operation
+      }
+    }
+    
+    // Trigger a refresh of events to ensure UI is updated
+    refreshEvents();
+    
+    // Success message
+    setAllieMessage({
+      type: 'success',
+      text: `Item removed successfully!`
+    });
+    
+  } catch (error) {
+    console.error(`Error removing ${itemType}:`, error);
+    setAllieMessage({
+      type: 'error',
+      text: `Failed to remove item: ${error.message}`
+    });
+  }
+};
   
   // Delete document from an appointment
   const handleRemoveDocument = async (documentId) => {
