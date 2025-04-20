@@ -1328,7 +1328,6 @@ const getEventsForSelectedDate = () => {
       </button>
       
       {/* Enhanced Event Manager - handles both creating new events and viewing/editing existing ones */}
-      // In RevisedFloatingCalendarWidget.jsx - Update the EnhancedEventManager code
 {/* Enhanced Event Manager - handles both creating new events and viewing/editing existing ones */}
 {(showEventManager || (selectedEvent && isEditingEvent)) && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

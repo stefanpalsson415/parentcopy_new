@@ -422,31 +422,40 @@ const initialSyncDueDate = async () => {
 // In src/components/dashboard/tabs/TasksTab.jsx
 // Add this new useEffect near other useEffects
 
+// NEW CODE (replacement for the useEffect in TasksTab.jsx)
 useEffect(() => {
   // Handle events from the calendar component
   const handleCalendarUpdate = (e) => {
     if (e.detail?.cycleUpdate) {
       console.log("Received calendar cycle date update event");
-      // Immediately refresh survey due date
-      calculateNextSurveyDue();
-      // Reload cycle progress
-      loadCycleProgress();
-      // Force sync calendar data
-      forceCalendarDateSync();
+      
+      // Use a debounced update to prevent multiple rapid refreshes
+      clearTimeout(window.cycleDueUpdateTimeout);
+      window.cycleDueUpdateTimeout = setTimeout(() => {
+        // Refresh survey due date
+        calculateNextSurveyDue();
+        // Reload cycle progress
+        loadCycleProgress();
+      }, 300);
     }
   };
   
   const handleCycleDateUpdate = (e) => {
     if (e.detail?.date) {
       console.log("Direct cycle date update:", e.detail.date);
+      
       // Immediately update the UI
       setSurveyDue(e.detail.date);
-      // Also update in the DB for persistence
-      updateSurveySchedule(currentWeek, e.detail.date);
+      
+      // Only update DB and force refresh if this isn't a silent update
+      if (!e.detail.silent) {
+        // Update in the DB for persistence
+        updateSurveySchedule(currentWeek, e.detail.date);
+      }
     }
   };
   
-  // Add event listeners
+  // Add event listeners with more targeted approach
   window.addEventListener('calendar-event-updated', handleCalendarUpdate);
   window.addEventListener('cycle-date-updated', handleCycleDateUpdate);
   
@@ -454,6 +463,7 @@ useEffect(() => {
   return () => {
     window.removeEventListener('calendar-event-updated', handleCalendarUpdate);
     window.removeEventListener('cycle-date-updated', handleCycleDateUpdate);
+    clearTimeout(window.cycleDueUpdateTimeout);
   };
 }, [currentWeek]);
 
