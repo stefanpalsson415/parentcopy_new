@@ -89,50 +89,88 @@ const EnhancedEventManager = ({
   const isUpdatingRef = useRef(false);
 const previousDateRef = useRef(null);
 
-  
-  // New code - Enhanced useEffect for proper initialization
+// Consolidated useEffect for initialEvent processing
 useEffect(() => {
-  // Properly initialize child name if childId exists
-  if (event.childId) {
-    const child = children.find(c => c.id === event.childId);
-    if (child && child.name !== event.childName) {
-      setEvent(prev => ({ ...prev, childName: child.name }));
+  // Only run this effect when initialEvent changes or mode changes
+  // and prevent running during updates
+  if (initialEvent && mode === 'edit' && !isUpdatingRef.current) {
+    isUpdatingRef.current = true;
+    
+    // Create an updatedEvent object to batch all changes
+    let updatedEvent = { ...event };
+    let hasChanges = false;
+    
+    // 1. Handle date/time standardization
+    if (initialEvent.dateObj && !updatedEvent.dateTime) {
+      updatedEvent.dateTime = initialEvent.dateObj.toISOString();
+      hasChanges = true;
+    } else if (initialEvent.start?.dateTime && !updatedEvent.dateTime) {
+      updatedEvent.dateTime = initialEvent.start.dateTime;
+      hasChanges = true;
     }
-  }
-  
-  // Ensure event type is properly set for cycle due date events
-  if (initialEvent && mode === 'edit') {
-    if ((initialEvent.title && initialEvent.title.includes('Cycle') && initialEvent.title.includes('Due Date')) || 
-        (initialEvent.category === 'cycle-due-date' || initialEvent.eventType === 'cycle-due-date')) {
-      setEvent(prev => ({ 
-        ...prev, 
-        category: 'meeting',
-        eventType: 'meeting'
-      }));
+    
+    // 2. Handle cycle due date special settings
+    const isCycleDueDate = (initialEvent.title && initialEvent.title.includes('Cycle') && initialEvent.title.includes('Due Date')) || 
+                           (initialEvent.category === 'cycle-due-date' || initialEvent.eventType === 'cycle-due-date');
+    
+    if (isCycleDueDate) {
+      if (updatedEvent.category !== 'meeting') {
+        updatedEvent.category = 'meeting';
+        hasChanges = true;
+      }
+      
+      if (updatedEvent.eventType !== 'meeting') {
+        updatedEvent.eventType = 'meeting';
+        hasChanges = true;
+      }
+      
+      if (updatedEvent.attendingParentId !== 'both') {
+        updatedEvent.attendingParentId = 'both';
+        hasChanges = true;
+      }
     }
-  }
-}, [event.childId, children, initialEvent, mode]);
-
-
-// Add at the beginning of EnhancedEventManager.jsx component after other useEffects
-useEffect(() => {
-  // This effect ensures proper date initialization for cycle due date events
-  if (initialEvent && mode === 'edit') {
-    // Handle cycle due date specific settings
-    if (initialEvent.title?.includes('Cycle') && initialEvent.title?.includes('Due Date')) {
-      // For cycle due dates, set category and type to meeting
-      setEvent(prev => ({
-        ...prev,
-        category: 'meeting',
-        eventType: 'meeting',
-        // Ensure both parents are attending
-        attendingParentId: 'both'
-      }));
+    
+    // 3. Apply the batch update only if something changed
+    if (hasChanges) {
+      setEvent(updatedEvent);
     }
+    
+    // Reset update flag after state update is processed
+    setTimeout(() => {
+      isUpdatingRef.current = false;
+    }, 0);
   }
+  // This effect should only run when initialEvent or mode changes, not when event changes
 }, [initialEvent, mode]);
 
-// Replace the useEffect for Google Places around line 300-350 with these:
+// Separate useEffect for child name update with safeguards
+const prevChildIdRef = useRef(null);
+
+useEffect(() => {
+  // Skip if we're currently in an update cycle
+  if (isUpdatingRef.current) return;
+  
+  // Only process if childId changed from previous render
+  if (event.childId && event.childId !== prevChildIdRef.current) {
+    prevChildIdRef.current = event.childId;
+    
+    const child = children.find(c => c.id === event.childId);
+    if (child && child.name !== event.childName) {
+      // Set the update flag before changing state
+      isUpdatingRef.current = true;
+      
+      // Use functional update to avoid dependency on event
+      setEvent(prev => ({ ...prev, childName: child.name }));
+      
+      // Reset update flag after state update is processed
+      setTimeout(() => {
+        isUpdatingRef.current = false;
+      }, 0);
+    }
+  }
+}, [event.childId, children]);  
+
+
 
 // Simplified Google Places initialization
 useEffect(() => {
@@ -279,47 +317,11 @@ useEffect(() => {
     }
   }, [event.location, placesInitialized]);
 
-// Add this useEffect to EnhancedEventManager.jsx (after other useEffects)
-// New code to ensure proper event initialization
-useEffect(() => {
-  // This effect runs when the component mounts or when initialEvent changes
-  if (initialEvent && mode === 'edit') {
-    // Ensure dateTime is properly handled
-    if (initialEvent.dateObj && !initialEvent.dateTime) {
-      setEvent(prev => ({
-        ...prev,
-        dateTime: initialEvent.dateObj.toISOString()
-      }));
-    } else if (initialEvent.start?.dateTime && !initialEvent.dateTime) {
-      setEvent(prev => ({
-        ...prev,
-        dateTime: initialEvent.start.dateTime
-      }));
-    }
-    
-    // Handle cycle due date specific settings
-    if (initialEvent.title?.includes('Cycle') && initialEvent.title?.includes('Due Date')) {
-      // For cycle due dates, set category and type to meeting
-      setEvent(prev => ({
-        ...prev,
-        category: 'meeting',
-        eventType: 'meeting',
-        // Ensure both parents are attending
-        attendingParentId: 'both'
-      }));
-    }
-  }
-}, [initialEvent, mode]);
-
-
   // Manual location input for fallback
   const handleManualLocationInput = (value) => {
     setEvent(prev => ({ ...prev, location: value }));
   };
 
-// Enhanced handleSave function with document and provider support
-// In src/components/calendar/EnhancedEventManager.jsx
-// Replace or modify the handleSave function (around line 216-366)
 
 const handleSave = async () => {
   try {
