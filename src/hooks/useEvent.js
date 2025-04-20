@@ -191,35 +191,51 @@ export function useEvents(options = {}) {
       return await eventStore.deleteEvent(eventId, currentUser.uid);
     }, [currentUser]);
   
-    // Refresh events
-    const refreshEvents = useCallback(async () => {
-      if (!currentUser) return;
-      setLoading(true);
-      const refreshedEvents = await eventStore.refreshEvents(currentUser.uid);
-      
-      // Apply filters to refreshed events
-      let filteredEvents = refreshedEvents;
-      
-      if (childId) {
-        filteredEvents = filteredEvents.filter(event => 
-          event.childId === childId || 
-          (event.attendees && event.attendees.some(a => a.id === childId))
-        );
-      }
-      
-      if (category) {
-        filteredEvents = filteredEvents.filter(event => 
-          event.category === category || event.eventType === category
-        );
-      }
-      
-      if (filterBy && typeof filterBy === 'function') {
-        filteredEvents = filteredEvents.filter(filterBy);
-      }
-      
-      setEvents(filteredEvents);
-      setLoading(false);
-    }, [currentUser, childId, category, filterBy]);
+    // In src/hooks/useEvent.js
+// Enhance the refreshEvents function around line 180-200
+
+const refreshEvents = useCallback(async () => {
+  if (!currentUser) return;
+  
+  console.log("Explicit refresh of events triggered");
+  setLoading(true);
+  
+  try {
+    // First, clear any cached events in the EventStore
+    await eventStore.clearCache();
+    
+    // Force reload from database
+    const refreshedEvents = await eventStore.refreshEvents(currentUser.uid, familyId);
+    
+    console.log(`Refreshed ${refreshedEvents.length} events from database`);
+    
+    // Apply filters to refreshed events
+    let filteredEvents = refreshedEvents;
+    
+    if (childId) {
+      filteredEvents = filteredEvents.filter(event => 
+        event.childId === childId || 
+        (event.attendees && event.attendees.some(a => a.id === childId))
+      );
+    }
+    
+    if (category) {
+      filteredEvents = filteredEvents.filter(event => 
+        event.category === category || event.eventType === category
+      );
+    }
+    
+    if (filterBy && typeof filterBy === 'function') {
+      filteredEvents = filteredEvents.filter(filterBy);
+    }
+    
+    setEvents(filteredEvents);
+  } catch (error) {
+    console.error("Error refreshing events:", error);
+  } finally {
+    setLoading(false);
+  }
+}, [currentUser, childId, category, filterBy, familyId]);
   
     return {
       events,

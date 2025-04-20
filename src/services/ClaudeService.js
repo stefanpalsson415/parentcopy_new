@@ -632,205 +632,220 @@ class ClaudeService {
   }
 
   // Add this new method to ClaudeService.js  
-  async handleCalendarConfirmation(message, token, userId) {  
-    try {  
-      // Check if we have a valid token and pending event  
-      if (!token || !userId) {  
-        return "I couldn't find the event you're referring to. Please try creating it again.";  
-      }  
-        
-      // Retrieve the pending event  
-      let pendingEvent = null;  
-      if (typeof window !== 'undefined') {  
-        try {  
-          const pendingEvents = JSON.parse(localStorage.getItem('pendingCalendarEvents') || '{}');  
-          pendingEvent = pendingEvents[token]?.event;  
-            
-          // Remove the pending event from storage  
-          delete pendingEvents[token];  
-          localStorage.setItem('pendingCalendarEvents', JSON.stringify(pendingEvents));  
-        } catch (storageError) {  
-          console.error("Error retrieving pending event:", storageError);  
-        }  
-      }  
-        
-      if (!pendingEvent) {  
-        return "I couldn't find the event you're referring to, or it may have expired. Please try creating it again.";  
-      }  
-        
-      // Check if the user wants to confirm or modify the event  
-      const lowerMessage = message.toLowerCase();  
-      const confirmTerms = ['yes', 'confirm', 'okay', 'ok', 'sure', 'add it', 'add to calendar', 'looks good', 'correct'];  
-        
-      // Check if any confirmation term is in the message  
-      const isConfirmed = confirmTerms.some(term =>   
-        lowerMessage.includes(term) || lowerMessage === term  
-      );  
-        
-      if (isConfirmed) {  
-        // User confirmed - add the event to the calendar  
-        const result = await CalendarService.addEvent(pendingEvent, userId);  
-          
-        if (result && result.success) {  
-          // Trigger a UI refresh  
-          if (typeof window !== 'undefined') {  
-            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));  
-          }  
-            
-          // Format the success message  
-          const eventDate = new Date(pendingEvent.start.dateTime);  
-          const formattedDate = eventDate.toLocaleDateString('en-US', {   
-            weekday: 'long',   
-            month: 'long',   
-            day: 'numeric'   
-          });  
-            
-          const formattedTime = eventDate.toLocaleTimeString('en-US', {   
-            hour: 'numeric',   
-            minute: '2-digit'  
-          });  
-            
-          let response = `I've added the following event to your family's shared calendar:\n\n`;  
-          response += `Event: ${pendingEvent.summary}\n`;  
-          response += `Date: ${formattedDate}\n`;  
-          response += `Time: ${formattedTime}\n`;  
-            
-          if (pendingEvent.location) {  
-            response += `Location: ${pendingEvent.location}\n`;  
-          }  
-            
-          if (pendingEvent.childName) {  
-            response += `For: ${pendingEvent.childName}\n`;  
-          }  
-            
-          if (pendingEvent.extraDetails?.providerName) {  
-            response += `Provider: ${pendingEvent.extraDetails.providerName}\n`;  
-          }  
-            
-          response += `\nThis has been added to your family's shared calendar. You can view and manage this in your calendar.`;  
-            
-          return response;  
-        } else {  
-          return "I tried to add the event to your calendar, but encountered an issue. Please try again or add it manually through the calendar widget.";  
-        }  
-      } else {  
-        // User wants to modify the event - try to understand what they want to change  
-        try {  
-          // Use UnifiedParserService to extract the updated event  
-          const UnifiedParserService = (await import('./UnifiedParserService')).default;  
-          const updatedEvent = await UnifiedParserService.parseEvent(message, {}, [  
-            { text: `Previous event: ${pendingEvent.summary} on ${pendingEvent.start.dateTime}` }  
-          ]);  
-            
-          // Check what was updated  
-          let changes = [];  
-            
-          // Check for date/time changes  
-          if (updatedEvent.dateTime) {  
-            const newDate = new Date(updatedEvent.dateTime);  
-            const oldDate = new Date(pendingEvent.start.dateTime);  
-              
-            if (newDate.toDateString() !== oldDate.toDateString() ||   
-                newDate.getHours() !== oldDate.getHours() ||   
-                newDate.getMinutes() !== oldDate.getMinutes()) {  
-                
-              // Update the event time  
-              pendingEvent.start.dateTime = newDate.toISOString();  
-                
-              // Update end time (maintain same duration)  
-              const oldEnd = new Date(pendingEvent.end.dateTime);  
-              const duration = oldEnd - oldDate;  
-                
-              const newEnd = new Date(newDate.getTime() + duration);  
-              pendingEvent.end.dateTime = newEnd.toISOString();  
-                
-              changes.push(`Date/time updated to ${newDate.toLocaleString()}`);  
-            }  
-          }  
-            
-          // Check for title changes  
-          if (updatedEvent.title && updatedEvent.title !== pendingEvent.summary) {  
-            pendingEvent.summary = updatedEvent.title;  
-            changes.push(`Title updated to "${updatedEvent.title}"`);  
-          }  
-            
-          // Check for location changes  
-          if (updatedEvent.location && updatedEvent.location !== pendingEvent.location) {  
-            pendingEvent.location = updatedEvent.location;  
-            changes.push(`Location updated to "${updatedEvent.location}"`);  
-          }  
-            
-          // Handle no changes detected  
-          if (changes.length === 0) {  
-            // No specific changes found, but user didn't confirm  
-            return "I'm not sure what changes you'd like to make. Please specify what you want to change, or reply with 'yes' to confirm the event.";  
-          }  
-            
-          // Create a new token for the updated event  
-          const newToken = Date.now().toString(36) + Math.random().toString(36).substring(2);  
-            
-          // Store the updated event  
-          if (typeof window !== 'undefined') {  
-            try {  
-              const pendingEvents = JSON.parse(localStorage.getItem('pendingCalendarEvents') || '{}');  
-              pendingEvents[newToken] = {  
-                event: pendingEvent,  
-                timestamp: Date.now()  
-              };  
-              localStorage.setItem('pendingCalendarEvents', JSON.stringify(pendingEvents));  
-            } catch (storageError) {  
-              console.error("Error storing updated pending event:", storageError);  
-            }  
-          }  
-            
-          // Format the updated event for confirmation  
-          const formattedDate = new Date(pendingEvent.start.dateTime).toLocaleDateString('en-US', {   
-            weekday: 'long',   
-            month: 'long',   
-            day: 'numeric'   
-          });  
-            
-          const formattedTime = new Date(pendingEvent.start.dateTime).toLocaleTimeString('en-US', {   
-            hour: 'numeric',   
-            minute: '2-digit'  
-          });  
-            
-          let responseMessage = `I've updated the event details:\n\n`;  
-          responseMessage += changes.join('\n') + '\n\n';  
-          responseMessage += `Updated details:\n`;  
-          responseMessage += `Event: ${pendingEvent.summary}\n`;  
-          responseMessage += `Date: ${formattedDate}\n`;  
-          responseMessage += `Time: ${formattedTime}\n`;  
-            
-          if (pendingEvent.location) {  
-            responseMessage += `Location: ${pendingEvent.location}\n`;  
-          }  
-            
-          if (pendingEvent.childName) {  
-            responseMessage += `For: ${pendingEvent.childName}\n`;  
-          }  
-            
-          if (pendingEvent.extraDetails?.providerName) {  
-            responseMessage += `Provider: ${pendingEvent.extraDetails.providerName}\n`;  
-          }  
-            
-          // Add confirmation instructions  
-          responseMessage += `\nDoes this look correct now? Reply with "yes" to add this event to your calendar.`;  
-            
-          // Add the confirmation token  
-          responseMessage += `\n\n<calendar_confirmation token="${newToken}">`;  
-            
-          return responseMessage;  
-        } catch (error) {  
-          console.error("Error processing event modifications:", error);  
-          return "I had trouble understanding your changes. Could you please specify exactly what you'd like to change about the event?";  
-        }  
-      }  
-    } catch (error) {  
-      console.error("Error handling calendar confirmation:", error);  
-      return "I encountered an issue processing your response. Please try creating the event again.";  
+  // In src/services/ClaudeService.js 
+async handleCalendarConfirmation(message, token, userId) {  
+  try {  
+    // Check if we have a valid token and pending event  
+    if (!token || !userId) {  
+      return "I couldn't find the event you're referring to. Please try creating it again.";  
     }  
-  }
+        
+    // Retrieve the pending event  
+    let pendingEvent = null;  
+    if (typeof window !== 'undefined') {  
+      try {  
+        const pendingEvents = JSON.parse(localStorage.getItem('pendingCalendarEvents') || '{}');  
+        pendingEvent = pendingEvents[token]?.event;  
+            
+        // Remove the pending event from storage  
+        delete pendingEvents[token];  
+        localStorage.setItem('pendingCalendarEvents', JSON.stringify(pendingEvents));  
+      } catch (storageError) {  
+        console.error("Error retrieving pending event:", storageError);  
+      }  
+    }  
+        
+    if (!pendingEvent) {  
+      return "I couldn't find the event you're referring to, or it may have expired. Please try creating it again.";  
+    }  
+        
+    // Check if the user wants to confirm or modify the event  
+    const lowerMessage = message.toLowerCase();  
+    const confirmTerms = ['yes', 'confirm', 'okay', 'ok', 'sure', 'add it', 'add to calendar', 'looks good', 'correct'];  
+        
+    // Check if any confirmation term is in the message  
+    const isConfirmed = confirmTerms.some(term =>   
+      lowerMessage.includes(term) || lowerMessage === term  
+    );  
+        
+    if (isConfirmed) {  
+      // User confirmed - add the event to the calendar  
+      const result = await CalendarService.addEvent(pendingEvent, userId);  
+          
+      if (result && result.success) {  
+        // Trigger a UI refresh with multiple attempts
+        if (typeof window !== 'undefined') {
+          console.log("Dispatching calendar refresh events after adding event");
+          
+          // Immediate refresh
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+          
+          // Follow-up refreshes to ensure UI updates
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+            console.log("Sending delayed refresh event (500ms)");
+          }, 500);
+          
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+            console.log("Sending delayed refresh event (1500ms)");
+          }, 1500);
+        }
+            
+        // Format the success message  
+        const eventDate = new Date(pendingEvent.start.dateTime);  
+        const formattedDate = eventDate.toLocaleDateString('en-US', {   
+          weekday: 'long',   
+          month: 'long',   
+          day: 'numeric'   
+        });  
+            
+        const formattedTime = eventDate.toLocaleTimeString('en-US', {   
+          hour: 'numeric',   
+          minute: '2-digit'  
+        });  
+            
+        let response = `I've added the following event to your family's shared calendar:\n\n`;  
+        response += `Event: ${pendingEvent.summary}\n`;  
+        response += `Date: ${formattedDate}\n`;  
+        response += `Time: ${formattedTime}\n`;  
+            
+        if (pendingEvent.location) {  
+          response += `Location: ${pendingEvent.location}\n`;  
+        }  
+            
+        if (pendingEvent.childName) {  
+          response += `For: ${pendingEvent.childName}\n`;  
+        }  
+            
+        if (pendingEvent.extraDetails?.providerName) {  
+          response += `Provider: ${pendingEvent.extraDetails.providerName}\n`;  
+        }  
+            
+        response += `\nThis has been added to your family's shared calendar. You can view and manage this in your calendar.`;  
+            
+        return response;  
+      } else {  
+        return "I tried to add the event to your calendar, but encountered an issue. Please try again or add it manually through the calendar widget.";  
+      }  
+    } else {  
+      // User wants to modify the event - try to understand what they want to change  
+      try {  
+        // Use UnifiedParserService to extract the updated event  
+        const UnifiedParserService = (await import('./UnifiedParserService')).default;  
+        const updatedEvent = await UnifiedParserService.parseEvent(message, {}, [  
+          { text: `Previous event: ${pendingEvent.summary} on ${pendingEvent.start.dateTime}` }  
+        ]);  
+            
+        // Check what was updated  
+        let changes = [];  
+            
+        // Check for date/time changes  
+        if (updatedEvent.dateTime) {  
+          const newDate = new Date(updatedEvent.dateTime);  
+          const oldDate = new Date(pendingEvent.start.dateTime);  
+              
+          if (newDate.toDateString() !== oldDate.toDateString() ||   
+              newDate.getHours() !== oldDate.getHours() ||   
+              newDate.getMinutes() !== oldDate.getMinutes()) {  
+                
+            // Update the event time  
+            pendingEvent.start.dateTime = newDate.toISOString();  
+                
+            // Update end time (maintain same duration)  
+            const oldEnd = new Date(pendingEvent.end.dateTime);  
+            const duration = oldEnd - oldDate;  
+                
+            const newEnd = new Date(newDate.getTime() + duration);  
+            pendingEvent.end.dateTime = newEnd.toISOString();  
+                
+            changes.push(`Date/time updated to ${newDate.toLocaleString()}`);  
+          }  
+        }  
+            
+        // Check for title changes  
+        if (updatedEvent.title && updatedEvent.title !== pendingEvent.summary) {  
+          pendingEvent.summary = updatedEvent.title;  
+          changes.push(`Title updated to "${updatedEvent.title}"`);  
+        }  
+            
+        // Check for location changes  
+        if (updatedEvent.location && updatedEvent.location !== pendingEvent.location) {  
+          pendingEvent.location = updatedEvent.location;  
+          changes.push(`Location updated to "${updatedEvent.location}"`);  
+        }  
+            
+        // Handle no changes detected  
+        if (changes.length === 0) {  
+          // No specific changes found, but user didn't confirm  
+          return "I'm not sure what changes you'd like to make. Please specify what you want to change, or reply with 'yes' to confirm the event.";  
+        }  
+            
+        // Create a new token for the updated event  
+        const newToken = Date.now().toString(36) + Math.random().toString(36).substring(2);  
+            
+        // Store the updated event  
+        if (typeof window !== 'undefined') {  
+          try {  
+            const pendingEvents = JSON.parse(localStorage.getItem('pendingCalendarEvents') || '{}');  
+            pendingEvents[newToken] = {  
+              event: pendingEvent,  
+              timestamp: Date.now()  
+            };  
+            localStorage.setItem('pendingCalendarEvents', JSON.stringify(pendingEvents));  
+          } catch (storageError) {  
+            console.error("Error storing updated pending event:", storageError);  
+          }  
+        }  
+            
+        // Format the updated event for confirmation  
+        const formattedDate = new Date(pendingEvent.start.dateTime).toLocaleDateString('en-US', {   
+          weekday: 'long',   
+          month: 'long',   
+          day: 'numeric'   
+        });  
+            
+        const formattedTime = new Date(pendingEvent.start.dateTime).toLocaleTimeString('en-US', {   
+          hour: 'numeric',   
+          minute: '2-digit'  
+        });  
+            
+        let responseMessage = `I've updated the event details:\n\n`;  
+        responseMessage += changes.join('\n') + '\n\n';  
+        responseMessage += `Updated details:\n`;  
+        responseMessage += `Event: ${pendingEvent.summary}\n`;  
+        responseMessage += `Date: ${formattedDate}\n`;  
+        responseMessage += `Time: ${formattedTime}\n`;  
+            
+        if (pendingEvent.location) {  
+          responseMessage += `Location: ${pendingEvent.location}\n`;  
+        }  
+            
+        if (pendingEvent.childName) {  
+          responseMessage += `For: ${pendingEvent.childName}\n`;  
+        }  
+            
+        if (pendingEvent.extraDetails?.providerName) {  
+          responseMessage += `Provider: ${pendingEvent.extraDetails.providerName}\n`;  
+        }  
+            
+        // Add confirmation instructions  
+        responseMessage += `\nDoes this look correct now? Reply with "yes" to add this event to your calendar.`;  
+            
+        // Add the confirmation token  
+        responseMessage += `\n\n<calendar_confirmation token="${newToken}">`;  
+            
+        return responseMessage;  
+      } catch (error) {  
+        console.error("Error processing event modifications:", error);  
+        return "I had trouble understanding your changes. Could you please specify exactly what you'd like to change about the event?";  
+      }  
+    }  
+  } catch (error) {  
+    console.error("Error handling calendar confirmation:", error);  
+    return "I encountered an issue processing your response. Please try creating the event again.";  
+  }  
+}
   
   // Extract provider details from text
   extractProviderInfo(text) {

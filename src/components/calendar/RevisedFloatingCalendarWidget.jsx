@@ -897,64 +897,72 @@ const handleUpdateEvent = async (updatedEvent) => {
    * Get events for currently selected date with filtering
    * @returns {Array} Filtered events for selected date
    */
-  const getEventsForSelectedDate = () => {
-    if (!selectedDate) return [];
+
+const getEventsForSelectedDate = () => {
+  if (!selectedDate) return [];
+  
+  console.log(`Getting events for ${selectedDate.toDateString()}, total events: ${events.length}`);
+  
+  return events.filter(event => {
+    // Ensure we have a valid date object
+    let eventDate = null;
     
-    return events.filter(event => {
-      // Ensure we have a valid date object
-      let eventDate = null;
-      
-      if (event.dateObj instanceof Date && !isNaN(event.dateObj)) {
-        eventDate = event.dateObj;
-      } else if (event.start?.dateTime) {
-        eventDate = new Date(event.start.dateTime);
-      } else if (event.start?.date) {
-        eventDate = new Date(event.start.date);
-      } else if (event.dateTime) {
-        eventDate = new Date(event.dateTime);
-      } else if (event.date) {
-        eventDate = new Date(event.date);
-      }
-      
-      // Skip events with invalid dates
-      if (!eventDate || isNaN(eventDate.getTime())) {
+    if (event.dateObj instanceof Date && !isNaN(event.dateObj)) {
+      eventDate = event.dateObj;
+    } else if (event.start?.dateTime) {
+      eventDate = new Date(event.start.dateTime);
+    } else if (event.start?.date) {
+      eventDate = new Date(event.start.date);
+    } else if (event.dateTime) {
+      eventDate = new Date(event.dateTime);
+    } else if (event.date) {
+      eventDate = new Date(event.date);
+    }
+    
+    // Skip events with invalid dates
+    if (!eventDate || isNaN(eventDate.getTime())) {
+      console.warn("Skipping event with invalid date:", event.title || event.summary);
+      return false;
+    }
+    
+    // Log for debugging
+    console.log(`Comparing event date: ${eventDate.toDateString()} with selected: ${selectedDate.toDateString()}`, 
+                `Event title: ${event.title || event.summary}`);
+    
+    // Check date match - only compare year, month, day (not time)
+    const dateMatch = eventDate.getDate() === selectedDate.getDate() &&
+                     eventDate.getMonth() === selectedDate.getMonth() &&
+                     eventDate.getFullYear() === selectedDate.getFullYear();
+    
+    // If date doesn't match, return false immediately
+    if (!dateMatch) return false;
+    
+    // Check member filter
+    if (selectedMember !== 'all') {
+      // For child events
+      if (event.childName && selectedMember !== event.childId && selectedMember !== event.childName) {
         return false;
       }
       
-      // Check date match - only compare year, month, day (not time)
-      const dateMatch = eventDate.getDate() === selectedDate.getDate() &&
-                       eventDate.getMonth() === selectedDate.getMonth() &&
-                       eventDate.getFullYear() === selectedDate.getFullYear();
-      
-      // If date doesn't match, return false immediately
-      if (!dateMatch) return false;
-      
-      // Check member filter
-      if (selectedMember !== 'all') {
-        // For child events
-        if (event.childName && selectedMember !== event.childId && selectedMember !== event.childName) {
-          return false;
-        }
-        
-        // For parent-assigned tasks
-        if (event.assignedTo && selectedMember !== event.assignedTo && 
-            event.assignedToName && selectedMember !== event.assignedToName) {
-          return false;
-        }
-        
-        // For family events, check attendees
-        const hasSelectedMember = event.attendees?.some(
-          attendee => attendee.id === selectedMember || attendee.name === selectedMember
-        );
-        
-        if (!hasSelectedMember && !event.childName && !event.assignedTo) {
-          return false;
-        }
+      // For parent-assigned tasks
+      if (event.assignedTo && selectedMember !== event.assignedTo && 
+          event.assignedToName && selectedMember !== event.assignedToName) {
+        return false;
       }
       
-      return true;
-    });
-  };
+      // For family events, check attendees
+      const hasSelectedMember = event.attendees?.some(
+        attendee => attendee.id === selectedMember || attendee.name === selectedMember
+      );
+      
+      if (!hasSelectedMember && !event.childName && !event.assignedTo) {
+        return false;
+      }
+    }
+    
+    return true;
+  });
+};
   
   /**
    * Filter events based on the current view type including AI parsed events
@@ -1041,11 +1049,21 @@ const handleUpdateEvent = async (updatedEvent) => {
         style={{ height: `${widgetHeight}rem`, width: `${widgetWidth}rem` }}
       >
         {/* Header Component */}
-        <CalendarHeader 
-          onClose={() => setIsOpen(false)} 
-          onMinimize={() => setIsOpen(false)}
-          onRefresh={() => setLastRefresh(Date.now())}
-        />
+<CalendarHeader 
+  onClose={() => setIsOpen(false)} 
+  onMinimize={() => setIsOpen(false)}
+  onRefresh={() => {
+    console.log("Manual refresh triggered");
+    // Reset the event cache first
+    resetEventCache();
+    // Update lastRefresh to trigger re-fetch
+    setLastRefresh(Date.now());
+    // Explicitly trigger event refresh from EventContext
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+    }
+  }}
+/>
         
         {/* Calendar content */}
         <div className="flex-1 overflow-y-auto p-3">

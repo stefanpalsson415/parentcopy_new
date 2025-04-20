@@ -248,6 +248,13 @@ const eventsQuery = query(
     }
   }
 
+  clearCache() {
+    console.log("Clearing event cache");
+    this.eventCache.clear();
+    this.lastRefresh = Date.now();
+    return true;
+  }
+
   // Update an existing event
   async updateEvent(eventId, updateData, userId) {
     try {
