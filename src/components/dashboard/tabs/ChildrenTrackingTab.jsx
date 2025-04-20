@@ -3702,32 +3702,32 @@ const handleRemoveItem = async (itemType, childId, itemId) => {
                                                     Family Insights
                                                   </h3>
                                                   <button 
-                                                    onClick={async () => {
-                                                      try {
-                                                        setLoadingSection("insights");
-                                                        // Use local insights only to avoid Claude API timeout
-                                                        const localInsights = AllieAIService.getFallbackChildInsights(childrenData);
-                                                        setAiInsights(localInsights);
-                                                        setLoadingSection(null);
-                                                        setAllieMessage({
-                                                          type: 'success',
-                                                          text: 'Insights refreshed successfully!'
-                                                        });
-                                                      } catch (error) {
-                                                        console.error("Error refreshing insights:", error);
-                                                        setLoadingSection(null);
-                                                        setAllieMessage({
-                                                          type: 'error',
-                                                          text: 'Error refreshing insights. Please try again.'
-                                                        });
-                                                      }
-                                                    }}
-                                                    className={`p-2 rounded hover:bg-blue-100 ${loadingSection === "insights" ? "animate-spin" : ""}`}
-                                                    disabled={loadingSection === "insights"}
-                                                    title="Refresh insights"
-                                                  >
-                                                    <RefreshCw size={18} className="text-blue-600" />
-                                                  </button>
+  onClick={async () => {
+    try {
+      setLoadingSection("insights");
+      // Use the local generateLocalInsights function instead
+      const localInsights = generateLocalInsights(childrenData);
+      setAiInsights(localInsights);
+      setLoadingSection(null);
+      setAllieMessage({
+        type: 'success',
+        text: 'Insights refreshed successfully!'
+      });
+    } catch (error) {
+      console.error("Error refreshing insights:", error);
+      setLoadingSection(null);
+      setAllieMessage({
+        type: 'error',
+        text: 'Error refreshing insights. Please try again.'
+      });
+    }
+  }}
+  className={`p-2 rounded hover:bg-blue-100 ${loadingSection === "insights" ? "animate-spin" : ""}`}
+  disabled={loadingSection === "insights"}
+  title="Refresh insights"
+>
+  <RefreshCw size={18} className="text-blue-600" />
+</button>
                                                 </div>
                                                 
                                                 <div className="space-y-2">
@@ -3760,6 +3760,40 @@ const handleRemoveItem = async (itemType, childId, itemId) => {
                                                           if (insight.childId) setActiveChild(insight.childId);
                                                           const section = document.querySelector('#routines-section');
                                                           if (section) section.scrollIntoView({ behavior: 'smooth' });
+                                                        }
+                                                        // Add this case to handle recommendation type insights
+                                                        else if (insight.type === 'recommendation') {
+                                                          // Determine the relevant section based on the insight content
+                                                          const content = (insight.title + ' ' + insight.content).toLowerCase();
+                                                          
+                                                          if (content.includes('medical') || content.includes('appointment') || 
+                                                              content.includes('doctor') || content.includes('health')) {
+                                                            setExpandedSections(prev => ({...prev, medical: true}));
+                                                            if (insight.childId) setActiveChild(insight.childId);
+                                                            const section = document.querySelector('#medical-section');
+                                                            if (section) section.scrollIntoView({ behavior: 'smooth' });
+                                                          }
+                                                          else if (content.includes('growth') || content.includes('height') || 
+                                                                   content.includes('weight') || content.includes('size')) {
+                                                            setExpandedSections(prev => ({...prev, growth: true}));
+                                                            if (insight.childId) setActiveChild(insight.childId);
+                                                            const section = document.querySelector('#growth-section');
+                                                            if (section) section.scrollIntoView({ behavior: 'smooth' });
+                                                          }
+                                                          else if (content.includes('routine') || content.includes('activity') || 
+                                                                   content.includes('schedule')) {
+                                                            setExpandedSections(prev => ({...prev, routines: true}));
+                                                            if (insight.childId) setActiveChild(insight.childId);
+                                                            const section = document.querySelector('#routines-section');
+                                                            if (section) section.scrollIntoView({ behavior: 'smooth' });
+                                                          }
+                                                          // Default to medical section if no specific section is identified
+                                                          else {
+                                                            setExpandedSections(prev => ({...prev, medical: true}));
+                                                            if (insight.childId) setActiveChild(insight.childId);
+                                                            const section = document.querySelector('#medical-section');
+                                                            if (section) section.scrollIntoView({ behavior: 'smooth' });
+                                                          }
                                                         }
                                                       }}
                                                     >
