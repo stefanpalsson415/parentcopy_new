@@ -934,36 +934,37 @@ handleVoiceTask(text);
   };
 
   // Process voice commands
-  const processVoiceCommand = (text) => {
-    // Create a friendly confirmation and show it in the UI
-    setAllieMessage({
-      type: 'success',
-      text: `I heard: "${text}". Processing your request...`
-    });
+const processVoiceCommand = (text) => {
+  // Create a friendly confirmation and show it in the UI
+  setAllieMessage({
+    type: 'success',
+    text: `I heard: "${text}". Processing your request...`
+  });
 
-    // For demo purposes, show a mock response after a delay
-    setTimeout(() => {
-      const lowerText = text.toLowerCase();
-      
-      // Example patterns to detect
-      if (lowerText.includes('appointment') || lowerText.includes('doctor')) {
-        handleVoiceAppointment(text);
-      } 
-      else if (lowerText.includes('growth') || lowerText.includes('weight') || lowerText.includes('height')) {
-        handleVoiceGrowthEntry(text);
-      }
-      else if (lowerText.includes('routine') || lowerText.includes('schedule')) {
-        handleVoiceRoutine(text);
-      }
-      else {
-        // Default response if we can't categorize
-        setAllieMessage({
-          type: 'info',
-          text: "I'm not sure how to process that request yet. Try saying something like 'Add a doctor's appointment' or 'Record Emma's height measurement'."
-        });
-      }
-    }, 1500);
-  };
+  // For demo purposes, show a mock response after a delay
+  setTimeout(() => {
+    const lowerText = text.toLowerCase();
+    
+    // Example patterns to detect
+    if (lowerText.includes('appointment') || lowerText.includes('doctor')) {
+      handleVoiceAppointment(text);
+    } 
+    else if (lowerText.includes('growth') || lowerText.includes('weight') || lowerText.includes('height')) {
+      handleVoiceGrowthEntry(text);
+    }
+    else if (lowerText.includes('routine') || lowerText.includes('schedule')) {
+      handleVoiceRoutine(text);
+    }
+    
+    else {
+      // Default response if we can't categorize
+      setAllieMessage({
+        type: 'info',
+        text: "I'm not sure how to process that request yet. Try saying something like 'Add a doctor's appointment' or 'Record Emma's height measurement'."
+      });
+    }
+  }, 1500);
+};
 
   // Handle voice appointment commands
   const handleVoiceAppointment = (text) => {
