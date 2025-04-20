@@ -599,12 +599,21 @@ handled = false;
         // Remove the processing message first
         setMessages(prev => prev.filter(msg => msg !== processingMessage));
         
-        // Get AI response for general messages
-        const aiResponse = await EnhancedChatService.getAIResponse(
-          currentMessageText, 
-          familyId, 
-          [...messages, userMessage]
-        );
+        // Helper function to get recent messages for context
+const getRecentMessages = (count = 5) => {
+  // Get the most recent messages, excluding AI processing messages
+  return messages
+    .filter(msg => !msg.text?.includes('analyzing') && !msg.text?.includes('I\'m processing'))
+    .slice(-count);
+};
+
+// Get AI response for general messages - use limited context
+const recentContext = [...getRecentMessages(5), userMessage]; // Only use last 5 messages
+const aiResponse = await EnhancedChatService.getAIResponse(
+  currentMessageText, 
+  familyId, 
+  recentContext
+);
         
         // Add AI response to messages
         const allieMessage = {
@@ -642,6 +651,103 @@ handled = false;
       }
     }
   };
+
+
+// Add function to handle message edits and rerun
+const handleEditMessage = async (messageId, editedText) => {
+  // Find the message index
+  const messageIndex = messages.findIndex(msg => msg.id === messageId);
+  if (messageIndex === -1) return;
+  
+  const originalMessage = messages[messageIndex];
+  
+  // Create a new message array with the edited message
+  const messagesUpToEdit = [...messages.slice(0, messageIndex)];
+  
+  // Add the edited message
+  const editedMessage = {
+    ...originalMessage,
+    text: editedText,
+    isEdited: true,
+    timestamp: new Date().toISOString()
+  };
+  messagesUpToEdit.push(editedMessage);
+  
+  // Update UI
+  setMessages(messagesUpToEdit);
+  setLoading(true);
+  
+  // Show processing message
+  const processingMessage = {
+    familyId,
+    sender: 'allie',
+    userName: 'Allie',
+    text: `I'm processing your edited message...`,
+    timestamp: new Date().toISOString()
+  };
+  
+  setMessages(prev => [...prev, processingMessage]);
+  
+  try {
+    // Save the edited message
+    await ChatPersistenceService.saveMessage(editedMessage);
+    
+    // Get AI response based on edited message
+    const aiResponse = await EnhancedChatService.getAIResponse(
+      editedText, 
+      familyId, 
+      [...getRecentMessages(5), editedMessage]
+    );
+    
+    // Remove processing message
+    setMessages(prev => prev.filter(msg => msg !== processingMessage));
+    
+    // Add AI response
+    const allieMessage = {
+      id: Date.now().toString(), 
+      familyId,
+      sender: 'allie',
+      userName: 'Allie',
+      text: aiResponse,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Save AI message to database
+    const savedAIMessage = await ChatPersistenceService.saveMessage(allieMessage);
+    if (savedAIMessage.success && savedAIMessage.messageId) {
+      allieMessage.id = savedAIMessage.messageId;
+    }
+    
+    // Add AI response to messages
+    setMessages(prev => [...prev, allieMessage]);
+  } catch (error) {
+    console.error("Error processing edited message:", error);
+    
+    // Show error message
+    setMessages(prev => [...prev.filter(msg => msg !== processingMessage), {
+      familyId,
+      sender: 'allie',
+      userName: 'Allie',
+      text: "I encountered an error processing your edited message. Please try again.",
+      timestamp: new Date().toISOString(),
+      error: true
+    }]);
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Update the ChatMessage usage in render:
+<ChatMessage 
+  message={msg} 
+  onDelete={handleDeleteMessage}
+  onEdit={handleEditMessage}
+/>
+
+// Add a function to handle message deletion
+const handleDeleteMessage = async (messageId) => {
+  setMessages(prev => prev.filter(msg => msg.id !== messageId));
+};
 
   // Process specific request types with focused context
   const processSpecificRequest = async (messageText, type) => {
