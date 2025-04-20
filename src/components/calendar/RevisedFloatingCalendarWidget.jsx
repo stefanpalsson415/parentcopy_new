@@ -1346,7 +1346,6 @@ const getEventsForSelectedDate = () => {
             // Clear cache and update local data
             resetEventCache();
             setEventCache(new Map());
-            setLastRefresh(Date.now());
             
             // Show success animation
             setShowSuccess(true);
@@ -1354,29 +1353,27 @@ const getEventsForSelectedDate = () => {
               setShowSuccess(false);
             }, 2000);
             
-            // Trigger multi-level refresh
-            // 1. Call refresh function if available
-            if (typeof refreshEvents === 'function') {
-              try {
+            // Simplified refresh strategy - use a single approach
+            try {
+              // If refreshEvents is available, use it first
+              if (typeof refreshEvents === 'function') {
                 await refreshEvents();
-              } catch (error) {
-                console.warn("Error using context refresh:", error);
+              } else {
+                // Otherwise update lastRefresh directly
+                setLastRefresh(Date.now());
               }
+              
+              // Dispatch DOM event once - after the refresh
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('calendar-event-updated', { 
+                  detail: { updated: true, cycleUpdate: !!result.cycleUpdate }
+                }));
+              }
+            } catch (error) {
+              console.warn("Error refreshing events:", error);
+              // Fallback to lastRefresh update
+              setLastRefresh(Date.now());
             }
-            
-            // 2. Dispatch DOM events for component refresh
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-              window.dispatchEvent(new CustomEvent('calendar-event-updated', { 
-                detail: { updated: true, cycleUpdate: true }
-              }));
-            }
-            
-            // 3. Delayed secondary refresh after animation
-            setTimeout(() => {
-              setLastRefresh(prev => prev + 1);
-              if (typeof refreshEvents === 'function') refreshEvents();
-            }, 2500);
             
             CalendarService.showNotification(
               isEditingEvent ? "Event updated successfully" : "Event added successfully", 

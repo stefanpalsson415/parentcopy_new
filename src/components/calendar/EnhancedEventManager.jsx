@@ -132,6 +132,9 @@ useEffect(() => {
   }
 }, [initialEvent, mode]);
 
+// Replace the useEffect for Google Places around line 300-350 with these:
+
+// Simplified Google Places initialization
 useEffect(() => {
   // Function to initialize PlaceAutocompleteElement
   const initPlacesAutocomplete = () => {
@@ -196,12 +199,6 @@ useEffect(() => {
           }
         });
         
-        // Set initial value if the event already has a location
-        if (event.location && placeAutocompleteElement.querySelector('input')) {
-          const input = placeAutocompleteElement.querySelector('input');
-          input.value = event.location;
-        }
-        
         return true;
       }
       return false;
@@ -243,7 +240,29 @@ useEffect(() => {
     window.removeEventListener('google-maps-api-loaded', handleMapsApiLoaded);
     clearTimeout(timeoutId);
   };
-}, [placesInitialized, event.location]);
+}, [placesInitialized]); // Remove event.location from dependencies
+
+// Separate effect for updating input value with a ref to track previous location
+const prevLocationRef = useRef(null);
+
+useEffect(() => {
+  // Skip if we're currently in an update cycle
+  if (isUpdatingRef.current) return;
+  
+  // Only process if location changed from previous render
+  if (event.location && event.location !== prevLocationRef.current && placeAutocompleteElementRef.current) {
+    prevLocationRef.current = event.location;
+    
+    try {
+      const input = placeAutocompleteElementRef.current.querySelector('input');
+      if (input && input.value !== event.location) {
+        input.value = event.location;
+      }
+    } catch (error) {
+      console.warn("Error setting initial location value:", error);
+    }
+  }
+}, [event.location, placesInitialized]);
 
   // Set initial value for the location field if editing
   useEffect(() => {
