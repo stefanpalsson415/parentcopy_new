@@ -534,26 +534,66 @@ const eventsQuery = query(
   }
 
   // In EventStore.js, update the refreshEvents method to be more robust
+// NEW CODE
 async refreshEvents(userId, familyId = null, cycleNumber = null) {
-    if (!userId) return [];
+  if (!userId) return [];
+  
+  console.log("Forced refresh of events for user:", userId);
+  
+  // Clear cache completely
+  this.eventCache.clear();
+  this.lastRefresh = Date.now();
+  
+  // Run a direct database query with no filters to get all events
+  try {
+    const eventsQuery = query(
+      collection(db, "events"),
+      where("userId", "==", userId)
+    );
     
-    console.log("Forced refresh of events for user:", userId);
+    const querySnapshot = await getDocs(eventsQuery);
+    const events = [];
     
-    // Clear cache
-    this.eventCache.clear();
+    // Process results
+    querySnapshot.forEach((doc) => {
+      const eventData = doc.data();
+      const standardizedEvent = this.standardizeEvent({
+        ...eventData,
+        firestoreId: doc.id
+      });
+      
+      // Add all events regardless of date range
+      events.push(standardizedEvent);
+      
+      // Update cache
+      this.eventCache.set(standardizedEvent.universalId, standardizedEvent);
+    });
     
-    // If we have specific criteria, try to fetch that specific event first
+    console.log(`Direct query found ${events.length} events`);
+    
+    // If we have specific criteria, try to fetch that specific event explicitly
     if (familyId && cycleNumber) {
       try {
-        await this.getCycleDueDateEvent(familyId, cycleNumber);
+        const dueDateEvent = await this.getCycleDueDateEvent(familyId, cycleNumber);
+        console.log("Refreshed specific cycle event:", dueDateEvent?.firestoreId);
       } catch (error) {
         console.error("Error refreshing cycle due date:", error);
       }
     }
     
-    // Then load all events
+    // Notify listeners
+    events.forEach(event => {
+      this.notifyListeners('update', event);
+    });
+    
+    return events;
+  } catch (error) {
+    console.error("Error in direct refresh:", error);
+    
+    // Fall back to regular getEventsForUser
     return await this.getEventsForUser(userId);
   }
+}
 }
 
 // Create and export a singleton instance

@@ -194,6 +194,7 @@ export function useEvents(options = {}) {
     // In src/hooks/useEvent.js
 // Enhance the refreshEvents function around line 180-200
 
+// NEW CODE
 const refreshEvents = useCallback(async () => {
   if (!currentUser) return;
   
@@ -204,8 +205,13 @@ const refreshEvents = useCallback(async () => {
     // First, clear any cached events in the EventStore
     await eventStore.clearCache();
     
-    // Force reload from database
-    const refreshedEvents = await eventStore.refreshEvents(currentUser.uid, familyId);
+    // Force reload from database with a clean slate
+    const refreshedEvents = await eventStore.getEventsForUser(
+      currentUser.uid, 
+      new Date(new Date().setDate(new Date().getDate() - 7)), // 7 days ago
+      new Date(new Date().setDate(new Date().getDate() + 90)), // 90 days ahead
+      true // force full reload
+    );
     
     console.log(`Refreshed ${refreshedEvents.length} events from database`);
     
@@ -229,7 +235,11 @@ const refreshEvents = useCallback(async () => {
       filteredEvents = filteredEvents.filter(filterBy);
     }
     
-    setEvents(filteredEvents);
+    // Make sure we reset the state completely with the new data
+    setEvents([]);
+    setTimeout(() => {
+      setEvents(filteredEvents);
+    }, 50);
   } catch (error) {
     console.error("Error refreshing events:", error);
   } finally {

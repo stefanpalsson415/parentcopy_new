@@ -650,92 +650,107 @@ const handleEventAdd = async (event) => {
     }
   };
   
-  const handleUpdateEvent = async (updatedEvent) => {
-    try {
-      setPendingAction('update');
+  // NEW CODE
+const handleUpdateEvent = async (updatedEvent) => {
+  try {
+    setPendingAction('update');
+    
+    if (!updatedEvent || !updatedEvent.firestoreId) {
+      CalendarService.showNotification("Cannot update this event - no valid ID found", "error");
+      setPendingAction(null);
+      return;
+    }
+    
+    console.log("Updating event with data:", updatedEvent);
+    
+    // Get the new date from whatever format is available
+    let newDate;
+    if (updatedEvent.dateObj instanceof Date && !isNaN(updatedEvent.dateObj)) {
+      newDate = updatedEvent.dateObj;
+    } else if (updatedEvent.dateTime) {
+      newDate = new Date(updatedEvent.dateTime);
+    } else if (updatedEvent.start?.dateTime) {
+      newDate = new Date(updatedEvent.start.dateTime);
+    } else {
+      newDate = new Date(); // Fallback
+    }
+    
+    // Validate the date - this is critical for event updates
+    if (isNaN(newDate.getTime())) {
+      console.error("Invalid date for event update:", updatedEvent);
+      CalendarService.showNotification("Invalid date format for event update", "error");
+      setPendingAction(null);
+      return;
+    }
+    
+    console.log("Event update with date:", newDate.toISOString());
+    
+    // Calculate end time (preserve duration if possible)
+    let endDate;
+    if (updatedEvent.dateEndObj instanceof Date && !isNaN(updatedEvent.dateEndObj)) {
+      endDate = updatedEvent.dateEndObj;
+    } else if (updatedEvent.endDateTime) {
+      endDate = new Date(updatedEvent.endDateTime);
+    } else if (updatedEvent.end?.dateTime) {
+      endDate = new Date(updatedEvent.end.dateTime);
+    } else {
+      // Default to 1 hour duration
+      endDate = new Date(newDate.getTime() + 60 * 60 * 1000);
+    }
+    
+    // Create updated event object with required fields
+    const eventUpdate = {
+      summary: updatedEvent.title,
+      title: updatedEvent.title, // Add explicit title field
+      description: updatedEvent.description || '',
+      location: updatedEvent.location || '',
       
-      if (!updatedEvent || !updatedEvent.firestoreId) {
-        CalendarService.showNotification("Cannot update this event - no valid ID found", "error");
-        setPendingAction(null);
-        return;
-      }
+      // Set all date formats for maximum compatibility
+      date: newDate.toISOString(),
+      dateTime: newDate.toISOString(),
+      dateObj: newDate,
+      dateEndObj: endDate,
+      endDateTime: endDate.toISOString(),
+      start: {
+        dateTime: newDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: endDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
       
-      // Create updated event object with required fields
-      const eventUpdate = {
-        summary: updatedEvent.title,
-        description: updatedEvent.description || '',
-        location: updatedEvent.location || '',
-        
-        // Include document and provider references
-        documents: updatedEvent.documents || [],
-        providers: updatedEvent.providers || [],
-        
-        // Include attendees
-        attendees: updatedEvent.attendees || [],
-        
-        // Child and parent associations
-        childId: updatedEvent.childId,
-        childName: updatedEvent.childName,
-        attendingParentId: updatedEvent.attendingParentId,
-        siblingIds: updatedEvent.siblingIds || [],
-        siblingNames: updatedEvent.siblingNames || [],
-        
-        // Reminders and additional context
-        reminders: updatedEvent.reminders,
-        notes: updatedEvent.notes || updatedEvent.extraDetails?.notes
-      };
+      // Include document and provider references
+      documents: updatedEvent.documents || [],
+      providers: updatedEvent.providers || [],
       
-      // Add date/time if available - make sure to include ALL date formats
-      if (updatedEvent.dateObj || updatedEvent.dateTime || updatedEvent.start?.dateTime) {
-        // Get the new date from whatever format is available
-        let newDate;
-        if (updatedEvent.dateObj instanceof Date) {
-          newDate = updatedEvent.dateObj;
-        } else if (updatedEvent.dateTime) {
-          newDate = new Date(updatedEvent.dateTime);
-        } else if (updatedEvent.start?.dateTime) {
-          newDate = new Date(updatedEvent.start.dateTime);
-        } else {
-          newDate = new Date(); // Fallback
-        }
-        
-        // Calculate end time (preserve duration if possible)
-        let endDate;
-        if (updatedEvent.dateEndObj instanceof Date) {
-          endDate = updatedEvent.dateEndObj;
-        } else if (updatedEvent.endDateTime) {
-          endDate = new Date(updatedEvent.endDateTime);
-        } else if (updatedEvent.end?.dateTime) {
-          endDate = new Date(updatedEvent.end.dateTime);
-        } else {
-          // Default to 1 hour duration
-          endDate = new Date(newDate.getTime() + 60 * 60 * 1000);
-        }
-        
-        // Ensure all date formats are included for compatibility
-        eventUpdate.date = newDate.toISOString();
-        eventUpdate.dateTime = newDate.toISOString();
-        eventUpdate.dateObj = newDate;
-        eventUpdate.dateEndObj = endDate;
-        eventUpdate.endDateTime = endDate.toISOString();
-        eventUpdate.start = {
-          dateTime: newDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        };
-        eventUpdate.end = {
-          dateTime: endDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        };
-      }
+      // Include attendees
+      attendees: updatedEvent.attendees || [],
+      
+      // Child and parent associations
+      childId: updatedEvent.childId,
+      childName: updatedEvent.childName,
+      attendingParentId: updatedEvent.attendingParentId,
+      siblingIds: updatedEvent.siblingIds || [],
+      siblingNames: updatedEvent.siblingNames || [],
+      
+      // Reminders and additional context
+      reminders: updatedEvent.reminders,
+      notes: updatedEvent.notes || updatedEvent.extraDetails?.notes,
+      
+      // Event type/category
+      category: updatedEvent.category || updatedEvent.eventType || 'general',
+      eventType: updatedEvent.eventType || updatedEvent.category || 'general',
       
       // Ensure we preserve AI metadata
-      eventUpdate.extraDetails = {
+      extraDetails: {
         ...(updatedEvent.extraDetails || {}),
         parsedWithAI: updatedEvent.extraDetails?.parsedWithAI || false,
         extractionConfidence: updatedEvent.extraDetails?.extractionConfidence || null,
         parsedFromImage: updatedEvent.extraDetails?.parsedFromImage || false,
         originalText: updatedEvent.extraDetails?.originalText || '',
         creationSource: updatedEvent.extraDetails?.creationSource || 'manual',
+        updatedAt: new Date().toISOString(), // Add timestamp
         
         // Provider details for appointments
         ...(updatedEvent.category === 'appointment' && updatedEvent.providers?.[0] ? {
@@ -750,64 +765,90 @@ const handleEventAdd = async (event) => {
           birthdayChildName: updatedEvent.extraDetails?.birthdayChildName,
           birthdayChildAge: updatedEvent.extraDetails?.birthdayChildAge
         } : {})
-      };
-        
-        // Update event using EventContext
-        const result = await updateEvent(updatedEvent.firestoreId, eventUpdate);
-        
-        if (result.success) {
-          // Close edit mode
-          setIsEditingEvent(false);
-          
-          // Update selected event with ALL date properties
-          setSelectedEvent(null); // Clear first to prevent stale data
-          
-          // Clear event cache to force reload with new data
-          resetEventCache();
-          
-          // Show notification
-          CalendarService.showNotification("Event updated successfully", "success");
-          
-          // Show success animation
-          setShowSuccess(true);
-          setTimeout(() => {
-            setShowSuccess(false);
-          }, 2000);
-          
-          // Trigger a comprehensive refresh strategy
-          
-          // 1. Try context's refresh function if available
-          if (typeof refreshEvents === 'function') {
-            try {
-              await refreshEvents();
-            } catch (refreshError) {
-              console.warn("Error using context refresh:", refreshError);
-            }
-          }
-          
-          // 2. Update last refresh timestamp to trigger re-renders
-          setLastRefresh(Date.now());
-          
-          // 3. Force DOM-level refresh for components not connected to context
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-            
-            // 4. Delayed refresh to catch any edge cases
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-            }, 500);
-          }
-        } else {
-          CalendarService.showNotification(result.error || "Failed to update event", "error");
-        }
-        
-        setPendingAction(null);
-      } catch (error) {
-        console.error("Error updating event:", error);
-        CalendarService.showNotification("Failed to update event: " + error.message, "error");
-        setPendingAction(null);
       }
     };
+    
+    // Clear the event cache BEFORE updating to prevent any stale data issues
+    resetEventCache();
+    setEventCache(new Map());
+    
+    console.log(`Sending update for event ${updatedEvent.firestoreId}:`, eventUpdate);
+    
+    // Update event using EventContext
+    const result = await updateEvent(updatedEvent.firestoreId, eventUpdate);
+    
+    if (result.success) {
+      console.log("Event updated successfully:", result);
+      
+      // IMMEDIATELY force a complete refresh of the event store
+      if (typeof window !== 'undefined') {
+        // Dispatch multiple events to ensure all components refresh
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        window.dispatchEvent(new CustomEvent('calendar-event-updated', { 
+          detail: { eventId: updatedEvent.firestoreId, updated: true }
+        }));
+      }
+      
+      // Close edit mode
+      setIsEditingEvent(false);
+      setSelectedEvent(null);
+      
+      // Show notification
+      CalendarService.showNotification("Event updated successfully", "success");
+      
+      // Show success animation
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+      }, 2000);
+      
+      // Execute a multi-level refresh strategy
+      
+      // 1. Explicit EventContext refresh
+      if (typeof refreshEvents === 'function') {
+        try {
+          await refreshEvents();
+          console.log("Explicit refreshEvents() called");
+        } catch (refreshError) {
+          console.warn("Error using context refresh:", refreshError);
+        }
+      }
+      
+      // 2. Clear any internal state that might hold stale data
+      setAddedEvents({});
+      setShowAddedMessage({});
+      setConflictingEvents([]);
+      
+      // 3. Update component state to force re-rendering
+      setLastRefresh(Date.now());
+      
+      // 4. Delayed secondary refresh for race conditions
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        }
+        // Force another state update to ensure re-render
+        setLastRefresh(prev => prev + 1);
+      }, 500);
+      
+      // 5. Additional refresh after animation completes
+      setTimeout(() => {
+        if (typeof refreshEvents === 'function') refreshEvents();
+        setLastRefresh(prev => prev + 1);
+      }, 2500);
+      
+    } else {
+      console.error("Failed to update event:", result.error);
+      CalendarService.showNotification(result.error || "Failed to update event", "error");
+    }
+    
+    setPendingAction(null);
+  } catch (error) {
+    console.error("Error updating event:", error);
+    CalendarService.showNotification("Failed to update event: " + error.message, "error");
+    setPendingAction(null);
+  }
+};
   
   // Navigate to a different view based on the event's linked entity
   const navigateToLinkedEntity = (event) => {
@@ -1287,20 +1328,25 @@ const getEventsForSelectedDate = () => {
       </button>
       
       {/* Enhanced Event Manager - handles both creating new events and viewing/editing existing ones */}
+      // In RevisedFloatingCalendarWidget.jsx - Update the EnhancedEventManager code
+{/* Enhanced Event Manager - handles both creating new events and viewing/editing existing ones */}
 {(showEventManager || (selectedEvent && isEditingEvent)) && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
       <EnhancedEventManager
         initialEvent={isEditingEvent ? selectedEvent : null}
         selectedDate={selectedDate}
-        onSave={(result) => {
+        onSave={async (result) => {
+          // Replace the handler with this enhanced version
           if (result?.success) {
             // Close the editor/creator
             setShowEventManager(false);
             setShowEventDetails(false);
             setIsEditingEvent(false);
             
-            // Update local data and refresh
+            // Clear cache and update local data
+            resetEventCache();
+            setEventCache(new Map());
             setLastRefresh(Date.now());
             
             // Show success animation
@@ -1308,6 +1354,30 @@ const getEventsForSelectedDate = () => {
             setTimeout(() => {
               setShowSuccess(false);
             }, 2000);
+            
+            // Trigger multi-level refresh
+            // 1. Call refresh function if available
+            if (typeof refreshEvents === 'function') {
+              try {
+                await refreshEvents();
+              } catch (error) {
+                console.warn("Error using context refresh:", error);
+              }
+            }
+            
+            // 2. Dispatch DOM events for component refresh
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+              window.dispatchEvent(new CustomEvent('calendar-event-updated', { 
+                detail: { updated: true, cycleUpdate: true }
+              }));
+            }
+            
+            // 3. Delayed secondary refresh after animation
+            setTimeout(() => {
+              setLastRefresh(prev => prev + 1);
+              if (typeof refreshEvents === 'function') refreshEvents();
+            }, 2500);
             
             CalendarService.showNotification(
               isEditingEvent ? "Event updated successfully" : "Event added successfully", 

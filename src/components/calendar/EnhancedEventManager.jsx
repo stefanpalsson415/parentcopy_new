@@ -110,8 +110,25 @@ useEffect(() => {
   }
 }, [event.childId, children, initialEvent, mode]);
 
-  // Initialize Google Places PlaceAutocompleteElement
-// Updated initialization code in useEffect
+
+// Add at the beginning of EnhancedEventManager.jsx component after other useEffects
+useEffect(() => {
+  // This effect ensures proper date initialization for cycle due date events
+  if (initialEvent && mode === 'edit') {
+    // Handle cycle due date specific settings
+    if (initialEvent.title?.includes('Cycle') && initialEvent.title?.includes('Due Date')) {
+      // For cycle due dates, set category and type to meeting
+      setEvent(prev => ({
+        ...prev,
+        category: 'meeting',
+        eventType: 'meeting',
+        // Ensure both parents are attending
+        attendingParentId: 'both'
+      }));
+    }
+  }
+}, [initialEvent, mode]);
+
 useEffect(() => {
   // Function to initialize PlaceAutocompleteElement
   const initPlacesAutocomplete = () => {
