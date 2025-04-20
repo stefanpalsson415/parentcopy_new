@@ -923,11 +923,18 @@ const generateAiInsights = useCallback(async (data) => {
       
       // Process the recorded text
       if (recordingText && recordingText !== 'Listening...') {
-        processVoiceCommand(recordingText);
-      }else if (lowerText.includes('task') || lowerText.includes('todo') || 
-      lowerText.includes('remind me') || lowerText.includes('add to list')) {
-handleVoiceTask(text);
-}
+        const lowerRecordingText = recordingText.toLowerCase();
+        
+        // Check if it's a task-related command
+        if (lowerRecordingText.includes('task') || 
+            lowerRecordingText.includes('todo') || 
+            lowerRecordingText.includes('remind me') || 
+            lowerRecordingText.includes('add to list')) {
+          handleVoiceTask(recordingText);
+        } else {
+          processVoiceCommand(recordingText);
+        }
+      }
     };
 
     recognition.start();
