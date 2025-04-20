@@ -1542,3 +1542,5 @@ When asked about dates or calendar requests, remember you ARE able to handle cal
     CURRENT DETECTED INTENT: ${familyContext.currentIntent || 'unknown'}`;
   }
 }
+const claudeService = new ClaudeService();
+export default claudeService;
