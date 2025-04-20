@@ -448,7 +448,6 @@ const formatDate = useCallback((dateString) => {
   }, []);
 
 
-// Replace the generateLocalInsights function with this more robust version
 const generateLocalInsights = useCallback((data) => {
   try {
     // For a simplified version, create some dynamic insights based on the data
@@ -457,9 +456,10 @@ const generateLocalInsights = useCallback((data) => {
     // Safely process data for each child
     if (!data || typeof data !== 'object') {
       console.warn("Invalid data provided to generateLocalInsights", data);
-      return [];
+      return getDefaultInsights();
     }
     
+    // Process children data
     Object.keys(data).forEach(childId => {
       try {
         const childData = data[childId];
@@ -487,7 +487,25 @@ const generateLocalInsights = useCallback((data) => {
               priority: "medium",
               childId: childId
             });
+          } else {
+            // No upcoming appointments
+            insights.push({
+              type: "recommendation",
+              title: "Schedule a Check-up",
+              content: `${childName} doesn't have any upcoming medical appointments scheduled. Consider scheduling a routine check-up.`,
+              priority: "medium",
+              childId: childId
+            });
           }
+        } else {
+          // No medical appointments at all
+          insights.push({
+            type: "recommendation",
+            title: "No Medical Records",
+            content: `${childName} doesn't have any medical appointments recorded. Start tracking health visits to maintain a complete medical history.`,
+            priority: "high",
+            childId: childId
+          });
         }
         
         // Growth data insights
@@ -509,6 +527,14 @@ const generateLocalInsights = useCallback((data) => {
                 priority: "low",
                 childId: childId
               });
+            } else {
+              insights.push({
+                type: "growth",
+                title: "Growth Tracking Up-to-Date",
+                content: `${childName}'s growth measurements are up-to-date. Last recorded on ${formatDate(latestGrowthEntry.date)}.`,
+                priority: "low",
+                childId: childId
+              });
             }
           }
         } else if (childAge) {
@@ -522,7 +548,38 @@ const generateLocalInsights = useCallback((data) => {
           });
         }
         
-        // Add more insights here as needed...
+        // Routine insights
+        if (childData.routines && Array.isArray(childData.routines) && childData.routines.length > 0) {
+          insights.push({
+            type: "routine",
+            title: "Established Routines",
+            content: `${childName} has ${childData.routines.length} established routine(s). Consistent routines help children thrive and develop good habits.`,
+            priority: "low",
+            childId: childId
+          });
+        } else {
+          insights.push({
+            type: "recommendation",
+            title: "Create Daily Routines",
+            content: `${childName} doesn't have any routines established yet. Setting up consistent daily routines can improve behavior and reduce stress.`,
+            priority: "medium",
+            childId: childId
+          });
+        }
+        
+        // Hand-me-downs insights
+        if (childData.clothesHandMeDowns && Array.isArray(childData.clothesHandMeDowns) && childData.clothesHandMeDowns.length > 0) {
+          const unusedItems = childData.clothesHandMeDowns.filter(item => !item.used);
+          if (unusedItems.length > 0) {
+            insights.push({
+              type: "clothes",
+              title: "Clothing Items Ready",
+              content: `${childName} has ${unusedItems.length} unused clothing items saved. Check if any are ready to use now.`,
+              priority: "low",
+              childId: childId
+            });
+          }
+        }
         
       } catch (childError) {
         console.warn(`Error generating insights for child ${childId}:`, childError);
@@ -530,15 +587,55 @@ const generateLocalInsights = useCallback((data) => {
       }
     });
     
-    // If we still have no insights, add a default one
-    if (insights.length === 0) {
+    // Add parent-specific insights
+    try {
+      const parents = familyMembers.filter(member => member.role === 'parent');
+      
+      parents.forEach(parent => {
+        insights.push({
+          type: "medical",
+          title: "Parent Health Check",
+          content: `${parent.name}, remember that your health is important too. Schedule your annual check-up if you haven't already.`,
+          priority: "medium",
+          childId: parent.id // Using childId field for parent ID too
+        });
+        
+        insights.push({
+          type: "recommendation",
+          title: "Self-Care Reminder",
+          content: `${parent.name}, taking time for self-care helps you be a better parent. Schedule some personal time this week.`,
+          priority: "medium",
+          childId: parent.id
+        });
+      });
+    } catch (parentError) {
+      console.warn("Error generating parent insights:", parentError);
+    }
+    
+    // Add survey-related insights
+    try {
       insights.push({
         type: "recommendation",
-        title: "Getting Started",
-        content: "Start tracking your children's health, growth, and routines to get personalized insights.",
+        title: "Family Survey Opportunity",
+        content: "Complete your family's workload survey to get personalized recommendations for better balance.",
         priority: "medium",
         childId: null
       });
+      
+      insights.push({
+        type: "recommendation",
+        title: "Weekly Check-In",
+        content: "Don't forget your weekly family check-in to ensure everyone's needs are being addressed.",
+        priority: "medium",
+        childId: null
+      });
+    } catch (surveyError) {
+      console.warn("Error generating survey insights:", surveyError);
+    }
+    
+    // If we still have no insights, add default ones
+    if (insights.length === 0) {
+      return getDefaultInsights();
     }
     
     // Sort insights by priority (high, medium, low)
@@ -548,12 +645,59 @@ const generateLocalInsights = useCallback((data) => {
       return priorityOrder[a.priority || 'medium'] - priorityOrder[b.priority || 'medium'];
     });
     
+    // Always include at least 3 insights
+    if (insights.length < 3) {
+      const defaultInsights = getDefaultInsights();
+      return [...insights, ...defaultInsights.slice(0, 3 - insights.length)];
+    }
+    
     return insights;
   } catch (error) {
     console.error("Error in generateLocalInsights:", error);
-    return []; // Return empty array on error
+    return getDefaultInsights(); // Return default insights on error
   }
-}, [getChildName, getChildAge, formatDate]);
+}, [getChildName, getChildAge, formatDate, familyMembers]);
+
+// Helper function to provide default insights
+const getDefaultInsights = () => {
+  return [
+    {
+      type: "recommendation",
+      title: "Getting Started",
+      content: "Start tracking your children's health, growth, and routines to get personalized insights.",
+      priority: "medium",
+      childId: null
+    },
+    {
+      type: "recommendation",
+      title: "Regular Health Check-ups",
+      content: "Regular medical check-ups are important for monitoring your family's health. Schedule appointments for anyone who hasn't had a check-up in the past year.",
+      priority: "high",
+      childId: null
+    },
+    {
+      type: "recommendation",
+      title: "Growth Tracking",
+      content: "Tracking your children's growth helps identify potential health concerns early. Try measuring height and weight quarterly.",
+      priority: "medium",
+      childId: null
+    },
+    {
+      type: "recommendation",
+      title: "Establish Routines",
+      content: "Consistent routines help children feel secure and develop healthy habits. Consider creating morning and bedtime routines.",
+      priority: "medium",
+      childId: null
+    },
+    {
+      type: "recommendation",
+      title: "Family Meeting",
+      content: "Regular family meetings can help address concerns and celebrate successes. Try scheduling a weekly family check-in.",
+      priority: "low",
+      childId: null
+    }
+  ];
+};
 
 
 const generateAiInsights = useCallback(async (data) => {
@@ -3711,6 +3855,7 @@ const handleRemoveItem = async (itemType, childId, itemId) => {
       try {
         // First generate local insights as a fallback
         const localInsights = generateLocalInsights(childrenData);
+        setAiInsights(localInsights);
         
         // Try to get AI insights for variety (with a catch in case it fails)
         try {
@@ -3720,13 +3865,10 @@ const handleRemoveItem = async (itemType, childId, itemId) => {
           // If we got valid AI insights, use those
           if (aiInsights && Array.isArray(aiInsights) && aiInsights.length > 0) {
             setAiInsights(aiInsights);
-          } else {
-            // Otherwise fall back to local insights
-            setAiInsights(localInsights);
           }
         } catch (aiError) {
           console.warn("Could not get AI insights, using local:", aiError);
-          setAiInsights(localInsights);
+          // Already set local insights above, so no need to set again
         }
         
         // Clear loading state
@@ -3747,7 +3889,7 @@ const handleRemoveItem = async (itemType, childId, itemId) => {
       }
     }, 500); // 500ms delay to make animation visible
   }}
-  className={`p-2 rounded hover:bg-blue-100`}
+  className="p-2 rounded hover:bg-blue-100"
   disabled={loadingSection === "insights"}
   title="Refresh insights"
 >
