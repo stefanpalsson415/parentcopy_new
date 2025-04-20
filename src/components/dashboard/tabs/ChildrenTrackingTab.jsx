@@ -3702,31 +3702,56 @@ const handleRemoveItem = async (itemType, childId, itemId) => {
                                                     Family Insights
                                                   </h3>
                                                   <button 
-  onClick={async () => {
-    try {
-      setLoadingSection("insights");
-      // Use the local generateLocalInsights function instead
-      const localInsights = generateLocalInsights(childrenData);
-      setAiInsights(localInsights);
-      setLoadingSection(null);
-      setAllieMessage({
-        type: 'success',
-        text: 'Insights refreshed successfully!'
-      });
-    } catch (error) {
-      console.error("Error refreshing insights:", error);
-      setLoadingSection(null);
-      setAllieMessage({
-        type: 'error',
-        text: 'Error refreshing insights. Please try again.'
-      });
-    }
+  onClick={() => {
+    // Set loading state to show animation
+    setLoadingSection("insights");
+    
+    // Add a small delay to make the animation visible
+    setTimeout(async () => {
+      try {
+        // First generate local insights as a fallback
+        const localInsights = generateLocalInsights(childrenData);
+        
+        // Try to get AI insights for variety (with a catch in case it fails)
+        try {
+          // This is an async call that will take some time
+          const aiInsights = await AllieAIService.generateChildInsights(familyId, childrenData);
+          
+          // If we got valid AI insights, use those
+          if (aiInsights && Array.isArray(aiInsights) && aiInsights.length > 0) {
+            setAiInsights(aiInsights);
+          } else {
+            // Otherwise fall back to local insights
+            setAiInsights(localInsights);
+          }
+        } catch (aiError) {
+          console.warn("Could not get AI insights, using local:", aiError);
+          setAiInsights(localInsights);
+        }
+        
+        // Clear loading state
+        setLoadingSection(null);
+        
+        // Show success message
+        setAllieMessage({
+          type: 'success',
+          text: 'Insights refreshed successfully!'
+        });
+      } catch (error) {
+        console.error("Error refreshing insights:", error);
+        setLoadingSection(null);
+        setAllieMessage({
+          type: 'error',
+          text: 'Error refreshing insights. Please try again.'
+        });
+      }
+    }, 500); // 500ms delay to make animation visible
   }}
-  className={`p-2 rounded hover:bg-blue-100 ${loadingSection === "insights" ? "animate-spin" : ""}`}
+  className={`p-2 rounded hover:bg-blue-100`}
   disabled={loadingSection === "insights"}
   title="Refresh insights"
 >
-  <RefreshCw size={18} className="text-blue-600" />
+  <RefreshCw size={18} className={`text-blue-600 ${loadingSection === "insights" ? "animate-spin" : ""}`} />
 </button>
                                                 </div>
                                                 
