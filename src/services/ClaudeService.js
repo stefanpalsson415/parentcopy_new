@@ -24,6 +24,15 @@ class ClaudeService {
     this.model = 'claude-3-7-sonnet-20250219'; // Latest model
     this.mockMode = false; // Explicitly disable mock mode
     
+    // Add debug mode flag that can be toggled
+    this.debugMode = false;
+    
+    // Add a mechanism to disable all AI calls if needed
+    this.disableAICalls = false;
+    
+    // Set this to true to disable calendar detection to prevent freezes
+    this.disableCalendarDetection = true;
+    
     console.log(`Claude service initialized to use ${isProduction ? 'production' : isLocalhost ? 'local' : 'unknown'} proxy server at ${this.proxyUrl}`);
   }
   
@@ -76,122 +85,138 @@ class ClaudeService {
   }
 
   async generateResponse(messages, context, options = {}) {
-  try {
-    // Add a call tracking mechanism to prevent infinite loops
-    if (!this._callTracker) {
-      this._callTracker = {
-        count: 0,
-        lastReset: Date.now()
-      };
-    }
-    
-    // Reset counter every 10 seconds
-    if (Date.now() - this._callTracker.lastReset > 10000) {
-      this._callTracker.count = 0;
-      this._callTracker.lastReset = Date.now();
-    }
-    
-    // Increment call count
-    this._callTracker.count++;
-    
-    // Prevent recursive calls that might cause freezing
-    if (this._callTracker.count > 5) {
-      console.warn("Too many API calls in a short period, throttling to prevent loops");
-      return "I'm processing multiple requests. Please wait a moment before asking another question.";
-    }
-    
-    // Format system prompt with family context
-    const systemPrompt = this.formatSystemPrompt(context || {});
-    
-    // Log for debugging
-    console.log("Claude API request via proxy:", { 
-      messagesCount: messages.length, 
-      systemPromptLength: systemPrompt.length,
-      model: this.model,
-      mockMode: this.mockMode,
-      temperature: options.temperature ||.7,
-      maxTokens: options.maxTokens || 4000
-    });
-    
-    // Check if messages is an array of our internal message format
-    let formattedMessages;
-    if (messages.length > 0 && messages[0].sender) {
-      // Convert to Claude's expected format
-      formattedMessages = messages.map(msg => ({
-        role: msg.sender === 'allie' ? 'assistant' : 'user',
-        content: msg.text || ""
-      }));
-    } else {
-      // Assume messages are already in Claude's format
-      formattedMessages = messages;
-    }
-    
-    // Reduce context size if needed (Claude has token limits)
-    // Keep the most recent messages, ensuring we have context but don't exceed limits
-    if (formattedMessages.length > 20) {
-      const contextLimit = 20;
-      // Always keep the last message
-      const lastMessage = formattedMessages[formattedMessages.length - 1];
+    try {
+      // Add a call tracking mechanism to prevent infinite loops
+      if (!this._callTracker) {
+        this._callTracker = {
+          count: 0,
+          lastReset: Date.now()
+        };
+      }
       
-      // Pick a selection of older messages for context
-      // Get every other message from the rest to reduce context size
-      const oldMessages = formattedMessages.slice(0, formattedMessages.length - 1)
-        .filter((_, index) => index % 2 === 0)
-        .slice(-contextLimit + 1);
+      // Reset counter every 10 seconds
+      if (Date.now() - this._callTracker.lastReset > 10000) {
+        this._callTracker.count = 0;
+        this._callTracker.lastReset = Date.now();
+      }
       
-      formattedMessages = [...oldMessages, lastMessage];
+      // Increment call count
+      this._callTracker.count++;
       
-      console.log(`Reduced message context from ${messages.length} to ${formattedMessages.length} messages`);
-    }
-    
-    // Check for calendar confirmation or calendar request  
-    const lastUserMessage = formattedMessages[formattedMessages.length - 1].content || "";
+      // Prevent recursive calls that might cause freezing
+      if (this._callTracker.count > 5) {
+        console.warn("Too many API calls in a short period, throttling to prevent loops");
+        return "I'm processing multiple requests. Please wait a moment before asking another question.";
+      }
+      
+      // Early exit if AI calls are disabled
+      if (this.disableAICalls) {
+        console.log("AI calls disabled. Returning fallback response.");
+        return this.createPersonalizedResponse(
+          typeof messages[messages.length - 1] === 'object' 
+            ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "") 
+            : "", 
+          context
+        );
+      }
+      
+      // Format system prompt with family context
+      const systemPrompt = this.formatSystemPrompt(context || {});
+      
+      // Log for debugging
+      if (this.debugMode) {
+        console.log("Claude API request via proxy:", { 
+          messagesCount: messages.length, 
+          systemPromptLength: systemPrompt.length,
+          model: this.model,
+          mockMode: this.mockMode,
+          temperature: options.temperature || 0.7,
+          maxTokens: options.maxTokens || 4000
+        });
+      }
+      
+      // Check if messages is an array of our internal message format
+      let formattedMessages;
+      if (messages.length > 0 && messages[0].sender) {
+        // Convert to Claude's expected format
+        formattedMessages = messages.map(msg => ({
+          role: msg.sender === 'allie' ? 'assistant' : 'user',
+          content: msg.text || ""
+        }));
+      } else {
+        // Assume messages are already in Claude's format
+        formattedMessages = messages;
+      }
+      
+      // Reduce context size if needed (Claude has token limits)
+      // Keep the most recent messages, ensuring we have context but don't exceed limits
+      if (formattedMessages.length > 20) {
+        const contextLimit = 20;
+        // Always keep the last message
+        const lastMessage = formattedMessages[formattedMessages.length - 1];
+        
+        // Pick a selection of older messages for context
+        // Get every other message from the rest to reduce context size
+        const oldMessages = formattedMessages.slice(0, formattedMessages.length - 1)
+          .filter((_, index) => index % 2 === 0)
+          .slice(-contextLimit + 1);
+        
+        formattedMessages = [...oldMessages, lastMessage];
+        
+        if (this.debugMode) {
+          console.log(`Reduced message context from ${messages.length} to ${formattedMessages.length} messages`);
+        }
+      }
+      
+      // Check for calendar confirmation or calendar request  
+      const lastUserMessage = formattedMessages[formattedMessages.length - 1].content || "";
 
-    // Check if the previous message had a calendar confirmation token  
-    let previousMessage = "";  
-    if (formattedMessages.length > 1) {  
-      previousMessage = formattedMessages[formattedMessages.length - 2].content || "";  
-    }
-
-    // If a calendar request is being explicitly requested, process it.
-    // Otherwise skip the automatic detection to prevent recursive API calls
-    if (options.forceCalendarCheck) {
-      const confirmationMatch = previousMessage.match(/\<calendar\_confirmation token="(\[^"\]+)"\>/);  
-      if (confirmationMatch && confirmationMatch[1]) {  
-        const confirmationToken = confirmationMatch[1];  
-        console.log("Found calendar confirmation token:", confirmationToken);  
-          
-        // Handle the confirmation response  
-        return this.handleCalendarConfirmation(lastUserMessage, confirmationToken, auth.currentUser?.uid);  
+      // Check if the previous message had a calendar confirmation token  
+      let previousMessage = "";  
+      if (formattedMessages.length > 1) {  
+        previousMessage = formattedMessages[formattedMessages.length - 2].content || "";  
       }
 
-      // Check if the last message appears to be a standalone calendar request  
-      const calendarIndicators = [  
-        'add to calendar', 'schedule', 'appointment', 'meeting', 'event',  
-        'create a', 'make a', 'add a', 'book a', 'plan a',  
-        'dentist', 'doctor', 'birthday', 'party', 'invitation'  
-      ];
-
-      const isLikelyCalendarRequest = calendarIndicators.some(indicator =>   
-        lastUserMessage.toLowerCase().includes(indicator)  
-      );
-
-      if (isLikelyCalendarRequest) {  
-        console.log("Detected likely calendar request in latest message");  
-          
-        // Use async/await with the new async extractCalendarRequest method  
-        try {  
-          const calendarEventData = await this.extractCalendarRequest(lastUserMessage);  
+      // If a calendar request is being explicitly requested, process it.
+      // Otherwise skip the automatic detection to prevent recursive API calls
+      if (options.forceCalendarCheck && !this.disableCalendarDetection) {
+        const confirmationMatch = previousMessage.match(/\<calendar\_confirmation token="(\[^"\]+)"\>/);  
+        if (confirmationMatch && confirmationMatch[1]) {  
+          const confirmationToken = confirmationMatch[1];  
+          console.log("Found calendar confirmation token:", confirmationToken);  
             
-          if (calendarEventData) {  
-            // Process only the calendar request from the most recent message  
-            console.log("Successfully extracted calendar data, processing only this request");  
-            return this.processCalendarRequest(calendarEventData, context);  
+          // Handle the confirmation response  
+          return this.handleCalendarConfirmation(lastUserMessage, confirmationToken, auth.currentUser?.uid);  
+        }
+
+        // Check if the last message appears to be a standalone calendar request  
+        const calendarIndicators = [  
+          'add to calendar', 'schedule', 'appointment', 'meeting', 'event',  
+          'create a', 'make a', 'add a', 'book a', 'plan a',  
+          'dentist', 'doctor', 'birthday', 'party', 'invitation'  
+        ];
+
+        const isLikelyCalendarRequest = calendarIndicators.some(indicator =>   
+          lastUserMessage.toLowerCase().includes(indicator)  
+        );
+
+        if (isLikelyCalendarRequest) {  
+          console.log("Detected likely calendar request in latest message");  
+            
+          // Use async/await with the new async extractCalendarRequest method  
+          try {  
+            const calendarEventData = await this.extractCalendarRequest(lastUserMessage);  
+              
+            if (calendarEventData) {  
+              // Process only the calendar request from the most recent message  
+              console.log("Successfully extracted calendar data, processing only this request");  
+              return this.processCalendarRequest(calendarEventData, context);  
+            }  
+          } catch (calendarError) {  
+            console.error("Error extracting calendar event:", calendarError);    
+            // Continue with normal Claude processing if calendar extraction fails  
           }  
-        } catch (calendarError) {  
-          console.error("Error extracting calendar event:", calendarError);    
-          // Continue with normal Claude processing if calendar extraction fails  
-        }  
+        }
       }
       
       // If we have too many messages, consider using a focused subset
@@ -209,7 +234,9 @@ class ClaudeService {
         );
         
         if (isLikelyStandaloneQuestion) {
-          console.log("Detected standalone question, focusing response on latest message");
+          if (this.debugMode) {
+            console.log("Detected standalone question, focusing response on latest message");
+          }
           // Create a focused subset of messages: some context + latest message
           const focusedMessages = [
             ...formattedMessages.slice(-3, -1), // Some context
@@ -217,7 +244,9 @@ class ClaudeService {
           ];
           
           // Update for logging
-          console.log(`Using focused context of ${focusedMessages.length} messages`);
+          if (this.debugMode) {
+            console.log(`Using focused context of ${focusedMessages.length} messages`);
+          }
           formattedMessages = focusedMessages;
         }
       }
@@ -236,7 +265,10 @@ class ClaudeService {
       const timeoutId = setTimeout(() => controller.abort(), 45000); // Increased timeout to 45 seconds
       
       // Make the API call through our proxy server with better error handling
-      console.log("Attempting to connect to proxy at:", this.proxyUrl);
+      if (this.debugMode) {
+        console.log("Attempting to connect to proxy at:", this.proxyUrl);
+      }
+      
       try {
         const response = await fetch(this.proxyUrl, {
           method: 'POST',
@@ -368,74 +400,74 @@ class ClaudeService {
   }
 
   // Updated version with loop protection
-async extractCalendarRequest(message) {  
-  try {
-    // Check if we're already processing a calendar request to prevent recursion
-    if (this._processingCalendarRequest) {
-      console.log("Calendar request processing already in progress, skipping to prevent loops");
-      return null;
-    }
-    
-    // Set a flag to prevent recursive calls
-    this._processingCalendarRequest = true;
-    
-    // Add a timeout to force release the lock after 5 seconds
-    setTimeout(() => {
-      this._processingCalendarRequest = false;
-    }, 5000);
+  async extractCalendarRequest(message) {  
+    try {
+      // Check if we're already processing a calendar request to prevent recursion
+      if (this._processingCalendarRequest) {
+        console.log("Calendar request processing already in progress, skipping to prevent loops");
+        return null;
+      }
+      
+      // Set a flag to prevent recursive calls
+      this._processingCalendarRequest = true;
+      
+      // Add a timeout to force release the lock after 5 seconds
+      setTimeout(() => {
+        this._processingCalendarRequest = false;
+      }, 5000);
 
-    // Check if this is a calendar-related request first (keep this quick check)  
-    const calendarKeywords = [  
-      'add to calendar', 'schedule', 'appointment', 'meeting', 'event',   
-      'calendar', 'book', 'plan', 'sync', 'reminder', 'save date', 'date'  
-    ];  
+      // Check if this is a calendar-related request first (keep this quick check)  
+      const calendarKeywords = [  
+        'add to calendar', 'schedule', 'appointment', 'meeting', 'event',   
+        'calendar', 'book', 'plan', 'sync', 'reminder', 'save date', 'date'  
+      ];  
+        
+      const isCalendarRequest = calendarKeywords.some(keyword =>   
+        message.toLowerCase().includes(keyword)  
+      );  
+        
+      if (!isCalendarRequest) {
+        this._processingCalendarRequest = false;
+        return null;  
+      }
+        
+      // Use UnifiedParserService to extract event details  
+      const UnifiedParserService = (await import('./UnifiedParserService')).default;  
+      const parsedEvent = await UnifiedParserService.parseEvent(message);  
+        
+      if (!parsedEvent || !parsedEvent.title) {  
+        console.warn("UnifiedParserService failed to extract event details");
+        this._processingCalendarRequest = false;
+        return null;  
+      }  
+        
+      console.log("AI-parsed event:", parsedEvent);  
+        
+      // Convert the parsed event to the format expected by processCalendarRequest  
+      const result = {  
+        type: parsedEvent.eventType || 'event',  
+        title: parsedEvent.title || 'New Event',  
+        dateTime: parsedEvent.dateTime, // ISO date string  
+        endDateTime: parsedEvent.endDateTime,  
+        location: parsedEvent.location || '',  
+        description: parsedEvent.description || '',  
+        childName: parsedEvent.childName || null,  
+        childId: parsedEvent.childId || null,  
+        hostParent: parsedEvent.hostName || '',  
+        extraDetails: parsedEvent.extraDetails || {},  
+        originalText: message  
+      };
       
-    const isCalendarRequest = calendarKeywords.some(keyword =>   
-      message.toLowerCase().includes(keyword)  
-    );  
-      
-    if (!isCalendarRequest) {
+      // Release the lock
       this._processingCalendarRequest = false;
-      return null;  
-    }
-      
-    // Use UnifiedParserService to extract event details  
-    const UnifiedParserService = (await import('./UnifiedParserService')).default;  
-    const parsedEvent = await UnifiedParserService.parseEvent(message);  
-      
-    if (!parsedEvent || !parsedEvent.title) {  
-      console.warn("UnifiedParserService failed to extract event details");
+      return result;
+    } catch (error) {  
+      console.error("Error extracting calendar event with AI:", error);
+      // Make sure to release the lock even if there's an error
       this._processingCalendarRequest = false;
       return null;  
     }  
-      
-    console.log("AI-parsed event:", parsedEvent);  
-      
-    // Convert the parsed event to the format expected by processCalendarRequest  
-    const result = {  
-      type: parsedEvent.eventType || 'event',  
-      title: parsedEvent.title || 'New Event',  
-      dateTime: parsedEvent.dateTime, // ISO date string  
-      endDateTime: parsedEvent.endDateTime,  
-      location: parsedEvent.location || '',  
-      description: parsedEvent.description || '',  
-      childName: parsedEvent.childName || null,  
-      childId: parsedEvent.childId || null,  
-      hostParent: parsedEvent.hostName || '',  
-      extraDetails: parsedEvent.extraDetails || {},  
-      originalText: message  
-    };
-    
-    // Release the lock
-    this._processingCalendarRequest = false;
-    return result;
-  } catch (error) {  
-    console.error("Error extracting calendar event with AI:", error);
-    // Make sure to release the lock even if there's an error
-    this._processingCalendarRequest = false;
-    return null;  
-  }  
-}
+  }
 
   async processCalendarRequest(eventData, context) {  
     try {  
@@ -443,7 +475,9 @@ async extractCalendarRequest(message) {
         return "I couldn't extract event details from your message. Could you provide more information?";  
       }  
         
-      console.log(`Processing calendar request with data:`, JSON.stringify(eventData, null, 2));  
+      if (this.debugMode) {
+        console.log(`Processing calendar request with data:`, JSON.stringify(eventData, null, 2));  
+      }
         
       const currentUser = auth.currentUser;  
       if (!currentUser) {  
@@ -613,7 +647,9 @@ async extractCalendarRequest(message) {
         }  
       };  
         
-      console.log("Generated calendar event:", JSON.stringify(event, null, 2));  
+      if (this.debugMode) {
+        console.log("Generated calendar event:", JSON.stringify(event, null, 2));  
+      }
         
       // Instead of immediately adding the event, return a confirmation message  
       // Format the event details for the user to confirm  
@@ -683,219 +719,219 @@ async extractCalendarRequest(message) {
 
   // Add this new method to ClaudeService.js  
   // In src/services/ClaudeService.js 
-async handleCalendarConfirmation(message, token, userId) {  
-  try {  
-    // Check if we have a valid token and pending event  
-    if (!token || !userId) {  
-      return "I couldn't find the event you're referring to. Please try creating it again.";  
-    }  
-        
-    // Retrieve the pending event  
-    let pendingEvent = null;  
-    if (typeof window !== 'undefined') {  
-      try {  
-        const pendingEvents = JSON.parse(localStorage.getItem('pendingCalendarEvents') || '{}');  
-        pendingEvent = pendingEvents[token]?.event;  
-            
-        // Remove the pending event from storage  
-        delete pendingEvents[token];  
-        localStorage.setItem('pendingCalendarEvents', JSON.stringify(pendingEvents));  
-      } catch (storageError) {  
-        console.error("Error retrieving pending event:", storageError);  
+  async handleCalendarConfirmation(message, token, userId) {  
+    try {  
+      // Check if we have a valid token and pending event  
+      if (!token || !userId) {  
+        return "I couldn't find the event you're referring to. Please try creating it again.";  
       }  
-    }  
-        
-    if (!pendingEvent) {  
-      return "I couldn't find the event you're referring to, or it may have expired. Please try creating it again.";  
-    }  
-        
-    // Check if the user wants to confirm or modify the event  
-    const lowerMessage = message.toLowerCase();  
-    const confirmTerms = ['yes', 'confirm', 'okay', 'ok', 'sure', 'add it', 'add to calendar', 'looks good', 'correct'];  
-        
-    // Check if any confirmation term is in the message  
-    const isConfirmed = confirmTerms.some(term =>   
-      lowerMessage.includes(term) || lowerMessage === term  
-    );  
-        
-    if (isConfirmed) {  
-      // User confirmed - add the event to the calendar  
-      const result = await CalendarService.addEvent(pendingEvent, userId);  
           
-      if (result && result.success) {  
-        // Trigger a UI refresh with multiple attempts
-        if (typeof window !== 'undefined') {
-          console.log("Dispatching calendar refresh events after adding event");
-          
-          // Immediate refresh
-          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-          
-          // Follow-up refreshes to ensure UI updates
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-            console.log("Sending delayed refresh event (500ms)");
-          }, 500);
-          
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-            console.log("Sending delayed refresh event (1500ms)");
-          }, 1500);
-        }
-            
-        // Format the success message  
-        const eventDate = new Date(pendingEvent.start.dateTime);  
-        const formattedDate = eventDate.toLocaleDateString('en-US', {   
-          weekday: 'long',   
-          month: 'long',   
-          day: 'numeric'   
-        });  
-            
-        const formattedTime = eventDate.toLocaleTimeString('en-US', {   
-          hour: 'numeric',   
-          minute: '2-digit'  
-        });  
-            
-        let response = `I've added the following event to your family's shared calendar:\n\n`;  
-        response += `Event: ${pendingEvent.summary}\n`;  
-        response += `Date: ${formattedDate}\n`;  
-        response += `Time: ${formattedTime}\n`;  
-            
-        if (pendingEvent.location) {  
-          response += `Location: ${pendingEvent.location}\n`;  
-        }  
-            
-        if (pendingEvent.childName) {  
-          response += `For: ${pendingEvent.childName}\n`;  
-        }  
-            
-        if (pendingEvent.extraDetails?.providerName) {  
-          response += `Provider: ${pendingEvent.extraDetails.providerName}\n`;  
-        }  
-            
-        response += `\nThis has been added to your family's shared calendar. You can view and manage this in your calendar.`;  
-            
-        return response;  
-      } else {  
-        return "I tried to add the event to your calendar, but encountered an issue. Please try again or add it manually through the calendar widget.";  
-      }  
-    } else {  
-      // User wants to modify the event - try to understand what they want to change  
-      try {  
-        // Use UnifiedParserService to extract the updated event  
-        const UnifiedParserService = (await import('./UnifiedParserService')).default;  
-        const updatedEvent = await UnifiedParserService.parseEvent(message, {}, [  
-          { text: `Previous event: ${pendingEvent.summary} on ${pendingEvent.start.dateTime}` }  
-        ]);  
-            
-        // Check what was updated  
-        let changes = [];  
-            
-        // Check for date/time changes  
-        if (updatedEvent.dateTime) {  
-          const newDate = new Date(updatedEvent.dateTime);  
-          const oldDate = new Date(pendingEvent.start.dateTime);  
+      // Retrieve the pending event  
+      let pendingEvent = null;  
+      if (typeof window !== 'undefined') {  
+        try {  
+          const pendingEvents = JSON.parse(localStorage.getItem('pendingCalendarEvents') || '{}');  
+          pendingEvent = pendingEvents[token]?.event;  
               
-          if (newDate.toDateString() !== oldDate.toDateString() ||   
-              newDate.getHours() !== oldDate.getHours() ||   
-              newDate.getMinutes() !== oldDate.getMinutes()) {  
-                
-            // Update the event time  
-            pendingEvent.start.dateTime = newDate.toISOString();  
-                
-            // Update end time (maintain same duration)  
-            const oldEnd = new Date(pendingEvent.end.dateTime);  
-            const duration = oldEnd - oldDate;  
-                
-            const newEnd = new Date(newDate.getTime() + duration);  
-            pendingEvent.end.dateTime = newEnd.toISOString();  
-                
-            changes.push(`Date/time updated to ${newDate.toLocaleString()}`);  
-          }  
+          // Remove the pending event from storage  
+          delete pendingEvents[token];  
+          localStorage.setItem('pendingCalendarEvents', JSON.stringify(pendingEvents));  
+        } catch (storageError) {  
+          console.error("Error retrieving pending event:", storageError);  
         }  
-            
-        // Check for title changes  
-        if (updatedEvent.title && updatedEvent.title !== pendingEvent.summary) {  
-          pendingEvent.summary = updatedEvent.title;  
-          changes.push(`Title updated to "${updatedEvent.title}"`);  
-        }  
-            
-        // Check for location changes  
-        if (updatedEvent.location && updatedEvent.location !== pendingEvent.location) {  
-          pendingEvent.location = updatedEvent.location;  
-          changes.push(`Location updated to "${updatedEvent.location}"`);  
-        }  
-            
-        // Handle no changes detected  
-        if (changes.length === 0) {  
-          // No specific changes found, but user didn't confirm  
-          return "I'm not sure what changes you'd like to make. Please specify what you want to change, or reply with 'yes' to confirm the event.";  
-        }  
-            
-        // Create a new token for the updated event  
-        const newToken = Date.now().toString(36) + Math.random().toString(36).substring(2);  
-            
-        // Store the updated event  
-        if (typeof window !== 'undefined') {  
-          try {  
-            const pendingEvents = JSON.parse(localStorage.getItem('pendingCalendarEvents') || '{}');  
-            pendingEvents[newToken] = {  
-              event: pendingEvent,  
-              timestamp: Date.now()  
-            };  
-            localStorage.setItem('pendingCalendarEvents', JSON.stringify(pendingEvents));  
-          } catch (storageError) {  
-            console.error("Error storing updated pending event:", storageError);  
-          }  
-        }  
-            
-        // Format the updated event for confirmation  
-        const formattedDate = new Date(pendingEvent.start.dateTime).toLocaleDateString('en-US', {   
-          weekday: 'long',   
-          month: 'long',   
-          day: 'numeric'   
-        });  
-            
-        const formattedTime = new Date(pendingEvent.start.dateTime).toLocaleTimeString('en-US', {   
-          hour: 'numeric',   
-          minute: '2-digit'  
-        });  
-            
-        let responseMessage = `I've updated the event details:\n\n`;  
-        responseMessage += changes.join('\n') + '\n\n';  
-        responseMessage += `Updated details:\n`;  
-        responseMessage += `Event: ${pendingEvent.summary}\n`;  
-        responseMessage += `Date: ${formattedDate}\n`;  
-        responseMessage += `Time: ${formattedTime}\n`;  
-            
-        if (pendingEvent.location) {  
-          responseMessage += `Location: ${pendingEvent.location}\n`;  
-        }  
-            
-        if (pendingEvent.childName) {  
-          responseMessage += `For: ${pendingEvent.childName}\n`;  
-        }  
-            
-        if (pendingEvent.extraDetails?.providerName) {  
-          responseMessage += `Provider: ${pendingEvent.extraDetails.providerName}\n`;  
-        }  
-            
-        // Add confirmation instructions  
-        responseMessage += `\nDoes this look correct now? Reply with "yes" to add this event to your calendar.`;  
-            
-        // Add the confirmation token  
-        responseMessage += `\n\n<calendar_confirmation token="${newToken}">`;  
-            
-        return responseMessage;  
-      } catch (error) {  
-        console.error("Error processing event modifications:", error);  
-        return "I had trouble understanding your changes. Could you please specify exactly what you'd like to change about the event?";  
       }  
+          
+      if (!pendingEvent) {  
+        return "I couldn't find the event you're referring to, or it may have expired. Please try creating it again.";  
+      }  
+          
+      // Check if the user wants to confirm or modify the event  
+      const lowerMessage = message.toLowerCase();  
+      const confirmTerms = ['yes', 'confirm', 'okay', 'ok', 'sure', 'add it', 'add to calendar', 'looks good', 'correct'];  
+          
+      // Check if any confirmation term is in the message  
+      const isConfirmed = confirmTerms.some(term =>   
+        lowerMessage.includes(term) || lowerMessage === term  
+      );  
+          
+      if (isConfirmed) {  
+        // User confirmed - add the event to the calendar  
+        const result = await CalendarService.addEvent(pendingEvent, userId);  
+            
+        if (result && result.success) {  
+          // Trigger a UI refresh with multiple attempts
+          if (typeof window !== 'undefined') {
+            console.log("Dispatching calendar refresh events after adding event");
+            
+            // Immediate refresh
+            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+            
+            // Follow-up refreshes to ensure UI updates
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+              console.log("Sending delayed refresh event (500ms)");
+            }, 500);
+            
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+              console.log("Sending delayed refresh event (1500ms)");
+            }, 1500);
+          }
+              
+          // Format the success message  
+          const eventDate = new Date(pendingEvent.start.dateTime);  
+          const formattedDate = eventDate.toLocaleDateString('en-US', {   
+            weekday: 'long',   
+            month: 'long',   
+            day: 'numeric'   
+          });  
+              
+          const formattedTime = eventDate.toLocaleTimeString('en-US', {   
+            hour: 'numeric',   
+            minute: '2-digit'  
+          });  
+              
+          let response = `I've added the following event to your family's shared calendar:\n\n`;  
+          response += `Event: ${pendingEvent.summary}\n`;  
+          response += `Date: ${formattedDate}\n`;  
+          response += `Time: ${formattedTime}\n`;  
+              
+          if (pendingEvent.location) {  
+            response += `Location: ${pendingEvent.location}\n`;  
+          }  
+              
+          if (pendingEvent.childName) {  
+            response += `For: ${pendingEvent.childName}\n`;  
+          }  
+              
+          if (pendingEvent.extraDetails?.providerName) {  
+            response += `Provider: ${pendingEvent.extraDetails.providerName}\n`;  
+          }  
+              
+          response += `\nThis has been added to your family's shared calendar. You can view and manage this in your calendar.`;  
+              
+          return response;  
+        } else {  
+          return "I tried to add the event to your calendar, but encountered an issue. Please try again or add it manually through the calendar widget.";  
+        }  
+      } else {  
+        // User wants to modify the event - try to understand what they want to change  
+        try {  
+          // Use UnifiedParserService to extract the updated event  
+          const UnifiedParserService = (await import('./UnifiedParserService')).default;  
+          const updatedEvent = await UnifiedParserService.parseEvent(message, {}, [  
+            { text: `Previous event: ${pendingEvent.summary} on ${pendingEvent.start.dateTime}` }  
+          ]);  
+              
+          // Check what was updated  
+          let changes = [];  
+              
+          // Check for date/time changes  
+          if (updatedEvent.dateTime) {  
+            const newDate = new Date(updatedEvent.dateTime);  
+            const oldDate = new Date(pendingEvent.start.dateTime);  
+                
+            if (newDate.toDateString() !== oldDate.toDateString() ||   
+                newDate.getHours() !== oldDate.getHours() ||   
+                newDate.getMinutes() !== oldDate.getMinutes()) {  
+                  
+              // Update the event time  
+              pendingEvent.start.dateTime = newDate.toISOString();  
+                  
+              // Update end time (maintain same duration)  
+              const oldEnd = new Date(pendingEvent.end.dateTime);  
+              const duration = oldEnd - oldDate;  
+                  
+              const newEnd = new Date(newDate.getTime() + duration);  
+              pendingEvent.end.dateTime = newEnd.toISOString();  
+                  
+              changes.push(`Date/time updated to ${newDate.toLocaleString()}`);  
+            }  
+          }  
+              
+          // Check for title changes  
+          if (updatedEvent.title && updatedEvent.title !== pendingEvent.summary) {  
+            pendingEvent.summary = updatedEvent.title;  
+            changes.push(`Title updated to "${updatedEvent.title}"`);  
+          }  
+              
+          // Check for location changes  
+          if (updatedEvent.location && updatedEvent.location !== pendingEvent.location) {  
+            pendingEvent.location = updatedEvent.location;  
+            changes.push(`Location updated to "${updatedEvent.location}"`);  
+          }  
+              
+          // Handle no changes detected  
+          if (changes.length === 0) {  
+            // No specific changes found, but user didn't confirm  
+            return "I'm not sure what changes you'd like to make. Please specify what you want to change, or reply with 'yes' to confirm the event.";  
+          }  
+              
+          // Create a new token for the updated event  
+          const newToken = Date.now().toString(36) + Math.random().toString(36).substring(2);  
+              
+          // Store the updated event  
+          if (typeof window !== 'undefined') {  
+            try {  
+              const pendingEvents = JSON.parse(localStorage.getItem('pendingCalendarEvents') || '{}');  
+              pendingEvents[newToken] = {  
+                event: pendingEvent,  
+                timestamp: Date.now()  
+              };  
+              localStorage.setItem('pendingCalendarEvents', JSON.stringify(pendingEvents));  
+            } catch (storageError) {  
+              console.error("Error storing updated pending event:", storageError);  
+            }  
+          }  
+              
+          // Format the updated event for confirmation  
+          const formattedDate = new Date(pendingEvent.start.dateTime).toLocaleDateString('en-US', {   
+            weekday: 'long',   
+            month: 'long',   
+            day: 'numeric'   
+          });  
+              
+          const formattedTime = new Date(pendingEvent.start.dateTime).toLocaleTimeString('en-US', {   
+            hour: 'numeric',   
+            minute: '2-digit'  
+          });  
+              
+          let responseMessage = `I've updated the event details:\n\n`;  
+          responseMessage += changes.join('\n') + '\n\n';  
+          responseMessage += `Updated details:\n`;  
+          responseMessage += `Event: ${pendingEvent.summary}\n`;  
+          responseMessage += `Date: ${formattedDate}\n`;  
+          responseMessage += `Time: ${formattedTime}\n`;  
+              
+          if (pendingEvent.location) {  
+            responseMessage += `Location: ${pendingEvent.location}\n`;  
+          }  
+              
+          if (pendingEvent.childName) {  
+            responseMessage += `For: ${pendingEvent.childName}\n`;  
+          }  
+              
+          if (pendingEvent.extraDetails?.providerName) {  
+            responseMessage += `Provider: ${pendingEvent.extraDetails.providerName}\n`;  
+          }  
+              
+          // Add confirmation instructions  
+          responseMessage += `\nDoes this look correct now? Reply with "yes" to add this event to your calendar.`;  
+              
+          // Add the confirmation token  
+          responseMessage += `\n\n<calendar_confirmation token="${newToken}">`;  
+              
+          return responseMessage;  
+        } catch (error) {  
+          console.error("Error processing event modifications:", error);  
+          return "I had trouble understanding your changes. Could you please specify exactly what you'd like to change about the event?";  
+        }  
+      }  
+    } catch (error) {  
+      console.error("Error handling calendar confirmation:", error);  
+      return "I encountered an issue processing your response. Please try creating the event again.";  
     }  
-  } catch (error) {  
-    console.error("Error handling calendar confirmation:", error);  
-    return "I encountered an issue processing your response. Please try creating the event again.";  
-  }  
-}
+  }
   
   // Extract provider details from text
   extractProviderInfo(text) {
@@ -1051,7 +1087,9 @@ async handleCalendarConfirmation(message, token, userId) {
   // Format system prompt with family context
   formatSystemPrompt(familyContext) {
     // Log the context data for debugging
-    console.log("Formatting system prompt with context:", Object.keys(familyContext));
+    if (this.debugMode) {
+      console.log("Formatting system prompt with context:", Object.keys(familyContext));
+    }
     
     // Get knowledge base if available
     const kb = familyContext.knowledgeBase || {};
@@ -1504,5 +1542,3 @@ When asked about dates or calendar requests, remember you ARE able to handle cal
     CURRENT DETECTED INTENT: ${familyContext.currentIntent || 'unknown'}`;
   }
 }
-
-export default new ClaudeService();
