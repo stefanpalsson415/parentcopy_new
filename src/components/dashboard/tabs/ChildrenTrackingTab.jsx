@@ -70,7 +70,9 @@ const ChildrenTrackingTab = () => {
     growth: false,
     routines: false,
     documents: false,
-    providers: false
+    providers: false,
+    taskBoard: true 
+
   });
 
   // Healthcare provider management 
@@ -3622,6 +3624,31 @@ const handleRemoveItem = async (itemType, childId, itemId) => {
                                           </div>
                                         )}
                                         
+{/* Family Task Board section - moved to top */}
+<div className="border border-gray-200 rounded-lg bg-white mb-6">
+  <button
+    onClick={() => setExpandedSections(prev => ({...prev, taskBoard: !prev.taskBoard}))}
+    className="w-full flex items-center justify-between p-3 font-medium font-roboto"
+  >
+    <div className="flex items-center">
+      <GripVertical size={18} className="mr-2 text-gray-500" />
+      Family Task Board
+    </div>
+    {expandedSections.taskBoard ? (
+      <ChevronUp size={18} className="text-gray-500" />
+    ) : (
+      <ChevronDown size={18} className="text-gray-500" />
+    )}
+  </button>
+  
+  {expandedSections.taskBoard && (
+    <div className="p-4 border-t border-gray-200" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+      <FamilyKanbanBoard />
+    </div>
+  )}
+</div>
+
+
                                         {/* Minimal UI that always renders even with errors */}
                                         <div className="bg-white rounded-lg p-4 shadow-sm mb-6">
                                           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
@@ -4008,12 +4035,7 @@ const handleRemoveItem = async (itemType, childId, itemId) => {
                                             {/* Main content sections - only render if data is loaded */}
                                             {Object.keys(childrenData).length > 0 && (
                                               <>
-                                                {/* Family Kanban Board */}
-                                                <div className="border border-gray-200 rounded-lg bg-white">
-                                                  <div className="p-4">
-                                                    <FamilyKanbanBoard />
-                                                  </div>
-                                                </div>
+                                                
                                                 
                                                 {/* Medical section */}
                                                 <div id="medical-section">
