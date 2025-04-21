@@ -782,18 +782,31 @@ const handleEditMessage = async (messageId, editedText) => {
 };
 
 
-/*
-// Update the ChatMessage usage in render:
 <ChatMessage 
+  key={index} 
   message={msg} 
   onDelete={handleDeleteMessage}
-  onEdit={handleEditMessage}
+  onEdit={handleEditMessage} 
+  showFeedback={true}
 />
-*/
 
 // Add a function to handle message deletion
 const handleDeleteMessage = async (messageId) => {
-  setMessages(prev => prev.filter(msg => msg.id !== messageId));
+  try {
+    // First delete the message from the database
+    const result = await ChatPersistenceService.deleteMessage(messageId, familyId);
+    
+    if (result.success) {
+      // Only update the UI if the database operation was successful
+      setMessages(prev => prev.filter(msg => msg.id !== messageId));
+    } else {
+      console.error("Failed to delete message from database:", result.error);
+      // Optionally show an error toast/message to the user
+    }
+  } catch (error) {
+    console.error("Error deleting message:", error);
+    // Optionally show an error toast/message to the user
+  }
 };
 
   // Process specific request types with focused context

@@ -54,14 +54,24 @@ const ChatMessage = ({ message, showFeedback = true, onReact = null, onDelete = 
   };
   
   // Function to handle message deletion
-  const handleDelete = async () => {
-    if (window.confirm("Are you sure you want to delete this message?")) {
-      if (onDelete) {
-        onDelete(message.id);
-      }
-    }
-    setShowOptions(false);
-  };
+const handleDelete = async () => {
+  // Instead of window.confirm, use a custom confirmation approach
+  // This avoids browser notifications and keeps everything in-app
+  // For now, I'll keep the confirmation logic but we can add a custom modal later
+  
+  // Prevent event propagation
+  event.stopPropagation();
+  
+  // Simple in-app confirm dialog
+  const confirmDelete = window.confirm("Are you sure you want to delete this message?");
+  
+  if (confirmDelete && onDelete) {
+    // Call the delete handler from the parent component
+    onDelete(message.id);
+  }
+  
+  setShowOptions(false);
+};
   
   // Function to handle editing
   const handleEdit = () => {

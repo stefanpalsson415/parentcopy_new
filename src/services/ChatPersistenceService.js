@@ -231,138 +231,85 @@ addToMessageCache(familyId, message) {
       
       console.log(`Loading up to ${pageSize} messages for family ${familyId}${loadMore ? ' (loading more)' : ''}`);
       
-      // Create a simpler query to avoid index issues
-      let messagesQuery;
+      // Use a simpler query that doesn't require complex indexes
+      // This is more reliable across browser refreshes
+      const messagesQuery = query(
+        collection(db, "chatMessages"),
+        where("familyId", "==", familyId)
+      );
       
-      try {
-        // First try with a simplified query to avoid indexing issues
-        messagesQuery = query(
-          collection(db, "chatMessages"),
-          where("familyId", "==", familyId),
-          orderBy("createdAt", "desc"), // Use createdAt which is a server timestamp
-          limit(pageSize)
-        );
+      const querySnapshot = await getDocs(messagesQuery);
+      let allMessages = [];
+      
+      querySnapshot.forEach(doc => {
+        const data = doc.data();
+        let timestamp;
         
-        // Add pagination if loading more
-        if (loadMore && this.lastDocumentSnapshot[familyId]) {
-          messagesQuery = query(
-            collection(db, "chatMessages"),
-            where("familyId", "==", familyId),
-            orderBy("createdAt", "desc"),
-            startAfter(this.lastDocumentSnapshot[familyId]),
-            limit(pageSize)
-          );
-        }
-        
-        const querySnapshot = await getDocs(messagesQuery);
-        
-        // Save last document for pagination
-        if (!querySnapshot.empty) {
-          this.lastDocumentSnapshot[familyId] = querySnapshot.docs[querySnapshot.docs.length - 1];
-        }
-        
-        const messages = [];
-        querySnapshot.forEach((doc) => {
-          const messageData = doc.data();
-          
-          // Remove metadata if not requested to reduce payload size
-          if (!includeMetadata && messageData.metadata) {
-            delete messageData.metadata;
-          }
-          
-          // Ensure timestamp is a valid date
-          let timestamp;
-          if (messageData.timestamp instanceof Timestamp) {
-            timestamp = messageData.timestamp.toDate();
-          } else if (messageData.createdAt instanceof Timestamp) {
-            timestamp = messageData.createdAt.toDate();
-          } else {
-            timestamp = new Date(messageData.timestamp || messageData.createdAt || Date.now());
-          }
-          
-          messages.push({
-            id: doc.id,
-            ...messageData,
-            timestamp: timestamp.toISOString()
-          });
-        });
-        
-        // Sort messages in ascending order (oldest first)
-        messages.sort((a, b) => {
-          const aTime = new Date(a.timestamp);
-          const bTime = new Date(b.timestamp);
-          return aTime - bTime;
-        });
-        
-        console.log(`Loaded ${messages.length} messages for family ${familyId}`);
-        
-        // Return messages with pagination info
-        return { 
-          messages,
-          hasMore: messages.length === pageSize
-        };
-      } catch (indexError) {
-        console.warn("Error with initial query, trying fallback approach:", indexError);
-        
-        // Fallback approach: Get all messages and filter/sort client-side
-        const fallbackQuery = query(
-          collection(db, "chatMessages"),
-          where("familyId", "==", familyId)
-        );
-        
-        const fallbackSnapshot = await getDocs(fallbackQuery);
-        let allMessages = [];
-        
-        fallbackSnapshot.forEach(doc => {
-          const data = doc.data();
-          let timestamp;
-          
-          // Handle various timestamp formats
-          if (data.timestamp instanceof Timestamp) {
-            timestamp = data.timestamp.toDate();
-          } else if (data.createdAt instanceof Timestamp) {
-            timestamp = data.createdAt.toDate();
-          } else {
-            timestamp = new Date(data.timestamp || data.createdAt || Date.now());
-          }
-          
-          allMessages.push({
-            id: doc.id,
-            ...data,
-            timestamp: timestamp.toISOString()
-          });
-        });
-        
-        // Sort by timestamp
-        allMessages.sort((a, b) => {
-          const aTime = new Date(a.timestamp);
-          const bTime = new Date(b.timestamp);
-          return aTime - bTime;
-        });
-        
-        // Handle pagination client-side
-        const startIndex = loadMore && this.messageCache[familyId] ? 
-          this.messageCache[familyId].length : 0;
-        
-        const paginatedMessages = allMessages.slice(startIndex, startIndex + pageSize);
-        
-        // Update cache for next pagination
-        if (loadMore) {
-          this.messageCache[familyId] = [
-            ...(this.messageCache[familyId] || []),
-            ...paginatedMessages
-          ];
+        // Handle various timestamp formats
+        if (data.timestamp instanceof Timestamp) {
+          timestamp = data.timestamp.toDate();
+        } else if (data.createdAt instanceof Timestamp) {
+          timestamp = data.createdAt.toDate();
         } else {
-          this.messageCache[familyId] = paginatedMessages;
+          timestamp = new Date(data.timestamp || data.createdAt || Date.now());
         }
         
-        console.log(`Loaded ${paginatedMessages.length} messages using fallback approach`);
+        // Remove metadata if not requested
+        if (!includeMetadata && data.metadata) {
+          delete data.metadata;
+        }
         
-        return {
-          messages: paginatedMessages,
-          hasMore: paginatedMessages.length === pageSize
-        };
+        allMessages.push({
+          id: doc.id,
+          ...data,
+          timestamp: timestamp.toISOString()
+        });
+      });
+      
+      // Sort by timestamp (newest first for pagination logic)
+      allMessages.sort((a, b) => {
+        const aTime = new Date(a.timestamp);
+        const bTime = new Date(b.timestamp);
+        return bTime - aTime; // Descending for pagination
+      });
+      
+      // Handle pagination
+      let paginatedMessages = [];
+      
+      if (loadMore && this.messageCache[familyId]) {
+        // Find the oldest message we already have
+        const oldestMessage = this.messageCache[familyId][0];
+        const oldestTimestamp = new Date(oldestMessage.timestamp);
+        
+        // Get messages older than our oldest message
+        const olderMessages = allMessages.filter(msg => 
+          new Date(msg.timestamp) < oldestTimestamp
+        );
+        
+        // Take the next page of older messages
+        paginatedMessages = olderMessages.slice(0, pageSize);
+        
+        // Update cache - prepend older messages
+        this.messageCache[familyId] = [...paginatedMessages, ...this.messageCache[familyId]];
+      } else {
+        // Initial load - take the newest messages
+        paginatedMessages = allMessages.slice(0, pageSize);
+        this.messageCache[familyId] = paginatedMessages;
       }
+      
+      // For display: sort in ascending order (oldest first)
+      const displayMessages = [...paginatedMessages].sort((a, b) => {
+        const aTime = new Date(a.timestamp);
+        const bTime = new Date(b.timestamp);
+        return aTime - bTime; // Ascending for display
+      });
+      
+      console.log(`Loaded ${displayMessages.length} messages for family ${familyId}`);
+      
+      return {
+        messages: displayMessages,
+        hasMore: allMessages.length > this.messageCache[familyId].length
+      };
     } catch (error) {
       console.error("Error loading messages:", error);
       return { messages: [], hasMore: false, error: error.message };
