@@ -243,14 +243,92 @@ class UnifiedParserService {
    */
   processResponse(response, type) {
     try {
-      // Try to extract JSON from the response
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error("Couldn't find JSON in Claude's response");
+      // Enhanced JSON extraction logic
+      let result = null;
+      
+      // First try: direct JSON parsing if response is already JSON
+      try {
+        result = JSON.parse(response);
+        console.log(`Successfully parsed direct JSON for ${type}`);
+      } catch (directParseError) {
+        // Continue to other methods if direct parsing fails
       }
       
-      // Parse the JSON
-      const result = JSON.parse(jsonMatch[0]);
+      // Second try: Look for JSON in markdown code blocks
+      if (!result) {
+        const markdownJsonRegex = /```(?:json)?\s*({[\s\S]*?})\s*```/;
+        const markdownMatch = response.match(markdownJsonRegex);
+        if (markdownMatch && markdownMatch[1]) {
+          try {
+            result = JSON.parse(markdownMatch[1]);
+            console.log(`Found JSON in markdown code block for ${type}`);
+          } catch (markdownError) {
+            console.warn(`Error parsing JSON from markdown for ${type}:`, markdownError);
+          }
+        }
+      }
+      
+      // Third try: Standard regex extraction
+      if (!result) {
+        const jsonMatch = response.match(/(\{[\s\S]*\})/);
+        if (jsonMatch && jsonMatch[0]) {
+          try {
+            // Clean the JSON string to ensure it's valid
+            const cleanJSON = jsonMatch[0]
+              .replace(/\\'/g, "'")
+              .replace(/\\"/g, '"')
+              .replace(/\n/g, ' ');
+            
+            result = JSON.parse(cleanJSON);
+            console.log(`Extracted JSON using regex for ${type}`);
+          } catch (regexError) {
+            console.warn(`Error parsing extracted JSON for ${type}:`, regexError);
+          }
+        }
+      }
+      
+      // Fourth try: Look for JSON arrays
+      if (!result) {
+        const arrayMatch = response.match(/(\[[\s\S]*\])/);
+        if (arrayMatch && arrayMatch[0]) {
+          try {
+            result = JSON.parse(arrayMatch[0]);
+            console.log(`Found JSON array for ${type}`);
+          } catch (arrayError) {
+            console.warn(`Error parsing JSON array for ${type}:`, arrayError);
+          }
+        }
+      }
+      
+      // If all parsing attempts failed, try to create a structured object from text
+      if (!result) {
+        console.warn(`Failed to extract JSON for ${type}. Creating from text fallback.`);
+        console.log("Response preview:", response.substring(0, 200) + "...");
+        
+        // Create object from text response - extract key information based on type
+        if (type === 'provider') {
+          const nameMatch = response.match(/name[:\s]+"?([^"]+)"?/i) || 
+                          response.match(/([A-Z][a-z]+(?: [A-Z][a-z]+)*)/);
+          const typeMatch = response.match(/type[:\s]+"?([^"]+)"?/i);
+          const specialtyMatch = response.match(/specialty[:\s]+"?([^"]+)"?/i);
+          
+          result = {
+            name: nameMatch ? nameMatch[1].trim() : "Unknown Provider",
+            type: typeMatch ? typeMatch[1].trim() : "medical",
+            specialty: specialtyMatch ? specialtyMatch[1].trim() : ""
+          };
+          
+          console.log("Created provider from text:", result);
+        } else {
+          // For other types, use the fallback objects
+          result = null;
+        }
+      }
+      
+      // If we still don't have a result, use fallbacks
+      if (!result) {
+        throw new Error("All parsing methods failed");
+      }
       
       // Type-specific post-processing
       switch (type) {
@@ -311,6 +389,17 @@ class UnifiedParserService {
           // Ensure required fields have defaults
           result.name = result.name || "Unknown Provider";
           result.type = result.type || "medical";
+          
+          // Extract email and phone if present in the response but not in the result
+          if (!result.email) {
+            const emailMatch = response.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
+            if (emailMatch) result.email = emailMatch[1];
+          }
+          
+          if (!result.phone) {
+            const phoneMatch = response.match(/(?:\+\d{1,2}\s)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/);
+            if (phoneMatch) result.phone = phoneMatch[0];
+          }
           break;
           
         case 'document':

@@ -105,30 +105,48 @@ const ProviderDirectory = ({
     const handleProviderAdded = () => {
       console.log("Provider added event received in ProviderDirectory");
       
-      // Force calendar refresh to trigger data reloading in parent components
-      window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-      
-      // Additional UI update triggers
-      if (typeof window !== 'undefined') {
-        // Try to trigger parent component refreshes
-        window.dispatchEvent(new CustomEvent('family-data-updated'));
+      // Force refresh of providers directly
+      if (onAddProvider || familyId) {
+        // If we have props for loading providers or an explicit reload function, use it
+        if (typeof onAddProvider === 'function') {
+          console.log("Refreshing providers via onAddProvider");
+          // The parent component should reload providers
+          window.dispatchEvent(new CustomEvent('load-providers', { detail: { familyId } }));
+        }
         
-        // Add a delayed refresh for components that might initialize late
+        // Try to trigger reloads on parent components
+        window.dispatchEvent(new CustomEvent('family-data-updated'));
+        window.dispatchEvent(new CustomEvent('force-data-refresh'));
+        
+        // Force a component re-render by triggering state updates
         setTimeout(() => {
+          console.log("Forcing directory refresh");
+          // Force re-render by dispatching a specific event
+          window.dispatchEvent(new CustomEvent('directory-refresh-needed'));
+          
+          // Re-dispatch provider-added as a fallback
+          window.dispatchEvent(new CustomEvent('provider-added'));
+          
+          // Also refresh calendar as some components might depend on it
           window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-          console.log("Sent delayed refresh event");
         }, 1000);
       }
     };
   
     // Listen for the custom event
     window.addEventListener('provider-added', handleProviderAdded);
+    window.addEventListener('directory-refresh-needed', () => {
+      // Force component redraw by updating a small piece of state
+      setSearchQuery(prev => prev);
+    });
     
     // Clean up
     return () => {
       window.removeEventListener('provider-added', handleProviderAdded);
+      window.removeEventListener('directory-refresh-needed', () => {});
     };
-  }, [familyId]); // Add familyId dependency to avoid stale closures
+  }, [familyId, onAddProvider]); // Add dependencies to avoid stale closures
+  
   // Open add/edit modal
   const openProviderModal = (provider = null) => {
     if (provider) {
