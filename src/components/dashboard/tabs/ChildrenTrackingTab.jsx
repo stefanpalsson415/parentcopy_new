@@ -3682,28 +3682,26 @@ const handleRemoveItem = async (itemType, childId, itemId) => {
                                         
 {/* Family Task Board section - moved to top */}
 <div id="task-board-section" className="border border-gray-200 rounded-lg bg-white mb-6">
-  <button
-    onClick={() => setExpandedSections(prev => ({...prev, taskBoard: !prev.taskBoard}))}
-    className="w-full flex items-center justify-between p-3 font-medium font-roboto"
-  >
-    <div className="flex items-center">
-      <GripVertical size={18} className="mr-2 text-gray-500" />
-      <h2 className="text-xl font-bold font-roboto m-0">Family Task Board</h2>
-    </div>
-    {expandedSections.taskBoard ? (
-      <ChevronUp size={18} className="text-gray-500" />
-    ) : (
-      <ChevronDown size={18} className="text-gray-500" />
-    )}
-  </button>
-  
-  {expandedSections.taskBoard && (
   <div className="p-4 border-t border-gray-200">
-    <FamilyKanbanBoard />
+    {expandedSections.taskBoard ? (
+      <FamilyKanbanBoard 
+        hideHeader={false}
+        onMinimize={() => setExpandedSections(prev => ({...prev, taskBoard: false}))}
+      />
+    ) : (
+      <button
+        onClick={() => setExpandedSections(prev => ({...prev, taskBoard: true}))}
+        className="w-full flex items-center justify-between p-3 font-medium font-roboto"
+      >
+        <div className="flex items-center">
+          <GripVertical size={18} className="mr-2 text-gray-500" />
+          <h2 className="text-xl font-bold font-roboto m-0">Family Task Board</h2>
+        </div>
+        <ChevronDown size={18} className="text-gray-500" />
+      </button>
+    )}
   </div>
-)}
 </div>
-
 
                                         {/* Minimal UI that always renders even with errors */}
                                         <div className="bg-white rounded-lg p-4 shadow-sm mb-6">

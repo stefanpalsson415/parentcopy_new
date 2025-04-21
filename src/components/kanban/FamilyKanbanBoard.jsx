@@ -31,14 +31,14 @@ import {
   writeBatch,
   increment
 } from 'firebase/firestore';
-import { Plus, Loader, AlertCircle } from 'lucide-react';
+import { Plus, Loader, AlertCircle, ChevronUp } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import CalendarService from '../../services/CalendarService';
 import UserAvatar from '../common/UserAvatar';
 
 
 
-const FamilyKanbanBoard = ({ hideHeader = false }) => {
+const FamilyKanbanBoard = ({ hideHeader = false, onMinimize = null }) => {
   const { familyId, familyMembers, selectedUser } = useFamily();
   const { currentUser } = useAuth();
   
@@ -481,7 +481,20 @@ const calendarEvent = {
   
   return (
     <div className="family-kanban-board">
-      {!hideHeader && <h2 className="text-2xl font-bold mb-4">Family Task Board</h2>}
+      {!hideHeader && (
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold">Family Task Board</h2>
+          {onMinimize && (
+            <button 
+              onClick={onMinimize}
+              className="p-1 hover:bg-gray-100 rounded"
+              title="Minimize board"
+            >
+              <ChevronUp size={18} />
+            </button>
+          )}
+        </div>
+      )}
       
       {/* Filters */}
       <KanbanFilters
