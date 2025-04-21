@@ -300,25 +300,30 @@ const FamilyKanbanBoard = () => {
     endDate.setHours(endDate.getHours() + 1); // 1 hour duration
     
     // Create event object
-    const calendarEvent = {
-      title: task.title,
-      description: task.description || `Kanban Task: ${task.title}`,
-      start: {
-        dateTime: dueDate.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      end: {
-        dateTime: endDate.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      category: 'task',
-      eventType: 'kanban',
-      color: task.priority === 'high' ? 'red' : task.priority === 'medium' ? 'orange' : 'blue',
-      familyId,
-      reminders: {
-        useDefault: true
-      }
-    };
+    // Create event object for the calendar
+const calendarEvent = {
+  summary: task.title,
+  description: task.description || `Kanban Task: ${task.title}`,
+  location: task.location || '',
+  start: {
+    dateTime: dueDate.toISOString(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+  },
+  end: {
+    dateTime: endDate.toISOString(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+  },
+  category: 'task',
+  eventType: 'kanban',
+  color: task.priority === 'high' ? 'red' : task.priority === 'medium' ? 'orange' : 'blue',
+  familyId,
+  // Add assigned user information
+  attendingParentId: task.assignedTo,
+  assignedToName: task.assignedToName,
+  reminders: {
+    useDefault: true
+  }
+};
     
     // Add to calendar
     const result = await CalendarService.addEvent(calendarEvent, currentUser.uid);

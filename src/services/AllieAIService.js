@@ -969,7 +969,7 @@ async processTaskFromChat(message, familyId, userId) {
           const calendarEvent = {
             title: `Task: ${taskDetails.text}`,
             summary: `Task: ${taskDetails.text}`,
-            description: taskDetails.notes || `Task from Allie chat`,
+            description: todoItem.notes || `Task from Allie chat`,
             location: '',
             start: {
               dateTime: dueDate.toISOString(),
@@ -983,6 +983,9 @@ async processTaskFromChat(message, familyId, userId) {
             eventType: "task",
             familyId: familyId,
             taskId: docRef.id,
+            // Add assigned user information
+            attendingParentId: todoItem.assignedTo,
+            assignedToName: todoItem.assignedTo ? familyMembers.find(m => m.id === todoItem.assignedTo)?.name : null,
             reminders: {
               useDefault: true
             }

@@ -302,10 +302,23 @@ const AllieChat = () => {
     }
   }, [location.pathname, familyMembers, completedWeeks, selectedUser]);
   
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  // Replace it with this enhanced version:
+useEffect(() => {
+  // This will run whenever messages change or when the chat is opened
+  messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+}, [messages, isOpen]);
+
+// Also add this new useEffect to ensure scrolling happens after the chat opens
+useEffect(() => {
+  if (isOpen) {
+    // Small delay to ensure DOM is updated before scrolling
+    const timer = setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }
+}, [isOpen]);
   
   // Load messages when component mounts or familyId changes
   useEffect(() => {
