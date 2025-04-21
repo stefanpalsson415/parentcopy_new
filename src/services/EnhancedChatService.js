@@ -1291,50 +1291,86 @@ async handleSharedTodoRequest(text, familyContext, userId) {
       }
     }
     
-    // Create the todo
-    if (familyContext.familyId) {
-      const todoData = {
-        text: todoText,
-        completed: false,
-        familyId: familyContext.familyId,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        createdBy: userId || 'allie-chat',
-        assignedTo: assignTo,
-        category: category,
-        position: 0, // Will be at the top of the list
-        notes: 'Added via Allie Chat',
-        dueDate: dueDate ? dueDate.toISOString() : null
-      };
-      
-      console.log("Creating todo:", todoData);
-      
-      // Add to Firestore
-      const docRef = await addDoc(collection(db, "relationshipTodos"), todoData);
-      
-      // Trigger update event for the UI
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('todo-added', { 
-          detail: { todoId: docRef.id }
-        }));
-      }
-      
-      // Create response message
-      let response = `Perfect! I've added "${todoText}" to your todo list. `;
-      
-      if (assignTo) {
-        const assigneeName = familyContext.familyMembers.find(m => m.id === assignTo)?.name || 'the assigned person';
-        response += `It's assigned to ${assigneeName}. `;
-      }
-      
-      if (dueDate) {
-        response += `It's due by ${dueDate.toLocaleDateString()}. `;
-      }
-      
-      response += `You can find it in the To-Do List section where you can edit, assign, or mark it complete.`;
-      
-      return response;
-    } else {
+    // Create the task 
+if (familyContext.familyId) {
+  // Determine which column to add the task to based on due date
+  let column = "upcoming";
+  if (dueDate) {
+    const today = new Date();
+    const oneWeekFromNow = new Date();
+    oneWeekFromNow.setDate(today.getDate() + 7);
+    
+    if (dueDate <= oneWeekFromNow) {
+      column = "this-week";
+    }
+    
+    // If due date is today or past due, put in "in-progress"
+    const dueDateCopy = new Date(dueDate);
+    const todayCopy = new Date(today);
+    if (dueDateCopy.setHours(0, 0, 0, 0) <= todayCopy.setHours(0, 0, 0, 0)) {
+      column = "in-progress";
+    }
+  }
+  
+  // Determine priority based on content
+  let priority = "medium";
+  if (todoText.toLowerCase().match(/urgent|asap|immediately|right away|emergency/)) {
+    priority = "high";
+  } else if (todoText.toLowerCase().match(/low priority|when you get a chance|eventually|not urgent|sometime/)) {
+    priority = "low";
+  }
+  
+  // Format task data for Kanban board
+  const taskData = {
+    title: todoText,
+    description: "Added via Allie Chat",
+    dueDate: dueDate ? dueDate.toISOString() : null,
+    priority: priority,
+    category: category,
+    assignedTo: assignTo,
+    assignedToName: assignTo ? familyContext.familyMembers.find(m => m.id === assignTo)?.name : null,
+    column: column,
+    familyId: familyContext.familyId,
+    createdAt: new Date().toISOString(),
+    createdBy: userId || 'allie-chat',
+    updatedAt: new Date().toISOString(),
+    subtasks: [],
+    comments: [],
+    completed: false
+  };
+  
+  console.log("Creating task for Kanban board:", taskData);
+  
+  // Add to Firestore kanbanTasks collection
+  const docRef = await addDoc(collection(db, "kanbanTasks"), taskData);
+  
+  // Trigger update event for the UI
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('kanban-task-added', { 
+      detail: { taskId: docRef.id }
+    }));
+  }
+  
+  // Create response message
+  let response = `Perfect! I've added "${todoText}" to your tasks. `;
+  
+  if (assignTo) {
+    const assigneeName = familyContext.familyMembers.find(m => m.id === assignTo)?.name || 'the assigned person';
+    response += `It's assigned to ${assigneeName}. `;
+  }
+  
+  if (dueDate) {
+    response += `It's due by ${dueDate.toLocaleDateString()}. `;
+  }
+  
+  response += `You'll find it in the ${
+    column === 'this-week' ? 'This Week' : 
+    column === 'in-progress' ? 'In Progress' : 
+    'Upcoming'
+  } column on your task board.`;
+  
+  return response;
+} else {
       return "I'd like to add this to your todo list, but I need to know which family this belongs to. Please make sure you're logged in and try again.";
     }
   } catch (error) {
