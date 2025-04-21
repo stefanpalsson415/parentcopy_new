@@ -103,9 +103,22 @@ const ProviderDirectory = ({
   
   useEffect(() => {
     const handleProviderAdded = () => {
-      // If we're on the Provider Directory page, refresh the page to show new providers
-      // This is a simple solution; a more elegant one would use context or Redux
+      console.log("Provider added event received in ProviderDirectory");
+      
+      // Force calendar refresh to trigger data reloading in parent components
       window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+      
+      // Additional UI update triggers
+      if (typeof window !== 'undefined') {
+        // Try to trigger parent component refreshes
+        window.dispatchEvent(new CustomEvent('family-data-updated'));
+        
+        // Add a delayed refresh for components that might initialize late
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+          console.log("Sent delayed refresh event");
+        }, 1000);
+      }
     };
   
     // Listen for the custom event
@@ -115,8 +128,7 @@ const ProviderDirectory = ({
     return () => {
       window.removeEventListener('provider-added', handleProviderAdded);
     };
-  }, []); // Empty dependency array since we don't reference any props
-
+  }, [familyId]); // Add familyId dependency to avoid stale closures
   // Open add/edit modal
   const openProviderModal = (provider = null) => {
     if (provider) {

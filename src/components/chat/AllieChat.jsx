@@ -781,15 +781,6 @@ const handleEditMessage = async (messageId, editedText) => {
   }
 };
 
-
-<ChatMessage 
-  key={index} 
-  message={msg} 
-  onDelete={handleDeleteMessage}
-  onEdit={handleEditMessage} 
-  showFeedback={true}
-/>
-
 // Add a function to handle message deletion
 const handleDeleteMessage = async (messageId) => {
   try {

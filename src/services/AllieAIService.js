@@ -305,7 +305,7 @@ safelyParseJSON(jsonString, defaultValue) {
   }
 }
 
-// Replace the processProviderFromChat method in src/services/AllieAIService.js
+// Updated processProviderFromChat method in src/services/AllieAIService.js
 
 async processProviderFromChat(message, familyId) {
   try {
@@ -338,11 +338,12 @@ async processProviderFromChat(message, familyId) {
         ProviderService = (await import('./ProviderService')).default;
       } catch (error) {
         console.error("Failed to import ProviderService:", error);
-        // Create an inline version if import fails
+        // Create an inline version if import fails - FIXED to use healthcareProviders collection
         ProviderService = {
           saveProvider: async (familyId, providerData) => {
             try {
-              const providersRef = collection(db, "providers");
+              // Use healthcareProviders collection to match ProviderService implementation
+              const providersRef = collection(db, "healthcareProviders");
               const docRef = await addDoc(providersRef, {
                 ...providerData,
                 familyId,
@@ -363,8 +364,19 @@ async processProviderFromChat(message, familyId) {
       const result = await ProviderService.saveProvider(familyId, providerDetails);
       
       if (result.success) {
+        // Improved event dispatching for UI refresh
         if (typeof window !== 'undefined') {
+          // Dispatch the event multiple times to ensure components react
           window.dispatchEvent(new CustomEvent('provider-added'));
+          
+          // Add a delayed event for components that might miss the first one
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('provider-added'));
+            console.log("Sent delayed provider-added event");
+          }, 1000);
+          
+          // Force a more general refresh
+          window.dispatchEvent(new CustomEvent('force-data-refresh'));
         }
 
         return { 
@@ -389,7 +401,6 @@ async processProviderFromChat(message, familyId) {
     return { success: false, error: error.message };
   }
 }
-
 
 
 // Replace the extractProviderDetails method in src/services/AllieAIService.js
