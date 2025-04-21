@@ -1,5 +1,5 @@
 // src/components/chat/AllieChat.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef,useCallback } from 'react';
 import { MessageSquare, X, MinusSquare, Send, Info, Calendar, PlusCircle, Mic, User, ChevronUp, ChevronDown, Upload, Camera, Maximize } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import EnhancedChatService from '../../services/EnhancedChatService';
@@ -509,224 +509,219 @@ useEffect(() => {
       .slice(-count);
   };
 
-  // Main send handler
-  const handleSend = useCallback(async () => {
-    if (input.trim() && canUseChat && selectedUser && familyId) {
-      try {
-        // Save the current message text before clearing it for UI
-        const currentMessageText = input.trim();
-        
-        // Process with NLU first to show insights
-        const intent = nlu.current.detectIntent(currentMessageText);
-        const entities = nlu.current.extractEntities(currentMessageText, familyMembers);
-        
-        // Update NLU insights
-        setDetectedIntent(intent);
-        setExtractedEntities(entities);
-        
-        // Create user message
-        const userMessage = {
-          familyId,
-          sender: selectedUser.id,
-          userName: selectedUser.name,
-          userImage: selectedUser.profilePicture,
-          text: currentMessageText,
-          timestamp: new Date().toISOString()
-        };
-        
-        // Optimistically add message to UI
-        setMessages(prev => [...prev, userMessage]);
-        setInput('');
-        setTranscription('');
-        setLoading(true);
-        
-        // Reset image if any
-        if (imageFile) {
-          setImageFile(null);
-          setImagePreview(null);
-        }
-        
-        // Save message to database first
-        const savedMessage = await ChatPersistenceService.saveMessage(userMessage);
-        
-        // If saving failed, show error
-        if (!savedMessage.success) {
-          console.error("Failed to save message:", savedMessage.error);
-          setMessages(prev => [...prev, {
-            familyId,
-            sender: 'allie',
-            userName: 'Allie',
-            text: "I couldn't save your message. Please try again in a moment.",
-            timestamp: new Date().toISOString(),
-            error: true
-          }]);
-          setLoading(false);
-          return;
-        }
-        
-        // Show processing message while we analyze the input
-        const processingMessage = {
-          familyId,
-          sender: 'allie',
-          userName: 'Allie',
-          text: `I'm analyzing your request...`,
-          timestamp: new Date().toISOString()
-        };
-        
-        setMessages(prev => [...prev, processingMessage]);
-        
-        // Check for document action responses
-        const lastMessage = messages[messages.length - 1];
-        if (lastMessage && (lastMessage.documentFile || lastMessage.awaitingChildSelection)) {
-          const isDocumentResponse = await handleDocumentActionSelection(currentMessageText, lastMessage);
-          
-          if (isDocumentResponse) {
-            // Remove processing message
-            setMessages(prev => prev.filter(msg => msg !== processingMessage));
-            setLoading(false);
-            return;
-          }
-        }
-        
-        // Try to process specialized requests
-        let handled = false;
-        
-        // Check for task-related requests with broader pattern matching
-if ((currentMessageText.toLowerCase().includes('add task') || 
-currentMessageText.toLowerCase().includes('create task') || 
-currentMessageText.toLowerCase().includes('new task') || 
-currentMessageText.toLowerCase().includes('add to-do') || 
-currentMessageText.toLowerCase().includes('add todo') ||
-(currentMessageText.toLowerCase().includes('can you') && 
- currentMessageText.toLowerCase().includes('task')) ||
-currentMessageText.toLowerCase().includes('chore') ||
-currentMessageText.toLowerCase().includes('clean')) && 
-!currentMessageText.toLowerCase().includes('?')) {
-  // Use AllieAIService to process the task for Kanban board
-  try {
-    const AllieAIService = (await import('../../services/AllieAIService')).default;
-    const result = await AllieAIService.processTaskFromChat(
-      currentMessageText,
-      familyId,
-      selectedUser?.id || 'allie-chat'
-    );
-    
-    if (result.success) {
-      // Add success message to chat
-      const successMessage = {
+  // The handleSend function has a syntax error - this is what needs to be fixed
+// The problem is likely a misplaced closing brace that's closing the function too early
+// Let me provide the corrected function implementation
+
+const handleSend = useCallback(async () => {
+  if (input.trim() && canUseChat && selectedUser && familyId) {
+    try {
+      // Save the current message text before clearing it for UI
+      const currentMessageText = input.trim();
+      
+      // Process with NLU first to show insights
+      const intent = nlu.current.detectIntent(currentMessageText);
+      const entities = nlu.current.extractEntities(currentMessageText, familyMembers);
+      
+      // Update NLU insights
+      setDetectedIntent(intent);
+      setExtractedEntities(entities);
+      
+      // Create user message
+      const userMessage = {
         familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: `I've added "${result.task.title}" to your tasks${result.task.assignedToName ? ` and assigned it to ${result.task.assignedToName}` : ''}. You'll find it in the ${result.task.column === 'this-week' ? 'This Week' : result.task.column === 'in-progress' ? 'In Progress' : 'Upcoming'} column on your task board.`,
+        sender: selectedUser.id,
+        userName: selectedUser.name,
+        userImage: selectedUser.profilePicture,
+        text: currentMessageText,
         timestamp: new Date().toISOString()
       };
       
-      setMessages(prev => prev.filter(m => !m.text?.includes('analyzing')).concat(successMessage));
-      handled = true;
-    } else {
-      throw new Error(result.error || "Failed to create task");
-    }
-  } catch (error) {
-    console.error("Error processing task request:", error);
-    handled = await processSpecificRequest(currentMessageText, 'todo');
-  }
-}
-        
-        // Check for provider-related requests
-        if (!handled && (
-            currentMessageText.toLowerCase().includes('provider') ||
-            currentMessageText.toLowerCase().includes('doctor') ||
-            currentMessageText.toLowerCase().includes('dentist') ||
-            currentMessageText.toLowerCase().includes('teacher'))) {
-          handled = await processProviderRequest(currentMessageText);
-        }
-        
-        // Check for calendar/event related requests
-        if (!handled && (
-            currentMessageText.toLowerCase().includes('appointment') ||
-            currentMessageText.toLowerCase().includes('schedule') ||
-            currentMessageText.toLowerCase().includes('calendar') ||
-            currentMessageText.toLowerCase().includes('event'))) {
-          handled = await processMessageForEvents(currentMessageText);
-        }
-
-        // Check for survey-related questions
-if (currentMessageText.toLowerCase().includes('survey') || 
-currentMessageText.toLowerCase().includes('invisible parentaltasks') || 
-currentMessageText.toLowerCase().includes('visible parentaltasks') || 
-currentMessageText.toLowerCase().includes('invisible household') || 
-currentMessageText.toLowerCase().includes('visible household') || 
-currentMessageText.toLowerCase().includes('cycle')) {
-// Don't try to parse this as a specialized request
-// Let the general AI response handler deal with this
-console.log("Detected survey-related question, using general AI response");
-handled = false;
-}
-        
-        // If we handled the request with a specialized parser, we're done
-        if (handled) {
-          setLoading(false);
-          // Remove the processing message
-          setMessages(prev => prev.filter(msg => msg !== processingMessage));
-          return;
-        }
-        
-        // If we get here, we need to use the general AI response
-        // Remove the processing message first
-        setMessages(prev => prev.filter(msg => msg !== processingMessage));
-        
-        // Helper function to get recent messages for context
-const getRecentMessages = (count = 5) => {
-  // Get the most recent messages, excluding AI processing messages
-  return messages
-    .filter(msg => !msg.text?.includes('analyzing') && !msg.text?.includes('I\'m processing'))
-    .slice(-count);
-};
-
-// Get AI response for general messages - use limited context
-const recentContext = [...getRecentMessages(5), userMessage]; // Only use last 5 messages
-const aiResponse = await EnhancedChatService.getAIResponse(
-  currentMessageText, 
-  familyId, 
-  recentContext
-);
-        
-        // Add AI response to messages
-        const allieMessage = {
-          id: Date.now().toString(), // Temporary ID 
-          familyId,
-          sender: 'allie',
-          userName: 'Allie',
-          text: aiResponse,
-          timestamp: new Date().toISOString()
-        };
-        
-        // Save AI message to database
-        const savedAIMessage = await ChatPersistenceService.saveMessage(allieMessage);
-        if (savedAIMessage.success && savedAIMessage.messageId) {
-          allieMessage.id = savedAIMessage.messageId;
-        }
-        
-        // Update messages state with AI response
-        setMessages(prev => [...prev, allieMessage]);
-        
-        setLoading(false);
-      } catch (error) {
-        console.error("Error sending message:", error);
-        setLoading(false);
-        
-        // Show error message
+      // Optimistically add message to UI
+      setMessages(prev => [...prev, userMessage]);
+      setInput('');
+      setTranscription('');
+      setLoading(true);
+      
+      // Reset image if any
+      if (imageFile) {
+        setImageFile(null);
+        setImagePreview(null);
+      }
+      
+      // Save message to database first
+      const savedMessage = await ChatPersistenceService.saveMessage(userMessage);
+      
+      // If saving failed, show error
+      if (!savedMessage.success) {
+        console.error("Failed to save message:", savedMessage.error);
         setMessages(prev => [...prev, {
           familyId,
           sender: 'allie',
           userName: 'Allie',
-          text: "I'm having trouble processing your request right now. Please try again in a moment.",
+          text: "I couldn't save your message. Please try again in a moment.",
           timestamp: new Date().toISOString(),
           error: true
         }]);
+        setLoading(false);
+        return;
       }
+      
+      // Show processing message while we analyze the input
+      const processingMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I'm analyzing your request...`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, processingMessage]);
+      
+      // Check for document action responses
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage && (lastMessage.documentFile || lastMessage.awaitingChildSelection)) {
+        const isDocumentResponse = await handleDocumentActionSelection(currentMessageText, lastMessage);
+        
+        if (isDocumentResponse) {
+          // Remove processing message
+          setMessages(prev => prev.filter(msg => msg !== processingMessage));
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // Try to process specialized requests
+      let handled = false;
+      
+      // Check for task-related requests with broader pattern matching
+      if ((currentMessageText.toLowerCase().includes('add task') || 
+          currentMessageText.toLowerCase().includes('create task') || 
+          currentMessageText.toLowerCase().includes('new task') || 
+          currentMessageText.toLowerCase().includes('add to-do') || 
+          currentMessageText.toLowerCase().includes('add todo') ||
+          (currentMessageText.toLowerCase().includes('can you') && 
+           currentMessageText.toLowerCase().includes('task')) ||
+          currentMessageText.toLowerCase().includes('chore') ||
+          currentMessageText.toLowerCase().includes('clean')) && 
+          !currentMessageText.toLowerCase().includes('?')) {
+        // Use AllieAIService to process the task for Kanban board
+        try {
+          const AllieAIService = (await import('../../services/AllieAIService')).default;
+          const result = await AllieAIService.processTaskFromChat(
+            currentMessageText,
+            familyId,
+            selectedUser?.id || 'allie-chat'
+          );
+          
+          if (result.success) {
+            // Add success message to chat
+            const successMessage = {
+              familyId,
+              sender: 'allie',
+              userName: 'Allie',
+              text: `I've added "${result.task.title}" to your tasks${result.task.assignedToName ? ` and assigned it to ${result.task.assignedToName}` : ''}. You'll find it in the ${result.task.column === 'this-week' ? 'This Week' : result.task.column === 'in-progress' ? 'In Progress' : 'Upcoming'} column on your task board.`,
+              timestamp: new Date().toISOString()
+            };
+            
+            setMessages(prev => prev.filter(m => !m.text?.includes('analyzing')).concat(successMessage));
+            handled = true;
+          } else {
+            throw new Error(result.error || "Failed to create task");
+          }
+        } catch (error) {
+          console.error("Error processing task request:", error);
+          handled = await processSpecificRequest(currentMessageText, 'todo');
+        }
+      }
+      
+      // Check for provider-related requests
+      if (!handled && (
+          currentMessageText.toLowerCase().includes('provider') ||
+          currentMessageText.toLowerCase().includes('doctor') ||
+          currentMessageText.toLowerCase().includes('dentist') ||
+          currentMessageText.toLowerCase().includes('teacher'))) {
+        handled = await processProviderRequest(currentMessageText);
+      }
+      
+      // Check for calendar/event related requests
+      if (!handled && (
+          currentMessageText.toLowerCase().includes('appointment') ||
+          currentMessageText.toLowerCase().includes('schedule') ||
+          currentMessageText.toLowerCase().includes('calendar') ||
+          currentMessageText.toLowerCase().includes('event'))) {
+        handled = await processMessageForEvents(currentMessageText);
+      }
+
+      // Check for survey-related questions
+      if (currentMessageText.toLowerCase().includes('survey') || 
+          currentMessageText.toLowerCase().includes('invisible parentaltasks') || 
+          currentMessageText.toLowerCase().includes('visible parentaltasks') || 
+          currentMessageText.toLowerCase().includes('invisible household') || 
+          currentMessageText.toLowerCase().includes('visible household') || 
+          currentMessageText.toLowerCase().includes('cycle')) {
+        // Don't try to parse this as a specialized request
+        // Let the general AI response handler deal with this
+        console.log("Detected survey-related question, using general AI response");
+        handled = false;
+      }
+      
+      // If we handled the request with a specialized parser, we're done
+      if (handled) {
+        setLoading(false);
+        // Remove the processing message
+        setMessages(prev => prev.filter(msg => msg !== processingMessage));
+        return;
+      }
+      
+      // If we get here, we need to use the general AI response
+      // Remove the processing message first
+      setMessages(prev => prev.filter(msg => msg !== processingMessage));
+      
+      // Get recent messages for context
+      const recentContext = [...getRecentMessages(5), userMessage]; // Only use last 5 messages
+      const aiResponse = await EnhancedChatService.getAIResponse(
+        currentMessageText, 
+        familyId, 
+        recentContext
+      );
+      
+      // Add AI response to messages
+      const allieMessage = {
+        id: Date.now().toString(), // Temporary ID 
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: aiResponse,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Save AI message to database
+      const savedAIMessage = await ChatPersistenceService.saveMessage(allieMessage);
+      if (savedAIMessage.success && savedAIMessage.messageId) {
+        allieMessage.id = savedAIMessage.messageId;
+      }
+      
+      // Update messages state with AI response
+      setMessages(prev => [...prev, allieMessage]);
+      
+      setLoading(false);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      setLoading(false);
+      
+      // Show error message
+      setMessages(prev => [...prev, {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: "I'm having trouble processing your request right now. Please try again in a moment.",
+        timestamp: new Date().toISOString(),
+        error: true
+      }]);
     }
-  };
+  }
+}, [input, canUseChat, selectedUser, familyId, imageFile, messages, getRecentMessages]);
 
 
 // Add function to handle message edits and rerun
