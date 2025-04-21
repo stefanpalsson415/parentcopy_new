@@ -559,14 +559,45 @@ useEffect(() => {
         // Try to process specialized requests
         let handled = false;
         
-        // Check for todos - be more specific to avoid false positives
+        // Check for task-related requests with broader pattern matching
 if ((currentMessageText.toLowerCase().includes('add task') || 
 currentMessageText.toLowerCase().includes('create task') || 
 currentMessageText.toLowerCase().includes('new task') || 
 currentMessageText.toLowerCase().includes('add to-do') || 
-currentMessageText.toLowerCase().includes('add todo')) && 
+currentMessageText.toLowerCase().includes('add todo') ||
+(currentMessageText.toLowerCase().includes('can you') && 
+ currentMessageText.toLowerCase().includes('task')) ||
+currentMessageText.toLowerCase().includes('chore') ||
+currentMessageText.toLowerCase().includes('clean')) && 
 !currentMessageText.toLowerCase().includes('?')) {
-handled = await processSpecificRequest(currentMessageText, 'todo');
+  // Use AllieAIService to process the task for Kanban board
+  try {
+    const AllieAIService = (await import('../../services/AllieAIService')).default;
+    const result = await AllieAIService.processTaskFromChat(
+      currentMessageText,
+      familyId,
+      selectedUser?.id || 'allie-chat'
+    );
+    
+    if (result.success) {
+      // Add success message to chat
+      const successMessage = {
+        familyId,
+        sender: 'allie',
+        userName: 'Allie',
+        text: `I've added "${result.task.title}" to your tasks${result.task.assignedToName ? ` and assigned it to ${result.task.assignedToName}` : ''}. You'll find it in the ${result.task.column === 'this-week' ? 'This Week' : result.task.column === 'in-progress' ? 'In Progress' : 'Upcoming'} column on your task board.`,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => prev.filter(m => !m.text?.includes('analyzing')).concat(successMessage));
+      handled = true;
+    } else {
+      throw new Error(result.error || "Failed to create task");
+    }
+  } catch (error) {
+    console.error("Error processing task request:", error);
+    handled = await processSpecificRequest(currentMessageText, 'todo');
+  }
 }
         
         // Check for provider-related requests
@@ -766,93 +797,102 @@ const handleDeleteMessage = async (messageId) => {
 };
 
   // Process specific request types with focused context
-  const processSpecificRequest = async (messageText, type) => {
-    try {
-      // Get family context but keep it minimal
-      const familyContext = {
-        familyId,
-        familyMembers: familyMembers
-      };
+const processSpecificRequest = async (messageText, type) => {
+  try {
+    // Get family context but keep it minimal
+    const familyContext = {
+      familyId,
+      familyMembers: familyMembers
+    };
+    
+    // Get recent relevant messages for context
+    const recentMessages = getRecentMessages(3);
+    
+    if (type === 'todo') {
+      // FALLBACK: Still try to parse using the old method in case the primary method failed
+      const todoData = await UnifiedParserService.parseTodo(messageText, familyContext, recentMessages);
       
-      // Get recent relevant messages for context
-      const recentMessages = getRecentMessages(3);
-      
-      if (type === 'todo') {
-        const todoData = await UnifiedParserService.parseTodo(messageText, familyContext, recentMessages);
-        
-        if (todoData && todoData.text) {
-          try {
-            // Create todo object
-            const todoItem = {
-              text: todoData.text,
-              completed: false,
-              familyId,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              createdBy: selectedUser?.id || 'allie-chat',
-              assignedTo: null,
-              category: todoData.category || 'general',
-              position: 0, // Will be at the top of the list
-              notes: todoData.notes || 'Added via Allie Chat',
-              dueDate: todoData.dueDate || null
-            };
+      if (todoData && todoData.text) {
+        try {
+          // Create task for Kanban board instead of relationshipTodos
+          const db = (await import('../../services/firebase')).db;
+          const { collection, addDoc, serverTimestamp } = (await import('firebase/firestore'));
+          
+          // Format as kanban task
+          const taskItem = {
+            title: todoData.text,
+            description: todoData.notes || "Added via Allie Chat",
+            dueDate: todoData.dueDate,
+            priority: "medium",
+            category: todoData.category || "household",
+            assignedTo: null,
+            column: "upcoming",
+            familyId: familyId,
+            createdAt: serverTimestamp(),
+            createdBy: selectedUser?.id || 'allie-chat',
+            updatedAt: serverTimestamp(),
+            subtasks: [],
+            comments: [],
+            completed: false
+          };
+          
+          // Try to match assignee to a family member
+          if (todoData.assignedTo) {
+            const assignee = familyMembers.find(member => 
+              member.name.toLowerCase() === todoData.assignedTo.toLowerCase()
+            );
             
-            // Try to match assignee to a family member
-            if (todoData.assignedTo) {
-              const assignee = familyMembers.find(member => 
-                member.name.toLowerCase() === todoData.assignedTo.toLowerCase()
-              );
-              
-              if (assignee) {
-                todoItem.assignedTo = assignee.id;
-              }
+            if (assignee) {
+              taskItem.assignedTo = assignee.id;
+              taskItem.assignedToName = assignee.name;
             }
-            
-            // Add to Firestore
-            const docRef = await addDoc(collection(db, "relationshipTodos"), todoItem);
-            
-            // Trigger update event for the UI
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('todo-added', { 
-                detail: { todoId: docRef.id }
-              }));
-            }
-            
-            // Success message
-            const successMessage = {
-              familyId,
-              sender: 'allie',
-              userName: 'Allie',
-              text: `Perfect! I've added "${todoItem.text}" to your todo list. ${todoItem.assignedTo ? `It's assigned to ${familyMembers.find(m => m.id === todoItem.assignedTo)?.name || 'the assigned person'}. ` : ''}${todoItem.dueDate ? `It's due by ${new Date(todoItem.dueDate).toLocaleDateString()}. ` : ''}You can find it in the To-Do List section where you can edit, assign, or mark it complete.`,
-              timestamp: new Date().toISOString()
-            };
-            
-            setMessages(prev => prev.filter(m => !m.text?.includes('analyzing')).concat(successMessage));
-            return true;
-          } catch (error) {
-            console.error("Error creating todo item:", error);
-            
-            // Error message
-            const errorMessage = {
-              familyId,
-              sender: 'allie',
-              userName: 'Allie',
-              text: `I had trouble adding the todo item. Please try again or add it directly from the To-Do List section.`,
-              timestamp: new Date().toISOString()
-            };
-            
-            setMessages(prev => prev.filter(m => !m.text?.includes('analyzing')).concat(errorMessage));
-            return false;
           }
+          
+          // Add to Kanban tasks collection
+          const docRef = await addDoc(collection(db, "kanbanTasks"), taskItem);
+          
+          // Trigger update event for the UI
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('kanban-task-added', { 
+              detail: { taskId: docRef.id }
+            }));
+          }
+          
+          // Success message
+          const successMessage = {
+            familyId,
+            sender: 'allie',
+            userName: 'Allie',
+            text: `I've added "${taskItem.title}" to your tasks${taskItem.assignedToName ? ` and assigned it to ${taskItem.assignedToName}` : ''}. You'll find it in the Upcoming column on your task board.`,
+            timestamp: new Date().toISOString()
+          };
+          
+          setMessages(prev => prev.filter(m => !m.text?.includes('analyzing')).concat(successMessage));
+          return true;
+        } catch (error) {
+          console.error("Error creating task item:", error);
+          
+          // Error message
+          const errorMessage = {
+            familyId,
+            sender: 'allie',
+            userName: 'Allie',
+            text: `I had trouble adding the task. Please try again or add it directly from the Task Board.`,
+            timestamp: new Date().toISOString()
+          };
+          
+          setMessages(prev => prev.filter(m => !m.text?.includes('analyzing')).concat(errorMessage));
+          return false;
         }
       }
-      
-      return false;
-    } catch (error) {
-      console.error(`Error processing ${type} request:`, error);
-      return false;
     }
-  };
+    
+    return false;
+  } catch (error) {
+    console.error(`Error processing ${type} request:`, error);
+    return false;
+  }
+};
 
   // Process provider requests with focused context
   const processProviderRequest = async (messageText) => {
