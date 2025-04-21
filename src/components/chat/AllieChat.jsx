@@ -308,6 +308,37 @@ useEffect(() => {
   messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
 }, [messages, isOpen]);
 
+// Add this new useEffect to listen for external chat triggers
+useEffect(() => {
+  const handleOpenChatEvent = (event) => {
+    console.log("Received open-allie-chat event:", event.detail);
+    
+    // Open the chat if it's not already open
+    if (!isOpen) {
+      setIsOpen(true);
+    }
+    
+    // Set the input with the message from the event
+    if (event.detail?.message) {
+      setInput(event.detail.message);
+      
+      // Wait for the chat to fully open and render
+      setTimeout(() => {
+        // Send the message after the chat is open
+        handleSend();
+      }, 800); // Give it more time to open and render
+    }
+  };
+  
+  // Add event listener for our custom event
+  window.addEventListener('open-allie-chat', handleOpenChatEvent);
+  
+  // Cleanup
+  return () => {
+    window.removeEventListener('open-allie-chat', handleOpenChatEvent);
+  };
+}, [isOpen, handleSend]); // Dependencies
+
 // Also add this new useEffect to ensure scrolling happens after the chat opens
 useEffect(() => {
   if (isOpen) {
@@ -478,7 +509,7 @@ useEffect(() => {
   };
 
   // Main send handler
-  const handleSend = async () => {
+  const handleSend = useCallback(async () => {
     if (input.trim() && canUseChat && selectedUser && familyId) {
       try {
         // Save the current message text before clearing it for UI

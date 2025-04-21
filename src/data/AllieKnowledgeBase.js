@@ -20,6 +20,65 @@ export const knowledgeBase = {
     ]
   },
   
+// Add this new section to the knowledgeBase object in src/data/AllieKnowledgeBase.js
+habits: {
+  introduction: "Creating new habits is one of the most powerful ways to improve family balance. Habits are automatic behaviors that develop through repetition and are triggered by specific cues.",
+  
+  habitLoop: {
+    cue: "A trigger that initiates the behavior.",
+    routine: "The behavior itself.",
+    reward: "The benefit or satisfaction received, which reinforces the behavior."
+  },
+  
+  whyHabitsFail: [
+    "Lack of clarity: Vague goals lead to inconsistent actions.",
+    "Inconsistent triggers: Without reliable cues, habits don't become automatic.",
+    "Absence of rewards: If the behavior doesn't feel good or show immediate benefits, motivation wanes.",
+    "Overambitious goals: Trying to change too much at once leads to overwhelm.",
+    "Emotional resistance: Unresolved fears or doubts sabotage progress.",
+    "Environmental friction: When the environment contradicts the habit."
+  ],
+  
+  keystoneHabits: [
+    "Exercise: Improves mood, energy, sleep, and self-discipline.",
+    "Healthy eating: Enhances focus, reduces inflammation, improves wellness.",
+    "Daily planning: Increases productivity, reduces stress, improves time management.",
+    "Gratitude journaling: Enhances optimism, resilience, and relationships."
+  ],
+  
+  strategies: {
+    cues: "Effective cues are consistent, obvious, and contextual. Types include time-based, location-based, emotional, preceding action, and people.",
+    
+    attractive: "Make habits attractive through temptation bundling, creating a ritual, using social motivation, and tapping into identity.",
+    
+    small: "Start small with the 'Two-Minute Rule' - any new habit should take less than two minutes to do at first.",
+    
+    repetition: "Repetition is the most important factor in forming habits. It can take anywhere from 21 to 254 days to form a habit.",
+    
+    rewards: "Use immediate rewards, visual progress tracking, social sharing, and emotional reflection to reinforce habits.",
+    
+    stacking: "Habit stacking links a new habit to an existing one using the formula: 'After [current habit], I will [new habit].'",
+    
+    identity: "Focus on becoming the kind of person who behaves in a certain way rather than focusing only on outcomes."
+  },
+  
+  overcomingSetbacks: [
+    "The 'Never Miss Twice' Rule: One miss is a slip; two is a pattern.",
+    "Reflect on triggers: What caused the slip?",
+    "Plan for barriers: Have a backup plan.",
+    "Use slips as data: Not failure, but feedback.",
+    "Self-compassion: Be kind to yourself and keep moving forward."
+  ],
+  
+  familyHabits: {
+    shared: "Creating shared family habits strengthens bonds and distributes responsibilities equally.",
+    modelling: "Parents who model good habits help children develop their own positive routines.",
+    consistency: "Consistent family routines create security and predictability for children.",
+    balance: "Balanced habits ensure no one family member carries a disproportionate workload."
+  }
+},
+
+
   // Allie whitepaper content
   whitepapers: {
     taskCategories: {

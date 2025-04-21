@@ -1697,35 +1697,19 @@ if (updatedInstances.length >= 5) {
     }
   };
   
-  // Trigger Allie chat
-  const triggerAllieChat = (message) => {
-    // Simple implementation - in a real app, this would interface with your chat component
-    console.log("Asking Allie:", message);
-    
-    // First try to find the global chat button element
-    const chatButton = document.getElementById('chat-button');
-    if (chatButton) {
-      // Try to open the chat
-      chatButton.click();
-      
-      // Find the input after a delay
-      setTimeout(() => {
-        const chatInput = document.querySelector('textarea[placeholder*="Message Allie"]');
-        if (chatInput) {
-          chatInput.value = message;
-          chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-          
-          // Find and click the send button
-          const sendButton = document.querySelector('button.bg-blue-600.text-white');
-          if (sendButton) {
-            sendButton.click();
-          }
-        }
-      }, 500);
-    } else {
-      createCelebration("Chat Not Available", false, "Please try asking Allie directly through the chat button.");
-    }
-  };
+  // Trigger Allie chat with event-based approach
+const triggerAllieChat = (message) => {
+  console.log("Triggering Allie chat with message:", message);
+  
+  // Dispatch a custom event that AllieChat will listen for
+  const event = new CustomEvent('open-allie-chat', { 
+    detail: { message }
+  });
+  window.dispatchEvent(event);
+  
+  // Show a subtle confirmation to the user
+  createCelebration("Asking Allie", true, "Opening chat and asking about habits...");
+};
   
   // Filter for all family members (both adults and children)
   const displayedMembers = familyMembers.filter(m => m.role === 'parent' || m.role === 'child');
