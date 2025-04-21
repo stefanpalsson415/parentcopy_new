@@ -2486,26 +2486,32 @@ You can view and manage this in your calendar.`,
             )}
             
             {/* Render messages with date headers */}
-            {(() => {
-              let currentDate = null;
-              return messages.map((msg, index) => {
-                const messageDate = new Date(msg.timestamp);
-                const messageDateStr = formatMessageDate(messageDate);
-                
-                // Check if this message is from a different date than the previous one
-                const showDateHeader = currentDate !== messageDateStr;
-                if (showDateHeader) {
-                  currentDate = messageDateStr;
-                }
-                
-                return (
-                  <React.Fragment key={index}>
-                    {showDateHeader && <DateHeader date={currentDate} />}
-                    <ChatMessage message={msg} />
-                  </React.Fragment>
-                );
-              });
-            })()}
+{(() => {
+  let currentDate = null;
+  return messages.map((msg, index) => {
+    const messageDate = new Date(msg.timestamp);
+    const messageDateStr = formatMessageDate(messageDate);
+    
+    // Check if this message is from a different date than the previous one
+    const showDateHeader = currentDate !== messageDateStr;
+    if (showDateHeader) {
+      currentDate = messageDateStr;
+    }
+    
+    return (
+      <React.Fragment key={index}>
+        {showDateHeader && <DateHeader date={currentDate} />}
+        <ChatMessage 
+          key={index} 
+          message={msg} 
+          onDelete={handleDeleteMessage}
+          onEdit={handleEditMessage} 
+          showFeedback={true}
+        />
+      </React.Fragment>
+    );
+  });
+})()}
             
             {/* Event confirmation UI */}
             {showEventConfirmation && detectedEventDetails && (
