@@ -737,12 +737,15 @@ const handleEditMessage = async (messageId, editedText) => {
   }
 };
 
+
+/*
 // Update the ChatMessage usage in render:
 <ChatMessage 
   message={msg} 
   onDelete={handleDeleteMessage}
   onEdit={handleEditMessage}
 />
+*/
 
 // Add a function to handle message deletion
 const handleDeleteMessage = async (messageId) => {
