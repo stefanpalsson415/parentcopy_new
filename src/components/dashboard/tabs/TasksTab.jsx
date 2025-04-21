@@ -1412,132 +1412,185 @@ if (updatedInstances.length >= 5) {
     }
   };
   
-  // Create new habit
-// Replace the createNewHabit function in TasksTab.jsx (around line 306-400)
 
-// Create new habit
-const createNewHabit = async (isRefresh = false) => {
-  try {
-    setAllieIsThinking(true);
-    
-    // Default habit parts - we'll use these directly for simplicity
-    const title = "Family Calendar Check-in";
-    const description = "Take a moment each day to review the family calendar";
-    const cue = "After breakfast";
-    const action = "Check the family calendar for today's events";
-    const reward = "Feel organized and prepared for the day";
-    const identity = "I am someone who stays on top of family commitments";
-    
-    // Create the habit subtasks
-    const subTasks = [
-      { title: cue, description: "This is your trigger" },
-      { title: action, description: "This is the habit action" },
-      { title: reward, description: "This is your reward" }
-    ];
-    
+  const createNewHabit = async (isRefresh = false) => {
     try {
-      // Create the habit in the tasks array of the family document
-      const familyRef = doc(db, "families", familyId);
-      const familyDoc = await getDoc(familyRef);
+      setAllieIsThinking(true);
       
-      if (!familyDoc.exists()) {
-        throw new Error("Family document not found");
-      }
-      
-      // Get current tasks
-      const currentTasks = familyDoc.data().tasks || [];
-      
-      // If refreshing, first remove the initial habit
-      let updatedTasks = [...currentTasks];
-      if (isRefresh) {
-        // Find and remove the initial non-user-generated habit
-        const initialHabitIndex = habits.findIndex(h => !h.isUserGenerated);
-        if (initialHabitIndex >= 0) {
-          // Find the corresponding task in currentTasks
-          const initialTaskId = habits[initialHabitIndex].id;
-          updatedTasks = updatedTasks.filter(t => t.id !== initialTaskId);
+      // More varied habit options for better user experience
+      const habitOptions = [
+        {
+          title: "Family Calendar Check-in",
+          description: "Take a moment each day to review the family calendar",
+          cue: "After breakfast",
+          action: "Check the family calendar for today's events",
+          reward: "Feel organized and prepared for the day",
+          identity: "I am someone who stays on top of family commitments"
+        },
+        {
+          title: "Evening Tidy-up",
+          description: "Spend 5 minutes tidying a shared family space",
+          cue: "After dinner",
+          action: "Set a 5-minute timer and tidy one area",
+          reward: "Enjoy a cleaner space and reduced stress",
+          identity: "I am someone who contributes to family organization"
+        },
+        {
+          title: "Meal Planning Check-in",
+          description: "Review upcoming meal plans and grocery needs",
+          cue: "Before breakfast",
+          action: "Check meal plan and shopping list",
+          reward: "Feel prepared and reduce decision fatigue",
+          identity: "I am someone who helps manage family nutrition"
         }
-      }
+      ];
       
-      // Generate a unique ID
-      const taskId = `habit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      // Select a habit option (randomly if refreshing, first option if new)
+      const selectedOption = isRefresh 
+        ? habitOptions[Math.floor(Math.random() * habitOptions.length)]
+        : habitOptions[0];
       
-      // Create the new habit with the ID
-      const newHabit = {
-        id: taskId,
-        title: title,
-        description: description,
-        cue: cue,
-        action: action,
-        reward: reward,
-        identity: identity,
-        assignedTo: selectedUser.roleType || selectedUser.role,
-        assignedToName: selectedUser.name,
-        category: identity.includes("parent") ? "Parental Tasks" : "Household Tasks",
-        insight: `This habit helps build your identity as ${identity}`,
-        completed: false,
-        comments: [],
-        streak: 0,
-        record: 0,
-        progress: 0,
-        lastCompleted: null,
-        isUserGenerated: !isRefresh, // If refreshing, this is the new initial habit
-        subTasks: subTasks.map((st, idx) => ({
-          id: `${taskId}-step-${idx + 1}`,
-          title: st.title,
-          description: st.description,
-          completed: false
-        }))
-      };
+      // Destructure the selected habit data
+      const { title, description, cue, action, reward, identity } = selectedOption;
       
-      // Update the tasks array
-      await updateDoc(familyRef, {
-        tasks: [...updatedTasks, newHabit]
-      });
+      // Create the habit subtasks
+      const subTasks = [
+        { title: cue, description: "This is your trigger" },
+        { title: action, description: "This is the habit action" },
+        { title: reward, description: "This is your reward" }
+      ];
       
-      // Set up empty habit instances
-      await updateDoc(doc(db, "families", familyId, "habitInstances", taskId), {
-        instances: []
-      }, { merge: true });
-      
-      // Update the local state
-      if (isRefresh) {
-        // Replace the initial habit
-        setHabits(prev => {
-          const filtered = prev.filter(h => h.isUserGenerated);
-          return [{...newHabit, completionInstances: []}, ...filtered];
+      try {
+        // Create the habit in the tasks array of the family document
+        const familyRef = doc(db, "families", familyId);
+        const familyDoc = await getDoc(familyRef);
+        
+        if (!familyDoc.exists()) {
+          throw new Error("Family document not found");
+        }
+        
+        // Get current tasks
+        const currentTasks = familyDoc.data().tasks || [];
+        
+        // Clear previous non-user habit instances from state if refreshing
+        if (isRefresh) {
+          const systemHabit = habits.find(h => !h.isUserGenerated);
+          if (systemHabit) {
+            // Clear the completions from state
+            setCompletedHabitInstances(prev => {
+              const newState = {...prev};
+              delete newState[systemHabit.id];
+              return newState;
+            });
+            
+            // Attempt to clean up old habit instances in database
+            try {
+              const habitInstanceRef = doc(db, "families", familyId, "habitInstances", systemHabit.id);
+              await updateDoc(habitInstanceRef, {
+                instances: [],
+                refreshed: true,
+                refreshedAt: new Date().toISOString()
+              });
+            } catch (cleanupError) {
+              console.warn("Non-critical error cleaning up old habit:", cleanupError);
+              // Continue even if this fails
+            }
+          }
+        }
+        
+        // If refreshing, first remove the initial habit
+        let updatedTasks = [...currentTasks];
+        if (isRefresh) {
+          // Find and remove ALL non-user-generated habits to prevent duplicates
+          const systemHabitIds = habits
+            .filter(h => !h.isUserGenerated)
+            .map(h => h.id);
+          
+          // Remove all system-generated habits from the tasks array
+          updatedTasks = updatedTasks.filter(t => !systemHabitIds.includes(t.id));
+        }
+        
+        // Generate a unique ID
+        const taskId = `habit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        
+        // Create the new habit with the ID
+        const newHabit = {
+          id: taskId,
+          title: title,
+          description: description,
+          cue: cue,
+          action: action,
+          reward: reward,
+          identity: identity,
+          assignedTo: selectedUser?.roleType || selectedUser?.role || "Everyone",
+          assignedToName: selectedUser?.name || "Everyone",
+          category: identity.includes("parent") ? "Parental Tasks" : "Household Tasks",
+          insight: `This habit helps build your identity as someone who values family balance.`,
+          completed: false,
+          comments: [],
+          streak: 0,
+          record: 0,
+          progress: 0,
+          lastCompleted: null,
+          isUserGenerated: !isRefresh, // If refreshing, this is the new initial habit
+          subTasks: subTasks.map((st, idx) => ({
+            id: `${taskId}-step-${idx + 1}`,
+            title: st.title,
+            description: st.description,
+            completed: false
+          }))
+        };
+        
+        // Update the tasks array
+        await updateDoc(familyRef, {
+          tasks: [...updatedTasks, newHabit]
         });
-        createCelebration("Habit refreshed!", true);
-      } else {
-        // Add to habits as user-generated
-        setHabits(prev => [
-          {...newHabit, completionInstances: []},
-          ...prev
-        ]);
-        createCelebration("New habit created!", true);
+        
+        // Set up empty habit instances
+        await setDoc(doc(db, "families", familyId, "habitInstances", taskId), {
+          instances: [],
+          createdAt: new Date().toISOString(),
+          isSystemGenerated: !newHabit.isUserGenerated
+        });
+        
+        // Update the local state
+        if (isRefresh) {
+          // Replace the initial habit
+          setHabits(prev => {
+            const filtered = prev.filter(h => h.isUserGenerated);
+            return [{...newHabit, completionInstances: []}, ...filtered];
+          });
+          createCelebration("Habit refreshed!", true);
+        } else {
+          // Add to habits as user-generated
+          setHabits(prev => [
+            {...newHabit, completionInstances: []},
+            ...prev
+          ]);
+          createCelebration("New habit created!", true);
+        }
+        
+        // Update completedHabitInstances state
+        setCompletedHabitInstances(prev => ({
+          ...prev,
+          [taskId]: []
+        }));
+        
+        setShowAddHabit(false);
+      } catch (dbError) {
+        console.error("Database error creating habit:", dbError);
+        throw dbError;
       }
       
-      // Update completedHabitInstances state
-      setCompletedHabitInstances(prev => ({
-        ...prev,
-        [taskId]: []
-      }));
-      
-      setShowAddHabit(false);
-    } catch (dbError) {
-      console.error("Database error creating habit:", dbError);
-      throw dbError;
+      setAllieIsThinking(false);
+      return true;
+    } catch (error) {
+      console.error("Error creating new habit:", error);
+      setAllieIsThinking(false);
+      createCelebration("Error", false, "Could not create habit. Please try again later.");
+      return false;
     }
-    
-    setAllieIsThinking(false);
-    return true;
-  } catch (error) {
-    console.error("Error creating new habit:", error);
-    setAllieIsThinking(false);
-    createCelebration("Error", false, "Could not create habit. Please try again later.");
-    return false;
-  }
-};
+  };
         
  
   
@@ -1719,16 +1772,6 @@ const createNewHabit = async (isRefresh = false) => {
   loading={loading}
 />
 
-{/* Keep the streak indicator if you want */}
-<div className="flex justify-end p-4">
-  <div className="bg-gray-100 rounded-lg px-3 py-2 text-center">
-    <div className="flex items-center">
-      <Flame className="text-orange-400 mr-1" size={18} />
-      <span className="text-lg font-bold">{familyStreak}</span>
-    </div>
-    <p className="text-xs">Current Streak</p>
-  </div>
-</div>
       {/* Current habits section */}
 <div className="p-4">
   <div className="flex justify-between items-center mb-4">
@@ -1743,23 +1786,26 @@ const createNewHabit = async (isRefresh = false) => {
       </button>
       
       <button 
-        onClick={() => {
-          const hasCompletions = habits.some(h => !h.isUserGenerated && hasCompletedInstances(h.id));
-          
-          if (hasCompletions) {
-            if (window.confirm("This will replace your current system habit. Your completion progress will be lost. Continue?")) {
-              createNewHabit(true);
-            }
-          } else {
-            createNewHabit(true);
-          }
-        }}
-        className="text-sm flex items-center px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md"
-        disabled={allieIsThinking}
-      >
-        <RefreshCw size={16} className="mr-1" />
-        Refresh
-      </button>
+  onClick={() => {
+    // More robust check for ANY habit completions
+    const hasCompletions = Object.values(completedHabitInstances).some(
+      instances => instances && instances.length > 0
+    );
+    
+    if (hasCompletions) {
+      if (window.confirm("This will replace your current system habit. Any habit completion progress will be lost. Continue?")) {
+        createNewHabit(true);
+      }
+    } else {
+      createNewHabit(true);
+    }
+  }}
+  className="text-sm flex items-center px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md"
+  disabled={allieIsThinking}
+>
+  <RefreshCw size={16} className="mr-1" />
+  Refresh
+</button>
     </div>
   </div>
   
@@ -1797,126 +1843,128 @@ const createNewHabit = async (isRefresh = false) => {
         ) : (
           <div className="space-y-4">
             {userHabits.map(habit => (
-              <div 
-                key={habit.id} 
-                className="border rounded-lg overflow-hidden transition-all duration-300 transform hover:shadow-md bg-white"
-              >
-                {/* Habit card */}
-                <div className="p-4">
-                  <div className="flex flex-col">
-                    {/* Habit header */}
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-medium text-base mb-1">{habit.title}</h4>
-                        <p className="text-sm text-gray-600">{habit.description}</p>
-                      </div>
-                      
-                      {/* Streak badge */}
-                      <div className="flex items-center bg-amber-50 px-2 py-1 rounded-full text-amber-700 text-xs">
-                        <Flame size={12} className="mr-1 text-amber-500" />
-                        <span>{habit.streak} day{habit.streak !== 1 ? 's' : ''}</span>
-                      </div>
-                    </div>
-                    
-                    {/* Cue, routine, reward pattern */}
-                    <div className="mt-3 grid grid-cols-3 gap-2">
-                      <div className="text-xs text-gray-500">
-                        <div className="font-medium mb-1">Cue</div>
-                        <div className="bg-gray-50 p-2 rounded-lg h-12 overflow-hidden flex items-center">
-                          {habit.cue || "After breakfast"}
-                        </div>
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        <div className="font-medium mb-1">Routine</div>
-                        <div className="bg-gray-50 p-2 rounded-lg h-12 overflow-hidden flex items-center">
-                          {habit.action || habit.title}
-                        </div>
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        <div className="font-medium mb-1">Reward</div>
-                        <div className="bg-gray-50 p-2 rounded-lg h-12 overflow-hidden flex items-center">
-                          {habit.reward || "Feel accomplished"}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Identity statement */}
-                    <div className="mt-3 text-xs px-3 py-2 bg-black text-white rounded-full inline-block">
-                      {habit.identity || "I am someone who values balance"}
-                    </div>
-                    
-                    {/* Completion circles */}
-                    <div className="mt-4">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-gray-500">Completion Progress</span>
-                        <span className="text-xs font-medium">
-                          {(habit.completionInstances?.length || 0)}/11 instances
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        {Array.from({ length: 11 }).map((_, index) => {
-                          const isCompleted = index < (habit.completionInstances?.length || 0);
-                          const isMinimumReached = index === 4 && isCompleted;
-                          const isComplete = index === 10 && isCompleted;
-                          
-                          return (
-                            <div 
-                              key={index} 
-                              className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                                isCompleted 
-                                  ? isComplete
-                                    ? 'bg-green-500 text-white'
-                                    : isMinimumReached
-                                      ? 'bg-blue-500 text-white'
-                                      : 'bg-black text-white'
-                                  : 'bg-gray-200 text-gray-400'
-                              }`}
-                            >
-                              {isCompleted && <Check size={14} />}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div className="flex justify-between mt-1">
-                        <span className="text-xs text-gray-500">Start</span>
-                        <span className="text-xs text-blue-500 font-medium">
-                          Survey Unlocked (5)
-                        </span>
-                        <span className="text-xs text-green-500 font-medium">
-                          Habit Mastered!
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Action buttons */}
-                    <div className="mt-4 flex justify-between items-center">
-                    <div className="space-x-2">
-  {habit.isUserGenerated && (
-    <button
-      onClick={() => deleteHabit(habit.id)}
-      className="text-xs flex items-center bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-md"
-    >
-      <Trash size={14} className="mr-1" />
-      Delete Habit
-    </button>
-  )}
-</div>
-                      
-                      <button
-                        onClick={() => {
-                          setSelectedHabit(habit);
-                          setShowHabitDetail(habit.id);
-                        }}
-                        className="px-3 py-2 bg-black text-white text-sm rounded-md hover:bg-gray-800 flex items-center"
-                      >
-                        <CheckCircle size={14} className="mr-2" />
-                        Practice This Habit
-                      </button>
-                    </div>
-                  </div>
+  <div 
+    key={habit.id} 
+    className="border-2 border-gray-200 rounded-lg overflow-hidden transition-all duration-300 transform hover:shadow-lg bg-white shadow-sm"
+  >
+    {/* Habit card */}
+    <div className="p-6">
+      <div className="flex flex-col">
+        {/* Habit header with enhanced typography */}
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex-1">
+            <h4 className="font-bold text-xl mb-2">{habit.title}</h4>
+            <p className="text-md text-gray-700 font-medium">{habit.description}</p>
+          </div>
+          
+          {/* Enhanced streak badge */}
+          <div className="flex items-center bg-amber-100 px-3 py-2 rounded-full text-amber-800 text-sm font-bold border border-amber-200 shadow-sm ml-3 streak-badge">
+            <Flame size={16} className="mr-2 text-amber-500" />
+            <span>{habit.streak} day{habit.streak !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+        
+        {/* Enhanced cue, routine, reward pattern with distinct colors */}
+        <div className="grid grid-cols-3 gap-4 my-4">
+          <div className="rounded-lg overflow-hidden shadow-sm border border-blue-100">
+            <div className="bg-blue-600 text-white font-medium px-3 py-2 text-center">Cue</div>
+            <div className="bg-blue-50 p-3 min-h-16 flex items-center justify-center text-center font-medium">
+              {habit.cue || "After breakfast"}
+            </div>
+          </div>
+          
+          <div className="rounded-lg overflow-hidden shadow-sm border border-green-100">
+            <div className="bg-green-600 text-white font-medium px-3 py-2 text-center">Routine</div>
+            <div className="bg-green-50 p-3 min-h-16 flex items-center justify-center text-center font-medium">
+              {habit.action || habit.title}
+            </div>
+          </div>
+          
+          <div className="rounded-lg overflow-hidden shadow-sm border border-purple-100">
+            <div className="bg-purple-600 text-white font-medium px-3 py-2 text-center">Reward</div>
+            <div className="bg-purple-50 p-3 min-h-16 flex items-center justify-center text-center font-medium">
+              {habit.reward || "Feel accomplished"}
+            </div>
+          </div>
+        </div>
+        
+        {/* Enhanced identity statement */}
+        <div className="my-4 text-sm px-4 py-3 bg-black text-white rounded-lg font-medium text-center shadow-sm identity-badge">
+          {habit.identity || "I am someone who values balance"}
+        </div>
+        
+        {/* Enhanced completion progress */}
+        <div className="mt-6 mb-2 bg-gray-50 p-4 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-bold text-gray-700">Completion Progress</span>
+            <span className="text-sm font-bold px-2 py-1 bg-gray-200 rounded-full">
+              {(habit.completionInstances?.length || 0)}/11 instances
+            </span>
+          </div>
+          <div className="flex justify-between">
+            {Array.from({ length: 11 }).map((_, index) => {
+              const isCompleted = index < (habit.completionInstances?.length || 0);
+              const isMinimumReached = index === 4 && isCompleted;
+              const isComplete = index === 10 && isCompleted;
+              
+              return (
+                <div 
+                  key={index} 
+                  className={`w-8 h-8 rounded-full flex items-center justify-center shadow ${
+                    isCompleted 
+                      ? isComplete
+                        ? 'bg-green-500 text-white pulse-animation'
+                        : isMinimumReached
+                          ? 'bg-blue-500 text-white pulse-animation'
+                          : 'bg-black text-white'
+                      : 'bg-gray-200 text-gray-400'
+                  }`}
+                >
+                  {isCompleted && <Check size={16} />}
                 </div>
-              </div>
-            ))}
+              );
+            })}
+          </div>
+          <div className="flex justify-between mt-2">
+            <span className="text-xs font-bold text-gray-600">Start</span>
+            <span className="text-xs font-bold text-blue-600">
+              Survey Unlocked (5)
+            </span>
+            <span className="text-xs font-bold text-green-600">
+              Habit Mastered!
+            </span>
+          </div>
+        </div>
+        
+        {/* Enhanced action buttons */}
+        <div className="mt-4 flex justify-between items-center">
+          <div className="space-x-2">
+            {habit.isUserGenerated && (
+              <button
+                onClick={() => deleteHabit(habit.id)}
+                className="text-sm flex items-center bg-red-50 text-red-600 hover:bg-red-100 px-3 py-2 rounded-md border border-red-100 shadow-sm"
+              >
+                <Trash size={14} className="mr-1" />
+                Delete Habit
+              </button>
+            )}
+          </div>
+          
+          <button
+            onClick={() => {
+              setSelectedHabit(habit);
+              setShowHabitDetail(habit.id);
+            }}
+            className="px-4 py-3 bg-black text-white text-md rounded-md hover:bg-gray-800 flex items-center font-bold shadow-sm completion-button"
+          >
+            <CheckCircle size={16} className="mr-2" />
+            Practice This Habit
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+))}
           </div>
         )}
       </div>
@@ -2272,16 +2320,72 @@ const createNewHabit = async (isRefresh = false) => {
   </div>
 )} 
       <style jsx="true">{`
-        .animation-bounce-in {
-          animation: bounceIn 0.5s;
-        }
-        
-        @keyframes bounceIn {
-          0% { transform: scale(0.8); opacity: 0; }
-          70% { transform: scale(1.1); opacity: 1; }
-          100% { transform: scale(1); }
-        }
-      `}</style>
+  .animation-bounce-in {
+    animation: bounceIn 0.5s;
+  }
+  
+  @keyframes bounceIn {
+    0% { transform: scale(0.8); opacity: 0; }
+    70% { transform: scale(1.1); opacity: 1; }
+    100% { transform: scale(1); }
+  }
+  
+  /* New animations for habit card */
+  .streak-badge {
+    animation: pulse 2s infinite;
+  }
+  
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(251, 191, 36, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+  }
+  
+  .completion-button {
+    transition: all 0.2s ease;
+  }
+  
+  .completion-button:hover {
+    transform: scale(1.05);
+  }
+  
+  .identity-badge {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .identity-badge:after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg, 
+      rgba(255, 255, 255, 0) 0%, 
+      rgba(255, 255, 255, 0.2) 50%, 
+      rgba(255, 255, 255, 0) 100%
+    );
+    animation: shine 3s infinite;
+  }
+  
+  @keyframes shine {
+    to {
+      left: 100%;
+    }
+  }
+  
+  .pulse-animation {
+    animation: pulseBg 2s infinite;
+  }
+  
+  @keyframes pulseBg {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+`}</style>
     </div>
   );
 };
