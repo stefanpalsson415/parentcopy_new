@@ -224,6 +224,7 @@ const AllieChat = () => {
     };
   }, [isResizing, startResizePos, startResizeDims, resizeType]);
   
+  
   // Auto-open chat on specific pages or for missing profiles - with fix for reopening
   useEffect(() => {
     // Don't auto-open if user has explicitly closed the chat
