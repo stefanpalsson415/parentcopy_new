@@ -467,26 +467,35 @@ const renderTabContent = () => {
       </div>
       
       {/* Navigation Tabs */}
-      <div 
-  className="fixed left-0 right-0 z-10 bg-gray-50 border-b shadow-sm" 
+<div 
+  className="fixed left-0 right-0 z-10 bg-white shadow-md" 
   style={{ top: headerHeight, height: navHeight }}
 >
   <div className="container mx-auto flex overflow-x-auto px-4 py-2">
     <button 
       id="tasks-tab"
-      className={`px-4 py-2 font-medium whitespace-nowrap font-roboto relative ${activeTab === 'tasks' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+      className={`px-6 py-2 font-medium whitespace-nowrap font-roboto rounded-lg transition-all mx-1 ${
+        activeTab === 'tasks' 
+          ? 'bg-black text-white shadow-sm' 
+          : 'text-gray-700 hover:bg-gray-100'
+      }`}
       onClick={() => setActiveTab('tasks')}
     >
-      {selectedUser ? `${selectedUser.name}'s Tasks` : 'My Tasks'}
+      {selectedUser ? `${selectedUser.name}'s Balanced Family` : 'My Tasks'}
       {notifications.tasks > 0 && (
-        <span className="absolute top-1 right-0 transform translate-x-1/2 -translate-y-1/4 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
+        <span className="absolute top-0 right-0 transform translate-x-1/2 -translate-y-1/4 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
           {notifications.tasks}
         </span>
       )}
     </button>
+    
     <button 
       id="dashboard-tab"
-      className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'dashboard' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+      className={`px-6 py-2 font-medium whitespace-nowrap font-roboto rounded-lg transition-all mx-1 ${
+        activeTab === 'dashboard' 
+          ? 'bg-black text-white shadow-sm' 
+          : 'text-gray-700 hover:bg-gray-100'
+      }`}
       onClick={() => setActiveTab('dashboard')}
     >
       Family Dashboard
@@ -496,12 +505,16 @@ const renderTabContent = () => {
     {selectedUser && (
       <button 
         id="relationship-tab"
-        className={`px-4 py-2 font-medium whitespace-nowrap font-roboto relative ${activeTab === 'relationship' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+        className={`px-6 py-2 font-medium whitespace-nowrap font-roboto rounded-lg transition-all mx-1 relative ${
+          activeTab === 'relationship' 
+            ? 'bg-black text-white shadow-sm' 
+            : 'text-gray-700 hover:bg-gray-100'
+        }`}
         onClick={() => setActiveTab('relationship')}
       >
-        Relationship
+        Strong Relationship
         {notifications.relationships > 0 && selectedUser.role === 'parent' && (
-          <span className="absolute top-1 right-1 transform translate-x-1/2 -translate-y-1/4 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
+          <span className="absolute top-0 right-0 transform translate-x-1/2 -translate-y-1/4 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
             {notifications.relationships}
           </span>
         )}
@@ -511,10 +524,14 @@ const renderTabContent = () => {
     {/* Children Tracking Tab */}
     <button 
       id="children-tab"
-      className={`px-4 py-2 font-medium whitespace-nowrap font-roboto ${activeTab === 'children' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+      className={`px-6 py-2 font-medium whitespace-nowrap font-roboto rounded-lg transition-all mx-1 ${
+        activeTab === 'children' 
+          ? 'bg-black text-white shadow-sm' 
+          : 'text-gray-700 hover:bg-gray-100'
+      }`}
       onClick={() => setActiveTab('children')}
     >
-        Family Command Center
+      Family Command Center
     </button>
   </div>
 </div>

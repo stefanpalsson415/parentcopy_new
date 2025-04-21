@@ -919,23 +919,23 @@ const generateAiInsights = useCallback(async (data) => {
     };
 
     recognition.onend = () => {
-      setIsRecording(false);
-      
-      // Process the recorded text
-      if (recordingText && recordingText !== 'Listening...') {
-        const lowerRecordingText = recordingText.toLowerCase();
-        
-        // Check if it's a task-related command
-        if (lowerRecordingText.includes('task') || 
-            lowerRecordingText.includes('todo') || 
-            lowerRecordingText.includes('remind me') || 
-            lowerRecordingText.includes('add to list')) {
-          handleVoiceTask(recordingText);
-        } else {
-          processVoiceCommand(recordingText);
-        }
-      }
-    };
+  setIsRecording(false);
+  
+  // Process the recorded text
+  if (recordingText && recordingText !== 'Listening...') {
+    const lowerRecordingText = recordingText.toLowerCase();
+    
+    // Check if it's a task-related command
+    if (lowerRecordingText.includes('task') || 
+        lowerRecordingText.includes('todo') || 
+        lowerRecordingText.includes('remind me') || 
+        lowerRecordingText.includes('add to list')) {
+      handleVoiceTask(recordingText);
+    } else {
+      processVoiceCommand(recordingText);
+    }
+  }
+};
 
     recognition.start();
   };
@@ -3698,10 +3698,10 @@ const handleRemoveItem = async (itemType, childId, itemId) => {
   </button>
   
   {expandedSections.taskBoard && (
-    <div className="p-4 border-t border-gray-200" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-      <FamilyKanbanBoard />
-    </div>
-  )}
+  <div className="p-4 border-t border-gray-200">
+    <FamilyKanbanBoard />
+  </div>
+)}
 </div>
 
 

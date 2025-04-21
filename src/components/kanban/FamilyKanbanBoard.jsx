@@ -38,7 +38,7 @@ import UserAvatar from '../common/UserAvatar';
 
 
 
-const FamilyKanbanBoard = () => {
+const FamilyKanbanBoard = ({ hideHeader = false }) => {
   const { familyId, familyMembers, selectedUser } = useFamily();
   const { currentUser } = useAuth();
   
@@ -481,7 +481,7 @@ const calendarEvent = {
   
   return (
     <div className="family-kanban-board">
-      <h2 className="text-2xl font-bold mb-4">Family Task Board</h2>
+      {!hideHeader && <h2 className="text-2xl font-bold mb-4">Family Task Board</h2>}
       
       {/* Filters */}
       <KanbanFilters
