@@ -305,13 +305,14 @@ useEffect(() => {
   
   // Determine which questions to use based on the survey type
   if (surveyType === "weekly") {
-    console.log(`Generating weekly questions for week ${currentWeek}`);
+    console.log(`Generating weekly questions for week ${currentWeek} for child: ${selectedUser?.id}`);
     
-    // Create family data object for context
+    // Create enhanced family data object with all children details
     const familyData = {
       familyName: familyName,
       familyId: familyId,
       children: familyMembers.filter(m => m.role === 'child').map(c => ({
+        id: c.id, // Include ID for matching
         name: c.name, 
         age: c.age || 10
       }))
@@ -320,15 +321,17 @@ useEffect(() => {
     // Get previous responses for context
     const previousResponses = currentSurveyResponses || {};
     
-    // Generate adaptive questions with full context
+    // Generate adaptive questions with full context AND child's ID
     questionSet = generateWeeklyQuestions(
       currentWeek, 
       true, // Pass true to indicate child
       familyData, 
-      previousResponses
+      previousResponses,
+      [], // No task completion data for kids
+      selectedUser?.id // Pass the child's ID for personalization
     );
     
-    console.log(`Generated ${questionSet.length} adaptive weekly questions for kids`);
+    console.log(`Generated ${questionSet?.length || 0} personalized weekly questions for child: ${selectedUser?.name}`);
   } else {
     console.log(`Using full question set with ${fullQuestionSet.length} questions`);
     questionSet = fullQuestionSet;

@@ -1099,15 +1099,16 @@ const extractAIPreferencesFromSurvey = (responses) => {
   };
 
   // Complete weekly check-in
-  const completeWeeklyCheckIn = async (memberId, weekNum, responses) => {
-    try {
-      if (!familyId) throw new Error("No family ID available");
-      
-      // Create a prefix for the responses to identify the week
-      const prefixedResponses = {};
-      Object.entries(responses).forEach(([key, value]) => {
-        prefixedResponses[`week-${weekNum}-${key}`] = value;
-      });
+const completeWeeklyCheckIn = async (memberId, weekNum, responses) => {
+  try {
+    if (!familyId) throw new Error("No family ID available");
+    
+    // Create a prefix for the responses to identify the week AND the user
+    const prefixedResponses = {};
+    Object.entries(responses).forEach(([key, value]) => {
+      // Include member ID in the key to keep responses separate per child
+      prefixedResponses[`week-${weekNum}-user-${memberId}-${key}`] = value;
+    });
       
       // Update local state
       setSurveyResponses({

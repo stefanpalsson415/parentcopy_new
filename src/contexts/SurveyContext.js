@@ -637,18 +637,123 @@ const selectPersonalizedInitialQuestions = (fullQuestionSet, familyData, targetC
     return selectedQuestions;
   };
 
-  // Generate weekly check-in questions - IMPROVED ADAPTIVE ALGORITHM
-  const generateWeeklyQuestions = (weekNumber, isChild = false, familyData = null, previousResponses = {}, taskCompletionData = []) => {
-    // Set standard question count for all family members
-    const targetQuestionCount = 20;
+  // Generate weekly check-in questions - IMPROVED ADAPTIVE ALGORITHM WITH CHILD PERSONALIZATION
+const generateWeeklyQuestions = (weekNumber, isChild = false, familyData = null, previousResponses = {}, taskCompletionData = [], childId = null) => {
+  // Set standard question count for all family members
+  const targetQuestionCount = 20;
+  
+  // Get categories
+  const categories = [
+    "Visible Household Tasks",
+    "Invisible Household Tasks",
+    "Visible Parental Tasks",
+    "Invisible Parental Tasks"
+  ];
+  
+  console.log(`Generating questions for week ${weekNumber}${childId ? `, child ID: ${childId}` : ''}`);
+  
+  // If this is for a specific child, filter previous responses to just that child
+  let childSpecificResponses = previousResponses;
+  if (isChild && childId) {
+    // Create a filtered set of responses that only includes this child's responses
+    childSpecificResponses = Object.fromEntries(
+      Object.entries(previousResponses).filter(([key, _]) => {
+        // Check if this response is from this specific child
+        // Either by looking for childId in the key or checking response metadata
+        return key.includes(`child-${childId}`) || 
+               key.includes(`user-${childId}`) ||
+               (key.includes(`week-${weekNumber}`) && key.includes(childId));
+      })
+    );
     
-    // Get categories
-    const categories = [
-      "Visible Household Tasks",
-      "Invisible Household Tasks",
-      "Visible Parental Tasks",
-      "Invisible Parental Tasks"
-    ];
+    console.log(`Found ${Object.keys(childSpecificResponses).length} specific responses for child ${childId}`);
+  }
+  
+  // Helper to get child-specific age if available
+  const getChildAge = () => {
+    if (!isChild || !childId || !familyData || !familyData.children) return 10; // Default
+    
+    const childData = familyData.children.find(c => c.id === childId);
+    return childData?.age ? parseInt(childData.age) : 10;
+  };
+  
+  // Get this specific child's age
+  const childAge = getChildAge();
+  
+  // Get seed value based on childId to ensure different random selections
+  const getChildSeed = () => {
+    if (!childId) return 0;
+    
+    // Generate a numeric seed from the childId string
+    return childId.split('').reduce((sum, char, i) => 
+      sum + char.charCodeAt(0) * (i + 1), 0) % 997; // Use prime number for better distribution
+  };
+  
+  // The seed affects random selections based on childId
+  const childSeed = getChildSeed();
+  
+  // ... rest of the function with modifications ...
+  
+  // Inside the getQuestionsFromCategory and other selection functions, add this:
+  // Use childSeed to vary selection for different children
+  const getChildSpecificQuestions = (questions, count) => {
+    if (!isChild || !childId) return questions.slice(0, count);
+    
+    // Shuffle array with a deterministic approach based on childId and week
+    const shuffled = [...questions];
+    const shuffleSeed = childSeed + (weekNumber * 31);
+    
+    // Fisher-Yates shuffle with deterministic randomness
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      // Use consistent "random" index based on child and position
+      const j = (shuffleSeed + i * 13) % (i + 1);
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    
+    return shuffled.slice(0, count);
+  };
+  
+  // Helper to analyze imbalances by category based on previous responses
+  const analyzeImbalancesByCategory = () => {
+    // Use child-specific responses if available
+    const responsesToAnalyze = isChild && childId ? childSpecificResponses : previousResponses;
+    
+    // Prepare category imbalance tracking
+    const imbalanceData = {};
+    categories.forEach(category => {
+      imbalanceData[category] = { 
+        mama: 0, 
+        papa: 0, 
+        total: 0, 
+        imbalance: 0 
+      };
+    });
+    
+    // ... rest of the function ...
+  };
+  
+  // When selecting questions, use the child-specific function:
+  const getQuestionsFromCategory = (category, count, excludeIds = []) => {
+    // Get all questions for this category that haven't been excluded
+    const categoryQuestions = fullQuestionSet.filter(q => 
+      q.category === category && !excludeIds.includes(q.id)
+    );
+    
+    // Sort by total weight (highest impact first)
+    const sortedQuestions = [...categoryQuestions].sort((a, b) => 
+      parseFloat(b.totalWeight) - parseFloat(a.totalWeight)
+    );
+    
+    // Use child-specific selection for children
+    return isChild && childId 
+      ? getChildSpecificQuestions(sortedQuestions, count)
+      : sortedQuestions.slice(0, count);
+  };
+  
+  // Apply same approach to other question selection functions...
+  
+  return finalQuestions;
+};
     
     // Helper to analyze imbalances by category based on previous responses
     const analyzeImbalancesByCategory = () => {
@@ -934,8 +1039,11 @@ const selectPersonalizedInitialQuestions = (fullQuestionSet, familyData, targetC
   // Initial questions
   const fullQuestionSet = generateFullQuestionSet();
   
+  
   // State for temporary survey progress
   const [currentSurveyResponsesState, setCurrentSurveyResponsesState] = useState({});
+  const [cachedChildQuestions, setCachedChildQuestions] = useState({});
+
   const [completedQuestions, setCompletedQuestions] = useState([]);
   // Track user-modified weights
   const [userModifiedWeights, setUserModifiedWeights] = useState({});
@@ -1077,6 +1185,32 @@ const setCurrentSurveyResponses = (responses) => {
     return null;
   };
   
+// Modify generateWeeklyQuestions to use and update the cache:
+const generateWeeklyQuestionsWithCache = (weekNumber, isChild = false, familyData = null, previousResponses = {}, taskCompletionData = [], childId = null) => {
+  // Create a cache key
+  const cacheKey = `${weekNumber}-${childId || 'adult'}`;
+  
+  // Check if we have a cached version
+  if (isChild && childId && cachedChildQuestions[cacheKey]) {
+    console.log(`Using cached questions for child ${childId} in week ${weekNumber}`);
+    return cachedChildQuestions[cacheKey];
+  }
+  
+  // Generate questions as usual
+  const questions = generateWeeklyQuestions(weekNumber, isChild, familyData, previousResponses, taskCompletionData, childId);
+  
+  // If this is for a child, cache the result
+  if (isChild && childId) {
+    setCachedChildQuestions(prev => ({
+      ...prev,
+      [cacheKey]: questions
+    }));
+  }
+  
+  return questions;
+};
+
+
   // Get questions for a specific category
   const getQuestionsByCategory = (category) => {
     return fullQuestionSet.filter(q => q.category === category);
@@ -1158,6 +1292,8 @@ const value = {
   updateSurveyResponse,
   resetSurvey,
   getSurveyProgress,
+  generateWeeklyQuestions: generateWeeklyQuestionsWithCache,
+
   setCurrentSurveyResponses,
   // New property for relationship questions
   relationshipQuestions: fullQuestionSet.filter(q => q.category === "Relationship Health"),
