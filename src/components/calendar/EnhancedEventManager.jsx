@@ -1009,21 +1009,25 @@ console.log("Saving event with location:", event.location);
     Location
   </label>
   
-  {/* Single location input with icon */}
-  <div className="flex items-center border rounded-md overflow-hidden">
-    <div className="p-2 text-gray-400">
-      <MapPin size={16} />
+  {/* This div is the container for the Places API */}
+  <div id="places-container" className="border rounded-md overflow-hidden"></div>
+  
+  {/* Manual fallback input - only shown if Places API fails to initialize */}
+  {!placesInitialized && (
+    <div className="flex items-center border rounded-md overflow-hidden mt-2">
+      <div className="p-2 text-gray-400">
+        <MapPin size={16} />
+      </div>
+      <input
+        type="text"
+        id="location-input"
+        value={event.location || ''}
+        onChange={(e) => handleManualLocationInput(e.target.value)}
+        className="w-full p-2 text-sm border-0 focus:ring-0"
+        placeholder="Where is this event happening?"
+      />
     </div>
-    <input
-      type="text"
-      id="location-input"
-      ref={placesContainerRef}
-      value={event.location || ''}
-      onChange={(e) => handleManualLocationInput(e.target.value)}
-      className="w-full p-2 text-sm border-0 focus:ring-0"
-      placeholder="Where is this event happening?"
-    />
-  </div>
+  )}
   
   {/* Current location value display (for visibility) */}
   {event.location && (
