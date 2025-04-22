@@ -968,13 +968,13 @@ const selectPersonalizedInitialQuestions = (fullQuestionSet, familyData, targetC
   };
   
   // Set survey responses from outside (like when loading saved responses)
-  const setCurrentSurveyResponses = (responses) => {
-    setCurrentSurveyResponsesState(responses);
-    
-    // Update completedQuestions state based on the responses
-    const questionIds = Object.keys(responses);
-    setCompletedQuestions(questionIds);
-  };
+const setCurrentSurveyResponses = (responses) => {
+  setCurrentSurveyResponsesState(responses);
+  
+  // Update completedQuestions state based on the responses
+  const questionIds = Object.keys(responses);
+  setCompletedQuestions(questionIds);
+};
   
   // Set family data for personalization
   const setFamilyData = (data) => {
