@@ -212,130 +212,87 @@ useEffect(() => {
   }
 }, [event.category, event.eventType, familyMembers]);
 
-// Improved Google Places initialization
+// New Simplified Google Places Autocomplete initialization
 useEffect(() => {
-  // Function to initialize PlaceAutocompleteElement
+  // Function to initialize Google Places Autocomplete
   const initPlacesAutocomplete = () => {
-    console.log("Initializing Google Places Autocomplete");
-    if (!window.google || !window.google.maps || !window.google.maps.places || 
-        !window.google.maps.places.PlaceAutocompleteElement) {
-      console.log("Places API or PlaceAutocompleteElement not available");
+    console.log("Initializing Google Places Autocomplete with standard API");
+    
+    if (!window.google || !window.google.maps || !window.google.maps.places) {
+      console.log("Google Maps Places API not available");
       return false;
     }
 
     try {
-      if (placesContainerRef.current) {
-        // Clear any existing content
-        placesContainerRef.current.innerHTML = '';
-        
-        const placeAutocompleteElement = new window.google.maps.places.PlaceAutocompleteElement({
-          types: ['address', 'establishment']
-        });
-        
-        // Add styling to make it match our UI
-        placeAutocompleteElement.style.width = '100%';
-        placeAutocompleteElement.style.border = 'none';
-        placeAutocompleteElement.style.padding = '8px';
-        
-        // Add the element to the container
-        placesContainerRef.current.appendChild(placeAutocompleteElement);
-        
-        // Store reference to the element
-        placeAutocompleteElementRef.current = placeAutocompleteElement;
-        
-        // Add event listener for place selection
-        placeAutocompleteElement.addEventListener('gmp-placeautocomplete-place-changed', () => {
-          try {
-            const place = placeAutocompleteElement.getPlace();
-            if (place) {
-              // Try to get a well-formatted address using available properties
-              let locationText = '';
-              
-              if (place.formattedAddress) {
-                locationText = place.formattedAddress;
-              } else if (place.formatted_address) {
-                locationText = place.formatted_address;
-              } else if (place.vicinity) {
-                locationText = place.vicinity;
-              } else if (place.address) {
-                locationText = place.address;
-              }
-              
-              // If we have a name and it's different from the address, include it
-              if (place.name && place.name !== locationText && locationText) {
-                locationText = `${place.name}, ${locationText}`;
-              } else if (place.name && !locationText) {
-                locationText = place.name;
-              }
-              
-              // Only update the event if we have some location text
-              if (locationText) {
-                console.log("Setting location from place selection:", locationText);
-                setEvent(prev => ({ ...prev, location: locationText }));
-                prevLocationRef.current = locationText;
-              }
-            }
-          } catch (error) {
-            console.warn("Error handling place selection:", error);
-          }
-        });
-        
-        // If we have an initial location, set it after initialization
-        if (event.location) {
-          try {
-            console.log("Setting initial location in Places Autocomplete:", event.location);
-            const input = placeAutocompleteElement.querySelector('input');
-            if (input) {
-              input.value = event.location;
-              prevLocationRef.current = event.location;
-            }
-          } catch (initError) {
-            console.warn("Error setting initial location:", initError);
-          }
-        }
-        
-        return true;
+      // Get the input element
+      const inputElement = document.getElementById('location-input');
+      
+      if (!inputElement) {
+        console.log("Location input element not found");
+        return false;
       }
-      return false;
+      
+      // Create the autocomplete instance directly on our input
+      const autocomplete = new window.google.maps.places.Autocomplete(inputElement, {
+        types: ['address', 'establishment'],
+        fields: ['name', 'formatted_address', 'address_components', 'geometry', 'place_id']
+      });
+      
+      // Store reference to the autocomplete object
+      placeAutocompleteElementRef.current = autocomplete;
+      
+      // Add event listener for place selection
+      autocomplete.addListener('place_changed', () => {
+        try {
+          const place = autocomplete.getPlace();
+          
+          if (place && place.formatted_address) {
+            let locationText = place.formatted_address;
+            
+            // Add place name if different from address
+            if (place.name && place.name !== locationText) {
+              locationText = `${place.name}, ${locationText}`;
+            }
+            
+            console.log("Setting location from place selection:", locationText);
+            setEvent(prev => ({ ...prev, location: locationText }));
+            prevLocationRef.current = locationText;
+          }
+        } catch (error) {
+          console.warn("Error handling place selection:", error);
+        }
+      });
+      
+      return true;
     } catch (error) {
-      console.warn("Error initializing PlaceAutocompleteElement:", error);
+      console.warn("Error initializing Places Autocomplete:", error);
       return false;
     }
   };
 
-  // Check if Google Maps API is loaded and initialize if it is
-  if (window.google && window.google.maps && window.google.maps.places && 
-      window.google.maps.places.PlaceAutocompleteElement && !placesInitialized) {
-    const success = initPlacesAutocomplete();
-    setPlacesInitialized(success);
-  }
+  // Initialize after a short delay to ensure the DOM is ready
+  const timeoutId = setTimeout(() => {
+    if (!placesInitialized && window.google && window.google.maps && window.google.maps.places) {
+      const success = initPlacesAutocomplete();
+      setPlacesInitialized(success);
+    }
+  }, 500);
   
-  // Set up a handler for when the API loads
+  // Also listen for the API loaded event
   const handleMapsApiLoaded = () => {
-    if (window.google && window.google.maps && window.google.maps.places && 
-        window.google.maps.places.PlaceAutocompleteElement && !placesInitialized) {
+    if (!placesInitialized) {
       const success = initPlacesAutocomplete();
       setPlacesInitialized(success);
     }
   };
   
-  // Add event listener for when the Google Maps API loads
   window.addEventListener('google-maps-api-loaded', handleMapsApiLoaded);
   
-  // Also check again in a short timeout in case the API is loaded but the event hasn't fired
-  const timeoutId = setTimeout(() => {
-    if (window.google && window.google.maps && window.google.maps.places && 
-        window.google.maps.places.PlaceAutocompleteElement && !placesInitialized) {
-      const success = initPlacesAutocomplete();
-      setPlacesInitialized(success);
-    }
-  }, 1000);
-  
   return () => {
-    window.removeEventListener('google-maps-api-loaded', handleMapsApiLoaded);
     clearTimeout(timeoutId);
+    window.removeEventListener('google-maps-api-loaded', handleMapsApiLoaded);
   };
-}, [placesInitialized, event.location]); // Add event.location as dependency to refresh when it changes
+}, [placesInitialized]);
 
 // Synchronize event location with Places input when location changes
 useEffect(() => {
@@ -358,23 +315,13 @@ useEffect(() => {
   }
 }, [event.location, placesInitialized]);
 
-// Manual location input function with improved handling
+// Simplified manual location input handler
 const handleManualLocationInput = (value) => {
   console.log("Manual location input:", value);
   setEvent(prev => ({ ...prev, location: value }));
   prevLocationRef.current = value;
   
-  // Also try to update the Places input if it exists
-  if (placeAutocompleteElementRef.current) {
-    try {
-      const input = placeAutocompleteElementRef.current.querySelector('input');
-      if (input) {
-        input.value = value;
-      }
-    } catch (error) {
-      console.warn("Error updating Places input after manual input:", error);
-    }
-  }
+  // No need to update any other input since we're using the same input field
 };
 
  
@@ -1039,19 +986,16 @@ console.log("Saving event with location:", event.location);
   <label className="block text-sm font-medium mb-1 text-gray-700">
     Location
   </label>
-
-  {/* Google Places Autocomplete container */}
-  <div ref={placesContainerRef} className="mb-2 rounded-md border overflow-hidden">
-    {/* PlaceAutocompleteElement will be inserted here if available */}
-  </div>
   
-  {/* Always show manual input as backup/alternative */}
-  <div className="flex items-center border rounded-md overflow-hidden mt-2">
+  {/* Single location input with icon */}
+  <div className="flex items-center border rounded-md overflow-hidden">
     <div className="p-2 text-gray-400">
       <MapPin size={16} />
     </div>
     <input
       type="text"
+      id="location-input"
+      ref={placesContainerRef}
       value={event.location || ''}
       onChange={(e) => handleManualLocationInput(e.target.value)}
       className="w-full p-2 text-sm border-0 focus:ring-0"
