@@ -309,198 +309,6 @@ useEffect(() => {
   messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
 }, [messages, isOpen]);
 
-// Add this new useEffect to listen for external chat triggers
-useEffect(() => {
-  const handleOpenChatEvent = (event) => {
-    console.log("Received open-allie-chat event:", event.detail);
-    
-    // Open the chat if it's not already open
-    if (!isOpen) {
-      setIsOpen(true);
-    }
-    
-    // Set the input with the message from the event
-    if (event.detail?.message) {
-      setInput(event.detail.message);
-      
-      // Wait for the chat to fully open and render
-      setTimeout(() => {
-        // Send the message after the chat is open
-        handleSend();
-      }, 800); // Give it more time to open and render
-    }
-  };
-  
-  // Add event listener for our custom event
-  window.addEventListener('open-allie-chat', handleOpenChatEvent);
-  
-  // Cleanup
-  return () => {
-    window.removeEventListener('open-allie-chat', handleOpenChatEvent);
-  };
-}, [isOpen, handleSend]); // Dependencies
-
-// Also add this new useEffect to ensure scrolling happens after the chat opens
-useEffect(() => {
-  if (isOpen) {
-    // Small delay to ensure DOM is updated before scrolling
-    const timer = setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
-    
-    return () => clearTimeout(timer);
-  }
-}, [isOpen]);
-  
-  // Load messages when component mounts or familyId changes
-  useEffect(() => {
-    if (selectedUser && familyId) {
-      loadMessages();
-    }
-  }, [selectedUser, familyId]);
-  
-  // Send an initial welcome/tutorial message when chat is first opened
-  useEffect(() => {
-    if (isOpen && shouldAutoOpen && !initialMessageSent && familyId) {
-      // Small delay for better UX
-      const timer = setTimeout(() => {
-        // Check for missing profile pictures first
-        const missingProfiles = familyMembers.filter(m => !m.profilePicture);
-        
-        // Check the current page to customize the message
-        let initialMessage = "";
-        
-        if (location.pathname === '/login') {
-          // Family selection screen - focus on profile pictures
-          if (missingProfiles.length > 0) {
-            initialMessage = `Welcome to Allie! I noticed that ${missingProfiles.length > 1 ? 'some family members' : missingProfiles[0].name} ${missingProfiles.length > 1 ? "don't" : "doesn't"} have profile pictures yet. Would you like me to help you upload ${missingProfiles.length > 1 ? 'them' : 'one'}? Just say "Add profile picture" or select a family member to upload for.`;
-            
-            // Update prompt chips for profile upload
-            setPromptChips([
-              { type: 'profile', text: 'Add profile pictures' },
-              { type: 'help', text: 'What can Allie do?' },
-              { type: 'survey', text: 'Tell me about the survey' }
-            ]);
-          } else {
-            initialMessage = `Hi ${selectedUser?.name || 'there'}! I'm Allie, your family's AI assistant. I'll help balance responsibilities and improve family harmony. Would you like to learn about what I can do?`;
-          }
-        } else if (location.pathname === '/survey' || location.pathname === '/kid-survey') {
-          // Survey screen - focus specifically on the initial survey
-          initialMessage = `Hi ${selectedUser?.name || 'there'}! I'm here to help with your initial family survey. This survey is how I learn about your family's task distribution. Feel free to ask me about any question like "Why is this important?" or "What does task weight mean?" You can also say "Do you know any dad jokes?" if you need a laugh while completing the survey!`;
-          
-          // Update prompt chips for survey
-          setPromptChips([
-            { type: 'help', text: 'Why are these questions important?' },
-            { type: 'info', text: 'How is task weight calculated?' },
-            { type: 'fun', text: 'Tell me a dad joke!' }
-          ]);
-        } else {
-          // Default welcome message
-          initialMessage = `Hello ${selectedUser?.name || 'there'}! I'm Allie, your family's AI assistant. I'm here to help with family balance, schedule management, and relationship insights. How can I help you today?`;
-        }
-        
-        // Add the initial message to the messages array
-        const welcomeMessage = {
-          familyId,
-          sender: 'allie',
-          userName: 'Allie',
-          text: initialMessage,
-          timestamp: new Date().toISOString()
-        };
-        
-        setMessages(prev => [...prev, welcomeMessage]);
-        setInitialMessageSent(true);
-      }, 500);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen, shouldAutoOpen, initialMessageSent, location.pathname, familyId, familyMembers, selectedUser]);
-  
-  // Load messages with retry capability
-  const loadMessages = async (loadMore = false) => {
-    try {
-      if (!selectedUser || !familyId) {
-        console.warn("loadMessages called without selectedUser or familyId", { selectedUser, familyId });
-        return;
-      }
-      
-      if (loadMore) {
-        setLoadingMore(true);
-      } else {
-        setLoading(true);
-      }
-      
-      console.log(`Attempting to load messages for family ${familyId}`, { loadMore });
-      
-      const result = await ChatPersistenceService.loadMessages(familyId, {
-        pageSize: 25,
-        loadMore,
-        includeMetadata: false
-      });
-      
-      console.log("Message loading result:", result);
-      
-      if (result.error) {
-        console.error("Error from ChatPersistenceService:", result.error);
-        throw new Error(result.error);
-      }
-      
-      setHasMoreMessages(result.hasMore);
-      
-      if (loadMore) {
-        // Prepend the older messages to the current list
-        setMessages(prev => [...result.messages, ...prev]);
-      } else {
-        // Replace all messages
-        setMessages(result.messages || []);
-      }
-    } catch (error) {
-      console.error("Error loading chat messages:", error, {
-        stack: error.stack,
-        familyId,
-        selectedUser: selectedUser?.id
-      });
-      
-      // Only show error message if we're not loading more
-      if (!loadMore) {
-        setMessages([{
-          familyId,
-          sender: 'allie',
-          userName: 'Allie',
-          text: "I had trouble loading your conversation history. Please try again or check your connection.",
-          timestamp: new Date().toISOString(),
-          error: true
-        }]);
-      }
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  };
-
-  // Retry loading messages on failure
-  const retryLoadMessages = (attempts = 3, delay = 1000) => {
-    let retryCount = 0;
-    
-    const attemptLoad = async () => {
-      try {
-        await loadMessages();
-        console.log("Successfully loaded messages after retry");
-      } catch (error) {
-        retryCount++;
-        console.log(`Attempt ${retryCount} failed, ${attempts - retryCount} attempts remaining`);
-        
-        if (retryCount < attempts) {
-          setTimeout(attemptLoad, delay);
-        } else {
-          console.error("All retry attempts failed");
-        }
-      }
-    };
-    
-    attemptLoad();
-  };
-
   // Helper function to get recent messages for context
   const getRecentMessages = (count = 3) => {
     // Get the most recent messages, excluding AI processing messages
@@ -508,11 +316,7 @@ useEffect(() => {
       .filter(msg => !msg.text?.includes('analyzing') && !msg.text?.includes('I\'m processing'))
       .slice(-count);
   };
-
-  // The handleSend function has a syntax error - this is what needs to be fixed
-// The problem is likely a misplaced closing brace that's closing the function too early
-// Let me provide the corrected function implementation
-
+   
 const handleSend = useCallback(async () => {
   if (input.trim() && canUseChat && selectedUser && familyId) {
     try {
@@ -723,6 +527,205 @@ const handleSend = useCallback(async () => {
   }
 }, [input, canUseChat, selectedUser, familyId, imageFile, messages, getRecentMessages]);
 
+
+
+// Add this new useEffect to listen for external chat triggers
+useEffect(() => {
+  const handleOpenChatEvent = (event) => {
+    console.log("Received open-allie-chat event:", event.detail);
+    
+    // Open the chat if it's not already open
+    if (!isOpen) {
+      setIsOpen(true);
+    }
+    
+    // Set the input with the message from the event
+    if (event.detail?.message) {
+      setInput(event.detail.message);
+      
+      // Wait for the chat to fully open and render
+      setTimeout(() => {
+        // Send the message after the chat is open
+        handleSend();
+      }, 800); // Give it more time to open and render
+    }
+  };
+  
+  // Add event listener for our custom event
+  window.addEventListener('open-allie-chat', handleOpenChatEvent);
+  
+  // Cleanup
+  return () => {
+    window.removeEventListener('open-allie-chat', handleOpenChatEvent);
+  };
+}, [isOpen, handleSend]); // Dependencies
+
+// Also add this new useEffect to ensure scrolling happens after the chat opens
+useEffect(() => {
+  if (isOpen) {
+    // Small delay to ensure DOM is updated before scrolling
+    const timer = setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }
+}, [isOpen]);
+  
+  // Load messages when component mounts or familyId changes
+  useEffect(() => {
+    if (selectedUser && familyId) {
+      loadMessages();
+    }
+  }, [selectedUser, familyId]);
+  
+  // Send an initial welcome/tutorial message when chat is first opened
+  useEffect(() => {
+    if (isOpen && shouldAutoOpen && !initialMessageSent && familyId) {
+      // Small delay for better UX
+      const timer = setTimeout(() => {
+        // Check for missing profile pictures first
+        const missingProfiles = familyMembers.filter(m => !m.profilePicture);
+        
+        // Check the current page to customize the message
+        let initialMessage = "";
+        
+        if (location.pathname === '/login') {
+          // Family selection screen - focus on profile pictures
+          if (missingProfiles.length > 0) {
+            initialMessage = `Welcome to Allie! I noticed that ${missingProfiles.length > 1 ? 'some family members' : missingProfiles[0].name} ${missingProfiles.length > 1 ? "don't" : "doesn't"} have profile pictures yet. Would you like me to help you upload ${missingProfiles.length > 1 ? 'them' : 'one'}? Just say "Add profile picture" or select a family member to upload for.`;
+            
+            // Update prompt chips for profile upload
+            setPromptChips([
+              { type: 'profile', text: 'Add profile pictures' },
+              { type: 'help', text: 'What can Allie do?' },
+              { type: 'survey', text: 'Tell me about the survey' }
+            ]);
+          } else {
+            initialMessage = `Hi ${selectedUser?.name || 'there'}! I'm Allie, your family's AI assistant. I'll help balance responsibilities and improve family harmony. Would you like to learn about what I can do?`;
+          }
+        } else if (location.pathname === '/survey' || location.pathname === '/kid-survey') {
+          // Survey screen - focus specifically on the initial survey
+          initialMessage = `Hi ${selectedUser?.name || 'there'}! I'm here to help with your initial family survey. This survey is how I learn about your family's task distribution. Feel free to ask me about any question like "Why is this important?" or "What does task weight mean?" You can also say "Do you know any dad jokes?" if you need a laugh while completing the survey!`;
+          
+          // Update prompt chips for survey
+          setPromptChips([
+            { type: 'help', text: 'Why are these questions important?' },
+            { type: 'info', text: 'How is task weight calculated?' },
+            { type: 'fun', text: 'Tell me a dad joke!' }
+          ]);
+        } else {
+          // Default welcome message
+          initialMessage = `Hello ${selectedUser?.name || 'there'}! I'm Allie, your family's AI assistant. I'm here to help with family balance, schedule management, and relationship insights. How can I help you today?`;
+        }
+        
+        // Add the initial message to the messages array
+        const welcomeMessage = {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: initialMessage,
+          timestamp: new Date().toISOString()
+        };
+        
+        setMessages(prev => [...prev, welcomeMessage]);
+        setInitialMessageSent(true);
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, shouldAutoOpen, initialMessageSent, location.pathname, familyId, familyMembers, selectedUser]);
+  
+  // Load messages with retry capability
+  const loadMessages = async (loadMore = false) => {
+    try {
+      if (!selectedUser || !familyId) {
+        console.warn("loadMessages called without selectedUser or familyId", { selectedUser, familyId });
+        return;
+      }
+      
+      if (loadMore) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+      
+      console.log(`Attempting to load messages for family ${familyId}`, { loadMore });
+      
+      const result = await ChatPersistenceService.loadMessages(familyId, {
+        pageSize: 25,
+        loadMore,
+        includeMetadata: false
+      });
+      
+      console.log("Message loading result:", result);
+      
+      if (result.error) {
+        console.error("Error from ChatPersistenceService:", result.error);
+        throw new Error(result.error);
+      }
+      
+      setHasMoreMessages(result.hasMore);
+      
+      if (loadMore) {
+        // Prepend the older messages to the current list
+        setMessages(prev => [...result.messages, ...prev]);
+      } else {
+        // Replace all messages
+        setMessages(result.messages || []);
+      }
+    } catch (error) {
+      console.error("Error loading chat messages:", error, {
+        stack: error.stack,
+        familyId,
+        selectedUser: selectedUser?.id
+      });
+      
+      // Only show error message if we're not loading more
+      if (!loadMore) {
+        setMessages([{
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: "I had trouble loading your conversation history. Please try again or check your connection.",
+          timestamp: new Date().toISOString(),
+          error: true
+        }]);
+      }
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  // Retry loading messages on failure
+  const retryLoadMessages = (attempts = 3, delay = 1000) => {
+    let retryCount = 0;
+    
+    const attemptLoad = async () => {
+      try {
+        await loadMessages();
+        console.log("Successfully loaded messages after retry");
+      } catch (error) {
+        retryCount++;
+        console.log(`Attempt ${retryCount} failed, ${attempts - retryCount} attempts remaining`);
+        
+        if (retryCount < attempts) {
+          setTimeout(attemptLoad, delay);
+        } else {
+          console.error("All retry attempts failed");
+        }
+      }
+    };
+    
+    attemptLoad();
+  };
+
+
+
+  // The handleSend function has a syntax error - this is what needs to be fixed
+// The problem is likely a misplaced closing brace that's closing the function too early
+// Let me provide the corrected function implementation
 
 // Add function to handle message edits and rerun
 const handleEditMessage = async (messageId, editedText) => {
