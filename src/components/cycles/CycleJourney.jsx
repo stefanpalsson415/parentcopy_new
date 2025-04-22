@@ -173,6 +173,13 @@ const CycleJourney = ({
         highestCompletedStep = 1;
         stepsCompleted.push(1);
       }
+      // Also check for direct step completion flags from cycleData
+if (cycleData.stepComplete && cycleData.stepComplete[1] === true) {
+  highestCompletedStep = Math.max(highestCompletedStep, 1);
+  if (!stepsCompleted.includes(1)) {
+    stepsCompleted.push(1);
+  }
+}
       
       const allMembersCompletedSurvey = familyMembers
         .every(member => {

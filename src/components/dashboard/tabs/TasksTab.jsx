@@ -1780,11 +1780,22 @@ const triggerAllieChat = (message) => {
       scheduledDate: meetingDate || null,
       completed: cycleData?.meeting?.completed === true
     },
-    // Add explicit survey status
+    // Enhanced survey status with step completion status
     survey: {
       enabled: canTakeSurvey,
       // Only true when completed is explicitly true
       completed: selectedUser?.weeklyCompleted?.[currentWeek-1]?.completed === true
+    },
+    // Explicitly mark step 1 as completed when 5+ habit instances
+    step: cycleStep,
+    stepComplete: {
+      1: Object.values(completedHabitInstances).some(instances => 
+          instances && instances.some(instance => 
+            instance.userId === selectedUser?.id) && 
+          instances.length >= 5
+        ),
+      2: selectedUser?.weeklyCompleted?.[currentWeek-1]?.completed === true,
+      3: cycleData?.meeting?.completed === true
     }
   }}
   familyMembers={familyMembers}
