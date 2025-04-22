@@ -742,39 +742,45 @@ const findExistingDueDateEvent = async () => {
             completedMeeting: false
           };
           
-          // For parents, check if they've completed habits requirement and surveys
-          if (member.role === 'parent') {
-            // First check for FULLY completed surveys using stricter criteria
-            // A survey is only considered fully completed if it meets ALL these conditions
-            const surveyFullyCompleted = 
-              memberData.completedSurvey === true && 
-              member.weeklyCompleted?.[currentWeek-1]?.completed === true &&
-              (member.status && member.status.toLowerCase().includes("survey done"));
-            
-            // Always check for habit completions
-            const parentHabits = Object.values(completedHabitInstances)
-              .filter(instances => instances.some(instance => 
-                instance.userId === member.id));
-            
-            const hasCompletedHabits = parentHabits.some(instances => instances.length >= 5);
-            
-            if (surveyFullyCompleted) {
-              // If survey is fully completed, set to step 3 (meeting phase)
-              memberData.step = 3;
-              memberData.completedSurvey = true;
-            } else if (hasCompletedHabits) {
-              // If not fully completed but has enough habit completions, enable survey
-              memberData.step = 2; // Ready for survey
-              
-              // Force canTakeSurvey to true for this case - this ensures partially 
-              // completed surveys can be resumed
-              if (member.id === selectedUser?.id) {
-                setCanTakeSurvey(true);
-              }
-            } else {
-              memberData.step = 1; // Still doing habits
-            }
-          }
+          // NEW CODE (replace with this)
+// For parents, check if they've completed habits requirement and surveys
+if (member.role === 'parent') {
+  // Check for ANY of these indicators that survey is completed (using OR instead of AND)
+  const surveyFullyCompleted = 
+    memberData.completedSurvey === true || 
+    member.weeklyCompleted?.[currentWeek-1]?.completed === true ||
+    (member.status && member.status.toLowerCase().includes("survey done"));
+  
+  // Always check for habit completions
+  const parentHabits = Object.values(completedHabitInstances)
+    .filter(instances => instances.some(instance => 
+      instance.userId === member.id));
+  
+  const hasCompletedHabits = parentHabits.some(instances => instances.length >= 5);
+  
+  if (surveyFullyCompleted) {
+    // If survey is completed by ANY measure, set to step 3 (meeting phase)
+    memberData.step = 3;
+    memberData.completedSurvey = true;
+    
+    // Log the completion for debugging
+    console.log(`Parent ${member.name} survey marked as completed, setting to step 3`);
+  } else if (hasCompletedHabits) {
+    // If not fully completed but has enough habit completions, enable survey
+    memberData.step = 2; // Ready for survey
+    
+    // Force canTakeSurvey to true for this case - this ensures partially 
+    // completed surveys can be resumed
+    if (member.id === selectedUser?.id) {
+      setCanTakeSurvey(true);
+    }
+    
+    console.log(`Parent ${member.name} has enough habits, setting to step 2`);
+  } else {
+    memberData.step = 1; // Still doing habits
+    console.log(`Parent ${member.name} still on habits, setting to step 1`);
+  }
+}
           // For children, check if they've completed their survey
           else if (member.role === 'child') {
             // Child's step is based on survey completion - check multiple indicators
@@ -857,33 +863,60 @@ const findExistingDueDateEvent = async () => {
         
         setCycleStep(currentFamilyStep);
         
-        // Update survey availability based on user role
-        if (selectedUser?.role === 'parent') {
-          // For parents: Check if this specific parent has completed enough habits
-          const currentUserProgress = progress[selectedUser.id];
-          setCanTakeSurvey(currentUserProgress && currentUserProgress.step >= 2);
-        } else if (selectedUser?.role === 'child') {
-          // For children: Always allow taking survey if ANY of these conditions are true:
-          // 1. Any parent has completed habits (step >= 2)
-          // 2. Overall cycle step is at least 2
-          // 3. Any parent has completed survey 
-          const anyParentCompleted = familyMembers
-            .filter(m => m.role === 'parent')
-            .some(parent => 
-              progress[parent.id]?.step >= 2 || 
-              progress[parent.id]?.completedSurvey ||
-              parent.weeklyCompleted?.[currentWeek-1]?.completed
-            );
-          
-          setCanTakeSurvey(anyParentCompleted || currentFamilyStep >= 2);
-          
-          // Log debug info
-          console.log("Child survey availability:", {
-            anyParentCompleted,
-            currentFamilyStep,
-            canTakeSurvey: anyParentCompleted || currentFamilyStep >= 2
-          });
-        }
+       // NEW CODE (replace with this)
+// Update survey availability based on user role
+if (selectedUser?.role === 'parent') {
+  // For parents: Check if this specific parent has completed enough habits
+  const currentUserProgress = progress[selectedUser.id];
+  setCanTakeSurvey(currentUserProgress && currentUserProgress.step >= 2);
+} else if (selectedUser?.role === 'child') {
+  // For children: Always allow taking survey if ANY of these conditions are true:
+  // 1. Any parent has completed habits (step >= 2)
+  // 2. Overall cycle step is at least 2
+  // 3. Any parent has completed survey 
+  
+  // Detailed logging for parent progress status
+  familyMembers
+    .filter(m => m.role === 'parent')
+    .forEach(parent => {
+      console.log(`Parent ${parent.name} survey eligibility:`, {
+        id: parent.id,
+        progressStep: progress[parent.id]?.step || 'unknown',
+        completedSurvey: progress[parent.id]?.completedSurvey || false,
+        weeklyCompleted: parent.weeklyCompleted?.[currentWeek-1]?.completed || false,
+        status: parent.status || 'unknown'
+      });
+    });
+  
+  const anyParentCompleted = familyMembers
+    .filter(m => m.role === 'parent')
+    .some(parent => {
+      // Check multiple indicators of completion (any of them)
+      const completedByStep = progress[parent.id]?.step >= 2;
+      const completedBySurveyFlag = progress[parent.id]?.completedSurvey === true;
+      const completedByWeekly = parent.weeklyCompleted?.[currentWeek-1]?.completed === true;
+      
+      // If any indicator shows completion, consider it completed
+      return completedByStep || completedBySurveyFlag || completedByWeekly;
+    });
+  
+  // Always enable survey for children if cycle is at step 2+ OR any parent has made progress
+  const shouldEnableSurvey = anyParentCompleted || currentFamilyStep >= 2;
+  setCanTakeSurvey(shouldEnableSurvey);
+  
+  // Log debug info with more details
+  console.log("Child survey availability:", {
+    anyParentCompleted,
+    currentFamilyStep,
+    canTakeSurvey: shouldEnableSurvey
+  });
+  
+  // Force to true for debug if any parent is at step 2+
+  if (familyMembers.filter(m => m.role === 'parent').some(p => progress[p.id]?.step >= 2)) {
+    console.log("Forcing canTakeSurvey=true because at least one parent is at step 2+");
+    setCanTakeSurvey(true);
+  }
+}
         
         // Double-check survey availability - if user has enough habits, always enable survey
         if (selectedUser?.role === 'parent') {

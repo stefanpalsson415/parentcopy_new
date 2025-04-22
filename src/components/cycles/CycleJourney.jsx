@@ -455,13 +455,37 @@ if (cycleData.stepComplete && cycleData.stepComplete[1] === true) {
       {/* Action Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-8">
         {steps.map((step) => {
-          // Skip rendering step 1 for children in family cycles
-          if (cycleType === 'family' && 
-              currentUser?.role === 'child' && 
-              step.number === 1 && 
-              step.childSkip) {
-            return null;
-          }
+          // NEW CODE (replace with this)
+// Special display for Step 1 for children in family cycles
+if (cycleType === 'family' && 
+  currentUser?.role === 'child' && 
+  step.number === 1 && 
+  step.childSkip) {
+return (
+  <motion.div 
+    key={`action-${step.number}`}
+    className="rounded-lg p-5 relative overflow-hidden bg-gray-50 border border-gray-100"
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ delay: 0.1 * step.number }}
+  >
+    <div className="flex flex-col h-full">
+      <div className="rounded-full w-12 h-12 flex items-center justify-center mb-3 bg-gray-200 text-gray-600 mx-auto">
+        {step.icon}
+      </div>
+      <h4 className="text-lg font-medium mb-1 text-center">
+        Step {step.number}: {step.title}
+      </h4>
+      <p className="text-sm text-gray-600 mb-4 text-center">
+        Just for parents! They build habits to help balance family responsibilities.
+      </p>
+      <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800">
+        <p>Your parents need to complete this step before you can take the family survey.</p>
+      </div>
+    </div>
+  </motion.div>
+);
+}
           
           const isCompleted = completedSteps.includes(step.number);
           const isActive = currentStep === step.number;

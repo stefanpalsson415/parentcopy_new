@@ -154,6 +154,7 @@ const KidFriendlySurvey = ({ surveyType = "initial" }) => {
     saveSurveyProgress,
     currentWeek,
     familyId,
+    familyName,
     selectFamilyMember 
   } = useFamily();
   
@@ -295,25 +296,46 @@ useEffect(() => {
   }, [isProcessing]);
   
   // Set up questions for kids based on survey type - Ensure exactly 50 questions with NO DUPLICATES
-  useEffect(() => {
-    if (!fullQuestionSet || fullQuestionSet.length === 0) return;
+useEffect(() => {
+  if (!fullQuestionSet || fullQuestionSet.length === 0) return;
+  
+  setIsLoadingQuestions(true);
+  
+  let questionSet;
+  
+  // Determine which questions to use based on the survey type
+  if (surveyType === "weekly") {
+    console.log(`Generating weekly questions for week ${currentWeek}`);
     
-    setIsLoadingQuestions(true);
+    // Create family data object for context
+    const familyData = {
+      familyName: familyName,
+      familyId: familyId,
+      children: familyMembers.filter(m => m.role === 'child').map(c => ({
+        name: c.name, 
+        age: c.age || 10
+      }))
+    };
     
-    let questionSet;
+    // Get previous responses for context
+    const previousResponses = currentSurveyResponses || {};
     
-    // Determine which questions to use based on the survey type
-    if (surveyType === "weekly") {
-      console.log(`Generating weekly questions for week ${currentWeek}`);
-      questionSet = generateWeeklyQuestions(currentWeek, true); // Pass true to indicate child
-      console.log(`Generated ${questionSet.length} weekly questions`);
-    } else {
-      console.log(`Using full question set with ${fullQuestionSet.length} questions`);
-      questionSet = fullQuestionSet;
-    }
+    // Generate adaptive questions with full context
+    questionSet = generateWeeklyQuestions(
+      currentWeek, 
+      true, // Pass true to indicate child
+      familyData, 
+      previousResponses
+    );
     
-    // Process the questions to make them age-appropriate
-    if (selectedUser && selectedUser.role === 'child') {
+    console.log(`Generated ${questionSet.length} adaptive weekly questions for kids`);
+  } else {
+    console.log(`Using full question set with ${fullQuestionSet.length} questions`);
+    questionSet = fullQuestionSet;
+  }
+  
+  // Process the questions to make them age-appropriate
+  if (selectedUser && selectedUser.role === 'child') {
       const childAge = parseInt(selectedUser.age) || 10; // Default to 10 if age is not specified
       
       // Get categories
