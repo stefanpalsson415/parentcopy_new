@@ -212,7 +212,7 @@ useEffect(() => {
   }
 }, [event.category, event.eventType, familyMembers]);
 
-// Function to initialize Google Places Autocomplete using the new PlaceAutocompleteElement
+// Function to initialize Google Places Autocomplete using the PlaceAutocompleteElement
 const initPlacesAutocomplete = () => {
   console.log("Initializing Google Places with PlaceAutocompleteElement API");
   
@@ -237,13 +237,10 @@ const initPlacesAutocomplete = () => {
         container.removeChild(container.firstChild);
       }
       
-      // Create the PlaceAutocompleteElement with corrected properties
+      // Create the PlaceAutocompleteElement with minimal properties
+      // The API currently doesn't accept 'fields' or other complex options
       const placeAutocompleteElement = 
-        new window.google.maps.places.PlaceAutocompleteElement({
-          type: 'address',  // Changed from types to type and simplified
-          fields: ['name', 'formatted_address', 'address_components', 'geometry', 'place_id']
-          // Removed inputPlaceholder property
-        });
+        new window.google.maps.places.PlaceAutocompleteElement();
       
       // Add to the container
       container.appendChild(placeAutocompleteElement);
@@ -254,19 +251,25 @@ const initPlacesAutocomplete = () => {
       // Add event listener for place selection
       placeAutocompleteElement.addEventListener('gmp-placeselect', (event) => {
         try {
-          const place = event.place;
+          const place = event.detail.place;
           
-          if (place && place.formattedAddress) {
-            let locationText = place.formattedAddress;
+          if (place) {
+            let locationText = "";
             
-            // Add place name if different from address
-            if (place.displayName && place.displayName !== locationText) {
-              locationText = `${place.displayName}, ${locationText}`;
+            // Try to get formatted address
+            if (place.formattedAddress) {
+              locationText = place.formattedAddress;
+            } else if (place.displayName) {
+              locationText = place.displayName;
+            } else if (place.name) {
+              locationText = place.name;
             }
             
-            console.log("Setting location from place selection:", locationText);
-            setEvent(prev => ({ ...prev, location: locationText }));
-            prevLocationRef.current = locationText;
+            if (locationText) {
+              console.log("Setting location from place selection:", locationText);
+              setEvent(prev => ({ ...prev, location: locationText }));
+              prevLocationRef.current = locationText;
+            }
           }
         } catch (error) {
           console.warn("Error handling place selection:", error);
