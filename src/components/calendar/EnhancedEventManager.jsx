@@ -146,6 +146,26 @@ useEffect(() => {
 // Separate useEffect for child name update with safeguards
 const prevChildIdRef = useRef(null);
 
+// Add this useEffect near other useEffects at the top level of the component
+useEffect(() => {
+  // Automatically set all family members as attendees for meeting events
+  if ((event.category === 'meeting' || event.eventType === 'meeting') && familyMembers.length > 0) {
+    // Create attendees list from all family members
+    const allAttendees = familyMembers.map(member => ({
+      id: member.id,
+      name: member.name,
+      role: member.role
+    }));
+    
+    // Update event with all family members as attendees and both parents attending
+    setEvent(prev => ({
+      ...prev,
+      attendees: allAttendees,
+      attendingParentId: 'both'
+    }));
+  }
+}, [event.category, event.eventType, familyMembers]);
+
 useEffect(() => {
   // Skip if we're currently in an update cycle
   if (isUpdatingRef.current) return;
@@ -190,10 +210,11 @@ useEffect(() => {
   }
 }, [event.category, event.eventType, familyMembers]);
 
-// Simplified Google Places initialization
+// Improved Google Places initialization
 useEffect(() => {
   // Function to initialize PlaceAutocompleteElement
   const initPlacesAutocomplete = () => {
+    console.log("Initializing Google Places Autocomplete");
     if (!window.google || !window.google.maps || !window.google.maps.places || 
         !window.google.maps.places.PlaceAutocompleteElement) {
       console.log("Places API or PlaceAutocompleteElement not available");
@@ -247,13 +268,29 @@ useEffect(() => {
               
               // Only update the event if we have some location text
               if (locationText) {
+                console.log("Setting location from place selection:", locationText);
                 setEvent(prev => ({ ...prev, location: locationText }));
+                prevLocationRef.current = locationText;
               }
             }
           } catch (error) {
             console.warn("Error handling place selection:", error);
           }
         });
+        
+        // If we have an initial location, set it after initialization
+        if (event.location) {
+          try {
+            console.log("Setting initial location in Places Autocomplete:", event.location);
+            const input = placeAutocompleteElement.querySelector('input');
+            if (input) {
+              input.value = event.location;
+              prevLocationRef.current = event.location;
+            }
+          } catch (initError) {
+            console.warn("Error setting initial location:", initError);
+          }
+        }
         
         return true;
       }
@@ -296,17 +333,16 @@ useEffect(() => {
     window.removeEventListener('google-maps-api-loaded', handleMapsApiLoaded);
     clearTimeout(timeoutId);
   };
-}, [placesInitialized]); // Remove event.location from dependencies
+}, [placesInitialized, event.location]); // Add event.location as dependency to refresh when it changes
 
-// Separate effect for updating input value with a ref to track previous location
-const prevLocationRef = useRef(null);
-
+// Synchronize event location with Places input when location changes
 useEffect(() => {
-  // Skip if we're currently in an update cycle
-  if (isUpdatingRef.current) return;
+  // Skip if we're currently in an update cycle or if Places isn't initialized yet
+  if (isUpdatingRef.current || !placesInitialized || !placeAutocompleteElementRef.current) return;
   
-  // Only process if location changed from previous render
-  if (event.location && event.location !== prevLocationRef.current && placeAutocompleteElementRef.current) {
+  // If event has a location and it's different from what we previously stored
+  if (event.location && event.location !== prevLocationRef.current) {
+    console.log("Updating Places input with location:", event.location);
     prevLocationRef.current = event.location;
     
     try {
@@ -315,30 +351,31 @@ useEffect(() => {
         input.value = event.location;
       }
     } catch (error) {
-      console.warn("Error setting initial location value:", error);
+      console.warn("Error updating location input value:", error);
     }
   }
 }, [event.location, placesInitialized]);
 
-  // Set initial value for the location field if editing
-  useEffect(() => {
-    if (event.location && placeAutocompleteElementRef.current) {
-      try {
-        // Try to set the input value
-        const input = placeAutocompleteElementRef.current.querySelector('input');
-        if (input) {
-          input.value = event.location;
-        }
-      } catch (error) {
-        console.warn("Error setting initial location value:", error);
+// Manual location input function with improved handling
+const handleManualLocationInput = (value) => {
+  console.log("Manual location input:", value);
+  setEvent(prev => ({ ...prev, location: value }));
+  prevLocationRef.current = value;
+  
+  // Also try to update the Places input if it exists
+  if (placeAutocompleteElementRef.current) {
+    try {
+      const input = placeAutocompleteElementRef.current.querySelector('input');
+      if (input) {
+        input.value = value;
       }
+    } catch (error) {
+      console.warn("Error updating Places input after manual input:", error);
     }
-  }, [event.location, placesInitialized]);
+  }
+};
 
-  // Manual location input for fallback
-  const handleManualLocationInput = (value) => {
-    setEvent(prev => ({ ...prev, location: value }));
-  };
+ 
 
 
 const handleSave = async () => {
@@ -360,91 +397,95 @@ const handleSave = async () => {
     }
     
     // Format the event for the calendar service
-    const calendarEvent = {
-      ...event,
-      userId: currentUser.uid,
-      familyId,
-      source: 'unified-manager',
-      start: {
-        dateTime: new Date(event.dateTime).toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      end: {
-        dateTime: new Date(event.endDateTime || 
-                new Date(new Date(event.dateTime).getTime() + 60 * 60 * 1000)
-               ).toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      // Add reminders if we have any
-      reminders: selectedReminders.length > 0 ? {
-        useDefault: false,
-        overrides: selectedReminders.map(minutes => ({
-          method: 'popup',
-          minutes
-        }))
-      } : undefined,
-      
-      // Include document and provider information
-      documents: event.documents || [],
-      providers: event.providers || [],
-      
-      // Include family members as attendees
-      attendees: [
-        // Always include the child if selected
-        ...(event.childId ? [{
-          id: event.childId,
-          name: event.childName,
-          role: 'child'
-        }] : []),
-        
-        // Include siblings if selected
-        ...(event.siblingIds?.map((sibId, index) => {
-          const sibling = familyMembers.find(m => m.id === sibId);
-          return {
-            id: sibId,
-            name: event.siblingNames?.[index] || (sibling ? sibling.name : 'Sibling'),
-            role: 'child'
-          };
-        }) || []),
-        
-        // Include attending parent
-        ...(event.attendingParentId ? (
-          event.attendingParentId === 'both' ?
-            // Both parents
-            parents.map(parent => ({
-              id: parent.id, 
-              name: parent.name,
-              role: 'parent'
-            })) :
-            // Single parent
-            [{
-              id: event.attendingParentId,
-              name: parents.find(p => p.id === event.attendingParentId)?.name || 'Parent',
-              role: 'parent'
-            }]
-        ) : [])
-      ],
-      
-      // Enhanced context
-      extraDetails: {
-        ...(event.extraDetails || {}),
-        notes: event.extraDetails?.notes || '',
-        
-        // For appointments, include provider details
-        ...(event.category === 'appointment' && event.providers?.[0] ? {
-          providerName: event.providers[0].name,
-          providerSpecialty: event.providers[0].specialty,
-          providerPhone: event.providers[0].phone,
-          providerAddress: event.providers[0].address
-        } : {}),
-        
-        // For birthdays, include age and related info
-        ...(event.category === 'birthday' ? {
-          birthdayChildName: event.extraDetails?.birthdayChildName,
-          birthdayChildAge: event.extraDetails?.birthdayChildAge
-        } : {})
-      }
-    };    
+const calendarEvent = {
+  ...event,
+  userId: currentUser.uid,
+  familyId,
+  source: 'unified-manager',
+  start: {
+    dateTime: new Date(event.dateTime).toISOString(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+  },
+  end: {
+    dateTime: new Date(event.endDateTime || 
+            new Date(new Date(event.dateTime).getTime() + 60 * 60 * 1000)
+           ).toISOString(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+  },
+  // Explicitly include location to ensure it's saved properly
+  location: event.location || '',
+  // Add reminders if we have any
+  reminders: selectedReminders.length > 0 ? {
+    useDefault: false,
+    overrides: selectedReminders.map(minutes => ({
+      method: 'popup',
+      minutes
+    }))
+  } : undefined,
+  
+  // Include document and provider information
+  documents: event.documents || [],
+  providers: event.providers || [],
+  
+  // Include family members as attendees
+  attendees: [
+    // Always include the child if selected
+    ...(event.childId ? [{
+      id: event.childId,
+      name: event.childName,
+      role: 'child'
+    }] : []),
+    
+    // Include siblings if selected
+    ...(event.siblingIds?.map((sibId, index) => {
+      const sibling = familyMembers.find(m => m.id === sibId);
+      return {
+        id: sibId,
+        name: event.siblingNames?.[index] || (sibling ? sibling.name : 'Sibling'),
+        role: 'child'
+      };
+    }) || []),
+    
+    // Include attending parent
+    ...(event.attendingParentId ? (
+      event.attendingParentId === 'both' ?
+        // Both parents
+        parents.map(parent => ({
+          id: parent.id, 
+          name: parent.name,
+          role: 'parent'
+        })) :
+        // Single parent
+        [{
+          id: event.attendingParentId,
+          name: parents.find(p => p.id === event.attendingParentId)?.name || 'Parent',
+          role: 'parent'
+        }]
+    ) : [])
+  ],
+  
+  // Enhanced context
+  extraDetails: {
+    ...(event.extraDetails || {}),
+    notes: event.extraDetails?.notes || '',
+    
+    // For appointments, include provider details
+    ...(event.category === 'appointment' && event.providers?.[0] ? {
+      providerName: event.providers[0].name,
+      providerSpecialty: event.providers[0].specialty,
+      providerPhone: event.providers[0].phone,
+      providerAddress: event.providers[0].address
+    } : {}),
+    
+    // For birthdays, include age and related info
+    ...(event.category === 'birthday' ? {
+      birthdayChildName: event.extraDetails?.birthdayChildName,
+      birthdayChildAge: event.extraDetails?.birthdayChildAge
+    } : {})
+  }
+};
+
+console.log("Saving event with location:", event.location);    
     let result;
 
     // Add reminders if we have any
@@ -992,39 +1033,37 @@ const handleSave = async () => {
         </div>
         
         {/* Location Section */}
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">
-            Location
-          </label>
+<div>
+  <label className="block text-sm font-medium mb-1 text-gray-700">
+    Location
+  </label>
 
-          {/* Google Places Autocomplete container */}
-          <div ref={placesContainerRef} className="mb-2 rounded-md border overflow-hidden">
-            {/* PlaceAutocompleteElement will be inserted here if available */}
-          </div>
-          
-          {/* When Google Places is not available, fallback to manual input */}
-          {(window.googleMapsAuthFailed || window.googleMapsLoadFailed || !placesInitialized) && (
-            <div className="flex items-center border rounded-md overflow-hidden mt-2">
-              <div className="p-2 text-gray-400">
-                <MapPin size={16} />
-              </div>
-              <input
-                type="text"
-                value={event.location || ''}
-                onChange={(e) => handleManualLocationInput(e.target.value)}
-                className="w-full p-2 text-sm border-0 focus:ring-0"
-                placeholder="Where is this event happening?"
-              />
-            </div>
-          )}
-          
-          {/* Current location value display (for visibility) */}
-          {event.location && (
-            <div className="text-xs text-blue-600 mt-1 pl-2">
-              Current location: {event.location}
-            </div>
-          )}
-        </div>
+  {/* Google Places Autocomplete container */}
+  <div ref={placesContainerRef} className="mb-2 rounded-md border overflow-hidden">
+    {/* PlaceAutocompleteElement will be inserted here if available */}
+  </div>
+  
+  {/* Always show manual input as backup/alternative */}
+  <div className="flex items-center border rounded-md overflow-hidden mt-2">
+    <div className="p-2 text-gray-400">
+      <MapPin size={16} />
+    </div>
+    <input
+      type="text"
+      value={event.location || ''}
+      onChange={(e) => handleManualLocationInput(e.target.value)}
+      className="w-full p-2 text-sm border-0 focus:ring-0"
+      placeholder="Where is this event happening?"
+    />
+  </div>
+  
+  {/* Current location value display (for visibility) */}
+  {event.location && (
+    <div className="text-xs text-blue-600 mt-1 pl-2">
+      Current location: {event.location}
+    </div>
+  )}
+</div>
         
         {/* Event Attendees Section */}
 {(event.category === 'meeting' || event.eventType === 'meeting' || event.category === 'general') ? (
@@ -1048,35 +1087,6 @@ const handleSave = async () => {
           "Family meetings include all family members by default." : 
           "All family members are included for this event."}
       </p>
-    </div>
-    
-    {/* Hidden fields to ensure all attendees are properly set */}
-    <div className="hidden">
-      {useEffect(() => {
-        // Set all family members as attendees for meetings
-        if (event.category === 'meeting' || event.eventType === 'meeting' || 
-           (event.category === 'general' && !event.childId)) {
-          // Extract all needed information for attendees
-          const allAttendees = familyMembers.map(member => ({
-            id: member.id,
-            name: member.name,
-            role: member.role
-          }));
-          
-          // Also make sure parents are properly marked
-          const bothParentsAttend = parents.length > 0;
-          
-          setEvent(prev => ({
-            ...prev,
-            attendees: allAttendees,
-            attendingParentId: bothParentsAttend ? 'both' : '',
-            childId: null, // Clear child-specific fields for meetings
-            childName: null,
-            siblingIds: [],
-            siblingNames: []
-          }));
-        }
-      }, [event.category, event.eventType])}
     </div>
   </div>
 ) : (
