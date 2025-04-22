@@ -88,6 +88,8 @@ const EnhancedEventManager = ({
   const parents = familyMembers.filter(m => m.role === 'parent');
   const isUpdatingRef = useRef(false);
 const previousDateRef = useRef(null);
+const prevLocationRef = useRef(null);
+
 
 // Consolidated useEffect for initialEvent processing
 useEffect(() => {
