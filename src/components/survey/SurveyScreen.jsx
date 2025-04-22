@@ -202,13 +202,14 @@ const SurveyScreen = ({ mode = 'initial' }) => {
           }
           
           // Call with full context data for adaptive selection
-          const weeklyQuestions = generateWeeklyQuestions(
-            currentWeek, 
-            false, // Not a child
-            familyData,
-            previousResponses,
-            taskCompletionData
-          );
+const weeklyQuestions = generateWeeklyQuestions(
+  currentWeek, 
+  false, // Not a child
+  familyData,
+  previousResponses,
+  taskCompletionData,
+  selectedUser?.id // Pass parent ID for personalization
+);
           
           console.log(`Generated ${weeklyQuestions?.length || 0} adaptive weekly questions for week ${currentWeek}`);
           
