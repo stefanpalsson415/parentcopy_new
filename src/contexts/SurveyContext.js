@@ -444,165 +444,165 @@ export function SurveyProvider({ children }) {
   };
 
   // Add this updated function in SurveyContext.js to replace the existing one
-const selectPersonalizedInitialQuestions = (fullQuestionSet, familyData, targetCount = 72) => {
-  console.log("Selecting personalized questions with target count:", targetCount);
-  
-  // If no family data is provided, return a balanced default set
-  if (!familyData) {
-    console.log("No family data provided, using default selection");
-    return selectDefaultInitialQuestions(fullQuestionSet, targetCount);
-  }
-  
-  const categories = [
-    "Visible Household Tasks",
-    "Invisible Household Tasks",
-    "Visible Parental Tasks",
-    "Invisible Parental Tasks"
-  ];
-  
-  // Questions per category (evenly distributed by default)
-  const questionsPerCategory = Math.floor(targetCount / categories.length);
-  console.log("Initial questions per category:", questionsPerCategory);
-  
-  // Create an array to hold our selected questions
-  const selectedQuestions = [];
-  
-  // Process family data for personalization
-  const { 
-    children = [],
-    communication = {},
-    priorities = {},
-    aiPreferences = {}
-  } = familyData;
-  
-  // Adjust distribution based on priorities
-  const priorityOrder = [
-    priorities.highestPriority,
-    priorities.secondaryPriority,
-    priorities.tertiaryPriority
-  ].filter(Boolean); // Remove any undefined values
-  
-  // Calculate adjusted distribution
-  let categoryDistribution = {};
-  if (priorityOrder.length > 0) {
-    // Default even distribution
-    categories.forEach(cat => {
-      categoryDistribution[cat] = questionsPerCategory;
-    });
+  const selectPersonalizedInitialQuestions = (fullQuestionSet, familyData, targetCount = 72) => {
+    console.log("Selecting personalized questions with target count:", targetCount);
     
-    // Boost highest priority by 50%
-    if (priorityOrder[0]) {
-      const boost = Math.min(6, Math.floor(questionsPerCategory * 0.5));
-      categoryDistribution[priorityOrder[0]] += boost;
-      
-      // Take from lowest priority if available
-      const lowestPriority = categories.find(cat => !priorityOrder.includes(cat));
-      if (lowestPriority) {
-        categoryDistribution[lowestPriority] = Math.max(
-          Math.floor(questionsPerCategory * 0.5), 
-          categoryDistribution[lowestPriority] - boost
-        );
-      }
+    // If no family data is provided, return a balanced default set
+    if (!familyData) {
+      console.log("No family data provided, using default selection");
+      return selectDefaultInitialQuestions(fullQuestionSet, targetCount);
     }
     
-    console.log("Adjusted distribution based on priorities:", categoryDistribution);
-  } else {
-    // Even distribution
-    categories.forEach(cat => {
-      categoryDistribution[cat] = questionsPerCategory;
-    });
-  }
-  
-  // Now select questions for each category based on the adjusted distribution
-  categories.forEach(category => {
-    // Get all questions for this category
-    const categoryQuestions = fullQuestionSet.filter(q => q.category === category);
+    const categories = [
+      "Visible Household Tasks",
+      "Invisible Household Tasks",
+      "Visible Parental Tasks",
+      "Invisible Parental Tasks"
+    ];
     
-    // Skip if no questions in this category
-    if (categoryQuestions.length === 0) return;
+    // Questions per category (evenly distributed by default)
+    const questionsPerCategory = Math.floor(targetCount / categories.length);
+    console.log("Initial questions per category:", questionsPerCategory);
     
-    // Score each question for relevance
-    const scoredQuestions = categoryQuestions.map(question => {
-      let relevanceScore = 0;
+    // Create an array to hold our selected questions
+    const selectedQuestions = [];
+    
+    // Process family data for personalization
+    const { 
+      children = [],
+      communication = {},
+      priorities = {},
+      aiPreferences = {}
+    } = familyData;
+    
+    // Adjust distribution based on priorities
+    const priorityOrder = [
+      priorities.highestPriority,
+      priorities.secondaryPriority,
+      priorities.tertiaryPriority
+    ].filter(Boolean); // Remove any undefined values
+    
+    // Calculate adjusted distribution
+    let categoryDistribution = {};
+    if (priorityOrder.length > 0) {
+      // Default even distribution
+      categories.forEach(cat => {
+        categoryDistribution[cat] = questionsPerCategory;
+      });
       
-      // Child-related scoring boost for families with children
-      if (children && children.length > 0) {
-        if (question.childDevelopment === "high") {
-          relevanceScore += 5;
-        }
-        if (question.text.toLowerCase().includes("child") || 
-            question.text.toLowerCase().includes("kid") ||
-            question.text.toLowerCase().includes("school")) {
-          relevanceScore += 3;
+      // Boost highest priority by 50%
+      if (priorityOrder[0]) {
+        const boost = Math.min(6, Math.floor(questionsPerCategory * 0.5));
+        categoryDistribution[priorityOrder[0]] += boost;
+        
+        // Take from lowest priority if available
+        const lowestPriority = categories.find(cat => !priorityOrder.includes(cat));
+        if (lowestPriority) {
+          categoryDistribution[lowestPriority] = Math.max(
+            Math.floor(questionsPerCategory * 0.5), 
+            categoryDistribution[lowestPriority] - boost
+          );
         }
       }
       
-      // Communication style relevance
-      if (communication.style) {
-        if ((communication.style === "reserved" || communication.style === "avoidant") &&
-            (question.invisibility === "completely" || question.invisibility === "mostly")) {
-          relevanceScore += 6;
-        }
-      }
-      
-      // Weight importance - prioritize high impact
-      const weight = parseFloat(question.totalWeight || 0);
-      if (weight >= 12) relevanceScore += 10;
-      else if (weight >= 9) relevanceScore += 8;
-      else if (weight >= 6) relevanceScore += 5;
-      
-      return {
-        ...question,
-        relevanceScore
-      };
-    });
-    
-    // Sort by relevance and take the required number for this category
-    const sortedQuestions = [...scoredQuestions].sort((a, b) => 
-      b.relevanceScore - a.relevanceScore
-    );
-    
-    // Take the number of questions based on our distribution
-    const numToTake = categoryDistribution[category] || questionsPerCategory;
-    const selectedForCategory = sortedQuestions.slice(0, numToTake);
-    
-    console.log(`Selected ${selectedForCategory.length} questions for ${category}`);
-    
-    // Add to selected questions
-    selectedQuestions.push(...selectedForCategory);
-  });
-  
-  // If we don't have enough questions, add more from any category
-  if (selectedQuestions.length < targetCount) {
-    console.log(`Only selected ${selectedQuestions.length}/${targetCount} questions, adding more...`);
-    
-    // Get all questions not already selected
-    const remainingQuestions = fullQuestionSet.filter(q => 
-      !selectedQuestions.some(selected => selected.id === q.id) &&
-      categories.includes(q.category)
-    );
-    
-    // Sort by weight (highest first)
-    const sortedRemaining = [...remainingQuestions].sort((a, b) => 
-      parseFloat(b.totalWeight || 0) - parseFloat(a.totalWeight || 0)
-    );
-    
-    // Add enough to reach target count
-    selectedQuestions.push(...sortedRemaining.slice(0, targetCount - selectedQuestions.length));
-    
-    console.log(`After filling, have ${selectedQuestions.length} questions`);
-  }
-  
-  // Sort the final selection by category and ID for a logical order
-  return selectedQuestions.sort((a, b) => {
-    // First sort by category
-    if (a.category !== b.category) {
-      return categories.indexOf(a.category) - categories.indexOf(b.category);
+      console.log("Adjusted distribution based on priorities:", categoryDistribution);
+    } else {
+      // Even distribution
+      categories.forEach(cat => {
+        categoryDistribution[cat] = questionsPerCategory;
+      });
     }
-    // Then by ID
-    return parseInt(a.id.replace('q', '')) - parseInt(b.id.replace('q', ''));
-  });
-};
+    
+    // Now select questions for each category based on the adjusted distribution
+    categories.forEach(category => {
+      // Get all questions for this category
+      const categoryQuestions = fullQuestionSet.filter(q => q.category === category);
+      
+      // Skip if no questions in this category
+      if (categoryQuestions.length === 0) return;
+      
+      // Score each question for relevance
+      const scoredQuestions = categoryQuestions.map(question => {
+        let relevanceScore = 0;
+        
+        // Child-related scoring boost for families with children
+        if (children && children.length > 0) {
+          if (question.childDevelopment === "high") {
+            relevanceScore += 5;
+          }
+          if (question.text.toLowerCase().includes("child") || 
+              question.text.toLowerCase().includes("kid") ||
+              question.text.toLowerCase().includes("school")) {
+            relevanceScore += 3;
+          }
+        }
+        
+        // Communication style relevance
+        if (communication.style) {
+          if ((communication.style === "reserved" || communication.style === "avoidant") &&
+              (question.invisibility === "completely" || question.invisibility === "mostly")) {
+            relevanceScore += 6;
+          }
+        }
+        
+        // Weight importance - prioritize high impact
+        const weight = parseFloat(question.totalWeight || 0);
+        if (weight >= 12) relevanceScore += 10;
+        else if (weight >= 9) relevanceScore += 8;
+        else if (weight >= 6) relevanceScore += 5;
+        
+        return {
+          ...question,
+          relevanceScore
+        };
+      });
+      
+      // Sort by relevance and take the required number for this category
+      const sortedQuestions = [...scoredQuestions].sort((a, b) => 
+        b.relevanceScore - a.relevanceScore
+      );
+      
+      // Take the number of questions based on our distribution
+      const numToTake = categoryDistribution[category] || questionsPerCategory;
+      const selectedForCategory = sortedQuestions.slice(0, numToTake);
+      
+      console.log(`Selected ${selectedForCategory.length} questions for ${category}`);
+      
+      // Add to selected questions
+      selectedQuestions.push(...selectedForCategory);
+    });
+    
+    // If we don't have enough questions, add more from any category
+    if (selectedQuestions.length < targetCount) {
+      console.log(`Only selected ${selectedQuestions.length}/${targetCount} questions, adding more...`);
+      
+      // Get all questions not already selected
+      const remainingQuestions = fullQuestionSet.filter(q => 
+        !selectedQuestions.some(selected => selected.id === q.id) &&
+        categories.includes(q.category)
+      );
+      
+      // Sort by weight (highest first)
+      const sortedRemaining = [...remainingQuestions].sort((a, b) => 
+        parseFloat(b.totalWeight || 0) - parseFloat(a.totalWeight || 0)
+      );
+      
+      // Add enough to reach target count
+      selectedQuestions.push(...sortedRemaining.slice(0, targetCount - selectedQuestions.length));
+      
+      console.log(`After filling, have ${selectedQuestions.length} questions`);
+    }
+    
+    // Sort the final selection by category and ID for a logical order
+    return selectedQuestions.sort((a, b) => {
+      // First sort by category
+      if (a.category !== b.category) {
+        return categories.indexOf(a.category) - categories.indexOf(b.category);
+      }
+      // Then by ID
+      return parseInt(a.id.replace('q', '')) - parseInt(b.id.replace('q', ''));
+    });
+  };
 
   // Default selection of initial survey questions without family data
   const selectDefaultInitialQuestions = (fullQuestionSet, targetCount = 72) => {
@@ -638,125 +638,84 @@ const selectPersonalizedInitialQuestions = (fullQuestionSet, familyData, targetC
   };
 
   // Generate weekly check-in questions - IMPROVED ADAPTIVE ALGORITHM WITH CHILD PERSONALIZATION
-const generateWeeklyQuestions = (weekNumber, isChild = false, familyData = null, previousResponses = {}, taskCompletionData = [], childId = null) => {
-  // Set standard question count for all family members
-  const targetQuestionCount = 20;
-  
-  // Get categories
-  const categories = [
-    "Visible Household Tasks",
-    "Invisible Household Tasks",
-    "Visible Parental Tasks",
-    "Invisible Parental Tasks"
-  ];
-  
-  console.log(`Generating questions for week ${weekNumber}${childId ? `, child ID: ${childId}` : ''}`);
-  
-  // If this is for a specific child, filter previous responses to just that child
-  let childSpecificResponses = previousResponses;
-  if (isChild && childId) {
-    // Create a filtered set of responses that only includes this child's responses
-    childSpecificResponses = Object.fromEntries(
-      Object.entries(previousResponses).filter(([key, _]) => {
-        // Check if this response is from this specific child
-        // Either by looking for childId in the key or checking response metadata
-        return key.includes(`child-${childId}`) || 
-               key.includes(`user-${childId}`) ||
-               (key.includes(`week-${weekNumber}`) && key.includes(childId));
-      })
-    );
+  const generateWeeklyQuestions = (weekNumber, isChild = false, familyData = null, previousResponses = {}, taskCompletionData = [], childId = null) => {
+    // Set standard question count for all family members
+    const targetQuestionCount = 20;
     
-    console.log(`Found ${Object.keys(childSpecificResponses).length} specific responses for child ${childId}`);
-  }
-  
-  // Helper to get child-specific age if available
-  const getChildAge = () => {
-    if (!isChild || !childId || !familyData || !familyData.children) return 10; // Default
+    // Get categories
+    const categories = [
+      "Visible Household Tasks",
+      "Invisible Household Tasks",
+      "Visible Parental Tasks",
+      "Invisible Parental Tasks"
+    ];
     
-    const childData = familyData.children.find(c => c.id === childId);
-    return childData?.age ? parseInt(childData.age) : 10;
-  };
-  
-  // Get this specific child's age
-  const childAge = getChildAge();
-  
-  // Get seed value based on childId to ensure different random selections
-  const getChildSeed = () => {
-    if (!childId) return 0;
+    console.log(`Generating questions for week ${weekNumber}${childId ? `, child ID: ${childId}` : ''}`);
     
-    // Generate a numeric seed from the childId string
-    return childId.split('').reduce((sum, char, i) => 
-      sum + char.charCodeAt(0) * (i + 1), 0) % 997; // Use prime number for better distribution
-  };
-  
-  // The seed affects random selections based on childId
-  const childSeed = getChildSeed();
-  
-  // ... rest of the function with modifications ...
-  
-  // Inside the getQuestionsFromCategory and other selection functions, add this:
-  // Use childSeed to vary selection for different children
-  const getChildSpecificQuestions = (questions, count) => {
-    if (!isChild || !childId) return questions.slice(0, count);
-    
-    // Shuffle array with a deterministic approach based on childId and week
-    const shuffled = [...questions];
-    const shuffleSeed = childSeed + (weekNumber * 31);
-    
-    // Fisher-Yates shuffle with deterministic randomness
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      // Use consistent "random" index based on child and position
-      const j = (shuffleSeed + i * 13) % (i + 1);
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    // If this is for a specific child, filter previous responses to just that child
+    let childSpecificResponses = previousResponses;
+    if (isChild && childId) {
+      // Create a filtered set of responses that only includes this child's responses
+      childSpecificResponses = Object.fromEntries(
+        Object.entries(previousResponses).filter(([key, _]) => {
+          // Check if this response is from this specific child
+          // Either by looking for childId in the key or checking response metadata
+          return key.includes(`child-${childId}`) || 
+                 key.includes(`user-${childId}`) ||
+                 (key.includes(`week-${weekNumber}`) && key.includes(childId));
+        })
+      );
+      
+      console.log(`Found ${Object.keys(childSpecificResponses).length} specific responses for child ${childId}`);
     }
     
-    return shuffled.slice(0, count);
-  };
-  
-  // Helper to analyze imbalances by category based on previous responses
-  const analyzeImbalancesByCategory = () => {
-    // Use child-specific responses if available
-    const responsesToAnalyze = isChild && childId ? childSpecificResponses : previousResponses;
+    // Helper to get child-specific age if available
+    const getChildAge = () => {
+      if (!isChild || !childId || !familyData || !familyData.children) return 10; // Default
+      
+      const childData = familyData.children.find(c => c.id === childId);
+      return childData?.age ? parseInt(childData.age) : 10;
+    };
     
-    // Prepare category imbalance tracking
-    const imbalanceData = {};
-    categories.forEach(category => {
-      imbalanceData[category] = { 
-        mama: 0, 
-        papa: 0, 
-        total: 0, 
-        imbalance: 0 
-      };
-    });
+    // Get this specific child's age
+    const childAge = getChildAge();
     
-    // ... rest of the function ...
-  };
-  
-  // When selecting questions, use the child-specific function:
-  const getQuestionsFromCategory = (category, count, excludeIds = []) => {
-    // Get all questions for this category that haven't been excluded
-    const categoryQuestions = fullQuestionSet.filter(q => 
-      q.category === category && !excludeIds.includes(q.id)
-    );
+    // Get seed value based on childId to ensure different random selections
+    const getChildSeed = () => {
+      if (!childId) return 0;
+      
+      // Generate a numeric seed from the childId string
+      return childId.split('').reduce((sum, char, i) => 
+        sum + char.charCodeAt(0) * (i + 1), 0) % 997; // Use prime number for better distribution
+    };
     
-    // Sort by total weight (highest impact first)
-    const sortedQuestions = [...categoryQuestions].sort((a, b) => 
-      parseFloat(b.totalWeight) - parseFloat(a.totalWeight)
-    );
+    // The seed affects random selections based on childId
+    const childSeed = getChildSeed();
     
-    // Use child-specific selection for children
-    return isChild && childId 
-      ? getChildSpecificQuestions(sortedQuestions, count)
-      : sortedQuestions.slice(0, count);
-  };
-  
-  // Apply same approach to other question selection functions...
-  
-  return finalQuestions;
-};
+    // Inside the getQuestionsFromCategory and other selection functions, add this:
+    // Use childSeed to vary selection for different children
+    const getChildSpecificQuestions = (questions, count) => {
+      if (!isChild || !childId) return questions.slice(0, count);
+      
+      // Shuffle array with a deterministic approach based on childId and week
+      const shuffled = [...questions];
+      const shuffleSeed = childSeed + (weekNumber * 31);
+      
+      // Fisher-Yates shuffle with deterministic randomness
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        // Use consistent "random" index based on child and position
+        const j = (shuffleSeed + i * 13) % (i + 1);
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      
+      return shuffled.slice(0, count);
+    };
     
     // Helper to analyze imbalances by category based on previous responses
     const analyzeImbalancesByCategory = () => {
+      // Use child-specific responses if available
+      const responsesToAnalyze = isChild && childId ? childSpecificResponses : previousResponses;
+      
       // Prepare category imbalance tracking
       const imbalanceData = {};
       categories.forEach(category => {
@@ -769,7 +728,7 @@ const generateWeeklyQuestions = (weekNumber, isChild = false, familyData = null,
       });
       
       // Count responses by category
-      Object.entries(previousResponses || {}).forEach(([key, value]) => {
+      Object.entries(responsesToAnalyze || {}).forEach(([key, value]) => {
         // Skip non-response entries
         if (value !== "Mama" && value !== "Papa") return;
         
@@ -1039,11 +998,9 @@ const generateWeeklyQuestions = (weekNumber, isChild = false, familyData = null,
   // Initial questions
   const fullQuestionSet = generateFullQuestionSet();
   
-  
   // State for temporary survey progress
   const [currentSurveyResponsesState, setCurrentSurveyResponsesState] = useState({});
   const [cachedChildQuestions, setCachedChildQuestions] = useState({});
-
   const [completedQuestions, setCompletedQuestions] = useState([]);
   // Track user-modified weights
   const [userModifiedWeights, setUserModifiedWeights] = useState({});
@@ -1076,13 +1033,13 @@ const generateWeeklyQuestions = (weekNumber, isChild = false, familyData = null,
   };
   
   // Set survey responses from outside (like when loading saved responses)
-const setCurrentSurveyResponses = (responses) => {
-  setCurrentSurveyResponsesState(responses);
-  
-  // Update completedQuestions state based on the responses
-  const questionIds = Object.keys(responses);
-  setCompletedQuestions(questionIds);
-};
+  const setCurrentSurveyResponses = (responses) => {
+    setCurrentSurveyResponsesState(responses);
+    
+    // Update completedQuestions state based on the responses
+    const questionIds = Object.keys(responses);
+    setCompletedQuestions(questionIds);
+  };
   
   // Set family data for personalization
   const setFamilyData = (data) => {
@@ -1185,31 +1142,30 @@ const setCurrentSurveyResponses = (responses) => {
     return null;
   };
   
-// Modify generateWeeklyQuestions to use and update the cache:
-const generateWeeklyQuestionsWithCache = (weekNumber, isChild = false, familyData = null, previousResponses = {}, taskCompletionData = [], childId = null) => {
-  // Create a cache key
-  const cacheKey = `${weekNumber}-${childId || 'adult'}`;
-  
-  // Check if we have a cached version
-  if (isChild && childId && cachedChildQuestions[cacheKey]) {
-    console.log(`Using cached questions for child ${childId} in week ${weekNumber}`);
-    return cachedChildQuestions[cacheKey];
-  }
-  
-  // Generate questions as usual
-  const questions = generateWeeklyQuestions(weekNumber, isChild, familyData, previousResponses, taskCompletionData, childId);
-  
-  // If this is for a child, cache the result
-  if (isChild && childId) {
-    setCachedChildQuestions(prev => ({
-      ...prev,
-      [cacheKey]: questions
-    }));
-  }
-  
-  return questions;
-};
-
+  // Modify generateWeeklyQuestions to use and update the cache:
+  const generateWeeklyQuestionsWithCache = (weekNumber, isChild = false, familyData = null, previousResponses = {}, taskCompletionData = [], childId = null) => {
+    // Create a cache key
+    const cacheKey = `${weekNumber}-${childId || 'adult'}`;
+    
+    // Check if we have a cached version
+    if (isChild && childId && cachedChildQuestions[cacheKey]) {
+      console.log(`Using cached questions for child ${childId} in week ${weekNumber}`);
+      return cachedChildQuestions[cacheKey];
+    }
+    
+    // Generate questions as usual
+    const questions = generateWeeklyQuestions(weekNumber, isChild, familyData, previousResponses, taskCompletionData, childId);
+    
+    // If this is for a child, cache the result
+    if (isChild && childId) {
+      setCachedChildQuestions(prev => ({
+        ...prev,
+        [cacheKey]: questions
+      }));
+    }
+    
+    return questions;
+  };
 
   // Get questions for a specific category
   const getQuestionsByCategory = (category) => {
@@ -1278,51 +1234,49 @@ const generateWeeklyQuestionsWithCache = (weekNumber, isChild = false, familyDat
       return baseQuestions; // Return original questions on error
     }
   };
-  
-
 
   // Update the context value
-const value = {
-  // Filter out relationship questions for regular survey
-  fullQuestionSet: fullQuestionSet
-    .filter(q => q.category !== "Relationship Health"),
-  generateWeeklyQuestions,
-  currentSurveyResponses: currentSurveyResponsesState,
-  completedQuestions,
-  updateSurveyResponse,
-  resetSurvey,
-  getSurveyProgress,
-  generateWeeklyQuestions: generateWeeklyQuestionsWithCache,
+  const value = {
+    // Filter out relationship questions for regular survey
+    fullQuestionSet: fullQuestionSet
+      .filter(q => q.category !== "Relationship Health"),
+    generateWeeklyQuestions,
+    currentSurveyResponses: currentSurveyResponsesState,
+    completedQuestions,
+    updateSurveyResponse,
+    resetSurvey,
+    getSurveyProgress,
+    generateWeeklyQuestions: generateWeeklyQuestionsWithCache,
 
-  setCurrentSurveyResponses,
-  // New property for relationship questions
-  relationshipQuestions: fullQuestionSet.filter(q => q.category === "Relationship Health"),
-  // NEW: Add the user-modified weights state and update function
-  userModifiedWeights,
-  updateQuestionWeight,
-  // NEW: Add family data and personalization functions
-  setFamilyData,
-  getPersonalizedInitialQuestions, // Make sure this is exposed
-  selectPersonalizedInitialQuestions, // NEW: Also expose the direct function
-  // Getter functions
-  getQuestionsByCategory,
-  getHighImpactQuestions,
-  getRelationshipImpactQuestions,
-  getInvisibleWorkQuestions,
-  getEmotionalLaborQuestions,
-  getChildDevelopmentQuestions,
-  getBalanceQuestions,
-  getFilteredQuestionsForAdult,
+    setCurrentSurveyResponses,
+    // New property for relationship questions
+    relationshipQuestions: fullQuestionSet.filter(q => q.category === "Relationship Health"),
+    // NEW: Add the user-modified weights state and update function
+    userModifiedWeights,
+    updateQuestionWeight,
+    // NEW: Add family data and personalization functions
+    setFamilyData,
+    getPersonalizedInitialQuestions, // Make sure this is exposed
+    selectPersonalizedInitialQuestions, // NEW: Also expose the direct function
+    // Getter functions
+    getQuestionsByCategory,
+    getHighImpactQuestions,
+    getRelationshipImpactQuestions,
+    getInvisibleWorkQuestions,
+    getEmotionalLaborQuestions,
+    getChildDevelopmentQuestions,
+    getBalanceQuestions,
+    getFilteredQuestionsForAdult,
 
-  // NEW: Add function to get filtered questions for children
-  getFilteredQuestionsForChild,
-  // Share family priorities with other components
-  familyPriorities: {
-    highestPriority: "Invisible Parental Tasks",
-    secondaryPriority: "Visible Parental Tasks",
-    tertiaryPriority: "Invisible Household Tasks"
-  }
-};
+    // NEW: Add function to get filtered questions for children
+    getFilteredQuestionsForChild,
+    // Share family priorities with other components
+    familyPriorities: {
+      highestPriority: "Invisible Parental Tasks",
+      secondaryPriority: "Visible Parental Tasks",
+      tertiaryPriority: "Invisible Household Tasks"
+    }
+  };
 
   return (
     <SurveyContext.Provider value={value}>
