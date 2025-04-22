@@ -291,6 +291,7 @@ const initPlacesAutocomplete = () => {
 };
 
   // Initialize after a short delay to ensure the DOM is ready
+useEffect(() => {
   const timeoutId = setTimeout(() => {
     if (!placesInitialized && window.google && window.google.maps && window.google.maps.places) {
       const success = initPlacesAutocomplete();
