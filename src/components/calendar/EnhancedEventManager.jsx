@@ -212,85 +212,83 @@ useEffect(() => {
   }
 }, [event.category, event.eventType, familyMembers]);
 
-/// Updated Google Places Autocomplete initialization using modern API
-useEffect(() => {
-  // Function to initialize Google Places Autocomplete using the new PlaceAutocompleteElement
-  const initPlacesAutocomplete = () => {
-    console.log("Initializing Google Places with PlaceAutocompleteElement API");
-    
-    if (!window.google || !window.google.maps || !window.google.maps.places) {
-      console.log("Google Maps Places API not available");
-      return false;
-    }
+// Function to initialize Google Places Autocomplete using the new PlaceAutocompleteElement
+const initPlacesAutocomplete = () => {
+  console.log("Initializing Google Places with PlaceAutocompleteElement API");
+  
+  if (!window.google || !window.google.maps || !window.google.maps.places) {
+    console.log("Google Maps Places API not available");
+    return false;
+  }
 
-    try {
-      // Check if the new API is available
-      if (window.google.maps.places.PlaceAutocompleteElement) {
-        // Get container where we'll mount the PlaceAutocompleteElement
-        const container = document.getElementById('places-container');
-        
-        if (!container) {
-          console.log("Places container element not found");
-          return false;
-        }
-        
-        // Clear any existing content
-        while (container.firstChild) {
-          container.removeChild(container.firstChild);
-        }
-        
-        // Create the PlaceAutocompleteElement
-        const placeAutocompleteElement = 
-          new window.google.maps.places.PlaceAutocompleteElement({
-            inputPlaceholder: "Where is this event happening?",
-            types: ['address', 'establishment'],
-            fields: ['name', 'formatted_address', 'address_components', 'geometry', 'place_id']
-          });
-        
-        // Add to the container
-        container.appendChild(placeAutocompleteElement);
-        
-        // Store reference to the element
-        placeAutocompleteElementRef.current = placeAutocompleteElement;
-        
-        // Add event listener for place selection
-        placeAutocompleteElement.addEventListener('gmp-placeselect', (event) => {
-          try {
-            const place = event.place;
-            
-            if (place && place.formattedAddress) {
-              let locationText = place.formattedAddress;
-              
-              // Add place name if different from address
-              if (place.displayName && place.displayName !== locationText) {
-                locationText = `${place.displayName}, ${locationText}`;
-              }
-              
-              console.log("Setting location from place selection:", locationText);
-              setEvent(prev => ({ ...prev, location: locationText }));
-              prevLocationRef.current = locationText;
-            }
-          } catch (error) {
-            console.warn("Error handling place selection:", error);
-          }
-        });
-        
-        // If we already have a location value, set it visually
-        if (event.location && prevLocationRef.current !== event.location) {
-          prevLocationRef.current = event.location;
-        }
-        
-        return true;
-      } else {
-        // Fallback to basic input if new API isn't available
-        console.log("PlaceAutocompleteElement not available, using fallback input");
+  try {
+    // Check if the new API is available
+    if (window.google.maps.places.PlaceAutocompleteElement) {
+      // Get container where we'll mount the PlaceAutocompleteElement
+      const container = document.getElementById('places-container');
+      
+      if (!container) {
+        console.log("Places container element not found");
         return false;
       }
-    } catch (error) {
-      console.warn("Error initializing Places API:", error);
+      
+      // Clear any existing content
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
+      
+      // Create the PlaceAutocompleteElement with corrected properties
+      const placeAutocompleteElement = 
+        new window.google.maps.places.PlaceAutocompleteElement({
+          type: 'address',  // Changed from types to type and simplified
+          fields: ['name', 'formatted_address', 'address_components', 'geometry', 'place_id']
+          // Removed inputPlaceholder property
+        });
+      
+      // Add to the container
+      container.appendChild(placeAutocompleteElement);
+      
+      // Store reference to the element
+      placeAutocompleteElementRef.current = placeAutocompleteElement;
+      
+      // Add event listener for place selection
+      placeAutocompleteElement.addEventListener('gmp-placeselect', (event) => {
+        try {
+          const place = event.place;
+          
+          if (place && place.formattedAddress) {
+            let locationText = place.formattedAddress;
+            
+            // Add place name if different from address
+            if (place.displayName && place.displayName !== locationText) {
+              locationText = `${place.displayName}, ${locationText}`;
+            }
+            
+            console.log("Setting location from place selection:", locationText);
+            setEvent(prev => ({ ...prev, location: locationText }));
+            prevLocationRef.current = locationText;
+          }
+        } catch (error) {
+          console.warn("Error handling place selection:", error);
+        }
+      });
+      
+      // If we already have a location value, set it visually
+      if (event.location && prevLocationRef.current !== event.location) {
+        prevLocationRef.current = event.location;
+      }
+      
+      return true;
+    } else {
+      // Fallback to basic input if new API isn't available
+      console.log("PlaceAutocompleteElement not available, using fallback input");
       return false;
     }
-  };
+  } catch (error) {
+    console.warn("Error initializing Places API:", error);
+    return false;
+  }
+};
 
   // Initialize after a short delay to ensure the DOM is ready
   const timeoutId = setTimeout(() => {
