@@ -316,7 +316,7 @@ useEffect(() => {
       .filter(msg => !msg.text?.includes('analyzing') && !msg.text?.includes('I\'m processing'))
       .slice(-count);
   };
-   
+  
 const handleSend = useCallback(async () => {
   if (input.trim() && canUseChat && selectedUser && familyId) {
     try {

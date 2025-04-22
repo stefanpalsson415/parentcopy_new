@@ -371,11 +371,24 @@ useEffect(() => {
           setCanTakeSurvey(shouldAllowSurvey);
         }
 
-        // Check if current user has already completed the survey for this week
-        const userHasCompletedSurvey = selectedUser && 
-          selectedUser.weeklyCompleted && 
-          selectedUser.weeklyCompleted[currentWeek-1]?.completed;
-        setHasCompletedSurvey(userHasCompletedSurvey);
+        // Check if current user has already FULLY completed the survey for this week
+// Only mark as completed if explicitly completed=true, not just any value
+const userHasCompletedSurvey = selectedUser && 
+selectedUser.weeklyCompleted && 
+selectedUser.weeklyCompleted[currentWeek-1]?.completed === true;
+setHasCompletedSurvey(userHasCompletedSurvey);
+
+// If user has 5+ habit completions, always allow survey access regardless of partial completion
+if (selectedUser && selectedUser.role === 'parent') {
+const userHabits = Object.values(completedHabitInstances)
+  .filter(instances => instances.some(instance => instance.userId === selectedUser.id));
+const hasEnoughHabits = userHabits.some(instances => instances.length >= 5);
+
+// Always enable survey if they have enough habits, even if partially completed
+if (hasEnoughHabits) {
+  setCanTakeSurvey(true);
+}
+}
                 
         setLoading(false);
       }
@@ -1651,15 +1664,21 @@ if (updatedInstances.length >= 5) {
   };
 
   const handleStartSurvey = () => {
-    // More robust completion check that aligns with CycleJourney
+    // Only check for FULLY completed surveys, not partially completed ones
     const userProgress = memberProgress[selectedUser.id] || {};
-    const hasCompleted = userProgress.completedSurvey || 
-                         (selectedUser.weeklyCompleted && 
-                          selectedUser.weeklyCompleted[currentWeek-1]?.completed) ||
-                         userProgress.step >= 3;
     
-    // Already completed check
-    if (hasCompleted) {
+    // Look for definite completion markers, not just progress markers
+    const hasFullyCompleted = 
+      // Check for explicit true completion flag
+      (userProgress.completedSurvey === true) || 
+      // Check weekly completed explicitly marked as true
+      (selectedUser.weeklyCompleted && 
+       selectedUser.weeklyCompleted[currentWeek-1]?.completed === true);
+    
+    // Don't use step >= 3 since that might be triggered by partial completion
+    
+    // Already completed check - only block if FULLY completed
+    if (hasFullyCompleted) {
       createCelebration("Already Completed", false, "You've already completed the survey for this cycle.");
       return;
     }
@@ -1732,6 +1751,12 @@ const triggerAllieChat = (message) => {
       scheduled: !!meetingDate,
       scheduledDate: meetingDate || null,
       completed: cycleData?.meeting?.completed === true
+    },
+    // Add explicit survey status
+    survey: {
+      enabled: canTakeSurvey,
+      // Only true when completed is explicitly true
+      completed: selectedUser?.weeklyCompleted?.[currentWeek-1]?.completed === true
     }
   }}
   familyMembers={familyMembers}
