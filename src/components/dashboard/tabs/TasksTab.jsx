@@ -1263,26 +1263,29 @@ const recordHabitInstance = async (habitId, reflectionNote = "") => {
       return false;
     }
     
-    // Update local state with deep cloning to ensure re-render
-    setCompletedHabitInstances(prev => {
-      const newState = {...prev};
-      newState[habitId] = updatedInstances;
-      return newState;
-    });
-    
-    // Update the tracking count in habits state
-    const habit = habits.find(h => h.id === habitId);
-    if (habit) {
+    // First update the completedHabitInstances in a separate state update
+setCompletedHabitInstances(prev => {
+  const newState = {...prev};
+  newState[habitId] = updatedInstances;
+  return newState;
+});
+
+// Now update the habits state
+const habit = habits.find(h => h.id === habitId);
+if (habit) {
+  // Wait for state to update before continuing
+  setTimeout(() => {
+    try {
       // Create a fresh copy of the habits array
       const updatedHabits = habits.map(h => {
         if (h.id === habitId) {
           return {
             ...h,
-            completionInstances: updatedInstances,
+            completionInstances: updatedInstances || [], // Ensure this isn't undefined
             lastCompleted: newInstance.timestamp,
             // Also increment streak
-            streak: h.streak + 1,
-            record: Math.max(h.streak + 1, h.record || 0)
+            streak: (h.streak || 0) + 1,
+            record: Math.max((h.streak || 0) + 1, h.record || 0)
           };
         }
         return h;
@@ -1290,6 +1293,16 @@ const recordHabitInstance = async (habitId, reflectionNote = "") => {
       
       // Set the updated habits
       setHabits(updatedHabits);
+    } catch (updateError) {
+      console.error("Error updating habit state:", updateError);
+      // Recover gracefully
+      createCelebration("Habit recorded, please refresh page", true);
+    }
+  }, 50); // Small delay to ensure state updates in correct order
+} else {
+  console.warn("Could not find habit with ID:", habitId);
+  createCelebration("Habit recorded, but display not updated", true);
+}
       
       // Create celebration
       createCelebration(habit.title, true);
@@ -1573,34 +1586,41 @@ if (updatedInstances.length >= 5) {
         });
         
         // Set up empty habit instances
-        await setDoc(doc(db, "families", familyId, "habitInstances", taskId), {
-          instances: [],
-          createdAt: new Date().toISOString(),
-          isSystemGenerated: !newHabit.isUserGenerated
-        });
-        
-        // Update the local state
-        if (isRefresh) {
-          // Replace the initial habit
-          setHabits(prev => {
-            const filtered = prev.filter(h => h.isUserGenerated);
-            return [{...newHabit, completionInstances: []}, ...filtered];
-          });
-          createCelebration("Habit refreshed!", true);
-        } else {
-          // Add to habits as user-generated
-          setHabits(prev => [
-            {...newHabit, completionInstances: []},
-            ...prev
-          ]);
-          createCelebration("New habit created!", true);
-        }
-        
-        // Update completedHabitInstances state
-        setCompletedHabitInstances(prev => ({
-          ...prev,
-          [taskId]: []
-        }));
+await setDoc(doc(db, "families", familyId, "habitInstances", taskId), {
+  instances: [],
+  createdAt: new Date().toISOString(),
+  isSystemGenerated: !newHabit.isUserGenerated
+});
+
+// Create a version of the habit with completionInstances explicitly set
+const habitWithCompletions = {
+  ...newHabit,
+  completionInstances: [] // Explicitly ensure this is set
+};
+
+// Update both state variables BEFORE updating the UI
+// First update the tracking instances
+setCompletedHabitInstances(prev => ({
+  ...prev,
+  [taskId]: []
+}));
+
+// Then update the habits state to avoid race conditions
+if (isRefresh) {
+  // Replace the initial habit
+  setHabits(prev => {
+    const filtered = prev.filter(h => h.isUserGenerated);
+    return [habitWithCompletions, ...filtered];
+  });
+  createCelebration("Habit refreshed!", true);
+} else {
+  // Add to habits as user-generated
+  setHabits(prev => [
+    habitWithCompletions,
+    ...prev
+  ]);
+  createCelebration("New habit created!", true);
+}
         
         setShowAddHabit(false);
       } catch (dbError) {
@@ -1924,29 +1944,31 @@ const triggerAllieChat = (message) => {
             </span>
           </div>
           <div className="flex justify-between">
-            {Array.from({ length: 11 }).map((_, index) => {
-              const isCompleted = index < (habit.completionInstances?.length || 0);
-              const isMinimumReached = index === 4 && isCompleted;
-              const isComplete = index === 10 && isCompleted;
-              
-              return (
-                <div 
-                  key={index} 
-                  className={`w-8 h-8 rounded-full flex items-center justify-center shadow ${
-                    isCompleted 
-                      ? isComplete
-                        ? 'bg-green-500 text-white pulse-animation'
-                        : isMinimumReached
-                          ? 'bg-blue-500 text-white pulse-animation'
-                          : 'bg-black text-white'
-                      : 'bg-gray-200 text-gray-400'
-                  }`}
-                >
-                  {isCompleted && <Check size={16} />}
-                </div>
-              );
-            })}
-          </div>
+  {Array.from({ length: 11 }).map((_, index) => {
+    // Ensure we have a valid array to check against
+    const completionInstances = habit.completionInstances || [];
+    const isCompleted = index < completionInstances.length;
+    const isMinimumReached = index === 4 && isCompleted;
+    const isComplete = index === 10 && isCompleted;
+    
+    return (
+      <div 
+        key={index} 
+        className={`w-8 h-8 rounded-full flex items-center justify-center shadow ${
+          isCompleted 
+            ? isComplete
+              ? 'bg-green-500 text-white pulse-animation'
+              : isMinimumReached
+                ? 'bg-blue-500 text-white pulse-animation'
+                : 'bg-black text-white'
+            : 'bg-gray-200 text-gray-400'
+        }`}
+      >
+        {isCompleted && <Check size={16} />}
+      </div>
+    );
+  })}
+</div>
           <div className="flex justify-between mt-2">
             <span className="text-xs font-bold text-gray-600">Start</span>
             <span className="text-xs font-bold text-blue-600">
