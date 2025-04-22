@@ -170,7 +170,25 @@ useEffect(() => {
   }
 }, [event.childId, children]);  
 
-
+// Add this useEffect near other useEffects at the top level of the component
+useEffect(() => {
+  // Automatically set all family members as attendees for meeting events
+  if ((event.category === 'meeting' || event.eventType === 'meeting') && familyMembers.length > 0) {
+    // Create attendees list from all family members
+    const allAttendees = familyMembers.map(member => ({
+      id: member.id,
+      name: member.name,
+      role: member.role
+    }));
+    
+    // Update event with all family members as attendees and both parents attending
+    setEvent(prev => ({
+      ...prev,
+      attendees: allAttendees,
+      attendingParentId: 'both'
+    }));
+  }
+}, [event.category, event.eventType, familyMembers]);
 
 // Simplified Google Places initialization
 useEffect(() => {
@@ -1008,142 +1026,227 @@ const handleSave = async () => {
           )}
         </div>
         
-        {/* Child Selection */}
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">
-            For Child
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {children.map(child => (
+        {/* Event Attendees Section */}
+{(event.category === 'meeting' || event.eventType === 'meeting' || event.category === 'general') ? (
+  // Meeting/General events: All family members attend
+  <div>
+    <label className="block text-sm font-medium mb-1 text-gray-700">
+      Event Attendees
+    </label>
+    <div className="p-3 bg-blue-50 rounded-md">
+      <div className="flex flex-wrap gap-2 mb-2">
+        {familyMembers.map(member => (
+          <div key={member.id} className="flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200">
+            <UserAvatar user={member} size={20} className="mr-1" />
+            {member.name}
+            <Check size={12} className="ml-1" />
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-blue-700">
+        {event.category === 'meeting' ? 
+          "Family meetings include all family members by default." : 
+          "All family members are included for this event."}
+      </p>
+    </div>
+    
+    {/* Hidden fields to ensure all attendees are properly set */}
+    <div className="hidden">
+      {useEffect(() => {
+        // Set all family members as attendees for meetings
+        if (event.category === 'meeting' || event.eventType === 'meeting' || 
+           (event.category === 'general' && !event.childId)) {
+          // Extract all needed information for attendees
+          const allAttendees = familyMembers.map(member => ({
+            id: member.id,
+            name: member.name,
+            role: member.role
+          }));
+          
+          // Also make sure parents are properly marked
+          const bothParentsAttend = parents.length > 0;
+          
+          setEvent(prev => ({
+            ...prev,
+            attendees: allAttendees,
+            attendingParentId: bothParentsAttend ? 'both' : '',
+            childId: null, // Clear child-specific fields for meetings
+            childName: null,
+            siblingIds: [],
+            siblingNames: []
+          }));
+        }
+      }, [event.category, event.eventType])}
+    </div>
+  </div>
+) : (
+  // Child-specific events: Child/Parent/Sibling selection
+  <>
+    {/* For meetings/general events: Show all attendees, for other events: Show child selection UI */}
+{(event.category === 'meeting' || event.eventType === 'meeting') ? (
+  <div>
+    <label className="block text-sm font-medium mb-1 text-gray-700">
+      Event Attendees
+    </label>
+    <div className="p-3 bg-blue-50 rounded-md">
+      <div className="flex flex-wrap gap-2 mb-2">
+        {familyMembers.map(member => (
+          <div key={member.id} className="flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200">
+            <UserAvatar user={member} size={20} className="mr-1" />
+            {member.name}
+            <Check size={12} className="ml-1" />
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-blue-700">
+        {event.category === 'meeting' ? 
+          "Family meetings include all family members by default." : 
+          "All family members are included for this event."}
+      </p>
+    </div>
+  </div>
+) : (
+  <>
+    {/* Child Selection */}
+    <div>
+      <label className="block text-sm font-medium mb-1 text-gray-700">
+        For Child
+      </label>
+      <div className="flex flex-wrap gap-2">
+        {children.map(child => (
+          <button
+            key={child.id}
+            type="button"
+            onClick={() => setEvent(prev => ({ 
+              ...prev, 
+              childId: child.id, 
+              childName: child.name 
+            }))}
+            className={`flex items-center px-3 py-1 rounded-full text-sm ${
+              event.childId === child.id 
+                ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+            }`}
+          >
+            <UserAvatar user={child} size={20} className="mr-1" />
+            {child.name}
+          </button>
+        ))}
+      </div>
+    </div>
+
+    {/* Attending Parent */}
+    {event.childId && (
+      <div>
+        <label className="block text-sm font-medium mb-1 text-gray-700">
+          Who will attend with {event.childName}?
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {parents.map(parent => (
+            <button
+              key={parent.id}
+              type="button"
+              onClick={() => setEvent(prev => ({ 
+                ...prev, 
+                attendingParentId: parent.id
+              }))}
+              className={`flex items-center px-3 py-1 rounded-full text-sm ${
+                event.attendingParentId === parent.id 
+                  ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+              }`}
+            >
+              <UserAvatar user={parent} size={20} className="mr-1" />
+              {parent.name}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setEvent(prev => ({ 
+              ...prev, 
+              attendingParentId: 'both'
+            }))}
+            className={`flex items-center px-3 py-1 rounded-full text-sm ${
+              event.attendingParentId === 'both'
+                ? 'bg-purple-100 text-purple-800 border border-purple-200' 
+                : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+            }`}
+          >
+            <Users size={16} className="mr-1" />
+            Both Parents
+          </button>
+          <button
+            type="button"
+            onClick={() => setEvent(prev => ({ 
+              ...prev, 
+              attendingParentId: 'undecided'
+            }))}
+            className={`flex items-center px-3 py-1 rounded-full text-sm ${
+              event.attendingParentId === 'undecided'
+                ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' 
+                : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+            }`}
+          >
+            <Clock size={16} className="mr-1" />
+            Decide Later
+          </button>
+        </div>
+      </div>
+    )}
+
+    {/* Include Siblings */}
+    {event.childId && children.filter(c => c.id !== event.childId).length > 0 && (
+      <div>
+        <label className="block text-sm font-medium mb-1 text-gray-700">
+          Include Siblings?
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {children
+            .filter(c => c.id !== event.childId)
+            .map(sibling => (
               <button
-                key={child.id}
+                key={sibling.id}
                 type="button"
-                onClick={() => setEvent(prev => ({ 
-                  ...prev, 
-                  childId: child.id, 
-                  childName: child.name 
-                }))}
+                onClick={() => {
+                  setEvent(prev => {
+                    const siblingIds = prev.siblingIds || [];
+                    const siblingNames = prev.siblingNames || [];
+                    
+                    if (siblingIds.includes(sibling.id)) {
+                      return {
+                        ...prev,
+                        siblingIds: siblingIds.filter(id => id !== sibling.id),
+                        siblingNames: siblingNames.filter(name => name !== sibling.name)
+                      };
+                    } else {
+                      return {
+                        ...prev,
+                        siblingIds: [...siblingIds, sibling.id],
+                        siblingNames: [...siblingNames, sibling.name]
+                      };
+                    }
+                  });
+                }}
                 className={`flex items-center px-3 py-1 rounded-full text-sm ${
-                  event.childId === child.id 
-                    ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                  event.siblingIds?.includes(sibling.id)
+                    ? 'bg-green-100 text-green-800 border border-green-200' 
                     : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
                 }`}
               >
-                <UserAvatar user={child} size={20} className="mr-1" />
-                {child.name}
+                <UserAvatar user={sibling} size={20} className="mr-1" />
+                {sibling.name}
+                {event.siblingIds?.includes(sibling.id) && (
+                  <Check size={12} className="ml-1" />
+                )}
               </button>
             ))}
-          </div>
         </div>
-        
-        {/* Attending Parent */}
-        {event.childId && (
-          <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700">
-              Who will attend with {event.childName}?
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {parents.map(parent => (
-                <button
-                  key={parent.id}
-                  type="button"
-                  onClick={() => setEvent(prev => ({ 
-                    ...prev, 
-                    attendingParentId: parent.id
-                  }))}
-                  className={`flex items-center px-3 py-1 rounded-full text-sm ${
-                    event.attendingParentId === parent.id 
-                      ? 'bg-blue-100 text-blue-800 border border-blue-200' 
-                      : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                  }`}
-                >
-                  <UserAvatar user={parent} size={20} className="mr-1" />
-                  {parent.name}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => setEvent(prev => ({ 
-                  ...prev, 
-                  attendingParentId: 'both'
-                }))}
-                className={`flex items-center px-3 py-1 rounded-full text-sm ${
-                  event.attendingParentId === 'both'
-                    ? 'bg-purple-100 text-purple-800 border border-purple-200' 
-                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                }`}
-              >
-                <Users size={16} className="mr-1" />
-                Both Parents
-              </button>
-              <button
-                type="button"
-                onClick={() => setEvent(prev => ({ 
-                  ...prev, 
-                  attendingParentId: 'undecided'
-                }))}
-                className={`flex items-center px-3 py-1 rounded-full text-sm ${
-                  event.attendingParentId === 'undecided'
-                    ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' 
-                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                }`}
-              >
-                <Clock size={16} className="mr-1" />
-                Decide Later
-              </button>
-            </div>
-          </div>
-        )}
-        
-        {/* Include Siblings */}
-        {event.childId && children.filter(c => c.id !== event.childId).length > 0 && (
-          <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700">
-              Include Siblings?
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {children
-                .filter(c => c.id !== event.childId)
-                .map(sibling => (
-                  <button
-                    key={sibling.id}
-                    type="button"
-                    onClick={() => {
-                      setEvent(prev => {
-                        const siblingIds = prev.siblingIds || [];
-                        const siblingNames = prev.siblingNames || [];
-                        
-                        if (siblingIds.includes(sibling.id)) {
-                          return {
-                            ...prev,
-                            siblingIds: siblingIds.filter(id => id !== sibling.id),
-                            siblingNames: siblingNames.filter(name => name !== sibling.name)
-                          };
-                        } else {
-                          return {
-                            ...prev,
-                            siblingIds: [...siblingIds, sibling.id],
-                            siblingNames: [...siblingNames, sibling.name]
-                          };
-                        }
-                      });
-                    }}
-                    className={`flex items-center px-3 py-1 rounded-full text-sm ${
-                      event.siblingIds?.includes(sibling.id)
-                        ? 'bg-green-100 text-green-800 border border-green-200' 
-                        : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                    }`}
-                  >
-                    <UserAvatar user={sibling} size={20} className="mr-1" />
-                    {sibling.name}
-                    {event.siblingIds?.includes(sibling.id) && (
-                      <Check size={12} className="ml-1" />
-                    )}
-                  </button>
-                ))}
-            </div>
-          </div>
-        )}
+      </div>
+    )}
+  </>
+)}
+  </>
+)}
         
         {/* Document Selection */}
         <div>

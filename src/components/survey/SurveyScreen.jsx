@@ -26,7 +26,10 @@ const SurveyScreen = ({ mode = 'initial' }) => {
     familyName,
     familyId,
     currentWeek,
-    selectFamilyMember
+    selectFamilyMember,
+    taskRecommendations,
+  surveyResponses,
+  getWeekHistoryData
   } = useFamily();
   
   const { 
@@ -188,8 +191,26 @@ const SurveyScreen = ({ mode = 'initial' }) => {
       } else if (mode === 'weekly') {
         // Generate weekly questions with enhanced error handling
         try {
-          const weeklyQuestions = generateWeeklyQuestions(currentWeek);
-          console.log(`Generated ${weeklyQuestions?.length || 0} weekly questions for week ${currentWeek}`);
+          // Get previous responses and task data for adaptive question selection
+          const previousResponses = surveyResponses || {};
+          const taskCompletionData = taskRecommendations?.filter(task => task.completed) || [];
+          
+          // Get previous week's data for more context if available
+          let previousWeekData = null;
+          if (currentWeek > 1) {
+            previousWeekData = getWeekHistoryData(currentWeek - 1);
+          }
+          
+          // Call with full context data for adaptive selection
+          const weeklyQuestions = generateWeeklyQuestions(
+            currentWeek, 
+            false, // Not a child
+            familyData,
+            previousResponses,
+            taskCompletionData
+          );
+          
+          console.log(`Generated ${weeklyQuestions?.length || 0} adaptive weekly questions for week ${currentWeek}`);
           
           if (!weeklyQuestions || weeklyQuestions.length === 0) {
             console.error("No weekly questions generated, using fallback");

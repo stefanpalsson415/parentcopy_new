@@ -1179,241 +1179,227 @@ const forceCalendarDateSync = async () => {
     });
   };
   
- // Replace the recordHabitInstance function with this updated version
-const recordHabitInstance = async (habitId, reflectionNote = "") => {
-  if (!familyId || !selectedUser) return;
-  
-  try {
-    setIsProcessing(true);
-    console.log(`Recording habit instance for habit ${habitId}`);
-    
-    // Create the new instance data
-    const newInstance = {
-      timestamp: new Date().toISOString(),
-      userId: selectedUser.id,
-      userName: selectedUser.name,
-      notes: reflectionNote || ""
-    };
-    
-    // Get current instances
-    const currentInstances = completedHabitInstances[habitId] || [];
-    const updatedInstances = [...currentInstances, newInstance];
-    
-    console.log(`Current instances: ${currentInstances.length}, Updated: ${updatedInstances.length}`);
-    
-    // Create a reference to the habit instances document
-    const habitInstanceRef = doc(db, "families", familyId, "habitInstances", habitId);
+  const recordHabitInstance = async (habitId, reflectionNote = "") => {
+    if (!familyId || !selectedUser) return;
     
     try {
-      // First, check if the document exists
-      const docSnap = await getDoc(habitInstanceRef);
+      setIsProcessing(true);
+      console.log(`Recording habit instance for habit ${habitId}`);
       
-      if (docSnap.exists()) {
-        // Update existing document
-        await updateDoc(habitInstanceRef, {
-          instances: updatedInstances
-        });
-      } else {
-        // Create new document
-        await setDoc(habitInstanceRef, {
-          instances: updatedInstances
-        });
+      // Create the new instance data
+      const newInstance = {
+        timestamp: new Date().toISOString(),
+        userId: selectedUser.id,
+        userName: selectedUser.name,
+        notes: reflectionNote || ""
+      };
+      
+      // Get current instances
+      const currentInstances = completedHabitInstances[habitId] || [];
+      const updatedInstances = [...currentInstances, newInstance];
+      
+      console.log(`Current instances: ${currentInstances.length}, Updated: ${updatedInstances.length}`);
+      
+      // Create a reference to the habit instances document
+      const habitInstanceRef = doc(db, "families", familyId, "habitInstances", habitId);
+      
+      try {
+        // First, check if the document exists
+        const docSnap = await getDoc(habitInstanceRef);
+        
+        if (docSnap.exists()) {
+          // Update existing document
+          await updateDoc(habitInstanceRef, {
+            instances: updatedInstances
+          });
+        } else {
+          // Create new document
+          await setDoc(habitInstanceRef, {
+            instances: updatedInstances
+          });
+        }
+        
+        console.log("Database updated successfully");
+        
+        // Also update the task's completion status if this is the first completion
+        if (currentInstances.length === 0) {
+          try {
+            const familyRef = doc(db, "families", familyId);
+            const familyDoc = await getDoc(familyRef);
+            
+            if (familyDoc.exists()) {
+              const tasks = familyDoc.data().tasks || [];
+              const updatedTasks = tasks.map(task => {
+                if (task.id === habitId) {
+                  // Update the first subtask as completed
+                  const updatedSubTasks = task.subTasks?.map((st, idx) => 
+                    idx === 0 ? {...st, completed: true} : st
+                  ) || [];
+                  
+                  return {
+                    ...task,
+                    subTasks: updatedSubTasks,
+                    lastCompleted: newInstance.timestamp
+                  };
+                }
+                return task;
+              });
+              
+              await updateDoc(familyRef, {
+                tasks: updatedTasks
+              });
+              
+              console.log("Task updated with completion status");
+            }
+          } catch (taskError) {
+            console.error("Error updating task:", taskError);
+          }
+        }
+      } catch (dbError) {
+        console.error("Database error:", dbError);
+        createCelebration("Error", false, "Failed to save your habit completion.");
+        setIsProcessing(false);
+        return false;
       }
       
-      console.log("Database updated successfully");
+      // First update the completedHabitInstances in a separate state update
+      setCompletedHabitInstances(prev => {
+        const newState = {...prev};
+        newState[habitId] = updatedInstances;
+        return newState;
+      });
       
-      // Also update the task's completion status if this is the first completion
-      if (currentInstances.length === 0) {
+      // Update the tracking count in habits state
+      const habit = habits.find(h => h.id === habitId);
+      if (habit) {
+        // Create a fresh copy of the habits array with defensive programming
+        const updatedHabits = habits.map(h => {
+          if (h.id === habitId) {
+            return {
+              ...h,
+              completionInstances: updatedInstances || [], // Ensure this isn't undefined
+              lastCompleted: newInstance.timestamp,
+              // Also increment streak with safer math
+              streak: (h.streak || 0) + 1,
+              record: Math.max((h.streak || 0) + 1, h.record || 0)
+            };
+          }
+          return h;
+        });
+        
+        // Set the updated habits
+        setHabits(updatedHabits);
+        
+        // Create celebration
+        createCelebration(habit.title, true);
+        
+        // Also update the habit streaks in the database
         try {
           const familyRef = doc(db, "families", familyId);
-          const familyDoc = await getDoc(familyRef);
+          await updateDoc(familyRef, {
+            [`habitStreaks.${habitId}`]: increment(1),
+            [`habitStreaks.${habitId}_record`]: (habit.streak + 1 > (habit.record || 0)) ? habit.streak + 1 : increment(0)
+          });
           
-          if (familyDoc.exists()) {
-            const tasks = familyDoc.data().tasks || [];
-            const updatedTasks = tasks.map(task => {
-              if (task.id === habitId) {
-                // Update the first subtask as completed
-                const updatedSubTasks = task.subTasks?.map((st, idx) => 
-                  idx === 0 ? {...st, completed: true} : st
-                ) || [];
-                
-                return {
-                  ...task,
-                  subTasks: updatedSubTasks,
-                  lastCompleted: newInstance.timestamp
-                };
+          console.log("Habit streaks updated in database");
+        } catch (streakError) {
+          console.error("Error updating habit streaks:", streakError);
+        }
+        
+        // Milestone reached - 5 or more completions
+        if (updatedInstances.length >= 5) {
+          try {
+            // Update the parent's cycle step in Firebase
+            const familyRef = doc(db, "families", familyId);
+            
+            // First, get current cycle progress
+            const familyDoc = await getDoc(familyRef);
+            const currentCycleProgress = familyDoc.data()?.cycleProgress || {};
+            const cycleProgressData = currentCycleProgress[currentWeek] || {
+              step: 1,
+              memberProgress: {}
+            };
+            
+            // Update this parent's progress
+            cycleProgressData.memberProgress = {
+              ...(cycleProgressData.memberProgress || {}),
+              [selectedUser.id]: {
+                ...(cycleProgressData.memberProgress?.[selectedUser.id] || {}),
+                step: 2
               }
-              return task;
+            };
+            
+            // Check if all parents have reached step 2
+            const allParents = familyMembers.filter(m => m.role === 'parent');
+            const allParentsReady = allParents.every(parent => {
+              // Either this parent we're updating, or already at step 2+
+              return parent.id === selectedUser.id || 
+                    (cycleProgressData.memberProgress?.[parent.id]?.step >= 2);
             });
             
+            // If all parents have reached 5 completions, move whole cycle to step 2
+            if (allParentsReady) {
+              cycleProgressData.step = 2;
+            }
+            
+            // Save to Firebase
             await updateDoc(familyRef, {
-              tasks: updatedTasks
+              [`cycleProgress.${currentWeek}`]: cycleProgressData
             });
             
-            console.log("Task updated with completion status");
+            // Update local state
+            setMemberProgress(prev => ({
+              ...prev,
+              [selectedUser.id]: {
+                ...prev[selectedUser.id],
+                step: 2
+              }
+            }));
+            
+            // If moved to step 2, update cycle step
+            if (allParentsReady) {
+              setCycleStep(2);
+            }
+            
+            // Trigger cycle progress refresh
+            loadCycleProgress();
+          } catch (error) {
+            console.error("Error updating cycle progress:", error);
           }
-        } catch (taskError) {
-          console.error("Error updating task:", taskError);
+          
+          // Launch confetti
+          launchConfetti();
+          
+          // Enable survey
+          setCanTakeSurvey(true);
+          
+          // Show special celebration
+          createCelebration("Survey Unlocked!", true, "You've completed a habit 5 times!");
+          
+          // Auto-open the family meeting after a short delay
+          setTimeout(() => {
+            onStartWeeklyCheckIn();
+          }, 2000);
+        }
+        // Other milestone - 11 completions (mastery)
+        else if (updatedInstances.length === 11) {
+          launchConfetti();
+          createCelebration("Habit Mastered!", true, "You've mastered this habit! Great job!");
         }
       }
-    } catch (dbError) {
-      console.error("Database error:", dbError);
-      createCelebration("Error", false, "Failed to save your habit completion.");
+      
+      // Reset reflection
+      setReflection('');
+      
+      setIsProcessing(false);
+      return true;
+    } catch (error) {
+      console.error("Error recording habit instance:", error);
+      createCelebration("Error", false, "Failed to record habit completion.");
       setIsProcessing(false);
       return false;
     }
-    
-    // First update the completedHabitInstances in a separate state update
-setCompletedHabitInstances(prev => {
-  const newState = {...prev};
-  newState[habitId] = updatedInstances;
-  return newState;
-});
-
-// Now update the habits state
-const habit = habits.find(h => h.id === habitId);
-if (habit) {
-  // Wait for state to update before continuing
-  setTimeout(() => {
-    try {
-      // Create a fresh copy of the habits array
-      const updatedHabits = habits.map(h => {
-        if (h.id === habitId) {
-          return {
-            ...h,
-            completionInstances: updatedInstances || [], // Ensure this isn't undefined
-            lastCompleted: newInstance.timestamp,
-            // Also increment streak
-            streak: (h.streak || 0) + 1,
-            record: Math.max((h.streak || 0) + 1, h.record || 0)
-          };
-        }
-        return h;
-      });
-      
-      // Set the updated habits
-      setHabits(updatedHabits);
-    } catch (updateError) {
-      console.error("Error updating habit state:", updateError);
-      // Recover gracefully
-      createCelebration("Habit recorded, please refresh page", true);
-    }
-  }, 50); // Small delay to ensure state updates in correct order
-} else {
-  console.warn("Could not find habit with ID:", habitId);
-  createCelebration("Habit recorded, but display not updated", true);
-}
-      
-      // Create celebration
-      createCelebration(habit.title, true);
-      
-      // Also update the habit streaks in the database
-      try {
-        const familyRef = doc(db, "families", familyId);
-        await updateDoc(familyRef, {
-          [`habitStreaks.${habitId}`]: increment(1),
-          [`habitStreaks.${habitId}_record`]: (habit.streak + 1 > (habit.record || 0)) ? habit.streak + 1 : increment(0)
-        });
-        
-        console.log("Habit streaks updated in database");
-      } catch (streakError) {
-        console.error("Error updating habit streaks:", streakError);
-      }
-      
-      // Milestone reached - 5 or more completions
-if (updatedInstances.length >= 5) {
-  try {
-    // Update the parent's cycle step in Firebase
-    const familyRef = doc(db, "families", familyId);
-    
-    // First, get current cycle progress
-    const familyDoc = await getDoc(familyRef);
-    const currentCycleProgress = familyDoc.data()?.cycleProgress || {};
-    const cycleProgressData = currentCycleProgress[currentWeek] || {
-      step: 1,
-      memberProgress: {}
-    };
-    
-    // Update this parent's progress
-    cycleProgressData.memberProgress = {
-      ...(cycleProgressData.memberProgress || {}),
-      [selectedUser.id]: {
-        ...(cycleProgressData.memberProgress?.[selectedUser.id] || {}),
-        step: 2
-      }
-    };
-    
-    // Check if all parents have reached step 2
-    const allParents = familyMembers.filter(m => m.role === 'parent');
-    const allParentsReady = allParents.every(parent => {
-      // Either this parent we're updating, or already at step 2+
-      return parent.id === selectedUser.id || 
-             (cycleProgressData.memberProgress?.[parent.id]?.step >= 2);
-    });
-    
-    // If all parents have reached 5 completions, move whole cycle to step 2
-    if (allParentsReady) {
-      cycleProgressData.step = 2;
-    }
-    
-    // Save to Firebase
-    await updateDoc(familyRef, {
-      [`cycleProgress.${currentWeek}`]: cycleProgressData
-    });
-    
-    // Update local state
-    setMemberProgress(prev => ({
-      ...prev,
-      [selectedUser.id]: {
-        ...prev[selectedUser.id],
-        step: 2
-      }
-    }));
-    
-    // If moved to step 2, update cycle step
-    if (allParentsReady) {
-      setCycleStep(2);
-    }
-    
-    // Trigger cycle progress refresh
-    loadCycleProgress();
-  } catch (error) {
-    console.error("Error updating cycle progress:", error);
-  }
-  
-  // Launch confetti
-  launchConfetti();
-  
-  // Enable survey
-  setCanTakeSurvey(true);
-  
-  // Show special celebration
-  createCelebration("Survey Unlocked!", true, "You've completed a habit 5 times!");
-  
-  // Auto-open the family meeting after a short delay
-  setTimeout(() => {
-    onStartWeeklyCheckIn();
-  }, 2000);
-}
-      // Other milestone - 11 completions (mastery)
-      else if (updatedInstances.length === 11) {
-        launchConfetti();
-        createCelebration("Habit Mastered!", true, "You've mastered this habit! Great job!");
-      }
-    }
-    
-    // Reset reflection
-    setReflection('');
-    
-    setIsProcessing(false);
-    return true;
-  } catch (error) {
-    console.error("Error recording habit instance:", error);
-    createCelebration("Error", false, "Failed to record habit completion.");
-    setIsProcessing(false);
-    return false;
-  }
-};
+  };
   
   // Save reflection after completing a habit
   const saveReflection = async () => {
