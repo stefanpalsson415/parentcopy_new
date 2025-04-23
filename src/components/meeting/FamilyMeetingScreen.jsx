@@ -829,120 +829,120 @@ const getSuggestedActionItems = useCallback(() => {
         
         {/* Content area - changes based on current screen */}
         {currentScreen === 'intro' && (
-          /* Introduction Screen */
-          <div className="p-6 space-y-6">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold mb-2">Welcome to Your Family Meeting</h2>
-              <p className="text-gray-600 text-sm max-w-lg mx-auto">
-                This meeting will help your family celebrate wins, address challenges, 
-                and plan improvements for better balance in the upcoming week.
+  /* Introduction Screen */
+  <div className="p-6 space-y-6">
+    <div className="text-center mb-8">
+      <h2 className="text-2xl font-bold mb-2">Welcome to Your Family Meeting</h2>
+      <p className="text-gray-600 text-sm max-w-lg mx-auto">
+        This meeting will help your family celebrate wins, address challenges, 
+        and plan improvements for better balance in the upcoming week.
+      </p>
+    </div>
+    
+    {loadingAgenda ? (
+      <div className="flex justify-center py-8">
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    ) : loadingError ? (
+      <div className="bg-red-50 p-4 rounded-lg text-red-700 text-center">
+        {loadingError}
+        <button 
+          className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 block mx-auto"
+          onClick={() => window.location.reload()}
+        >
+          Try Again
+        </button>
+      </div>
+    ) : (
+      <>
+        {/* AI-Generated Agenda Preview */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg shadow-sm">
+          <div className="flex items-start mb-4">
+            <div className="bg-blue-500 p-2 rounded-lg mr-3">
+              <Sparkles className="text-white" size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-blue-800">AI-Generated Meeting Agenda</h3>
+              <p className="text-sm text-blue-600">
+                Based on your family's survey data and task history, we've created a personalized meeting agenda.
               </p>
             </div>
+          </div>
+          
+          <div className="mt-4 space-y-3">
+            {agenda?.sections?.map((section, index) => (
+              <div key={index} className="bg-white rounded p-3 shadow-sm">
+                <h4 className="font-medium mb-1">{section.title}</h4>
+                <p className="text-sm text-gray-600">{section.description || ""}</p>
+              </div>
+            ))}
             
-            {loadingAgenda ? (
-              <div className="flex justify-center py-8">
-                <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            {!agenda?.sections && (
+              <div className="bg-white p-4 rounded-lg">
+                <p className="text-center text-gray-600">Your agenda is still being prepared.</p>
               </div>
-            ) : loadingError ? (
-              <div className="bg-red-50 p-4 rounded-lg text-red-700 text-center">
-                {loadingError}
-                <button 
-                  className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 block mx-auto"
-                  onClick={() => window.location.reload()}
-                >
-                  Try Again
-                </button>
-              </div>
-            ) : (
-              <>
-                {/* AI-Generated Agenda Preview */}
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg shadow-sm">
-                  <div className="flex items-start mb-4">
-                    <div className="bg-blue-500 p-2 rounded-lg mr-3">
-                      <Sparkles className="text-white" size={24} />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-blue-800">AI-Generated Meeting Agenda</h3>
-                      <p className="text-sm text-blue-600">
-                        Based on your family's survey data and task history, we've created a personalized meeting agenda.
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4 space-y-3">
-                    {agenda?.sections?.map((section, index) => (
-                      <div key={index} className="bg-white rounded p-3 shadow-sm">
-                        <h4 className="font-medium mb-1">{section.title}</h4>
-                        <p className="text-sm text-gray-600">{section.description || ""}</p>
-                      </div>
-                    ))}
-                    
-                    {!agenda?.sections && (
-                      <div className="bg-white p-4 rounded-lg">
-                        <p className="text-center text-gray-600">Your agenda is still being prepared.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Balance Chart */}
-                <div className="mt-6">
-                  <h3 className="text-lg font-bold mb-3">Your Family Balance Journey</h3>
-                  <FamilyBalanceChart 
-                    weekHistory={weekHistory}
-                    completedWeeks={completedWeeks}
-                  />
-                  <p className="text-sm text-gray-500 mt-2">
-                    This chart shows your progress toward a balanced workload in your family.
-                  </p>
-                </div>
-                
-                {/* Sprint Retrospective Explanation */}
-                <div className="border p-4 rounded-lg mt-6">
-                  <h3 className="font-bold mb-2">About Sprint Retrospectives</h3>
-                  <p className="text-sm text-gray-600 mb-3">
-                    We use a "sprint retrospective" format that professional teams use to improve how they work together.
-                    This simple structure helps families reflect on what's working and what needs improvement.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">✓ What Went Well</span>
-                    <span className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded">⚠ What Could Improve</span>
-                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">→ Action Items</span>
-                  </div>
-                </div>
-              </>
             )}
-            
-            {/* Navigation Buttons with Meeting Type Selection */}
-<div className="flex flex-col pt-6 space-y-4">
-  <h3 className="text-lg font-medium text-center mb-2">How would you like to run this meeting?</h3>
-  
-  <button
-    onClick={goToNextScreen}
-    disabled={loadingAgenda}
-    className="w-full flex items-center justify-center bg-black text-white px-6 py-3 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
-  >
-    <Users size={20} className="mr-2" />
-    Start Structured Meeting
-    <ChevronRight size={18} className="ml-2" />
-  </button>
-  
-  <button
-    onClick={() => {
-      // Close this meeting and open the Allie Chat meeting instead
-      onClose();
-      // Need to send a message to the parent component to open Allie Chat meeting
-      window.dispatchEvent(new CustomEvent('open-allie-chat-meeting'));
-    }}
-    disabled={loadingAgenda}
-    className="w-full flex items-center justify-center bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-3 rounded-lg hover:from-purple-600 hover:to-blue-600 disabled:opacity-70"
-  >
-    <MessageSquare size={20} className="mr-2" />
-    Let Allie Guide Your Meeting
-  </button>
-</div>
-        )}
+          </div>
+        </div>
         
+        {/* Balance Chart */}
+        <div className="mt-6">
+          <h3 className="text-lg font-bold mb-3">Your Family Balance Journey</h3>
+          <FamilyBalanceChart 
+            weekHistory={weekHistory}
+            completedWeeks={completedWeeks}
+          />
+          <p className="text-sm text-gray-500 mt-2">
+            This chart shows your progress toward a balanced workload in your family.
+          </p>
+        </div>
+        
+        {/* Sprint Retrospective Explanation */}
+        <div className="border p-4 rounded-lg mt-6">
+          <h3 className="font-bold mb-2">About Sprint Retrospectives</h3>
+          <p className="text-sm text-gray-600 mb-3">
+            We use a "sprint retrospective" format that professional teams use to improve how they work together.
+            This simple structure helps families reflect on what's working and what needs improvement.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">✓ What Went Well</span>
+            <span className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded">⚠ What Could Improve</span>
+            <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">→ Action Items</span>
+          </div>
+        </div>
+      </>
+    )}
+    
+    {/* Navigation Buttons with Meeting Type Selection */}
+    <div className="flex flex-col pt-6 space-y-4">
+      <h3 className="text-lg font-medium text-center mb-2">How would you like to run this meeting?</h3>
+      
+      <button
+        onClick={goToNextScreen}
+        disabled={loadingAgenda}
+        className="w-full flex items-center justify-center bg-black text-white px-6 py-3 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
+      >
+        <Users size={20} className="mr-2" />
+        Start Structured Meeting
+        <ChevronRight size={18} className="ml-2" />
+      </button>
+      
+      <button
+        onClick={() => {
+          // Close this meeting and open the Allie Chat meeting instead
+          onClose();
+          // Need to send a message to the parent component to open Allie Chat meeting
+          window.dispatchEvent(new CustomEvent('open-allie-chat-meeting'));
+        }}
+        disabled={loadingAgenda}
+        className="w-full flex items-center justify-center bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-3 rounded-lg hover:from-purple-600 hover:to-blue-600 disabled:opacity-70"
+      >
+        <MessageSquare size={20} className="mr-2" />
+        Let Allie Guide Your Meeting
+      </button>
+    </div>
+  </div>
+)}        
         {currentScreen === 'meeting' && (
           /* Interactive Meeting Screen */
           <div className="p-6">
