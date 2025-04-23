@@ -8,6 +8,7 @@ import HowThisWorksScreen from '../education/HowThisWorksScreen';
 import PersonalizedApproachScreen from '../education/PersonalizedApproachScreen';
 import UserSettingsScreen from '../user/UserSettingsScreen';
 import FamilyMeetingScreen from '../meeting/FamilyMeetingScreen';
+import AllieChatMeeting from '../meeting/AllieChatMeeting';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AllieChat from '../chat/AllieChat';
@@ -48,6 +49,7 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const [showSettings, setShowSettings] = useState(false);
   const [activeComponent, setActiveComponent] = useState(null);
   const [showFamilyMeeting, setShowFamilyMeeting] = useState(false);
+  const [meetingType, setMeetingType] = useState('standard'); // 'standard' or 'chat'
   const [loadingFamily, setLoadingFamily] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [insights, setInsights] = useState([]);
@@ -364,6 +366,41 @@ useEffect(() => {
     );
   }
   
+  const openFamilyMeeting = (type = 'standard') => {
+    setMeetingType(type);
+    setShowFamilyMeeting(true);
+  };
+  
+  // Render section
+  {showFamilyMeeting && (
+    meetingType === 'standard' ? (
+      <FamilyMeetingScreen onClose={() => setShowFamilyMeeting(false)} />
+    ) : (
+      <AllieChatMeeting onClose={() => setShowFamilyMeeting(false)} />
+    )
+  )}
+  
+  // Add a meeting selector UI
+  <div className="mt-4">
+    <h3 className="font-medium mb-2">Family Meeting Options</h3>
+    <div className="flex space-x-4">
+      <button
+        onClick={() => openFamilyMeeting('standard')}
+        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+      >
+        Start Structured Meeting
+      </button>
+      <button
+        onClick={() => openFamilyMeeting('chat')}
+        className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600"
+      >
+        Chat with Allie
+      </button>
+    </div>
+  </div>
+
+
+
   /// Generate tab content based on active tab
 const renderTabContent = () => {
   switch (activeTab) {
