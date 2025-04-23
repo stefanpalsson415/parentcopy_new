@@ -309,11 +309,11 @@ useEffect(() => {
     setShowSettings(!showSettings);
   };
   
-  // Update handleOpenFamilyMeeting to show the selection modal instead
-const handleOpenFamilyMeeting = () => {
-  console.log("Opening meeting type selection");
-  setShowMeetingTypeModal(true);
-};
+  const handleOpenFamilyMeeting = () => {
+    console.log("Opening meeting type selection modal");
+    setShowMeetingTypeModal(true);
+  };
+
 
 // Add this function to handle meeting type selection
 const selectMeetingType = (type) => {
@@ -380,14 +380,14 @@ const selectMeetingType = (type) => {
     setShowFamilyMeeting(true);
   };
   
-  // Render section
-  {showFamilyMeeting && (
-    meetingType === 'standard' ? (
-      <FamilyMeetingScreen onClose={() => setShowFamilyMeeting(false)} />
-    ) : (
-      <AllieChatMeeting onClose={() => setShowFamilyMeeting(false)} />
-    )
-  )}
+  {/* Family Meeting Modal */}
+{showFamilyMeeting && (
+  meetingType === 'standard' ? (
+    <FamilyMeetingScreen onClose={handleCloseFamilyMeeting} />
+  ) : (
+    <AllieChatMeeting onClose={handleCloseFamilyMeeting} />
+  )
+)}
   
   {/* Meeting Type Selection Modal */}
 {showMeetingTypeModal && (
