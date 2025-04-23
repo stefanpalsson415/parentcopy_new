@@ -1,27 +1,37 @@
-import React, { useState, useEffect } from 'react';
-import { Filter, Info, ChevronDown, ChevronUp, PieChart, Brain, Calendar, Heart, Scale, Clock, Users, CheckCircle2, AlertTriangle, Lightbulb,  
-  MessageCircle, Star } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Heart, Shield, TrendingUp, Clock, Brain, 
+  BarChart2, PieChart, LineChart, CircleUser, Users, 
+  Calendar, CheckCircle, Activity, Lightbulb, Award,
+  ChevronDown, ChevronUp, Maximize, Minimize,
+  AlertTriangle, Target, ArrowRight, Star, Sparkles
+} from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { useSurvey } from '../../../contexts/SurveyContext';
-import { calculateBalanceScores } from '../../../utils/TaskWeightCalculator';
 import AllieAIService from '../../../services/AllieAIService';
+import { calculateBalanceScores } from '../../../utils/TaskWeightCalculator';
 
 import { 
-  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, 
-  Radar, Legend, ResponsiveContainer, LineChart, Line, 
-  XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, 
-  PieChart as RechartPieChart, Pie, Cell, Area, ComposedChart
+  ResponsiveContainer, PieChart as RechartPie, Pie, Cell, 
+  LineChart as RechartLine, Line, BarChart, Bar,
+  AreaChart, Area, ComposedChart, XAxis, YAxis, 
+  CartesianGrid, Tooltip, Legend, Radar, RadarChart,
+  PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from 'recharts';
 
+// Main Dashboard Component
 const DashboardTab = () => {
+  // Access family data from context
   const { 
     familyId,
-    completedWeeks, 
-    currentWeek, 
+    familyName,
     familyMembers,
     surveyResponses,
+    completedWeeks, 
+    currentWeek,
     getWeekHistoryData,
     impactInsights,
+    taskRecommendations,
     taskEffectivenessData,
     familyPriorities,
     weightedScores: globalWeightedScores,
@@ -29,36 +39,40 @@ const DashboardTab = () => {
     weekHistory
   } = useFamily();
   
+  // Access survey data from context
   const { fullQuestionSet } = useSurvey();
   
-  // State for filters and expanded sections
-  const [radarFilter, setRadarFilter] = useState('all'); // 'all', 'parents', 'children'
-  const [timeFilter, setTimeFilter] = useState('all'); // 'all', 'initial', 'current', 'week1', 'week2', etc.
+  // State for expanded/collapsed sections and loading indicators
   const [expandedSections, setExpandedSections] = useState({
-    balance: true,
-    history: true,
-    categories: true,
-    weightInsights: true,
-    aiInsights: true
+    harmonyPulse: true,
+    memberJourneys: true,
+    childDevelopment: true,
+    timeline: true,
+    impactHub: true
   });
   
-  // Loading states
+  // State for various data metrics and loading
   const [loading, setLoading] = useState({
-    balance: true,
-    history: true,
-    categories: true,
-    weightInsights: true,
-    aiInsights: true
+    harmonyPulse: true,
+    memberJourneys: true,
+    childDevelopment: true,
+    timeline: true,
+    impactHub: true
   });
   
-  // Local state for calculated metrics
-  const [weightedScores, setWeightedScores] = useState(null);
-  const [weightedInsights, setWeightedInsights] = useState([]);
-  const [weightByFactorData, setWeightByFactorData] = useState([]);
-  const [aiInsights, setAiInsights] = useState([]);
-  const [balanceHistory, setBalanceHistory] = useState([]);
+  // State for time filter
+  const [timeFilter, setTimeFilter] = useState('all');
   
-  // Toggle section expansion
+  // State for weighted scores and harmony metrics
+  const [weightedScores, setWeightedScores] = useState(null);
+  const [harmonyScore, setHarmonyScore] = useState(null);
+  const [memberInsights, setMemberInsights] = useState({});
+  const [childInsights, setChildInsights] = useState({});
+  const [timelineData, setTimelineData] = useState([]);
+  const [impactData, setImpactData] = useState(null);
+  const [selectedMember, setSelectedMember] = useState(null);
+  
+  // Toggle expanded sections
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
       ...prev,
@@ -66,80 +80,53 @@ const DashboardTab = () => {
     }));
   };
   
-  const [expandedJourneySections, setExpandedJourneySections] = useState({
-    journeyInsights: true,
-    familyMeeting: true
-  });
-  
-  // For handling selected cycle in journey view
-  const [selectedCycle, setSelectedCycle] = useState(1);
-  const [journeyData, setJourneyData] = useState([]);
-  
-  // Toggle section expansion for journey sections
-  const toggleJourneySection = (section) => {
-    setExpandedJourneySections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
-  
-  // Format date helper
+  // Helper function to format date
   const formatDate = (date) => {
     if (!date) return "Not available";
     const dateObj = typeof date === 'string' ? new Date(date) : date;
     return dateObj.toLocaleDateString('en-US', { 
-      weekday: 'short',
       month: 'short', 
       day: 'numeric'
     });
   };
-
-
-  // Calculate time filter options based on completed weeks
-  const getTimeFilterOptions = () => {
-    const options = [];
-    
-    // Add All Time option
-    options.push({ id: 'all', label: 'All Time' });
-    
-    // Add Initial Survey option
-    options.push({ id: 'initial', label: 'Initial Survey' });
-    
-    // Add only completed weeks (sorted)
-    [...completedWeeks]
-      .sort((a, b) => a - b)
-      .forEach(week => {
-        options.push({ id: `week${week}`, label: `Week ${week}` });
-      });
-    
-    // Add current week if not in completed weeks
-    if (!completedWeeks.includes(currentWeek)) {
-      options.push({ id: `week${currentWeek}`, label: `Week ${currentWeek}` });
-    }
-    
-    return options;
+  
+  // Helper function to determine if a user is a child
+  const isChild = (member) => {
+    return member.role === 'child';
   };
   
-  // Load and calculate dashboard data
+  // Helper function to determine if a user is a parent
+  const isParent = (member) => {
+    return member.role === 'parent';
+  };
+  
+  // Get parents and children from family members
+  const parents = useMemo(() => familyMembers.filter(isParent), [familyMembers]);
+  const children = useMemo(() => familyMembers.filter(isChild), [familyMembers]);
+  
+  // Effect hook to load all dashboard data
   useEffect(() => {
-    const loadData = async () => {
+    const loadDashboardData = async () => {
       try {
-        // Set loading states
+        // Set all sections to loading
         setLoading({
-          balance: true,
-          history: true,
-          categories: true,
-          weightInsights: true,
-          aiInsights: true
+          harmonyPulse: true,
+          memberJourneys: true,
+          childDevelopment: true,
+          timeline: true,
+          impactHub: true
         });
         
-        // Get filtered responses based on time period
-        const filteredResponses = getFilteredResponses();
+        if (!familyId) {
+          console.log("No family ID available, cannot load dashboard data");
+          return;
+        }
         
-        // Calculate weight-based metrics if we have questions and responses
-        if (fullQuestionSet && fullQuestionSet.length > 0 && filteredResponses && Object.keys(filteredResponses).length > 0) {
-          // Calculate weighted scores using the TaskWeightCalculator
-          const scores = calculateBalanceScores(fullQuestionSet, filteredResponses, familyPriorities);
+        console.log("Loading dashboard data for family:", familyId);
+        
+        // 1. Calculate weighted scores for Harmony Pulse
+        if (fullQuestionSet && Object.keys(surveyResponses).length > 0) {
+          const scores = calculateBalanceScores(fullQuestionSet, surveyResponses, familyPriorities);
           setWeightedScores(scores);
           
           // Update global state with weighted scores for other components
@@ -147,510 +134,670 @@ const DashboardTab = () => {
             setGlobalWeightedScores(scores);
           }
           
-          // Generate weight-based insights
-          const insights = generateWeightBasedInsights(scores);
-          setWeightedInsights(insights);
+          // Calculate harmony score (0-100) based on balance and other factors
+          const balanceScore = calculateHarmonyScore(scores);
+          setHarmonyScore(balanceScore);
           
-          // Create data for factor-based charts
-          const factorData = generateWeightByFactorData(filteredResponses);
-          setWeightByFactorData(factorData);
+          setLoading(prev => ({ ...prev, harmonyPulse: false }));
         } else {
-          console.log("Not enough data to calculate weighted metrics", {
-            hasQuestionSet: !!fullQuestionSet,
-            questionCount: fullQuestionSet?.length || 0,
-            responseCount: Object.keys(filteredResponses || {}).length
-          });
+          console.log("Insufficient data for weighted scores calculation");
+          setLoading(prev => ({ ...prev, harmonyPulse: false }));
         }
         
-        // Calculate balance history data
-        const historyData = calculateBalanceHistory();
-        setBalanceHistory(historyData);
+        // 2. Generate member-specific insights
+        const memberData = {};
         
-        // Load AI insights
-        if (familyId && currentWeek) {
-          try {
-            console.log("Loading AI insights...");
-            const insights = await AllieAIService.generateDashboardInsights(
-              familyId, 
-              currentWeek
-            );
-            
-            // Ensure insights is always an array
-            if (insights && insights.insights && Array.isArray(insights.insights)) {
-              setAiInsights(insights.insights);
-            } else if (Array.isArray(insights)) {
-              setAiInsights(insights);
-            } else {
-              console.warn("AI insights returned invalid format:", insights);
-              setAiInsights([]);
-            }
-          } catch (insightError) {
-            console.error("Error loading AI insights:", insightError);
-            setAiInsights([]);
+        for (const member of familyMembers) {
+          // Different approach for parents vs children
+          if (isParent(member)) {
+            // For parents, analyze contribution patterns
+            memberData[member.id] = await generateParentInsights(member);
+          } else if (isChild(member)) {
+            // For children, generate age-appropriate insights
+            memberData[member.id] = await generateChildJourneyInsights(member);
           }
+        }
+        
+        setMemberInsights(memberData);
+        setLoading(prev => ({ ...prev, memberJourneys: false }));
+        
+        // 3. Generate child development insights using AI service
+        const childDevelopmentData = {};
+        
+        for (const child of children) {
+          try {
+            // Use AllieAIService to generate insights
+            const insights = await generateChildDevelopmentInsights(child);
+            childDevelopmentData[child.id] = insights;
+          } catch (error) {
+            console.error(`Error generating insights for child ${child.id}:`, error);
+            childDevelopmentData[child.id] = {
+              suggestions: [],
+              milestones: [],
+              emotionalInsights: [],
+              error: error.message
+            };
+          }
+        }
+        
+        setChildInsights(childDevelopmentData);
+        setLoading(prev => ({ ...prev, childDevelopment: false }));
+        
+        // 4. Build transformation timeline data
+        const timeline = buildTimelineData();
+        setTimelineData(timeline);
+        setLoading(prev => ({ ...prev, timeline: false }));
+        
+        // 5. Calculate impact data
+        const impact = await calculateImpactData();
+        setImpactData(impact);
+        setLoading(prev => ({ ...prev, impactHub: false }));
+        
+        // Set first parent as default selected member if none selected
+        if (!selectedMember && parents.length > 0) {
+          setSelectedMember(parents[0].id);
         }
       } catch (error) {
         console.error("Error loading dashboard data:", error);
-      } finally {
-        // Finish loading
+        
+        // Set all sections to not loading on error
         setLoading({
-          balance: false,
-          history: false,
-          categories: false,
-          weightInsights: false,
-          aiInsights: false
+          harmonyPulse: false,
+          memberJourneys: false,
+          childDevelopment: false,
+          timeline: false,
+          impactHub: false
         });
       }
     };
     
-    loadData();
-  }, [timeFilter, radarFilter, fullQuestionSet, surveyResponses, familyPriorities, familyId, currentWeek, setGlobalWeightedScores]);
+    loadDashboardData();
+  }, [familyId, fullQuestionSet, surveyResponses, familyMembers]);
   
-
-  // Load cycle data and journey data
-useEffect(() => {
-  const loadJourneyData = async () => {
+  // Function to calculate harmony score from various metrics
+  const calculateHarmonyScore = (scores) => {
+    // Start with a base score
+    let harmonyScore = 70;
+    
+    if (!scores || !scores.categoryBalance) return harmonyScore;
+    
+    // Calculate average imbalance across categories
+    const categories = Object.values(scores.categoryBalance);
+    const avgImbalance = categories.reduce((sum, cat) => sum + Math.abs(cat.imbalance), 0) / categories.length;
+    
+    // Adjust score based on imbalance (more imbalance = lower score)
+    harmonyScore -= avgImbalance / 2;
+    
+    // Adjust for completed tasks (more completed tasks = higher score)
+    const completedTasksCount = (taskRecommendations || []).filter(t => t.completed).length;
+    harmonyScore += completedTasksCount * 2;
+    
+    // Cap score between 0 and 100
+    return Math.max(0, Math.min(100, Math.round(harmonyScore)));
+  };
+  
+  // Function to generate insights for a parent
+  const generateParentInsights = async (parent) => {
     try {
-      // Load all completed cycles for journey data
-      const journeyEntries = [];
+      // Filter responses specific to this parent
+      const parentResponses = Object.entries(surveyResponses)
+        .filter(([key, value]) => {
+          return key.includes(parent.id) || value === parent.roleType;
+        })
+        .reduce((obj, [key, value]) => {
+          obj[key] = value;
+          return obj;
+        }, {});
       
-      // Add initial survey as "Cycle 0" if available
-      const initialData = await getWeekHistoryData(0);
-      if (initialData) {
-        journeyEntries.push({
-          cycleNumber: 0,
-          label: "Initial",
-          data: initialData,
-          completionDate: initialData.completionDate
-        });
-      }
+      // Get tasks assigned to this parent
+      const assignedTasks = (taskRecommendations || [])
+        .filter(task => task.assignedTo === parent.roleType)
+        .map(task => ({
+          ...task,
+          completionRate: task.completed ? 100 : 0
+        }));
       
-      // Add all other completed cycles
-      for (const weekNum of completedWeeks) {
-        const weekData = await getWeekHistoryData(weekNum);
-        if (weekData) {
-          journeyEntries.push({
-            cycleNumber: weekNum,
-            label: `Cycle ${weekNum}`,
-            data: weekData,
-            completionDate: weekData.completionDate
-          });
+      // Calculate strength areas based on task completion history
+      const completedTasks = assignedTasks.filter(task => task.completed);
+      
+      const strengthCategories = completedTasks.reduce((acc, task) => {
+        const category = task.category || 'Other';
+        acc[category] = (acc[category] || 0) + 1;
+        return acc;
+      }, {});
+      
+      // Find top strength category
+      const strengths = Object.entries(strengthCategories)
+        .sort((a, b) => b[1] - a[1])
+        .map(([category, count]) => ({
+          category,
+          count,
+          description: getCategoryDescription(category)
+        }));
+      
+      // Calculate growth areas based on incomplete tasks and imbalances
+      const incompleteTasks = assignedTasks.filter(task => !task.completed);
+      
+      const growthCategories = incompleteTasks.reduce((acc, task) => {
+        const category = task.category || 'Other';
+        acc[category] = (acc[category] || 0) + 1;
+        return acc;
+      }, {});
+      
+      // Find top growth category
+      const growthAreas = Object.entries(growthCategories)
+        .sort((a, b) => b[1] - a[1])
+        .map(([category, count]) => ({
+          category,
+          count,
+          description: getCategoryDescription(category)
+        }));
+      
+      // Create personalized insights using AI (if available)
+      let personalizedInsights = [];
+      try {
+        if (familyId && parent.id) {
+          // Generate insights using AllieAIService
+          const aiInsights = await AllieAIService.generateDashboardInsights(
+            familyId, 
+            currentWeek
+          );
+          
+          // Filter insights relevant to this parent
+          if (aiInsights && aiInsights.insights) {
+            personalizedInsights = aiInsights.insights
+              .filter(insight => {
+                // Include insights specific to this parent's role or general insights
+                return insight.category === parent.roleType || 
+                      !insight.category || 
+                      insight.category === 'general';
+              })
+              .map(insight => ({
+                title: insight.title || 'Personal Insight',
+                description: insight.description || insight.actionItem || 'Personalized recommendation',
+                category: insight.category || 'general'
+              }));
+          }
         }
+      } catch (error) {
+        console.error("Error generating personalized insights:", error);
+        // Provide fallback insights if AI fails
+        personalizedInsights = [
+          {
+            title: 'Balance Opportunity',
+            description: `Consider focusing on ${growthAreas[0]?.category || 'shared responsibilities'} to improve your family's balance.`,
+            category: 'balance'
+          }
+        ];
       }
       
-      // Sort by cycle number for consistent display
-      journeyEntries.sort((a, b) => a.cycleNumber - b.cycleNumber);
-      setJourneyData(journeyEntries);
+      // Return compiled insights
+      return {
+        strengths: strengths.slice(0, 3),
+        growthAreas: growthAreas.slice(0, 3),
+        taskCompletionRate: assignedTasks.length > 0 
+          ? Math.round((completedTasks.length / assignedTasks.length) * 100) 
+          : 0,
+        personalizedInsights,
+        taskDistribution: groupTasksByCategory(assignedTasks)
+      };
     } catch (error) {
-      console.error(`Error loading journey data:`, error);
+      console.error(`Error generating insights for parent ${parent.id}:`, error);
+      return {
+        strengths: [],
+        growthAreas: [],
+        taskCompletionRate: 0,
+        personalizedInsights: [],
+        taskDistribution: []
+      };
     }
   };
   
-  loadJourneyData();
-}, [completedWeeks, getWeekHistoryData]);
+  // Function to generate journey insights for a child
+  const generateChildJourneyInsights = async (child) => {
+    try {
+      // For children, we focus on contributions and developmental aspects
+      
+      // Filter for child-specific data
+      const childData = weekHistory ? Object.values(weekHistory)
+        .filter(week => week && week.familyMembers)
+        .map(week => week.familyMembers.find(m => m.id === child.id))
+        .filter(Boolean) : [];
+      
+      // Generate age-appropriate insights
+      const childAge = child.age ? parseInt(child.age) : null;
+      
+      // Return compiled insights
+      return {
+        contributionsRecognized: childData.length > 0,
+        ageAppropriateProgress: childAge,
+        participationGrowth: childData.length > 1 
+          ? "Increasing participation over time" 
+          : "Just getting started",
+        strengths: generateChildStrengths(child)
+      };
+    } catch (error) {
+      console.error(`Error generating journey insights for child ${child.id}:`, error);
+      return {
+        contributionsRecognized: false,
+        ageAppropriateProgress: null,
+        participationGrowth: "Could not calculate",
+        strengths: []
+      };
+    }
+  };
   
-  // Get filtered responses based on selected time period
-  const getFilteredResponses = () => {
-    if (!surveyResponses) return {};
-    
-    const filteredResponses = {};
-    
-    if (timeFilter === 'initial') {
-      // Only include responses from initial survey
-      Object.entries(surveyResponses).forEach(([key, value]) => {
-        if (!key.includes('week-') && !key.includes('weekly-') && key.includes('q')) {
-          filteredResponses[key] = value;
-        }
-      });
-    } else if (timeFilter.startsWith('week')) {
-      // Extract week number
-      const weekNum = parseInt(timeFilter.replace('week', ''));
+  // Generate child development insights using AllieAIService
+  const generateChildDevelopmentInsights = async (child) => {
+    try {
+      // Use the AI service to generate child-specific insights
+      // First check if we have direct data from AllieAIService
+      let aiChildInsights = [];
       
-      // Include responses for this specific week - with expanded formats
-      Object.entries(surveyResponses).forEach(([key, value]) => {
-        if (key.includes(`week-${weekNum}`) || 
-            key.includes(`weekly-${weekNum}`) || 
-            key.includes(`week${weekNum}-`) || 
-            (weekNum === 1 && (key.includes('weekly') || key.includes('week1')))) {
-          filteredResponses[key] = value;
+      try {
+        // This would be a call to an AI service to get child-specific insights
+        // Normally this would be: await AllieAIService.generateChildInsights(familyId, child.id);
+        // But since we don't have that exact method, we'll use a general approach
+        
+        const familyInsights = await AllieAIService.generateDashboardInsights(
+          familyId, 
+          currentWeek
+        );
+        
+        // Extract child-relevant insights if possible
+        if (familyInsights && familyInsights.insights) {
+          aiChildInsights = familyInsights.insights
+            .filter(insight => 
+              insight.childId === child.id || 
+              insight.category?.toLowerCase().includes('child') ||
+              insight.title?.toLowerCase().includes('child') ||
+              insight.description?.toLowerCase().includes(child.name?.toLowerCase() || '')
+            );
         }
-      });
-      
-      // If we're still not finding any responses for week 1, add a debug log
-      if (weekNum === 1 && Object.keys(filteredResponses).length === 0) {
-        console.log("No Week 1 responses found with standard filtering. Available keys:", Object.keys(surveyResponses));
+      } catch (error) {
+        console.warn("Error fetching AI child insights:", error);
       }
+      
+      // Create development milestones based on child age
+      const childAge = child.age ? parseInt(child.age) : null;
+      const milestones = generateAgeMilestones(childAge, child.name);
+      
+      // Generate emotional intelligence insights
+      const emotionalInsights = generateEmotionalInsights(child);
+      
+      // Generate parental balance suggestions
+      const parentalBalanceSuggestions = generateParentalBalanceSuggestions(child);
+      
+      return {
+        milestones,
+        emotionalInsights,
+        suggestions: parentalBalanceSuggestions,
+        aiInsights: aiChildInsights
+      };
+    } catch (error) {
+      console.error(`Error generating development insights for child ${child.id}:`, error);
+      return {
+        milestones: [],
+        emotionalInsights: [],
+        suggestions: [],
+        aiInsights: []
+      };
+    }
+  };
+  
+  // Generate age-appropriate milestones based on child's age
+  const generateAgeMilestones = (age, name) => {
+    if (!age) return [];
+    
+    // Define age groups and milestones
+    const milestonesByAge = {
+      // Toddlers (1-3)
+      toddler: [
+        { title: 'Language Development', description: 'Expanding vocabulary and simple sentences' },
+        { title: 'Motor Skills', description: 'Running, climbing, and exploring' },
+        { title: 'Social Development', description: 'Beginning to engage in parallel play' }
+      ],
+      // Preschoolers (3-5)
+      preschool: [
+        { title: 'Emotional Regulation', description: 'Learning to identify and express feelings' },
+        { title: 'Cognitive Growth', description: 'Asking questions and learning concepts' },
+        { title: 'Independence', description: 'Developing self-care routines' }
+      ],
+      // School Age (6-12)
+      schoolAge: [
+        { title: 'Academic Development', description: 'Reading, writing, and critical thinking' },
+        { title: 'Peer Relationships', description: 'Building friendships and social skills' },
+        { title: 'Responsibility', description: 'Taking on age-appropriate tasks' }
+      ],
+      // Teenagers (13-18)
+      teen: [
+        { title: 'Identity Formation', description: 'Developing sense of self and values' },
+        { title: 'Higher Thinking', description: 'Abstract reasoning and future planning' },
+        { title: 'Independence', description: 'Preparing for adulthood and responsibility' }
+      ]
+    };
+    
+    // Determine age group
+    let ageGroup;
+    if (age < 3) {
+      ageGroup = 'toddler';
+    } else if (age < 6) {
+      ageGroup = 'preschool';
+    } else if (age < 13) {
+      ageGroup = 'schoolAge';
     } else {
-      // 'all' - include all responses
-      return surveyResponses;
+      ageGroup = 'teen';
     }
     
-    return filteredResponses;
+    // Return age-appropriate milestones
+    return milestonesByAge[ageGroup].map(milestone => ({
+      ...milestone,
+      childName: name
+    }));
   };
   
-  // Generate weight-based insights
-  const generateWeightBasedInsights = (scores) => {
-    if (!scores) return [];
-    
-    const insights = [];
-    
-    // Find the most imbalanced categories
-    const imbalancedCategories = Object.entries(scores.categoryBalance)
-      .sort((a, b) => b[1].imbalance - a[1].imbalance);
-    
-    if (imbalancedCategories.length > 0) {
-      const mostImbalanced = imbalancedCategories[0];
-      const category = mostImbalanced[0];
-      const imbalanceData = mostImbalanced[1];
-      
-      // High impact insight for the most imbalanced category
-      insights.push({
-        title: `Highest Weighted Imbalance: ${category}`,
-        description: `${category} shows a ${Math.round(imbalanceData.imbalance)}% imbalance when accounting for task complexity, frequency, and emotional labor.`,
-        type: 'weight-critical',
-        icon: <Scale size={20} className="text-amber-600" />
-      });
-      
-      // Insight for invisible work if it's highly imbalanced
-      if (category.includes('Invisible') && imbalanceData.imbalance > 30) {
-        insights.push({
-          title: 'Invisible Work Imbalance',
-          description: `Our analysis shows that invisible work (mental load, planning, coordination) is significantly imbalanced in your family.`,
-          type: 'weight-invisible',
-          icon: <Brain size={20} className="text-purple-600" />
-        });
+  // Generate emotional intelligence insights
+  const generateEmotionalInsights = (child) => {
+    const insights = [
+      {
+        title: 'Emotional Recognition',
+        description: `${child.name} is developing the ability to recognize and name emotions.`,
+        suggestion: 'Both parents should regularly discuss feelings during daily activities.'
+      },
+      {
+        title: 'Self-Regulation',
+        description: `Learning to manage emotions effectively is a key skill for ${child.name}'s age group.`,
+        suggestion: 'Consistent approaches from both parents help develop emotional regulation.'
+      },
+      {
+        title: 'Empathy Development',
+        description: `${child.name} is learning to understand other people's perspectives and feelings.`,
+        suggestion: 'Model empathy in your own interactions to teach this important skill.'
       }
-    }
-    
-    // Add insight about emotional labor impact if relevant
-    const emotionalCategory = imbalancedCategories.find(([cat]) => cat.includes('Parental'));
-    if (emotionalCategory && emotionalCategory[1].imbalance > 25) {
-      insights.push({
-        title: 'Emotional Labor Impact',
-        description: 'Tasks with high emotional labor requirements (handling children\'s emotions, resolving conflicts) show significant imbalance. These create substantial mental load.',
-        type: 'weight-emotional',
-        icon: <Heart size={20} className="text-red-600" />
-      });
-    }
+    ];
     
     return insights;
   };
   
-  // Generate data for weight by factor charts based on actual survey data
-  const generateWeightByFactorData = (responses) => {
-    if (!fullQuestionSet || !responses || Object.keys(responses).length === 0) return [];
+  // Generate parental balance suggestions specific to this child
+  const generateParentalBalanceSuggestions = (child) => {
+    // Base suggestions on family data if possible
+    const balanceData = weightedScores?.categoryBalance || {};
+    const imbalancedCategories = Object.entries(balanceData)
+      .sort((a, b) => Math.abs(b[1].imbalance) - Math.abs(a[1].imbalance))
+      .slice(0, 2)
+      .map(([category, _]) => category);
     
-    // Initialize factor counters
-    const factorCounts = {
-      'Emotional Labor': { mama: 0, papa: 0, total: 0 },
-      'Invisible Tasks': { mama: 0, papa: 0, total: 0 },
-      'Child Development': { mama: 0, papa: 0, total: 0 },
-      'Time Investment': { mama: 0, papa: 0, total: 0 }
-    };
-    
-    // Count responses by factor
-    Object.entries(responses).forEach(([key, value]) => {
-      if (value !== 'Mama' && value !== 'Papa') return;
-      
-      // Extract question ID and find the question
-      let questionId = key;
-      if (key.includes('-')) {
-        const parts = key.split('-');
-        questionId = parts.find(part => part.startsWith('q')) || key;
+    // Create child-specific balance suggestions
+    return [
+      {
+        title: 'Balanced Attention',
+        description: `Equal engagement from both parents helps ${child.name} develop secure attachments.`,
+        imbalancedArea: imbalancedCategories[0] || 'Parental Tasks'
+      },
+      {
+        title: 'Consistent Approaches',
+        description: `When parents align on expectations and routines, ${child.name} feels more secure.`,
+        imbalancedArea: imbalancedCategories[1] || 'Household Tasks'
+      },
+      {
+        title: 'Shared Special Time',
+        description: `Each parent should have regular one-on-one time with ${child.name} to build connection.`,
+        imbalancedArea: 'Quality Time'
       }
-      
-      const question = fullQuestionSet.find(q => q.id === questionId);
-      if (!question) return;
-      
-      // Count by emotional labor level
-      if (question.emotionalLabor === 'high' || question.emotionalLabor === 'extreme') {
-        factorCounts['Emotional Labor'].total++;
-        if (value === 'Mama') factorCounts['Emotional Labor'].mama++;
-        else if (value === 'Papa') factorCounts['Emotional Labor'].papa++;
-      }
-      
-      // Count by invisibility
-      if (question.invisibility === 'mostly' || question.invisibility === 'completely') {
-        factorCounts['Invisible Tasks'].total++;
-        if (value === 'Mama') factorCounts['Invisible Tasks'].mama++;
-        else if (value === 'Papa') factorCounts['Invisible Tasks'].papa++;
-      }
-      
-      // Count by child development impact
-      if (question.childDevelopment === 'high') {
-        factorCounts['Child Development'].total++;
-        if (value === 'Mama') factorCounts['Child Development'].mama++;
-        else if (value === 'Papa') factorCounts['Child Development'].papa++;
-      }
-      
-      // Count by time investment (base weight)
-      if (question.baseWeight >= 4) {
-        factorCounts['Time Investment'].total++;
-        if (value === 'Mama') factorCounts['Time Investment'].mama++;
-        else if (value === 'Papa') factorCounts['Time Investment'].papa++;
-      }
-    });
-    
-    // Convert to percentages for charting
-    return Object.entries(factorCounts).map(([factor, counts]) => {
-      if (counts.total === 0) {
-        return null; // Skip factors with no data
-      }
-      
-      const mamaPercent = Math.round((counts.mama / counts.total) * 100);
-      const papaPercent = Math.round((counts.papa / counts.total) * 100);
-      
-      return {
-        name: factor,
-        mama: mamaPercent,
-        papa: papaPercent,
-        imbalance: Math.abs(mamaPercent - papaPercent)
-      };
-    }).filter(Boolean); // Remove null entries
+    ];
   };
   
-  // Calculate radar data based on survey responses and question categories
-  const getRadarData = () => {
-    // Use the weighted scores if available
-    if (weightedScores && weightedScores.categoryBalance) {
-      return Object.entries(weightedScores.categoryBalance).map(([category, data]) => ({
-        category,
-        mama: Math.round(data.mama),
-        papa: Math.round(data.papa)
-      }));
+  // Generate strengths for a child
+  const generateChildStrengths = (child) => {
+    // These would ideally come from survey data or AI
+    // For now using placeholder strengths based on child's name for demonstration
+    const nameSum = child.name.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    
+    const possibleStrengths = [
+      { title: 'Creativity', description: 'Shows imagination in play and activities' },
+      { title: 'Empathy', description: "Demonstrates care for others' feelings" },
+      { title: 'Curiosity', description: 'Always eager to learn new things' },
+      { title: 'Persistence', description: 'Keeps trying even when things are difficult' },
+      { title: 'Leadership', description: 'Takes initiative in group settings' },
+      { title: 'Adaptability', description: 'Handles changes in routine well' },
+      { title: 'Problem Solving', description: 'Finds creative solutions to challenges' },
+      { title: 'Teamwork', description: 'Works well with others on shared tasks' }
+    ];
+    
+    // Select strengths pseudo-randomly based on name
+    const strengthIndices = [];
+    let index = nameSum % possibleStrengths.length;
+    
+    for (let i = 0; i < 3; i++) {
+      strengthIndices.push(index);
+      index = (index + 3) % possibleStrengths.length;
     }
     
-    // Define the categories
-    const categories = {
-      "Visible Household Tasks": { mama: 0, papa: 0, total: 0 },
-      "Invisible Household Tasks": { mama: 0, papa: 0, total: 0 },
-      "Visible Parental Tasks": { mama: 0, papa: 0, total: 0 },
-      "Invisible Parental Tasks": { mama: 0, papa: 0, total: 0 }
-    };
-    
-    // Filter survey responses based on the selected time period
-    const filteredResponses = getFilteredResponses();
-    
-    // Count responses by category
-    Object.entries(filteredResponses).forEach(([key, value]) => {
-      if (value !== 'Mama' && value !== 'Papa') return;
-      
-      // Extract question ID from key (assuming format like "q1" or "week-1-q1")
-      let questionId = key;
-      if (key.includes('-')) {
-        const parts = key.split('-');
-        // Look for the part that starts with "q"
-        questionId = parts.find(part => part.startsWith('q')) || key;
-      }
-      
-      // Find the question in the question set
-      const question = fullQuestionSet.find(q => q.id === questionId);
-      
-      if (!question) return;
-      
-      // Update counts
-      const category = question.category;
-      if (categories[category]) {
-        categories[category].total++;
-        if (value === 'Mama') {
-          categories[category].mama++;
-        } else if (value === 'Papa') {
-          categories[category].papa++;
-        }
-      }
-    });
-    
-    // Convert counts to percentages for radar chart
-    return Object.entries(categories).map(([category, counts]) => {
-      const total = counts.total;
-      if (total === 0) {
-        return { category, mama: 0, papa: 0 };
-      }
-      
-      return {
-        category,
-        mama: Math.round((counts.mama / total) * 100),
-        papa: Math.round((counts.papa / total) * 100)
-      };
-    });
+    return strengthIndices.map(i => possibleStrengths[i]);
   };
   
-  // Get current balance using weighted scores if available
-  const getCurrentBalance = () => {
-    if (weightedScores && weightedScores.overallBalance) {
-      return {
-        mama: Math.round(weightedScores.overallBalance.mama),
-        papa: Math.round(weightedScores.overallBalance.papa)
-      };
-    }
+  // Build timeline data from week history
+  const buildTimelineData = () => {
+    const timeline = [];
     
-    // If no weighted scores, calculate directly from responses
-    const filteredResponses = getFilteredResponses();
-    
-    // Count Mama and Papa responses
-    let mamaCount = 0;
-    let papaCount = 0;
-    
-    Object.values(filteredResponses).forEach(value => {
-      if (value === 'Mama') {
-        mamaCount++;
-      } else if (value === 'Papa') {
-        papaCount++;
-      }
-    });
-    
-    const total = mamaCount + papaCount;
-    
-    if (total === 0) {
-      return { mama: 0, papa: 0 };
-    }
-    
-    // Calculate percentages
-    return {
-      mama: Math.round((mamaCount / total) * 100),
-      papa: Math.round((papaCount / total) * 100)
-    };
-  };
-  
-  // Calculate balance history data from actual survey responses
-  const calculateBalanceHistory = () => {
-    const history = [];
-    
-    // Add initial survey data point
-    let initialMama = 0;
-    let initialPapa = 0;
-    let initialTotal = 0;
-    
-    // Count responses from initial survey
-    Object.entries(surveyResponses).forEach(([key, value]) => {
-      // Include responses without week prefix (likely from initial survey)
-      if (!key.includes('week-') && !key.includes('weekly-') && key.includes('q')) {
-        if (value === 'Mama') initialMama++;
-        else if (value === 'Papa') initialPapa++;
-        initialTotal++;
-      }
-    });
-    
-    // Add initial survey data point if we have data
-    if (initialTotal > 0) {
-      history.push({
-        week: 'Initial',
-        mama: Math.round((initialMama / initialTotal) * 100),
-        papa: Math.round((initialPapa / initialTotal) * 100)
+    // Add initial survey as first point if available
+    if (weekHistory && weekHistory.initial) {
+      timeline.push({
+        weekNumber: 0,
+        label: 'Initial Survey',
+        date: formatDate(weekHistory.initial.completionDate),
+        balance: weekHistory.initial.balance || { mama: 50, papa: 50 },
+        completedTasks: 0,
+        keyEvent: 'Started family balance journey'
       });
     }
     
-    // Add data points for each completed week
+    // Add data for each completed week
     completedWeeks.forEach(weekNum => {
-      // Try to get data from week history first
       const weekData = getWeekHistoryData(weekNum);
       
-      if (weekData && weekData.balance) {
-        // Use saved balance data if available
-        history.push({
-          week: `Week ${weekNum}`,
-          mama: Math.round(weekData.balance.mama),
-          papa: Math.round(weekData.balance.papa)
-        });
-        return;
-      }
-      
-      // If no saved data, calculate from survey responses
-      let weekMama = 0;
-      let weekPapa = 0;
-      let weekTotal = 0;
-      
-      // Count responses for this week
-      Object.entries(surveyResponses).forEach(([key, value]) => {
-        if (key.includes(`week-${weekNum}`) || 
-            key.includes(`weekly-${weekNum}`) ||
-            key.includes(`week${weekNum}-`)) {
-          if (value === 'Mama') weekMama++;
-          else if (value === 'Papa') weekPapa++;
-          weekTotal++;
-        }
-      });
-      
-      // Add week data point if we have data
-      if (weekTotal > 0) {
-        history.push({
-          week: `Week ${weekNum}`,
-          mama: Math.round((weekMama / weekTotal) * 100),
-          papa: Math.round((weekPapa / weekTotal) * 100)
+      if (weekData) {
+        // Count completed tasks
+        const completedTasks = (weekData.tasks || []).filter(t => t.completed).length;
+        
+        // Determine if this was a key event week
+        const isKeyEvent = completedTasks > 2 || (weekData.balance && Math.abs(weekData.balance.mama - 50) < 5);
+        
+        timeline.push({
+          weekNumber: weekNum,
+          label: `Week ${weekNum}`,
+          date: formatDate(weekData.completionDate),
+          balance: weekData.balance || { mama: 50, papa: 50 },
+          completedTasks,
+          keyEvent: isKeyEvent ? 
+            (completedTasks > 2 ? 'Productivity milestone' : 'Balance milestone') : null
         });
       }
     });
     
-    // Add current week if it's not in completed weeks and we have data
+    // Add current week if not in completed weeks
     if (!completedWeeks.includes(currentWeek)) {
-      let currentWeekMama = 0;
-      let currentWeekPapa = 0;
-      let currentWeekTotal = 0;
-      
-      // Count responses for current week
-      Object.entries(surveyResponses).forEach(([key, value]) => {
-        if (key.includes(`week-${currentWeek}`) || 
-            key.includes(`weekly-${currentWeek}`) ||
-            key.includes(`week${currentWeek}-`)) {
-          if (value === 'Mama') currentWeekMama++;
-          else if (value === 'Papa') currentWeekPapa++;
-          currentWeekTotal++;
-        }
+      timeline.push({
+        weekNumber: currentWeek,
+        label: `Current (Week ${currentWeek})`,
+        date: formatDate(new Date()),
+        balance: { mama: 50, papa: 50 }, // Placeholder until we have data
+        completedTasks: 0,
+        current: true
       });
-      
-      // Add current week data point if we have data
-      if (currentWeekTotal > 0) {
-        history.push({
-          week: `Week ${currentWeek}`,
-          mama: Math.round((currentWeekMama / currentWeekTotal) * 100),
-          papa: Math.round((currentWeekPapa / currentWeekTotal) * 100)
-        });
-      }
     }
     
-    return history;
+    return timeline.sort((a, b) => a.weekNumber - b.weekNumber);
   };
   
-  // Filter data based on selected time period
-  const filterDataByTime = (data) => {
-    if (!data || data.length === 0) return [];
-    
-    if (timeFilter === 'all') return data;
-    
-    if (timeFilter === 'initial') {
-      // For Initial survey view, we want to show just the initial survey point
-      return data.filter(item => item.week === 'Initial');
-    }
-    
-    // Handle specific week filters (like 'week1', 'week2')
-    if (timeFilter.startsWith('week')) {
-      const weekNum = parseInt(timeFilter.replace('week', ''));
+  // Calculate impact data
+  const calculateImpactData = async () => {
+    try {
+      // This would ideally come from the AI service
+      // For now we'll calculate it from available data
       
-      // For Week N view, we want to show data from Initial through Week N
-      return data.filter(item => {
-        if (item.week === 'Initial') return true;
+      // Calculate time saved based on task balance improvements
+      let timeSaved = 0;
+      let relationshipBoost = 0;
+      let stressReduction = 0;
+      
+      // If we have enough timeline data, use it to calculate
+      if (timelineData.length >= 2) {
+        const initialBalance = timelineData[0].balance;
+        const currentBalance = timelineData[timelineData.length - 1].balance;
         
-        if (item.week.startsWith('Week ')) {
-          const itemWeekNum = parseInt(item.week.replace('Week ', ''));
-          return itemWeekNum <= weekNum;
-        }
+        // Calculate improvement in balance
+        const initialImbalance = Math.abs(initialBalance.mama - initialBalance.papa);
+        const currentImbalance = Math.abs(currentBalance.mama - currentBalance.papa);
+        const improvement = initialImbalance - currentImbalance;
         
-        return false;
-      });
+        // For each 10% improvement in balance, estimate 2 hours saved per week
+        timeSaved = Math.max(0, Math.round((improvement / 10) * 2));
+        
+        // Relationship boost is directly related to balance improvement
+        relationshipBoost = Math.min(100, Math.max(0, 50 + improvement * 2));
+        
+        // Stress reduction is also related to balance improvement
+        stressReduction = Math.min(100, Math.max(0, 40 + improvement * 1.5));
+      } else {
+        // Default values if we don't have enough data
+        timeSaved = 1;
+        relationshipBoost = 55;
+        stressReduction = 45;
+      }
+      
+      // Get total completed tasks
+      const completedTasks = (taskRecommendations || []).filter(t => t.completed).length;
+      
+      // Generate experiment ideas
+      const experiments = await generateBalanceExperiments();
+      
+      return {
+        timeSaved,
+        relationshipBoost,
+        stressReduction,
+        completedTasks,
+        experiments
+      };
+    } catch (error) {
+      console.error("Error calculating impact data:", error);
+      return {
+        timeSaved: 0,
+        relationshipBoost: 0,
+        stressReduction: 0,
+        completedTasks: 0,
+        experiments: []
+      };
     }
+  };
+  
+  // Generate balance experiments
+  const generateBalanceExperiments = async () => {
+    try {
+      // This would ideally use AI to generate personalized experiments
+      // For now using static examples that might be useful for most families
+      
+      let experiments = [
+        {
+          title: "Weekly Role Reversal",
+          description: "Switch roles for one day each week - the parent who usually handles meals tries childcare, and vice versa.",
+          estimatedImpact: "May improve balance by ~7% in targeted categories",
+          difficulty: "moderate"
+        },
+        {
+          title: "Shared Calendar Day",
+          description: "Dedicate 30 minutes each Sunday to joint calendar review and task planning for the week ahead.",
+          estimatedImpact: "Can reduce invisible work imbalance by ~12%",
+          difficulty: "easy"
+        },
+        {
+          title: "Mental Load Shift",
+          description: "Explicitly transfer responsibility for one 'invisible' household system (meal planning, gift buying, etc.) to the less-involved parent.",
+          estimatedImpact: "Potential 15-20% improvement in invisible household category",
+          difficulty: "challenging"
+        }
+      ];
+      
+      // If we have imbalance data, try to customize to the family's needs
+      if (weightedScores && weightedScores.categoryBalance) {
+        const categories = Object.entries(weightedScores.categoryBalance);
+        
+        // Find most imbalanced category
+        const mostImbalanced = categories.sort((a, b) => Math.abs(b[1].imbalance) - Math.abs(a[1].imbalance))[0];
+        
+        if (mostImbalanced) {
+          const [category, data] = mostImbalanced;
+          const dominantParent = data.mama > data.papa ? "Mama" : "Papa";
+          const otherParent = dominantParent === "Mama" ? "Papa" : "Mama";
+          
+          // Add a customized experiment
+          experiments.unshift({
+            title: `${category} Balance Boost`,
+            description: `${otherParent} takes lead on ${category.toLowerCase()} for two weeks, with ${dominantParent} providing guidance rather than doing tasks.`,
+            estimatedImpact: `Could reduce ${Math.round(Math.abs(data.imbalance))}% imbalance by half`,
+            difficulty: "challenging",
+            targeted: true
+          });
+        }
+      }
+      
+      return experiments;
+    } catch (error) {
+      console.error("Error generating balance experiments:", error);
+      return [];
+    }
+  };
+  
+  // Helper function to group tasks by category
+  const groupTasksByCategory = (tasks) => {
+    const grouped = tasks.reduce((acc, task) => {
+      const category = task.category || 'Other';
+      
+      if (!acc[category]) {
+        acc[category] = {
+          category,
+          count: 0,
+          completed: 0
+        };
+      }
+      
+      acc[category].count++;
+      if (task.completed) {
+        acc[category].completed++;
+      }
+      
+      return acc;
+    }, {});
     
-    return data;
+    return Object.values(grouped).map(group => ({
+      ...group,
+      completionRate: group.count > 0 ? Math.round((group.completed / group.count) * 100) : 0
+    }));
+  };
+  
+  // Helper function to get category descriptions
+  const getCategoryDescription = (category) => {
+    const descriptions = {
+      "Visible Household Tasks": "Cleaning, cooking, and other observable home maintenance",
+      "Invisible Household Tasks": "Planning, organizing, and mental load of home management",
+      "Visible Parental Tasks": "Direct childcare, driving, and helping with homework",
+      "Invisible Parental Tasks": "Emotional support, scheduling, and anticipating children's needs",
+      "Other": "Miscellaneous tasks and responsibilities"
+    };
+    
+    return descriptions[category] || "Tasks and responsibilities in this area";
   };
   
   // Custom tooltip for charts
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-3 border rounded shadow-lg">
-          <p className="font-medium text-sm">{label}</p>
+        <div className="bg-white p-3 border rounded shadow-md">
+          <p className="font-medium text-sm mb-1">{label}</p>
           {payload.map((entry, index) => (
             <p key={index} style={{ color: entry.color }} className="text-sm">
-              {`${entry.name}: ${entry.value}%`}
+              {`${entry.name}: ${entry.value}${entry.unit || '%'}`}
             </p>
           ))}
         </div>
@@ -660,922 +807,1333 @@ useEffect(() => {
   };
   
   // COLORS
-  const MAMA_COLOR = '#8884d8';
-  const PAPA_COLOR = '#82ca9d';
+  const MAMA_COLOR = '#8884d8'; // Purple
+  const PAPA_COLOR = '#82ca9d'; // Green
+  const ACCENT_COLOR = '#ff7300'; // Orange
+  const SUCCESS_COLOR = '#4caf50'; // Green
+  const WARNING_COLOR = '#ff9800'; // Orange
+  const ERROR_COLOR = '#f44336'; // Red
   
-  // Get current balance
-  const currentBalance = getCurrentBalance();
+  // Define section components
   
-  // Filter balance history data by time period
-  const filteredBalanceHistory = filterDataByTime(balanceHistory);
-  
-  return (
-    <div className="space-y-4">
-      {/* Time Filter */}
-      <div className="bg-white rounded-lg shadow p-4 flex items-center justify-end">
-        <div className="flex items-center text-sm">
-          <Filter size={14} className="mr-1" />
-          <span className="mr-2">Time Period:</span>
-          <select 
-            className="border rounded py-1 px-2 bg-white"
-            value={timeFilter}
-            onChange={(e) => setTimeFilter(e.target.value)}
-          >
-            {getTimeFilterOptions().map(option => (
-              <option key={option.id} value={option.id}>{option.label}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Task Category Distribution */}
-      <div className="bg-white rounded-lg shadow">
-        <div 
-          className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50"
-          onClick={() => toggleSection('categories')}
-        >
-          <h3 className="text-lg font-semibold">Task Category Distribution</h3>
-          {expandedSections.categories ? (
-            <ChevronUp size={20} className="text-gray-500" />
-          ) : (
-            <ChevronDown size={20} className="text-gray-500" />
-          )}
-        </div>
-        
-        {expandedSections.categories && (
-          <div className="p-6 pt-0">
-            {loading.categories ? (
-              <div className="h-48 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                  <p className="text-gray-500">Loading data...</p>
-                </div>
+  // 1. Family Harmony Pulse Component
+  const FamilyHarmonyPulse = () => {
+    // Scale the harmony score to a 0-100 scale for visualization
+    const scoreValue = harmonyScore || 70;
+    
+    // Determine score level
+    const getScoreLevel = (score) => {
+      if (score >= 80) return { label: 'Excellent', color: SUCCESS_COLOR };
+      if (score >= 65) return { label: 'Good', color: '#8bc34a' };
+      if (score >= 50) return { label: 'Moderate', color: WARNING_COLOR };
+      return { label: 'Needs Attention', color: ERROR_COLOR };
+    };
+    
+    const scoreLevel = getScoreLevel(scoreValue);
+    
+    // Get current balance data
+    const balanceData = weightedScores?.overallBalance 
+      ? [
+          { name: 'Mama', value: Math.round(weightedScores.overallBalance.mama) },
+          { name: 'Papa', value: Math.round(weightedScores.overallBalance.papa) }
+        ]
+      : [
+          { name: 'Mama', value: 50 },
+          { name: 'Papa', value: 50 }
+        ];
+    
+    // Get category breakdown data
+    const categoryData = weightedScores?.categoryBalance
+      ? Object.entries(weightedScores.categoryBalance).map(([category, data]) => ({
+          category: category.replace(' Tasks', ''),
+          mama: Math.round(data.mama),
+          papa: Math.round(data.papa),
+          imbalance: Math.round(Math.abs(data.imbalance))
+        }))
+      : [];
+    
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-5 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Harmony Score */}
+          <div className="flex flex-col items-center justify-center p-6 bg-gray-50 rounded-lg">
+            <h3 className="text-lg font-medium mb-2 font-roboto">Family Harmony Score</h3>
+            <div className="relative w-40 h-40">
+              {/* Circular progress */}
+              <svg className="w-full h-full" viewBox="0 0 100 100">
+                {/* Background circle */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="45"
+                  fill="none"
+                  stroke="#e6e6e6"
+                  strokeWidth="8"
+                />
+                {/* Progress circle */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="45"
+                  fill="none"
+                  stroke={scoreLevel.color}
+                  strokeWidth="8"
+                  strokeDasharray="283"
+                  strokeDashoffset={283 - (283 * scoreValue) / 100}
+                  strokeLinecap="round"
+                  transform="rotate(-90 50 50)"
+                />
+              </svg>
+              {/* Score text */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-4xl font-bold">{scoreValue}</span>
+                <span className="text-sm text-gray-500">{scoreLevel.label}</span>
               </div>
-            ) : !getRadarData() || getRadarData().every(item => item.mama === 0 && item.papa === 0) ? (
-              <div className="h-48 flex items-center justify-center">
-                <div className="text-center p-6 bg-gray-50 rounded-lg max-w-md">
-                  <p className="text-gray-600">
-                    Not enough data to display category distribution yet. Complete the initial survey to see the breakdown by task category.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="flex justify-between items-center mb-4">
-                  <p className="text-sm text-gray-600">
-                    Distribution of responsibilities across four task categories
-                  </p>
-                  
-                  <div className="flex items-center text-sm">
-                    <span className="mr-2">View:</span>
-                    <div className="flex border rounded overflow-hidden">
-                      <button 
-                        className={`px-2 py-1 ${radarFilter === 'all' ? 'bg-blue-100 text-blue-700' : 'bg-white'}`}
-                        onClick={() => setRadarFilter('all')}
-                      >
-                        All
-                      </button>
-                      <button 
-                        className={`px-2 py-1 border-l ${radarFilter === 'parents' ? 'bg-blue-100 text-blue-700' : 'bg-white'}`}
-                        onClick={() => setRadarFilter('parents')}
-                      >
-                        Parents
-                      </button>
-                      <button 
-                        className={`px-2 py-1 border-l ${radarFilter === 'children' ? 'bg-blue-100 text-blue-700' : 'bg-white'}`}
-                        onClick={() => setRadarFilter('children')}
-                      >
-                        Children
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                  
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart outerRadius="80%" data={getRadarData()}>
-                      <PolarGrid />
-                      <PolarAngleAxis dataKey="category" />
-                      <PolarRadiusAxis angle={30} domain={[0, 100]} />
-                        
-                      <Radar
-                        name="Mama's Tasks"
-                        dataKey="mama"
-                        stroke={MAMA_COLOR}
-                        fill={MAMA_COLOR}
-                        fillOpacity={0.5}
-                      />
-                        
-                      <Radar
-                        name="Papa's Tasks"
-                        dataKey="papa"
-                        stroke={PAPA_COLOR}
-                        fill={PAPA_COLOR}
-                        fillOpacity={0.5}
-                      />
-                        
-                      <Legend />
-                    </RadarChart>
-                  </ResponsiveContainer>
-                </div>
-                  
-                <div className="mt-4 text-sm text-center text-gray-500">
-                  The chart shows what percentage of tasks in each category are handled by Mama vs Papa.
-                </div>
-
-                {/* Add a bar chart version for easier visual comparison */}
-                <div className="mt-6">
-                  <h4 className="font-medium mb-3">Category Breakdown</h4>
-                  <div className="h-64 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={getRadarData()}
-                        layout="vertical"
-                        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis type="number" domain={[0, 100]} />
-                        <YAxis dataKey="category" type="category" width={150} />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Legend />
-                        <Bar dataKey="mama" name="Mama's Share" stackId="a" fill={MAMA_COLOR} />
-                        <Bar dataKey="papa" name="Papa's Share" stackId="a" fill={PAPA_COLOR} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Category Explanation */}
-                <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-3 bg-blue-50 rounded-lg">
-                    <h5 className="font-medium text-blue-800 text-sm">Visible Household Tasks</h5>
-                    <p className="text-xs mt-1 text-blue-600">
-                      Tasks like cleaning, cooking, laundry, yard work, and home maintenance that are easily observable.
-                    </p>
-                  </div>
-                  
-                  <div className="p-3 bg-purple-50 rounded-lg">
-                    <h5 className="font-medium text-purple-800 text-sm">Invisible Household Tasks</h5>
-                    <p className="text-xs mt-1 text-purple-600">
-                      Tasks like planning, scheduling, budgeting, and household management that often go unnoticed.
-                    </p>
-                  </div>
-                  
-                  <div className="p-3 bg-green-50 rounded-lg">
-                    <h5 className="font-medium text-green-800 text-sm">Visible Parental Tasks</h5>
-                    <p className="text-xs mt-1 text-green-600">
-                      Direct childcare activities like helping with homework, driving kids, bathing, and bedtime routines.
-                    </p>
-                  </div>
-                  
-                  <div className="p-3 bg-red-50 rounded-lg">
-                    <h5 className="font-medium text-red-800 text-sm">Invisible Parental Tasks</h5>
-                    <p className="text-xs mt-1 text-red-600">
-                      Emotional labor, monitoring development, healthcare coordination, and anticipating children's needs.
-                    </p>
-                  </div>
-                </div>
-              </>
-            )}
+            </div>
+            <p className="text-sm mt-4 text-center text-gray-600 font-roboto">
+              Based on task balance, completion rates, and family dynamics
+            </p>
           </div>
-        )}
-      </div>
-      
-      {/* AI Insights Section */}
-      <div className="bg-white rounded-lg shadow">
-        <div 
-          className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50"
-          onClick={() => toggleSection('aiInsights')}
-        >
-          <h3 className="text-lg font-semibold flex items-center">
-            <Brain size={20} className="text-purple-600 mr-2" />
-            Allie's AI Insights
-          </h3>
-          {expandedSections.aiInsights ? (
-            <ChevronUp size={20} className="text-gray-500" />
-          ) : (
-            <ChevronDown size={20} className="text-gray-500" />
-          )}
-        </div>
-        
-        {expandedSections.aiInsights && (
-          <div className="p-6 pt-0">
-            {loading.aiInsights ? (
-              <div className="h-24 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                  <p className="text-gray-500">Generating AI insights...</p>
-                </div>
-              </div>
-            ) : !aiInsights || !Array.isArray(aiInsights) || aiInsights.length === 0 ? (
-              <div className="text-center p-6 bg-gray-50 rounded-lg">
-                <p className="text-gray-500">
-                  Not enough data to generate AI insights yet. Complete more surveys to unlock personalized AI analysis.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-sm text-gray-600 mb-4">
-                  Personalized AI-generated insights based on your family's unique data
-                </p>
-                
-                {aiInsights.map((insight, index) => (
-                  <div key={index} className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                    <h4 className="font-medium text-purple-800">{insight.title}</h4>
-                    <p className="text-sm mt-2 text-purple-700">{insight.description}</p>
-                    
-                    {insight.actionItem && (
-                      <div className="flex items-start mt-3 bg-white p-3 rounded border border-purple-100">
-                        <Calendar size={16} className="text-purple-600 mt-1 mr-2 flex-shrink-0" />
-                        <p className="text-sm">{insight.actionItem}</p>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-      
-      {/* Balance card */}
-      <div className="bg-white rounded-lg shadow">
-        <div 
-          className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50"
-          onClick={() => toggleSection('balance')}
-        >
-          <h3 className="text-lg font-semibold">Current Family Balance</h3>
-          {expandedSections.balance ? (
-            <ChevronUp size={20} className="text-gray-500" />
-          ) : (
-            <ChevronDown size={20} className="text-gray-500" />
-          )}
-        </div>
-        
-        {expandedSections.balance && (
-          <div className="p-6 pt-0">
-            {loading.balance ? (
-              <div className="h-48 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                  <p className="text-gray-500">Loading data...</p>
-                </div>
-              </div>
-            ) : !currentBalance || 
-            (currentBalance.mama === 0 && currentBalance.papa === 0) ? (
-              <div className="h-48 flex items-center justify-center">
-                <div className="text-center p-6 bg-gray-50 rounded-lg max-w-md">
-                  <p className="text-gray-600">
-                    Not enough data to display balance information yet. Complete the initial survey and weekly check-ins to see your family balance data.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-                <p className="text-sm text-gray-600 mb-3">
-                  {timeFilter === 'initial' 
-                    ? 'Initial survey distribution of parental responsibilities'
-                    : timeFilter.startsWith('week')
-                      ? `Week ${timeFilter.replace('week', '')} distribution of parental responsibilities`
-                      : 'Current distribution of parental responsibilities'}
-                </p>
-                  
-                <div className="mb-6">
-                  <div className="flex justify-between mb-1">
-                    <span className="font-medium">Mama ({currentBalance.mama}%)</span>
-                    <span className="font-medium">Papa ({currentBalance.papa}%)</span>
-                  </div>
-                  <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500" style={{ width: `${currentBalance.mama}%` }} />
-                  </div>
-                  
-                  <div className="mt-2 text-center text-xs">
-                    <span className={`px-2 py-1 rounded-full ${
-                      Math.abs(currentBalance.mama - 50) > 20
-                        ? 'bg-red-100 text-red-700'
-                        : Math.abs(currentBalance.mama - 50) > 10
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-green-100 text-green-700'
-                    }`}>
-                      {Math.abs(currentBalance.mama - 50) > 20
-                        ? 'Significant Imbalance'
-                        : Math.abs(currentBalance.mama - 50) > 10
-                          ? 'Moderate Imbalance'
-                          : 'Good Balance'}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="flex items-center text-sm text-gray-600 mb-4">
-                  <span>
-                    {currentBalance.mama > 60
-                      ? "Mama is handling significantly more tasks than Papa. Focus on the recommendations for ways to improve balance."
-                      : currentBalance.mama < 40
-                        ? "Papa is handling significantly more tasks than Mama. Check the recommendations for ways to improve balance."
-                        : "Your family has a good balance of responsibilities!"}
-                  </span>
-                </div>
-                
-                {/* Pie chart of current distribution */}
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RechartPieChart>
-                      <Pie
-                        data={[
-                          { name: 'Mama', value: currentBalance.mama },
-                          { name: 'Papa', value: currentBalance.papa }
-                        ]}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        paddingAngle={5}
-                        dataKey="value"
-                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      >
-                        <Cell key="cell-0" fill={MAMA_COLOR} />
-                        <Cell key="cell-1" fill={PAPA_COLOR} />
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </RechartPieChart>
-                  </ResponsiveContainer>
-                </div>
-                
-                {/* Balance Scale Visualization */}
-                <div className="mt-6 bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-blue-800 mb-2">Family Balance Scale</h4>
-                  
-                  <div className="h-36 relative">
-                    {/* The Balance Scale */}
-                    <div className="absolute left-1/2 bottom-0 transform -translate-x-1/2 w-4 h-24 bg-gray-700 rounded"></div>
-                    
-                    {/* The Balance Beam - rotated based on current balance */}
-                    <div 
-                      className="absolute left-1/2 top-8 transform -translate-x-1/2 w-64 h-4 bg-gray-700 rounded transition-transform duration-700 ease-in-out"
-                      style={{ 
-                        transformOrigin: 'center',
-                        transform: `translateX(-50%) rotate(${(currentBalance.mama - 50) * 0.8}deg)` 
-                      }}
+          
+          {/* Current Balance */}
+          <div className="flex flex-col p-6 bg-gray-50 rounded-lg">
+            <h3 className="text-lg font-medium mb-2 font-roboto">Current Balance</h3>
+            <div className="flex-1 flex items-center justify-center">
+              <div className="w-full h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={balanceData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                      label={({ name, value }) => `${name}: ${value}%`}
                     >
-                      {/* Mama's Side */}
-                      <div className="absolute left-0 -top-20 w-16 h-16 bg-purple-200 rounded-full flex items-center justify-center transform -translate-x-1/2">
-                        <div className="text-center">
-                          <div className="text-xl font-bold text-purple-800">{currentBalance.mama}%</div>
-                          <div className="text-xs text-purple-700">Mama</div>
-                        </div>
-                      </div>
-                      
-                      {/* Papa's Side */}
-                      <div className="absolute right-0 -top-20 w-16 h-16 bg-green-200 rounded-full flex items-center justify-center transform translate-x-1/2">
-                        <div className="text-center">
-                          <div className="text-xl font-bold text-green-800">{currentBalance.papa}%</div>
-                          <div className="text-xs text-green-700">Papa</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <p className="text-sm text-center text-blue-700 mt-2">
-                    {Math.abs(currentBalance.mama - 50) <= 5 
-                      ? "Great job! Your family's workload is well balanced."
-                      : currentBalance.mama > 50
-                        ? "The scale is tipping toward Mama. Papa can help balance it by taking on more tasks."
-                        : "The scale is tipping toward Papa. Mama can help balance it by taking on more tasks."}
-                  </p>
-                </div>
-              </>
-            )}
+                      <Cell key="cell-0" fill={MAMA_COLOR} />
+                      <Cell key="cell-1" fill={PAPA_COLOR} />
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="mt-2 text-center">
+              <span 
+                className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  Math.abs((balanceData[0].value - 50)) <= 5
+                    ? 'bg-green-100 text-green-800'
+                    : Math.abs((balanceData[0].value - 50)) <= 15
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-red-100 text-red-800'
+                }`}
+              >
+                {Math.abs((balanceData[0].value - 50)) <= 5
+                  ? 'Well Balanced'
+                  : Math.abs((balanceData[0].value - 50)) <= 15
+                  ? 'Moderately Balanced'
+                  : 'Needs Balancing'}
+              </span>
+            </div>
           </div>
-        )}
-      </div>
-        
-      {/* Balance history chart */}
-      <div className="bg-white rounded-lg shadow">
-        <div 
-          className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50"
-          onClick={() => toggleSection('history')}
-        >
-          <h3 className="text-lg font-semibold">Task Balance History</h3>
-          {expandedSections.history ? (
-            <ChevronUp size={20} className="text-gray-500" />
-          ) : (
-            <ChevronDown size={20} className="text-gray-500" />
-          )}
-        </div>
-        
-        {expandedSections.history && (
-          <div className="p-6 pt-0">
-            {loading.history ? (
-              <div className="h-48 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                  <p className="text-gray-500">Loading data...</p>
-                </div>
-              </div>
-            ) : !filteredBalanceHistory || filteredBalanceHistory.length < 2 ? (
-              <div className="h-48 flex items-center justify-center">
-                <div className="text-center p-6 bg-gray-50 rounded-lg max-w-md">
-                  <p className="text-gray-600">
-                    Not enough data to display history yet. Complete at least one weekly check-in to see your progress over time.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-                <p className="text-sm text-gray-600 mb-4">
-                  See how your family's task balance has changed over time
-                </p>
-                  
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
-                      data={filteredBalanceHistory}
-                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="week" />
-                      <YAxis domain={[0, 100]} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Legend />
-                      <Line 
-                        type="monotone" 
-                        dataKey="mama" 
-                        name="Mama's Tasks" 
-                        stroke={MAMA_COLOR} 
-                        activeDot={{ r: 8 }} 
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="papa" 
-                        name="Papa's Tasks" 
-                        stroke={PAPA_COLOR} 
-                      />
-                      {/* Add a reference line for 50/50 balance */}
-                      <Line
-                        type="monotone"
-                        dataKey={() => 50}
-                        name="50/50 Balance"
-                        stroke="#888"
-                        strokeDasharray="3 3"
-                        activeDot={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-                  
-                <div className="mt-4 text-sm text-center text-gray-500">
-                  {filteredBalanceHistory.length > 2 && 
-                   filteredBalanceHistory[0].mama !== filteredBalanceHistory[filteredBalanceHistory.length - 1].mama ? (
-                    <>
-                      {filteredBalanceHistory[0].mama > filteredBalanceHistory[filteredBalanceHistory.length - 1].mama ? (
-                        <>
-                          Your balance is improving! Papa's task share has increased by 
-                          {' '}{filteredBalanceHistory[filteredBalanceHistory.length - 1].papa - filteredBalanceHistory[0].papa}% 
-                          since the initial survey.
-                        </>
-                      ) : (
-                        <>
-                          Your balance has changed since the initial survey, with Mama's task share increasing by 
-                          {' '}{filteredBalanceHistory[filteredBalanceHistory.length - 1].mama - filteredBalanceHistory[0].mama}%.
-                        </>
-                      )}
-                    </>
-                  ) : (
-                    "Complete more weekly check-ins to see your progress over time."
-                  )}
-                </div>
-                
-                {/* Task Impact Insights Section */}
-                {impactInsights && impactInsights.length > 0 && (
-                  <div className="mt-6 p-4 border rounded-lg bg-purple-50">
-                    <h4 className="font-medium text-purple-800">Impact Insights</h4>
-                    <p className="text-sm mt-1 text-purple-600 mb-3">
-                      Here's how your completed tasks have impacted your family's balance:
-                    </p>
-                    
-                    <div className="space-y-2">
-                      {impactInsights.map((insight, index) => (
-                        <div key={index} className={`p-2 text-sm rounded ${
-                          insight.type === 'success' ? 'bg-green-100 text-green-700' :
-                          insight.type === 'warning' ? 'bg-amber-100 text-amber-700' :
-                          'bg-blue-100 text-blue-700'
-                        }`}>
-                          {insight.message}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-      
-      {/* Weight-Based Insights Section - Redesigned */}
-      <div className="bg-white rounded-lg shadow">
-        <div 
-          className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50"
-          onClick={() => toggleSection('weightInsights')}
-        >
-          <h3 className="text-lg font-semibold">Advanced Balance Analysis</h3>
-          {expandedSections.weightInsights ? (
-            <ChevronUp size={20} className="text-gray-500" />
-          ) : (
-            <ChevronDown size={20} className="text-gray-500" />
-          )}
-        </div>
-        
-        {expandedSections.weightInsights && (
-          <div className="p-6 pt-0">
-            {loading.weightInsights ? (
-              <div className="h-48 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                  <p className="text-gray-500">Analyzing weight data...</p>
-                </div>
-              </div>
-            ) : !weightByFactorData || weightByFactorData.length === 0 ? (
-              <div className="h-48 flex items-center justify-center">
-                <div className="text-center p-6 bg-gray-50 rounded-lg max-w-md">
-                  <p className="text-gray-600">
-                    Not enough data to display advanced analysis yet. Complete more surveys to see this detailed breakdown.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-                <p className="text-sm text-gray-600 mb-4">
-                  Our advanced analysis examines your family's balance across multiple dimensions that impact workload
-                </p>
-                
-                <div className="bg-white rounded-lg p-4 mb-6 border shadow-sm">
-                  <h4 className="font-medium text-lg mb-3 font-roboto">Important Balance Factors</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-2">
-                        <Brain size={16} className="text-purple-600" />
-                      </div>
-                      <div>
-                        <h5 className="font-medium text-sm font-roboto">Invisible Mental Load</h5>
-                        <p className="text-xs text-gray-600 font-roboto">Planning, remembering, and coordinating tasks creates significant workload</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center mr-2">
-                        <Heart size={16} className="text-red-600" />
-                      </div>
-                      <div>
-                        <h5 className="font-medium text-sm font-roboto">Emotional Labor</h5>
-                        <p className="text-xs text-gray-600 font-roboto">Supporting family emotions requires energy and mental bandwidth</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-2">
-                        <Clock size={16} className="text-blue-600" />
-                      </div>
-                      <div>
-                        <h5 className="font-medium text-sm font-roboto">Time Investment</h5>
-                        <p className="text-xs text-gray-600 font-roboto">Tasks that require significant time or frequent repetition</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 flex items-center justify-center mr-2">
-                        <Users size={16} className="text-green-600" />
-                      </div>
-                      <div>
-                        <h5 className="font-medium text-sm font-roboto">Child Development Impact</h5>
-                        <p className="text-xs text-gray-600 font-roboto">Tasks that influence how children view gender roles and relationships</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Weight Factor Bar Chart */}
-                <h4 className="font-medium mb-3">Distribution by Impact Factor</h4>
-                <div className="h-64 w-full mb-6">
+          
+          {/* Category Breakdown */}
+          <div className="flex flex-col p-6 bg-gray-50 rounded-lg">
+            <h3 className="text-lg font-medium mb-2 font-roboto">Category Breakdown</h3>
+            <div className="flex-1">
+              {categoryData.length > 0 ? (
+                <div className="w-full h-60">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
-                      data={weightByFactorData}
+                      data={categoryData}
+                      layout="vertical"
                       margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis domain={[0, 100]} />
+                      <XAxis type="number" domain={[0, 100]} />
+                      <YAxis dataKey="category" type="category" width={120} />
                       <Tooltip content={<CustomTooltip />} />
                       <Legend />
-                      <Bar dataKey="mama" name="Mama's Share" fill={MAMA_COLOR} />
-                      <Bar dataKey="papa" name="Papa's Share" fill={PAPA_COLOR} />
+                      <Bar dataKey="mama" name="Mama" stackId="a" fill={MAMA_COLOR} />
+                      <Bar dataKey="papa" name="Papa" stackId="a" fill={PAPA_COLOR} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                
-                {/* Weight insights */}
+              ) : (
+                <div className="flex items-center justify-center h-60 bg-gray-100 rounded">
+                  <p className="text-gray-500 text-center font-roboto">
+                    Complete surveys to see category breakdown
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {/* Status Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+          {/* Imbalance Alert */}
+          {categoryData.length > 0 && (
+            <div className={`p-4 rounded-lg bg-white border ${
+              categoryData.some(cat => cat.imbalance > 20)
+                ? 'border-amber-300'
+                : 'border-green-300'
+            }`}>
+              <div className="flex items-start">
+                {categoryData.some(cat => cat.imbalance > 20) ? (
+                  <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 mr-2" />
+                ) : (
+                  <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 mr-2" />
+                )}
+                <div>
+                  <h3 className="font-medium font-roboto">
+                    {categoryData.some(cat => cat.imbalance > 20)
+                      ? 'Imbalance Alert'
+                      : 'Good Balance'}
+                  </h3>
+                  <p className="text-sm text-gray-600 font-roboto">
+                    {categoryData.some(cat => cat.imbalance > 20)
+                      ? `${categoryData.sort((a, b) => b.imbalance - a.imbalance)[0].category} shows a ${
+                          categoryData.sort((a, b) => b.imbalance - a.imbalance)[0].imbalance
+                        }% imbalance`
+                      : 'All categories are reasonably balanced'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Task Completion */}
+          <div className="p-4 rounded-lg bg-white border border-blue-300">
+            <div className="flex items-start">
+              <CheckCircle className="w-5 h-5 text-blue-500 mt-0.5 mr-2" />
+              <div>
+                <h3 className="font-medium font-roboto">Task Completion</h3>
+                <p className="text-sm text-gray-600 font-roboto">
+                  {taskRecommendations && taskRecommendations.length > 0
+                    ? `${taskRecommendations.filter(t => t.completed).length} of ${taskRecommendations.length} tasks completed`
+                    : 'No tasks created yet'}
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Weekly Progress */}
+          <div className="p-4 rounded-lg bg-white border border-purple-300">
+            <div className="flex items-start">
+              <TrendingUp className="w-5 h-5 text-purple-500 mt-0.5 mr-2" />
+              <div>
+                <h3 className="font-medium font-roboto">Weekly Progress</h3>
+                <p className="text-sm text-gray-600 font-roboto">
+                  {completedWeeks.length > 0
+                    ? `${completedWeeks.length} weeks completed, on week ${currentWeek}`
+                    : 'Just getting started'}
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Family Size */}
+          <div className="p-4 rounded-lg bg-white border border-green-300">
+            <div className="flex items-start">
+              <Users className="w-5 h-5 text-green-500 mt-0.5 mr-2" />
+              <div>
+                <h3 className="font-medium font-roboto">Family Members</h3>
+                <p className="text-sm text-gray-600 font-roboto">
+                  {parents.length} parents, {children.length} {children.length === 1 ? 'child' : 'children'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
+  // 2. Individual Member Journeys Component
+  const IndividualMemberJourneys = () => {
+    // Get selected member data
+    const selectedMemberData = selectedMember ? 
+      familyMembers.find(m => m.id === selectedMember) : null;
+    
+    // Get member insights
+    const insights = selectedMember && memberInsights[selectedMember] 
+      ? memberInsights[selectedMember] 
+      : null;
+    
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-5 mb-6">
+        {/* Member selection tabs */}
+        <div className="flex flex-wrap gap-2 mb-6">
+          {familyMembers.map(member => (
+            <button
+              key={member.id}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors font-roboto ${
+                selectedMember === member.id
+                  ? 'bg-black text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+              onClick={() => setSelectedMember(member.id)}
+            >
+              {member.name}
+            </button>
+          ))}
+        </div>
+        
+        {/* Selected member details */}
+        {selectedMemberData && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Member Profile */}
+            <div className="bg-gray-50 rounded-lg p-5">
+              <div className="flex flex-col items-center mb-4">
+                <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center mb-3">
+                  {selectedMemberData.profilePicture ? (
+                    <img 
+                      src={selectedMemberData.profilePicture} 
+                      alt={selectedMemberData.name} 
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  ) : (
+                    <CircleUser className="w-12 h-12 text-gray-400" />
+                  )}
+                </div>
+                <h3 className="text-lg font-medium font-roboto">{selectedMemberData.name}</h3>
+                <p className="text-sm text-gray-500 font-roboto capitalize">
+                  {isParent(selectedMemberData) 
+                    ? `${selectedMemberData.roleType || 'Parent'}`
+                    : `Child (Age ${selectedMemberData.age || 'unknown'})`}
+                </p>
+              </div>
+              
+              {/* Key Metrics */}
+              {isParent(selectedMemberData) && insights ? (
                 <div className="space-y-4">
-                  {weightedInsights.map((insight, index) => (
-                    <div 
-                      key={index}
-                      className={`p-4 rounded-lg border ${
-                        insight.type === 'weight-critical' ? 'border-amber-200 bg-amber-50' :
-                        insight.type === 'weight-invisible' ? 'border-purple-200 bg-purple-50' :
-                        insight.type === 'weight-emotional' ? 'border-red-200 bg-red-50' :
-                        insight.type === 'weight-development' ? 'border-green-200 bg-green-50' :
-                        'border-blue-200 bg-blue-50'
-                      }`}
-                    >
-                      <div className="flex items-start">
-                        <div className="mt-1 mr-3 flex-shrink-0">
-                          {insight.icon}
-                        </div>
-                        <div>
-                          <h4 className="font-medium">{insight.title}</h4>
-                          <p className="text-sm mt-1">{insight.description}</p>
-                        </div>
-                      </div>
+                  {/* Task Completion Rate */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-sm font-medium font-roboto">Task Completion</span>
+                      <span className="text-sm font-roboto">{insights.taskCompletionRate}%</span>
                     </div>
-                  ))}
+                    <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-500" 
+                        style={{ width: `${insights.taskCompletionRate}%` }} 
+                      />
+                    </div>
+                  </div>
                   
-                  {/* Task effectiveness insights */}
-                  {taskEffectivenessData && taskEffectivenessData.length > 0 && (
-                    <div className="p-4 border rounded-lg bg-blue-50">
-                      <h4 className="font-medium">Task Effectiveness Analysis</h4>
-                      <p className="text-sm mt-1 text-gray-600 mb-3">
-                        Our analysis shows which types of tasks have been most effective in improving your family's balance:
-                      </p>
-                      
-                      <div className="space-y-2">
-                        {taskEffectivenessData
-                          .sort((a, b) => b.effectiveness - a.effectiveness)
-                          .slice(0, 3)
-                          .map((item, index) => (
-                            <div key={index} className="flex justify-between items-center">
-                              <span className="text-sm">{item.taskType} tasks</span>
-                              <div className="flex items-center">
-                                <span className="text-xs mr-2">
-                                  {Math.round(item.effectiveness * 100)}% effective
-                                </span>
-                                <div className="w-24 h-2 bg-gray-200 rounded overflow-hidden">
-                                  <div 
-                                    className="h-full bg-green-500" 
-                                    style={{ width: `${item.effectiveness * 100}%` }} 
-                                  />
-                                </div>
-                              </div>
+                  {/* Task Distribution */}
+                  {insights.taskDistribution && insights.taskDistribution.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2 font-roboto">Task Distribution</h4>
+                      <div className="space-y-3">
+                        {insights.taskDistribution.map((category, index) => (
+                          <div key={index}>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-xs font-roboto">{category.category}</span>
+                              <span className="text-xs font-roboto">{category.completionRate}%</span>
                             </div>
-                          ))
-                        }
+                            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-green-500" 
+                                style={{ width: `${category.completionRate}%` }} 
+                              />
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
                 </div>
-              </>
+              ) : isChild(selectedMemberData) && memberInsights[selectedMemberData.id] ? (
+                <div className="space-y-4">
+                  <div className="bg-blue-50 rounded p-3">
+                    <h4 className="text-sm font-medium font-roboto text-blue-700">
+                      Participation Journey
+                    </h4>
+                    <p className="text-xs text-blue-600 font-roboto mt-1">
+                      {memberInsights[selectedMemberData.id].participationGrowth}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-6 text-center">
+                  <p className="text-gray-500 text-sm font-roboto">
+                    Complete more cycles to see detailed metrics
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            {/* Strengths and Growth Areas */}
+            <div className="bg-gray-50 rounded-lg p-5">
+              <h3 className="text-md font-medium mb-4 font-roboto">Strengths & Growth Areas</h3>
+              
+              {isParent(selectedMemberData) && insights ? (
+                <div className="space-y-4">
+                  {/* Strengths */}
+                  <div>
+                    <h4 className="flex items-center text-sm font-medium mb-2 font-roboto">
+                      <Award className="w-4 h-4 text-yellow-500 mr-1" />
+                      Strengths
+                    </h4>
+                    <div className="space-y-2">
+                      {insights.strengths && insights.strengths.length > 0 ? (
+                        insights.strengths.map((strength, index) => (
+                          <div key={index} className="p-2 bg-white rounded border border-green-100">
+                            <p className="text-sm font-medium font-roboto">{strength.category}</p>
+                            <p className="text-xs text-gray-600 font-roboto mt-1">{strength.description}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-500 font-roboto">
+                          Complete more tasks to reveal strengths
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Growth Areas */}
+                  <div>
+                    <h4 className="flex items-center text-sm font-medium mb-2 font-roboto">
+                      <TrendingUp className="w-4 h-4 text-blue-500 mr-1" />
+                      Growth Areas
+                    </h4>
+                    <div className="space-y-2">
+                      {insights.growthAreas && insights.growthAreas.length > 0 ? (
+                        insights.growthAreas.map((area, index) => (
+                          <div key={index} className="p-2 bg-white rounded border border-blue-100">
+                            <p className="text-sm font-medium font-roboto">{area.category}</p>
+                            <p className="text-xs text-gray-600 font-roboto mt-1">{area.description}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-500 font-roboto">
+                          All task areas look good
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : isChild(selectedMemberData) && memberInsights[selectedMemberData.id] ? (
+                <div className="space-y-4">
+                  {/* Child Strengths */}
+                  <div>
+                    <h4 className="flex items-center text-sm font-medium mb-2 font-roboto">
+                      <Sparkles className="w-4 h-4 text-yellow-500 mr-1" />
+                      Unique Qualities
+                    </h4>
+                    <div className="space-y-2">
+                      {memberInsights[selectedMemberData.id].strengths && 
+                       memberInsights[selectedMemberData.id].strengths.length > 0 ? (
+                        memberInsights[selectedMemberData.id].strengths.map((strength, index) => (
+                          <div key={index} className="p-2 bg-white rounded border border-yellow-100">
+                            <p className="text-sm font-medium font-roboto">{strength.title}</p>
+                            <p className="text-xs text-gray-600 font-roboto mt-1">{strength.description}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-500 font-roboto">
+                          Add more information about {selectedMemberData.name} to see strengths
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-6 text-center">
+                  <p className="text-gray-500 text-sm font-roboto">
+                    Complete more cycles to reveal strengths & growth areas
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            {/* Personalized Insights */}
+            <div className="bg-gray-50 rounded-lg p-5">
+              <h3 className="text-md font-medium mb-4 font-roboto">Personalized Insights</h3>
+              
+              {isParent(selectedMemberData) && insights && insights.personalizedInsights ? (
+                <div className="space-y-3">
+                  {insights.personalizedInsights.length > 0 ? (
+                    insights.personalizedInsights.map((insight, index) => (
+                      <div key={index} className="p-3 bg-white rounded shadow-sm">
+                        <div className="flex items-start">
+                          <Lightbulb className="w-4 h-4 text-amber-500 mt-0.5 mr-2 flex-shrink-0" />
+                          <div>
+                            <h4 className="text-sm font-medium font-roboto">{insight.title}</h4>
+                            <p className="text-xs text-gray-600 font-roboto mt-1">{insight.description}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="py-6 text-center">
+                      <p className="text-gray-500 text-sm font-roboto">
+                        No personalized insights available yet
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : isChild(selectedMemberData) ? (
+                <div className="py-6 text-center">
+                  <p className="text-gray-500 text-sm font-roboto">
+                    Check the Child Development section for insights about {selectedMemberData.name}
+                  </p>
+                </div>
+              ) : (
+                <div className="py-6 text-center">
+                  <p className="text-gray-500 text-sm font-roboto">
+                    Complete more cycles to generate personalized insights
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {!selectedMemberData && (
+          <div className="py-8 text-center">
+            <p className="text-gray-500 font-roboto">
+              Select a family member to view their journey
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  };
+  
+  // 3. Child Development Observatory Component
+  const ChildDevelopmentObservatory = () => {
+    // State for selected child
+    const [selectedChild, setSelectedChild] = useState(
+      children.length > 0 ? children[0].id : null
+    );
+    
+    // Get selected child data
+    const selectedChildData = selectedChild ? 
+      children.find(child => child.id === selectedChild) : null;
+    
+    // Get child insights
+    const insights = selectedChild && childInsights[selectedChild] 
+      ? childInsights[selectedChild] 
+      : null;
+    
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-5 mb-6">
+        <div className="mb-4">
+          <h2 className="text-xl font-medium flex items-center font-roboto">
+            <Brain className="w-5 h-5 text-purple-600 mr-2" />
+            Child Development Observatory
+          </h2>
+          <p className="text-gray-600 text-sm font-roboto mt-1">
+            Science-backed insights personalized for your {children.length > 1 ? 'children' : 'child'}
+          </p>
+        </div>
+        
+        {children.length === 0 ? (
+          <div className="p-8 text-center bg-gray-50 rounded-lg">
+            <p className="text-gray-600 font-roboto">
+              No children added to your family yet
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Child selection tabs */}
+            <div className="flex flex-wrap gap-2 mb-6">
+              {children.map(child => (
+                <button
+                  key={child.id}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors font-roboto ${
+                    selectedChild === child.id
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                  onClick={() => setSelectedChild(child.id)}
+                >
+                  {child.name}
+                </button>
+              ))}
+            </div>
+            
+            {/* Child insights */}
+            {selectedChildData && insights ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Left Column */}
+                <div className="space-y-5">
+                  {/* Milestones */}
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <h3 className="text-md font-medium mb-3 text-blue-800 font-roboto">
+                      Age-Appropriate Milestones
+                    </h3>
+                    <div className="space-y-3">
+                      {insights.milestones && insights.milestones.length > 0 ? (
+                        insights.milestones.map((milestone, index) => (
+                          <div key={index} className="bg-white rounded p-3 shadow-sm">
+                            <h4 className="text-sm font-medium font-roboto">{milestone.title}</h4>
+                            <p className="text-xs text-gray-600 font-roboto mt-1">
+                              {milestone.description}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-600 font-roboto">
+                          Add {selectedChildData.name}'s age to see developmentally appropriate milestones
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Emotional Intelligence */}
+                  <div className="bg-purple-50 rounded-lg p-4">
+                    <h3 className="text-md font-medium mb-3 text-purple-800 font-roboto">
+                      Emotional Intelligence Insights
+                    </h3>
+                    <div className="space-y-3">
+                      {insights.emotionalInsights && insights.emotionalInsights.length > 0 ? (
+                        insights.emotionalInsights.map((insight, index) => (
+                          <div key={index} className="bg-white rounded p-3 shadow-sm">
+                            <h4 className="text-sm font-medium font-roboto">{insight.title}</h4>
+                            <p className="text-xs text-gray-600 font-roboto mt-1">
+                              {insight.description}
+                            </p>
+                            {insight.suggestion && (
+                              <div className="mt-2 p-2 bg-purple-50 rounded text-xs text-purple-700 font-roboto">
+                                <strong>Suggestion:</strong> {insight.suggestion}
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-600 font-roboto">
+                          Complete more surveys to generate emotional intelligence insights
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Right Column */}
+                <div className="space-y-5">
+                  {/* Parental Balance Impact */}
+                  <div className="bg-green-50 rounded-lg p-4">
+                    <h3 className="text-md font-medium mb-3 text-green-800 font-roboto">
+                      Parental Balance Impact
+                    </h3>
+                    <div className="space-y-3">
+                      {insights.suggestions && insights.suggestions.length > 0 ? (
+                        insights.suggestions.map((suggestion, index) => (
+                          <div key={index} className="bg-white rounded p-3 shadow-sm">
+                            <h4 className="text-sm font-medium font-roboto">{suggestion.title}</h4>
+                            <p className="text-xs text-gray-600 font-roboto mt-1">
+                              {suggestion.description}
+                            </p>
+                            {suggestion.imbalancedArea && (
+                              <div className="mt-2 flex items-center">
+                                <span className="text-xs text-gray-500 mr-2 font-roboto">Focus area:</span>
+                                <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-roboto">
+                                  {suggestion.imbalancedArea}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-600 font-roboto">
+                          Complete more surveys to see how parental balance affects {selectedChildData.name}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* AI Insights */}
+                  <div className="bg-amber-50 rounded-lg p-4">
+                    <h3 className="text-md font-medium mb-3 text-amber-800 font-roboto">
+                      AI-Generated Insights
+                    </h3>
+                    <div className="space-y-3">
+                      {insights.aiInsights && insights.aiInsights.length > 0 ? (
+                        insights.aiInsights.map((insight, index) => (
+                          <div key={index} className="bg-white rounded p-3 shadow-sm">
+                            <div className="flex items-start">
+                              <Brain className="w-4 h-4 text-amber-500 mt-0.5 mr-2 flex-shrink-0" />
+                              <div>
+                                <h4 className="text-sm font-medium font-roboto">
+                                  {insight.title || 'Development Insight'}
+                                </h4>
+                                <p className="text-xs text-gray-600 font-roboto mt-1">
+                                  {insight.description || insight.content || 'Personalized insight for your child'}
+                                </p>
+                                {insight.actionItem && (
+                                  <div className="mt-2 p-2 bg-amber-50 rounded text-xs text-amber-700 font-roboto">
+                                    <strong>Action:</strong> {insight.actionItem}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-600 font-roboto">
+                          Our AI is gathering more data to provide personalized insights
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Developmental Progress */}
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <h3 className="text-md font-medium mb-3 text-blue-800 font-roboto">
+                      Age-Appropriate Activities
+                    </h3>
+                    <div className="space-y-3">
+                      {selectedChildData.age ? (
+                        <>
+                          <div className="bg-white rounded p-3 shadow-sm">
+                            <div className="flex items-start">
+                              <Activity className="w-4 h-4 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
+                              <div>
+                                <h4 className="text-sm font-medium font-roboto">
+                                  Balanced Engagement
+                                </h4>
+                                <p className="text-xs text-gray-600 font-roboto mt-1">
+                                  Each parent should aim for 15-30 minutes of focused one-on-one time with {selectedChildData.name} daily.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-white rounded p-3 shadow-sm">
+                            <div className="flex items-start">
+                              <Calendar className="w-4 h-4 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
+                              <div>
+                                <h4 className="text-sm font-medium font-roboto">
+                                  Consistency Matters
+                                </h4>
+                                <p className="text-xs text-gray-600 font-roboto mt-1">
+                                  Create a shared calendar for {selectedChildData.name}'s activities, ensuring both parents participate equally.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-white rounded p-3 shadow-sm">
+                            <div className="flex items-start">
+                              <Users className="w-4 h-4 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
+                              <div>
+                                <h4 className="text-sm font-medium font-roboto">
+                                  Gender-Neutral Modeling
+                                </h4>
+                                <p className="text-xs text-gray-600 font-roboto mt-1">
+                                  Alternate who handles different types of care to show {selectedChildData.name} that roles aren't gender-specific.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-sm text-gray-600 font-roboto">
+                          Add {selectedChildData.name}'s age to see appropriate activities
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-8 text-center bg-gray-50 rounded-lg">
+                <p className="text-gray-600 font-roboto">
+                  Select a child to view development insights
+                </p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+  
+  // 4. Family Transformation Timeline Component
+  const FamilyTransformationTimeline = () => {
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-5 mb-6">
+        <div className="mb-4">
+          <h2 className="text-xl font-medium flex items-center font-roboto">
+            <TrendingUp className="w-5 h-5 text-blue-600 mr-2" />
+            Family Transformation Timeline
+          </h2>
+          <p className="text-gray-600 text-sm font-roboto mt-1">
+            Track your progress from the beginning of your balance journey
+          </p>
+        </div>
+        
+        {timelineData.length <= 1 ? (
+          <div className="p-8 text-center bg-gray-50 rounded-lg">
+            <p className="text-gray-600 font-roboto">
+              Complete more weekly cycles to build your transformation timeline
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Balance Trend Chart */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h3 className="text-md font-medium mb-3 font-roboto">Balance Progress</h3>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={timelineData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="label" />
+                    <YAxis yAxisId="left" orientation="left" domain={[0, 100]} />
+                    <YAxis yAxisId="right" orientation="right" domain={[0, 10]} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend />
+                    <Area 
+                      yAxisId="left"
+                      type="monotone" 
+                      dataKey="balance.mama" 
+                      name="Mama's Share" 
+                      fill={MAMA_COLOR} 
+                      stroke={MAMA_COLOR}
+                      fillOpacity={0.3}
+                    />
+                    <Area 
+                      yAxisId="left"
+                      type="monotone" 
+                      dataKey="balance.papa" 
+                      name="Papa's Share" 
+                      fill={PAPA_COLOR} 
+                      stroke={PAPA_COLOR}
+                      fillOpacity={0.3}
+                    />
+                    <Line 
+                      yAxisId="right"
+                      type="monotone" 
+                      dataKey="completedTasks" 
+                      name="Completed Tasks" 
+                      stroke={ACCENT_COLOR} 
+                    />
+                    {/* Add a reference line for 50/50 balance */}
+                    <Line
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey={() => 50}
+                      name="Perfect Balance"
+                      stroke="#888"
+                      strokeDasharray="3 3"
+                      activeDot={false}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="text-xs text-center text-gray-600 mt-2 font-roboto">
+                Track your journey from initial survey through each completed week
+              </p>
+            </div>
+            
+            {/* Key Journey Milestones */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h3 className="text-md font-medium mb-3 font-roboto">Key Journey Milestones</h3>
+              
+              <div className="relative">
+                {/* Timeline line */}
+                <div className="absolute left-4 top-0 bottom-0 w-px bg-gray-300"></div>
+                
+                <div className="space-y-4 pl-16 relative">
+                  {/* First milestone - Start of journey */}
+                  <div className="relative">
+                    <div className="absolute left-[-44px] top-0 w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                      <Calendar className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <h4 className="text-md font-medium font-roboto">Started Balance Journey</h4>
+                      <p className="text-sm text-gray-600 font-roboto">
+                        {timelineData[0]?.date || 'N/A'} - Initial survey completed
+                      </p>
+                      <div className="mt-1 flex items-center">
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-roboto">
+                          Initial Balance: Mama {timelineData[0]?.balance?.mama || 0}% / Papa {timelineData[0]?.balance?.papa || 0}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Filter for key events */}
+                  {timelineData
+                    .filter(point => point.keyEvent && point.weekNumber > 0)
+                    .map((point, index) => (
+                      <div key={index} className="relative">
+                        <div className="absolute left-[-44px] top-0 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                          <Star className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <h4 className="text-md font-medium font-roboto">{point.keyEvent}</h4>
+                          <p className="text-sm text-gray-600 font-roboto">
+                            {point.date} - Week {point.weekNumber}
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-roboto">
+                              Balance: Mama {point.balance?.mama || 0}% / Papa {point.balance?.papa || 0}%
+                            </span>
+                            {point.completedTasks > 0 && (
+                              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-roboto">
+                                {point.completedTasks} Tasks Completed
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  
+                  {/* Current point */}
+                  {timelineData.find(point => point.current) && (
+                    <div className="relative">
+                      <div className="absolute left-[-44px] top-0 w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center">
+                        <Target className="w-4 h-4 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-md font-medium font-roboto">Current Week</h4>
+                        <p className="text-sm text-gray-600 font-roboto">
+                          {timelineData.find(point => point.current)?.date || 'N/A'} - Week {currentWeek}
+                        </p>
+                        <div className="mt-1 flex items-center">
+                          <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-roboto">
+                            Keep going!
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* Progress Summary */}
+            {timelineData.length >= 2 && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <h3 className="text-md font-medium mb-2 text-blue-800 font-roboto">Balance Improvement</h3>
+                  <div className="flex items-center">
+                    <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mr-3 text-xl font-bold text-blue-600 font-roboto">
+                      {Math.abs(
+                        Math.abs(timelineData[0].balance.mama - 50) - 
+                        Math.abs(timelineData[timelineData.length - 1].balance.mama - 50)
+                      ).toFixed(0)}%
+                    </div>
+                    <div>
+                      <p className="text-sm text-blue-700 font-roboto">
+                        {Math.abs(timelineData[0].balance.mama - 50) > 
+                         Math.abs(timelineData[timelineData.length - 1].balance.mama - 50)
+                          ? 'Closer to equal balance'
+                          : 'Change in balance distribution'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-green-50 rounded-lg p-4">
+                  <h3 className="text-md font-medium mb-2 text-green-800 font-roboto">Tasks Completed</h3>
+                  <div className="flex items-center">
+                    <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mr-3 text-xl font-bold text-green-600 font-roboto">
+                      {timelineData.reduce((sum, point) => sum + (point.completedTasks || 0), 0)}
+                    </div>
+                    <div>
+                      <p className="text-sm text-green-700 font-roboto">
+                        Total tasks completed across all weeks
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-purple-50 rounded-lg p-4">
+                  <h3 className="text-md font-medium mb-2 text-purple-800 font-roboto">Journey Progress</h3>
+                  <div className="flex items-center">
+                    <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mr-3 text-xl font-bold text-purple-600 font-roboto">
+                      {Math.round((completedWeeks.length / 8) * 100)}%
+                    </div>
+                    <div>
+                      <p className="text-sm text-purple-700 font-roboto">
+                        {completedWeeks.length > 0
+                          ? `${completedWeeks.length} of 8 weeks completed`
+                          : 'Journey just started'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         )}
       </div>
-
-{/* Journey Insights Section */}
-<div className="bg-white rounded-lg shadow">
-  <div 
-    className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50"
-    onClick={() => toggleJourneySection('journeyInsights')}
-  >
-    <h3 className="text-lg font-semibold font-roboto">Journey Insights</h3>
-    {expandedJourneySections.journeyInsights ? (
-      <ChevronUp size={20} className="text-gray-500" />
-    ) : (
-      <ChevronDown size={20} className="text-gray-500" />
-    )}
-  </div>
+    );
+  };
   
-  {expandedJourneySections.journeyInsights && (
-    <div className="p-6 pt-0">
-      <p className="text-sm text-gray-600 mb-4 font-roboto">
-        Actionable insights based on your family's journey data
-      </p>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {impactInsights && impactInsights.length > 0 ? impactInsights.map((insight, index) => (
-          <div 
-            key={index} 
-            className={`p-4 rounded-lg border ${
-              insight.type === 'success' ? 'border-green-200 bg-green-50' :
-              insight.type === 'warning' || insight.type === 'challenge' ? 'border-amber-200 bg-amber-50' :
-              insight.type === 'insight' ? 'border-blue-200 bg-blue-50' :
-              'border-purple-200 bg-purple-50'
-            }`}
-          >
-            <div className="flex items-start">
-              <div className="mt-1 mr-3">
-                {insight.type === 'success' ? (
-                  <CheckCircle2 size={20} className="text-green-600" />
-                ) : insight.type === 'warning' ? (
-                  <AlertTriangle size={20} className="text-amber-600" />
-                ) : (
-                  <Lightbulb size={20} className="text-blue-600" />
-                )}
+  // 5. Balance Impact Hub Component
+  const BalanceImpactHub = () => {
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-5 mb-6">
+        <div className="mb-4">
+          <h2 className="text-xl font-medium flex items-center font-roboto">
+            <Activity className="w-5 h-5 text-green-600 mr-2" />
+            Balance Impact Hub
+          </h2>
+          <p className="text-gray-600 text-sm font-roboto mt-1">
+            See how improved balance translates to real-life benefits
+          </p>
+        </div>
+        
+        {!impactData ? (
+          <div className="p-8 text-center bg-gray-50 rounded-lg">
+            <p className="text-gray-600 font-roboto">
+              Complete more weekly cycles to unlock impact insights
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Impact Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Time Saved */}
+              <div className="bg-blue-50 rounded-lg p-5">
+                <h3 className="text-lg font-medium text-blue-800 font-roboto">Time Reclaimed</h3>
+                <div className="mt-3 flex items-center">
+                  <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center mr-3">
+                    <Clock className="w-8 h-8 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-3xl font-bold text-blue-600 font-roboto">{impactData.timeSaved}hr</p>
+                    <p className="text-sm text-blue-700 font-roboto">per week</p>
+                  </div>
+                </div>
+                <p className="mt-3 text-sm text-blue-600 font-roboto">
+                  Better balance means more time for what matters to you
+                </p>
               </div>
-              <div>
-                <h4 className="font-medium text-sm">{insight.title || insight.category}</h4>
-                <p className="text-sm mt-1">{insight.description || insight.message}</p>
+              
+              {/* Relationship Quality */}
+              <div className="bg-red-50 rounded-lg p-5">
+                <h3 className="text-lg font-medium text-red-800 font-roboto">Relationship Boost</h3>
+                <div className="mt-3 flex items-center">
+                  <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mr-3">
+                    <Heart className="w-8 h-8 text-red-600" />
+                  </div>
+                  <div>
+                    <div className="w-32 bg-red-200 rounded-full h-4 overflow-hidden">
+                      <div 
+                        className="bg-red-500 h-full" 
+                        style={{ width: `${impactData.relationshipBoost}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-sm text-red-700 mt-1 font-roboto">
+                      {impactData.relationshipBoost}% satisfaction
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 text-sm text-red-600 font-roboto">
+                  Equitable workload leads to stronger relationships
+                </p>
+              </div>
+              
+              {/* Stress Reduction */}
+              <div className="bg-green-50 rounded-lg p-5">
+                <h3 className="text-lg font-medium text-green-800 font-roboto">Stress Reduction</h3>
+                <div className="mt-3 flex items-center">
+                  <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mr-3">
+                    <Shield className="w-8 h-8 text-green-600" />
+                  </div>
+                  <div>
+                    <div className="w-32 bg-green-200 rounded-full h-4 overflow-hidden">
+                      <div 
+                        className="bg-green-500 h-full" 
+                        style={{ width: `${impactData.stressReduction}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-sm text-green-700 mt-1 font-roboto">
+                      {impactData.stressReduction}% decrease
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 text-sm text-green-600 font-roboto">
+                  Shared responsibilities mean less stress for everyone
+                </p>
               </div>
             </div>
+            
+            {/* Balance Experiments */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h3 className="text-md font-medium mb-3 font-roboto">Try These Balance Experiments</h3>
+              <div className="space-y-3">
+                {impactData.experiments && impactData.experiments.length > 0 ? (
+                  impactData.experiments.map((experiment, index) => (
+                    <div key={index} className={`bg-white rounded-lg p-4 shadow-sm border ${experiment.targeted ? 'border-yellow-300' : 'border-transparent'}`}>
+                      <div className="flex items-start">
+                        <div className={`w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center mr-3 ${
+                          experiment.difficulty === 'easy' ? 'bg-green-100' :
+                          experiment.difficulty === 'moderate' ? 'bg-blue-100' :
+                          'bg-purple-100'
+                        }`}>
+                          <Lightbulb className={`w-4 h-4 ${
+                            experiment.difficulty === 'easy' ? 'text-green-600' :
+                            experiment.difficulty === 'moderate' ? 'text-blue-600' :
+                            'text-purple-600'
+                          }`} />
+                        </div>
+                        <div>
+                          <h4 className="text-md font-medium font-roboto flex items-center">
+                            {experiment.title}
+                            {experiment.targeted && (
+                              <span className="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded text-xs font-roboto">
+                                Personalized
+                              </span>
+                            )}
+                          </h4>
+                          <p className="text-sm text-gray-600 mt-1 font-roboto">
+                            {experiment.description}
+                          </p>
+                          <div className="flex justify-between items-center mt-3">
+                            <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded font-roboto">
+                              {experiment.estimatedImpact}
+                            </span>
+                            <span className="text-xs text-gray-500 font-roboto">
+                              Difficulty: {experiment.difficulty}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-600 font-roboto">
+                    Complete more surveys to unlock personalized experiments
+                  </p>
+                )}
+              </div>
+            </div>
+            
+            {/* Child Wellbeing Indicators */}
+            {children.length > 0 && (
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h3 className="text-md font-medium mb-3 font-roboto">Child Wellbeing Impact</h3>
+                <div className="prose max-w-none">
+                  <p className="text-sm text-gray-600 font-roboto">
+                    Research shows that when parents share responsibilities more equally:
+                  </p>
+                  <ul className="mt-2 space-y-2">
+                    <li className="text-sm text-gray-600 font-roboto">
+                      Children develop more flexible gender role attitudes and expectations
+                    </li>
+                    <li className="text-sm text-gray-600 font-roboto">
+                      Both parents build stronger, more secure attachments with children
+                    </li>
+                    <li className="text-sm text-gray-600 font-roboto">
+                      Children experience more consistent parenting and lower household stress
+                    </li>
+                    <li className="text-sm text-gray-600 font-roboto">
+                      Children learn valuable life skills by observing collaborative problem-solving
+                    </li>
+                  </ul>
+                </div>
+                
+                {/* Impact Projection */}
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                  <h4 className="text-sm font-medium text-blue-800 font-roboto flex items-center">
+                    <Target className="w-4 h-4 mr-1 text-blue-600" />
+                    Long-Term Impact Projection
+                  </h4>
+                  <p className="text-sm text-blue-700 mt-1 font-roboto">
+                    Continuing on your current balance journey could lead to significant improvements in your 
+                    {children.length > 1 ? " children's" : " child's"} development of healthy relationship models,
+                    emotional intelligence, and future relationship success.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
-        )) : (
-          <div className="col-span-3 text-center p-6 bg-gray-50 rounded-lg">
-            <p className="text-gray-500">Complete more weekly check-ins to see journey insights.</p>
+        )}
+      </div>
+    );
+  };
+
+  // Main Return - Dashboard Layout
+  return (
+    <div className="space-y-4">
+      {/* Harmony Pulse Section */}
+      <div 
+        className="bg-white rounded-lg shadow border-l-4 border-black mb-6"
+        onClick={() => toggleSection('harmonyPulse')}
+      >
+        <div className="p-4 flex justify-between items-center cursor-pointer">
+          <h2 className="text-xl font-medium flex items-center font-roboto">
+            <Activity className="w-5 h-5 mr-2" />
+            Family Harmony Pulse
+          </h2>
+          {expandedSections.harmonyPulse ? (
+            <Minimize size={20} className="text-gray-500" />
+          ) : (
+            <Maximize size={20} className="text-gray-500" />
+          )}
+        </div>
+        
+        {expandedSections.harmonyPulse && (
+          <div className="px-4 pb-4">
+            {loading.harmonyPulse ? (
+              <div className="h-48 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <p className="text-gray-500 font-roboto">Loading harmony data...</p>
+                </div>
+              </div>
+            ) : (
+              <FamilyHarmonyPulse />
+            )}
           </div>
         )}
       </div>
       
-      {/* Trend chart */}
-      {journeyData && journeyData.length > 1 && (
-        <div className="mt-6">
-          <h4 className="font-medium mb-3">Balance Trends Over Time</h4>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={journeyData.map(cycle => {
-                // Get overall balance from cycle data
-                const balance = cycle.data && cycle.data.balance 
-                  ? cycle.data.balance
-                  : { mama: 50, papa: 50 };
-                
-                // Get category balance data
-                const categoryBalance = cycle.data && cycle.data.categoryBalance || {};
-                
-                return {
-                  name: cycle.cycleNumber === 0 ? "Initial" : `Cycle ${cycle.cycleNumber}`,
-                  cycleNumber: cycle.cycleNumber,
-                  mamaOverall: balance.mama || 50,
-                  papaOverall: balance.papa || 50,
-                  visibleHousehold: categoryBalance["Visible Household Tasks"]?.mamaPercent || 50,
-                  invisibleHousehold: categoryBalance["Invisible Household Tasks"]?.mamaPercent || 50,
-                  visibleParental: categoryBalance["Visible Parental Tasks"]?.mamaPercent || 50,
-                  invisibleParental: categoryBalance["Invisible Parental Tasks"]?.mamaPercent || 50,
-                };
-              })}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis domain={[0, 100]} />
-                <Tooltip />
-                <Legend />
-                <Line 
-                  name="Overall (Mama %)" 
-                  type="monotone" 
-                  dataKey="mamaOverall" 
-                  stroke="#8884d8" 
-                  activeDot={{ r: 8 }} 
-                />
-                <Line 
-                  name="Invisible Household" 
-                  type="monotone" 
-                  dataKey="invisibleHousehold" 
-                  stroke="#82ca9d" 
-                />
-                <Line 
-                  name="Invisible Parental" 
-                  type="monotone" 
-                  dataKey="invisibleParental" 
-                  stroke="#ff7300" 
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          <p className="text-xs text-gray-500 text-center mt-2">
-            This chart shows percentage of workload handled by Mama over time. Closer to 50% indicates better balance.
-          </p>
+      {/* Individual Member Journeys Section */}
+      <div 
+        className="bg-white rounded-lg shadow border-l-4 border-black mb-6"
+        onClick={() => toggleSection('memberJourneys')}
+      >
+        <div className="p-4 flex justify-between items-center cursor-pointer">
+          <h2 className="text-xl font-medium flex items-center font-roboto">
+            <Users className="w-5 h-5 mr-2" />
+            Individual Member Journeys
+          </h2>
+          {expandedSections.memberJourneys ? (
+            <Minimize size={20} className="text-gray-500" />
+          ) : (
+            <Maximize size={20} className="text-gray-500" />
+          )}
         </div>
-      )}
-    </div>
-  )}
-</div>
-
-{/* Family Meeting Notes Section */}
-<div className="bg-white rounded-lg shadow">
-  <div 
-    className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50"
-    onClick={() => toggleJourneySection('familyMeeting')}
-  >
-    <h3 className="text-lg font-semibold flex items-center font-roboto">
-      <MessageCircle size={18} className="mr-2 text-amber-600" />
-      Recent Family Meeting
-    </h3>
-    {expandedJourneySections.familyMeeting ? (
-      <ChevronUp size={20} className="text-gray-500" />
-    ) : (
-      <ChevronDown size={20} className="text-gray-500" />
-    )}
-  </div>
-  
-  {expandedJourneySections.familyMeeting && (
-    <div className="p-6 pt-0">
-      {completedWeeks && completedWeeks.length > 0 ? (() => {
-        // Get most recent cycle data
-        const lastCycleNumber = Math.max(...completedWeeks);
-        const lastCycleData = weekHistory[`week${lastCycleNumber}`];
         
-        if (lastCycleData?.meetingNotes) {
-          return (
-            <div className="border rounded-lg p-5 bg-white">
-              <h4 className="text-base font-medium mb-4 font-roboto">
-                Meeting Notes from Cycle {lastCycleNumber} 
-                <span className="text-sm font-normal text-gray-500 ml-2">
-                  {lastCycleData.completionDate ? `(${formatDate(lastCycleData.completionDate)})` : ''}
-                </span>
-              </h4>
-              
-              {/* What went well */}
-              {lastCycleData.meetingNotes.wentWell && (
-                <div className="mb-5">
-                  <div className="flex items-center mb-2">
-                    <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center mr-2 text-green-600">✓</div>
-                    <h5 className="font-medium text-green-800 font-roboto">What Went Well</h5>
-                  </div>
-                  <div className="bg-green-50 border border-green-200 rounded p-4 font-roboto ml-8">
-                    {lastCycleData.meetingNotes.wentWell}
+        {expandedSections.memberJourneys && (
+          <div className="px-4 pb-4">
+            {loading.memberJourneys ? (
+              <div className="h-48 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <p className="text-gray-500 font-roboto">Loading member data...</p>
+                </div>
+              </div>
+            ) : (
+              <IndividualMemberJourneys />
+            )}
+          </div>
+        )}
+      </div>
+      
+      {/* Child Development Observatory Section */}
+      {children.length > 0 && (
+        <div 
+          className="bg-white rounded-lg shadow border-l-4 border-black mb-6"
+          onClick={() => toggleSection('childDevelopment')}
+        >
+          <div className="p-4 flex justify-between items-center cursor-pointer">
+            <h2 className="text-xl font-medium flex items-center font-roboto">
+              <Brain className="w-5 h-5 mr-2" />
+              Child Development Observatory
+            </h2>
+            {expandedSections.childDevelopment ? (
+              <Minimize size={20} className="text-gray-500" />
+            ) : (
+              <Maximize size={20} className="text-gray-500" />
+            )}
+          </div>
+          
+          {expandedSections.childDevelopment && (
+            <div className="px-4 pb-4">
+              {loading.childDevelopment ? (
+                <div className="h-48 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                    <p className="text-gray-500 font-roboto">Loading child development data...</p>
                   </div>
                 </div>
-              )}
-              
-              {/* What could improve */}
-              {lastCycleData.meetingNotes.couldImprove && (
-                <div className="mb-5">
-                  <div className="flex items-center mb-2">
-                    <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center mr-2 text-amber-600">⚠</div>
-                    <h5 className="font-medium text-amber-800 font-roboto">What Could Improve</h5>
-                  </div>
-                  <div className="bg-amber-50 border border-amber-200 rounded p-4 font-roboto ml-8">
-                    {lastCycleData.meetingNotes.couldImprove}
-                  </div>
-                </div>
-              )}
-              
-              {/* Action items */}
-              {lastCycleData.meetingNotes.actionItems && (
-                <div className="mb-5">
-                  <div className="flex items-center mb-2">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center mr-2 text-blue-600">→</div>
-                    <h5 className="font-medium text-blue-800 font-roboto">Action Items</h5>
-                  </div>
-                  <div className="bg-blue-50 border border-blue-200 rounded p-4 font-roboto ml-8">
-                    {lastCycleData.meetingNotes.actionItems.split('\n').map((item, idx) => (
-                      item.trim() ? (
-                        <div key={idx} className="flex items-center mb-2">
-                          <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center mr-2 text-blue-600 border border-blue-300 text-xs">
-                            {idx + 1}
-                          </div>
-                          <span>{item}</span>
-                        </div>
-                      ) : null
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* Next cycle goals */}
-              {lastCycleData.meetingNotes.nextWeekGoals && (
-                <div className="mb-5">
-                  <div className="flex items-center mb-2">
-                    <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center mr-2 text-purple-600">🎯</div>
-                    <h5 className="font-medium text-purple-800 font-roboto">Next Cycle Goals</h5>
-                  </div>
-                  <div className="bg-purple-50 border border-purple-200 rounded p-4 font-roboto ml-8">
-                    {lastCycleData.meetingNotes.nextWeekGoals.split('\n').map((goal, idx) => (
-                      goal.trim() ? (
-                        <div key={idx} className="flex items-start mb-2">
-                          <Star size={16} className="text-purple-600 mr-2 mt-0.5 flex-shrink-0" />
-                          <span>{goal}</span>
-                        </div>
-                      ) : null
-                    ))}
-                  </div>
-                </div>
+              ) : (
+                <ChildDevelopmentObservatory />
               )}
             </div>
-          );
-        } else {
-          return (
-            <div className="text-center py-6 bg-gray-50 rounded-lg">
-              <p className="text-gray-500 font-roboto">No family meeting notes found for the most recent cycle.</p>
-            </div>
-          );
-        }
-      })() : (
-        <div className="text-center py-6 bg-gray-50 rounded-lg">
-          <p className="text-gray-500 font-roboto">Complete your first cycle to see family meeting notes.</p>
+          )}
         </div>
       )}
-    </div>
-  )}
-</div>
-
-
       
+      {/* Family Transformation Timeline Section */}
+      <div 
+        className="bg-white rounded-lg shadow border-l-4 border-black mb-6"
+        onClick={() => toggleSection('timeline')}
+      >
+        <div className="p-4 flex justify-between items-center cursor-pointer">
+          <h2 className="text-xl font-medium flex items-center font-roboto">
+            <TrendingUp className="w-5 h-5 mr-2" />
+            Family Transformation Timeline
+          </h2>
+          {expandedSections.timeline ? (
+            <Minimize size={20} className="text-gray-500" />
+          ) : (
+            <Maximize size={20} className="text-gray-500" />
+          )}
+        </div>
+        
+        {expandedSections.timeline && (
+          <div className="px-4 pb-4">
+            {loading.timeline ? (
+              <div className="h-48 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <p className="text-gray-500 font-roboto">Loading timeline data...</p>
+                </div>
+              </div>
+            ) : (
+              <FamilyTransformationTimeline />
+            )}
+          </div>
+        )}
+      </div>
+      
+      {/* Balance Impact Hub Section */}
+      <div 
+        className="bg-white rounded-lg shadow border-l-4 border-black mb-6"
+        onClick={() => toggleSection('impactHub')}
+      >
+        <div className="p-4 flex justify-between items-center cursor-pointer">
+          <h2 className="text-xl font-medium flex items-center font-roboto">
+            <Target className="w-5 h-5 mr-2" />
+            Balance Impact Hub
+          </h2>
+          {expandedSections.impactHub ? (
+            <Minimize size={20} className="text-gray-500" />
+          ) : (
+            <Maximize size={20} className="text-gray-500" />
+          )}
+        </div>
+        
+        {expandedSections.impactHub && (
+          <div className="px-4 pb-4">
+            {loading.impactHub ? (
+              <div className="h-48 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <p className="text-gray-500 font-roboto">Loading impact data...</p>
+                </div>
+              </div>
+            ) : (
+              <BalanceImpactHub />
+            )}
+          </div>
+        )}
+      </div>
+      
+      {/* Action Button - Link to Tasks */}
+      <div className="flex justify-center">
+        <button
+          onClick={() => window.location.href = '/tasks'}
+          className="bg-black text-white font-medium py-3 px-6 rounded-lg shadow-md hover:bg-gray-800 transition-colors flex items-center font-roboto"
+        >
+          <ArrowRight className="mr-2 h-5 w-5" />
+          View &amp; Complete Tasks
+        </button>
+      </div>
     </div>
   );
 };
