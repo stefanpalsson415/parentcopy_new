@@ -25,6 +25,7 @@ import UserAvatar from '../common/UserAvatar';
 
 
 
+
 const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -276,8 +277,16 @@ useEffect(() => {
 useEffect(() => {
   const handleOpenAllieChat = () => {
     console.log("Opening Allie Chat meeting from custom event");
-    setMeetingType('chat');
-    setShowFamilyMeeting(true);
+    
+    // First ensure we close any open meeting
+    setShowFamilyMeeting(false);
+    
+    // Wait a moment to ensure React has processed the state change
+    setTimeout(() => {
+      console.log("Now setting meeting type to chat and opening");
+      setMeetingType('chat');
+      setShowFamilyMeeting(true);
+    }, 100);
   };
   
   window.addEventListener('open-allie-chat-meeting', handleOpenAllieChat);
