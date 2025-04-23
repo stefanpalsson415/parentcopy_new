@@ -544,7 +544,7 @@ const shouldAdvanceStage = (message, currentStage) => {
   return false;
 };
 
-// Update the processMeetingStage function
+// Replace the processMeetingStage function with this improved version:
 const processMeetingStage = async (userMessage) => {
   // First message initiates meeting mode
   if (!isMeetingMode && isMeetingStartMessage(userMessage)) {
@@ -562,17 +562,23 @@ Let's start with what went well this week. What are some successes your family e
     // Update meeting notes
     updateMeetingNotes(userMessage);
     
-    // Update response count for current stage
+    // Check for help requests that need suggestions FIRST - before incrementing response count
+    // This is the key fix - checking for suggestions before doing anything else
+    if (needsSuggestions(userMessage)) {
+      console.log("User needs suggestions for stage:", meetingStage);
+      // Don't increment response count for help requests
+      // This ensures we stay on the same stage and provide proper guidance
+      
+      // Get appropriate suggestions for this stage
+      const suggestionResponse = await getStageSpecificSuggestions(meetingStage);
+      return suggestionResponse;
+    }
+    
+    // If not asking for help, update response count for current stage
     setResponseCount(prev => ({
       ...prev,
       [meetingStage]: (prev[meetingStage] || 0) + 1
     }));
-    
-    // Check for help requests that need suggestions
-    if (needsSuggestions(userMessage)) {
-      setShowSuggestions(true);
-      return await getStageSpecificSuggestions(meetingStage);
-    }
     
     // Determine if we should move to the next stage
     const shouldAdvance = shouldAdvanceStage(userMessage, meetingStage);
@@ -598,21 +604,57 @@ Let's start with what went well this week. What are some successes your family e
   return null;
 };
 
-// Helper function to get suggestions for the current stage
+// Also update the needsSuggestions function to be more comprehensive:
+const needsSuggestions = (message) => {
+  if (!message) return false;
+  
+  const lowerMsg = message.toLowerCase().trim();
+  
+  // Check for very short uncertain responses
+  if (lowerMsg === "not sure" || 
+      lowerMsg === "idk" || 
+      lowerMsg === "i don't know" ||
+      lowerMsg === "hmm" ||
+      lowerMsg === "um" ||
+      lowerMsg === "help" ||
+      lowerMsg === "i need help") {
+    return true;
+  }
+  
+  // Check for longer phrases indicating uncertainty
+  return lowerMsg.includes('not sure') || 
+         lowerMsg.includes('suggestions') || 
+         lowerMsg.includes('help me') ||
+         lowerMsg.includes('don\'t know') ||
+         lowerMsg.includes('what should') ||
+         lowerMsg.includes('could you suggest') ||
+         lowerMsg.includes('give me ideas') ||
+         lowerMsg.includes('struggling') ||
+         lowerMsg.includes('can\'t think') ||
+         lowerMsg.match(/what (?:are|would be) (?:some|good)/);
+};
+
+// Update the getStageSpecificSuggestions function to return more helpful responses
 const getStageSpecificSuggestions = async (stage) => {
-  // Create a suggestions prompt for Claude
+  // Create a suggestions prompt for Claude with more specificity
   const suggestionsPrompt = `You are Allie, giving specific, helpful suggestions for the ${getStageDisplayName(stage)} phase of a family meeting.
   
 Based on this family's data (tasks, survey responses, etc.), provide 3-4 VERY SPECIFIC suggestions that are tailored to their situation.
 Each suggestion should be concrete and actionable.
 
-Format your response with bullet points for readability. Be conversational, warm, and helpful.
+For the "${getStageDisplayName(stage)}" stage specifically:
+- Provide examples that directly relate to this specific topic
+- Use a warm, encouraging tone
+- Be conversational and supportive
+- Reference their family context when possible
+
+Format your response with bullet points for readability and be positive and encouraging.
 
 Return ONLY the suggestions without meta-commentary about the suggestions themselves.`;
 
   try {
     const suggestions = await ClaudeService.generateResponse(
-      [{ role: 'user', content: `The family needs help with ideas for ${getStageDisplayName(stage)}. Please provide suggestions.` }],
+      [{ role: 'user', content: `The family needs specific ideas for ${getStageDisplayName(stage)}. They replied "not sure" and need help. Please provide helpful, concrete suggestions.` }],
       { 
         system: suggestionsPrompt,
         familyId,
@@ -623,16 +665,18 @@ Return ONLY the suggestions without meta-commentary about the suggestions themse
       }
     );
     
-    return `I'd be happy to suggest some ideas for ${getStageDisplayName(stage)}:
+    return `I understand it can be hard to think of examples on the spot! Here are some ideas for ${getStageDisplayName(stage)}:
 
 ${suggestions}
 
-What do you think? Or do you have other ideas you'd like to discuss?`;
+Do any of these resonate with your experience this week? Or would you like more specific suggestions?`;
   } catch (error) {
     console.error("Error getting suggestions:", error);
     return getStageFallbackSuggestions(stage);
   }
 };
+
+
 
 // Fallback suggestions if API fails
 const getStageFallbackSuggestions = (stage) => {
@@ -713,17 +757,6 @@ const getNextStage = (currentStage) => {
   return stageOrder[currentIndex + 1];
 };
 
-// Helper to check if user needs suggestions
-const needsSuggestions = (message) => {
-  const lowerMsg = message.toLowerCase();
-  return lowerMsg.includes('not sure') || 
-         lowerMsg.includes('suggestions') || 
-         lowerMsg.includes('help') ||
-         lowerMsg.includes('don\'t know') ||
-         lowerMsg.includes('what should') ||
-         lowerMsg.includes('could you suggest') ||
-         lowerMsg.match(/what (?:are|would be) (?:some|good)/);
-};
 
 // Get transition prompts between stages
 const getStageTransitionPrompt = async (currentStage, nextStage) => {
