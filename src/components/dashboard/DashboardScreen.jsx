@@ -273,28 +273,7 @@ useEffect(() => {
 }, [familyId, currentWeek]);
   
 
-// Listen for the custom event to open Allie Chat meeting
-useEffect(() => {
-  const handleOpenAllieChat = () => {
-    console.log("Opening Allie Chat meeting from custom event");
-    
-    // First ensure we close any open meeting
-    setShowFamilyMeeting(false);
-    
-    // Wait a moment to ensure React has processed the state change
-    setTimeout(() => {
-      console.log("Now setting meeting type to chat and opening");
-      setMeetingType('chat');
-      setShowFamilyMeeting(true);
-    }, 100);
-  };
-  
-  window.addEventListener('open-allie-chat-meeting', handleOpenAllieChat);
-  
-  return () => {
-    window.removeEventListener('open-allie-chat-meeting', handleOpenAllieChat);
-  };
-}, []);
+
 
 
 
@@ -412,11 +391,7 @@ const selectMeetingType = (type) => {
   
   {/* Family Meeting Modal */}
 {showFamilyMeeting && (
-  meetingType === 'standard' ? (
-    <FamilyMeetingScreen onClose={handleCloseFamilyMeeting} />
-  ) : (
-    <AllieChatMeeting onClose={handleCloseFamilyMeeting} />
-  )
+  <FamilyMeetingScreen onClose={handleCloseFamilyMeeting} />
 )}
   
   {/* Meeting Type Selection Modal */}

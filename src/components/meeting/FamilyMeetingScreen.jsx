@@ -928,18 +928,23 @@ const getSuggestedActionItems = useCallback(() => {
       </button>
       
       <button
-        onClick={() => {
-          // Close this meeting and open the Allie Chat meeting instead
-          onClose();
-          // Need to send a message to the parent component to open Allie Chat meeting
-          window.dispatchEvent(new CustomEvent('open-allie-chat-meeting'));
-        }}
-        disabled={loadingAgenda}
-        className="w-full flex items-center justify-center bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-3 rounded-lg hover:from-purple-600 hover:to-blue-600 disabled:opacity-70"
-      >
-        <MessageSquare size={20} className="mr-2" />
-        Let Allie Guide Your Meeting
-      </button>
+  onClick={() => {
+    // Close this meeting modal
+    onClose();
+    
+    // Trigger the AllieChat widget to open and start a guided meeting
+    window.dispatchEvent(new CustomEvent('open-allie-chat', { 
+      detail: { 
+        message: "Hi Allie, can you guide me through our family meeting for Week " + currentWeek + "? We want to discuss our family balance, celebrate wins, and plan improvements."
+      }
+    }));
+  }}
+  disabled={loadingAgenda}
+  className="w-full flex items-center justify-center bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-3 rounded-lg hover:from-purple-600 hover:to-blue-600 disabled:opacity-70"
+>
+  <MessageSquare size={20} className="mr-2" />
+  Let Allie Guide Your Meeting
+</button>
     </div>
   </div>
 )}        

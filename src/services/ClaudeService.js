@@ -1119,6 +1119,7 @@ if (isLikelyTaskRequest) {
     return `I'm here to help with your family balance needs. I can answer questions about survey weights, task distribution, and relationship strategies. What would you like to know about?`;
   }
   
+  
   // Format system prompt with family context
   formatSystemPrompt(familyContext) {
     // Log the context data for debugging

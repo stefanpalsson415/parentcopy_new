@@ -21,6 +21,9 @@ import ChatPersistenceService from '../../services/ChatPersistenceService';
 import UnifiedParserService from '../../services/UnifiedParserService';
 import { addDoc, collection } from 'firebase/firestore';
 import { db } from '../../services/firebase';
+import FamilyBalanceChart from '../meeting/FamilyBalanceChart';
+
+
 
 const AllieChat = () => {
   // Utility function to format message dates into readable groups
@@ -75,6 +78,22 @@ const AllieChat = () => {
   const [dragCounter, setDragCounter] = useState(0);
   const childEventDetector = useRef(null);
   const childTrackingService = useRef(null);
+  const [responseCount, setResponseCount] = useState({});
+const [showSuggestions, setShowSuggestions] = useState(false);
+const [readyForNextStage, setReadyForNextStage] = useState(false);
+
+
+  const [isMeetingMode, setIsMeetingMode] = useState(false);
+const [meetingStage, setMeetingStage] = useState('intro');
+const [meetingNotes, setMeetingNotes] = useState({
+  wentWell: '',
+  couldImprove: '',
+  actionItems: '',
+  nextWeekGoals: '',
+  additionalNotes: '',
+  kidsInput: '',
+  balanceReflection: ''
+});
   
   // Enhanced state variables
   const [showInsights, setShowInsights] = useState(false);
@@ -317,6 +336,439 @@ useEffect(() => {
       .slice(-count);
   };
   
+
+// Detect if a message is starting a meeting
+const isMeetingStartMessage = (text) => {
+  const lowerText = text.toLowerCase();
+  return lowerText.includes('family meeting') || 
+         lowerText.includes('guide me through') || 
+         lowerText.includes('meeting guide') ||
+         lowerText.includes('meeting for week');
+};
+
+
+// Update meeting notes based on current stage
+const updateMeetingNotes = (input) => {
+  const stageToFieldMap = {
+    'wentWell': 'wentWell',
+    'couldImprove': 'couldImprove',
+    'actionItems': 'actionItems',
+    'kidsCorner': 'kidsInput',
+    'nextWeekGoals': 'nextWeekGoals',
+    'summary': 'additionalNotes'
+  };
+  
+  const field = stageToFieldMap[meetingStage];
+  if (field) {
+    setMeetingNotes(prev => {
+      // If this field already has content, append the new input
+      if (prev[field]) {
+        return {
+          ...prev,
+          [field]: `${prev[field]}\n${input}`
+        };
+      }
+      
+      // Otherwise, set the input as the content
+      return {
+        ...prev,
+        [field]: input
+      };
+    });
+  }
+};
+
+// Generate meeting summary for review
+const generateMeetingSummary = () => {
+  return `
+## What Went Well
+${meetingNotes.wentWell || "No notes recorded."}
+
+## What Could Improve
+${meetingNotes.couldImprove || "No notes recorded."}
+
+## Action Items
+${meetingNotes.actionItems || "No action items recorded."}
+
+## Kids' Corner
+${meetingNotes.kidsInput || "No kids' input recorded."}
+
+## Next Week's Goals
+${meetingNotes.nextWeekGoals || "No goals recorded."}
+`;
+};
+
+// Save meeting notes to database
+const saveMeetingNotes = async () => {
+  try {
+    await DatabaseService.saveFamilyMeetingNotes(familyId, currentWeek, meetingNotes);
+    console.log("Family meeting notes saved successfully");
+  } catch (error) {
+    console.error("Error saving family meeting notes:", error);
+  }
+};
+
+
+// Add this function to get a personalized meeting response from Claude
+const getMeetingResponse = async (userMessage, stage) => {
+  try {
+    // Create a detailed prompt that includes family context and current meeting stage
+    const familyContext = {
+      familyId,
+      familyName,
+      familyMembers,
+      currentWeek,
+      surveyResponses,
+      tasks: taskRecommendations
+    };
+
+    // Create a specialized prompt based on meeting stage
+    let systemPrompt = `You are Allie, guiding the ${familyName || 'family'} through their Week ${currentWeek} family meeting.
+
+IMPORTANT CONTEXT:
+- Current meeting stage: ${stage}
+- Family members: ${JSON.stringify(familyMembers.map(m => ({ name: m.name, role: m.role })))}
+- Current tasks: ${JSON.stringify(taskRecommendations?.slice(0, 5))}
+
+MEETING GOAL:
+You are facilitating a weekly family meeting to help distribute household responsibilities more equitably. 
+Give thoughtful, specific responses that reference their actual family data.
+
+GUIDELINES:
+1. BE CONVERSATIONAL and WARM - this is a family discussion
+2. OFFER CONCRETE EXAMPLES specific to their family
+3. IF THEY ASK FOR SUGGESTIONS, provide 3-4 specific ideas with explanations
+4. REMEMBER details they've mentioned earlier in the meeting
+5. Make the conversation feel NATURAL and PERSONAL, not scripted
+6. IF THEY SEEM UNCERTAIN, provide helpful prompts to get them thinking`;
+
+    // Add stage-specific instructions
+    switch(stage) {
+      case 'wentWell':
+        systemPrompt += `\n\nFor the "What Went Well" stage:
+- Ask for specific successes in workload sharing
+- Acknowledge specific tasks they completed from their task list
+- If they ask for suggestions, mention things like: "Did you complete the meal planning task together?" or "Did you notice more balance in morning routines?"
+- Validate small wins - even tiny improvements matter`;
+        break;
+      case 'couldImprove':
+        systemPrompt += `\n\nFor the "What Could Improve" stage:
+- Encourage honest reflection about challenges
+- If they ask for suggestions, mention specific categories with imbalance
+- Ask thoughtful follow-up questions about challenges mentioned
+- Keep the tone constructive, not critical`;
+        break;
+      case 'actionItems':
+        systemPrompt += `\n\nFor the "Action Items" stage:
+- If they ask for suggestions, provide 3-4 SPECIFIC action items tailored to their tasks and survey responses
+- Each suggestion should be concrete and actionable
+- Link suggestions to challenges they mentioned earlier
+- Make sure suggestions are realistic for the coming week`;
+        break;
+      // Add other cases for remaining stages
+    }
+
+    // Get personalized response from Claude
+    const response = await ClaudeService.generateResponse(
+      [
+        { role: 'user', content: `Previous meeting notes so far:\n${JSON.stringify(meetingNotes)}\n\nUser message: ${userMessage}` }
+      ],
+      { 
+        system: systemPrompt,
+        familyId,
+        currentWeek,
+        taskRecommendations,
+        familyMembers,
+        surveyResponses
+      }
+    );
+    
+    return response;
+  } catch (error) {
+    console.error("Error getting meeting response from Claude:", error);
+    // Fallback response if API fails
+    return `I'm having trouble processing that. Let's continue with our discussion about ${getStageDisplayName(stage)}. What are your thoughts?`;
+  }
+};
+
+
+// Helper function to determine if we should move to next stage
+const shouldAdvanceStage = (message, currentStage) => {
+  const lowerMsg = message.toLowerCase();
+  
+  // If user explicitly asks to move on
+  if (lowerMsg.includes('next') || 
+      lowerMsg.includes('move on') || 
+      lowerMsg.includes('continue') ||
+      lowerMsg.includes('let\'s go') ||
+      lowerMsg.match(/next\s+(?:step|stage|question|topic)/)) {
+    return true;
+  }
+  
+  // If they've responded enough times to this stage
+  const currentCount = responseCount[currentStage] || 0;
+  if (currentCount >= 2) {
+    // For important stages like action items, require more discussion
+    if (currentStage === 'actionItems' && currentCount < 3) {
+      return false;
+    }
+    return true;
+  }
+  
+  // If they ask for help/suggestions but have already given a response
+  if ((lowerMsg.includes('not sure') || 
+       lowerMsg.includes('suggestions') || 
+       lowerMsg.includes('help') ||
+       lowerMsg.includes('don\'t know') ||
+       lowerMsg.includes('what should')) && 
+      currentCount > 0) {
+    setShowSuggestions(true);
+    return false;
+  }
+  
+  // Default to false - don't advance yet
+  return false;
+};
+
+// Update the processMeetingStage function
+const processMeetingStage = async (userMessage) => {
+  // First message initiates meeting mode
+  if (!isMeetingMode && isMeetingStartMessage(userMessage)) {
+    setIsMeetingMode(true);
+    setMeetingStage('intro');
+    
+    // Return introduction message
+    return `Welcome to your Week ${currentWeek} Family Meeting! I'll guide you through a structured discussion to help your family celebrate wins, address challenges, and plan improvements for better balance.
+
+Let's start with what went well this week. What are some successes your family experienced with workload sharing or task completion?`;
+  }
+  
+  // If already in meeting mode, process the current stage
+  if (isMeetingMode) {
+    // Update meeting notes
+    updateMeetingNotes(userMessage);
+    
+    // Update response count for current stage
+    setResponseCount(prev => ({
+      ...prev,
+      [meetingStage]: (prev[meetingStage] || 0) + 1
+    }));
+    
+    // Check for help requests that need suggestions
+    if (needsSuggestions(userMessage)) {
+      setShowSuggestions(true);
+      return await getStageSpecificSuggestions(meetingStage);
+    }
+    
+    // Determine if we should move to the next stage
+    const shouldAdvance = shouldAdvanceStage(userMessage, meetingStage);
+    
+    // Get appropriate response based on stage and advancement
+    let response;
+    
+    if (shouldAdvance) {
+      // Move to next stage
+      const nextStage = getNextStage(meetingStage);
+      setMeetingStage(nextStage);
+      setShowSuggestions(false);
+      response = await getStageTransitionPrompt(meetingStage, nextStage);
+    } else {
+      // Stay on current stage
+      response = await getMeetingResponse(userMessage, meetingStage);
+    }
+    
+    return response;
+  }
+  
+  // Not in meeting mode or not a meeting start message
+  return null;
+};
+
+// Helper function to get suggestions for the current stage
+const getStageSpecificSuggestions = async (stage) => {
+  // Create a suggestions prompt for Claude
+  const suggestionsPrompt = `You are Allie, giving specific, helpful suggestions for the ${getStageDisplayName(stage)} phase of a family meeting.
+  
+Based on this family's data (tasks, survey responses, etc.), provide 3-4 VERY SPECIFIC suggestions that are tailored to their situation.
+Each suggestion should be concrete and actionable.
+
+Format your response with bullet points for readability. Be conversational, warm, and helpful.
+
+Return ONLY the suggestions without meta-commentary about the suggestions themselves.`;
+
+  try {
+    const suggestions = await ClaudeService.generateResponse(
+      [{ role: 'user', content: `The family needs help with ideas for ${getStageDisplayName(stage)}. Please provide suggestions.` }],
+      { 
+        system: suggestionsPrompt,
+        familyId,
+        currentWeek,
+        taskRecommendations,
+        familyMembers,
+        surveyResponses
+      }
+    );
+    
+    return `I'd be happy to suggest some ideas for ${getStageDisplayName(stage)}:
+
+${suggestions}
+
+What do you think? Or do you have other ideas you'd like to discuss?`;
+  } catch (error) {
+    console.error("Error getting suggestions:", error);
+    return getStageFallbackSuggestions(stage);
+  }
+};
+
+// Fallback suggestions if API fails
+const getStageFallbackSuggestions = (stage) => {
+  const suggestions = {
+    wentWell: [
+      "• Did you complete any tasks together as a family?",
+      "• Was there a moment when workload felt more balanced?",
+      "• Did anyone step up to help with something unexpected?",
+      "• Has communication about responsibilities improved?"
+    ],
+    couldImprove: [
+      "• Are there recurring tasks that tend to fall to one person?",
+      "• Are there 'invisible' tasks that aren't being acknowledged?",
+      "• Is the mental load of planning and organizing shared?",
+      "• Are there times when responsibilities feel particularly imbalanced?"
+    ],
+    actionItems: [
+      "• Could one parent take over a task that the other usually handles?",
+      "• Could you create a visual chart of responsibilities?",
+      "• Could you schedule a mid-week check-in to adjust as needed?",
+      "• Could you identify one 'invisible' task to explicitly assign?"
+    ],
+    kidsCorner: [
+      "• What do the kids notice about how chores are divided?",
+      "• Do they have suggestions for how to make things more fair?",
+      "• Would they like to take on any new responsibilities?",
+      "• What family tasks do they enjoy doing together?"
+    ],
+    nextWeekGoals: [
+      "• What's one area where you want to see improvement next week?",
+      "• Is there a specific balance percentage you're aiming for?",
+      "• Are there any events next week that will require special planning?",
+      "• What's one self-care activity each person will prioritize?"
+    ]
+  };
+  
+  return `I'd be happy to suggest some ideas for ${getStageDisplayName(stage)}:
+
+${suggestions[stage]?.join('\n') || "Let me know what you're thinking, and we can build on your ideas."}
+
+What do you think? Or do you have other ideas you'd like to discuss?`;
+};
+
+// Helper function to get stage display name
+const getStageDisplayName = (stage) => {
+  const stageNames = {
+    intro: "Introduction",
+    wentWell: "What Went Well",
+    couldImprove: "What Could Improve",
+    actionItems: "Action Items",
+    kidsCorner: "Kids' Corner",
+    nextWeekGoals: "Next Week's Goals",
+    summary: "Meeting Summary",
+    completed: "Completion"
+  };
+  
+  return stageNames[stage] || stage;
+};
+
+// Helper function to get next stage
+const getNextStage = (currentStage) => {
+  const stageOrder = [
+    'intro',
+    'wentWell',
+    'couldImprove',
+    'actionItems',
+    'kidsCorner',
+    'nextWeekGoals',
+    'summary',
+    'completed'
+  ];
+  
+  const currentIndex = stageOrder.indexOf(currentStage);
+  if (currentIndex === -1 || currentIndex === stageOrder.length - 1) {
+    return 'completed';
+  }
+  
+  return stageOrder[currentIndex + 1];
+};
+
+// Helper to check if user needs suggestions
+const needsSuggestions = (message) => {
+  const lowerMsg = message.toLowerCase();
+  return lowerMsg.includes('not sure') || 
+         lowerMsg.includes('suggestions') || 
+         lowerMsg.includes('help') ||
+         lowerMsg.includes('don\'t know') ||
+         lowerMsg.includes('what should') ||
+         lowerMsg.includes('could you suggest') ||
+         lowerMsg.match(/what (?:are|would be) (?:some|good)/);
+};
+
+// Get transition prompts between stages
+const getStageTransitionPrompt = async (currentStage, nextStage) => {
+  // Create appropriate transition message
+  const transitions = {
+    'wentWell-couldImprove': `Thank you for sharing what went well! It's important to celebrate these wins.
+
+Now, let's talk about what could improve. What challenges did your family face with workload sharing this week?`,
+    'couldImprove-actionItems': `I appreciate your honesty about the challenges. Identifying areas for improvement is the first step to making positive changes.
+
+Let's move on to action items. What specific changes would your family like to commit to for next week?`,
+    'actionItems-kidsCorner': `Those are great action items! I'll make sure to save these for your next week's plan.
+
+Now let's hear from the kids. What did the children observe about family responsibilities this week?`,
+    'kidsCorner-nextWeekGoals': `Thank you for including the kids' perspectives! This helps everyone feel valued and heard.
+
+Finally, let's set some goals for next week. What are your family's top priorities for the coming week?`,
+    'nextWeekGoals-summary': async () => {
+      // Generate meeting summary
+      const summary = generateMeetingSummary();
+      return `Great goals! I've prepared a summary of our meeting for your review:
+
+${summary}
+
+Is there anything you'd like to add or change before we complete the meeting?`;
+    },
+    'summary-completed': async () => {
+      // Save meeting notes
+      await saveMeetingNotes();
+      return `Thank you for a productive family meeting! I've saved all your notes and will use them to help track your progress.
+
+You can now complete this week's cycle with the button in the Task tab, or discuss anything else that's on your mind.`;
+    }
+  };
+  
+  const key = `${currentStage}-${nextStage}`;
+  if (transitions[key]) {
+    return typeof transitions[key] === 'function' ? await transitions[key]() : transitions[key];
+  }
+  
+  // Default transition if specific one not found
+  return `Let's move on to talk about ${getStageDisplayName(nextStage)}. ${getStageInitialPrompt(nextStage)}`;
+};
+
+// Initial prompts for each stage
+const getStageInitialPrompt = (stage) => {
+  const prompts = {
+    wentWell: "What are some successes your family experienced with workload sharing or task completion this week?",
+    couldImprove: "What challenges did your family face with workload sharing this week?",
+    actionItems: "What specific changes would your family like to commit to for next week?",
+    kidsCorner: "What did the children observe about family responsibilities this week?",
+    nextWeekGoals: "What are your family's top priorities for the coming week?"
+  };
+  
+  return prompts[stage] || "What are your thoughts on this?";
+};
+
+
+
 const handleSend = useCallback(async () => {
   if (input.trim() && canUseChat && selectedUser && familyId) {
     try {
@@ -353,6 +805,66 @@ const handleSend = useCallback(async () => {
         setImagePreview(null);
       }
       
+      // First check if this is a meeting-related message
+      const meetingResponse = processMeetingStage(currentMessageText);
+      
+      // Modify the meeting response part in handleSend
+if (meetingResponse) {
+  // This is a meeting-related message
+  // Save user message to database
+  const savedMessage = await ChatPersistenceService.saveMessage(userMessage);
+  
+  if (!savedMessage.success) {
+    console.error("Failed to save message:", savedMessage.error);
+    setMessages(prev => [...prev, {
+      familyId,
+      sender: 'allie',
+      userName: 'Allie',
+      text: "I couldn't save your message. Please try again in a moment.",
+      timestamp: new Date().toISOString(),
+      error: true
+    }]);
+    setLoading(false);
+    return;
+  }
+  
+  // Show typing indicator
+  setMessages(prev => [...prev, {
+    familyId,
+    sender: 'allie',
+    userName: 'Allie',
+    isTyping: true,
+    timestamp: new Date().toISOString()
+  }]);
+  
+  // Get Allie's response - either from cache or API
+  let allieResponseText;
+  if (typeof meetingResponse === 'string') {
+    allieResponseText = meetingResponse;
+  } else {
+    // It's a promise, await it
+    allieResponseText = await meetingResponse;
+  }
+  
+  // Create Allie's response message
+  const allieMessage = {
+    familyId,
+    sender: 'allie',
+    userName: 'Allie',
+    text: allieResponseText,
+    timestamp: new Date().toISOString()
+  };
+  
+  // Save AI message to database
+  const savedAIMessage = await ChatPersistenceService.saveMessage(allieMessage);
+  
+  // Remove typing indicator and add actual response
+  setMessages(prev => prev.filter(msg => !msg.isTyping).concat(allieMessage));
+  setLoading(false);
+  return;
+}
+      
+      // If not a meeting message, proceed with normal flow
       // Save message to database first
       const savedMessage = await ChatPersistenceService.saveMessage(userMessage);
       
@@ -559,6 +1071,29 @@ useEffect(() => {
     window.removeEventListener('open-allie-chat', handleOpenChatEvent);
   };
 }, [isOpen, handleSend]); // Dependencies
+
+// Add a second useEffect specifically for meeting guidance
+useEffect(() => {
+  // Check if this is specifically for a family meeting (check URL parameters or path)
+  const isMeetingPage = location.pathname.includes('/tasks') || 
+                        location.search.includes('meeting');
+
+  if (isOpen && isMeetingPage && !initialMessageSent) {
+    // Small delay to ensure the chat is fully rendered
+    const timer = setTimeout(() => {
+      const meetingPrompt = `Guide me through a family meeting for Week ${currentWeek}`;
+      setInput(meetingPrompt);
+      
+      // Add another small delay to ensure input is set before sending
+      setTimeout(() => {
+        handleSend();
+        setInitialMessageSent(true);
+      }, 300);
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }
+}, [isOpen, initialMessageSent, location, currentWeek, handleSend]);
 
 // Also add this new useEffect to ensure scrolling happens after the chat opens
 useEffect(() => {
