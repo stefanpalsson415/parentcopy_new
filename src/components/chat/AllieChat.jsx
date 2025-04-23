@@ -22,6 +22,8 @@ import UnifiedParserService from '../../services/UnifiedParserService';
 import { addDoc, collection } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import FamilyBalanceChart from '../meeting/FamilyBalanceChart';
+import ClaudeService from '../../services/ClaudeService';
+
 
 
 
@@ -60,7 +62,19 @@ const AllieChat = () => {
     </div>
   );
   
-  const { familyId, selectedUser, familyMembers, updateMemberProfile, familyName, currentWeek, completedWeeks } = useFamily();
+  const { 
+    familyId, 
+    selectedUser, 
+    familyMembers, 
+    updateMemberProfile, 
+    familyName, 
+    currentWeek, 
+    completedWeeks,
+    surveyResponses,         // Add this
+    taskRecommendations,     // Add this
+    weekHistory 
+  } = useFamily();
+  
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
