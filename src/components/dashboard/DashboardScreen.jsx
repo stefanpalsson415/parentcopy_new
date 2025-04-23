@@ -271,6 +271,24 @@ useEffect(() => {
   loadAIInsights();
 }, [familyId, currentWeek]);
   
+
+// Listen for the custom event to open Allie Chat meeting
+useEffect(() => {
+  const handleOpenAllieChat = () => {
+    console.log("Opening Allie Chat meeting from custom event");
+    setMeetingType('chat');
+    setShowFamilyMeeting(true);
+  };
+  
+  window.addEventListener('open-allie-chat-meeting', handleOpenAllieChat);
+  
+  return () => {
+    window.removeEventListener('open-allie-chat-meeting', handleOpenAllieChat);
+  };
+}, []);
+
+
+
   // Redirect if no user is selected after loading attempt completes
   // Redirect if no user is selected or initial survey incomplete
   useEffect(() => {
@@ -311,20 +329,9 @@ useEffect(() => {
   
   const handleOpenFamilyMeeting = () => {
     console.log("Opening family meeting");
-    // Open a simple prompt instead of a fancy modal
-    const meetingChoice = window.confirm(
-      "Would you like to use Allie Chat to guide your meeting? Click OK for Chat or Cancel for Standard meeting."
-    );
-    
-    if (meetingChoice) {
-      console.log("Selected Allie Chat meeting");
-      setMeetingType('chat');
-    } else {
-      console.log("Selected standard meeting");
-      setMeetingType('standard');
-    }
-    
-    // Open the selected meeting type
+    // Always start with the standard meeting's intro screen
+    // User will choose between standard and chat there
+    setMeetingType('standard');
     setShowFamilyMeeting(true);
   };
 

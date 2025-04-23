@@ -913,18 +913,34 @@ const getSuggestedActionItems = useCallback(() => {
               </>
             )}
             
-            {/* Navigation Buttons */}
-            <div className="flex justify-end pt-6">
-              <button
-                onClick={goToNextScreen}
-                disabled={loadingAgenda}
-                className="flex items-center bg-black text-white px-6 py-3 rounded hover:bg-gray-800 disabled:bg-gray-400"
-              >
-                Start Meeting
-                <ChevronRight size={18} className="ml-1" />
-              </button>
-            </div>
-          </div>
+            {/* Navigation Buttons with Meeting Type Selection */}
+<div className="flex flex-col pt-6 space-y-4">
+  <h3 className="text-lg font-medium text-center mb-2">How would you like to run this meeting?</h3>
+  
+  <button
+    onClick={goToNextScreen}
+    disabled={loadingAgenda}
+    className="w-full flex items-center justify-center bg-black text-white px-6 py-3 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
+  >
+    <Users size={20} className="mr-2" />
+    Start Structured Meeting
+    <ChevronRight size={18} className="ml-2" />
+  </button>
+  
+  <button
+    onClick={() => {
+      // Close this meeting and open the Allie Chat meeting instead
+      onClose();
+      // Need to send a message to the parent component to open Allie Chat meeting
+      window.dispatchEvent(new CustomEvent('open-allie-chat-meeting'));
+    }}
+    disabled={loadingAgenda}
+    className="w-full flex items-center justify-center bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-3 rounded-lg hover:from-purple-600 hover:to-blue-600 disabled:opacity-70"
+  >
+    <MessageSquare size={20} className="mr-2" />
+    Let Allie Guide Your Meeting
+  </button>
+</div>
         )}
         
         {currentScreen === 'meeting' && (
