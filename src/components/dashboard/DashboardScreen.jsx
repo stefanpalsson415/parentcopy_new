@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Filter, Settings, Users, Heart, Info, Calendar, Bell } from 'lucide-react';
+import { LogOut, Filter, Settings, Users, Heart, Info, Calendar, Bell, MessageSquare } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import DashboardTab from './tabs/DashboardTab';
 import TasksTab from './tabs/TasksTab';
@@ -41,7 +41,8 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   } = useFamily();
   
   const { loadFamilyData, currentUser } = useAuth();
-  
+  const [showMeetingTypeModal, setShowMeetingTypeModal] = useState(false);
+
 
   const [aiInsights, setAiInsights] = useState([]);
   const [activeTab, setActiveTab] = useState('tasks');
@@ -308,11 +309,19 @@ useEffect(() => {
     setShowSettings(!showSettings);
   };
   
-  // Handle Family Meeting open/close
-  const handleOpenFamilyMeeting = () => {
-    console.log("Opening family meeting dialog");
-    setShowFamilyMeeting(true);
-  };
+  // Update handleOpenFamilyMeeting to show the selection modal instead
+const handleOpenFamilyMeeting = () => {
+  console.log("Opening meeting type selection");
+  setShowMeetingTypeModal(true);
+};
+
+// Add this function to handle meeting type selection
+const selectMeetingType = (type) => {
+  console.log(`Selected meeting type: ${type}`);
+  setMeetingType(type);
+  setShowMeetingTypeModal(false);
+  setShowFamilyMeeting(true);
+};
   
   const handleCloseFamilyMeeting = () => {
     console.log("Closing family meeting dialog");
@@ -380,24 +389,50 @@ useEffect(() => {
     )
   )}
   
-  // Add a meeting selector UI
-  <div className="mt-4">
-    <h3 className="font-medium mb-2">Family Meeting Options</h3>
-    <div className="flex space-x-4">
+  {/* Meeting Type Selection Modal */}
+{showMeetingTypeModal && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div className="bg-white rounded-lg max-w-md w-full p-6">
+      <h3 className="text-xl font-bold mb-4">Select Meeting Type</h3>
+      <p className="text-gray-600 mb-6">How would you like to run your family meeting?</p>
+      
+      <div className="grid grid-cols-1 gap-4">
+        <button
+          onClick={() => selectMeetingType('standard')}
+          className="flex items-center p-4 border rounded-lg hover:bg-gray-50"
+        >
+          <div className="p-3 bg-blue-100 rounded-full mr-4">
+            <Users size={24} className="text-blue-600" />
+          </div>
+          <div className="text-left">
+            <h4 className="font-medium mb-1">Structured Meeting</h4>
+            <p className="text-sm text-gray-500">Guided format with steps for discussion</p>
+          </div>
+        </button>
+        
+        <button
+          onClick={() => selectMeetingType('chat')}
+          className="flex items-center p-4 border rounded-lg hover:bg-gray-50"
+        >
+          <div className="p-3 bg-purple-100 rounded-full mr-4">
+            <MessageSquare size={24} className="text-purple-600" />
+          </div>
+          <div className="text-left">
+            <h4 className="font-medium mb-1">Allie Chat Meeting</h4>
+            <p className="text-sm text-gray-500">Let Allie guide your meeting conversation-style</p>
+          </div>
+        </button>
+      </div>
+      
       <button
-        onClick={() => openFamilyMeeting('standard')}
-        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+        onClick={() => setShowMeetingTypeModal(false)}
+        className="mt-6 w-full px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
       >
-        Start Structured Meeting
-      </button>
-      <button
-        onClick={() => openFamilyMeeting('chat')}
-        className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600"
-      >
-        Chat with Allie
+        Cancel
       </button>
     </div>
   </div>
+)}
 
 
 
