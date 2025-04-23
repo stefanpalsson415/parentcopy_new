@@ -310,8 +310,22 @@ useEffect(() => {
   };
   
   const handleOpenFamilyMeeting = () => {
-    console.log("Opening meeting type selection modal");
-    setShowMeetingTypeModal(true);
+    console.log("Opening family meeting");
+    // Open a simple prompt instead of a fancy modal
+    const meetingChoice = window.confirm(
+      "Would you like to use Allie Chat to guide your meeting? Click OK for Chat or Cancel for Standard meeting."
+    );
+    
+    if (meetingChoice) {
+      console.log("Selected Allie Chat meeting");
+      setMeetingType('chat');
+    } else {
+      console.log("Selected standard meeting");
+      setMeetingType('standard');
+    }
+    
+    // Open the selected meeting type
+    setShowFamilyMeeting(true);
   };
 
 
