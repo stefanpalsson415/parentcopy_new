@@ -1498,7 +1498,7 @@ const DashboardTab = () => {
       familyMembers.find(m => m.id === selectedMember) : null;
     
     // Get member insights
-    const insights = selectedMember && memberInsights[selectedMember] 
+    const insights = selectedMember && memberInsights[selectedMember]  
       ? memberInsights[selectedMember] 
       : null;
     
@@ -1614,7 +1614,7 @@ const DashboardTab = () => {
                       </p>
                     </div>
                     
-                    {/* Child-specific activities */}
+                    {/* Child-specific activities - Enhanced to show actual activities */}
                     {childTrackingData[selectedMemberData.id] && (
                       <div className="bg-green-50 rounded p-3">
                         <h4 className="text-sm font-medium font-roboto text-green-700">
@@ -1623,17 +1623,43 @@ const DashboardTab = () => {
                         <ul className="text-xs text-green-600 font-roboto mt-1 space-y-1">
                           {childTrackingData[selectedMemberData.id].activities?.length > 0 ? (
                             childTrackingData[selectedMemberData.id].activities.slice(0, 3).map((activity, index) => (
-                              <li key={index}>{activity.name || activity.title}</li>
+                              <li key={index} className="flex items-center">
+                                <Activity className="w-3 h-3 mr-1 text-green-500" />
+                                {activity.name || activity.title}
+                              </li>
                             ))
                           ) : (
-                            <li>No activities recorded yet</li>
+                            <li className="flex items-center">
+                              <Info className="w-3 h-3 mr-1 text-green-500" />
+                              No activities recorded yet
+                            </li>
                           )}
                         </ul>
                         
+                        {/* Growth data summary */}
                         {childTrackingData[selectedMemberData.id].growthData?.length > 0 && (
-                          <p className="text-xs mt-2">
-                            Growth data: {childTrackingData[selectedMemberData.id].growthData.length} entries recorded
-                          </p>
+                          <div className="mt-2 bg-white p-2 rounded">
+                            <p className="text-xs font-medium text-green-700">
+                              Growth Tracking
+                            </p>
+                            <div className="mt-1">
+                              {childTrackingData[selectedMemberData.id].growthData.length > 1 ? (
+                                <div className="text-xs">
+                                  <span className="font-medium">Latest:</span> {
+                                    formatDate(childTrackingData[selectedMemberData.id].growthData
+                                      .sort((a, b) => new Date(b.date) - new Date(a.date))[0].date)
+                                  }
+                                  {childTrackingData[selectedMemberData.id].growthData[0].height && (
+                                    <span className="ml-2">Height: {childTrackingData[selectedMemberData.id].growthData[0].height}</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="text-xs">
+                                  {childTrackingData[selectedMemberData.id].growthData.length} growth record
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         )}
                       </div>
                     )}
@@ -1733,8 +1759,49 @@ const DashboardTab = () => {
                         <p className="text-xs text-gray-600 font-roboto mt-1">
                           Both parents should engage equally in {selectedMemberData.name}'s activities and development to model balanced relationships.
                         </p>
+                        {/* Add ability to create a habit */}
+                        <div className="mt-2 flex justify-end">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              createHabitFromInsight({
+                                title: `Balanced Engagement with ${selectedMemberData.name}`,
+                                description: `Ensure both parents participate equally in ${selectedMemberData.name}'s activities and care`,
+                                category: 'Invisible Parental Tasks',
+                                insight: 'Children benefit from equal engagement from both parents'
+                              });
+                            }}
+                            className="flex items-center text-xs bg-pink-100 hover:bg-pink-200 text-pink-800 px-2 py-1 rounded"
+                          >
+                            <Plus className="w-3 h-3 mr-1" />
+                            Create Habit
+                          </button>
+                        </div>
                       </div>
                     </div>
+                    
+                    {/* Development Milestones */}
+                    {selectedMemberData.age && (
+                      <div>
+                        <h4 className="flex items-center text-sm font-medium mb-2 font-roboto">
+                          <Target className="w-4 h-4 text-purple-500 mr-1" />
+                          Age-Appropriate Development
+                        </h4>
+                        <div className="p-2 bg-white rounded border border-purple-100">
+                          <p className="text-sm font-medium font-roboto">
+                            Development Focus for Age {selectedMemberData.age}
+                          </p>
+                          <p className="text-xs text-gray-600 font-roboto mt-1">
+                            {selectedMemberData.age < 5 ? 
+                              `At this age, ${selectedMemberData.name} is developing language skills, motor coordination, and early social abilities.` :
+                              selectedMemberData.age < 10 ?
+                              `At this age, ${selectedMemberData.name} is developing reading/writing skills, peer relationships, and increasing independence.` :
+                              `At this age, ${selectedMemberData.name} is developing abstract thinking, social identity, and independent decision-making.`
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="py-6 text-center">
@@ -1760,6 +1827,24 @@ const DashboardTab = () => {
                               <h4 className="text-sm font-medium font-roboto">{insight.title}</h4>
                               <p className="text-xs text-gray-600 font-roboto mt-1">{insight.description}</p>
                             </div>
+                          </div>
+                          {/* Add ability to create a habit from insight */}
+                          <div className="mt-2 flex justify-end">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                createHabitFromInsight({
+                                  title: insight.title,
+                                  description: insight.description,
+                                  category: insight.category || 'Invisible Household Tasks',
+                                  insight: 'Based on personalized AI analysis of your family data'
+                                });
+                              }}
+                              className="flex items-center text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 px-2 py-1 rounded"
+                            >
+                              <Plus className="w-3 h-3 mr-1" />
+                              Create Habit
+                            </button>
                           </div>
                         </div>
                       ))
@@ -1788,6 +1873,24 @@ const DashboardTab = () => {
                             </p>
                           </div>
                         </div>
+                        {/* Add ability to create a habit */}
+                        <div className="mt-2 flex justify-end">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              createHabitFromInsight({
+                                title: 'Balance Healthcare Management',
+                                description: `Ensure both parents participate in ${selectedMemberData.name}'s healthcare appointments and follow-ups`,
+                                category: 'Invisible Parental Tasks',
+                                insight: 'Shared healthcare responsibility ensures both parents understand medical needs'
+                              });
+                            }}
+                            className="flex items-center text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 px-2 py-1 rounded"
+                          >
+                            <Plus className="w-3 h-3 mr-1" />
+                            Create Habit
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       <div className="p-3 bg-white rounded shadow-sm">
@@ -1814,6 +1917,40 @@ const DashboardTab = () => {
                         </div>
                       </div>
                     </div>
+                    
+                    {/* Add insight about extracurricular activities if present */}
+                    {childTrackingData[selectedMemberData.id]?.activities?.length > 0 && (
+                      <div className="p-3 bg-white rounded shadow-sm">
+                        <div className="flex items-start">
+                          <Lightbulb className="w-4 h-4 text-amber-500 mt-0.5 mr-2 flex-shrink-0" />
+                          <div>
+                            <h4 className="text-sm font-medium font-roboto">Activity Engagement</h4>
+                            <p className="text-xs text-gray-600 font-roboto mt-1">
+                              {selectedMemberData.name} participates in {childTrackingData[selectedMemberData.id].activities.length} activities. 
+                              Balance parent participation in these activities to show equal support.
+                            </p>
+                          </div>
+                        </div>
+                        {/* Add ability to create a habit */}
+                        <div className="mt-2 flex justify-end">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              createHabitFromInsight({
+                                title: 'Balanced Activity Support',
+                                description: `Alternate which parent takes ${selectedMemberData.name} to activities and lessons`,
+                                category: 'Visible Parental Tasks',
+                                insight: 'Children benefit from seeing both parents involved in their extracurricular activities'
+                              });
+                            }}
+                            className="flex items-center text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 px-2 py-1 rounded"
+                          >
+                            <Plus className="w-3 h-3 mr-1" />
+                            Create Habit
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="py-6 text-center">
@@ -1959,6 +2096,24 @@ const DashboardTab = () => {
                                   <strong>Suggestion:</strong> {insight.suggestion}
                                 </div>
                               )}
+                              {/* Add create habit button */}
+                              <div className="mt-2 flex justify-end">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    createHabitFromInsight({
+                                      title: insight.title,
+                                      description: insight.suggestion || insight.description,
+                                      category: 'Invisible Parental Tasks',
+                                      insight: 'Emotional intelligence development benefits from consistent parenting approaches'
+                                    });
+                                  }}
+                                  className="flex items-center text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 px-2 py-1 rounded"
+                                >
+                                  <Plus className="w-3 h-3 mr-1" />
+                                  Create Habit
+                                </button>
+                              </div>
                             </div>
                           ))
                         ) : (
@@ -2657,7 +2812,7 @@ const DashboardTab = () => {
     );
   };
 
-  // Main Return - Dashboard Layout
+  // Main Dashboard Tab return
   return (
     <div className="space-y-4">
       {/* Dashboard Overview */}
@@ -2716,4 +2871,119 @@ const DashboardTab = () => {
         {expandedSections.memberJourneys && (
           <div className="px-4 pb-4">
             {loading.memberJourneys ? (
-              <div
+              <div className="h-48 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <p className="text-gray-500 font-roboto">Loading member journeys...</p>
+                </div>
+              </div>
+            ) : (
+              <IndividualMemberJourneys />
+            )}
+          </div>
+        )}
+      </div>
+      
+      {/* Child Development Observatory Section */}
+      <div 
+        className="bg-white rounded-lg shadow border-l-4 border-black mb-6"
+      >
+        <div className="p-4 flex justify-between items-center cursor-pointer section-header-clickable"
+             onClick={(e) => toggleSection('childDevelopment', e)}>
+          <h2 className="text-xl font-medium flex items-center font-roboto">
+            <Brain className="w-5 h-5 mr-2" />
+            Child Development Observatory
+          </h2>
+          {expandedSections.childDevelopment ? (
+            <Minimize size={20} className="text-gray-500" />
+          ) : (
+            <Maximize size={20} className="text-gray-500" />
+          )}
+        </div>
+        
+        {expandedSections.childDevelopment && (
+          <div className="px-4 pb-4">
+            {loading.childDevelopment ? (
+              <div className="h-48 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <p className="text-gray-500 font-roboto">Loading child development data...</p>
+                </div>
+              </div>
+            ) : (
+              <ChildDevelopmentObservatory />
+            )}
+          </div>
+        )}
+      </div>
+      
+      {/* Family Transformation Timeline Section */}
+      <div 
+        className="bg-white rounded-lg shadow border-l-4 border-black mb-6"
+      >
+        <div className="p-4 flex justify-between items-center cursor-pointer section-header-clickable"
+             onClick={(e) => toggleSection('timeline', e)}>
+          <h2 className="text-xl font-medium flex items-center font-roboto">
+            <TrendingUp className="w-5 h-5 mr-2" />
+            Family Transformation Timeline
+          </h2>
+          {expandedSections.timeline ? (
+            <Minimize size={20} className="text-gray-500" />
+          ) : (
+            <Maximize size={20} className="text-gray-500" />
+          )}
+        </div>
+        
+        {expandedSections.timeline && (
+          <div className="px-4 pb-4">
+            {loading.timeline ? (
+              <div className="h-48 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <p className="text-gray-500 font-roboto">Loading transformation timeline...</p>
+                </div>
+              </div>
+            ) : (
+              <FamilyTransformationTimeline />
+            )}
+          </div>
+        )}
+      </div>
+      
+      {/* Balance Impact Hub Section */}
+      <div 
+        className="bg-white rounded-lg shadow border-l-4 border-black mb-6"
+      >
+        <div className="p-4 flex justify-between items-center cursor-pointer section-header-clickable"
+             onClick={(e) => toggleSection('impactHub', e)}>
+          <h2 className="text-xl font-medium flex items-center font-roboto">
+            <Target className="w-5 h-5 mr-2" />
+            Balance Impact Hub
+          </h2>
+          {expandedSections.impactHub ? (
+            <Minimize size={20} className="text-gray-500" />
+          ) : (
+            <Maximize size={20} className="text-gray-500" />
+          )}
+        </div>
+        
+        {expandedSections.impactHub && (
+          <div className="px-4 pb-4">
+            {loading.impactHub ? (
+              <div className="h-48 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <p className="text-gray-500 font-roboto">Loading impact data...</p>
+                </div>
+              </div>
+            ) : (
+              <BalanceImpactHub />
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default DashboardTab;
