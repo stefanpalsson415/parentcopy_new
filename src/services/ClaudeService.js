@@ -11,7 +11,11 @@ class ClaudeService {
     
     // Set the appropriate API URL based on environment
     if (isProduction) {
-      this.proxyUrl = 'https://checkallie.com/api/claude';
+      // Use relative URL to avoid potential CORS issues with absolute URLs
+      this.proxyUrl = '/api/claude';
+      
+      // Enable automatic testing on initialization
+      this.testConnectionOnLoad = true;
     } else if (isLocalhost) {
       // For local development, use the port-specific proxy
       const port = window.location.port || '3001';
@@ -21,19 +25,56 @@ class ClaudeService {
       this.proxyUrl = '/api/claude';
     }
       
-    this.model = 'claude-3-7-sonnet-20250219'; // Latest model
-    this.mockMode = false; // Explicitly disable mock mode
+    // Update to a more stable model identifier (remove specific date)
+    this.model = 'claude-3-sonnet-20240229'; // Use a stable model version
     
-    // Add debug mode flag that can be toggled
-    this.debugMode = false;
-    
-    // Add a mechanism to disable all AI calls if needed
+    // Enable better fallbacks
+    this.mockMode = false;
+    this.debugMode = true; // Enable debug mode in production temporarily
     this.disableAICalls = false;
-    
-    // Set this to true to disable calendar detection to prevent freezes
     this.disableCalendarDetection = true;
+    this.retryCount = 3; // Add retry mechanism
     
     console.log(`Claude service initialized to use ${isProduction ? 'production' : isLocalhost ? 'local' : 'unknown'} proxy server at ${this.proxyUrl}`);
+    
+    // Auto-test connection in production
+    if (this.testConnectionOnLoad && isProduction) {
+      setTimeout(() => {
+        this.testProxyConnection()
+          .then(success => {
+            if (!success) {
+              console.warn("Claude API connection test failed on initialization. Check server configuration.");
+              // Switch to fallback mode if test fails
+              this.enableFallbackMode();
+            }
+          })
+          .catch(err => {
+            console.error("Error during Claude API connection test:", err);
+            this.enableFallbackMode();
+          });
+      }, 2000);
+    }
+  }
+  
+  // Add this new method
+  enableFallbackMode() {
+    console.log("Enabling Claude API fallback mode");
+    this.disableAICalls = true;
+    
+    // Show a console message that might help debugging
+    console.warn("Claude API is disabled due to connection issues. Using fallback responses.");
+    
+    // Try to notify any admin users if possible
+    if (typeof window !== 'undefined') {
+      try {
+        // Create a non-intrusive notification for admin users
+        const adminNotice = document.createElement('div');
+        adminNotice.innerHTML = `<div style="position:fixed; bottom:10px; left:10px; background:rgba(255,0,0,0.1); color:#900; padding:5px; border-radius:3px; font-size:10px; z-index:9999;">Claude API Unavailable - Using Fallbacks</div>`;
+        document.body.appendChild(adminNotice);
+      } catch (e) {
+        // Ignore DOM errors
+      }
+    }
   }
   
   // Add a test method to verify connectivity

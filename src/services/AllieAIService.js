@@ -123,6 +123,185 @@ safelyParseJSON(jsonString, defaultValue) {
   }
 }
 
+/**
+ * Generate balance impact data based on family history
+ * @param {string} familyId - Family ID
+ * @param {number} currentWeek - Current week number
+ * @returns {Promise<Object>} Impact metrics object
+ */
+async generateBalanceImpactData(familyId, currentWeek) {
+  try {
+    console.log(`Generating balance impact data for family ${familyId}, week ${currentWeek}`);
+    
+    // First try to get family data for context
+    const familyData = await this.getFamilyDataForContext(familyId);
+    
+    // Create a prompt for Claude to generate impact insights
+    const systemPrompt = `You are Allie, a family balance assistant. Based on the family's data and progress,
+    generate quantifiable impact metrics for their balance improvements.
+    
+    Return a JSON object with these fields:
+    - timeSaved: Number of hours saved per week (0-10)
+    - relationshipBoost: Relationship satisfaction percentage (0-100)
+    - stressReduction: Stress reduction percentage (0-100)
+    - completedHabits: Number of completed habits/tasks
+    
+    Base your estimates on:
+    - Current week: ${currentWeek}
+    - Completed tasks: ${familyData?.completedTasks?.length || 0}
+    - Current balance scores: ${JSON.stringify(familyData?.weightedScores || {})}
+    
+    Be realistic but optimistic. The goal is to motivate the family by showing tangible benefits.`;
+    
+    // Call Claude API
+    const impactResponse = await this.claudeService.generateResponse(
+      [{ role: 'user', content: `Generate balance impact metrics for this family based on their progress through week ${currentWeek}.` }],
+      { system: systemPrompt }
+    );
+    
+    // Parse response - handle both direct JSON and text with JSON
+    let impactData;
+    try {
+      // Try direct parsing
+      impactData = JSON.parse(impactResponse);
+    } catch (e) {
+      // Extract JSON from text response
+      const jsonMatch = impactResponse.match(/(\{[\s\S]*\})/);
+      if (jsonMatch) {
+        try {
+          impactData = JSON.parse(jsonMatch[0]);
+        } catch (err) {
+          console.error("Failed to parse impact data from response:", err);
+          throw new Error("Invalid response format");
+        }
+      } else {
+        throw new Error("Couldn't extract JSON from response");
+      }
+    }
+    
+    // Validate the data structure
+    if (!impactData || typeof impactData !== 'object') {
+      throw new Error("Invalid impact data structure");
+    }
+    
+    // Ensure all required fields are present
+    const defaultData = {
+      timeSaved: Math.min(currentWeek, 10),
+      relationshipBoost: 50 + Math.min(currentWeek * 5, 40),
+      stressReduction: 40 + Math.min(currentWeek * 4, 35),
+      completedHabits: familyData?.completedTasks?.length || Math.max(1, currentWeek * 2)
+    };
+    
+    return {
+      ...defaultData,
+      ...impactData
+    };
+  } catch (error) {
+    console.error("Error generating balance impact data:", error);
+    // Return sensible defaults if we can't generate data
+    return {
+      timeSaved: Math.min(currentWeek, 5),
+      relationshipBoost: 55,
+      stressReduction: 45,
+      completedHabits: currentWeek * 2
+    };
+  }
+}
+
+/**
+ * Generate balance experiments for families to try
+ * @param {string} familyId - Family ID
+ * @param {Object} weightedScores - Family's weighted balance scores
+ * @returns {Promise<Array>} Array of experiment objects
+ */
+async generateBalanceExperiments(familyId, weightedScores) {
+  try {
+    console.log(`Generating balance experiments for family ${familyId}`);
+    
+    // Get family context
+    const familyData = await this.getFamilyDataForContext(familyId);
+    
+    // Create prompt for Claude to generate experiment ideas
+    const systemPrompt = `You are Allie, a family balance assistant. Based on the family's data and current balance scores,
+    suggest 3-4 specific experiments they could try to improve their balance.
+    
+    Return an array of experiment objects, each with:
+    - title: Short, action-oriented title
+    - description: Clear explanation of the experiment (1-2 sentences)
+    - estimatedImpact: Projected impact if implemented (e.g., "May improve balance by ~7% in targeted categories")
+    - difficulty: "easy", "moderate", or "challenging"
+    - actionable: true (all experiments should be actionable)
+    - targeted: true if targeting their most imbalanced category
+    
+    Most imbalanced categories: ${JSON.stringify(
+      Object.entries(weightedScores?.categoryBalance || {})
+        .sort((a, b) => Math.abs(b[1].imbalance) - Math.abs(a[1].imbalance))
+        .slice(0, 2)
+        .map(([category, data]) => ({ 
+          category, 
+          imbalance: Math.abs(data.imbalance), 
+          dominant: data.mama > data.papa ? "Mama" : "Papa" 
+        }))
+    )}`;
+    
+    // Call Claude API
+    const experimentsResponse = await this.claudeService.generateResponse(
+      [{ role: 'user', content: `Based on this family's balance data, suggest experiments they could try to improve their balance.` }],
+      { system: systemPrompt }
+    );
+    
+    // Parse response - handle both direct JSON and text with JSON
+    let experimentsData;
+    try {
+      // Try to find array pattern first
+      const arrayMatch = experimentsResponse.match(/(\[[\s\S]*\])/);
+      if (arrayMatch) {
+        experimentsData = JSON.parse(arrayMatch[0]);
+      } else {
+        // Try parsing the whole response as JSON
+        experimentsData = JSON.parse(experimentsResponse);
+      }
+    } catch (e) {
+      console.error("Failed to parse experiments from response:", e);
+      throw new Error("Invalid response format");
+    }
+    
+    // Validate the experiments array
+    if (!Array.isArray(experimentsData)) {
+      throw new Error("Experiments data is not an array");
+    }
+    
+    // Return the experiments
+    return experimentsData;
+  } catch (error) {
+    console.error("Error generating balance experiments:", error);
+    // Return default experiments if we can't generate data
+    return [
+      {
+        title: "Weekly Role Reversal",
+        description: "Switch roles for one day each cycle - the parent who usually handles meals tries childcare, and vice versa.",
+        estimatedImpact: "May improve balance by ~7% in targeted categories",
+        difficulty: "moderate",
+        actionable: true
+      },
+      {
+        title: "Shared Calendar Day",
+        description: "Dedicate 30 minutes each Sunday to joint calendar review and habit planning for the cycle ahead.",
+        estimatedImpact: "Can reduce invisible work imbalance by ~12%",
+        difficulty: "easy",
+        actionable: true
+      },
+      {
+        title: "Mental Load Shift",
+        description: "Explicitly transfer responsibility for one 'invisible' household system (meal planning, gift buying, etc.) to the less-involved parent.",
+        estimatedImpact: "Potential 15-20% improvement in invisible household category",
+        difficulty: "challenging",
+        actionable: true
+      }
+    ];
+  }
+}
+
   /**
    * Get comprehensive family context for AI
    * @param {string} familyId - Family ID
