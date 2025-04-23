@@ -1,7 +1,7 @@
 // src/components/meeting/AllieChatMeeting.jsx
 import React, { useState, useEffect } from 'react';
 import { useFamily } from '../../contexts/FamilyContext';
-import { FamilyBalanceChart } from './FamilyMeetingScreen';
+import FamilyBalanceChart from './FamilyBalanceChart';
 import { Message, MessageSquare, Save, Download } from 'lucide-react';
 
 const AllieChatMeeting = ({ onClose }) => {

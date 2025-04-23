@@ -12,6 +12,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import confetti from 'canvas-confetti';
 import DatabaseService from '../../services/DatabaseService';
+import FamilyBalanceChart from './FamilyBalanceChart';
+
+
+
 
 // Save indicator component for autosave functionality
 const SaveIndicator = ({ saving, saved }) => (
