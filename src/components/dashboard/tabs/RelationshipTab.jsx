@@ -22,7 +22,6 @@ import RelationshipAssessment from '../../relationship/RelationshipAssessment';
 import RelationshipPrework from '../../relationship/RelationshipPrework';
 import CouplesMeeting from '../../relationship/CouplesMeeting';
 import UserAvatar from '../../common/UserAvatar';
-import RelationshipEventCard from '../../calendar';
 import { useAuth } from '../../../contexts/AuthContext';
 import CycleJourney from '../../cycles/CycleJourney';
 
