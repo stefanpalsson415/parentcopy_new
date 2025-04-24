@@ -475,17 +475,17 @@ const renderTabContent = () => {
   const formattedFamilyName = `${displayFamilyName} Family AI Balancer`;
   
   // Calculate heights for fixed elements
-  const headerHeight = "84px"; // 4rem or 64px is a common header height
-  const navHeight = "56px";    // Typical height for navigation tabs
+  const headerHeight = "96px"; // Increased height for better spacing
+  const navHeight = "64px";    // Increased height for navigation tabs
   
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
-<div className="fixed top-0 left-0 right-0 z-20 bg-black text-white p-4 shadow-md" style={{ height: headerHeight }}>
+<div className="fixed top-0 left-0 right-0 z-20 bg-black text-white py-4 px-6 shadow-md" style={{ height: headerHeight }}>
   <div className="container mx-auto flex justify-between items-center">
-    <div className="flex items-center">
+    <div className="flex items-center space-x-4">
       {/* Family photo - UPDATED to use UserAvatar */}
-      <div className="mr-4 hidden md:block">
+      <div className="hidden md:block">
         <UserAvatar 
           user={{ 
             name: familyName || 'Family', 
@@ -497,61 +497,61 @@ const renderTabContent = () => {
         />
       </div>
       <div className="flex flex-col">
-        <h1 className="text-xl font-bold font-roboto">Allie</h1>
+        <h1 className="text-2xl font-bold font-roboto">Allie</h1>
         <p className="text-sm font-roboto">Balance family responsibilities together</p>
-        <p className="text-xs text-gray-300 font-roboto">The {familyName ? familyName.split(' ')[0] : ''} Family</p>
+        <p className="text-xs text-gray-300 font-roboto mt-1">The {familyName ? familyName.split(' ')[0] : ''} Family</p>
       </div>
     </div>
-    <div className="flex items-center">
+    <div className="flex items-center space-x-4">
       {/* User avatar - UPDATED to use UserAvatar */}
       <div 
         onClick={toggleSettings}
-        className="cursor-pointer mr-2"
+        className="cursor-pointer flex items-center space-x-2"
       >
         <UserAvatar 
           user={selectedUser} 
-          size={32} 
+          size={36} 
           className="border-2 border-white"
         />
+        <span className="font-roboto">{selectedUser.name}</span>
       </div>
-      <span className="mr-3 font-roboto">{selectedUser.name}</span>
       <button 
         onClick={handleLogout}
-        className="flex items-center text-sm bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded font-roboto"
+        className="flex items-center text-sm bg-gray-800 hover:bg-gray-700 px-3 py-2 rounded font-roboto"
       >
-        <LogOut size={14} className="mr-1" />
+        <LogOut size={14} className="mr-2" />
         Switch User
-            </button>
-            <button 
-              onClick={async () => {
-                try {
-                  const ClaudeService = (await import('../../services/ClaudeService')).default;
-                  console.log("Testing proxy connection directly...");
-                  const result = await ClaudeService.testProxyConnection();
-                  console.log("Proxy test result:", result);
-                  alert("Proxy test result: " + (result ? "Success" : "Failed"));
-                } catch (error) {
-                  console.error("Error testing proxy:", error);
-                  alert("Error testing proxy: " + error.message);
-                }
-              }}
-              className="ml-2 px-2 py-1 bg-red-600 text-white text-xs rounded"
-            >
-              Test Proxy
-            </button>
-          </div>
-        </div>
-      </div>
+      </button>
+      <button 
+        onClick={async () => {
+          try {
+            const ClaudeService = (await import('../../services/ClaudeService')).default;
+            console.log("Testing proxy connection directly...");
+            const result = await ClaudeService.testProxyConnection();
+            console.log("Proxy test result:", result);
+            alert("Proxy test result: " + (result ? "Success" : "Failed"));
+          } catch (error) {
+            console.error("Error testing proxy:", error);
+            alert("Error testing proxy: " + error.message);
+          }
+        }}
+        className="px-3 py-2 bg-red-600 text-white text-xs rounded"
+      >
+        Test Proxy
+      </button>
+    </div>
+  </div>
+</div>
       
       {/* Navigation Tabs */}
 <div 
   className="fixed left-0 right-0 z-10 bg-white shadow-md" 
   style={{ top: headerHeight, height: navHeight }}
 >
-  <div className="container mx-auto flex overflow-x-auto px-4 py-2">
+  <div className="container mx-auto flex overflow-x-auto px-6 py-3">
     <button 
       id="tasks-tab"
-      className={`px-6 py-2 font-medium whitespace-nowrap font-roboto rounded-lg transition-all mx-1 ${
+      className={`px-6 py-2 font-medium whitespace-nowrap font-roboto rounded-lg transition-all mx-2 relative ${
         activeTab === 'tasks' 
           ? 'bg-black text-white shadow-sm' 
           : 'text-gray-700 hover:bg-gray-100'
@@ -560,7 +560,7 @@ const renderTabContent = () => {
     >
       {selectedUser ? `${selectedUser.name}'s Balanced Family` : 'My Tasks'}
       {notifications.tasks > 0 && (
-        <span className="absolute top-0 right-0 transform translate-x-1/2 -translate-y-1/4 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
+        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
           {notifications.tasks}
         </span>
       )}
@@ -568,7 +568,7 @@ const renderTabContent = () => {
     
     <button 
       id="dashboard-tab"
-      className={`px-6 py-2 font-medium whitespace-nowrap font-roboto rounded-lg transition-all mx-1 ${
+      className={`px-6 py-2 font-medium whitespace-nowrap font-roboto rounded-lg transition-all mx-2 ${
         activeTab === 'dashboard' 
           ? 'bg-black text-white shadow-sm' 
           : 'text-gray-700 hover:bg-gray-100'
@@ -582,7 +582,7 @@ const renderTabContent = () => {
     {selectedUser && (
       <button 
         id="relationship-tab"
-        className={`px-6 py-2 font-medium whitespace-nowrap font-roboto rounded-lg transition-all mx-1 relative ${
+        className={`px-6 py-2 font-medium whitespace-nowrap font-roboto rounded-lg transition-all mx-2 relative ${
           activeTab === 'relationship' 
             ? 'bg-black text-white shadow-sm' 
             : 'text-gray-700 hover:bg-gray-100'
@@ -591,7 +591,7 @@ const renderTabContent = () => {
       >
         Strong Relationship
         {notifications.relationships > 0 && selectedUser.role === 'parent' && (
-          <span className="absolute top-0 right-0 transform translate-x-1/2 -translate-y-1/4 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
+          <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
             {notifications.relationships}
           </span>
         )}
@@ -601,7 +601,7 @@ const renderTabContent = () => {
     {/* Children Tracking Tab */}
     <button 
       id="children-tab"
-      className={`px-6 py-2 font-medium whitespace-nowrap font-roboto rounded-lg transition-all mx-1 ${
+      className={`px-6 py-2 font-medium whitespace-nowrap font-roboto rounded-lg transition-all mx-2 ${
         activeTab === 'children' 
           ? 'bg-black text-white shadow-sm' 
           : 'text-gray-700 hover:bg-gray-100'
