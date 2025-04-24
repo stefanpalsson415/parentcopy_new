@@ -389,17 +389,6 @@ const handleChatSubmit = async (userInput = null) => {
   };
   
 
-// Add this EventDetails component within ChildDashboard.jsx before the main component
-const EventDetails = ({ event, onEdit }) => {
-  const [expanded, setExpanded] = useState(false);
-  const [missingDetails, setMissingDetails] = useState([]);
-  
-  useEffect(() => {
-    // Calculate missing details based on event type
-    const missing = calculateMissingDetails(event);
-    setMissingDetails(missing);
-  }, [event]);
-  
   // Helper to determine which details are required for each event type
   const calculateMissingDetails = (event) => {
     const missing = [];
@@ -431,6 +420,21 @@ const EventDetails = ({ event, onEdit }) => {
     
     return missing;
   };
+
+
+
+// Add this EventDetails component within ChildDashboard.jsx before the main component
+const EventDetails = ({ event, onEdit }) => {
+  const [expanded, setExpanded] = useState(false);
+  const [missingDetails, setMissingDetails] = useState([]);
+  
+  useEffect(() => {
+    // Calculate missing details based on event type
+    const missing = calculateMissingDetails(event);
+    setMissingDetails(missing);
+  }, [event]);
+  
+
   
   return (
     <div className="border rounded-lg p-3 mb-3 hover:bg-gray-50 transition-colors">
