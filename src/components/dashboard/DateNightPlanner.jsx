@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Calendar, Plus, Heart, Star, X, Clock, CheckCircle, Trash2, Edit, Users, AlertCircle } from 'lucide-react';
-import EnhancedEventManager from '../calendar/EnhancedEventManager';
+import EnhancedEventManager from '../../components/calendar/EnhancedEventManager';
 import { db } from '../../services/firebase';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 

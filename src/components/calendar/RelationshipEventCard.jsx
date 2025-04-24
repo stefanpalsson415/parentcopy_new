@@ -3,6 +3,8 @@ import React from 'react';
 import { Heart, Calendar, Clock, MapPin, Users, Info } from 'lucide-react';
 import CalendarOperations from '../../services/CalendarOperations';
 
+
+
 /**
  * Special event card for relationship-focused calendar events
  */
