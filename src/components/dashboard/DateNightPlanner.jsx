@@ -85,59 +85,75 @@ useEffect(() => {
   };
   
   // Handle calendar event save
-  const handleEventSave = async (eventResult) => {
-    try {
-      setCalendarError(null);
+const handleEventSave = async (eventResult) => {
+  try {
+    setCalendarError(null);
+    
+    if (eventResult && eventResult.success) {
+      // Extract date night specific details
+      const { dateTime, location, description, providers, dateNightDetails } = eventResult;
       
-      if (eventResult && eventResult.success) {
-        // Add to date nights list
-        if (selectedDateIdea) {
-          const newDateNight = {
-            id: Date.now().toString(),
-            title: selectedDateIdea,
-            description: '',
-            date: new Date(eventResult.dateTime || Date.now()).toISOString().split('T')[0],
-            time: new Date(eventResult.dateTime || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-            category: ideaCategory !== 'all' ? ideaCategory : 'entertainment',
-            completed: false,
-            participants: familyMembers
-              .filter(m => m.role === 'parent')
-              .map(m => ({ id: m.id, name: m.name })),
-            inCalendar: true
-          };
-          
-          setDateNights([...dateNights, newDateNight]);
-        }
+      // Add to date nights list
+      if (selectedDateIdea) {
+        const newDateNight = {
+          id: Date.now().toString(),
+          title: selectedDateIdea,
+          description: description || '',
+          date: new Date(dateTime || Date.now()).toISOString().split('T')[0],
+          time: new Date(dateTime || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+          location: location || '',
+          category: ideaCategory !== 'all' ? ideaCategory : 'entertainment',
+          completed: false,
+          participants: familyMembers
+            .filter(m => m.role === 'parent')
+            .map(m => ({ id: m.id, name: m.name })),
+          inCalendar: true,
+          providers: providers || [], // Store babysitter/provider information
+          dateNightDetails: dateNightDetails || {} // Store date night specific details
+        };
         
-        // If editing, update the existing date night
-        if (editIndex !== null) {
-          const updatedDateNights = [...dateNights];
-          updatedDateNights[editIndex] = {
-            ...updatedDateNights[editIndex],
-            inCalendar: true
-          };
-          setDateNights(updatedDateNights);
-        }
-        
-        setCalendarSuccess(true);
-        setTimeout(() => setCalendarSuccess(false), 3000);
-        setShowAddModal(false);
-        setEditIndex(null);
-        setSelectedDateIdea(null);
-        
-        // Also call the provided onAddToCalendar if it exists
-        if (onAddToCalendar && typeof onAddToCalendar === 'function') {
-          await onAddToCalendar(eventResult);
-        }
-      } else {
-        throw new Error("Failed to add to calendar");
+        setDateNights([...dateNights, newDateNight]);
       }
-    } catch (error) {
-      console.error('Error adding to calendar:', error);
-      setCalendarError('Failed to add to calendar. Please try again.');
-      setTimeout(() => setCalendarError(null), 5000);
+      
+      // If editing, update the existing date night
+      if (editIndex !== null) {
+        const updatedDateNights = [...dateNights];
+        updatedDateNights[editIndex] = {
+          ...updatedDateNights[editIndex],
+          description: eventResult.description || updatedDateNights[editIndex].description,
+          location: eventResult.location || updatedDateNights[editIndex].location,
+          date: new Date(eventResult.dateTime || Date.now()).toISOString().split('T')[0],
+          time: new Date(eventResult.dateTime || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+          providers: eventResult.providers || updatedDateNights[editIndex].providers || [],
+          dateNightDetails: eventResult.dateNightDetails || updatedDateNights[editIndex].dateNightDetails || {},
+          inCalendar: true
+        };
+        setDateNights(updatedDateNights);
+      }
+      
+      setCalendarSuccess(true);
+      setTimeout(() => setCalendarSuccess(false), 3000);
+      setShowAddModal(false);
+      setEditIndex(null);
+      setSelectedDateIdea(null);
+      
+      // Also call the provided onAddToCalendar if it exists
+      if (onAddToCalendar && typeof onAddToCalendar === 'function') {
+        await onAddToCalendar({
+          ...eventResult,
+          eventType: 'date-night',
+          category: 'relationship'
+        });
+      }
+    } else {
+      throw new Error("Failed to add to calendar");
     }
-  };
+  } catch (error) {
+    console.error('Error adding to calendar:', error);
+    setCalendarError('Failed to add to calendar. Please try again.');
+    setTimeout(() => setCalendarError(null), 5000);
+  }
+};
   
   // Format date for display
   const formatDate = (dateString) => {
@@ -236,26 +252,35 @@ useEffect(() => {
   }
   
   // Get event data for EnhancedEventManager when editing
-  const getEventDataForEditing = () => {
-    if (editIndex === null) return null;
-    
-    const dateNight = dateNights[editIndex];
-    const startDate = new Date(`${dateNight.date}T${dateNight.time || '19:00'}`);
-    
-    return {
-      title: `Date Night: ${dateNight.title}`,
-      description: dateNight.description || 'Quality time together',
-      location: '',
-      dateTime: startDate.toISOString(),
-      category: 'relationship',
-      eventType: 'date-night',
-      duration: 120, // Default 2 hour duration
-      childId: null,
-      childName: null,
-      attendingParentId: 'both',
-      participants: dateNight.participants
-    };
+const getEventDataForEditing = () => {
+  if (editIndex === null) return null;
+  
+  const dateNight = dateNights[editIndex];
+  const startDate = new Date(`${dateNight.date}T${dateNight.time || '19:00'}`);
+  
+  return {
+    title: `Date Night: ${dateNight.title}`,
+    description: dateNight.description || 'Quality time together',
+    location: dateNight.location || '',
+    dateTime: startDate.toISOString(),
+    category: 'relationship',
+    eventType: 'date-night',
+    duration: 120, // Default 2 hour duration
+    childId: null,
+    childName: null,
+    attendingParentId: 'both',
+    participants: dateNight.participants,
+    providers: dateNight.providers || [], // Preserve babysitter/provider if set
+    dateNightDetails: dateNight.dateNightDetails || {
+      venue: dateNight.location || '',
+      budget: '',
+      transportation: '',
+      childcareArranged: dateNight.providers && dateNight.providers.length > 0,
+      needsBabysitter: true,
+      specialOccasion: false
+    }
   };
+};
   
   return (
     <div className="bg-white rounded-lg shadow">
@@ -552,29 +577,43 @@ useEffect(() => {
               </>
             )}
             
-            {(selectedDateIdea || editIndex !== null) && (
-              <EnhancedEventManager
-                initialEvent={editIndex !== null ? getEventDataForEditing() : {
-                  title: `Date Night: ${selectedDateIdea}`,
-                  description: 'Quality time together',
-                  category: 'relationship',
-                  eventType: 'date-night',
-                  duration: 120, // 2 hours
-                  attendingParentId: 'both'
-                }}
-                onSave={handleEventSave}
-                onCancel={() => {
-                  setSelectedDateIdea(null);
-                  if (editIndex !== null) {
-                    setEditIndex(null);
-                  }
-                }}
-                eventType="date-night"
-                selectedDate={new Date()}
-                isCompact={true}
-                mode={editIndex !== null ? 'edit' : 'create'}
-              />
-            )}
+            // When selected date idea exists
+{(selectedDateIdea || editIndex !== null) && (
+  <EnhancedEventManager
+    initialEvent={editIndex !== null ? getEventDataForEditing() : {
+      title: `Date Night: ${selectedDateIdea}`,
+      description: 'Quality time together',
+      category: 'relationship',
+      eventType: 'date-night',
+      duration: 120, // 2 hours
+      attendingParentId: 'both',
+      dateNightDetails: {
+        venue: '',
+        budget: '',
+        transportation: '',
+        childcareArranged: false,
+        needsBabysitter: true,
+        specialOccasion: false
+      },
+      // Make sure parents are automatically assigned
+      participants: familyMembers
+        .filter(m => m.role === 'parent')
+        .map(m => ({ id: m.id, name: m.name }))
+    }}
+    onSave={handleEventSave}
+    onCancel={() => {
+      setSelectedDateIdea(null);
+      if (editIndex !== null) {
+        setEditIndex(null);
+      }
+    }}
+    eventType="date-night"
+    selectedDate={new Date()}
+    isCompact={true}
+    mode={editIndex !== null ? 'edit' : 'create'}
+    highlightProviderSelection={true} // New prop to emphasize babysitter selection
+  />
+)}
           </div>
         </div>
       )}

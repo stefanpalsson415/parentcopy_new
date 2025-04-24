@@ -454,6 +454,15 @@ const calendarEvent = {
     ...(event.category === 'birthday' ? {
       birthdayChildName: event.extraDetails?.birthdayChildName,
       birthdayChildAge: event.extraDetails?.birthdayChildAge
+    } : {}),
+    
+    // For date nights, include date night details
+    ...(event.eventType === 'date-night' ? {
+      dateNightDetails: event.dateNightDetails || {},
+      babysitterName: event.providers?.[0]?.name,
+      venue: event.dateNightDetails?.venue || event.location || '',
+      isSpecialOccasion: event.dateNightDetails?.specialOccasion || false,
+      occasionNote: event.dateNightDetails?.occasionNote || ''
     } : {})
   }
 };
@@ -1309,81 +1318,129 @@ console.log("Saving event with location:", event.location);
         </div>
 
         {/* Provider Selection */}
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">
-            Link to Provider
-          </label>
-          <div className="p-3 bg-gray-50 rounded-md">
-            {event.providers?.length > 0 ? (
-              <div className="space-y-2">
-                {event.providers.map((provider, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 bg-white rounded border">
-                    <div className="flex items-center">
-                      <User size={16} className="text-purple-500 mr-2" />
-                      <span className="text-sm">{provider.name}</span>
-                      {provider.specialty && (
-                        <span className="text-xs text-gray-500 ml-2">({provider.specialty})</span>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => setEvent(prev => ({
-                        ...prev,
-                        providers: prev.providers.filter((_, i) => i !== index)
-                      }))}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  onClick={() => {
-                    // This would normally open a provider picker
-                    // For now we'll just navigate to provider directory
-                    if (typeof window !== 'undefined') {
-                      window.dispatchEvent(new CustomEvent('open-provider-directory', {
-                        detail: { 
-                          onSelect: (selectedProvider) => {
-                            setEvent(prev => ({
-                              ...prev,
-                              providers: [...(prev.providers || []), selectedProvider]
-                            }));
-                          }
-                        }
-                      }));
-                    }
-                  }}
-                  className="w-full py-2 text-center text-sm text-purple-600 hover:text-purple-800"
-                >
-                  + Add More Providers
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  // This would normally open a provider picker
-                  // For now we'll just navigate to provider directory
-                  if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('open-provider-directory', {
-                      detail: { 
-                        onSelect: (selectedProvider) => {
-                          setEvent(prev => ({
-                            ...prev,
-                            providers: [...(prev.providers || []), selectedProvider]
-                          }));
-                        }
-                      }
+<div>
+  <label className="block text-sm font-medium mb-1 text-gray-700">
+    {event.eventType === 'date-night' && event.dateNightDetails?.needsBabysitter ? 
+      'Select Babysitter' : 
+      'Link to Provider'}
+  </label>
+  <div className={`p-3 rounded-md ${
+    event.eventType === 'date-night' && event.dateNightDetails?.needsBabysitter && (!event.providers || event.providers.length === 0) ?
+    'bg-amber-50 border border-amber-200' : 
+    'bg-gray-50'
+  }`}>
+    {event.providers?.length > 0 ? (
+      <div className="space-y-2">
+        {event.providers.map((provider, index) => (
+          <div key={index} className="flex items-center justify-between p-2 bg-white rounded border">
+            <div className="flex items-center">
+              <User size={16} className={`${
+                event.eventType === 'date-night' ? 'text-pink-500' : 'text-purple-500'
+              } mr-2`} />
+              <span className="text-sm">{provider.name}</span>
+              {provider.specialty && (
+                <span className="text-xs text-gray-500 ml-2">({provider.specialty})</span>
+              )}
+            </div>
+            <button
+              onClick={() => setEvent(prev => ({
+                ...prev,
+                providers: prev.providers.filter((_, i) => i !== index),
+                dateNightDetails: prev.eventType === 'date-night' ? {
+                  ...prev.dateNightDetails,
+                  childcareArranged: prev.providers.length > 1 // Only mark as not arranged if removing the last provider
+                } : prev.dateNightDetails
+              }))}
+              className="text-red-500 hover:text-red-700"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={() => {
+            // This would normally open a provider picker
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('open-provider-directory', {
+                detail: { 
+                  filterType: event.eventType === 'date-night' ? 'childcare' : null,
+                  title: event.eventType === 'date-night' ? 'Select Babysitter' : 'Select Provider',
+                  onSelect: (selectedProvider) => {
+                    setEvent(prev => ({
+                      ...prev,
+                      providers: [...(prev.providers || []), selectedProvider],
+                      dateNightDetails: prev.eventType === 'date-night' ? {
+                        ...prev.dateNightDetails,
+                        childcareArranged: true
+                      } : prev.dateNightDetails
                     }));
                   }
-                }}
-                className="w-full p-3 border border-dashed border-gray-300 rounded-md flex items-center justify-center"
-              >
-                <User size={20} className="text-gray-400 mr-2" />
-                <span className="text-sm text-gray-600">Select Provider</span>
-              </button>
-            )}
-          </div>
-        </div>
+                }
+              }));
+            }
+          }}
+          className={`w-full py-2 text-center text-sm ${
+            event.eventType === 'date-night' ? 
+            'text-pink-600 hover:text-pink-800' : 
+            'text-purple-600 hover:text-purple-800'
+          }`}
+        >
+          + Add {event.eventType === 'date-night' ? 'Another Babysitter' : 'More Providers'}
+        </button>
+      </div>
+    ) : (
+      <button
+        onClick={() => {
+          // This would normally open a provider picker
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('open-provider-directory', {
+              detail: { 
+                filterType: event.eventType === 'date-night' ? 'childcare' : null,
+                title: event.eventType === 'date-night' ? 'Select Babysitter' : 'Select Provider',
+                onSelect: (selectedProvider) => {
+                  setEvent(prev => ({
+                    ...prev,
+                    providers: [...(prev.providers || []), selectedProvider],
+                    dateNightDetails: prev.eventType === 'date-night' ? {
+                      ...prev.dateNightDetails,
+                      childcareArranged: true
+                    } : prev.dateNightDetails
+                  }));
+                }
+              }
+            }));
+          }
+        }}
+        className={`w-full p-3 border ${
+          event.eventType === 'date-night' && event.dateNightDetails?.needsBabysitter ?
+          'border-amber-300 bg-amber-50' : 
+          'border-dashed border-gray-300'
+        } rounded-md flex items-center justify-center`}
+      >
+        <User size={20} className={`${
+          event.eventType === 'date-night' ? 'text-pink-500' : 'text-gray-400'
+        } mr-2`} />
+        <span className={`text-sm ${
+          event.eventType === 'date-night' && event.dateNightDetails?.needsBabysitter ?
+          'text-amber-700 font-medium' : 
+          'text-gray-600'
+        }`}>
+          {event.eventType === 'date-night' && event.dateNightDetails?.needsBabysitter ? 
+          'Select Babysitter' : 
+          'Select Provider'}
+        </span>
+      </button>
+    )}
+    
+    {/* Helper text for date nights */}
+    {event.eventType === 'date-night' && event.dateNightDetails?.needsBabysitter && 
+     (!event.providers || event.providers.length === 0) && (
+      <p className="text-xs mt-2 text-amber-700">
+        Don't forget to select a babysitter for your date night!
+      </p>
+    )}
+  </div>
+</div>
         
         {/* Recurring Event Toggle */}
         <div>

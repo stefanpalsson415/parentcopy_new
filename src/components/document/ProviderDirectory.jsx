@@ -39,7 +39,8 @@ const ProviderDirectory = ({
   loadingProviders = false,
   onAddProvider,
   onUpdateProvider,
-  onDeleteProvider
+  onDeleteProvider,
+  onClose
 }) => {
   const { currentUser } = useAuth();
   const [viewMode, setViewMode] = useState('card');
@@ -240,32 +241,41 @@ const ProviderDirectory = ({
     <div className="bg-white rounded-lg font-roboto">
       {/* Header with controls */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-3">
-        <div>
-          <h3 className="text-lg font-medium font-roboto flex items-center">
-            <User size={20} className="mr-2 text-purple-500" />
-            Family Provider Directory
-          </h3>
-          <p className="text-sm text-gray-500 font-roboto">
-            Manage your family's doctors, teachers, childcare, and service providers
-          </p>
-        </div>
-        
-        <div className="flex space-x-2 shrink-0">
-          <button
-            className="p-2 rounded-md hover:bg-gray-100"
-            onClick={toggleViewMode}
-            title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
-          >
-            {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
-          </button>
-          <button 
-            className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
-            onClick={() => openProviderModal()}
-          >
-            <Plus size={20} />
-          </button>
-        </div>
-      </div>
+  <div>
+    <h3 className="text-lg font-medium font-roboto flex items-center">
+      <User size={20} className="mr-2 text-purple-500" />
+      Family Provider Directory
+    </h3>
+    <p className="text-sm text-gray-500 font-roboto">
+      Manage your family's doctors, teachers, childcare, and service providers
+    </p>
+  </div>
+  
+  <div className="flex space-x-2 shrink-0">
+    <button
+      className="p-2 rounded-md hover:bg-gray-100"
+      onClick={toggleViewMode}
+      title={viewMode === 'card' ? 'Switch to list view' : 'Switch to card view'}
+    >
+      {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
+    </button>
+    <button 
+      className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
+      onClick={() => openProviderModal()}
+    >
+      <Plus size={20} />
+    </button>
+    {onClose && (
+      <button 
+        className="p-2 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+        onClick={onClose}
+        title="Close"
+      >
+        <X size={20} />
+      </button>
+    )}
+  </div>
+</div>
       
       {/* Search and filters */}
       <div className="bg-gray-50 p-4 rounded-lg mb-4">

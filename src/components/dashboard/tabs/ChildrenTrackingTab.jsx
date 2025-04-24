@@ -402,13 +402,12 @@ const ChildrenTrackingTab = () => {
     });
   }, []);
 
-  // Handle opening event managers and forms
   const openModal = (modalType, data) => {
     setActiveComponent({
       type: 'eventManager',
       props: {
         initialEvent: {
-          title: '',
+          title: modalType === 'growth' ? 'Growth Measurement' : '',
           description: '',
           childId: data.childId,
           childName: getChildName(data.childId),
@@ -773,20 +772,20 @@ const ChildrenTrackingTab = () => {
   };
 
   // Open provider directory
-  const handleOpenProviders = () => {
-    setActiveComponent({
-      type: 'providerDirectory',
-      props: {
-        familyId: familyId,
-        providers: healthcareProviders,
-        loadingProviders: loadingProviders,
-        onAddProvider: () => {}, // Implement if needed
-        onUpdateProvider: () => {}, // Implement if needed
-        onDeleteProvider: () => {}, // Implement if needed
-        onClose: () => setActiveComponent(null)
-      }
-    });
-  };
+const handleOpenProviders = () => {
+  setActiveComponent({
+    type: 'providerDirectory',
+    props: {
+      familyId: familyId,
+      providers: healthcareProviders,
+      loadingProviders: loadingProviders,
+      onAddProvider: () => {}, // Implement if needed
+      onUpdateProvider: () => {}, // Implement if needed
+      onDeleteProvider: () => {}, // Implement if needed
+      onClose: () => setActiveComponent(null)
+    }
+  });
+};
 
   return (
     <div className="relative min-h-full">
@@ -908,14 +907,14 @@ const ChildrenTrackingTab = () => {
       {/* Main Child Dashboard */}
       {activeChild && (
         <ChildDashboard 
-          child={familyMembers.find(m => m.id === activeChild)}
-          childData={childrenData[activeChild]}
-          onOpenAppointment={(data) => openModal('appointment', data)}
-          onOpenGrowth={(data) => openModal('growth', data)}
-          onOpenRoutine={(data) => openModal('routine', data)}
-          onOpenDocuments={handleOpenDocuments}
-          onOpenProviders={handleOpenProviders}
-        />
+        child={familyMembers.find(m => m.id === activeChild)}
+        childData={childrenData[activeChild]}
+        onOpenAppointment={(data) => openModal('appointment', data)}
+        onOpenGrowth={(data) => openModal('growth', data)}
+        onOpenRoutine={(data) => openModal('routine', data)}
+        onOpenDocuments={handleOpenDocuments}
+        onOpenProviders={handleOpenProviders}
+      />
       )}
       
       {/* Allie notification */}
@@ -1017,15 +1016,15 @@ const ChildrenTrackingTab = () => {
       
       {/* Render active component (EnhancedEventManager, DocumentLibrary, etc.) */}
       {activeComponent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          {activeComponent.type === 'eventManager' && (
-            <EnhancedEventManager {...activeComponent.props} />
-          )}
-          {activeComponent.type === 'documentLibrary' && (
-            <DocumentLibrary {...activeComponent.props} />
-          )}
-          {activeComponent.type === 'providerDirectory' && (
-            <ProviderDirectory {...activeComponent.props} />
+  <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    {activeComponent.type === 'eventManager' && (
+      <EnhancedEventManager {...activeComponent.props} />
+    )}
+    {activeComponent.type === 'documentLibrary' && (
+      <DocumentLibrary {...activeComponent.props} />
+    )}
+    {activeComponent.type === 'providerDirectory' && (
+      <ProviderDirectory {...activeComponent.props} />
           )}
         </div>
       )}

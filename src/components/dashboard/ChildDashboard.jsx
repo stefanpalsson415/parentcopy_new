@@ -217,176 +217,9 @@ const ChildDashboard = ({
     }
   };
   
-  // Handle suggested action click
-  const handleSuggestionClick = (suggestion) => {
-    setChatInput(suggestion);
-    handleChatSubmit(suggestion);
-  };
   
-  // Replace the existing handleChatSubmit function
-const handleChatSubmit = async (userInput = null) => {
-    const input = userInput || chatInput;
-    if (!input.trim()) return;
-    
-    // Update chat with user message
-    setChatMessages(prev => [...prev, { role: 'user', content: input }]);
-    setChatInput('');
-    setIsProcessing(true);
-    
-    try {
-      // Process the message with Allie
-      const contextData = {
-        childId: child.id,
-        childName: child.name,
-        childData: childData,
-        recentEvents: timeline.slice(0, 5),
-        chatHistory: chatMessages.slice(-5),  // Last 5 messages for context
-        missingInformation: quickStats.missingInfo
-      };
-      
-      // Send enhanced context to Allie
-      const response = await AllieAIService.processChildChat(
-        input,
-        child,
-        childData,
-        familyId,
-        contextData  // Add this enhanced context
-      );
-      
-      // Add Allie's response to chat
-      setChatMessages(prev => [...prev, { role: 'assistant', content: response.message }]);
-      
-      // If there's an action to take
-      if (response.action) {
-        setPendingAction(response.action);
-        
-        // Handle different action types
-        switch(response.action.type) {
-          case 'openAppointmentForm':
-            if (onOpenAppointment) {
-              onOpenAppointment({
-                childId: child.id,
-                ...response.action.data
-              });
-            }
-            break;
-            
-          case 'openGrowthForm':
-            if (onOpenGrowth) {
-              onOpenGrowth({
-                childId: child.id,
-                ...response.action.data
-              });
-            }
-            break;
-            
-          case 'openRoutineForm':
-            if (onOpenRoutine) {
-              onOpenRoutine({
-                childId: child.id,
-                ...response.action.data
-              });
-            }
-            break;
-            
-          case 'openDocuments':
-            if (onOpenDocuments) {
-              onOpenDocuments(child.id);
-            }
-            break;
-            
-          case 'completeEventDetails':
-            // Find the event in the timeline
-            const eventToEdit = timeline.find(event => 
-              event.id === response.action.eventId ||
-              event.title === response.action.eventTitle
-            );
-            
-            if (eventToEdit) {
-              // Open appropriate form based on event type
-              if (eventToEdit.category === 'medical') {
-                onOpenAppointment({ 
-                  childId: child.id, 
-                  ...eventToEdit.data,
-                  ...response.action.additionalData // Include any new data Allie extracted
-                });
-              } else if (eventToEdit.category === 'activity') {
-                onOpenRoutine({ 
-                  childId: child.id, 
-                  ...eventToEdit.data,
-                  ...response.action.additionalData
-                });
-              }
-            }
-            break;
-            
-          default:
-            console.log("Unknown action type:", response.action.type);
-        }
-      }
-      
-      // Generate new contextual suggestions
-      const newSuggestions = generateChatSuggestions();
-      setSuggestions(newSuggestions);
-      
-    } catch (error) {
-      console.error("Error processing chat:", error);
-      setChatMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: "I'm sorry, I had trouble processing that request. Can you try again?"
-      }]);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
   
-  // Start voice recognition
-  const startVoiceRecognition = () => {
-    // Check if browser supports speech recognition
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      setChatMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: "Speech recognition is not supported in your browser. Try using Chrome."
-      }]);
-      return;
-    }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => {
-      setIsRecording(true);
-      setChatInput('Listening...');
-    };
-
-    recognition.onresult = (event) => {
-      const transcript = Array.from(event.results)
-        .map(result => result[0])
-        .map(result => result.transcript)
-        .join('');
-      
-      setChatInput(transcript);
-    };
-
-    recognition.onerror = (event) => {
-      console.error('Speech recognition error', event.error);
-      setIsRecording(false);
-      setChatInput('');
-    };
-
-    recognition.onend = () => {
-      setIsRecording(false);
-      if (chatInput && chatInput !== 'Listening...') {
-        handleChatSubmit(chatInput);
-      }
-    };
-
-    recognition.start();
-  };
+ 
   
 
   // Helper to determine which details are required for each event type
@@ -666,12 +499,8 @@ const generateChatSuggestions = () => {
           item.category === 'school' || 
           item.category === 'education'
         );
-      case 'special':
-        return timeline.filter(item => 
-          item.category === 'special' || 
-          item.category === 'birthday' ||
-          item.category === 'celebration'
-        );
+        case 'providers':
+            return []; // We'll handle providers differently
       default:
         return timeline;
     }
@@ -681,6 +510,38 @@ const generateChatSuggestions = () => {
 const renderTabContent = () => {
     const tabTimeline = getTabTimeline();
     
+    if (activeTab === 'providers') {
+      return (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="font-medium text-lg flex items-center">
+              <User size={18} className="mr-2 text-purple-500" />
+              {child.name}'s Healthcare Providers
+            </h3>
+            <button
+              onClick={() => onOpenProviders(child.id)}
+              className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 inline-flex items-center"
+            >
+              <Plus size={14} className="mr-1" />
+              Add Provider
+            </button>
+          </div>
+          
+          <div className="text-center py-10 bg-gray-50 rounded-lg">
+            <User size={40} className="mx-auto text-gray-400 mb-3" />
+            <p className="text-gray-500">Manage healthcare providers for {child.name}</p>
+            <button
+              onClick={() => onOpenProviders(child.id)}
+              className="mt-4 px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 inline-flex items-center"
+            >
+              <Plus size={14} className="mr-1" />
+              View Provider Directory
+            </button>
+          </div>
+        </div>
+      );
+    }
+  
     if (tabTimeline.length === 0) {
       return (
         <div className="text-center py-10 bg-gray-50 rounded-lg">
@@ -696,7 +557,9 @@ const renderTabContent = () => {
                 case 'activities':
                   onOpenRoutine({ childId: child.id });
                   break;
-                // Add handlers for other tabs
+                case 'school':
+                  onOpenAppointment({ childId: child.id, category: 'school', eventType: 'school' });
+                  break;
                 default:
                   break;
               }
@@ -705,8 +568,7 @@ const renderTabContent = () => {
             <Plus size={14} className="mr-1" />
             Add {activeTab === 'health' ? 'Appointment' : 
                  activeTab === 'activities' ? 'Activity' :
-                 activeTab === 'school' ? 'School Event' :
-                 activeTab === 'special' ? 'Special Event' : 'Event'}
+                 activeTab === 'school' ? 'School Event' : 'Event'}
           </button>
         </div>
       );
@@ -731,6 +593,8 @@ const renderTabContent = () => {
                   onOpenAppointment({ childId: child.id, ...item.data });
                 } else if (item.category === 'activity') {
                   onOpenRoutine({ childId: child.id, ...item.data });
+                } else if (item.category === 'school') {
+                  onOpenAppointment({ childId: child.id, category: 'school', eventType: 'school', ...item.data });
                 }
               }
             }} 
@@ -1037,14 +901,14 @@ const renderTabContent = () => {
             <span className="text-xs">School</span>
           </button>
           <button
-            onClick={() => setActiveTab('special')}
-            className={`flex-1 py-2 px-3 rounded ${
-              activeTab === 'special' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'
-            }`}
-          >
-            <Award size={16} className="mx-auto mb-1" />
-            <span className="text-xs">Special</span>
-          </button>
+  onClick={() => setActiveTab('providers')}
+  className={`flex-1 py-2 px-3 rounded ${
+    activeTab === 'providers' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'
+  }`}
+>
+  <User size={16} className="mx-auto mb-1" />
+  <span className="text-xs">Providers</span>
+</button>
           <button
             onClick={() => onOpenDocuments(child.id)}
             className={`flex-1 py-2 px-3 rounded hover:bg-gray-200`}
@@ -1061,80 +925,31 @@ const renderTabContent = () => {
       </div>
       
       {/* Allie Chat Interface */}
-      <div className="p-4 rounded-b-lg">
-        <h3 className="font-medium mb-3 text-lg flex items-center">
-          <MessageCircle size={18} className="mr-2 text-purple-500" />
-          Chat with Allie about {child.name}
-        </h3>
-        
-        {/* Chat messages */}
-        <div className="bg-gray-50 rounded-lg p-3 mb-3 max-h-60 overflow-y-auto">
-          {chatMessages.map((message, index) => (
-            <div 
-              key={index} 
-              className={`mb-2 ${
-                message.role === 'user' ? 'text-right' : ''
-              }`}
-            >
-              <div 
-                className={`inline-block rounded-lg p-2 max-w-[85%] ${
-                  message.role === 'user' ? 
-                    'bg-blue-100 text-blue-800' : 
-                    'bg-white border border-gray-200 text-gray-800'
-                }`}
-              >
-                <p className="text-sm">{message.content}</p>
-              </div>
-            </div>
-          ))}
-          <div ref={chatEndRef} />
-        </div>
-        
-        {/* Suggested actions */}
-        <div className="mb-3 flex flex-wrap gap-2">
-          {suggestions.map((suggestion, index) => (
-            <button
-              key={index}
-              className="bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-xs hover:bg-purple-100"
-              onClick={() => handleSuggestionClick(suggestion)}
-            >
-              {suggestion}
-            </button>
-          ))}
-        </div>
-        
-        {/* Chat input */}
-        <div className="flex">
-          <div className="relative flex-grow">
-            <input
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              placeholder={`Ask Allie about ${child.name}...`}
-              className="w-full border border-gray-300 rounded-l-md pl-3 pr-10 py-2 text-sm focus:ring-purple-500 focus:border-purple-500"
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  handleChatSubmit();
-                }
-              }}
-              disabled={isProcessing || isRecording}
-            />
-            {isProcessing && (
-              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            )}
-          </div>
-          
-          <button
-            className={`p-2 ${isRecording ? 'bg-red-500' : 'bg-purple-500'} text-white rounded-r-md hover:${isRecording ? 'bg-red-600' : 'bg-purple-600'}`}
-            onClick={startVoiceRecognition}
-            disabled={isProcessing}
-          >
-            <Mic size={18} />
-          </button>
-        </div>
-      </div>
+<div className="p-4 rounded-b-lg">
+  <h3 className="font-medium mb-3 text-lg flex items-center">
+    <MessageCircle size={18} className="mr-2 text-purple-500" />
+    Chat with Allie about {child.name}
+  </h3>
+  
+  <button
+    onClick={() => {
+      // Dispatch the open-allie-chat event to trigger the global chat widget
+      window.dispatchEvent(new CustomEvent('open-allie-chat', {
+        detail: {
+          message: `I need help with ${child.name}`
+        }
+      }));
+    }}
+    className="w-full py-3 bg-black text-white rounded-md hover:bg-gray-800 flex items-center justify-center"
+  >
+    <MessageCircle size={18} className="mr-2" />
+    Chat with Allie
+  </button>
+  
+  <div className="mt-2 text-center text-xs text-gray-500">
+    Ask questions or get help managing {child.name}'s health, activities, or documents
+  </div>
+</div>
     </div>
   );
 };
