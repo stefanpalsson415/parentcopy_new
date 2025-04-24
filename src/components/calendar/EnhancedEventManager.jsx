@@ -3,7 +3,7 @@ import {
   FileText, Image, FileIcon, Calendar, User, Users, Trash2, Clock, MapPin, Tag, X,
   Heart, Check, AlertCircle, Info, Edit, BookOpen, Music, Star, Award, Gift, 
   Briefcase, Activity, Phone, Mail, DollarSign, Truck, Package, Home, Shield, 
-  Umbrella, List, Coffee, Check, Clipboard
+  Umbrella, List, Coffee, Clipboard
 } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';

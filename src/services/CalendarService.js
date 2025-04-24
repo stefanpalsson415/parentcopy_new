@@ -1,8 +1,7 @@
 // src/services/CalendarService.js
-import { doc, getDoc, setDoc, updateDoc, collection, addDoc,deleteDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, addDoc, deleteDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 import eventStore from './EventStore';
-
 
 class CalendarService {
   constructor() {
@@ -75,568 +74,452 @@ class CalendarService {
     }
   }
 
-
-  
-
-
-
-
-// Add a new method to handle recurring events
-async createRecurringEvents(baseEvent, userId, universalId) {
-  try {
-    // Check for valid recurrence rule
-    if (!baseEvent.recurrence || !Array.isArray(baseEvent.recurrence) || baseEvent.recurrence.length === 0) {
-      return;
-    }
-    
-    const recurrenceRule = baseEvent.recurrence[0];
-    if (!recurrenceRule.startsWith('RRULE:')) {
-      return;
-    }
-    
-    // Parse the recurrence rule
-    const ruleString = recurrenceRule.substring(6); // Remove 'RRULE:' prefix
-    const ruleComponents = ruleString.split(';');
-    
-    const rules = {};
-    ruleComponents.forEach(component => {
-      const [key, value] = component.split('=');
-      rules[key] = value;
-    });
-    
-    // We currently only support weekly recurrence
-    if (rules.FREQ !== 'WEEKLY') {
-      return;
-    }
-    
-    // Get the day of week
-    let dayOfWeek = '';
-    if (rules.BYDAY) {
-      dayOfWeek = rules.BYDAY;
-    } else {
-      // Use the day from the base event
-      const baseDate = new Date(baseEvent.start.dateTime);
-      const days = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
-      dayOfWeek = days[baseDate.getDay()];
-    }
-    
-    // Calculate end date (default to 10 occurrences if not specified)
-    let endDate = new Date();
-    endDate.setDate(endDate.getDate() + 70); // Default to 10 weeks
-    
-    if (rules.UNTIL) {
-      endDate = new Date(rules.UNTIL);
-    } else if (rules.COUNT) {
-      const count = parseInt(rules.COUNT);
-      const baseDate = new Date(baseEvent.start.dateTime);
-      endDate = new Date(baseDate);
-      endDate.setDate(baseDate.getDate() + (count * 7)); // count * 7 days
-    }
-    
-    // Create recurring events
-    const baseDate = new Date(baseEvent.start.dateTime);
-    const dayIndex = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].indexOf(dayOfWeek);
-    
-    // Adjust base date to match day of week if needed
-    const baseDayOfWeek = baseDate.getDay();
-    if (baseDayOfWeek !== dayIndex) {
-      // Find the next occurrence of the target day
-      const daysToAdd = (dayIndex - baseDayOfWeek + 7) % 7;
-      baseDate.setDate(baseDate.getDate() + daysToAdd);
-    }
-    
-    // Start from base date and create recurring events
-    const events = [];
-    const currentDate = new Date(baseDate);
-    
-    while (currentDate <= endDate) {
-      if (currentDate > baseDate) { // Skip the base event (already added)
-        const eventStartDate = new Date(currentDate);
-        const eventEndDate = new Date(currentDate);
-        
-        // Calculate end time based on base event duration
-        const baseStartTime = new Date(baseEvent.start.dateTime);
-        const baseEndTime = new Date(baseEvent.end.dateTime);
-        const durationMs = baseEndTime - baseStartTime;
-        
-        // Set the same time for the new event
-        eventStartDate.setHours(baseStartTime.getHours(), baseStartTime.getMinutes(), 0, 0);
-        eventEndDate.setTime(eventStartDate.getTime() + durationMs);
-        
-        // Create the event
-        const recurringEvent = {
-          ...baseEvent,
-          id: `${baseEvent.id}-${currentDate.toISOString().split('T')[0]}`,
-          start: {
-            dateTime: eventStartDate.toISOString(),
-            timeZone: baseEvent.start.timeZone
-          },
-          end: {
-            dateTime: eventEndDate.toISOString(),
-            timeZone: baseEvent.end.timeZone
-          },
-          universalId, // Link all recurring events
-          recurrenceId: baseEvent.id, // Reference the base event
-          recurringEventDate: currentDate.toISOString().split('T')[0] // Store the date of this occurrence
-        };
-        
-        // Remove recurrence rule from individual occurrences
-        delete recurringEvent.recurrence;
-        
-        // Add to Firestore
-        const eventsRef = collection(db, "calendarEvents");
-        await addDoc(eventsRef, {
-          ...recurringEvent,
-          userId,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-        
-        events.push(recurringEvent);
+  // Enhanced addEvent method that handles all event types and their details
+  async addEvent(event, userId) {
+    try {
+      if (!userId) throw new Error("User ID is required");
+      
+      console.log("Adding calendar event:", {
+        title: event.summary || event.title || 'Untitled',
+        type: event.eventType || event.category || 'general',
+        hasDate: !!(event.dateTime || event.start?.dateTime),
+        childName: event.childName || 'None'
+      });
+      
+      // Process the event details based on type to ensure all fields are captured
+      const eventData = this.processEventDetailsForStorage(event);
+      
+      // Use the EventStore to add the event (with enhanced metadata)
+      const result = await eventStore.addEvent(eventData, userId, event.familyId);
+      
+      // Check for duplicate detection
+      if (result.isDuplicate) {
+        this.showNotification(`This event already exists in your calendar`, "info");
+      } else {
+        const eventTypeDisplay = this.getEventTypeDisplayName(event.eventType || event.category);
+        this.showNotification(`${eventTypeDisplay} "${event.summary || event.title}" added to your calendar`, "success");
       }
       
-      // Move to next week
-      currentDate.setDate(currentDate.getDate() + 7);
-    }
-    
-    return events;
-  } catch (error) {
-    console.error("Error creating recurring events:", error);
-    return [];
-  }
-}
-
-
-// Replace the deleteEvent method with this enhanced version
-async deleteEvent(eventId, userId) {
-  try {
-    if (!eventId || !userId) {
-      throw new Error("Event ID and User ID are required to delete events");
-    }
-    
-    console.log("Deleting calendar event:", { eventId });
-    
-    // First, get the event to retrieve its universalId and other details
-    const docRef = doc(db, "calendar_events", eventId);
-    const eventDoc = await getDoc(docRef);
-    
-    if (!eventDoc.exists()) {
-      throw new Error(`Event with ID ${eventId} not found`);
-    }
-    
-    const eventData = eventDoc.data();
-    const universalId = eventData.universalId || eventId;
-    
-    // Delete from Firestore
-    await deleteDoc(docRef);
-    
-    // Check for and delete any linked events (for siblings)
-    if (eventData.linkedToEventId || eventData.childId) {
-      try {
-        // Query for linked events
-        const linkedEventsQuery = query(
-          collection(db, "calendar_events"),
-          where("linkedToEventId", "==", eventId)
-        );
-        
-        const querySnapshot = await getDocs(linkedEventsQuery);
-        
-        // Delete all linked events
-        const deletionPromises = [];
-        querySnapshot.forEach((doc) => {
-          deletionPromises.push(deleteDoc(doc.ref));
-        });
-        
-        if (deletionPromises.length > 0) {
-          await Promise.all(deletionPromises);
-          console.log(`Deleted ${deletionPromises.length} linked events`);
-        }
-      } catch (linkedError) {
-        console.warn("Error cleaning up linked events:", linkedError);
-        // Continue with main deletion even if linked cleanup fails
+      // Dispatch DOM event for components to refresh
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('calendar-event-added', {
+          detail: { 
+            eventId: result.eventId,
+            universalId: result.universalId,
+            isDuplicate: result.isDuplicate || false,
+            eventType: event.eventType || event.category
+          }
+        }));
       }
+      
+      return result;
+    } catch (error) {
+      console.error("Error adding event to calendar:", error);
+      this.showNotification("Failed to add event to calendar", "error");
+      return { success: false, error: error.message || "Unknown error" };
     }
-    
-    // Dispatch events for UI refresh
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-      window.dispatchEvent(new CustomEvent('calendar-event-deleted', {
-        detail: { 
-          eventId, 
-          universalId,
-          childId: eventData.childId,
-          childName: eventData.childName
-        }
-      }));
-    }
-    
-    this.showNotification("Event deleted from calendar", "success");
-    
-    return {
-      success: true,
-      universalId
-    };
-  } catch (error) {
-    console.error("Error deleting event:", error);
-    this.showNotification("Failed to delete event", "error");
-    return { success: false, error: error.message || "Unknown error" };
   }
-}
-
-async addEvent(event, userId) {
-  try {
-    if (!userId) throw new Error("User ID is required");
-    
-    console.log("Adding calendar event:", {
-      title: event.summary || event.title || 'Untitled',
-      hasDate: !!(event.dateTime || event.start?.dateTime),
-      childName: event.childName || 'None',
-      documents: event.documents?.length || 0,
-      providers: event.providers?.length || 0
-    });
-    
-    // Process any document references
-    if (event.documents && event.documents.length > 0) {
-      // Log document attachment
-      console.log(`Attaching ${event.documents.length} documents to event`);
-    }
-    
-    // Process any provider references
-    if (event.providers && event.providers.length > 0) {
-      // Log provider attachment
-      console.log(`Linking ${event.providers.length} providers to event`);
-    }
-    
-    // Use the EventStore to add the event (with enhanced metadata)
-    const result = await eventStore.addEvent(event, userId, event.familyId);
-    
-    // Check for duplicate detection
-    if (result.isDuplicate) {
-      this.showNotification(`This event already exists in your calendar`, "info");
-    } else {
-      this.showNotification(`Event "${event.summary || event.title}" added to your calendar`, "success");
-    }
-    
-    // Dispatch DOM event for components to refresh
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('calendar-event-added', {
-        detail: { 
-          eventId: result.eventId,
-          universalId: result.universalId,
-          isDuplicate: result.isDuplicate || false
-        }
-      }));
-    }
-    
-    return result;
-  } catch (error) {
-    console.error("Error adding event to calendar:", error);
-    this.showNotification("Failed to add event to calendar", "error");
-    return { success: false, error: error.message || "Unknown error" };
-  }
-}
-
-async updateEvent(eventId, updateData, userId) {
-  try {
-    if (!eventId || !userId) {
-      throw new Error("Event ID and User ID are required to update events");
-    }
-    
-    console.log("Updating calendar event:", { 
-      eventId, 
-      updateFields: Object.keys(updateData),
-      hasDocuments: !!updateData.documents,
-      hasProviders: !!updateData.providers
-    });
-    
-    // Process document references if updated
-    if (updateData.documents) {
-      console.log(`Updating event with ${updateData.documents.length} document references`);
-    }
-    
-    // Process provider references if updated
-    if (updateData.providers) {
-      console.log(`Updating event with ${updateData.providers.length} provider references`);
-    }
-    
-    // Use the EventStore to update the event
-    const result = await eventStore.updateEvent(eventId, updateData, userId);
-    
-    // Show notification
-    this.showNotification("Event updated successfully", "success");
-    
-    // Dispatch DOM event for components to refresh
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('calendar-event-updated', {
-        detail: { 
-          eventId,
-          universalId: result.universalId
-        }
-      }));
-    }
-    
-    return result;
-  } catch (error) {
-    console.error("Error updating event:", error);
-    this.showNotification("Failed to update event", "error");
-    return { success: false, error: error.message || "Unknown error" };
-  }
-}
-
-// Replace the deleteEvent method
-async deleteEvent(eventId, userId) {
-  try {
-    if (!eventId || !userId) {
-      throw new Error("Event ID and User ID are required to delete events");
-    }
-    
-    console.log("Deleting calendar event:", { eventId });
-    
-    // Use the EventStore to delete the event
-    const result = await eventStore.deleteEvent(eventId, userId);
-    
-    // Show notification if successful
-    if (result.success) {
-      this.showNotification("Event deleted from calendar", "success");
-    }
-    
-    return result;
-  } catch (error) {
-    console.error("Error deleting event:", error);
-    this.showNotification("Failed to delete event", "error");
-    return { success: false, error: error.message || "Unknown error" };
-  }
-}
-
-// Replace the getEventsForUser method
-async getEventsForUser(userId, timeMin, timeMax) {
-  try {
-    if (!userId) {
-      throw new Error("User ID is required to get events");
-    }
-    
-    // Use the EventStore to get events
-    return await eventStore.getEventsForUser(userId, timeMin, timeMax);
-  } catch (error) {
-    console.error("Error getting events:", error);
-    return [];
-  }
-}
-
-/// In CalendarService.js - Find the addChildEvent method and replace it with this:
-// Fix for CalendarService.js - replace the addChildEvent method
-async addChildEvent(event, userId) {
-  try {
-    if (!userId) {
-      throw new Error("User ID is required to add events");
-    }
-    
-    console.log("Adding child calendar event:", {
-      title: event.title || 'Untitled',
-      childName: event.childName || 'Unknown child',
-      hasDate: !!(event.dateTime),
-      userId
-    });
-    
-    // Ensure event has required fields
-    if (!event.title) {
-      event.title = "Untitled Child Event";
-    }
-    
-    // Clean event object by removing any undefined fields
-    const cleanedEvent = Object.fromEntries(
-      Object.entries(event).filter(([_, value]) => value !== undefined)
-    );
-    
-    // Format child event
-    const standardizedEvent = {
-      ...cleanedEvent,
-      summary: cleanedEvent.title,
-      description: cleanedEvent.description || '',
-      start: {
-        dateTime: cleanedEvent.dateTime instanceof Date 
-          ? cleanedEvent.dateTime.toISOString() 
-          : new Date(cleanedEvent.dateTime).toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      end: {
-        dateTime: cleanedEvent.endDateTime instanceof Date 
-          ? cleanedEvent.endDateTime.toISOString() 
-          : new Date(new Date(cleanedEvent.dateTime).getTime() + 60*60000).toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      location: cleanedEvent.location || '',
-      childId: cleanedEvent.childId,
-      childName: cleanedEvent.childName,
-      attendingParentId: cleanedEvent.attendingParentId,
-      eventType: cleanedEvent.eventType || 'other',
-      extraDetails: cleanedEvent.extraDetails || {},
-      creationSource: cleanedEvent.creationSource || 'manual'
-    };
-    
-    // Save event to Firestore
-    const eventData = {
-      ...standardizedEvent,
-      userId,
-      familyId: cleanedEvent.familyId || null,
-      createdAt: serverTimestamp()
-    };
-    
-    const eventRef = collection(db, "calendar_events"); // Use regular events collection, not child-specific
-    const docRef = await addDoc(eventRef, eventData);
-    
-    // Dispatch a single event to notify components - NO force refresh to avoid duplication
-    if (typeof window !== 'undefined') {
-      const updateEvent = new CustomEvent('calendar-child-event-added', {
-        detail: { 
-          eventId: docRef.id, 
-          childId: cleanedEvent.childId,
-          childName: cleanedEvent.childName
-        }
-      });
-      window.dispatchEvent(updateEvent);
-    }
-    
-    // Show success notification
-    this.showNotification(`${standardizedEvent.summary} added to your calendar for ${cleanedEvent.childName}`, "success");
-    
-    return {
-      success: true,
-      eventId: docRef.id,
-      isMock: false
-    };
-  } catch (error) {
-    console.error("Error adding child event to calendar:", error);
-    this.showNotification("Failed to add child event to calendar", "error");
-    return { success: false, error: error.message || "Unknown error" };
-  }
-}
-
-// Create a date formatter that handles both US and SE formats
-formatDateForDisplay(date, region = 'US') {
-  if (!date) return '';
   
-  try {
-    const dateObj = date instanceof Date ? date : new Date(date);
+  // Helper method to get a user-friendly display name for event types
+  getEventTypeDisplayName(eventType) {
+    const displayNames = {
+      'appointment': 'Appointment',
+      'activity': 'Activity',
+      'birthday': 'Birthday',
+      'meeting': 'Meeting',
+      'date-night': 'Date Night',
+      'travel': 'Trip',
+      'vacation': 'Vacation',
+      'playdate': 'Playdate',
+      'conference': 'Conference'
+    };
     
-    // Format differently based on region
-    if (region === 'SE') {
-      // Swedish format: DD/MM/YYYY, 24-hour clock
-      return {
-        date: dateObj.toLocaleDateString('sv-SE', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-        time: dateObj.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', hour12: false })
-      };
-    } else {
-      // US format: MM/DD/YYYY, 12-hour clock
-      return {
-        date: dateObj.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-        time: dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
-      };
-    }
-  } catch (error) {
-    console.error("Error formatting date:", error);
-    return { date: '', time: '' };
+    return displayNames[eventType] || 'Event';
   }
-}
-
-// Add this method to CalendarService class
-// Add this method to CalendarService class
-async addChildEvent(event, userId) {
-  try {
-    if (!userId) {
-      throw new Error("User ID is required to add events");
-    }
-    
-    // Ensure event has required fields
-    if (!event.title) {
-      event.title = "Untitled Child Event";
-    }
-    
-    // Format child event
-    const standardizedEvent = {
+  
+  // Process all event details to ensure they're correctly formatted for storage
+  processEventDetailsForStorage(event) {
+    // Create a standardized event object first
+    const standardEvent = {
       ...event,
-      summary: event.title,
-      description: event.description || '',
-      start: {
-        dateTime: event.dateTime instanceof Date ? event.dateTime.toISOString() : new Date(event.dateTime).toISOString(),
+      // Ensure we have standard title/summary fields
+      title: event.title || event.summary || 'Untitled Event',
+      summary: event.summary || event.title || 'Untitled Event',
+      // Ensure we have standardized date/time fields
+      start: event.start || {
+        dateTime: event.dateTime || new Date().toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       },
-      end: {
-        dateTime: event.endDateTime instanceof Date ? 
-          event.endDateTime.toISOString() : 
-          new Date(new Date(event.dateTime).getTime() + 60*60000).toISOString(),
+      end: event.end || {
+        dateTime: event.endDateTime || 
+                  new Date(new Date(event.dateTime || Date.now()).getTime() + 60 * 60 * 1000).toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       },
-      location: event.location || '',
-      childId: event.childId,
-      childName: event.childName,
-      attendingParentId: event.attendingParentId,
-      eventType: event.eventType || 'other',
-      extraDetails: event.extraDetails || {},
-      creationSource: event.creationSource || 'manual'
+      // Set empty arrays for related entities if not present
+      documents: event.documents || [],
+      providers: event.providers || [],
+      attendees: event.attendees || []
     };
     
-    // Save event to Firestore
-    const eventData = {
-      ...standardizedEvent,
-      userId,
-      familyId: event.familyId || null,
-      createdAt: serverTimestamp()
-    };
+    // Add extraDetails for type-specific data if not already present
+    if (!standardEvent.extraDetails) {
+      standardEvent.extraDetails = {};
+    }
     
-    const eventRef = collection(db, "calendar_child_events");
-    const docRef = await addDoc(eventRef, eventData);
+    // Always include event-specific details in extraDetails
+    if (event.appointmentDetails && (event.category === 'appointment' || event.eventType === 'appointment')) {
+      standardEvent.extraDetails.appointmentDetails = event.appointmentDetails;
+    }
     
-    // Dispatch an event to notify components
-    if (typeof window !== 'undefined') {
-      const updateEvent = new CustomEvent('calendar-child-event-added', {
-        detail: { eventId: docRef.id, childId: event.childId }
+    if (event.activityDetails && (event.category === 'activity' || event.eventType === 'activity')) {
+      standardEvent.extraDetails.activityDetails = event.activityDetails;
+    }
+    
+    if (event.birthdayDetails && (event.category === 'birthday' || event.eventType === 'birthday')) {
+      standardEvent.extraDetails.birthdayDetails = event.birthdayDetails;
+    }
+    
+    if (event.meetingDetails && (event.category === 'meeting' || event.eventType === 'meeting')) {
+      standardEvent.extraDetails.meetingDetails = event.meetingDetails;
+    }
+    
+    if (event.dateNightDetails && event.eventType === 'date-night') {
+      standardEvent.extraDetails.dateNightDetails = event.dateNightDetails;
+    }
+    
+    if (event.travelDetails && (event.eventType === 'travel' || event.eventType === 'vacation')) {
+      standardEvent.extraDetails.travelDetails = event.travelDetails;
+    }
+    
+    if (event.playdateDetails && event.eventType === 'playdate') {
+      standardEvent.extraDetails.playdateDetails = event.playdateDetails;
+    }
+    
+    if (event.conferenceDetails && event.eventType === 'conference') {
+      standardEvent.extraDetails.conferenceDetails = event.conferenceDetails;
+    }
+    
+    return standardEvent;
+  }
+
+  async updateEvent(eventId, updateData, userId) {
+    try {
+      if (!eventId || !userId) {
+        throw new Error("Event ID and User ID are required to update events");
+      }
+      
+      console.log("Updating calendar event:", { 
+        eventId, 
+        updateFields: Object.keys(updateData),
+        eventType: updateData.eventType || updateData.category
       });
-      window.dispatchEvent(updateEvent);
+      
+      // Process all event details to ensure they're properly formatted
+      const processedUpdateData = this.processEventDetailsForStorage(updateData);
+      
+      // Use the EventStore to update the event
+      const result = await eventStore.updateEvent(eventId, processedUpdateData, userId);
+      
+      // Show notification
+      this.showNotification("Event updated successfully", "success");
+      
+      // Dispatch DOM event for components to refresh
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('calendar-event-updated', {
+          detail: { 
+            eventId,
+            universalId: result.universalId,
+            eventType: updateData.eventType || updateData.category
+          }
+        }));
+      }
+      
+      return result;
+    } catch (error) {
+      console.error("Error updating event:", error);
+      this.showNotification("Failed to update event", "error");
+      return { success: false, error: error.message || "Unknown error" };
     }
-    
-    // Show success notification
-    this.showNotification(`Event "${standardizedEvent.summary}" added to your calendar for ${event.childName}`, "success");
-    
-    return {
-      success: true,
-      eventId: docRef.id,
-      isMock: false
-    };
-  } catch (error) {
-    console.error("Error adding child event to calendar:", error);
-    this.showNotification("Failed to add child event to calendar", "error");
-    return { success: false, error: error.message || "Unknown error" };
   }
-}
 
-// Create a date formatter that handles both US and SE formats
-formatDateForDisplay(date, region = 'US') {
-  if (!date) return '';
+  async deleteEvent(eventId, userId) {
+    try {
+      if (!eventId || !userId) {
+        throw new Error("Event ID and User ID are required to delete events");
+      }
+      
+      console.log("Deleting calendar event:", { eventId });
+      
+      // Use the EventStore to delete the event
+      const result = await eventStore.deleteEvent(eventId, userId);
+      
+      // Show notification if successful
+      if (result.success) {
+        this.showNotification("Event deleted from calendar", "success");
+      }
+      
+      // Dispatch event for UI refresh
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        window.dispatchEvent(new CustomEvent('calendar-event-deleted', {
+          detail: { 
+            eventId, 
+            universalId: result.universalId || eventId
+          }
+        }));
+      }
+      
+      return result;
+    } catch (error) {
+      console.error("Error deleting event:", error);
+      this.showNotification("Failed to delete event", "error");
+      return { success: false, error: error.message || "Unknown error" };
+    }
+  }
+
+  async getEventsForUser(userId, timeMin, timeMax) {
+    try {
+      if (!userId) {
+        throw new Error("User ID is required to get events");
+      }
+      
+      // Use the EventStore to get events
+      return await eventStore.getEventsForUser(userId, timeMin, timeMax);
+    } catch (error) {
+      console.error("Error getting events:", error);
+      return [];
+    }
+  }
   
-  try {
-    const dateObj = date instanceof Date ? date : new Date(date);
-    
-    // Format differently based on region
-    if (region === 'SE') {
-      // Swedish format: DD/MM/YYYY, 24-hour clock
-      return {
-        date: dateObj.toLocaleDateString('sv-SE', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-        time: dateObj.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', hour12: false })
+  // Child-specific event handling
+  async addChildEvent(event, userId) {
+    try {
+      if (!userId) {
+        throw new Error("User ID is required to add events");
+      }
+      
+      console.log("Adding child calendar event:", {
+        title: event.title || 'Untitled',
+        childName: event.childName || 'Unknown child',
+        hasDate: !!(event.dateTime),
+        eventType: event.eventType || event.category,
+        userId
+      });
+      
+      // Ensure event has required fields
+      if (!event.title) {
+        event.title = "Untitled Child Event";
+      }
+      
+      // Clean event object by removing any undefined fields
+      const cleanedEvent = Object.fromEntries(
+        Object.entries(event).filter(([_, value]) => value !== undefined)
+      );
+      
+      // Process all event details before saving
+      const processedEvent = this.processEventDetailsForStorage(cleanedEvent);
+      
+      // Format child event
+      const standardizedEvent = {
+        ...processedEvent,
+        creationSource: cleanedEvent.creationSource || 'manual'
       };
-    } else {
-      // US format: MM/DD/YYYY, 12-hour clock
-      return {
-        date: dateObj.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-        time: dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+      
+      // Save event to Firestore
+      const eventData = {
+        ...standardizedEvent,
+        userId,
+        familyId: cleanedEvent.familyId || null,
+        createdAt: serverTimestamp()
       };
+      
+      // Use the events collection, not child-specific one (simplified)
+      const eventRef = collection(db, "events");
+      const docRef = await addDoc(eventRef, eventData);
+      
+      // Dispatch an event to notify components
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('calendar-child-event-added', {
+          detail: { 
+            eventId: docRef.id, 
+            childId: cleanedEvent.childId,
+            childName: cleanedEvent.childName
+          }
+        }));
+        
+        // Also trigger general refresh
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+      }
+      
+      // Show success notification
+      const eventTypeDisplay = this.getEventTypeDisplayName(event.eventType || event.category);
+      this.showNotification(`${eventTypeDisplay} added for ${cleanedEvent.childName}`, "success");
+      
+      return {
+        success: true,
+        eventId: docRef.id
+      };
+    } catch (error) {
+      console.error("Error adding child event to calendar:", error);
+      this.showNotification("Failed to add child event to calendar", "error");
+      return { success: false, error: error.message || "Unknown error" };
     }
-  } catch (error) {
-    console.error("Error formatting date:", error);
-    return { date: '', time: '' };
   }
-}
 
+  // Create a recurring event series
+  async createRecurringEvents(baseEvent, userId, universalId) {
+    try {
+      // Check for valid recurrence rule
+      if (!baseEvent.recurrence || !Array.isArray(baseEvent.recurrence) || baseEvent.recurrence.length === 0) {
+        return;
+      }
+      
+      const recurrenceRule = baseEvent.recurrence[0];
+      if (!recurrenceRule.startsWith('RRULE:')) {
+        return;
+      }
+      
+      // Parse the recurrence rule
+      const ruleString = recurrenceRule.substring(6); // Remove 'RRULE:' prefix
+      const ruleComponents = ruleString.split(';');
+      
+      const rules = {};
+      ruleComponents.forEach(component => {
+        const [key, value] = component.split('=');
+        rules[key] = value;
+      });
+      
+      // We currently only support weekly recurrence
+      if (rules.FREQ !== 'WEEKLY') {
+        return;
+      }
+      
+      // Get the day of week
+      let dayOfWeek = '';
+      if (rules.BYDAY) {
+        dayOfWeek = rules.BYDAY;
+      } else {
+        // Use the day from the base event
+        const baseDate = new Date(baseEvent.start.dateTime);
+        const days = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+        dayOfWeek = days[baseDate.getDay()];
+      }
+      
+      // Calculate end date (default to 10 occurrences if not specified)
+      let endDate = new Date();
+      endDate.setDate(endDate.getDate() + 70); // Default to 10 weeks
+      
+      if (rules.UNTIL) {
+        endDate = new Date(rules.UNTIL);
+      } else if (rules.COUNT) {
+        const count = parseInt(rules.COUNT);
+        const baseDate = new Date(baseEvent.start.dateTime);
+        endDate = new Date(baseDate);
+        endDate.setDate(baseDate.getDate() + (count * 7)); // count * 7 days
+      }
+      
+      // Create recurring events
+      const baseDate = new Date(baseEvent.start.dateTime);
+      const dayIndex = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].indexOf(dayOfWeek);
+      
+      // Adjust base date to match day of week if needed
+      const baseDayOfWeek = baseDate.getDay();
+      if (baseDayOfWeek !== dayIndex) {
+        // Find the next occurrence of the target day
+        const daysToAdd = (dayIndex - baseDayOfWeek + 7) % 7;
+        baseDate.setDate(baseDate.getDate() + daysToAdd);
+      }
+      
+      // Start from base date and create recurring events
+      const events = [];
+      const currentDate = new Date(baseDate);
+      
+      while (currentDate <= endDate) {
+        if (currentDate > baseDate) { // Skip the base event (already added)
+          const eventStartDate = new Date(currentDate);
+          const eventEndDate = new Date(currentDate);
+          
+          // Calculate end time based on base event duration
+          const baseStartTime = new Date(baseEvent.start.dateTime);
+          const baseEndTime = new Date(baseEvent.end.dateTime);
+          const durationMs = baseEndTime - baseStartTime;
+          
+          // Set the same time for the new event
+          eventStartDate.setHours(baseStartTime.getHours(), baseStartTime.getMinutes(), 0, 0);
+          eventEndDate.setTime(eventStartDate.getTime() + durationMs);
+          
+          // Create the event
+          const recurringEvent = {
+            ...baseEvent,
+            id: `${baseEvent.id}-${currentDate.toISOString().split('T')[0]}`,
+            start: {
+              dateTime: eventStartDate.toISOString(),
+              timeZone: baseEvent.start.timeZone
+            },
+            end: {
+              dateTime: eventEndDate.toISOString(),
+              timeZone: baseEvent.end.timeZone
+            },
+            universalId, // Link all recurring events
+            recurrenceId: baseEvent.id, // Reference the base event
+            recurringEventDate: currentDate.toISOString().split('T')[0] // Store the date of this occurrence
+          };
+          
+          // Remove recurrence rule from individual occurrences
+          delete recurringEvent.recurrence;
+          
+          // Process all event details
+          const processedEvent = this.processEventDetailsForStorage(recurringEvent);
+          
+          // Add to Firestore
+          const eventsRef = collection(db, "events");
+          await addDoc(eventsRef, {
+            ...processedEvent,
+            userId,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+          
+          events.push(recurringEvent);
+        }
+        
+        // Move to next week
+        currentDate.setDate(currentDate.getDate() + 7);
+      }
+      
+      return events;
+    } catch (error) {
+      console.error("Error creating recurring events:", error);
+      return [];
+    }
+  }
+
+  // Format date for display
+  formatDateForDisplay(date, region = 'US') {
+    if (!date) return '';
+    
+    try {
+      const dateObj = date instanceof Date ? date : new Date(date);
+      
+      // Format differently based on region
+      if (region === 'SE') {
+        // Swedish format: DD/MM/YYYY, 24-hour clock
+        return {
+          date: dateObj.toLocaleDateString('sv-SE', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+          time: dateObj.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', hour12: false })
+        };
+      } else {
+        // US format: MM/DD/YYYY, 12-hour clock
+        return {
+          date: dateObj.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
+          time: dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+        };
+      }
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return { date: '', time: '' };
+    }
+  }
 
   // Generate an ICS file for download
   async generateICSFile(event) {
@@ -686,6 +569,81 @@ formatDateForDisplay(date, region = 'US') {
     }
   }
 
+  // Create event object from a task
+  createEventFromTask(task) {
+    // Calculate event start and end time
+    const startTime = new Date();
+    startTime.setHours(startTime.getHours() + 1); // Start in 1 hour
+    
+    const endTime = new Date(startTime);
+    endTime.setHours(endTime.getHours() + 1); // 1 hour duration
+    
+    // Create event object
+    return {
+      'summary': `Allie Task: ${task.title || 'Untitled Task'}`,
+      'description': `${task.description || ''}\n\nAssigned to: ${task.assignedToName || 'Unknown'}\nCategory: ${task.category || task.focusArea || 'Unknown'}`,
+      'start': {
+        'dateTime': startTime.toISOString(),
+        'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      'end': {
+        'dateTime': endTime.toISOString(),
+        'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      'eventType': 'task',
+      'category': 'task',
+      'reminders': {
+        'useDefault': false,
+        'overrides': [
+          {'method': 'popup', 'minutes': 10}
+        ]
+      }
+    };
+  }
+
+  // Create event for family meeting
+  createFamilyMeetingEvent(weekNumber, meetingDate) {
+    // Default to next Sunday if no date provided
+    if (!meetingDate) {
+      meetingDate = new Date();
+      meetingDate.setDate(meetingDate.getDate() + (7 - meetingDate.getDay())); // Next Sunday
+      meetingDate.setHours(19, 0, 0, 0); // 7:00 PM
+    }
+    
+    const endTime = new Date(meetingDate);
+    endTime.setMinutes(endTime.getMinutes() + 30); // 30 min duration
+    
+    return {
+      'summary': `Allie Family Meeting - Week ${weekNumber || '?'}`,
+      'title': `Allie Family Meeting - Week ${weekNumber || '?'}`,
+      'description': 'Weekly family meeting to discuss task balance and set goals for the coming week.',
+      'start': {
+        'dateTime': meetingDate.toISOString(),
+        'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      'end': {
+        'dateTime': endTime.toISOString(),
+        'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      'eventType': 'meeting',
+      'category': 'meeting',
+      'reminders': {
+        'useDefault': false,
+        'overrides': [
+          {'method': 'popup', 'minutes': 60},
+          {'method': 'email', 'minutes': 1440} // 24 hours before
+        ]
+      },
+      'meetingDetails': {
+        'agenda': 'Weekly family meeting',
+        'issuesForDiscussion': 'Task balance and goals for the coming week',
+        'followUpPlan': 'Review progress next week'
+      },
+      'colorId': '6' // Blue
+    };
+  }
+
+  // Show a notification to the user
   showNotification(message, type = "info") {
     if (typeof window === 'undefined') return;
     
@@ -755,102 +713,6 @@ formatDateForDisplay(date, region = 'US') {
       notification.style.animation = 'fadeOut 0.3s ease-out forwards';
       setTimeout(() => notification.remove(), 300);
     }, 5000);
-  }
-
-  // Create event object from a task
-  createEventFromTask(task) {
-    // Calculate event start and end time
-    const startTime = new Date();
-    startTime.setHours(startTime.getHours() + 1); // Start in 1 hour
-    
-    const endTime = new Date(startTime);
-    endTime.setHours(endTime.getHours() + 1); // 1 hour duration
-    
-    // Create event object
-    return {
-      'summary': `Allie Task: ${task.title || 'Untitled Task'}`,
-      'description': `${task.description || ''}\n\nAssigned to: ${task.assignedToName || 'Unknown'}\nCategory: ${task.category || task.focusArea || 'Unknown'}`,
-      'start': {
-        'dateTime': startTime.toISOString(),
-        'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      'end': {
-        'dateTime': endTime.toISOString(),
-        'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      'reminders': {
-        'useDefault': false,
-        'overrides': [
-          {'method': 'popup', 'minutes': 10}
-        ]
-      }
-    };
-  }
-
-  // Create event for family meeting
-  createFamilyMeetingEvent(weekNumber, meetingDate) {
-    // Default to next Sunday if no date provided
-    if (!meetingDate) {
-      meetingDate = new Date();
-      meetingDate.setDate(meetingDate.getDate() + (7 - meetingDate.getDay())); // Next Sunday
-      meetingDate.setHours(19, 0, 0, 0); // 7:00 PM
-    }
-    
-    const endTime = new Date(meetingDate);
-    endTime.setMinutes(endTime.getMinutes() + 30); // 30 min duration
-    
-    return {
-      'summary': `Allie Family Meeting - Week ${weekNumber || '?'}`,
-      'description': 'Weekly family meeting to discuss task balance and set goals for the coming week.',
-      'start': {
-        'dateTime': meetingDate.toISOString(),
-        'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      'end': {
-        'dateTime': endTime.toISOString(),
-        'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      'reminders': {
-        'useDefault': false,
-        'overrides': [
-          {'method': 'popup', 'minutes': 60},
-          {'method': 'email', 'minutes': 1440} // 24 hours before
-        ]
-      },
-      'colorId': '6' // Blue
-    };
-  }
-
-  // Create event for task reminder
-  createTaskReminderEvent(task, reminderDate) {
-    if (!reminderDate) {
-      reminderDate = new Date();
-      reminderDate.setDate(reminderDate.getDate() + 1); // Default to tomorrow
-      reminderDate.setHours(10, 0, 0, 0); // 10:00 AM
-    }
-    
-    const endTime = new Date(reminderDate);
-    endTime.setMinutes(endTime.getMinutes() + 30);
-    
-    return {
-      'summary': `Reminder: ${task.title || 'Task Reminder'}`,
-      'description': `This is a reminder to complete your Allie task: ${task.description || 'No description provided'}`,
-      'start': {
-        'dateTime': reminderDate.toISOString(),
-        'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      'end': {
-        'dateTime': endTime.toISOString(),
-        'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      'reminders': {
-        'useDefault': false,
-        'overrides': [
-          {'method': 'popup', 'minutes': 30}
-        ]
-      },
-      'colorId': '10' // Green
-    };
   }
 }
 
