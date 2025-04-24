@@ -1003,6 +1003,117 @@ async createOrFindProvider(familyId, name, specialty, email, phone, address = ""
   }
 }
 
+// New method in AllieAIService.js to process events from chat for all types
+
+async processEventFromChat(message, familyId, eventType = null, childId = null) {
+  try {
+    if (!familyId) return { success: false, error: "Family ID is required" };
+    
+    console.log(`Processing ${eventType || 'event'} from chat:`, message);
+    
+    // Get family context for better parsing
+    const familyContext = await this.getFamilyContext(familyId);
+    
+    // Use UnifiedParserService to extract event details
+    const UnifiedParserService = (await import('./UnifiedParserService')).default;
+    const eventDetails = await UnifiedParserService.parseEvent(message, familyContext);
+    
+    if (!eventDetails || !eventDetails.title) {
+      return { 
+        success: false, 
+        error: "Could not determine event details from your message" 
+      };
+    }
+    
+    console.log("Parsed event details:", eventDetails);
+    
+    // If no child ID is provided, try to identify from the message
+    if (!childId && eventDetails.childName) {
+      const childrenMatches = familyContext.children
+        .filter(child => eventDetails.childName.toLowerCase().includes(child.name.toLowerCase()));
+      
+      if (childrenMatches.length > 0) {
+        childId = childrenMatches[0].id;
+        eventDetails.childId = childId;
+      } else if (familyContext.children.length === 1) {
+        // If only one child, assume it's for them
+        childId = familyContext.children[0].id;
+        eventDetails.childId = childId;
+        eventDetails.childName = familyContext.children[0].name;
+      }
+    }
+    
+    // For date nights, both parents should be included
+    if (eventDetails.eventType === 'date-night') {
+      eventDetails.attendingParentId = 'both';
+    }
+    
+    // Handle providers if mentioned
+    if (eventDetails.providers && eventDetails.providers.length > 0) {
+      for (const providerData of eventDetails.providers) {
+        const providerId = await this.createOrFindProvider(
+          familyId, 
+          providerData.name,
+          providerData.specialty,
+          providerData.email,
+          providerData.phone
+        );
+        
+        if (providerId) {
+          providerData.id = providerId;
+        }
+      }
+    }
+    
+    // Create complete event object
+    const completeEvent = {
+      ...eventDetails,
+      familyId,
+      userId: familyContext.currentUser?.uid,
+      // Create standardized date/time format
+      dateObj: new Date(eventDetails.dateTime),
+      start: {
+        dateTime: new Date(eventDetails.dateTime).toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: new Date(new Date(eventDetails.dateTime).getTime() + (eventDetails.duration || 60) * 60000).toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      }
+    };
+    
+    // Save to calendar
+    const { addEvent } = (await import('../contexts/EventContext')).useEvents();
+    const result = await addEvent(completeEvent);
+    
+    if (result.success) {
+      // Trigger calendar refresh
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+      }
+      
+      return { 
+        success: true, 
+        eventId: result.eventId,
+        eventDetails: completeEvent,
+        message: `Successfully added ${
+          eventDetails.eventType === 'appointment' ? 'appointment' :
+          eventDetails.eventType === 'activity' ? 'activity' :
+          eventDetails.eventType === 'date-night' ? 'date night' :
+          'event'
+        } to your calendar.`
+      };
+    } else {
+      return { 
+        success: false, 
+        error: result.error || "Failed to add event to calendar" 
+      };
+    }
+  } catch (error) {
+    console.error("Error processing event from chat:", error);
+    return { success: false, error: error.message };
+  }
+}
 
 async processAppointmentFromChat(message, familyId, childId = null) {
   try {
@@ -1478,10 +1589,118 @@ async addAppointmentToCalendar(appointmentDetails) {
   }
 }
 
-// Similar methods for activities
+// Add to AllieAIService.js
 async processActivityFromChat(message, familyId, childId = null) {
-  // Similar implementation to processAppointmentFromChat but for activities
-  // ...
+  try {
+    if (!familyId) return { success: false, error: "Family ID is required" };
+    
+    // Extract activity details from message
+    const activityDetails = await this.extractActivityDetails(message);
+    
+    // If no child ID is provided, try to identify from the message
+    if (!childId) {
+      const familyContext = await this.getFamilyContext(familyId);
+      
+      // Look for child names in the message
+      const childrenMatches = familyContext.children
+        .filter(child => message.toLowerCase().includes(child.name.toLowerCase()));
+      
+      if (childrenMatches.length > 0) {
+        childId = childrenMatches[0].id;
+        activityDetails.childId = childId;
+        activityDetails.childName = childrenMatches[0].name;
+      } else if (familyContext.children.length === 1) {
+        // If only one child, assume it's for them
+        childId = familyContext.children[0].id;
+        activityDetails.childId = childId;
+        activityDetails.childName = familyContext.children[0].name;
+      } else {
+        return { 
+          success: false, 
+          error: "Couldn't determine which child this activity is for" 
+        };
+      }
+    }
+    
+    // Create activity in the database
+    const result = await this.saveActivityToDatabase(familyId, childId, activityDetails);
+    
+    // Also add to calendar
+    if (result.success) {
+      await this.addActivityToCalendar(activityDetails);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error("Error processing activity from chat:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Helper method to extract activity details
+async extractActivityDetails(message) {
+  // Use Claude API to extract structured data
+  const systemPrompt = `You are an AI that extracts activity information from text.
+  Extract the following details in a structured JSON format:
+  - activityType: Type of activity (e.g., soccer, music, dance)
+  - date: Activity date (in YYYY-MM-DD format, use today's date if not specified)
+  - time: Activity time (in HH:MM format)
+  - location: Location or address
+  - coach: Coach or instructor name
+  - equipmentNeeded: Equipment needed
+  - parentAttendance: Whether parent attendance is required (true/false)
+  - notes: Any additional information
+  
+  If information isn't available, use null for that field.`;
+  
+  const userMessage = `Extract activity details from this message: "${message}"`;
+  
+  const response = await ClaudeService.generateResponse(
+    [{ role: 'user', content: userMessage }],
+    { system: systemPrompt }
+  );
+  
+  try {
+    const details = JSON.parse(response);
+    // Set default date and time if not provided
+    if (!details.date) {
+      details.date = new Date().toISOString().split('T')[0];
+    }
+    if (!details.time) {
+      details.time = "15:00"; // Default to 3 PM
+    }
+    return details;
+  } catch (error) {
+    console.error("Error parsing activity details:", error);
+    // Return basic structure if parsing fails
+    return {
+      activityType: "practice",
+      date: new Date().toISOString().split('T')[0],
+      time: "15:00",
+      location: null,
+      coach: null,
+      equipmentNeeded: null,
+      parentAttendance: false,
+      notes: message // Use original message as notes
+    };
+  }
+}
+
+// Similar methods for other event types
+async processBirthdayFromChat(message, familyId, childId = null) {
+  // Similar implementation
+}
+
+async processMeetingFromChat(message, familyId) {
+  // Similar implementation
+}
+
+async processDateNightFromChat(message, familyId) {
+  // Similar implementation
+}
+
+async processTravelFromChat(message, familyId) {
+  // Similar implementation
 }
 
 

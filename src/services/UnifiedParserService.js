@@ -113,25 +113,97 @@ class UnifiedParserService {
       case 'event':
         return `Extract the following details about the event or appointment:
         {
-          "title": "string (event title or purpose)",
-          "eventType": "string (birthday, dental, doctor, meeting, etc.)",
-          "dateTime": "string (ISO date string, like 2023-04-16T15:30:00.000Z)",
-          "location": "string (where the event takes place)",
-          "childName": "string (if event is for a child)",
-          "isInvitation": boolean (true if a child is invited to someone else's event),
-          "hostName": "string (if it's an invitation, who is hosting)",
-          "extraDetails": {
-            "birthdayChildName": "string (for birthday parties)",
-            "birthdayChildAge": number (for birthday parties),
-            "notes": "string (any special instructions or details)"
-          }
-        }
+        "title": "string (event title or purpose)",
+        "eventType": "string (general, appointment, activity, birthday, meeting, date-night, travel, playdate, etc.)",
+        "category": "string (the category this event belongs to: appointment, activity, birthday, meeting, etc.)",
+        "dateTime": "string (ISO date string, like 2023-04-16T15:30:00.000Z)",
+        "duration": "number (duration in minutes, default 60)",
+        "location": "string (where the event takes place)",
+        "childId": "string (if event is for a specific child)",
+        "childName": "string (if event is for a child)",
+        "attendingParentId": "string (which parent will attend, 'both', or 'undecided')",
         
-        IMPORTANT RULES:
-        1. If the date/time is ambiguous, prefer dates in the future.
-        2. For times like "3", assume 3:00 PM unless context clearly indicates morning.
-        3. For birthdays, extract both the name and age of the birthday child.
-        4. Set isInvitation to true if the text indicates a child is being invited to attend someone else's event.`;
+        "appointmentDetails": {
+          "reasonForVisit": "string",
+          "insuranceInfo": "string",
+          "formsNeeded": "string",
+          "fastingRequired": "boolean",
+          "bringRecords": "boolean",
+          "transportation": "string",
+          "postCare": "string",
+          "duration": "number (in minutes)",
+          "followUpDate": "string (ISO date)",
+          "costsAndCopays": "string",
+          "doctorName": "string"
+        },
+        
+        "activityDetails": {
+          "equipmentNeeded": "string",
+          "parentAttendance": "boolean",
+          "weatherContingency": "string",
+          "seasonDuration": "string",
+          "fees": "string",
+          "uniform": "string",
+          "communicationMethod": "string",
+          "coach": "string"
+        },
+        
+        "birthdayDetails": {
+          "birthdayChildName": "string",
+          "birthdayChildAge": "number",
+          "guestList": "string",
+          "theme": "string",
+          "foodArrangements": "string",
+          "activities": "string",
+          "budget": "string",
+          "favors": "string",
+          "setupCleanup": "string",
+          "weatherBackup": "string",
+          "isInvitation": "boolean",
+          "rsvpDeadline": "string (ISO date)"
+        },
+        
+        "dateNightDetails": {
+          "venue": "string",
+          "budget": "string",
+          "transportation": "string",
+          "childcareArranged": "boolean",
+          "needsBabysitter": "boolean",
+          "specialOccasion": "boolean",
+          "occasionNote": "string"
+        },
+        
+        "meetingDetails": {
+          "agenda": "string",
+          "issuesForDiscussion": "string",
+          "followUpPlan": "string"
+        },
+        
+        "providers": [
+          {
+            "name": "string",
+            "type": "string",
+            "specialty": "string",
+            "id": "string (if known)"
+          }
+        ],
+        
+        "isRecurring": "boolean",
+        "recurrence": {
+          "frequency": "string (daily, weekly, monthly)",
+          "days": ["string (day names like Monday, Tuesday)"],
+          "endDate": "string (ISO date)"
+        }
+      }
+      
+      IMPORTANT RULES:
+      1. Determine the most specific event type and category based on the content
+      2. For appointments, extract doctor name, reason for visit, and any special requirements
+      3. For activities, note equipment needs, parent attendance requirements, and schedules
+      4. For birthdays, capture birthday child details, theme, and guest information
+      5. For date nights, include venue, childcare needs, and special occasion details
+      6. Extract recurring patterns if mentioned (weekly soccer practice, monthly check-ups)
+      7. Include provider details when mentioned (doctor, coach, teacher names)`;
         
       case 'provider':
         return `Extract the following details about the provider:
