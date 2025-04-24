@@ -539,7 +539,10 @@ const calendarEvent = {
               onDragEnd={handleDragEnd}
               onDragOver={handleDragOver}
             >
-              <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: '50vh' }}>
+             <div className="flex gap-4 overflow-x-auto pb-4" style={{ 
+  minHeight: tasks.length > 0 ? '300px' : '150px',
+  maxHeight: tasks.length > 10 ? '60vh' : 'auto'
+}}>
                 <SortableContext 
                   items={columns.map(col => col.id)} 
                   strategy={horizontalListSortingStrategy}

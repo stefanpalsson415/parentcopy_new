@@ -49,10 +49,13 @@ const KanbanColumn = ({
       
       {/* Cards container */}
       <div 
-        ref={setNodeRef}
-        className="flex-grow p-2 overflow-y-auto"
-        style={{ maxHeight: 'calc(100vh - 300px)' }}
-      >
+  ref={setNodeRef}
+  className="flex-grow p-2 overflow-y-auto"
+  style={{ 
+    maxHeight: tasks.length > 0 ? 'calc(100vh - 450px)' : '150px',
+    minHeight: tasks.length === 0 ? '50px' : '100px'
+  }}
+>
         <SortableContext 
           items={tasks.map(t => t.id)} 
           strategy={verticalListSortingStrategy}
