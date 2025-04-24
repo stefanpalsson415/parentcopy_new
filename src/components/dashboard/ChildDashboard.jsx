@@ -1,0 +1,894 @@
+// src/components/dashboard/ChildDashboard.jsx
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Calendar, Heart, Activity, Book, Award, Clock, 
+  MessageCircle, Paperclip, FileText, User, Plus, 
+  ChevronRight, ChevronDown, Edit, MapPin, Phone,
+  Mic, AlertCircle, CheckCircle, Info, X
+} from 'lucide-react';
+import { useFamily } from '../../contexts/FamilyContext';
+import { useAuth } from '../../contexts/AuthContext';
+import UserAvatar from '../common/UserAvatar';
+import { formatDistanceToNow, format, isToday, isTomorrow, isThisWeek } from 'date-fns';
+import { useEvents } from '../../contexts/EventContext';
+import AllieAIService from '../../services/AllieAIService';
+
+const ChildDashboard = ({ 
+  child, 
+  childData, 
+  onOpenAppointment, 
+  onOpenGrowth, 
+  onOpenRoutine, 
+  onOpenDocuments,
+  onOpenProviders
+}) => {
+  const { currentUser, familyId } = useAuth();
+  const { familyMembers } = useFamily();
+  const { events, loading: eventsLoading } = useEvents();
+  const [activeTab, setActiveTab] = useState('health');
+  const [quickStats, setQuickStats] = useState({
+    upcomingAppointments: 0,
+    missingInfo: [],
+    growthStatus: 'unknown',
+    recentMilestones: []
+  });
+  const [timeline, setTimeline] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState([
+    { role: 'assistant', content: `How can I help with ${child.name} today?` }
+  ]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [suggestions, setSuggestions] = useState([
+    `Schedule a doctor's appointment for ${child.name}`,
+    `Record ${child.name}'s growth measurements`,
+    `Add information about ${child.name}'s allergies`
+  ]);
+  const [isRecording, setIsRecording] = useState(false);
+  const chatEndRef = useRef(null);
+  
+  // Generate timeline and quick stats on load
+  useEffect(() => {
+    generateTimeline();
+    generateQuickStats();
+  }, [child, childData, events]);
+  
+  // Scroll chat to bottom on new messages
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages]);
+  
+  // Generate timeline from events and child data
+  const generateTimeline = () => {
+    const timeline = [];
+    
+    // Add child-specific events from the events list
+    if (events && events.length > 0) {
+      const childEvents = events.filter(event => 
+        event.childId === child.id || 
+        (event.attendees && event.attendees.some(a => a.id === child.id))
+      );
+      
+      childEvents.forEach(event => {
+        const eventDate = new Date(event.start?.dateTime || event.start?.date || event.dateTime);
+        if (eventDate >= new Date()) {
+          timeline.push({
+            type: 'event',
+            title: event.summary || event.title,
+            date: eventDate,
+            details: event.description || '',
+            location: event.location || '',
+            category: event.category || 'general',
+            data: event
+          });
+        }
+      });
+    }
+    
+    // Add appointments from childData
+    if (childData?.medicalAppointments) {
+      childData.medicalAppointments.forEach(apt => {
+        if (!apt.completed && new Date(apt.date) >= new Date()) {
+          timeline.push({
+            type: 'appointment',
+            title: apt.title,
+            date: new Date(`${apt.date}T${apt.time || '09:00:00'}`),
+            details: apt.notes || '',
+            location: apt.location || '',
+            category: 'medical',
+            data: apt
+          });
+        }
+      });
+    }
+    
+    // Add routines from childData
+    if (childData?.routines) {
+      childData.routines.forEach(routine => {
+        // Add routine for next occurrence based on day of week
+        if (routine.days && routine.days.length > 0) {
+          const today = new Date();
+          const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          const todayIndex = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+          
+          // Find the next day that this routine occurs
+          const nextDayIndex = routine.days
+            .map(day => dayNames.indexOf(day))
+            .filter(dayIndex => dayIndex >= todayIndex)
+            .sort((a, b) => a - b)[0] || routine.days.map(day => dayNames.indexOf(day)).sort()[0];
+          
+          const daysToAdd = (nextDayIndex - todayIndex + 7) % 7;
+          const nextOccurrence = new Date(today);
+          nextOccurrence.setDate(today.getDate() + daysToAdd);
+          
+          // Set time from routine
+          if (routine.startTime) {
+            const [hours, minutes] = routine.startTime.split(':');
+            nextOccurrence.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+          } else {
+            nextOccurrence.setHours(9, 0, 0, 0); // Default to 9:00 AM
+          }
+          
+          timeline.push({
+            type: 'routine',
+            title: routine.title,
+            date: nextOccurrence,
+            details: routine.notes || '',
+            days: routine.days,
+            category: 'activity',
+            data: routine
+          });
+        }
+      });
+    }
+    
+    // Sort by date
+    timeline.sort((a, b) => a.date - b.date);
+    
+    // Set the timeline
+    setTimeline(timeline);
+  };
+  
+  // Generate quick stats for the child
+  const generateQuickStats = () => {
+    const stats = {
+      upcomingAppointments: 0,
+      missingInfo: [],
+      growthStatus: 'unknown',
+      recentMilestones: []
+    };
+    
+    // Count upcoming appointments
+    if (childData?.medicalAppointments) {
+      stats.upcomingAppointments = childData.medicalAppointments.filter(
+        apt => !apt.completed && new Date(apt.date) >= new Date()
+      ).length;
+      
+      // Check for missing information in appointments
+      childData.medicalAppointments
+        .filter(apt => !apt.completed && new Date(apt.date) >= new Date())
+        .forEach(apt => {
+          if (!apt.doctor) {
+            stats.missingInfo.push("Doctor's name for " + apt.title);
+          }
+          if (!apt.location) {
+            stats.missingInfo.push("Location for " + apt.title);
+          }
+        });
+    }
+    
+    // Check growth status
+    if (childData?.growthData && childData.growthData.length > 0) {
+      const latestGrowth = [...childData.growthData].sort((a, b) => 
+        new Date(b.date) - new Date(a.date)
+      )[0];
+      
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      
+      stats.growthStatus = new Date(latestGrowth.date) > threeMonthsAgo 
+        ? 'recent' 
+        : 'needs_update';
+    } else {
+      stats.growthStatus = 'missing';
+      stats.missingInfo.push("Growth measurements");
+    }
+    
+    // Limit missing info to top 3
+    stats.missingInfo = stats.missingInfo.slice(0, 3);
+    
+    setQuickStats(stats);
+  };
+  
+  // Format date for display
+  const formatTimelineDate = (date) => {
+    if (isToday(date)) {
+      return `Today, ${format(date, 'h:mm a')}`;
+    } else if (isTomorrow(date)) {
+      return `Tomorrow, ${format(date, 'h:mm a')}`;
+    } else if (isThisWeek(date)) {
+      return `${format(date, 'EEEE')}, ${format(date, 'h:mm a')}`;
+    } else {
+      return format(date, 'MMM d, h:mm a');
+    }
+  };
+  
+  // Handle suggested action click
+  const handleSuggestionClick = (suggestion) => {
+    setChatInput(suggestion);
+    handleChatSubmit(suggestion);
+  };
+  
+  // Handle chat submission
+  const handleChatSubmit = async (userInput = null) => {
+    const input = userInput || chatInput;
+    if (!input.trim()) return;
+    
+    // Update chat with user message
+    setChatMessages(prev => [...prev, { role: 'user', content: input }]);
+    setChatInput('');
+    setIsProcessing(true);
+    
+    try {
+      // Process the message with Allie
+      const response = await AllieAIService.processChildChat(
+        input,
+        child,
+        childData,
+        familyId
+      );
+      
+      // Add Allie's response to chat
+      setChatMessages(prev => [...prev, { role: 'assistant', content: response.message }]);
+      
+      // If there's an action to take
+      if (response.action) {
+        setPendingAction(response.action);
+        
+        // Automatically trigger some actions
+        if (response.action.type === 'openAppointmentForm' && onOpenAppointment) {
+          onOpenAppointment({
+            childId: child.id,
+            ...response.action.data
+          });
+        } else if (response.action.type === 'openGrowthForm' && onOpenGrowth) {
+          onOpenGrowth({
+            childId: child.id,
+            ...response.action.data
+          });
+        } else if (response.action.type === 'openRoutineForm' && onOpenRoutine) {
+          onOpenRoutine({
+            childId: child.id,
+            ...response.action.data
+          });
+        } else if (response.action.type === 'openDocuments' && onOpenDocuments) {
+          onOpenDocuments(child.id);
+        }
+      }
+      
+      // Generate new suggestions based on context
+      const newSuggestions = await AllieAIService.generateChildSuggestions(
+        child,
+        childData,
+        chatMessages,
+        familyId
+      );
+      
+      if (newSuggestions && newSuggestions.length > 0) {
+        setSuggestions(newSuggestions);
+      }
+    } catch (error) {
+      console.error("Error processing chat:", error);
+      setChatMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: "I'm sorry, I had trouble processing that request. Can you try again?"
+      }]);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
+  // Start voice recognition
+  const startVoiceRecognition = () => {
+    // Check if browser supports speech recognition
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      setChatMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: "Speech recognition is not supported in your browser. Try using Chrome."
+      }]);
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+      setChatInput('Listening...');
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map(result => result[0])
+        .map(result => result.transcript)
+        .join('');
+      
+      setChatInput(transcript);
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error', event.error);
+      setIsRecording(false);
+      setChatInput('');
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+      if (chatInput && chatInput !== 'Listening...') {
+        handleChatSubmit(chatInput);
+      }
+    };
+
+    recognition.start();
+  };
+  
+  // Get timeline items for the selected tab
+  const getTabTimeline = () => {
+    switch (activeTab) {
+      case 'health':
+        return timeline.filter(item => 
+          item.category === 'medical' || 
+          item.category === 'health' ||
+          item.type === 'appointment'
+        );
+      case 'activities':
+        return timeline.filter(item => 
+          item.category === 'activity' || 
+          item.category === 'sport' ||
+          item.type === 'routine'
+        );
+      case 'school':
+        return timeline.filter(item => 
+          item.category === 'school' || 
+          item.category === 'education'
+        );
+      case 'special':
+        return timeline.filter(item => 
+          item.category === 'special' || 
+          item.category === 'birthday' ||
+          item.category === 'celebration'
+        );
+      default:
+        return timeline;
+    }
+  };
+  
+  // Render timeline for selected tab
+  const renderTabContent = () => {
+    const tabTimeline = getTabTimeline();
+    
+    if (tabTimeline.length === 0) {
+      return (
+        <div className="text-center py-10 bg-gray-50 rounded-lg">
+          <Calendar size={40} className="mx-auto text-gray-400 mb-3" />
+          <p className="text-gray-500">No {activeTab} events found for {child.name}</p>
+          <button 
+            className="mt-4 px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-gray-800 inline-flex items-center"
+            onClick={() => {
+              switch (activeTab) {
+                case 'health':
+                  onOpenAppointment({ childId: child.id });
+                  break;
+                case 'activities':
+                  onOpenRoutine({ childId: child.id });
+                  break;
+                // Add handlers for other tabs
+                default:
+                  break;
+              }
+            }}
+          >
+            <Plus size={14} className="mr-1" />
+            Add {activeTab === 'health' ? 'Appointment' : 
+                 activeTab === 'activities' ? 'Activity' :
+                 activeTab === 'school' ? 'School Event' :
+                 activeTab === 'special' ? 'Special Event' : 'Event'}
+          </button>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="space-y-3">
+        {/* Events */}
+        {tabTimeline.map((item, index) => (
+          <div key={index} className="border rounded-lg p-3 hover:bg-gray-50 transition-colors">
+            <div className="flex justify-between">
+              <div className="flex items-start">
+                {/* Icon based on type */}
+                <div className={`p-2 rounded-full mr-3 ${
+                  item.category === 'medical' ? 'bg-red-100 text-red-600' :
+                  item.category === 'activity' ? 'bg-green-100 text-green-600' :
+                  item.category === 'school' ? 'bg-blue-100 text-blue-600' :
+                  item.category === 'special' ? 'bg-purple-100 text-purple-600' :
+                  'bg-gray-100 text-gray-600'
+                }`}>
+                  {item.category === 'medical' ? <Heart size={16} /> :
+                   item.category === 'activity' ? <Activity size={16} /> :
+                   item.category === 'school' ? <Book size={16} /> :
+                   item.category === 'special' ? <Award size={16} /> :
+                   <Calendar size={16} />}
+                </div>
+                
+                <div>
+                  <h4 className="font-medium">{item.title}</h4>
+                  <p className="text-sm text-gray-600">{formatTimelineDate(item.date)}</p>
+                  {item.location && (
+                    <p className="text-sm text-gray-600 flex items-center mt-1">
+                      <MapPin size={12} className="mr-1" /> {item.location}
+                    </p>
+                  )}
+                  {/* Show specific details based on item type */}
+                  {item.type === 'appointment' && item.data.doctor && (
+                    <p className="text-sm text-gray-600 flex items-center mt-1">
+                      <User size={12} className="mr-1" /> Dr. {item.data.doctor}
+                    </p>
+                  )}
+                  {item.type === 'routine' && item.days && (
+                    <p className="text-sm text-gray-600 flex items-center mt-1">
+                      <Clock size={12} className="mr-1" /> {item.days.join(', ')}
+                    </p>
+                  )}
+                </div>
+              </div>
+              
+              <button 
+                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                onClick={() => {
+                  // Open appropriate form based on item type
+                  if (item.type === 'appointment') {
+                    onOpenAppointment({ childId: child.id, ...item.data });
+                  } else if (item.type === 'routine') {
+                    onOpenRoutine({ childId: child.id, ...item.data });
+                  } else if (item.type === 'event') {
+                    // Handle event based on category
+                    if (item.category === 'medical') {
+                      onOpenAppointment({ childId: child.id, ...item.data });
+                    } else if (item.category === 'activity') {
+                      onOpenRoutine({ childId: child.id, ...item.data });
+                    }
+                  }
+                }}
+              >
+                <Edit size={16} />
+              </button>
+            </div>
+            
+            {/* Item details */}
+            {item.details && (
+              <div className="mt-2 p-2 bg-gray-50 rounded text-sm">
+                <p>{item.details}</p>
+              </div>
+            )}
+            
+            {/* Missing information warnings */}
+            {item.type === 'appointment' && (!item.data.doctor || !item.data.location) && (
+              <div className="mt-2 flex items-center text-amber-600 text-xs">
+                <AlertCircle size={12} className="mr-1" />
+                Missing: {!item.data.doctor ? "Doctor's name" : ""} 
+                {!item.data.doctor && !item.data.location ? " and " : ""}
+                {!item.data.location ? "Location" : ""}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+  
+  // Render health-specific content
+  const renderHealthTab = () => {
+    // List of appointments
+    const appointments = childData?.medicalAppointments || [];
+    const upcomingAppointments = appointments
+      .filter(apt => !apt.completed && new Date(apt.date) >= new Date())
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    const pastAppointments = appointments
+      .filter(apt => apt.completed || new Date(apt.date) < new Date())
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    // Growth data
+    const growthEntries = childData?.growthData || [];
+    const latestGrowth = growthEntries.length > 0
+      ? [...growthEntries].sort((a, b) => new Date(b.date) - new Date(a.date))[0]
+      : null;
+    
+    return (
+      <div className="space-y-6">
+        {/* Upcoming Appointments */}
+        <div>
+          <h3 className="font-medium mb-2 text-lg flex items-center">
+            <Calendar size={18} className="mr-2 text-blue-500" />
+            Upcoming Appointments
+          </h3>
+          
+          {upcomingAppointments.length > 0 ? (
+            <div className="space-y-3">
+              {upcomingAppointments.slice(0, 3).map((apt, index) => (
+                <div key={index} className="border rounded-lg p-3 hover:bg-gray-50 transition-colors">
+                  <div className="flex justify-between">
+                    <div>
+                      <h4 className="font-medium">{apt.title}</h4>
+                      <p className="text-sm text-gray-600">
+                        {format(new Date(apt.date), 'MMM d, yyyy')} 
+                        {apt.time && ` at ${apt.time}`}
+                      </p>
+                      {apt.doctor && (
+                        <p className="text-sm text-gray-600 flex items-center mt-1">
+                          <User size={12} className="mr-1" /> Dr. {apt.doctor}
+                        </p>
+                      )}
+                      {apt.location && (
+                        <p className="text-sm text-gray-600 flex items-center mt-1">
+                          <MapPin size={12} className="mr-1" /> {apt.location}
+                        </p>
+                      )}
+                    </div>
+                    
+                    <button 
+                      className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                      onClick={() => onOpenAppointment({ childId: child.id, ...apt })}
+                    >
+                      <Edit size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              
+              {upcomingAppointments.length > 3 && (
+                <button className="w-full text-center py-2 text-blue-600 hover:bg-blue-50 rounded text-sm">
+                  View all {upcomingAppointments.length} appointments
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-6 bg-gray-50 rounded-lg">
+              <Heart size={32} className="mx-auto text-gray-400 mb-2" />
+              <p className="text-gray-500">No upcoming appointments</p>
+              <button 
+                className="mt-3 px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 inline-flex items-center"
+                onClick={() => onOpenAppointment({ childId: child.id })}
+              >
+                <Plus size={14} className="mr-1" />
+                Add Appointment
+              </button>
+            </div>
+          )}
+        </div>
+        
+        {/* Latest Growth Data */}
+        <div>
+          <h3 className="font-medium mb-2 text-lg flex items-center">
+            <Activity size={18} className="mr-2 text-green-500" />
+            Growth Information
+          </h3>
+          
+          {latestGrowth ? (
+            <div className="border rounded-lg p-3">
+              <div className="flex justify-between">
+                <h4 className="font-medium">Latest Measurements</h4>
+                <p className="text-sm text-gray-600">
+                  {format(new Date(latestGrowth.date), 'MMM d, yyyy')}
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-2">
+                {latestGrowth.height && (
+                  <div>
+                    <p className="text-sm text-gray-600">Height</p>
+                    <p className="font-medium">{latestGrowth.height}</p>
+                  </div>
+                )}
+                {latestGrowth.weight && (
+                  <div>
+                    <p className="text-sm text-gray-600">Weight</p>
+                    <p className="font-medium">{latestGrowth.weight}</p>
+                  </div>
+                )}
+                {latestGrowth.shoeSize && (
+                  <div>
+                    <p className="text-sm text-gray-600">Shoe Size</p>
+                    <p className="font-medium">{latestGrowth.shoeSize}</p>
+                  </div>
+                )}
+                {latestGrowth.clothingSize && (
+                  <div>
+                    <p className="text-sm text-gray-600">Clothing Size</p>
+                    <p className="font-medium">{latestGrowth.clothingSize}</p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="mt-3 flex justify-end">
+                <button 
+                  className="px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 inline-flex items-center"
+                  onClick={() => onOpenGrowth({ childId: child.id })}
+                >
+                  <Plus size={14} className="mr-1" />
+                  Add New Measurement
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-6 bg-gray-50 rounded-lg">
+              <Activity size={32} className="mx-auto text-gray-400 mb-2" />
+              <p className="text-gray-500">No growth data recorded yet</p>
+              <button 
+                className="mt-3 px-3 py-1 bg-black text-white rounded-md text-sm hover:bg-gray-800 inline-flex items-center"
+                onClick={() => onOpenGrowth({ childId: child.id })}
+              >
+                <Plus size={14} className="mr-1" />
+                Add Measurements
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+  
+  return (
+    <div className="bg-white rounded-lg shadow-sm mb-6">
+      {/* Child Profile Header */}
+      <div className="p-4 border-b border-gray-200 flex items-center">
+        <UserAvatar user={child} size={64} className="mr-4" />
+        <div>
+          <h2 className="text-2xl font-bold">{child.name}</h2>
+          <p className="text-gray-600">{child.age ? `${child.age} years old` : 'Age not specified'}</p>
+        </div>
+      </div>
+      
+      {/* Quick Stats */}
+      <div className="p-4 bg-gray-50 border-b border-gray-200">
+        <h3 className="text-sm font-medium text-gray-500 mb-2">QUICK STATS</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Upcoming Appointments */}
+          <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+            <div className="flex items-center text-blue-600 mb-1">
+              <Calendar size={16} className="mr-1" />
+              <h4 className="font-medium">Appointments</h4>
+            </div>
+            <p className="text-gray-700">
+              {quickStats.upcomingAppointments > 0 ? 
+                `${quickStats.upcomingAppointments} upcoming` : 
+                'No upcoming appointments'}
+            </p>
+          </div>
+          
+          {/* Missing Information */}
+          <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+            <div className="flex items-center text-amber-600 mb-1">
+              <AlertCircle size={16} className="mr-1" />
+              <h4 className="font-medium">Missing Info</h4>
+            </div>
+            {quickStats.missingInfo.length > 0 ? (
+              <ul className="text-gray-700 text-sm">
+                {quickStats.missingInfo.map((item, index) => (
+                  <li key={index} className="flex items-start">
+                    <span className="mr-1">•</span> {item}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-700">All information is complete</p>
+            )}
+          </div>
+          
+          {/* Growth Status */}
+          <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+            <div className="flex items-center text-green-600 mb-1">
+              <Activity size={16} className="mr-1" />
+              <h4 className="font-medium">Growth Status</h4>
+            </div>
+            <p className="text-gray-700">
+              {quickStats.growthStatus === 'recent' ? (
+                <span className="flex items-center text-green-600">
+                  <CheckCircle size={14} className="mr-1" /> Up to date
+                </span>
+              ) : quickStats.growthStatus === 'needs_update' ? (
+                <span className="flex items-center text-amber-600">
+                  <Info size={14} className="mr-1" /> Needs updating
+                </span>
+              ) : (
+                <span className="flex items-center text-red-600">
+                  <AlertCircle size={14} className="mr-1" /> No data recorded
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+      
+      {/* Timeline */}
+      <div className="p-4 border-b border-gray-200">
+        <h3 className="font-medium mb-3 text-lg">Upcoming Timeline</h3>
+        
+        {timeline.length > 0 ? (
+          <div className="space-y-3 mb-4">
+            {timeline.slice(0, 3).map((item, index) => (
+              <div key={index} className="flex items-start">
+                <div className={`p-2 rounded-full mr-3 ${
+                  item.category === 'medical' ? 'bg-red-100 text-red-600' :
+                  item.category === 'activity' ? 'bg-green-100 text-green-600' :
+                  item.category === 'school' ? 'bg-blue-100 text-blue-600' :
+                  item.category === 'special' ? 'bg-purple-100 text-purple-600' :
+                  'bg-gray-100 text-gray-600'
+                }`}>
+                  {item.category === 'medical' ? <Heart size={16} /> :
+                   item.category === 'activity' ? <Activity size={16} /> :
+                   item.category === 'school' ? <Book size={16} /> :
+                   item.category === 'special' ? <Award size={16} /> :
+                   <Calendar size={16} />}
+                </div>
+                <div>
+                  <p className="font-medium">{item.title}</p>
+                  <p className="text-sm text-gray-600">{formatTimelineDate(item.date)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-6 bg-gray-50 rounded-lg">
+            <Calendar size={32} className="mx-auto text-gray-400 mb-2" />
+            <p className="text-gray-500">No upcoming events</p>
+          </div>
+        )}
+        
+        {timeline.length > 3 && (
+          <button className="w-full text-center py-2 text-blue-600 hover:bg-blue-50 rounded text-sm">
+            View all {timeline.length} events
+          </button>
+        )}
+      </div>
+      
+      {/* Tabs */}
+      <div className="p-4 border-b border-gray-200">
+        <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+          <button
+            onClick={() => setActiveTab('health')}
+            className={`flex-1 py-2 px-3 rounded ${
+              activeTab === 'health' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'
+            }`}
+          >
+            <Heart size={16} className="mx-auto mb-1" />
+            <span className="text-xs">Health</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('activities')}
+            className={`flex-1 py-2 px-3 rounded ${
+              activeTab === 'activities' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'
+            }`}
+          >
+            <Activity size={16} className="mx-auto mb-1" />
+            <span className="text-xs">Activities</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('school')}
+            className={`flex-1 py-2 px-3 rounded ${
+              activeTab === 'school' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'
+            }`}
+          >
+            <Book size={16} className="mx-auto mb-1" />
+            <span className="text-xs">School</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('special')}
+            className={`flex-1 py-2 px-3 rounded ${
+              activeTab === 'special' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'
+            }`}
+          >
+            <Award size={16} className="mx-auto mb-1" />
+            <span className="text-xs">Special</span>
+          </button>
+          <button
+            onClick={() => onOpenDocuments(child.id)}
+            className={`flex-1 py-2 px-3 rounded hover:bg-gray-200`}
+          >
+            <FileText size={16} className="mx-auto mb-1" />
+            <span className="text-xs">Documents</span>
+          </button>
+        </div>
+      </div>
+      
+      {/* Tab Content */}
+      <div className="p-4 border-b border-gray-200">
+        {activeTab === 'health' ? renderHealthTab() : renderTabContent()}
+      </div>
+      
+      {/* Allie Chat Interface */}
+      <div className="p-4 rounded-b-lg">
+        <h3 className="font-medium mb-3 text-lg flex items-center">
+          <MessageCircle size={18} className="mr-2 text-purple-500" />
+          Chat with Allie about {child.name}
+        </h3>
+        
+        {/* Chat messages */}
+        <div className="bg-gray-50 rounded-lg p-3 mb-3 max-h-60 overflow-y-auto">
+          {chatMessages.map((message, index) => (
+            <div 
+              key={index} 
+              className={`mb-2 ${
+                message.role === 'user' ? 'text-right' : ''
+              }`}
+            >
+              <div 
+                className={`inline-block rounded-lg p-2 max-w-[85%] ${
+                  message.role === 'user' ? 
+                    'bg-blue-100 text-blue-800' : 
+                    'bg-white border border-gray-200 text-gray-800'
+                }`}
+              >
+                <p className="text-sm">{message.content}</p>
+              </div>
+            </div>
+          ))}
+          <div ref={chatEndRef} />
+        </div>
+        
+        {/* Suggested actions */}
+        <div className="mb-3 flex flex-wrap gap-2">
+          {suggestions.map((suggestion, index) => (
+            <button
+              key={index}
+              className="bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-xs hover:bg-purple-100"
+              onClick={() => handleSuggestionClick(suggestion)}
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+        
+        {/* Chat input */}
+        <div className="flex">
+          <div className="relative flex-grow">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              placeholder={`Ask Allie about ${child.name}...`}
+              className="w-full border border-gray-300 rounded-l-md pl-3 pr-10 py-2 text-sm focus:ring-purple-500 focus:border-purple-500"
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleChatSubmit();
+                }
+              }}
+              disabled={isProcessing || isRecording}
+            />
+            {isProcessing && (
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
+          </div>
+          
+          <button
+            className={`p-2 ${isRecording ? 'bg-red-500' : 'bg-purple-500'} text-white rounded-r-md hover:${isRecording ? 'bg-red-600' : 'bg-purple-600'}`}
+            onClick={startVoiceRecognition}
+            disabled={isProcessing}
+          >
+            <Mic size={18} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ChildDashboard;
