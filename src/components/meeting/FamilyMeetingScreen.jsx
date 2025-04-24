@@ -230,186 +230,298 @@ const FamilyMeetingScreen = ({ onClose }) => {
     };
   }, [familyId, currentWeek]);
 
-  // NEW CODE
-const generateAIInsights = useCallback(() => {
-  // Analyze survey data to find insights based on actual data
-  const insights = {
-    successInsights: [],
-    challengeInsights: [],
-    actionInsights: []
-  };
-  
-  try {
-    console.log("Generating insights from task data:", taskRecommendations);
-    console.log("Week history:", weekHistory);
+  const generateAIInsights = useCallback(() => {
+    // Analyze survey data to find insights based on actual data
+    const insights = {
+      successInsights: [],
+      challengeInsights: [],
+      actionInsights: []
+    };
     
-    // Check for task completion patterns
-    const completedTasks = taskRecommendations?.filter(t => t.completed) || [];
-    const incompleteTasks = taskRecommendations?.filter(t => !t.completed) || [];
-    
-    if (completedTasks.length > 0) {
-      // Success insights based on completed tasks
-      insights.successInsights.push(
-        `${completedTasks.length} of ${taskRecommendations?.length || 0} tasks completed this week`
-      );
+    try {
+      console.log("Generating insights from task data:", taskRecommendations);
+      console.log("Week history:", weekHistory);
       
-      // Check which parent completed more tasks
-      const mamaCompletedCount = completedTasks.filter(t => t.assignedTo === 'Mama').length;
-      const papaCompletedCount = completedTasks.filter(t => t.assignedTo === 'Papa').length;
+      // Check for task completion patterns
+      const completedTasks = taskRecommendations?.filter(t => t.completed) || [];
+      const incompleteTasks = taskRecommendations?.filter(t => !t.completed) || [];
       
-      if (mamaCompletedCount > papaCompletedCount) {
-        insights.successInsights.push(`Mama completed ${mamaCompletedCount} tasks this week`);
-      } else if (papaCompletedCount > mamaCompletedCount) {
-        insights.successInsights.push(`Papa completed ${papaCompletedCount} tasks this week`);
-      } else if (mamaCompletedCount > 0) {
-        insights.successInsights.push(`Both parents completed an equal number of tasks`);
-      }
-    }
-    
-    // Analyze balance changes from survey data
-    if (weekHistory && Object.keys(weekHistory).length > 1) {
-      // Get last two weeks of data to compare
-      const weeks = Object.keys(weekHistory)
-        .filter(key => key.startsWith('week'))
-        .map(key => parseInt(key.replace('week', '')))
-        .sort((a, b) => b - a); // Sort descending
-      
-      if (weeks.length >= 2) {
-        const currentWeekData = weekHistory[`week${weeks[0]}`];
-        const prevWeekData = weekHistory[`week${weeks[1]}`];
+      if (completedTasks.length > 0) {
+        // Success insights based on completed tasks
+        insights.successInsights.push(
+          `${completedTasks.length} of ${taskRecommendations?.length || 0} tasks completed this week`
+        );
         
-        if (currentWeekData?.balance && prevWeekData?.balance) {
-          const currentImbalance = Math.abs(currentWeekData.balance.mama - 50);
-          const prevImbalance = Math.abs(prevWeekData.balance.mama - 50);
+        // Check which parent completed more tasks
+        const mamaCompletedCount = completedTasks.filter(t => t.assignedTo === 'Mama').length;
+        const papaCompletedCount = completedTasks.filter(t => t.assignedTo === 'Papa').length;
+        
+        if (mamaCompletedCount > papaCompletedCount) {
+          insights.successInsights.push(`Mama completed ${mamaCompletedCount} tasks this week`);
+        } else if (papaCompletedCount > mamaCompletedCount) {
+          insights.successInsights.push(`Papa completed ${papaCompletedCount} tasks this week`);
+        } else if (mamaCompletedCount > 0) {
+          insights.successInsights.push(`Both parents completed an equal number of tasks`);
+        }
+      }
+      
+      // Analyze balance changes from survey data - prioritize weighted scores
+      if (weekHistory && Object.keys(weekHistory).length > 1) {
+        // Get last two weeks of data to compare
+        const weeks = Object.keys(weekHistory)
+          .filter(key => key.startsWith('week'))
+          .map(key => parseInt(key.replace('week', '')))
+          .sort((a, b) => b - a); // Sort descending
+        
+        if (weeks.length >= 2) {
+          const currentWeekData = weekHistory[`week${weeks[0]}`];
+          const prevWeekData = weekHistory[`week${weeks[1]}`];
           
-          if (currentImbalance < prevImbalance) {
+          // GET BALANCE DATA - PRIORITIZE WEIGHTED SCORES
+          let currentBalance, prevBalance;
+          
+          // For current week - check sources in priority order
+          if (currentWeekData?.weightedScores?.overallBalance) {
+            console.log("Using weighted scores for current week balance");
+            currentBalance = currentWeekData.weightedScores.overallBalance;
+          } else if (currentWeekData?.balance) {
+            console.log("Using standard balance for current week");
+            currentBalance = currentWeekData.balance;
+          } else if (currentWeekData?.surveyResponses) {
+            console.log("Calculating balance from survey responses for current week");
+            // Calculate from responses if needed - use a more accurate method
+            const responseCount = Object.keys(currentWeekData.surveyResponses).length;
+            let mamaCount = 0;
+            
+            Object.values(currentWeekData.surveyResponses).forEach(val => {
+              if (String(val).toLowerCase().includes('mama') || 
+                  String(val).toLowerCase().includes('mom')) {
+                mamaCount++;
+              }
+            });
+            
+            currentBalance = {
+              mama: responseCount > 0 ? (mamaCount / responseCount) * 100 : 50,
+              papa: responseCount > 0 ? ((responseCount - mamaCount) / responseCount) * 100 : 50
+            };
+          } else {
+            console.log("No balance data for current week, using default 50/50");
+            currentBalance = { mama: 50, papa: 50 };
+          }
+          
+          // For previous week - similar logic with priority order
+          if (prevWeekData?.weightedScores?.overallBalance) {
+            console.log("Using weighted scores for previous week balance");
+            prevBalance = prevWeekData.weightedScores.overallBalance;
+          } else if (prevWeekData?.balance) {
+            console.log("Using standard balance for previous week");
+            prevBalance = prevWeekData.balance;
+          } else if (prevWeekData?.surveyResponses) {
+            console.log("Calculating balance from survey responses for previous week");
+            // Calculate from responses if needed
+            const responseCount = Object.keys(prevWeekData.surveyResponses).length;
+            let mamaCount = 0;
+            
+            Object.values(prevWeekData.surveyResponses).forEach(val => {
+              if (String(val).toLowerCase().includes('mama') || 
+                  String(val).toLowerCase().includes('mom')) {
+                mamaCount++;
+              }
+            });
+            
+            prevBalance = {
+              mama: responseCount > 0 ? (mamaCount / responseCount) * 100 : 50,
+              papa: responseCount > 0 ? ((responseCount - mamaCount) / responseCount) * 100 : 50
+            };
+          } else {
+            console.log("No balance data for previous week, using default 50/50");
+            prevBalance = { mama: 50, papa: 50 };
+          }
+          
+          console.log("Balance comparison data:", {
+            current: currentBalance,
+            previous: prevBalance
+          });
+          
+          // Calculate imbalance changes
+          const currentImbalance = Math.abs(currentBalance.mama - 50);
+          const prevImbalance = Math.abs(prevBalance.mama - 50);
+          const imbalanceChange = Math.abs(currentImbalance - prevImbalance).toFixed(1);
+          
+          if (currentImbalance < prevImbalance && Math.abs(currentImbalance - prevImbalance) >= 2) {
             insights.successInsights.push(
-              `Family balance improved by ${(prevImbalance - currentImbalance).toFixed(1)}% since last week`
+              `Family balance improved by ${imbalanceChange}% since last week`
             );
-          } else if (currentImbalance > prevImbalance) {
+          } else if (currentImbalance > prevImbalance && Math.abs(currentImbalance - prevImbalance) >= 2) {
             insights.challengeInsights.push(
-              `Balance decreased by ${(currentImbalance - prevImbalance).toFixed(1)}% since last week`
+              `Balance decreased by ${imbalanceChange}% since last week`
+            );
+          } else {
+            insights.successInsights.push(
+              `Your family's balance has remained stable this week`
             );
           }
         }
       }
-    }
-    
-    // Analyze survey responses for balance patterns
-    const surveyResponses = Object.entries(weekHistory?.initial?.surveyResponses || {})
-      .concat(Object.entries(weekHistory?.[`week${currentWeek}`]?.surveyResponses || {}));
-    
-    if (surveyResponses.length > 0) {
-      // Count Mama vs Papa responses
-      let mamaCount = 0;
-      let totalCount = 0;
       
-      surveyResponses.forEach(([_, value]) => {
-        if (value === 'Mama' || value === 'Papa') {
-          totalCount++;
-          if (value === 'Mama') mamaCount++;
-        }
-      });
+      // Get current balance from weighted scores or calculate it
+      let currentBalanceData;
       
-      if (totalCount > 0) {
-        const mamaPercent = Math.round((mamaCount / totalCount) * 100);
-        const papaPercent = 100 - mamaPercent;
-        const imbalance = Math.abs(mamaPercent - 50);
+      // Try to get weighted scores first (most accurate)
+      if (weekHistory?.[`week${currentWeek}`]?.weightedScores?.categoryBalance) {
+        console.log("Using category weighted scores for insights");
+        currentBalanceData = weekHistory[`week${currentWeek}`].weightedScores.categoryBalance;
         
-        if (imbalance > 20) {
-          const dominantParent = mamaPercent > 50 ? 'Mama' : 'Papa';
+        // Find most imbalanced category
+        let mostImbalancedCategory = null;
+        let highestImbalance = 0;
+        
+        Object.entries(currentBalanceData).forEach(([category, data]) => {
+          if (data.imbalance > highestImbalance) {
+            highestImbalance = data.imbalance;
+            mostImbalancedCategory = {
+              name: category,
+              imbalance: data.imbalance,
+              mamaPercent: data.mama,
+              papaPercent: data.papa,
+              questionCount: data.questionCount || 0
+            };
+          }
+        });
+        
+        if (mostImbalancedCategory && mostImbalancedCategory.imbalance > 20) {
+          const dominantParent = mostImbalancedCategory.mamaPercent > mostImbalancedCategory.papaPercent ? 'Mama' : 'Papa';
+          const dominantPercent = dominantParent === 'Mama' ? 
+            Math.round(mostImbalancedCategory.mamaPercent) : 
+            Math.round(mostImbalancedCategory.papaPercent);
+          
           insights.challengeInsights.push(
-            `Survey responses show ${dominantParent} is handling ${dominantParent === 'Mama' ? mamaPercent : papaPercent}% of tasks`
+            `${mostImbalancedCategory.name} shows a ${Math.round(mostImbalancedCategory.imbalance)}% imbalance with ${dominantParent} handling ${dominantPercent}% of tasks`
           );
-        } else {
-          insights.successInsights.push(
-            `Your family has achieved a good balance with only ${imbalance}% difference between parents`
+        }
+      } else {
+        // Fall back to analyzing raw survey responses
+        console.log("Falling back to raw survey analysis for balance insights");
+        const surveyResponses = Object.entries(weekHistory?.initial?.surveyResponses || {})
+          .concat(Object.entries(weekHistory?.[`week${currentWeek}`]?.surveyResponses || {}));
+        
+        if (surveyResponses.length > 0) {
+          // Count Mama vs Papa responses
+          let mamaCount = 0;
+          let totalCount = 0;
+          
+          surveyResponses.forEach(([_, value]) => {
+            const valueStr = String(value || '').toLowerCase();
+            if (valueStr === 'mama' || valueStr === 'papa' || 
+                valueStr.includes('mama') || valueStr.includes('papa') ||
+                valueStr.includes('mom') || valueStr.includes('dad')) {
+              totalCount++;
+              if (valueStr === 'mama' || valueStr.includes('mama') || valueStr.includes('mom')) {
+                mamaCount++;
+              }
+            }
+          });
+          
+          if (totalCount > 0) {
+            const mamaPercent = Math.round((mamaCount / totalCount) * 100);
+            const papaPercent = 100 - mamaPercent;
+            const imbalance = Math.abs(mamaPercent - 50);
+            
+            if (imbalance > 20) {
+              const dominantParent = mamaPercent > 50 ? 'Mama' : 'Papa';
+              insights.challengeInsights.push(
+                `Survey responses show ${dominantParent} is handling ${dominantParent === 'Mama' ? mamaPercent : papaPercent}% of tasks`
+              );
+            } else {
+              insights.successInsights.push(
+                `Your family has achieved a good balance with only ${imbalance}% difference between parents`
+              );
+            }
+          }
+        }
+      }
+      
+      // Analyze incomplete tasks for challenges
+      if (incompleteTasks.length > 0) {
+        const categories = incompleteTasks.map(t => t.category || 'Other');
+        const categoryCounts = {};
+        
+        categories.forEach(cat => {
+          categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+        });
+        
+        // Find most challenging category
+        const sortedCategories = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1]);
+        if (sortedCategories.length > 0) {
+          insights.challengeInsights.push(
+            `${sortedCategories[0][0]} has the most incomplete tasks (${sortedCategories[0][1]})`
           );
         }
       }
-    }
-    
-    // Analyze incomplete tasks for challenges
-    if (incompleteTasks.length > 0) {
-      const categories = incompleteTasks.map(t => t.category || 'Other');
-      const categoryCounts = {};
       
-      categories.forEach(cat => {
-        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
-      });
+      // Generate action insights based on our analysis
+      if (insights.challengeInsights.length > 0) {
+        // Create actions based on challenges
+        insights.actionInsights.push(
+          "Focus on better sharing of tasks in the most imbalanced category"
+        );
+        
+        // Add specific action based on the top challenge
+        const topChallenge = insights.challengeInsights[0].toLowerCase();
+        
+        if (topChallenge.includes('balance decreased')) {
+          insights.actionInsights.push(
+            "Schedule a midweek check-in to adjust workload sharing before issues grow"
+          );
+        } else if (topChallenge.includes('incomplete tasks')) {
+          insights.actionInsights.push(
+            "Break down complex tasks into smaller steps for easier completion"
+          );
+        } else if (topChallenge.includes('handling')) {
+          const overloadedParent = topChallenge.includes('mama') ? 'Mama' : 'Papa';
+          const otherParent = overloadedParent === 'Mama' ? 'Papa' : 'Mama';
+          insights.actionInsights.push(
+            `Have ${otherParent} take over two tasks normally handled by ${overloadedParent} this week`
+          );
+        }
+      }
       
-      // Find most challenging category
-      const sortedCategories = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1]);
-      if (sortedCategories.length > 0) {
-        insights.challengeInsights.push(
-          `${sortedCategories[0][0]} has the most incomplete tasks (${sortedCategories[0][1]})`
+      // Ensure we have at least one insight in each category
+      if (insights.successInsights.length === 0) {
+        insights.successInsights.push("Taking time for family meetings is a success in itself");
+      }
+      if (insights.challengeInsights.length === 0) {
+        insights.challengeInsights.push("Consider identifying one area where balance could be improved");
+      }
+      if (insights.actionInsights.length === 0) {
+        insights.actionInsights.push(
+          "Continue building positive habits for better family balance",
+          "Try weekly check-ins to discuss workload distribution"
         );
       }
-    }
-    
-    // Generate action insights based on our analysis
-    if (insights.challengeInsights.length > 0) {
-      // Create actions based on challenges
-      insights.actionInsights.push(
-        "Focus on better sharing of tasks in the most imbalanced category"
-      );
       
-      // Add specific action based on the top challenge
-      const topChallenge = insights.challengeInsights[0].toLowerCase();
-      
-      if (topChallenge.includes('balance decreased')) {
-        insights.actionInsights.push(
-          "Schedule a midweek check-in to adjust workload sharing before issues grow"
-        );
-      } else if (topChallenge.includes('incomplete tasks')) {
-        insights.actionInsights.push(
-          "Break down complex tasks into smaller steps for easier completion"
-        );
-      } else if (topChallenge.includes('handling')) {
-        const overloadedParent = topChallenge.includes('mama') ? 'Mama' : 'Papa';
-        const otherParent = overloadedParent === 'Mama' ? 'Papa' : 'Mama';
-        insights.actionInsights.push(
-          `Have ${otherParent} take over two tasks normally handled by ${overloadedParent} this week`
-        );
-      }
+    } catch (error) {
+      console.error("Error generating insights:", error);
+      // Provide fallback insights
+      insights.successInsights = [
+        "Completing family meetings consistently is a success",
+        "Every discussion about balance is a step toward improvement",
+        "Acknowledging both parents' contributions builds mutual appreciation"
+      ];
+      insights.challengeInsights = [
+        "Improving balance requires consistent effort",
+        "Building new habits takes time and patience",
+        "Communication about workload is often challenging but worthwhile"
+      ];
+      insights.actionInsights = [
+        "Set specific goals for the coming week",
+        "Choose one imbalanced area to focus on improving",
+        "Create a shared system for tracking household responsibilities"
+      ];
     }
     
-    // Ensure we have at least one insight in each category
-    if (insights.successInsights.length === 0) {
-      insights.successInsights.push("Taking time for family meetings is a success in itself");
-    }
-    if (insights.challengeInsights.length === 0) {
-      insights.challengeInsights.push("Consider identifying one area where balance could be improved");
-    }
-    if (insights.actionInsights.length === 0) {
-      insights.actionInsights.push(
-        "Continue building positive habits for better family balance",
-        "Try weekly check-ins to discuss workload distribution"
-      );
-    }
-    
-  } catch (error) {
-    console.error("Error generating insights:", error);
-    // Provide fallback insights
-    insights.successInsights = [
-      "Completing family meetings consistently is a success",
-      "Every discussion about balance is a step toward improvement",
-      "Acknowledging both parents' contributions builds mutual appreciation"
-    ];
-    insights.challengeInsights = [
-      "Improving balance requires consistent effort",
-      "Building new habits takes time and patience",
-      "Communication about workload is often challenging but worthwhile"
-    ];
-    insights.actionInsights = [
-      "Set specific goals for the coming week",
-      "Choose one imbalanced area to focus on improving",
-      "Create a shared system for tracking household responsibilities"
-    ];
-  }
-  
-  return insights;
-}, [weekHistory, taskRecommendations, currentWeek]);
+    return insights;
+  }, [weekHistory, taskRecommendations, currentWeek]);
 
   // Generate suggested action items based on family data
   // NEW CODE

@@ -1522,6 +1522,25 @@ When asked about dates or calendar requests, remember you ARE able to handle cal
     ).join('\n')}
     ` : ''}
     
+// Enhance survey data section with weighted scores if available
+${familyContext.surveyData ? `
+Survey Data:
+Total Questions: ${familyContext.surveyData.totalQuestions || 0}
+Mama Percentage: ${familyContext.surveyData.mamaPercentage?.toFixed(1) || 50}%
+Papa Percentage: ${(100 - (familyContext.surveyData.mamaPercentage || 50)).toFixed(1)}%
+
+${familyContext.weightedScores ? `
+Weighted Balance (Normalized for different question sets):
+Overall Balance: Mama ${familyContext.weightedScores.overallBalance?.mama?.toFixed(1) || 50}%, Papa ${familyContext.weightedScores.overallBalance?.papa?.toFixed(1) || 50}%
+` : ''}
+
+Category Breakdown:
+${Object.entries(familyContext.weightedScores?.categoryBalance || familyContext.surveyData.categories || {}).map(([category, data]) => 
+  `- ${category}: Mama ${data.mama?.toFixed(1) || 0}%, Papa ${data.papa?.toFixed(1) || 0}% (Based on ${data.questionCount || '?'} questions)`
+).join('\n')}
+` : ''}
+
+
     ${familyContext.tasks && familyContext.tasks.length > 0 ? `
     Current Tasks:
     ${familyContext.tasks.map(task => 

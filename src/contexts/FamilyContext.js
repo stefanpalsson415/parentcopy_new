@@ -1098,7 +1098,7 @@ const extractAIPreferencesFromSurvey = (responses) => {
     }
   };
 
-  // Complete weekly check-in
+  // In completeWeeklyCheckIn function in FamilyContext.js
 const completeWeeklyCheckIn = async (memberId, weekNum, responses) => {
   try {
     if (!familyId) throw new Error("No family ID available");
@@ -1110,76 +1110,58 @@ const completeWeeklyCheckIn = async (memberId, weekNum, responses) => {
       prefixedResponses[`week-${weekNum}-user-${memberId}-${key}`] = value;
     });
       
-      // Update local state
-      setSurveyResponses({
-        ...surveyResponses,
-        ...prefixedResponses
-      });
+    // Update local state
+    setSurveyResponses({
+      ...surveyResponses,
+      ...prefixedResponses
+    });
+    
+    // Recalculate weighted scores using survey data from the bridge
+    // Use surveyDataRef which contains data bridged from SurveyContext
+    if (surveyDataRef.current?.fullQuestionSet && Object.keys(surveyResponses).length > 0) {
+      console.log("Recalculating weighted scores after weekly check-in");
       
-      // Update member completion status
-      const updatedMembers = familyMembers.map(member => {
-        if (member.id === memberId) {
-          const weeklyCompleted = [...(member.weeklyCompleted || [])];
-          
-          // Make sure there's an entry for each week up to the current one
-          while (weeklyCompleted.length < weekNum) {
-            weeklyCompleted.push({
-              completed: false,
-              date: null
-            });
-          }
-          
-          // Update the current week's status
-          weeklyCompleted[weekNum - 1] = {
-            completed: true,
-            date: new Date().toISOString().split('T')[0]
-          };
-          
-          // Send relationship data to AI engine for learning
-          if (responses && Object.keys(responses).some(key => key.startsWith('rel-'))) {
-            try {
-              // Extract just the relationship responses
-              const relationshipResponses = {};
-              Object.entries(responses).forEach(([key, value]) => {
-                if (key.startsWith('rel-')) {
-                  relationshipResponses[key] = value;
-                }
-              });
-              
-              // Don't await this to avoid blocking completion
-              AllieAIService.processRelationshipFeedback(
-                familyId,
-                weekNum,
-                memberId,
-                relationshipResponses
-              ).catch(err => console.error("Error processing relationship feedback:", err));
-              
-              console.log("Sent relationship data to AI engine for learning");
-            } catch (error) {
-              console.error("Error handling relationship responses:", error);
-              // Don't block completion if this fails
-            }
-          }
-
-          return {
-            ...member,
-            weeklyCompleted
-          };
+      // Import the calculator function if not already available
+      const { calculateBalanceScores } = require('../utils/TaskWeightCalculator');
+      
+      const updatedScores = calculateBalanceScores(
+        surveyDataRef.current.fullQuestionSet, 
+        {
+          ...surveyResponses,
+          ...prefixedResponses
+        }, 
+        surveyDataRef.current.familyPriorities || familyPriorities
+      );
+      
+      // Update weighted scores
+      setWeightedScores(updatedScores);
+      
+      // Add the updated scores to the week status for historical reference
+      const updatedStatus = {
+        ...weekStatus,
+        [weekNum]: {
+          ...weekStatus[weekNum],
+          surveysCompleted: true,
+          surveyCompletedDate: new Date().toISOString(),
+          weightedScores: updatedScores // Store the calculated scores
         }
-        return member;
-      });
+      };
       
-      setFamilyMembers(updatedMembers);
+      setWeekStatus(updatedStatus);
       
-      // Update Firebase
-      await DatabaseService.updateMemberSurveyCompletion(familyId, memberId, `weekly-${weekNum}`, true);
-      await DatabaseService.saveSurveyResponses(familyId, memberId, `weekly-${weekNum}`, responses);
-      await DatabaseService.saveFamilyData({ familyMembers: updatedMembers }, familyId);
-      
-      // Update selected user if that's the one completing the check-in
-      if (selectedUser && selectedUser.id === memberId) {
-        const weeklyCompleted = [...(selectedUser.weeklyCompleted || [])];
+      // Will save to Firebase at the end of this function
+      var statusToSave = updatedStatus;
+    } else {
+      console.log("Insufficient data to recalculate weighted scores");
+      var statusToSave = weekStatus; // Initialize for later use
+    }
+    
+    // Update member completion status
+    const updatedMembers = familyMembers.map(member => {
+      if (member.id === memberId) {
+        const weeklyCompleted = [...(member.weeklyCompleted || [])];
         
+        // Make sure there's an entry for each week up to the current one
         while (weeklyCompleted.length < weekNum) {
           weeklyCompleted.push({
             completed: false,
@@ -1187,52 +1169,125 @@ const completeWeeklyCheckIn = async (memberId, weekNum, responses) => {
           });
         }
         
+        // Update the current week's status
         weeklyCompleted[weekNum - 1] = {
           completed: true,
           date: new Date().toISOString().split('T')[0]
         };
         
-        setSelectedUser({
-          ...selectedUser,
+        // Send relationship data to AI engine for learning
+        if (responses && Object.keys(responses).some(key => key.startsWith('rel-'))) {
+          try {
+            // Extract just the relationship responses
+            const relationshipResponses = {};
+            Object.entries(responses).forEach(([key, value]) => {
+              if (key.startsWith('rel-')) {
+                relationshipResponses[key] = value;
+              }
+            });
+            
+            // Don't await this to avoid blocking completion
+            AllieAIService.processRelationshipFeedback(
+              familyId,
+              weekNum,
+              memberId,
+              relationshipResponses
+            ).catch(err => console.error("Error processing relationship feedback:", err));
+            
+            console.log("Sent relationship data to AI engine for learning");
+          } catch (error) {
+            console.error("Error handling relationship responses:", error);
+            // Don't block completion if this fails
+          }
+        }
+
+        return {
+          ...member,
           weeklyCompleted
+        };
+      }
+      return member;
+    });
+    
+    setFamilyMembers(updatedMembers);
+    
+    // Update Firebase
+    await DatabaseService.updateMemberSurveyCompletion(familyId, memberId, `weekly-${weekNum}`, true);
+    await DatabaseService.saveSurveyResponses(familyId, memberId, `weekly-${weekNum}`, responses);
+    await DatabaseService.saveFamilyData({ familyMembers: updatedMembers }, familyId);
+    
+    // Update selected user if that's the one completing the check-in
+    if (selectedUser && selectedUser.id === memberId) {
+      const weeklyCompleted = [...(selectedUser.weeklyCompleted || [])];
+      
+      while (weeklyCompleted.length < weekNum) {
+        weeklyCompleted.push({
+          completed: false,
+          date: null
         });
       }
       
-      // Check if all members have completed this week's check-in
-      const allCompleted = updatedMembers.every(member => 
-        member.weeklyCompleted && 
-        member.weeklyCompleted[weekNum - 1] && 
-        member.weeklyCompleted[weekNum - 1].completed
-      );
+      weeklyCompleted[weekNum - 1] = {
+        completed: true,
+        date: new Date().toISOString().split('T')[0]
+      };
       
-      if (allCompleted) {
-        // Update week status
-        const updatedStatus = {
-          ...weekStatus,
-          [weekNum]: {
-            ...weekStatus[weekNum],
-            surveysCompleted: true,
-            surveyCompletedDate: new Date().toISOString()
-          }
-        };
-        
-        setWeekStatus(updatedStatus);
-        
-        // Save to Firebase
-        await DatabaseService.saveFamilyData({
-          weekStatus: updatedStatus
-        }, familyId);
+      setSelectedUser({
+        ...selectedUser,
+        weeklyCompleted
+      });
+    }
+    
+    // Check if all members have completed this week's check-in
+    const allCompleted = updatedMembers.every(member => 
+      member.weeklyCompleted && 
+      member.weeklyCompleted[weekNum - 1] && 
+      member.weeklyCompleted[weekNum - 1].completed
+    );
+    
+    if (allCompleted) {
+      // Update week status
+      const updatedStatus = {
+        ...statusToSave,
+        [weekNum]: {
+          ...statusToSave[weekNum],
+          surveysCompleted: true,
+          surveyCompletedDate: new Date().toISOString()
+        }
+      };
+      
+      setWeekStatus(updatedStatus);
+      
+      // Save to Firebase with weighted scores if we calculated them
+      const dataToSave = {
+        weekStatus: updatedStatus
+      };
+      
+      // Add weightedScores to save data if they were calculated
+      if (updatedStatus[weekNum]?.weightedScores) {
+        dataToSave.weightedScores = updatedStatus[weekNum].weightedScores;
       }
       
-      return {
-        success: true,
-        allCompleted
-      };
-    } catch (error) {
-      setError(error.message);
-      throw error;
+      await DatabaseService.saveFamilyData(dataToSave, familyId);
+    } else {
+      // If we calculated weighted scores but not all members have completed yet
+      if (statusToSave[weekNum]?.weightedScores) {
+        await DatabaseService.saveFamilyData({
+          weekStatus: statusToSave,
+          weightedScores: statusToSave[weekNum].weightedScores
+        }, familyId);
+      }
     }
-  };
+    
+    return {
+      success: true,
+      allCompleted
+    };
+  } catch (error) {
+    setError(error.message);
+    throw error;
+  }
+};
 
 
 

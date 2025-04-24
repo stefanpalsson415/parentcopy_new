@@ -510,26 +510,39 @@ const DashboardTab = () => {
   };
   
   // Function to calculate harmony score from various metrics
-  const calculateHarmonyScore = (scores) => {
-    // Start with a base score
-    let harmonyScore = 70;
+const calculateHarmonyScore = (scores) => {
+  // Start with a base score
+  let harmonyScore = 70;
+  
+  if (!scores || !scores.categoryBalance) return harmonyScore;
+  
+  // Calculate weighted average imbalance across categories - accounts for varying question counts
+  const categories = Object.values(scores.categoryBalance);
+  
+  // Calculate total weight based on question counts per category
+  const totalWeight = categories.reduce((sum, cat) => sum + (cat.questionCount || 1), 0);
+  const weightedImbalance = categories.reduce((sum, cat) => {
+    // Weight by question count and category importance
+    const categoryImportance = 
+      cat.category === "Invisible Parental Tasks" ? 1.3 :
+      cat.category === "Invisible Household Tasks" ? 1.2 : 
+      cat.category === "Visible Parental Tasks" ? 1.1 : 1.0;
     
-    if (!scores || !scores.categoryBalance) return harmonyScore;
-    
-    // Calculate average imbalance across categories
-    const categories = Object.values(scores.categoryBalance);
-    const avgImbalance = categories.reduce((sum, cat) => sum + Math.abs(cat.imbalance), 0) / categories.length;
-    
-    // Adjust score based on imbalance (more imbalance = lower score)
-    harmonyScore -= avgImbalance / 2;
-    
-    // Adjust for completed habits (more completed habits = higher score)
-    const completedHabitsCount = (taskRecommendations || []).filter(t => t.completed).length;
-    harmonyScore += completedHabitsCount * 2;
-    
-    // Cap score between 0 and 100
-    return Math.max(0, Math.min(100, Math.round(harmonyScore)));
-  };
+    // If we have question count, use it for weighting, otherwise treat all equally
+    const weight = (cat.questionCount || 1) * categoryImportance;
+    return sum + (Math.abs(cat.imbalance) * weight);
+  }, 0) / totalWeight;
+  
+  // Adjust score based on imbalance (more imbalance = lower score)
+  harmonyScore -= weightedImbalance / 2;
+  
+  // Adjust for completed habits (more completed habits = higher score)
+  const completedHabitsCount = (taskRecommendations || []).filter(t => t.completed).length;
+  harmonyScore += completedHabitsCount * 2;
+  
+  // Cap score between 0 and 100
+  return Math.max(0, Math.min(100, Math.round(harmonyScore)));
+};
   
   // Function to generate insights for a parent using direct data analysis
   const generateParentInsights = async (parent) => {

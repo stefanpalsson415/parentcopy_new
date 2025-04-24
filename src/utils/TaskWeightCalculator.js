@@ -78,55 +78,144 @@ export const calculateTaskWeight = (question, familyPriorities) => {
   return totalWeight;
 };
 
+
+
 // Function to calculate balance scores
-export const calculateBalanceScores = (questions, responses, familyPriorities) => {
-  let mamaTotal = 0;
-  let papaTotal = 0;
-    
-  // Category totals
-  const categoryScores = {
-    "Visible Household Tasks": { mama: 0, papa: 0, total: 0 },
-    "Invisible Household Tasks": { mama: 0, papa: 0, total: 0 },
-    "Visible Parental Tasks": { mama: 0, papa: 0, total: 0 },
-    "Invisible Parental Tasks": { mama: 0, papa: 0, total: 0 }
+export const calculateBalanceScores = (fullQuestionSet, responses, priorities = null) => {
+  // Define categories
+  const categories = {
+    "Visible Household Tasks": { mama: 0, papa: 0, neutral: 0, total: 0, questionCount: 0 },
+    "Invisible Household Tasks": { mama: 0, papa: 0, neutral: 0, total: 0, questionCount: 0 },
+    "Visible Parental Tasks": { mama: 0, papa: 0, neutral: 0, total: 0, questionCount: 0 },
+    "Invisible Parental Tasks": { mama: 0, papa: 0, neutral: 0, total: 0, questionCount: 0 }
   };
-    
-  // Calculate weighted scores for each response
-  Object.entries(responses).forEach(([questionId, response]) => {
-    const question = questions.find(q => q.id === questionId);
-    if (!question) return;
-      
-    const weight = calculateTaskWeight(question, familyPriorities);
-      
-    if (response === 'Mama') {
-      mamaTotal += weight;
-      categoryScores[question.category].mama += weight;
-    } else if (response === 'Papa') {
-      papaTotal += weight;
-      categoryScores[question.category].papa += weight;
+  
+  // Set up default weights for each category
+  const categoryWeights = {
+    "Visible Household Tasks": 1.0,
+    "Invisible Household Tasks": 1.2,
+    "Visible Parental Tasks": 1.1,
+    "Invisible Parental Tasks": 1.5
+  };
+  
+  // If priorities provided, adjust category weights
+  if (priorities) {
+    if (priorities.highestPriority && categories[priorities.highestPriority]) {
+      categoryWeights[priorities.highestPriority] = 1.5;
     }
+    if (priorities.secondaryPriority && categories[priorities.secondaryPriority]) {
+      categoryWeights[priorities.secondaryPriority] = 1.3;
+    }
+    if (priorities.tertiaryPriority && categories[priorities.tertiaryPriority]) {
+      categoryWeights[priorities.tertiaryPriority] = 1.1;
+    }
+  }
+  
+  // Track all questions that could have been asked vs. ones actually asked
+  const possibleQuestionsByCategory = {};
+  for (const category in categories) {
+    possibleQuestionsByCategory[category] = fullQuestionSet.filter(q => q.category === category).length;
+  }
+  
+  // Process all responses
+  Object.entries(responses).forEach(([key, value]) => {
+    // Skip non-relevant responses
+    if (!value || (value !== 'Mama' && value !== 'Papa' && value !== 'Neutral' && 
+                   value !== 'Both' && value !== 'Neither')) {
+      return;
+    }
+    
+    // Extract the question ID
+    let questionId = key;
+    // Handle prefixed question IDs like "week-1-user-123-q45"
+    if (key.includes('-q')) {
+      questionId = 'q' + key.split('-q')[1];
+    } else if (key.includes('-')) {
+      // Try to extract just the question part
+      const parts = key.split('-');
+      questionId = parts[parts.length - 1];
+    }
+    
+    // Find the question in the full set
+    const question = fullQuestionSet.find(q => q.id === questionId);
+    
+    if (question && question.category && categories[question.category]) {
+      const category = question.category;
+      const weight = parseFloat(question.totalWeight || 1);
       
-    categoryScores[question.category].total += weight;
+      // Track that we've seen a question from this category
+      categories[category].questionCount++;
+      
+      // Add weighted score based on response
+      if (value === 'Mama') {
+        categories[category].mama += weight;
+        categories[category].total += weight;
+      } else if (value === 'Papa') {
+        categories[category].papa += weight;
+        categories[category].total += weight;
+      } else if (value === 'Both' || value === 'Neutral' || value === 'Neither') {
+        // For neutral responses, split the weight evenly
+        categories[category].mama += weight / 2;
+        categories[category].papa += weight / 2;
+        categories[category].neutral += weight;
+        categories[category].total += weight;
+      }
+    }
   });
+  
+  // Calculate percentages for each category, normalizing for question count
+  const categoryBalance = {};
+  
+  for (const [category, data] of Object.entries(categories)) {
+    // Only include categories with responses
+    if (data.total > 0) {
+      const mamaPercent = (data.mama / data.total) * 100;
+      const papaPercent = (data.papa / data.total) * 100;
+      const neutralPercent = (data.neutral / data.total) * 100;
+      
+      // Calculate normalized imbalance - adjust for question distribution
+      const questionCoverage = data.questionCount / possibleQuestionsByCategory[category];
+      const normalizedImbalance = Math.abs(mamaPercent - papaPercent) * 
+                                 (questionCoverage >= 0.5 ? 1 : 0.5 + questionCoverage);
+      
+      categoryBalance[category] = {
+        mama: mamaPercent,
+        papa: papaPercent,
+        neutral: neutralPercent,
+        imbalance: normalizedImbalance,
+        questionCount: data.questionCount,
+        possibleQuestions: possibleQuestionsByCategory[category],
+        coverage: questionCoverage
+      };
+    }
+  }
+  
+  // Calculate overall weighted balance across all categories
+  let totalWeight = 0;
+  let weightedMama = 0;
+  let weightedPapa = 0;
+  let weightedNeutral = 0;
+  
+  for (const [category, data] of Object.entries(categoryBalance)) {
+    const catWeight = categoryWeights[category] || 1;
+    const questionWeight = data.questionCount;
+    const combinedWeight = catWeight * questionWeight;
     
-  // Calculate percentages
-  const totalWeight = mamaTotal + papaTotal;
-  const result = {
-    overallBalance: {
-      mama: totalWeight ? (mamaTotal / totalWeight) * 100 : 50,
-      papa: totalWeight ? (papaTotal / totalWeight) * 100 : 50
-    },
-    categoryBalance: {}
+    weightedMama += data.mama * combinedWeight;
+    weightedPapa += data.papa * combinedWeight;
+    weightedNeutral += data.neutral * combinedWeight;
+    totalWeight += combinedWeight;
+  }
+  
+  const overallBalance = totalWeight > 0 ? {
+    mama: weightedMama / totalWeight,
+    papa: weightedPapa / totalWeight,
+    neutral: weightedNeutral / totalWeight,
+    imbalance: Math.abs((weightedMama - weightedPapa) / totalWeight)
+  } : { mama: 50, papa: 50, neutral: 0, imbalance: 0 };
+  
+  return {
+    categoryBalance,
+    overallBalance
   };
-    
-  // Calculate category percentages
-  Object.entries(categoryScores).forEach(([category, scores]) => {
-    result.categoryBalance[category] = {
-      mama: scores.total ? (scores.mama / scores.total) * 100 : 50,
-      papa: scores.total ? (scores.papa / scores.total) * 100 : 50,
-      imbalance: scores.total ? Math.abs(scores.mama - scores.papa) / scores.total * 100 : 0
-    };
-  });
-    
-  return result;
 };
