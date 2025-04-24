@@ -1233,29 +1233,85 @@ console.log("Saving event with location:", event.location);
       </p>
     </div>
   </div>
-) : (
-  // Child-specific events UI remains unchanged
-  <>
-    {/* For meetings/general events: Show all attendees, for other events: Show child selection UI */}
-{(event.category === 'meeting' || event.eventType === 'meeting') ? (
+) : event.eventType === 'date-night' ? (
   <div>
     <label className="block text-sm font-medium mb-1 text-gray-700">
       Event Attendees
     </label>
-    <div className="p-3 bg-blue-50 rounded-md">
+    <div className="p-3 bg-pink-50 rounded-md">
       <div className="flex flex-wrap gap-2 mb-2">
-        {familyMembers.map(member => (
-          <div key={member.id} className="flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200">
-            <UserAvatar user={member} size={20} className="mr-1" />
-            {member.name}
+        {/* Show parents first, always selected for date nights */}
+        {parents.map(parent => (
+          <div key={parent.id} className="flex items-center px-3 py-1 rounded-full text-sm bg-pink-100 text-pink-800 border border-pink-200">
+            <UserAvatar user={parent} size={20} className="mr-1" />
+            {parent.name}
             <Check size={12} className="ml-1" />
           </div>
         ))}
+        
+        {/* Allow adding children optionally */}
+        {children.map(child => {
+          // Initialize attendees if needed
+          const attendees = event.attendees || [];
+          const isSelected = attendees.some(a => a.id === child.id);
+          
+          return (
+            <button
+              key={child.id}
+              type="button"
+              onClick={() => {
+                // Toggle child's attendance
+                setEvent(prev => {
+                  // Initialize attendees with parents if not present
+                  let currentAttendees = prev.attendees || [];
+                  if (currentAttendees.length === 0) {
+                    // Add parents first
+                    parents.forEach(parent => {
+                      currentAttendees.push({
+                        id: parent.id,
+                        name: parent.name,
+                        role: parent.role
+                      });
+                    });
+                  }
+                  
+                  let newAttendees;
+                  
+                  if (currentAttendees.some(a => a.id === child.id)) {
+                    // Remove child if already included
+                    newAttendees = currentAttendees.filter(a => a.id !== child.id);
+                  } else {
+                    // Add child if not included
+                    newAttendees = [
+                      ...currentAttendees, 
+                      {
+                        id: child.id,
+                        name: child.name,
+                        role: child.role
+                      }
+                    ];
+                  }
+                  
+                  return { ...prev, attendees: newAttendees };
+                });
+              }}
+              className={`flex items-center px-3 py-1 rounded-full text-sm ${
+                isSelected
+                  ? 'bg-pink-100 text-pink-800 border border-pink-200'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <UserAvatar user={child} size={20} className="mr-1" />
+              {child.name}
+              {isSelected && (
+                <Check size={12} className="ml-1" />
+              )}
+            </button>
+          );
+        })}
       </div>
-      <p className="text-xs text-blue-700">
-        {event.category === 'meeting' ? 
-          "Family meetings include all family members by default." : 
-          "All family members are included for this event."}
+      <p className="text-xs text-pink-700">
+        Parents are included by default for date nights. You can optionally include children.
       </p>
     </div>
   </div>
@@ -1399,42 +1455,78 @@ console.log("Saving event with location:", event.location);
     )}
   </>
 )}
-  </>
-)}
         
-        {/* Document Selection */}
-<div>
-  <label className="block text-sm font-medium mb-1 text-gray-700">
-    Attach Documents
-  </label>
-  <div className="p-3 bg-gray-50 rounded-md">
-    {event.documents?.length > 0 ? (
-      <div className="space-y-2">
-        {event.documents.map((doc, index) => (
-          <div key={index} className="flex items-center justify-between p-2 bg-white rounded border">
-            <div className="flex items-center">
-              <FileText size={16} className="text-blue-500 mr-2" />
-              <span className="text-sm truncate max-w-xs">{doc.title || doc.fileName}</span>
+       {/* Document Selection - Hide for date nights */}
+{event.eventType !== 'date-night' && (
+  <div>
+    <label className="block text-sm font-medium mb-1 text-gray-700">
+      Attach Documents
+    </label>
+    <div className="p-3 bg-gray-50 rounded-md">
+      {event.documents?.length > 0 ? (
+        <div className="space-y-2">
+          {event.documents.map((doc, index) => (
+            <div key={index} className="flex items-center justify-between p-2 bg-white rounded border">
+              <div className="flex items-center">
+                <FileText size={16} className="text-blue-500 mr-2" />
+                <span className="text-sm truncate max-w-xs">{doc.title || doc.fileName}</span>
+              </div>
+              <button
+                onClick={() => setEvent(prev => ({
+                  ...prev,
+                  documents: prev.documents.filter((_, i) => i !== index)
+                }))}
+                className="text-red-500 hover:text-red-700"
+              >
+                <X size={16} />
+              </button>
             </div>
-            <button
-              onClick={() => setEvent(prev => ({
+          ))}
+          <button
+            onClick={() => {
+              // Direct implementation to add mock document
+              // In a real app, this would open a document picker
+              const mockDoc = {
+                id: `doc-${Date.now()}`,
+                title: `Document ${event.documents.length + 1}`,
+                fileName: `document_${event.documents.length + 1}.pdf`,
+                type: 'application/pdf',
+                createdAt: new Date().toISOString()
+              };
+              
+              setEvent(prev => ({
                 ...prev,
-                documents: prev.documents.filter((_, i) => i !== index)
-              }))}
-              className="text-red-500 hover:text-red-700"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        ))}
+                documents: [...(prev.documents || []), mockDoc]
+              }));
+              
+              // Still dispatch event for compatibility, but don't rely on it
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('open-document-library', {
+                  detail: { 
+                    childId: event.childId,
+                    onSelect: (selectedDoc) => {
+                      setEvent(prev => ({
+                        ...prev,
+                        documents: [...(prev.documents || []), selectedDoc]
+                      }));
+                    }
+                  }
+                }));
+              }
+            }}
+            className="w-full py-2 text-center text-sm text-blue-600 hover:text-blue-800"
+          >
+            + Add More Documents
+          </button>
+        </div>
+      ) : (
         <button
           onClick={() => {
             // Direct implementation to add mock document
-            // In a real app, this would open a document picker
             const mockDoc = {
               id: `doc-${Date.now()}`,
-              title: `Document ${event.documents.length + 1}`,
-              fileName: `document_${event.documents.length + 1}.pdf`,
+              title: "New Document",
+              fileName: "new_document.pdf",
               type: 'application/pdf',
               createdAt: new Date().toISOString()
             };
@@ -1459,51 +1551,15 @@ console.log("Saving event with location:", event.location);
               }));
             }
           }}
-          className="w-full py-2 text-center text-sm text-blue-600 hover:text-blue-800"
+          className="w-full p-3 border border-dashed border-gray-300 rounded-md flex items-center justify-center"
         >
-          + Add More Documents
+          <FileText size={20} className="text-gray-400 mr-2" />
+          <span className="text-sm text-gray-600">Select Documents</span>
         </button>
-      </div>
-    ) : (
-      <button
-        onClick={() => {
-          // Direct implementation to add mock document
-          const mockDoc = {
-            id: `doc-${Date.now()}`,
-            title: "New Document",
-            fileName: "new_document.pdf",
-            type: 'application/pdf',
-            createdAt: new Date().toISOString()
-          };
-          
-          setEvent(prev => ({
-            ...prev,
-            documents: [...(prev.documents || []), mockDoc]
-          }));
-          
-          // Still dispatch event for compatibility, but don't rely on it
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('open-document-library', {
-              detail: { 
-                childId: event.childId,
-                onSelect: (selectedDoc) => {
-                  setEvent(prev => ({
-                    ...prev,
-                    documents: [...(prev.documents || []), selectedDoc]
-                  }));
-                }
-              }
-            }));
-          }
-        }}
-        className="w-full p-3 border border-dashed border-gray-300 rounded-md flex items-center justify-center"
-      >
-        <FileText size={20} className="text-gray-400 mr-2" />
-        <span className="text-sm text-gray-600">Select Documents</span>
-      </button>
-    )}
+      )}
+    </div>
   </div>
-</div>
+)}
 
         {/* Provider Selection */}
 <div>
@@ -1547,46 +1603,48 @@ console.log("Saving event with location:", event.location);
         ))}
         <button
           onClick={() => {
-            // Direct implementation to add mock provider
-            const providerType = event.eventType === 'date-night' ? 'childcare' : 'medical';
-            const mockProvider = {
-              id: `provider-${Date.now()}`,
-              name: event.eventType === 'date-night' ? 
-                `Babysitter ${event.providers.length + 1}` : 
-                `Provider ${event.providers.length + 1}`,
-              type: providerType,
-              specialty: event.eventType === 'date-night' ? 'Childcare' : 'General',
-              phone: '555-123-4567',
-              email: 'provider@example.com'
-            };
-            
-            setEvent(prev => ({
-              ...prev,
-              providers: [...(prev.providers || []), mockProvider],
-              dateNightDetails: prev.eventType === 'date-night' ? {
-                ...prev.dateNightDetails,
-                childcareArranged: true
-              } : prev.dateNightDetails
-            }));
-            
-            // Still dispatch event for compatibility
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('open-provider-directory', {
-                detail: { 
-                  filterType: event.eventType === 'date-night' ? 'childcare' : null,
-                  title: event.eventType === 'date-night' ? 'Select Babysitter' : 'Select Provider',
-                  onSelect: (selectedProvider) => {
-                    setEvent(prev => ({
-                      ...prev,
-                      providers: [...(prev.providers || []), selectedProvider],
-                      dateNightDetails: prev.eventType === 'date-night' ? {
-                        ...prev.dateNightDetails,
-                        childcareArranged: true
-                      } : prev.dateNightDetails
-                    }));
+            // Properly trigger provider directory for direct connection
+            if (event.eventType === 'date-night') {
+              // For babysitters, directly open the provider directory
+              if (typeof window !== 'undefined') {
+                console.log("Opening provider directory for babysitter selection");
+                window.dispatchEvent(new CustomEvent('open-provider-directory', {
+                  detail: { 
+                    filterType: 'childcare',
+                    title: 'Select Babysitter',
+                    onSelect: (selectedProvider) => {
+                      setEvent(prev => ({
+                        ...prev,
+                        providers: [...(prev.providers || []), selectedProvider],
+                        dateNightDetails: {
+                          ...prev.dateNightDetails,
+                          childcareArranged: true
+                        }
+                      }));
+                      
+                      // Dispatch event to refresh any UI components
+                      window.dispatchEvent(new CustomEvent('provider-selected', {
+                        detail: { provider: selectedProvider }
+                      }));
+                    }
                   }
-                }
-              }));
+                }));
+              }
+            } else {
+              // For other providers
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('open-provider-directory', {
+                  detail: { 
+                    title: 'Select Provider',
+                    onSelect: (selectedProvider) => {
+                      setEvent(prev => ({
+                        ...prev,
+                        providers: [...(prev.providers || []), selectedProvider]
+                      }));
+                    }
+                  }
+                }));
+              }
             }
           }}
           className={`w-full py-2 text-center text-sm ${
@@ -1599,67 +1657,110 @@ console.log("Saving event with location:", event.location);
         </button>
       </div>
     ) : (
-      <button
-        onClick={() => {
-          // Direct implementation to add mock provider
-          const providerType = event.eventType === 'date-night' ? 'childcare' : 'medical';
-          const mockProvider = {
-            id: `provider-${Date.now()}`,
-            name: event.eventType === 'date-night' ? 'Babysitter' : 'Provider',
-            type: providerType,
-            specialty: event.eventType === 'date-night' ? 'Childcare' : 'General',
-            phone: '555-123-4567',
-            email: 'provider@example.com'
-          };
-          
-          setEvent(prev => ({
-            ...prev,
-            providers: [...(prev.providers || []), mockProvider],
-            dateNightDetails: prev.eventType === 'date-night' ? {
-              ...prev.dateNightDetails,
-              childcareArranged: true
-            } : prev.dateNightDetails
-          }));
-          
-          // Still dispatch event for compatibility
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('open-provider-directory', {
-              detail: { 
-                filterType: event.eventType === 'date-night' ? 'childcare' : null,
-                title: event.eventType === 'date-night' ? 'Select Babysitter' : 'Select Provider',
-                onSelect: (selectedProvider) => {
-                  setEvent(prev => ({
-                    ...prev,
-                    providers: [...(prev.providers || []), selectedProvider],
-                    dateNightDetails: prev.eventType === 'date-night' ? {
-                      ...prev.dateNightDetails,
-                      childcareArranged: true
-                    } : prev.dateNightDetails
+      <div className="space-y-2">
+        {event.eventType === 'date-night' ? (
+          <>
+            <button
+              onClick={() => {
+                // Open provider directory for babysitter selection
+                if (typeof window !== 'undefined') {
+                  console.log("Opening provider directory for babysitter selection");
+                  window.dispatchEvent(new CustomEvent('open-provider-directory', {
+                    detail: { 
+                      filterType: 'childcare',
+                      title: 'Select Babysitter',
+                      onSelect: (selectedProvider) => {
+                        console.log("Provider selected:", selectedProvider);
+                        setEvent(prev => ({
+                          ...prev,
+                          providers: [...(prev.providers || []), selectedProvider],
+                          dateNightDetails: {
+                            ...prev.dateNightDetails,
+                            childcareArranged: true
+                          }
+                        }));
+                      }
+                    }
                   }));
                 }
+              }}
+              className="w-full p-3 border border-amber-300 bg-amber-50 rounded-md flex items-center justify-center"
+            >
+              <User size={20} className="text-pink-500 mr-2" />
+              <span className="text-sm text-amber-700 font-medium">
+                Select Babysitter
+              </span>
+            </button>
+            
+            <button
+              onClick={() => {
+                // Add a simple babysitter entry manually
+                const mockProvider = {
+                  id: `provider-${Date.now()}`,
+                  name: "New Babysitter",
+                  type: "childcare",
+                  specialty: "Childcare",
+                  phone: "",
+                  email: ""
+                };
+                
+                setEvent(prev => ({
+                  ...prev,
+                  providers: [...(prev.providers || []), mockProvider],
+                  dateNightDetails: {
+                    ...prev.dateNightDetails,
+                    childcareArranged: true
+                  }
+                }));
+              }}
+              className="w-full py-2 text-center text-sm text-pink-600 hover:text-pink-800"
+            >
+              + Create New Babysitter
+            </button>
+            
+            <button
+              onClick={() => {
+                setEvent(prev => ({
+                  ...prev,
+                  dateNightDetails: {
+                    ...prev.dateNightDetails,
+                    needsBabysitter: false,
+                    childcareArranged: true
+                  }
+                }));
+              }}
+              className="w-full py-2 text-center text-sm text-gray-600 hover:text-gray-800"
+            >
+              No Babysitter Needed
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => {
+              // Open provider directory for general provider selection
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('open-provider-directory', {
+                  detail: { 
+                    title: 'Select Provider',
+                    onSelect: (selectedProvider) => {
+                      setEvent(prev => ({
+                        ...prev,
+                        providers: [...(prev.providers || []), selectedProvider]
+                      }));
+                    }
+                  }
+                }));
               }
-            }));
-          }
-        }}
-        className={`w-full p-3 border ${
-          event.eventType === 'date-night' && event.dateNightDetails?.needsBabysitter ?
-          'border-amber-300 bg-amber-50' : 
-          'border-dashed border-gray-300'
-        } rounded-md flex items-center justify-center`}
-      >
-        <User size={20} className={`${
-          event.eventType === 'date-night' ? 'text-pink-500' : 'text-gray-400'
-        } mr-2`} />
-        <span className={`text-sm ${
-          event.eventType === 'date-night' && event.dateNightDetails?.needsBabysitter ?
-          'text-amber-700 font-medium' : 
-          'text-gray-600'
-        }`}>
-          {event.eventType === 'date-night' && event.dateNightDetails?.needsBabysitter ? 
-          'Select Babysitter' : 
-          'Select Provider'}
-        </span>
-      </button>
+            }}
+            className="w-full p-3 border border-dashed border-gray-300 rounded-md flex items-center justify-center"
+          >
+            <User size={20} className="text-gray-400 mr-2" />
+            <span className="text-sm text-gray-600">
+              Select Provider
+            </span>
+          </button>
+        )}
+      </div>
     )}
     
     {/* Helper text for date nights */}
@@ -1887,67 +1988,8 @@ console.log("Saving event with location:", event.location);
         />
       </div>
     )}
-      
-    {/* Babysitter Selection Prompt */}
-    {event.dateNightDetails?.needsBabysitter && (!event.providers || event.providers.length === 0) && (
-      <div className="p-3 bg-amber-50 border border-amber-200 rounded-md mb-4 flex items-start">
-        <AlertCircle size={16} className="text-amber-600 mt-0.5 mr-2 flex-shrink-0" />
-        <div>
-          <p className="text-sm text-amber-800">Don't forget to select a babysitter below!</p>
-          <button   
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('open-provider-directory', {
-                  detail: {   
-                    filterType: 'childcare',
-                    title: 'Select Babysitter',
-                    onSelect: (selectedProvider) => {
-                      setEvent(prev => ({
-                        ...prev,
-                        providers: [...(prev.providers || []), selectedProvider]
-                      }));
-                    }
-                  }
-                }));
-              }
-            }}
-            className="text-xs text-amber-800 underline mt-1"
-          >
-            Choose a babysitter now
-          </button>
-        </div>
-      </div>
-    )}
-      
-    {/* Date Night Planning Considerations */}
-    <div className="bg-white p-3 rounded-md border border-pink-100">
-      <h5 className="text-sm font-medium mb-2 text-pink-800">Planning Checklist</h5>
-      <ul className="text-xs text-gray-600 space-y-1">
-        <li className="flex items-start">
-          <div className="h-4 w-4 rounded-sm border border-pink-300 flex-shrink-0 mt-0.5 mr-2"></div>
-          Childcare arrangements
-        </li>
-        <li className="flex items-start">
-          <div className="h-4 w-4 rounded-sm border border-pink-300 flex-shrink-0 mt-0.5 mr-2"></div>
-          Meal preparations for children
-        </li>
-        <li className="flex items-start">
-          <div className="h-4 w-4 rounded-sm border border-pink-300 flex-shrink-0 mt-0.5 mr-2"></div>
-          Transportation plans
-        </li>
-        <li className="flex items-start">
-          <div className="h-4 w-4 rounded-sm border border-pink-300 flex-shrink-0 mt-0.5 mr-2"></div>
-          Emergency contacts while away
-        </li>
-        <li className="flex items-start">
-          <div className="h-4 w-4 rounded-sm border border-pink-300 flex-shrink-0 mt-0.5 mr-2"></div>
-          Bedtime routines for sitter
-        </li>
-      </ul>
-    </div>
   </div>
 )}
-
 
 
         {/* Birthday specific fields */}
