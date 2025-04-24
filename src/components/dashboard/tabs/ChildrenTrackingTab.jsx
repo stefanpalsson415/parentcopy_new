@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Calendar, AlertCircle, 
   Activity, Users, Search, X, RefreshCw, 
-  User, PlusCircle, Mic
+  User, PlusCircle, Mic, CheckCircle, Info
 } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -995,20 +995,20 @@ const ChildrenTrackingTab = () => {
                 </button>
                 
                 {!isRecording ? (
-                  <button
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md font-roboto hover:bg-blue-700"
-                    onClick={recognizeSpeech}
-                  >
-                    Start Recording
-                  </button>
-                ) : (
-                  <button
-                    className="px-4 py-2 bg-red-600 text-white rounded-md font-roboto hover:bg-red-700"
-                    onClick={() => setIsRecording(false)}
-                  >
-                    Stop Recording
-                  </button>
-                )}
+  <button
+    className="px-4 py-2 bg-blue-600 text-white rounded-md font-roboto hover:bg-blue-700"
+    onClick={handleVoiceInput}
+  >
+    Start Recording
+  </button>
+) : (
+  <button
+    className="px-4 py-2 bg-red-600 text-white rounded-md font-roboto hover:bg-red-700"
+    onClick={() => setIsRecording(false)}
+  >
+    Stop Recording
+  </button>
+)}
               </div>
             </div>
           </div>
