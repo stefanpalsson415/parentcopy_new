@@ -524,98 +524,103 @@ const getEventDataForEditing = () => {
         </div>
       </div>
       
-      {/* Date Ideas and Calendar Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-lg w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold font-roboto">{editIndex !== null ? 'Edit Date Night' : 'Plan a Date Night'}</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-600">
-                <X size={20} />
-              </button>
+      {/* Date Ideas Selection Modal */}
+{showAddModal && !selectedDateIdea && editIndex === null && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div className="bg-white rounded-lg max-w-lg w-full p-6">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-bold font-roboto">Plan a Date Night</h3>
+        <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-600">
+          <X size={20} />
+        </button>
+      </div>
+      
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-2 font-roboto">Choose a date idea:</label>
+        <select
+          value={ideaCategory}
+          onChange={(e) => setIdeaCategory(e.target.value)}
+          className="w-full border rounded p-2 text-sm font-roboto mb-3"
+        >
+          <option value="all">All Ideas</option>
+          <option value="dining">Dining</option>
+          <option value="adventure">Adventure</option>
+          <option value="entertainment">Entertainment</option>
+          <option value="family">Family</option>
+          <option value="budget">Budget-Friendly</option>
+        </select>
+        
+        <div className="max-h-60 overflow-y-auto border rounded p-2">
+          {getDateIdeas(ideaCategory).map((idea, i) => (
+            <div 
+              key={i}
+              className="p-2 rounded cursor-pointer hover:bg-gray-100 mb-1 flex items-center"
+              onClick={() => setSelectedDateIdea(idea)}
+            >
+              <Star size={14} className="text-yellow-500 mr-2" />
+              <span className="text-sm font-roboto">{idea}</span>
             </div>
-            
-            {editIndex === null && !selectedDateIdea && (
-              <>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium mb-2 font-roboto">Choose a date idea:</label>
-                  <select
-                    value={ideaCategory}
-                    onChange={(e) => setIdeaCategory(e.target.value)}
-                    className="w-full border rounded p-2 text-sm font-roboto mb-3"
-                  >
-                    <option value="all">All Ideas</option>
-                    <option value="dining">Dining</option>
-                    <option value="adventure">Adventure</option>
-                    <option value="entertainment">Entertainment</option>
-                    <option value="family">Family</option>
-                    <option value="budget">Budget-Friendly</option>
-                  </select>
-                  
-                  <div className="max-h-60 overflow-y-auto border rounded p-2">
-                    {getDateIdeas(ideaCategory).map((idea, i) => (
-                      <div 
-                        key={i}
-                        className="p-2 rounded cursor-pointer hover:bg-gray-100 mb-1 flex items-center"
-                        onClick={() => setSelectedDateIdea(idea)}
-                      >
-                        <Star size={14} className="text-yellow-500 mr-2" />
-                        <span className="text-sm font-roboto">{idea}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                
-                <div className="mt-4 text-center">
-                  <button
-                    onClick={() => setSelectedDateIdea("Custom Date Night")}
-                    className="text-blue-600 hover:text-blue-800 text-sm underline font-roboto"
-                  >
-                    Create a custom date night instead
-                  </button>
-                </div>
-              </>
-            )}
-            
-{(selectedDateIdea || editIndex !== null) && (
-  <EnhancedEventManager
-    initialEvent={editIndex !== null ? getEventDataForEditing() : {
-      title: `Date Night: ${selectedDateIdea}`,
-      description: 'Quality time together',
-      category: 'relationship',
-      eventType: 'date-night',
-      duration: 120, // 2 hours
-      attendingParentId: 'both',
-      dateNightDetails: {
-        venue: '',
-        budget: '',
-        transportation: '',
-        childcareArranged: false,
-        needsBabysitter: true,
-        specialOccasion: false
-      },
-      // Make sure parents are automatically assigned
-      participants: familyMembers
-        .filter(m => m.role === 'parent')
-        .map(m => ({ id: m.id, name: m.name }))
-    }}
-    onSave={handleEventSave}
-    onCancel={() => {
-      setSelectedDateIdea(null);
-      if (editIndex !== null) {
-        setEditIndex(null);
-      }
-    }}
-    eventType="date-night"
-    selectedDate={new Date()}
-    isCompact={true}
-    mode={editIndex !== null ? 'edit' : 'create'}
-    highlightProviderSelection={true} // New prop to emphasize babysitter selection
-  />
-)}
-          </div>
+          ))}
         </div>
-      )}
+      </div>
+      
+      <div className="mt-4 text-center">
+        <button
+          onClick={() => setSelectedDateIdea("Custom Date Night")}
+          className="text-blue-600 hover:text-blue-800 text-sm underline font-roboto"
+        >
+          Create a custom date night instead
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Event Manager Modal - Direct (no wrapper) */}
+{(selectedDateIdea || editIndex !== null) && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <EnhancedEventManager
+        initialEvent={editIndex !== null ? getEventDataForEditing() : {
+          title: `Date Night: ${selectedDateIdea}`,
+          description: 'Quality time together',
+          category: 'relationship',
+          eventType: 'date-night',
+          duration: 120, // 2 hours
+          attendingParentId: 'both',
+          dateNightDetails: {
+            venue: '',
+            budget: '',
+            transportation: '',
+            childcareArranged: false,
+            needsBabysitter: true,
+            specialOccasion: false
+          },
+          // Make sure parents are automatically assigned
+          participants: familyMembers
+            .filter(m => m.role === 'parent')
+            .map(m => ({ id: m.id, name: m.name }))
+        }}
+        onSave={(result) => {
+          handleEventSave(result);
+          setSelectedDateIdea(null);
+          setShowAddModal(false);
+        }}
+        onCancel={() => {
+          setSelectedDateIdea(null);
+          if (editIndex !== null) {
+            setEditIndex(null);
+          }
+          setShowAddModal(false);
+        }}
+        eventType="date-night"
+        selectedDate={new Date()}
+        isCompact={false}
+        mode={editIndex !== null ? 'edit' : 'create'}
+      />
+    </div>
+  </div>
+)}
     </div>
   );
 };

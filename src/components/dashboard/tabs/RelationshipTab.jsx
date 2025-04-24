@@ -699,6 +699,8 @@ const CycleManager = ({ cycle }) => {
  * Communication Suggestions Component
  */
 const CommunicationSuggestions = () => {
+  const { familyMembers } = useFamily();
+  const { currentUser } = useAuth();
   const [suggestions, setSuggestions] = useState([
     {
       title: "Active Listening Practice",
@@ -716,6 +718,19 @@ const CommunicationSuggestions = () => {
       category: "gratitude"
     }
   ]);
+  
+  // State for showing event manager modal
+  const [showEventManager, setShowEventManager] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState(null);
+
+  // Handle scheduling an activity
+  const handleScheduleActivity = (suggestion) => {
+    // Set the selected activity
+    setSelectedActivity(suggestion);
+    
+    // Show the event manager modal
+    setShowEventManager(true);
+  };
 
   return (
     <div className="bg-white rounded-lg shadow p-6 mt-6">
@@ -739,13 +754,49 @@ const CommunicationSuggestions = () => {
           >
             <h4 className="font-medium mb-2 font-roboto">{suggestion.title}</h4>
             <p className="text-sm font-roboto">{suggestion.description}</p>
-            <button className="mt-3 text-sm flex items-center text-blue-600 hover:text-blue-800">
+            <button 
+              className="mt-3 text-sm flex items-center text-blue-600 hover:text-blue-800"
+              onClick={() => handleScheduleActivity(suggestion)}
+            >
               <Calendar size={14} className="mr-1" />
               Schedule this activity
             </button>
           </div>
         ))}
       </div>
+      
+      {/* Event Manager Modal */}
+      {showEventManager && selectedActivity && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <EnhancedEventManager
+              initialEvent={{
+                title: selectedActivity.title,
+                description: selectedActivity.description,
+                category: 'relationship',
+                eventType: selectedActivity.category === 'gratitude' ? 'general' : 
+                           selectedActivity.category === 'communication' ? 'check-in' : 'activity',
+                // Set default attendees to both parents
+                attendees: familyMembers
+                  .filter(m => m.role === 'parent')
+                  .map(m => ({ id: m.id, name: m.name, role: m.role })),
+                duration: 30 // Default 30 minutes
+              }}
+              onSave={() => {
+                setShowEventManager(false);
+                setSelectedActivity(null);
+              }}
+              onCancel={() => {
+                setShowEventManager(false);
+                setSelectedActivity(null);
+              }}
+              selectedDate={new Date()}
+              isCompact={false}
+              mode="create"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -192,6 +192,97 @@ useEffect(() => {
   }
 }, [event.childId, children]);  
 
+// Consolidated useEffect for initialEvent processing
+useEffect(() => {
+  // Only run this effect when initialEvent changes or mode changes
+  // and prevent running during updates
+  if (initialEvent && mode === 'edit' && !isUpdatingRef.current) {
+    isUpdatingRef.current = true;
+    
+    // Create an updatedEvent object to batch all changes
+    let updatedEvent = { ...event };
+    let hasChanges = false;
+    
+    // 1. Handle date/time standardization
+    if (initialEvent.dateObj && !updatedEvent.dateTime) {
+      updatedEvent.dateTime = initialEvent.dateObj.toISOString();
+      hasChanges = true;
+    } else if (initialEvent.start?.dateTime && !updatedEvent.dateTime) {
+      updatedEvent.dateTime = initialEvent.start.dateTime;
+      hasChanges = true;
+    }
+    
+    // 2. Handle cycle due date special settings
+    const isCycleDueDate = (initialEvent.title && initialEvent.title.includes('Cycle') && initialEvent.title.includes('Due Date')) || 
+                           (initialEvent.category === 'cycle-due-date' || initialEvent.eventType === 'cycle-due-date');
+    
+    if (isCycleDueDate) {
+      if (updatedEvent.category !== 'meeting') {
+        updatedEvent.category = 'meeting';
+        hasChanges = true;
+      }
+      
+      if (updatedEvent.eventType !== 'meeting') {
+        updatedEvent.eventType = 'meeting';
+        hasChanges = true;
+      }
+      
+      if (updatedEvent.attendingParentId !== 'both') {
+        updatedEvent.attendingParentId = 'both';
+        hasChanges = true;
+      }
+    }
+    
+    // 3. ADDED: Initialize attendees for date-night, meeting, general events
+    if (updatedEvent.category === 'meeting' || updatedEvent.eventType === 'meeting' || 
+        updatedEvent.category === 'general' || updatedEvent.eventType === 'date-night') {
+      // If attendees not already set, initialize with all family members
+      if (!updatedEvent.attendees || updatedEvent.attendees.length === 0) {
+        updatedEvent.attendees = familyMembers.map(member => ({
+          id: member.id,
+          name: member.name,
+          role: member.role
+        }));
+        hasChanges = true;
+      }
+    }
+    
+    // 4. ADDED: For date-night events, make sure we have both parents attending
+    if (updatedEvent.eventType === 'date-night') {
+      const parents = familyMembers.filter(m => m.role === 'parent');
+      
+      if (!updatedEvent.attendees) {
+        updatedEvent.attendees = [];
+      }
+      
+      // Make sure all parents are in attendees
+      parents.forEach(parent => {
+        if (!updatedEvent.attendees.some(a => a.id === parent.id)) {
+          updatedEvent.attendees.push({
+            id: parent.id,
+            name: parent.name,
+            role: parent.role
+          });
+          hasChanges = true;
+        }
+      });
+    }
+    
+    // 5. Apply the batch update only if something changed
+    if (hasChanges) {
+      setEvent(updatedEvent);
+    }
+    
+    // Reset update flag after state update is processed
+    setTimeout(() => {
+      isUpdatingRef.current = false;
+    }, 0);
+  }
+  // This effect should only run when initialEvent or mode changes, not when event changes
+}, [initialEvent, mode, familyMembers]);
+
+
+
 // Add this useEffect near other useEffects at the top level of the component
 useEffect(() => {
   // Automatically set all family members as attendees for meeting events
@@ -783,59 +874,81 @@ console.log("Saving event with location:", event.location);
       
       <div className="space-y-4">
         {/* Event Type */}
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">
-            Event Type
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setEvent(prev => ({ ...prev, category: 'general', eventType: 'general' }))}
-              className={`px-3 py-1 text-sm rounded-full ${
-                event.category === 'general' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
-              }`}
-            >
-              General
-            </button>
-            <button
-              type="button"
-              onClick={() => setEvent(prev => ({ ...prev, category: 'appointment', eventType: 'appointment' }))}
-              className={`px-3 py-1 text-sm rounded-full ${
-                event.category === 'appointment' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
-              }`}
-            >
-              Appointment
-            </button>
-            <button
-              type="button"
-              onClick={() => setEvent(prev => ({ ...prev, category: 'activity', eventType: 'activity' }))}
-              className={`px-3 py-1 text-sm rounded-full ${
-                event.category === 'activity' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-              }`}
-            >
-              Activity
-            </button>
-            <button
-              type="button"
-              onClick={() => setEvent(prev => ({ ...prev, category: 'birthday', eventType: 'birthday' }))}
-              className={`px-3 py-1 text-sm rounded-full ${
-                event.category === 'birthday' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
-              }`}
-            >
-              Birthday
-            </button>
-            <button
-              type="button"
-              onClick={() => setEvent(prev => ({ ...prev, category: 'meeting', eventType: 'meeting' }))}
-              className={`px-3 py-1 text-sm rounded-full ${
-                event.category === 'meeting' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800'
-              }`}
-            >
-              Meeting
-            </button>
-          </div>
-        </div>
-        
+<div>
+  <label className="block text-sm font-medium mb-1 text-gray-700">
+    Event Type
+  </label>
+  <div className="flex flex-wrap gap-2">
+    <button
+      type="button"
+      onClick={() => setEvent(prev => ({ ...prev, category: 'general', eventType: 'general' }))}
+      className={`px-3 py-1 text-sm rounded-full ${
+        event.category === 'general' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+      }`}
+    >
+      General
+    </button>
+    <button
+      type="button"
+      onClick={() => setEvent(prev => ({ ...prev, category: 'appointment', eventType: 'appointment' }))}
+      className={`px-3 py-1 text-sm rounded-full ${
+        event.category === 'appointment' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+      }`}
+    >
+      Appointment
+    </button>
+    <button
+      type="button"
+      onClick={() => setEvent(prev => ({ ...prev, category: 'activity', eventType: 'activity' }))}
+      className={`px-3 py-1 text-sm rounded-full ${
+        event.category === 'activity' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+      }`}
+    >
+      Activity
+    </button>
+    <button
+      type="button"
+      onClick={() => setEvent(prev => ({ ...prev, category: 'birthday', eventType: 'birthday' }))}
+      className={`px-3 py-1 text-sm rounded-full ${
+        event.category === 'birthday' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
+      }`}
+    >
+      Birthday
+    </button>
+    <button
+      type="button"
+      onClick={() => setEvent(prev => ({ ...prev, category: 'meeting', eventType: 'meeting' }))}
+      className={`px-3 py-1 text-sm rounded-full ${
+        event.category === 'meeting' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800'
+      }`}
+    >
+      Meeting
+    </button>
+    <button
+      type="button"
+      onClick={() => setEvent(prev => ({ 
+        ...prev, 
+        category: 'relationship', 
+        eventType: 'date-night',
+        dateNightDetails: {
+          ...(prev.dateNightDetails || {}),
+          venue: '',
+          budget: '',
+          transportation: '',
+          childcareArranged: false,
+          needsBabysitter: true,
+          specialOccasion: false
+        },
+        attendingParentId: 'both' // Default to both parents for date nights
+      }))}
+      className={`px-3 py-1 text-sm rounded-full ${
+        event.eventType === 'date-night' ? 'bg-pink-100 text-pink-800' : 'bg-gray-100 text-gray-800'
+      }`}
+    >
+      Date Night
+    </button>
+  </div>
+</div>        
         {/* Title */}
         <div>
           <label className="block text-sm font-medium mb-1 text-gray-700">
@@ -1049,31 +1162,79 @@ console.log("Saving event with location:", event.location);
 </div>
         
         {/* Event Attendees Section */}
-{(event.category === 'meeting' || event.eventType === 'meeting' || event.category === 'general') ? (
-  // Meeting/General events: All family members attend
+        {(event.category === 'meeting' || event.eventType === 'meeting' || event.category === 'general') ? (
   <div>
     <label className="block text-sm font-medium mb-1 text-gray-700">
       Event Attendees
     </label>
     <div className="p-3 bg-blue-50 rounded-md">
       <div className="flex flex-wrap gap-2 mb-2">
-        {familyMembers.map(member => (
-          <div key={member.id} className="flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200">
-            <UserAvatar user={member} size={20} className="mr-1" />
-            {member.name}
-            <Check size={12} className="ml-1" />
-          </div>
-        ))}
+        {familyMembers.map(member => {
+          // Check if this member is in attendees
+          // First init attendees if not existing
+          const attendees = event.attendees || familyMembers.map(m => ({
+            id: m.id, 
+            name: m.name,
+            role: m.role
+          }));
+          
+          const isSelected = attendees.some(a => a.id === member.id);
+          
+          return (
+            <button
+              key={member.id}
+              type="button"
+              onClick={() => {
+                // Toggle this member's attendance
+                setEvent(prev => {
+                  // Initialize attendees if not present
+                  const currentAttendees = prev.attendees || familyMembers.map(m => ({
+                    id: m.id, 
+                    name: m.name,
+                    role: m.role
+                  }));
+                  
+                  let newAttendees;
+                  
+                  if (currentAttendees.some(a => a.id === member.id)) {
+                    // Remove if already included
+                    newAttendees = currentAttendees.filter(a => a.id !== member.id);
+                  } else {
+                    // Add if not included
+                    newAttendees = [...currentAttendees, {
+                      id: member.id,
+                      name: member.name,
+                      role: member.role
+                    }];
+                  }
+                  
+                  return { ...prev, attendees: newAttendees };
+                });
+              }}
+              className={`flex items-center px-3 py-1 rounded-full text-sm ${
+                isSelected
+                  ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <UserAvatar user={member} size={20} className="mr-1" />
+              {member.name}
+              {isSelected && (
+                <Check size={12} className="ml-1" />
+              )}
+            </button>
+          );
+        })}
       </div>
       <p className="text-xs text-blue-700">
         {event.category === 'meeting' ? 
-          "Family meetings include all family members by default." : 
-          "All family members are included for this event."}
+          "Family meetings include all family members by default. Click to toggle attendance." : 
+          "All family members are included by default. Click to toggle attendance."}
       </p>
     </div>
   </div>
 ) : (
-  // Child-specific events: Child/Parent/Sibling selection
+  // Child-specific events UI remains unchanged
   <>
     {/* For meetings/general events: Show all attendees, for other events: Show child selection UI */}
 {(event.category === 'meeting' || event.eventType === 'meeting') ? (
@@ -1242,80 +1403,107 @@ console.log("Saving event with location:", event.location);
 )}
         
         {/* Document Selection */}
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">
-            Attach Documents
-          </label>
-          <div className="p-3 bg-gray-50 rounded-md">
-            {event.documents?.length > 0 ? (
-              <div className="space-y-2">
-                {event.documents.map((doc, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 bg-white rounded border">
-                    <div className="flex items-center">
-                      <FileText size={16} className="text-blue-500 mr-2" />
-                      <span className="text-sm truncate max-w-xs">{doc.title || doc.fileName}</span>
-                    </div>
-                    <button
-                      onClick={() => setEvent(prev => ({
-                        ...prev,
-                        documents: prev.documents.filter((_, i) => i !== index)
-                      }))}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  onClick={() => {
-                    // This would normally open a document picker
-                    // For now we'll just navigate to document library
-                    if (typeof window !== 'undefined') {
-                      window.dispatchEvent(new CustomEvent('open-document-library', {
-                        detail: { 
-                          childId: event.childId,
-                          onSelect: (selectedDoc) => {
-                            setEvent(prev => ({
-                              ...prev,
-                              documents: [...(prev.documents || []), selectedDoc]
-                            }));
-                          }
-                        }
-                      }));
-                    }
-                  }}
-                  className="w-full py-2 text-center text-sm text-blue-600 hover:text-blue-800"
-                >
-                  + Add More Documents
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  // This would normally open a document picker
-                  // For now we'll just navigate to document library
-                  if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('open-document-library', {
-                      detail: { 
-                        childId: event.childId,
-                        onSelect: (selectedDoc) => {
-                          setEvent(prev => ({
-                            ...prev,
-                            documents: [...(prev.documents || []), selectedDoc]
-                          }));
-                        }
-                      }
+<div>
+  <label className="block text-sm font-medium mb-1 text-gray-700">
+    Attach Documents
+  </label>
+  <div className="p-3 bg-gray-50 rounded-md">
+    {event.documents?.length > 0 ? (
+      <div className="space-y-2">
+        {event.documents.map((doc, index) => (
+          <div key={index} className="flex items-center justify-between p-2 bg-white rounded border">
+            <div className="flex items-center">
+              <FileText size={16} className="text-blue-500 mr-2" />
+              <span className="text-sm truncate max-w-xs">{doc.title || doc.fileName}</span>
+            </div>
+            <button
+              onClick={() => setEvent(prev => ({
+                ...prev,
+                documents: prev.documents.filter((_, i) => i !== index)
+              }))}
+              className="text-red-500 hover:text-red-700"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={() => {
+            // Direct implementation to add mock document
+            // In a real app, this would open a document picker
+            const mockDoc = {
+              id: `doc-${Date.now()}`,
+              title: `Document ${event.documents.length + 1}`,
+              fileName: `document_${event.documents.length + 1}.pdf`,
+              type: 'application/pdf',
+              createdAt: new Date().toISOString()
+            };
+            
+            setEvent(prev => ({
+              ...prev,
+              documents: [...(prev.documents || []), mockDoc]
+            }));
+            
+            // Still dispatch event for compatibility, but don't rely on it
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('open-document-library', {
+                detail: { 
+                  childId: event.childId,
+                  onSelect: (selectedDoc) => {
+                    setEvent(prev => ({
+                      ...prev,
+                      documents: [...(prev.documents || []), selectedDoc]
                     }));
                   }
-                }}
-                className="w-full p-3 border border-dashed border-gray-300 rounded-md flex items-center justify-center"
-              >
-                <FileText size={20} className="text-gray-400 mr-2" />
-                <span className="text-sm text-gray-600">Select Documents</span>
-              </button>
-            )}
-          </div>
-        </div>
+                }
+              }));
+            }
+          }}
+          className="w-full py-2 text-center text-sm text-blue-600 hover:text-blue-800"
+        >
+          + Add More Documents
+        </button>
+      </div>
+    ) : (
+      <button
+        onClick={() => {
+          // Direct implementation to add mock document
+          const mockDoc = {
+            id: `doc-${Date.now()}`,
+            title: "New Document",
+            fileName: "new_document.pdf",
+            type: 'application/pdf',
+            createdAt: new Date().toISOString()
+          };
+          
+          setEvent(prev => ({
+            ...prev,
+            documents: [...(prev.documents || []), mockDoc]
+          }));
+          
+          // Still dispatch event for compatibility, but don't rely on it
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('open-document-library', {
+              detail: { 
+                childId: event.childId,
+                onSelect: (selectedDoc) => {
+                  setEvent(prev => ({
+                    ...prev,
+                    documents: [...(prev.documents || []), selectedDoc]
+                  }));
+                }
+              }
+            }));
+          }
+        }}
+        className="w-full p-3 border border-dashed border-gray-300 rounded-md flex items-center justify-center"
+      >
+        <FileText size={20} className="text-gray-400 mr-2" />
+        <span className="text-sm text-gray-600">Select Documents</span>
+      </button>
+    )}
+  </div>
+</div>
 
         {/* Provider Selection */}
 <div>
@@ -1359,7 +1547,29 @@ console.log("Saving event with location:", event.location);
         ))}
         <button
           onClick={() => {
-            // This would normally open a provider picker
+            // Direct implementation to add mock provider
+            const providerType = event.eventType === 'date-night' ? 'childcare' : 'medical';
+            const mockProvider = {
+              id: `provider-${Date.now()}`,
+              name: event.eventType === 'date-night' ? 
+                `Babysitter ${event.providers.length + 1}` : 
+                `Provider ${event.providers.length + 1}`,
+              type: providerType,
+              specialty: event.eventType === 'date-night' ? 'Childcare' : 'General',
+              phone: '555-123-4567',
+              email: 'provider@example.com'
+            };
+            
+            setEvent(prev => ({
+              ...prev,
+              providers: [...(prev.providers || []), mockProvider],
+              dateNightDetails: prev.eventType === 'date-night' ? {
+                ...prev.dateNightDetails,
+                childcareArranged: true
+              } : prev.dateNightDetails
+            }));
+            
+            // Still dispatch event for compatibility
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('open-provider-directory', {
                 detail: { 
@@ -1391,7 +1601,27 @@ console.log("Saving event with location:", event.location);
     ) : (
       <button
         onClick={() => {
-          // This would normally open a provider picker
+          // Direct implementation to add mock provider
+          const providerType = event.eventType === 'date-night' ? 'childcare' : 'medical';
+          const mockProvider = {
+            id: `provider-${Date.now()}`,
+            name: event.eventType === 'date-night' ? 'Babysitter' : 'Provider',
+            type: providerType,
+            specialty: event.eventType === 'date-night' ? 'Childcare' : 'General',
+            phone: '555-123-4567',
+            email: 'provider@example.com'
+          };
+          
+          setEvent(prev => ({
+            ...prev,
+            providers: [...(prev.providers || []), mockProvider],
+            dateNightDetails: prev.eventType === 'date-night' ? {
+              ...prev.dateNightDetails,
+              childcareArranged: true
+            } : prev.dateNightDetails
+          }));
+          
+          // Still dispatch event for compatibility
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('open-provider-directory', {
               detail: { 
