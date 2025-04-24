@@ -581,8 +581,224 @@ async processProviderFromChat(message, familyId) {
   }
 }
 
+// In src/services/AllieAIService.js
 
-// Replace the extractProviderDetails method in src/services/AllieAIService.js
+// Enhanced version of processChildChat
+async processChildChat(message, child, childData, familyId, contextData = null) {
+  try {
+    console.log("Processing child chat message:", message);
+    
+    // Check for direct action patterns first
+    const actionResult = this.extractChildChatAction(message, child);
+    if (actionResult) {
+      return actionResult;
+    }
+    
+    // Create a more detailed prompt with enhanced context
+    const systemPrompt = `You are Allie, a helpful assistant for managing children's information and events.
+    You are currently helping with a child named ${child.name}.
+    
+    CHILD INFORMATION:
+    - Name: ${child.name}
+    - Age: ${child?.age || 'Unknown'}
+    - ID: ${child.id}
+    
+    CONTEXT FOR YOUR RESPONSE:
+    ${contextData ? `
+    - Recent events: ${contextData.recentEvents?.map(e => e.title).join(', ') || 'None'}
+    - Missing information: ${contextData.missingInformation?.join(', ') || 'None'}
+    ` : ''}
+    
+    GUIDELINES:
+    1. ALWAYS focus your responses on ${child.name} specifically
+    2. If you detect a request to add information or events, extract as many details as possible
+    3. Keep responses brief and actionable
+    4. When appropriate, suggest opening a specific form or taking a specific action
+    5. Reference the 15 key details needed for different event types
+    
+    For medical appointments, key details include: date/time, doctor's name, location, insurance info, etc.
+    For activities, key details include: schedule, location, equipment needed, transportation, etc.
+    For special events, key details include: venue, guest list, theme, etc.
+    
+    IMPORTANT: If the user's message contains details about an event, return them in a structured format to auto-fill forms.`;
+    
+    // Call Claude API with specific child context
+    const claudeResponse = await ClaudeService.generateResponse(
+      [{ role: 'user', content: message }],
+      { system: systemPrompt, childContext: { childId: child.id, childName: child.name } }
+    );
+    
+    // Process the response to extract any actions or structured data
+    const processedResponse = this.processChildResponse(claudeResponse, message, child);
+    
+    return processedResponse;
+  } catch (error) {
+    console.error("Error in processChildChat:", error);
+    return {
+      message: "I'm sorry, I encountered an error while processing your request. Could you try again?",
+      error: error.message
+    };
+  }
+}
+
+// New helper method for extracting actions from child chat messages
+extractChildChatAction(message, child) {
+  const lowerMsg = message.toLowerCase();
+  
+  // Direct appointment scheduling pattern
+  if ((lowerMsg.includes('schedule') || lowerMsg.includes('book') || lowerMsg.includes('make')) && 
+      (lowerMsg.includes('appointment') || lowerMsg.includes('doctor') || lowerMsg.includes('dentist'))) {
+    
+    // Try to extract appointment type
+    let appointmentType = 'checkup';
+    if (lowerMsg.includes('dentist')) appointmentType = 'dentist';
+    else if (lowerMsg.includes('eye') || lowerMsg.includes('vision')) appointmentType = 'eye exam';
+    
+    // Try to extract date
+    let dateMatch = message.match(/on\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?/i);
+    let dateStr = '';
+    
+    if (dateMatch) {
+      const month = dateMatch[1];
+      const day = dateMatch[2];
+      const year = new Date().getFullYear();
+      dateStr = `${month} ${day}, ${year}`;
+    }
+    
+    return {
+      message: `I'll help you schedule a ${appointmentType} appointment for ${child.name}${dateStr ? ` on ${dateStr}` : ''}. Let me open the appointment form for you.`,
+      action: {
+        type: 'openAppointmentForm',
+        data: {
+          title: `${appointmentType.charAt(0).toUpperCase() + appointmentType.slice(1)}`,
+          date: dateStr ? new Date(dateStr) : undefined,
+          category: 'medical',
+          eventType: 'appointment'
+        }
+      }
+    };
+  }
+  
+  // Growth recording pattern
+  if ((lowerMsg.includes('growth') || lowerMsg.includes('height') || lowerMsg.includes('weight')) && 
+      (lowerMsg.includes('record') || lowerMsg.includes('track') || lowerMsg.includes('add'))) {
+    
+    return {
+      message: `Let's record ${child.name}'s growth measurements. I'll open the form for you.`,
+      action: {
+        type: 'openGrowthForm',
+        data: {
+          title: `Growth Measurement`,
+          date: new Date(),
+          category: 'growth',
+          eventType: 'growth'
+        }
+      }
+    };
+  }
+  
+  // Activity/routine pattern
+  if ((lowerMsg.includes('activity') || lowerMsg.includes('class') || lowerMsg.includes('practice') || lowerMsg.includes('lesson')) && 
+      (lowerMsg.includes('add') || lowerMsg.includes('record') || lowerMsg.includes('schedule'))) {
+    
+    // Try to extract activity type
+    let activityType = 'activity';
+    if (lowerMsg.includes('soccer')) activityType = 'soccer practice';
+    else if (lowerMsg.includes('swim')) activityType = 'swimming lesson';
+    else if (lowerMsg.includes('piano') || lowerMsg.includes('music')) activityType = 'music lesson';
+    
+    return {
+      message: `I'll help you add a ${activityType} for ${child.name}. Opening the activity form now.`,
+      action: {
+        type: 'openRoutineForm',
+        data: {
+          title: activityType.charAt(0).toUpperCase() + activityType.slice(1),
+          category: 'activity',
+          eventType: 'activity',
+          isRecurring: true
+        }
+      }
+    };
+  }
+  
+  // No direct action detected
+  return null;
+}
+
+// Helper to process Claude responses for child chat
+processChildResponse(response, originalMessage, child) {
+  // Default response structure
+  const result = {
+    message: response,
+    action: null
+  };
+  
+  // Check if there's structured data in the response (JSON format)
+  const jsonMatch = response.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const jsonData = JSON.parse(jsonMatch[0]);
+      
+      // If there's action data, extract it
+      if (jsonData.action) {
+        result.action = jsonData.action;
+        
+        // Clean up the message to remove the JSON
+        result.message = response.replace(jsonMatch[0], '').trim();
+      }
+      
+      // If there's extracted event data, use it
+      if (jsonData.eventDetails) {
+        result.action = {
+          type: jsonData.eventDetails.category === 'medical' ? 'openAppointmentForm' : 
+                jsonData.eventDetails.category === 'activity' ? 'openRoutineForm' : 
+                'completeEventDetails',
+          data: {
+            ...jsonData.eventDetails,
+            childId: child.id,
+            childName: child.name
+          }
+        };
+      }
+    } catch (error) {
+      console.warn("Failed to parse JSON from Claude response:", error);
+    }
+  }
+  
+  // If we couldn't extract an action but the message suggests one
+  const lowerResponse = response.toLowerCase();
+  
+  if (!result.action) {
+    if (lowerResponse.includes('appointment form') || lowerResponse.includes('schedule appointment')) {
+      result.action = {
+        type: 'openAppointmentForm',
+        data: { childId: child.id }
+      };
+    } 
+    else if (lowerResponse.includes('growth form') || lowerResponse.includes('record growth')) {
+      result.action = {
+        type: 'openGrowthForm',
+        data: { childId: child.id }
+      };
+    }
+    else if (lowerResponse.includes('activity form') || lowerResponse.includes('routine form')) {
+      result.action = {
+        type: 'openRoutineForm',
+        data: { childId: child.id }
+      };
+    }
+    else if (lowerResponse.includes('document') || lowerResponse.includes('upload')) {
+      result.action = {
+        type: 'openDocuments',
+        data: { childId: child.id }
+      };
+    }
+  }
+  
+  return result;
+}
+
+
 
 async extractProviderDetails(message) {
   try {

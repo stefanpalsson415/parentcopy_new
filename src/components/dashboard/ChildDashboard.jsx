@@ -12,6 +12,9 @@ import UserAvatar from '../common/UserAvatar';
 import { formatDistanceToNow, format, isToday, isTomorrow, isThisWeek } from 'date-fns';
 import { useEvents } from '../../contexts/EventContext';
 import AllieAIService from '../../services/AllieAIService';
+import { formatDistanceToNow, format, isToday, isTomorrow, isThisWeek, parseISO } from 'date-fns';
+import { getDoc, doc, collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../services/firebase';
 
 const ChildDashboard = ({ 
   child, 
@@ -221,8 +224,8 @@ const ChildDashboard = ({
     handleChatSubmit(suggestion);
   };
   
-  // Handle chat submission
-  const handleChatSubmit = async (userInput = null) => {
+  // Replace the existing handleChatSubmit function
+const handleChatSubmit = async (userInput = null) => {
     const input = userInput || chatInput;
     if (!input.trim()) return;
     
@@ -233,11 +236,22 @@ const ChildDashboard = ({
     
     try {
       // Process the message with Allie
+      const contextData = {
+        childId: child.id,
+        childName: child.name,
+        childData: childData,
+        recentEvents: timeline.slice(0, 5),
+        chatHistory: chatMessages.slice(-5),  // Last 5 messages for context
+        missingInformation: quickStats.missingInfo
+      };
+      
+      // Send enhanced context to Allie
       const response = await AllieAIService.processChildChat(
         input,
         child,
         childData,
-        familyId
+        familyId,
+        contextData  // Add this enhanced context
       );
       
       // Add Allie's response to chat
@@ -247,38 +261,75 @@ const ChildDashboard = ({
       if (response.action) {
         setPendingAction(response.action);
         
-        // Automatically trigger some actions
-        if (response.action.type === 'openAppointmentForm' && onOpenAppointment) {
-          onOpenAppointment({
-            childId: child.id,
-            ...response.action.data
-          });
-        } else if (response.action.type === 'openGrowthForm' && onOpenGrowth) {
-          onOpenGrowth({
-            childId: child.id,
-            ...response.action.data
-          });
-        } else if (response.action.type === 'openRoutineForm' && onOpenRoutine) {
-          onOpenRoutine({
-            childId: child.id,
-            ...response.action.data
-          });
-        } else if (response.action.type === 'openDocuments' && onOpenDocuments) {
-          onOpenDocuments(child.id);
+        // Handle different action types
+        switch(response.action.type) {
+          case 'openAppointmentForm':
+            if (onOpenAppointment) {
+              onOpenAppointment({
+                childId: child.id,
+                ...response.action.data
+              });
+            }
+            break;
+            
+          case 'openGrowthForm':
+            if (onOpenGrowth) {
+              onOpenGrowth({
+                childId: child.id,
+                ...response.action.data
+              });
+            }
+            break;
+            
+          case 'openRoutineForm':
+            if (onOpenRoutine) {
+              onOpenRoutine({
+                childId: child.id,
+                ...response.action.data
+              });
+            }
+            break;
+            
+          case 'openDocuments':
+            if (onOpenDocuments) {
+              onOpenDocuments(child.id);
+            }
+            break;
+            
+          case 'completeEventDetails':
+            // Find the event in the timeline
+            const eventToEdit = timeline.find(event => 
+              event.id === response.action.eventId ||
+              event.title === response.action.eventTitle
+            );
+            
+            if (eventToEdit) {
+              // Open appropriate form based on event type
+              if (eventToEdit.category === 'medical') {
+                onOpenAppointment({ 
+                  childId: child.id, 
+                  ...eventToEdit.data,
+                  ...response.action.additionalData // Include any new data Allie extracted
+                });
+              } else if (eventToEdit.category === 'activity') {
+                onOpenRoutine({ 
+                  childId: child.id, 
+                  ...eventToEdit.data,
+                  ...response.action.additionalData
+                });
+              }
+            }
+            break;
+            
+          default:
+            console.log("Unknown action type:", response.action.type);
         }
       }
       
-      // Generate new suggestions based on context
-      const newSuggestions = await AllieAIService.generateChildSuggestions(
-        child,
-        childData,
-        chatMessages,
-        familyId
-      );
+      // Generate new contextual suggestions
+      const newSuggestions = generateChatSuggestions();
+      setSuggestions(newSuggestions);
       
-      if (newSuggestions && newSuggestions.length > 0) {
-        setSuggestions(newSuggestions);
-      }
     } catch (error) {
       console.error("Error processing chat:", error);
       setChatMessages(prev => [...prev, { 
@@ -338,6 +389,260 @@ const ChildDashboard = ({
     recognition.start();
   };
   
+
+// Add this EventDetails component within ChildDashboard.jsx before the main component
+const EventDetails = ({ event, onEdit }) => {
+  const [expanded, setExpanded] = useState(false);
+  const [missingDetails, setMissingDetails] = useState([]);
+  
+  useEffect(() => {
+    // Calculate missing details based on event type
+    const missing = calculateMissingDetails(event);
+    setMissingDetails(missing);
+  }, [event]);
+  
+  // Helper to determine which details are required for each event type
+  const calculateMissingDetails = (event) => {
+    const missing = [];
+    
+    // Common essential details for all events
+    if (!event.title || event.title.trim() === '') missing.push('Event title');
+    if (!event.date) missing.push('Date');
+    
+    // Specific details based on event type
+    if (event.category === 'medical' || event.type === 'appointment') {
+      if (!event.doctor && !event.providerName) missing.push("Doctor's name");
+      if (!event.location) missing.push('Office location');
+      if (!event.phone) missing.push('Contact number');
+      if (!event.insuranceInfo) missing.push('Insurance information');
+    }
+    else if (event.category === 'activity' || event.type === 'routine') {
+      if (!event.location) missing.push('Location');
+      if (!event.coach && !event.instructor) missing.push('Coach/instructor name');
+      if (!event.equipment) missing.push('Required equipment');
+      if (event.isRecurring && (!event.days || event.days.length === 0)) {
+        missing.push('Schedule days');
+      }
+    }
+    else if (event.category === 'party' || event.title?.toLowerCase().includes('birthday')) {
+      if (!event.location) missing.push('Venue location');
+      if (!event.guestList && !event.attendees) missing.push('Guest list');
+      if (!event.theme) missing.push('Party theme');
+    }
+    
+    return missing;
+  };
+  
+  return (
+    <div className="border rounded-lg p-3 mb-3 hover:bg-gray-50 transition-colors">
+      <div className="flex justify-between items-start">
+        <div className="flex items-start">
+          {/* Event type icon */}
+          <div className={`p-2 rounded-full mr-3 ${
+            event.category === 'medical' ? 'bg-red-100 text-red-600' :
+            event.category === 'activity' ? 'bg-green-100 text-green-600' :
+            event.category === 'school' ? 'bg-blue-100 text-blue-600' :
+            event.category === 'special' || event.category === 'party' ? 'bg-purple-100 text-purple-600' :
+            'bg-gray-100 text-gray-600'
+          }`}>
+            {event.category === 'medical' ? <Heart size={16} /> :
+             event.category === 'activity' ? <Activity size={16} /> :
+             event.category === 'school' ? <Book size={16} /> :
+             event.category === 'special' || event.category === 'party' ? <Award size={16} /> :
+             <Calendar size={16} />}
+          </div>
+          
+          <div>
+            <h4 className="font-medium">{event.title}</h4>
+            <p className="text-sm text-gray-600">
+              {event.date && typeof event.date === 'string' 
+                ? format(parseISO(event.date), 'MMM d, yyyy')
+                : event.date 
+                  ? format(event.date, 'MMM d, yyyy') 
+                  : 'Date not set'} 
+              {event.time && ` at ${event.time}`}
+            </p>
+            
+            {/* Show key details based on event type */}
+            {event.location && (
+              <p className="text-sm text-gray-600 flex items-center mt-1">
+                <MapPin size={12} className="mr-1" /> {event.location}
+              </p>
+            )}
+            
+            {(event.doctor || event.providerName) && (
+              <p className="text-sm text-gray-600 flex items-center mt-1">
+                <User size={12} className="mr-1" /> {event.providerName || `Dr. ${event.doctor}`}
+              </p>
+            )}
+            
+            {event.phone && (
+              <p className="text-sm text-gray-600 flex items-center mt-1">
+                <Phone size={12} className="mr-1" /> {event.phone}
+              </p>
+            )}
+          </div>
+        </div>
+        
+        <div className="flex items-start">
+          {/* Completeness indicator */}
+          {missingDetails.length > 0 ? (
+            <span className="inline-flex items-center px-2 py-1 mr-2 text-xs rounded-full bg-amber-100 text-amber-800">
+              {15 - missingDetails.length}/15
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-2 py-1 mr-2 text-xs rounded-full bg-green-100 text-green-800">
+              Complete
+            </span>
+          )}
+          
+          <button 
+            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+            onClick={() => onEdit(event)}
+          >
+            <Edit size={16} />
+          </button>
+        </div>
+      </div>
+      
+      {/* Expandable details section */}
+      <div className="mt-2">
+        <button
+          className="text-sm text-blue-600 flex items-center"
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? <ChevronDown size={14} className="mr-1" /> : <ChevronRight size={14} className="mr-1" />}
+          {expanded ? "Hide details" : "Show details"}
+        </button>
+        
+        {expanded && (
+          <div className="mt-2 space-y-2">
+            {event.description && (
+              <div className="p-2 bg-gray-50 rounded text-sm">
+                <p>{event.description}</p>
+              </div>
+            )}
+            
+            {/* Missing information warnings */}
+            {missingDetails.length > 0 && (
+              <div className="p-2 bg-amber-50 rounded border border-amber-100">
+                <p className="text-sm font-medium text-amber-800 mb-1">Missing information:</p>
+                <ul className="text-sm text-amber-700 list-disc list-inside">
+                  {missingDetails.map((detail, idx) => (
+                    <li key={idx}>{detail}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {/* Additional details specific to event type */}
+            {event.category === 'medical' && (
+              <div className="space-y-1">
+                {event.insuranceInfo && (
+                  <p className="text-sm"><span className="font-medium">Insurance:</span> {event.insuranceInfo}</p>
+                )}
+                {event.forms && (
+                  <p className="text-sm"><span className="font-medium">Forms needed:</span> {event.forms}</p>
+                )}
+                {event.followUp && (
+                  <p className="text-sm"><span className="font-medium">Follow-up:</span> {event.followUp}</p>
+                )}
+              </div>
+            )}
+            
+            {event.category === 'activity' && (
+              <div className="space-y-1">
+                {event.equipment && (
+                  <p className="text-sm"><span className="font-medium">Equipment:</span> {event.equipment}</p>
+                )}
+                {event.transportation && (
+                  <p className="text-sm"><span className="font-medium">Transportation:</span> {event.transportation}</p>
+                )}
+                {event.isRecurring && event.days && (
+                  <p className="text-sm"><span className="font-medium">Schedule:</span> {event.days.join(', ')}</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Add these functions to the main ChildDashboard component
+
+// Function to get child-specific providers
+const loadChildProviders = async () => {
+  if (!child || !familyId) return [];
+  
+  try {
+    const providersRef = collection(db, "healthcareProviders");
+    const q = query(
+      providersRef, 
+      where("familyId", "==", familyId),
+      where("forChild", "==", child.id)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const providers = [];
+    
+    querySnapshot.forEach((doc) => {
+      providers.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+    
+    return providers;
+  } catch (error) {
+    console.error("Error loading child providers:", error);
+    return [];
+  }
+};
+
+// Enhanced version of the generateChatSuggestions function
+const generateChatSuggestions = () => {
+  const suggestions = [];
+  
+  // Basic suggestions for all children
+  suggestions.push(`Schedule a doctor's appointment for ${child.name}`);
+  
+  // Check child data for personalized suggestions
+  if (!childData?.growthData || childData.growthData.length === 0) {
+    suggestions.push(`Add growth measurements for ${child.name}`);
+  }
+  
+  if (!childData?.medicalAppointments || childData.medicalAppointments.length === 0) {
+    suggestions.push(`Add medical info for ${child.name}`);
+  }
+  
+  // Add activity based suggestions
+  if (!childData?.routines || childData.routines.length === 0) {
+    suggestions.push(`Add a regular activity for ${child.name}`);
+  }
+  
+  // Check timeline for upcoming events needing more info
+  const incompleteEvents = timeline.filter(event => {
+    const missing = calculateMissingDetails(event);
+    return missing.length > 0;
+  });
+  
+  if (incompleteEvents.length > 0) {
+    suggestions.push(`Complete details for ${incompleteEvents[0].title}`);
+  }
+  
+  // Add document suggestions
+  suggestions.push(`Upload a document for ${child.name}`);
+  
+  // Limit to 4 suggestions and return
+  return suggestions.slice(0, 4);
+};
+
+
+
+
+
   // Get timeline items for the selected tab
   const getTabTimeline = () => {
     switch (activeTab) {
@@ -369,8 +674,8 @@ const ChildDashboard = ({
     }
   };
   
-  // Render timeline for selected tab
-  const renderTabContent = () => {
+  // Replace the existing renderTabContent function with this enhanced version
+const renderTabContent = () => {
     const tabTimeline = getTabTimeline();
     
     if (tabTimeline.length === 0) {
@@ -406,87 +711,27 @@ const ChildDashboard = ({
     
     return (
       <div className="space-y-3">
-        {/* Events */}
+        {/* Events list using EventDetails component */}
         {tabTimeline.map((item, index) => (
-          <div key={index} className="border rounded-lg p-3 hover:bg-gray-50 transition-colors">
-            <div className="flex justify-between">
-              <div className="flex items-start">
-                {/* Icon based on type */}
-                <div className={`p-2 rounded-full mr-3 ${
-                  item.category === 'medical' ? 'bg-red-100 text-red-600' :
-                  item.category === 'activity' ? 'bg-green-100 text-green-600' :
-                  item.category === 'school' ? 'bg-blue-100 text-blue-600' :
-                  item.category === 'special' ? 'bg-purple-100 text-purple-600' :
-                  'bg-gray-100 text-gray-600'
-                }`}>
-                  {item.category === 'medical' ? <Heart size={16} /> :
-                   item.category === 'activity' ? <Activity size={16} /> :
-                   item.category === 'school' ? <Book size={16} /> :
-                   item.category === 'special' ? <Award size={16} /> :
-                   <Calendar size={16} />}
-                </div>
-                
-                <div>
-                  <h4 className="font-medium">{item.title}</h4>
-                  <p className="text-sm text-gray-600">{formatTimelineDate(item.date)}</p>
-                  {item.location && (
-                    <p className="text-sm text-gray-600 flex items-center mt-1">
-                      <MapPin size={12} className="mr-1" /> {item.location}
-                    </p>
-                  )}
-                  {/* Show specific details based on item type */}
-                  {item.type === 'appointment' && item.data.doctor && (
-                    <p className="text-sm text-gray-600 flex items-center mt-1">
-                      <User size={12} className="mr-1" /> Dr. {item.data.doctor}
-                    </p>
-                  )}
-                  {item.type === 'routine' && item.days && (
-                    <p className="text-sm text-gray-600 flex items-center mt-1">
-                      <Clock size={12} className="mr-1" /> {item.days.join(', ')}
-                    </p>
-                  )}
-                </div>
-              </div>
-              
-              <button 
-                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                onClick={() => {
-                  // Open appropriate form based on item type
-                  if (item.type === 'appointment') {
-                    onOpenAppointment({ childId: child.id, ...item.data });
-                  } else if (item.type === 'routine') {
-                    onOpenRoutine({ childId: child.id, ...item.data });
-                  } else if (item.type === 'event') {
-                    // Handle event based on category
-                    if (item.category === 'medical') {
-                      onOpenAppointment({ childId: child.id, ...item.data });
-                    } else if (item.category === 'activity') {
-                      onOpenRoutine({ childId: child.id, ...item.data });
-                    }
-                  }
-                }}
-              >
-                <Edit size={16} />
-              </button>
-            </div>
-            
-            {/* Item details */}
-            {item.details && (
-              <div className="mt-2 p-2 bg-gray-50 rounded text-sm">
-                <p>{item.details}</p>
-              </div>
-            )}
-            
-            {/* Missing information warnings */}
-            {item.type === 'appointment' && (!item.data.doctor || !item.data.location) && (
-              <div className="mt-2 flex items-center text-amber-600 text-xs">
-                <AlertCircle size={12} className="mr-1" />
-                Missing: {!item.data.doctor ? "Doctor's name" : ""} 
-                {!item.data.doctor && !item.data.location ? " and " : ""}
-                {!item.data.location ? "Location" : ""}
-              </div>
-            )}
-          </div>
+          <EventDetails 
+            key={index} 
+            event={item} 
+            onEdit={() => {
+              // Handle different event types
+              if (item.type === 'appointment') {
+                onOpenAppointment({ childId: child.id, ...item.data });
+              } else if (item.type === 'routine') {
+                onOpenRoutine({ childId: child.id, ...item.data });
+              } else if (item.type === 'event') {
+                // Handle event based on category
+                if (item.category === 'medical') {
+                  onOpenAppointment({ childId: child.id, ...item.data });
+                } else if (item.category === 'activity') {
+                  onOpenRoutine({ childId: child.id, ...item.data });
+                }
+              }
+            }} 
+          />
         ))}
       </div>
     );
