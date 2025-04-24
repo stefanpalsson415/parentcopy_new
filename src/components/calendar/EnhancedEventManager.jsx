@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  FileText, Image, FileIcon, Calendar, User, Users, Trash2, Clock, MapPin, Tag, X, Check, AlertCircle, Info, Edit
+  FileText, Image, FileIcon, Calendar, User, Users, Trash2, Clock, MapPin, Tag, X,Heart, Check, AlertCircle, Info, Edit
 } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -1506,6 +1506,220 @@ console.log("Saving event with location:", event.location);
           </div>
         )}
         
+{/* Date Night Specific Fields - Only show for date-night event type */}
+{event.eventType === 'date-night' && (
+  <div className="p-4 bg-pink-50 rounded-md border border-pink-200 mt-4">
+    <h4 className="font-medium mb-3 flex items-center">
+      <Heart size={18} className="mr-2 text-pink-600" />
+      Date Night Details
+    </h4>
+      
+    {/* Date Night Planning Considerations */}
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+      <div>
+        <label className="block text-sm font-medium mb-1 text-gray-700">
+          Venue/Restaurant
+        </label>
+        <input
+          type="text"
+          value={event.dateNightDetails?.venue || ''}
+          onChange={(e) => setEvent(prev => ({   
+            ...prev,   
+            dateNightDetails: {
+              ...prev.dateNightDetails,
+              venue: e.target.value
+            }
+          }))}
+          className="w-full border rounded-md p-2 text-sm"
+          placeholder="Where will you be going?"
+        />
+      </div>
+        
+      <div>
+        <label className="block text-sm font-medium mb-1 text-gray-700">
+          Budget
+        </label>
+        <input
+          type="text"
+          value={event.dateNightDetails?.budget || ''}
+          onChange={(e) => setEvent(prev => ({   
+            ...prev,   
+            dateNightDetails: {
+              ...prev.dateNightDetails,
+              budget: e.target.value
+            }
+          }))}
+          className="w-full border rounded-md p-2 text-sm"
+          placeholder="Estimated cost for the evening"
+        />
+      </div>
+    </div>
+      
+    <div className="flex flex-wrap gap-3 mb-4">
+      <div className="flex items-center">
+        <input
+          type="checkbox"
+          id="childcareArranged"
+          checked={event.dateNightDetails?.childcareArranged || false}
+          onChange={(e) => setEvent(prev => ({   
+            ...prev,   
+            dateNightDetails: {
+              ...prev.dateNightDetails,
+              childcareArranged: e.target.checked
+            }
+          }))}
+          className="h-4 w-4 text-blue-600 rounded border-gray-300"
+        />
+        <label htmlFor="childcareArranged" className="ml-2 text-sm text-gray-700">
+          Childcare arranged
+        </label>
+      </div>
+        
+      <div className="flex items-center">
+        <input
+          type="checkbox"
+          id="needsBabysitter"
+          checked={event.dateNightDetails?.needsBabysitter || false}
+          onChange={(e) => {
+            setEvent(prev => ({   
+              ...prev,   
+              dateNightDetails: {
+                ...prev.dateNightDetails,
+                needsBabysitter: e.target.checked
+              }
+            }));
+              
+            // If checked and no providers, prompt to add a babysitter
+            if (e.target.checked && (!event.providers || event.providers.length === 0)) {
+              setTimeout(() => {
+                if (typeof window !== 'undefined' && !isUpdatingRef.current) {
+                  window.dispatchEvent(new CustomEvent('open-provider-directory', {
+                    detail: {   
+                      filterType: 'childcare',
+                      title: 'Select Babysitter',
+                      onSelect: (selectedProvider) => {
+                        setEvent(prev => ({
+                          ...prev,
+                          providers: [...(prev.providers || []), selectedProvider]
+                        }));
+                      }
+                    }
+                  }));
+                }
+              }, 500);
+            }
+          }}
+          className="h-4 w-4 text-blue-600 rounded border-gray-300"
+        />
+        <label htmlFor="needsBabysitter" className="ml-2 text-sm text-gray-700">
+          Need a babysitter
+        </label>
+      </div>
+        
+      <div className="flex items-center">
+        <input
+          type="checkbox"
+          id="specialOccasion"
+          checked={event.dateNightDetails?.specialOccasion || false}
+          onChange={(e) => setEvent(prev => ({   
+            ...prev,   
+            dateNightDetails: {
+              ...prev.dateNightDetails,
+              specialOccasion: e.target.checked,
+              occasionNote: e.target.checked   
+                ? prev.dateNightDetails?.occasionNote || ''   
+                : ''
+            }
+          }))}
+          className="h-4 w-4 text-blue-600 rounded border-gray-300"
+        />
+        <label htmlFor="specialOccasion" className="ml-2 text-sm text-gray-700">
+          Special occasion
+        </label>
+      </div>
+    </div>
+      
+    {/* Special occasion note */}
+    {event.dateNightDetails?.specialOccasion && (
+      <div className="mb-4">
+        <input
+          type="text"
+          value={event.dateNightDetails?.occasionNote || ''}
+          onChange={(e) => setEvent(prev => ({   
+            ...prev,   
+            dateNightDetails: {
+              ...prev.dateNightDetails,
+              occasionNote: e.target.value
+            }
+          }))}
+          className="w-full border rounded-md p-2 text-sm"
+          placeholder="What's the special occasion? (Anniversary, birthday, etc.)"
+        />
+      </div>
+    )}
+      
+    {/* Babysitter Selection Prompt */}
+    {event.dateNightDetails?.needsBabysitter && (!event.providers || event.providers.length === 0) && (
+      <div className="p-3 bg-amber-50 border border-amber-200 rounded-md mb-4 flex items-start">
+        <AlertCircle size={16} className="text-amber-600 mt-0.5 mr-2 flex-shrink-0" />
+        <div>
+          <p className="text-sm text-amber-800">Don't forget to select a babysitter below!</p>
+          <button   
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('open-provider-directory', {
+                  detail: {   
+                    filterType: 'childcare',
+                    title: 'Select Babysitter',
+                    onSelect: (selectedProvider) => {
+                      setEvent(prev => ({
+                        ...prev,
+                        providers: [...(prev.providers || []), selectedProvider]
+                      }));
+                    }
+                  }
+                }));
+              }
+            }}
+            className="text-xs text-amber-800 underline mt-1"
+          >
+            Choose a babysitter now
+          </button>
+        </div>
+      </div>
+    )}
+      
+    {/* Date Night Planning Considerations */}
+    <div className="bg-white p-3 rounded-md border border-pink-100">
+      <h5 className="text-sm font-medium mb-2 text-pink-800">Planning Checklist</h5>
+      <ul className="text-xs text-gray-600 space-y-1">
+        <li className="flex items-start">
+          <div className="h-4 w-4 rounded-sm border border-pink-300 flex-shrink-0 mt-0.5 mr-2"></div>
+          Childcare arrangements
+        </li>
+        <li className="flex items-start">
+          <div className="h-4 w-4 rounded-sm border border-pink-300 flex-shrink-0 mt-0.5 mr-2"></div>
+          Meal preparations for children
+        </li>
+        <li className="flex items-start">
+          <div className="h-4 w-4 rounded-sm border border-pink-300 flex-shrink-0 mt-0.5 mr-2"></div>
+          Transportation plans
+        </li>
+        <li className="flex items-start">
+          <div className="h-4 w-4 rounded-sm border border-pink-300 flex-shrink-0 mt-0.5 mr-2"></div>
+          Emergency contacts while away
+        </li>
+        <li className="flex items-start">
+          <div className="h-4 w-4 rounded-sm border border-pink-300 flex-shrink-0 mt-0.5 mr-2"></div>
+          Bedtime routines for sitter
+        </li>
+      </ul>
+    </div>
+  </div>
+)}
+
+
+
         {/* Birthday specific fields */}
         {event.category === 'birthday' && (
           <div className="p-3 bg-purple-50 rounded-md">

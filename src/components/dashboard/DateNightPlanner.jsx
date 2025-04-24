@@ -577,7 +577,6 @@ const getEventDataForEditing = () => {
               </>
             )}
             
-            // When selected date idea exists
 {(selectedDateIdea || editIndex !== null) && (
   <EnhancedEventManager
     initialEvent={editIndex !== null ? getEventDataForEditing() : {

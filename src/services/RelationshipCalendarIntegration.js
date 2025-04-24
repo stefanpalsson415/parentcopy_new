@@ -115,41 +115,67 @@ class RelationshipCalendarIntegration {
    */
   async addDateNightToCalendar(userId, dateNight) {
     try {
-      if (!userId || !dateNight) throw new Error("User ID and date night data required");
-      
-      // Parse date and time
-      const startDate = dateNight.date ? 
-        CalendarOperations.parseDateTime(dateNight.date, dateNight.time || '19:00') :
-        CalendarOperations.getNextWeekendEvening();
-      
-      // Create standardized event
-      const eventData = {
-        title: `Date Night: ${dateNight.title || 'Dinner Date'}`,
-        description: dateNight.description || 'Quality time together to strengthen your relationship.',
-        startDate: startDate,
-        duration: 120, // 2 hours
-        location: dateNight.location || '',
-        category: 'relationship',
-        eventType: 'date-night',
-        colorId: '10', // Purple
-        metadata: {
-          relationshipActivity: true,
-          dateNightDetails: dateNight
+      if (!userId || !dateNight) {
+        console.error("Missing userId or dateNight data");
+        return { success: false, error: "Missing required data" };
+      }
+        
+      console.log("Adding date night to calendar:", dateNight);
+        
+      // Create a standard calendar event
+      const calendarEvent = {
+        summary: dateNight.title || "Date Night",
+        title: dateNight.title || "Date Night",
+        description: dateNight.description || "Quality time together",
+        location: dateNight.location || dateNight.dateNightDetails?.venue || "",
+        start: dateNight.start || {
+          dateTime: dateNight.dateTime || new Date().toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
         },
-        reminders: [
-          { method: 'popup', minutes: 24 * 60 }, // 1 day before
-          { method: 'popup', minutes: 120 }     // 2 hours before
-        ]
+        end: dateNight.end || {
+          dateTime: dateNight.endDateTime ||   
+            new Date(new Date(dateNight.dateTime || Date.now()).getTime() + 120 * 60 * 1000).toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        // Make sure event type and category are set correctly
+        eventType: 'date-night',
+        category: 'relationship',
+        // Include providers (babysitters)
+        providers: dateNight.providers || [],
+        // Include participants (always both parents)
+        attendees: dateNight.attendees || dateNight.participants || [],
+        // Include date night specific details
+        extraDetails: {
+          ...(dateNight.extraDetails || {}),
+          dateNightDetails: dateNight.dateNightDetails || {},
+          babysitterName: dateNight.providers?.[0]?.name,
+          venue: dateNight.dateNightDetails?.venue || dateNight.location || '',
+          isSpecialOccasion: dateNight.dateNightDetails?.specialOccasion || false,
+          occasionNote: dateNight.dateNightDetails?.occasionNote || ''
+        },
+        // Set appropriate reminders
+        reminders: {
+          useDefault: false,
+          overrides: [
+            { method: 'popup', minutes: 60 * 24 }, // 1 day before
+            { method: 'popup', minutes: 60 * 2 }   // 2 hours before
+          ]
+        }
       };
-      
-      // Standardize the event
-      const standardizedEvent = CalendarOperations.createStandardEvent(eventData);
-      
-      // Add to calendar
-      return await CalendarService.addEvent(standardizedEvent, userId);
+        
+      // Use CalendarService to add the event
+      const result = await CalendarService.addEvent(calendarEvent, userId);
+        
+      // After successful addition, trigger UI refresh
+      if (result.success && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        console.log("Date night added to calendar:", result);
+      }
+        
+      return result;
     } catch (error) {
       console.error("Error adding date night to calendar:", error);
-      throw error;
+      return { success: false, error: error.message };
     }
   }
   
