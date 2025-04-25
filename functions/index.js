@@ -23,8 +23,14 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ||
 // Claude API endpoint
 const CLAUDE_API_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 
-// Test endpoint route
-app.get('/test', (req, res) => {
+// Log all requests for debugging
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path} - Received request`);
+  next();
+});
+
+// Test endpoint route - handle both /test and /api/claude/test
+app.get(['/test', '/api/claude/test'], (req, res) => {
   // Add explicit content type to prevent browser misinterpreting
   res.set('Content-Type', 'application/json');
   console.log('Test endpoint called successfully');
@@ -36,8 +42,8 @@ app.get('/test', (req, res) => {
   });
 });
 
-// Main Claude API route
-app.post('/', async (req, res) => {
+// Main Claude API route - handle both / and /api/claude
+app.post(['/', '/api/claude'], async (req, res) => {
   try {
     // Set content type explicitly
     res.set('Content-Type', 'application/json');
@@ -107,6 +113,15 @@ app.post('/', async (req, res) => {
       });
     }
   }
+});
+
+// Add a catch-all route for debugging
+app.all('*', (req, res) => {
+  console.log(`Unhandled route: ${req.method} ${req.path}`);
+  res.status(404).json({
+    status: 'error',
+    message: `Unhandled route: ${req.method} ${req.path}`
+  });
 });
 
 // Export the Express app as a single Firebase Function
