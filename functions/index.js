@@ -7,9 +7,16 @@ const cors = require('cors');
 const testApp = express();
 const claudeApp = express();
 
-// Apply CORS middleware
-testApp.use(cors({ origin: true }));
-claudeApp.use(cors({ origin: true }));
+// Apply CORS middleware with more explicit configuration
+const corsOptions = {
+  origin: ['https://checkallie.com', 'https://www.checkallie.com', 'http://localhost:3000'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'anthropic-version'],
+  credentials: true
+};
+
+testApp.use(cors(corsOptions));
+claudeApp.use(cors(corsOptions));
 
 // You'll need the Anthropic API key - store it in Firebase environment config
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 
@@ -18,8 +25,11 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ||
 // Claude API endpoint
 const CLAUDE_API_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 
-// Test endpoint route
-testApp.get('/*', (req, res) => {
+// Test endpoint route - simplified and improved for debugging
+testApp.get('*', (req, res) => {
+  // Add explicit content type to prevent browser misinterpreting
+  res.set('Content-Type', 'application/json');
+  
   res.status(200).json({
     status: 'success',
     message: 'Claude API test endpoint is working',
@@ -29,6 +39,9 @@ testApp.get('/*', (req, res) => {
 
 // Main Claude API routes
 claudeApp.get('/test', (req, res) => {
+  // Add explicit content type to prevent browser misinterpreting
+  res.set('Content-Type', 'application/json');
+  
   res.status(200).json({
     status: 'success',
     message: 'Claude API proxy is working',
@@ -38,14 +51,19 @@ claudeApp.get('/test', (req, res) => {
 
 claudeApp.post('/', async (req, res) => {
   try {
+    // Set content type explicitly
+    res.set('Content-Type', 'application/json');
+    
+    // Log the incoming request for debugging
+    console.log('Received request to Claude API proxy');
+    
     // Make sure we have the API key
     if (!ANTHROPIC_API_KEY) {
       console.error('Anthropic API key is not configured');
-      res.status(500).json({
+      return res.status(500).json({
         status: 'error',
-        message: 'Server is not properly configured.'
+        message: 'Server is not properly configured: Missing API key'
       });
-      return;
     }
 
     // Get the request body from the client
@@ -72,7 +90,7 @@ claudeApp.post('/', async (req, res) => {
     });
 
     // Send back the Claude API response
-    res.status(200).json(claudeResponse.data);
+    return res.status(200).json(claudeResponse.data);
   } catch (error) {
     console.error('Error calling Claude API:', error);
     
@@ -82,20 +100,20 @@ claudeApp.post('/', async (req, res) => {
       const status = error.response.status || 500;
       const errorData = error.response.data || { error: 'Unknown error' };
       
-      res.status(status).json({
+      return res.status(status).json({
         status: 'error',
         message: 'Error from Claude API',
         details: errorData
       });
     } else if (error.request) {
       // The request was made but no response was received
-      res.status(504).json({
+      return res.status(504).json({
         status: 'error',
         message: 'Timeout or no response from Claude API'
       });
     } else {
       // Something else caused the error
-      res.status(500).json({
+      return res.status(500).json({
         status: 'error',
         message: error.message || 'Unknown error occurred'
       });
@@ -108,6 +126,8 @@ claudeApp.post('/', async (req, res) => {
 exports.claudeTest = functions
   .region('europe-west1')
   .runWith({
+    timeoutSeconds: 60,
+    memory: '256MB',
     invoker: 'public'
   })
   .https.onRequest(testApp);
@@ -115,6 +135,8 @@ exports.claudeTest = functions
 exports.claude = functions
   .region('europe-west1')
   .runWith({
+    timeoutSeconds: 60,
+    memory: '256MB',
     invoker: 'public'
   })
   .https.onRequest(claudeApp);

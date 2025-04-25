@@ -49,63 +49,73 @@ class ClaudeService {
     }
   }
   
-  async testProxyConnection() {
-    try {
-      // If we're already in mock/disabled mode, don't bother testing
-      if (this.mockMode || this.disableAICalls) {
-        console.log("Skipping proxy test - already in mock/disabled mode");
-        return false;
-      }
-      
-      console.log("Testing proxy connection at:", this.proxyUrl);
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-      
-      try {
-        const response = await fetch(`${this.proxyUrl}/test`, {
-          method: 'GET',
-          signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        console.log("Proxy test response status:", response.status);
-        
-        if (response.ok) {
-          // First check if the response is HTML instead of JSON
-          const contentType = response.headers.get('content-type');
-          if (contentType && contentType.includes('text/html')) {
-            console.error("Received HTML instead of JSON - API endpoint misconfigured");
-            return false;
-          }
-          
-          try {
-            const data = await response.json();
-            console.log("Proxy test response data:", data);
-            return true;
-          } catch (jsonError) {
-            console.error("Failed to parse JSON response:", jsonError);
-            return false;
-          }
-        } else {
-          console.error("Proxy test failed:", await response.text());
-          return false;
-        }
-      } catch (fetchError) {
-        clearTimeout(timeoutId);
-        
-        if (fetchError.name === 'AbortError') {
-          console.error("Proxy test timed out after 5 seconds");
-        } else {
-          console.error("Error testing proxy connection:", fetchError);
-        }
-        return false;
-      }
-    } catch (error) {
-      console.error("Error in proxy test:", error);
+// Update the testProxyConnection method in ClaudeService.js
+async testProxyConnection() {
+  try {
+    // If we're already in mock/disabled mode, don't bother testing
+    if (this.mockMode || this.disableAICalls) {
+      console.log("Skipping proxy test - already in mock/disabled mode");
       return false;
     }
+    
+    console.log("Testing proxy connection at:", this.proxyUrl);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    
+    try {
+      const response = await fetch(`${this.proxyUrl}/test`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      console.log("Proxy test response status:", response.status);
+      
+      if (response.ok) {
+        // First check if the response is HTML instead of JSON
+        const contentType = response.headers.get('content-type');
+        console.log("Response content type:", contentType);
+        
+        if (contentType && contentType.includes('text/html')) {
+          console.error("Received HTML instead of JSON - API endpoint misconfigured");
+          return false;
+        }
+        
+        try {
+          const data = await response.json();
+          console.log("Proxy test response data:", data);
+          return true;
+        } catch (jsonError) {
+          console.error("Failed to parse JSON response:", jsonError);
+          // Let's try to see what we received
+          const text = await response.text();
+          console.log("Raw response:", text.substring(0, 200));
+          return false;
+        }
+      } else {
+        console.error("Proxy test failed:", await response.text());
+        return false;
+      }
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError.name === 'AbortError') {
+        console.error("Proxy test timed out after 5 seconds");
+      } else {
+        console.error("Error testing proxy connection:", fetchError);
+      }
+      return false;
+    }
+  } catch (error) {
+    console.error("Error in proxy test:", error);
+    return false;
   }
+}
   
   // Add this new method
   enableFallbackMode() {
@@ -388,6 +398,7 @@ try {
   const response = await fetch(this.proxyUrl, {
     method: 'POST',
     headers: {
+      'Accept': 'application/json',
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(payload),
