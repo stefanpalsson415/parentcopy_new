@@ -8,6 +8,14 @@
     ],
     "rewrites": [
       {
+        "source": "/api/claude/test",
+        "function": "claudeTest"
+      },
+      {
+        "source": "/api/claude/**",
+        "function": "claude"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
@@ -15,17 +23,7 @@
   },
   "functions": {
     "source": "functions",
-    "codebase": "default",
-    "ignore": [
-      "node_modules",
-      ".git",
-      "firebase-debug.log",
-      "firebase-debug.*.log"
-    ],
-    "predeploy": [
-      "echo 'Skipping lint'"
-    ],
     "runtime": "nodejs18",
-    "region": ["europe-west1"]
+    "region": "europe-west1"
   }
 }

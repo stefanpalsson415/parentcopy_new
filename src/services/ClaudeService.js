@@ -10,59 +10,35 @@ class ClaudeService {
     const isLocalhost = hostname === 'localhost' || hostname.includes('127.0.0.1');
     const isFirebase = hostname.includes('firebaseapp.com') || hostname.includes('web.app');
     
-    // Set the appropriate API URL based on environment
-    if (isProduction) {
-      // Use relative URL to avoid potential CORS issues with absolute URLs
-      this.proxyUrl = '/api/claude';
-      
-      // Enable automatic testing on initialization
-      this.testConnectionOnLoad = true;
-    } else if (isLocalhost) {
-      // For local development, use the port-specific proxy
-      const port = window.location.port || '3001';
-      this.proxyUrl = `http://localhost:${port === '3000' ? '3001' : port}/api/claude`;
-    } else if (isFirebase) {
-      // For Firebase hosting, we need to use a different strategy since Firebase Hosting doesn't support API endpoints directly
-      
-      // You could use an external API service if available:
-      // this.proxyUrl = 'https://your-backend-service.com/api/claude';
-      
-      // For now, enable mock mode automatically for Firebase deployments
-      this.mockMode = true;
-      this.disableAICalls = true;
-      this.proxyUrl = '/api/claude'; // This won't be used, but set for completeness
-      console.log("Detected Firebase hosting - enabling mock mode automatically");
-      
-      // Skip testing since we already know the endpoint isn't available
-      this.testConnectionOnLoad = false;
-    } else {
-      // Fallback for any other environment
-      this.proxyUrl = '/api/claude';
-    }
-      
-    // Update to a more stable model identifier (remove specific date)
-    this.model = 'claude-3-sonnet-20240229'; // Use a stable model version
+    // Set the appropriate API URL - works with regional Firebase Functions
+    this.proxyUrl = '/api/claude';
     
-    // Enable better fallbacks
-    if (!this.mockMode) {
-      this.mockMode = false;
-    }
-    this.debugMode = true; // Enable debug mode in production temporarily
+    // Model settings
+    this.model = 'claude-3-sonnet-20240229';
+    
+    // Basic settings
+    this.mockMode = false;
+    this.debugMode = true; // Enable logging temporarily
+    this.disableAICalls = false;
     this.disableCalendarDetection = true;
-    this.retryCount = 3; // Add retry mechanism
+    this.retryCount = 3;
+    this.functionRegion = 'europe-west1'; // Match this to your deployment region
     
-    console.log(`Claude service initialized to use ${isProduction ? 'production' : isLocalhost ? 'local' : isFirebase ? 'firebase (mock mode)' : 'unknown'} proxy server at ${this.proxyUrl}`);
-    console.log(`AI calls ${this.disableAICalls ? 'disabled' : 'enabled'}, Mock mode: ${this.mockMode}`);
+    // Whether to test the connection on load
+    this.testConnectionOnLoad = true;
     
-    // Auto-test connection in production (but not on Firebase)
-    if (this.testConnectionOnLoad && (isProduction || (!isLocalhost && !isFirebase))) {
+    console.log(`Claude service initialized to use proxy server at ${this.proxyUrl}`);
+    
+    // Auto-test connection on initialization
+    if (this.testConnectionOnLoad) {
       setTimeout(() => {
         this.testProxyConnection()
           .then(success => {
             if (!success) {
               console.warn("Claude API connection test failed on initialization. Check server configuration.");
-              // Switch to fallback mode if test fails
               this.enableFallbackMode();
+            } else {
+              console.log("Claude API connection test successful!");
             }
           })
           .catch(err => {

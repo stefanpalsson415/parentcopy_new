@@ -1,108 +1,109 @@
-// FIXED CODE - replace entire functions/index.js file with this:
-const { initializeApp } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
-const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
-const { defineString } = require('firebase-functions/params');
-const logger = require('firebase-functions/logger');
+const functions = require('firebase-functions');
+const express = require('express');
 const axios = require('axios');
+const cors = require('cors');
 
-// Initialize Firebase Admin
-initializeApp();
+// Create Express apps for both functions
+const testApp = express();
+const claudeApp = express();
 
-// Get the Claude API key from environment variable or use a fallback for development
-const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY || 'sk-ant-api03-wYazj0X00yKvWF_TCwYGGsT6pJrW5ytBEowQ7R-OiW8TX_vnPBeUFJlkxKJDEyJ9xM88Bi9bt9ChNpsIJOvYkg-aMXNIg-ZYDQQG';
+// Apply CORS middleware
+testApp.use(cors({ origin: true }));
+claudeApp.use(cors({ origin: true }));
 
-// Simple Hello World function for testing using v2 API
-exports.helloWorld = onCall({ region: 'europe-west1' }, (request) => {
-  logger.info("Hello world function called with data:", request.data);
-  
-  return {
-    message: "Hello from Firebase!",
-    timestamp: new Date().toISOString(),
-    receivedData: request.data
-  };
+// You'll need the Anthropic API key - store it in Firebase environment config
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 
+                          functions.config().anthropic?.apikey;
+
+// Claude API endpoint
+const CLAUDE_API_ENDPOINT = 'https://api.anthropic.com/v1/messages';
+
+// Test endpoint route
+testApp.get('/*', (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: 'Claude API test endpoint is working',
+    timestamp: new Date().toISOString()
+  });
 });
 
-// Cloud Function to proxy calls to Claude API using v2 API
-exports.callClaudeAPI = onCall({ region: 'europe-west1' }, async (request) => {
+// Main Claude API routes
+claudeApp.get('/test', (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: 'Claude API proxy is working',
+    timestamp: new Date().toISOString()
+  });
+});
+
+claudeApp.post('/', async (req, res) => {
   try {
-    logger.info("Received request for Claude API:", {
-      systemLength: request.data.system ? request.data.system.length : 0,
-      messagesCount: request.data.messages ? request.data.messages.length : 0
-    });
-    
-    // Make request to Claude API
-    const response = await axios.post(
-      'https://api.anthropic.com/v1/messages',
-      {
-        model: "claude-3-7-sonnet-20240219",
-        max_tokens: 1000,
-        system: request.data.system,
-        messages: request.data.messages
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': CLAUDE_API_KEY,
-          'anthropic-version': '2023-06-01'
-        }
+    // Make sure we have the API key
+    if (!ANTHROPIC_API_KEY) {
+      console.error('Anthropic API key is not configured');
+      res.status(500).json({
+        status: 'error',
+        message: 'Server is not properly configured.'
+      });
+      return;
+    }
+
+    // Get the request body from the client
+    const { model, max_tokens, temperature, messages, system } = req.body;
+
+    // Prepare the request for Anthropic API
+    const claudeRequest = {
+      model: model || 'claude-3-sonnet-20240229',
+      max_tokens: max_tokens || 4000,
+      temperature: temperature || 0.7,
+      messages: messages || [],
+      system: system || ''
+    };
+
+    console.log('Making request to Claude API', { model, messagesCount: messages?.length });
+
+    // Forward the request to Anthropic
+    const claudeResponse = await axios.post(CLAUDE_API_ENDPOINT, claudeRequest, {
+      headers: {
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json'
       }
-    );
-    
-    logger.info("Claude API response received");
-    
-    // Return the Claude API response
-    return response.data;
+    });
+
+    // Send back the Claude API response
+    res.status(200).json(claudeResponse.data);
   } catch (error) {
-    logger.error("Error calling Claude API:", error.message);
+    console.error('Error calling Claude API:', error);
     
-    // More detailed error handling
+    // Handle different types of errors
     if (error.response) {
-      logger.error("Response error:", error.response.status, error.response.data);
-      throw new HttpsError(
-        'unknown', 
-        `Claude API error: ${error.response.status}`,
-        {
-          status: error.response.status,
-          data: error.response.data
-        }
-      );
+      // The request was made and the server responded with an error status
+      const status = error.response.status || 500;
+      const errorData = error.response.data || { error: 'Unknown error' };
+      
+      res.status(status).json({
+        status: 'error',
+        message: 'Error from Claude API',
+        details: errorData
+      });
     } else if (error.request) {
-      logger.error("No response received");
-      throw new HttpsError('unavailable', 'No response from Claude API');
+      // The request was made but no response was received
+      res.status(504).json({
+        status: 'error',
+        message: 'Timeout or no response from Claude API'
+      });
     } else {
-      logger.error("Request setup error:", error.message);
-      throw new HttpsError('internal', error.message);
+      // Something else caused the error
+      res.status(500).json({
+        status: 'error',
+        message: error.message || 'Unknown error occurred'
+      });
     }
   }
 });
 
-// HTTP endpoint for testing Claude API directly (browser accessible)
-exports.testClaudeAPI = onRequest({ region: 'europe-west1' }, async (req, res) => {
-  try {
-    logger.info("Test Claude API endpoint hit");
-    
-    // Make a simple call to Claude
-    const response = await axios.post(
-      'https://api.anthropic.com/v1/messages',
-      {
-        model: "claude-3-7-sonnet-20240219",
-        max_tokens: 100,
-        system: "You are a helpful assistant.",
-        messages: [{ role: "user", content: "Hello!" }]
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': CLAUDE_API_KEY,
-          'anthropic-version': '2023-06-01'
-        }
-      }
-    );
-    
-    res.json({ success: true, data: response.data });
-  } catch (error) {
-    logger.error("Error in test endpoint:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
+// Export the Express apps as Firebase Functions
+// Specify europe-west1 region since you're in Sweden
+exports.claudeTest = functions.region('europe-west1').https.onRequest(testApp);
+exports.claude = functions.region('europe-west1').https.onRequest(claudeApp);
