@@ -134,7 +134,7 @@ async generateBalanceImpactData(familyId, currentWeek) {
     console.log(`Generating balance impact data for family ${familyId}, week ${currentWeek}`);
     
     // First try to get family data for context
-    const familyData = await this.getFamilyDataForContext(familyId);
+    const familyData = await this.getFamilyContext(familyId);
     
     // Create a prompt for Claude to generate impact insights
     const systemPrompt = `You are Allie, a family balance assistant. Based on the family's data and progress,
