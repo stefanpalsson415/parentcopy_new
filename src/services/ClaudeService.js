@@ -8,6 +8,7 @@ class ClaudeService {
     const hostname = window.location.hostname;
     const isProduction = hostname === 'checkallie.com' || hostname === 'www.checkallie.com';
     const isLocalhost = hostname === 'localhost' || hostname.includes('127.0.0.1');
+    const isFirebase = hostname.includes('firebaseapp.com') || hostname.includes('web.app');
     
     // Set the appropriate API URL based on environment
     if (isProduction) {
@@ -20,6 +21,20 @@ class ClaudeService {
       // For local development, use the port-specific proxy
       const port = window.location.port || '3001';
       this.proxyUrl = `http://localhost:${port === '3000' ? '3001' : port}/api/claude`;
+    } else if (isFirebase) {
+      // For Firebase hosting, we need to use a different strategy since Firebase Hosting doesn't support API endpoints directly
+      
+      // You could use an external API service if available:
+      // this.proxyUrl = 'https://your-backend-service.com/api/claude';
+      
+      // For now, enable mock mode automatically for Firebase deployments
+      this.mockMode = true;
+      this.disableAICalls = true;
+      this.proxyUrl = '/api/claude'; // This won't be used, but set for completeness
+      console.log("Detected Firebase hosting - enabling mock mode automatically");
+      
+      // Skip testing since we already know the endpoint isn't available
+      this.testConnectionOnLoad = false;
     } else {
       // Fallback for any other environment
       this.proxyUrl = '/api/claude';
@@ -29,16 +44,18 @@ class ClaudeService {
     this.model = 'claude-3-sonnet-20240229'; // Use a stable model version
     
     // Enable better fallbacks
-    this.mockMode = false;
+    if (!this.mockMode) {
+      this.mockMode = false;
+    }
     this.debugMode = true; // Enable debug mode in production temporarily
-    this.disableAICalls = false;
     this.disableCalendarDetection = true;
     this.retryCount = 3; // Add retry mechanism
     
-    console.log(`Claude service initialized to use ${isProduction ? 'production' : isLocalhost ? 'local' : 'unknown'} proxy server at ${this.proxyUrl}`);
+    console.log(`Claude service initialized to use ${isProduction ? 'production' : isLocalhost ? 'local' : isFirebase ? 'firebase (mock mode)' : 'unknown'} proxy server at ${this.proxyUrl}`);
+    console.log(`AI calls ${this.disableAICalls ? 'disabled' : 'enabled'}, Mock mode: ${this.mockMode}`);
     
-    // Auto-test connection in production
-    if (this.testConnectionOnLoad && isProduction) {
+    // Auto-test connection in production (but not on Firebase)
+    if (this.testConnectionOnLoad && (isProduction || (!isLocalhost && !isFirebase))) {
       setTimeout(() => {
         this.testProxyConnection()
           .then(success => {
@@ -53,6 +70,64 @@ class ClaudeService {
             this.enableFallbackMode();
           });
       }, 2000);
+    }
+  }
+  
+  async testProxyConnection() {
+    try {
+      // If we're already in mock/disabled mode, don't bother testing
+      if (this.mockMode || this.disableAICalls) {
+        console.log("Skipping proxy test - already in mock/disabled mode");
+        return false;
+      }
+      
+      console.log("Testing proxy connection at:", this.proxyUrl);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      
+      try {
+        const response = await fetch(`${this.proxyUrl}/test`, {
+          method: 'GET',
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        console.log("Proxy test response status:", response.status);
+        
+        if (response.ok) {
+          // First check if the response is HTML instead of JSON
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('text/html')) {
+            console.error("Received HTML instead of JSON - API endpoint misconfigured");
+            return false;
+          }
+          
+          try {
+            const data = await response.json();
+            console.log("Proxy test response data:", data);
+            return true;
+          } catch (jsonError) {
+            console.error("Failed to parse JSON response:", jsonError);
+            return false;
+          }
+        } else {
+          console.error("Proxy test failed:", await response.text());
+          return false;
+        }
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError.name === 'AbortError') {
+          console.error("Proxy test timed out after 5 seconds");
+        } else {
+          console.error("Error testing proxy connection:", fetchError);
+        }
+        return false;
+      }
+    } catch (error) {
+      console.error("Error in proxy test:", error);
+      return false;
     }
   }
   
@@ -100,30 +175,7 @@ class ClaudeService {
     }
   }
   
-  // In ClaudeService.js
-  async testProxyConnection() {
-    try {
-      console.log("Testing proxy connection at:", this.proxyUrl);
-      
-      const response = await fetch(`${this.proxyUrl}/test`, {
-        method: 'GET'
-      });
-      
-      console.log("Proxy test response status:", response.status);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log("Proxy test response data:", data);
-        return true;
-      } else {
-        console.error("Proxy test failed:", await response.text());
-        return false;
-      }
-    } catch (error) {
-      console.error("Error testing proxy connection:", error);
-      return false;
-    }
-  }
+  
 
   async generateResponse(messages, context, options = {}) {
     try {
@@ -341,35 +393,60 @@ if (isLikelyTaskRequest) {
       const timeoutId = setTimeout(() => controller.abort(), 45000); // Increased timeout to 45 seconds
       
       // Make the API call through our proxy server with better error handling
-      if (this.debugMode) {
-        console.log("Attempting to connect to proxy at:", this.proxyUrl);
+if (this.debugMode) {
+  console.log("Attempting to connect to proxy at:", this.proxyUrl);
+}
+
+try {
+  // First check if we're in mock mode or AI calls are disabled
+  if (this.mockMode || this.disableAICalls) {
+    console.log("Using fallback response (mock mode or AI calls disabled)");
+    return this.createPersonalizedResponse(
+      typeof messages[messages.length - 1] === 'object' 
+        ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "") 
+        : "", 
+      context
+    );
+  }
+
+  const response = await fetch(this.proxyUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload),
+    signal: controller.signal
+  });
+  
+  clearTimeout(timeoutId);
+  
+  if (!response.ok) {
+    console.warn("Claude proxy returned error status:", response.status);
+    // Try to get more details about the error
+    let errorDetails = "";
+    try {
+      const errorText = await response.text();
+      // Check if we got HTML instead of JSON (common Firebase Hosting issue)
+      if (errorText.toLowerCase().includes('<!doctype html>') || 
+          errorText.toLowerCase().includes('<html>')) {
+        console.error("Received HTML instead of API response - enabling fallback mode");
+        this.enableFallbackMode();
       }
-      
-      try {
-        const response = await fetch(this.proxyUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload),
-          signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-          console.warn("Claude proxy returned error status:", response.status);
-          // Try to get more details about the error
-          let errorDetails = "";
-          try {
-            const errorText = await response.text();
-            errorDetails = errorText.substring(0, 200); // Get first 200 chars of error
-            console.warn("Error details from proxy:", errorDetails);
-          } catch (e) {}
-          
-          // Return a personalized response
-          return this.createPersonalizedResponse(lastUserMessage, context);
-        }
+      errorDetails = errorText.substring(0, 200); // Get first 200 chars of error
+      console.warn("Error details from proxy:", errorDetails);
+    } catch (e) {}
+    
+    // Return a personalized response
+    return this.createPersonalizedResponse(lastUserMessage, context);
+  }
+  
+  // Check content type for HTML
+  const contentType = response.headers.get('content-type');
+  if (contentType && contentType.includes('text/html')) {
+    console.error("Received HTML instead of JSON - API endpoint misconfigured");
+    this.enableFallbackMode();
+    return this.createPersonalizedResponse(lastUserMessage, context);
+  }
         
         // Try to parse the JSON with better error handling
         let result;
