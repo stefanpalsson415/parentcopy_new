@@ -105,5 +105,16 @@ claudeApp.post('/', async (req, res) => {
 
 // Export the Express apps as Firebase Functions
 // Specify europe-west1 region since you're in Sweden
-exports.claudeTest = functions.region('europe-west1').https.onRequest(testApp);
-exports.claude = functions.region('europe-west1').https.onRequest(claudeApp);
+exports.claudeTest = functions
+  .region('europe-west1')
+  .runWith({
+    invoker: 'public'
+  })
+  .https.onRequest(testApp);
+
+exports.claude = functions
+  .region('europe-west1')
+  .runWith({
+    invoker: 'public'
+  })
+  .https.onRequest(claudeApp);
