@@ -18,7 +18,7 @@ class ClaudeService {
     
     // Basic settings
     this.mockMode = false;
-    this.debugMode = true; // Enable logging temporarily
+    this.debugMode = true; // Always enable logging for debugging
     this.disableAICalls = false;
     this.disableCalendarDetection = true;
     this.retryCount = 3;
@@ -29,8 +29,9 @@ class ClaudeService {
     
     console.log(`Claude service initialized to use proxy server at ${this.proxyUrl}`);
     
-    // Auto-test connection on initialization
+    // Auto-test connection on initialization with longer delay
     if (this.testConnectionOnLoad) {
+      console.log("Will test Claude API connection in 3 seconds...");
       setTimeout(() => {
         this.testProxyConnection()
           .then(success => {
@@ -45,77 +46,99 @@ class ClaudeService {
             console.error("Error during Claude API connection test:", err);
             this.enableFallbackMode();
           });
-      }, 2000);
+      }, 3000); // Increased delay to ensure app is fully loaded
     }
   }
   
-// Update the testProxyConnection method in ClaudeService.js
-async testProxyConnection() {
-  try {
-    // If we're already in mock/disabled mode, don't bother testing
-    if (this.mockMode || this.disableAICalls) {
-      console.log("Skipping proxy test - already in mock/disabled mode");
-      return false;
-    }
-    
-    console.log("Testing proxy connection at:", this.proxyUrl);
-    
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-    
+  async testProxyConnection() {
     try {
-      const response = await fetch(`${this.proxyUrl}/test`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      console.log("Proxy test response status:", response.status);
-      
-      if (response.ok) {
-        // First check if the response is HTML instead of JSON
-        const contentType = response.headers.get('content-type');
-        console.log("Response content type:", contentType);
-        
-        if (contentType && contentType.includes('text/html')) {
-          console.error("Received HTML instead of JSON - API endpoint misconfigured");
-          return false;
-        }
-        
-        try {
-          const data = await response.json();
-          console.log("Proxy test response data:", data);
-          return true;
-        } catch (jsonError) {
-          console.error("Failed to parse JSON response:", jsonError);
-          // Let's try to see what we received
-          const text = await response.text();
-          console.log("Raw response:", text.substring(0, 200));
-          return false;
-        }
-      } else {
-        console.error("Proxy test failed:", await response.text());
+      // If we're already in mock/disabled mode, don't bother testing
+      if (this.mockMode || this.disableAICalls) {
+        console.log("Skipping proxy test - already in mock/disabled mode");
         return false;
       }
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
       
-      if (fetchError.name === 'AbortError') {
-        console.error("Proxy test timed out after 5 seconds");
-      } else {
-        console.error("Error testing proxy connection:", fetchError);
+      console.log("Testing proxy connection at:", this.proxyUrl);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout for slower networks
+      
+      try {
+        // Log the full URL being requested for debugging
+        const testUrl = `${this.proxyUrl}/test`;
+        console.log("Full test URL:", testUrl);
+        
+        const response = await fetch(testUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store'
+          },
+          signal: controller.signal,
+          // Add cache-busting query parameter
+          cache: 'no-store'
+        });
+        
+        clearTimeout(timeoutId);
+        console.log("Proxy test response status:", response.status);
+        
+        if (response.ok) {
+          // First check if the response is HTML instead of JSON
+          const contentType = response.headers.get('content-type');
+          console.log("Response content type:", contentType);
+          
+          if (contentType && contentType.includes('text/html')) {
+            console.error("Received HTML instead of JSON - API endpoint misconfigured");
+            // Get the response text to help debug
+            const text = await response.text();
+            console.error("HTML response received:", text.substring(0, 200));
+            return false;
+          }
+          
+          try {
+            const data = await response.json();
+            console.log("Proxy test response data:", data);
+            return true;
+          } catch (jsonError) {
+            console.error("Failed to parse JSON response:", jsonError);
+            // Let's try to see what we received
+            const text = await response.text();
+            console.log("Raw response:", text.substring(0, 200));
+            return false;
+          }
+        } else {
+          // For non-OK responses, log detailed information
+          console.error(`Proxy test failed with status: ${response.status}`);
+          try {
+            const text = await response.text();
+            console.error("Error response:", text.substring(0, 500));
+            
+            // Check if this is a CORS error
+            if (response.status === 0 || !response.status) {
+              console.error("Possible CORS issue detected");
+            }
+          } catch (e) {
+            console.error("Could not read error response");
+          }
+          return false;
+        }
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError.name === 'AbortError') {
+          console.error("Proxy test timed out after 10 seconds");
+        } else {
+          console.error("Error testing proxy connection:", fetchError);
+          console.error("Error details:", fetchError.message);
+        }
+        return false;
       }
+    } catch (error) {
+      console.error("Error in proxy test:", error);
       return false;
     }
-  } catch (error) {
-    console.error("Error in proxy test:", error);
-    return false;
   }
-}
   
   // Add this new method
   enableFallbackMode() {

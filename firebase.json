@@ -9,7 +9,7 @@
     "rewrites": [
       {
         "source": "/api/claude/test",
-        "function": "claudeTest",
+        "function": "claude",
         "region": "europe-west1"
       },
       {
@@ -36,7 +36,7 @@
           },
           {
             "key": "Access-Control-Allow-Headers",
-            "value": "Content-Type, Authorization"
+            "value": "Content-Type, Authorization, x-api-key, anthropic-version"
           },
           {
             "key": "Content-Type",

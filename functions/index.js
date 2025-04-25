@@ -3,9 +3,8 @@ const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 
-// Create Express apps for both functions
-const testApp = express();
-const claudeApp = express();
+// Create a single Express app for all Claude-related endpoints
+const app = express();
 
 // Apply CORS middleware with more explicit configuration
 const corsOptions = {
@@ -15,8 +14,7 @@ const corsOptions = {
   credentials: true
 };
 
-testApp.use(cors(corsOptions));
-claudeApp.use(cors(corsOptions));
+app.use(cors(corsOptions));
 
 // You'll need the Anthropic API key - store it in Firebase environment config
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 
@@ -25,22 +23,11 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ||
 // Claude API endpoint
 const CLAUDE_API_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 
-// Test endpoint route - simplified and improved for debugging
-testApp.get('*', (req, res) => {
+// Test endpoint route
+app.get('/test', (req, res) => {
   // Add explicit content type to prevent browser misinterpreting
   res.set('Content-Type', 'application/json');
-  
-  res.status(200).json({
-    status: 'success',
-    message: 'Claude API test endpoint is working',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Main Claude API routes
-claudeApp.get('/test', (req, res) => {
-  // Add explicit content type to prevent browser misinterpreting
-  res.set('Content-Type', 'application/json');
+  console.log('Test endpoint called successfully');
   
   res.status(200).json({
     status: 'success',
@@ -49,7 +36,8 @@ claudeApp.get('/test', (req, res) => {
   });
 });
 
-claudeApp.post('/', async (req, res) => {
+// Main Claude API route
+app.post('/', async (req, res) => {
   try {
     // Set content type explicitly
     res.set('Content-Type', 'application/json');
@@ -121,17 +109,7 @@ claudeApp.post('/', async (req, res) => {
   }
 });
 
-// Export the Express apps as Firebase Functions
-// Specify europe-west1 region since you're in Sweden
-exports.claudeTest = functions
-  .region('europe-west1')
-  .runWith({
-    timeoutSeconds: 60,
-    memory: '256MB',
-    invoker: 'public'
-  })
-  .https.onRequest(testApp);
-
+// Export the Express app as a single Firebase Function
 exports.claude = functions
   .region('europe-west1')
   .runWith({
@@ -139,4 +117,4 @@ exports.claude = functions
     memory: '256MB',
     invoker: 'public'
   })
-  .https.onRequest(claudeApp);
+  .https.onRequest(app);
