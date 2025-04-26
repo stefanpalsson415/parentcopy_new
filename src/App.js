@@ -36,16 +36,24 @@ import { EventProvider } from './contexts/EventContext';
 
 
 
-// New code for App.js (GoogleMapsApiLoader component)
 function GoogleMapsApiLoader() {
   useEffect(() => {
     // Check if the script is already loaded
     if (!window.google || !window.google.maps) {
       // Define a global callback function for the script
-      window.initGoogleMapsApi = () => {
+      window.initGoogleMapsApi = async () => {
         console.log("Google Maps API loaded successfully");
-        // Dispatch an event to notify components that the API is loaded
-        window.dispatchEvent(new Event('google-maps-api-loaded'));
+        
+        // Import the places library using the new method
+        try {
+          const placesLib = await window.google.maps.importLibrary("places");
+          console.log("Places library loaded successfully:", placesLib.version);
+          // Dispatch an event to notify components that the API is loaded
+          window.dispatchEvent(new Event('google-maps-api-loaded'));
+        } catch (error) {
+          console.error("Error loading Places library:", error);
+          window.googleMapsLoadFailed = true;
+        }
       };
       
       // Handle API loading errors globally
@@ -63,9 +71,9 @@ function GoogleMapsApiLoader() {
         return; // Don't load the API if no key is available
       }
 
-      // Create and append the script tag with updated libraries
+      // Create and append the script tag - use v=weekly to ensure newest features
       const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,marker&callback=initGoogleMapsApi`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMapsApi&v=weekly`;
       script.async = true;
       script.defer = true;
       
