@@ -399,15 +399,14 @@ const initPlacesAutocomplete = async () => {
     `;
     document.head.appendChild(styleEl);
     
-    // Create the PlaceAutocompleteElement with enhanced options
-    console.log("Creating enhanced PlaceAutocompleteElement...");
-    const placeAutocompleteElement = new window.google.maps.places.PlaceAutocompleteElement({
-      types: ['address', 'establishment'], // Allow addresses and points of interest
-      fields: ['formatted_address', 'geometry', 'name', 'place_id'],
-      inputPlaceholder: 'Where is this event happening?',
-      // Optional: Add location bias to improve results relevance
-      locationBias: navigator.geolocation ? { center: { lat: 0, lng: 0 }, radius: 10000 } : undefined
-    });
+    // Create the PlaceAutocompleteElement with enhanced options compatible with the new API
+console.log("Creating enhanced PlaceAutocompleteElement...");
+const placeAutocompleteElement = new window.google.maps.places.PlaceAutocompleteElement({
+  types: ['address', 'establishment'], // Allow addresses and points of interest
+  inputPlaceholder: 'Where is this event happening?',
+  // Optional: Add location bias to improve results relevance
+  locationBias: navigator.geolocation ? { center: { lat: 0, lng: 0 }, radius: 10000 } : undefined
+});
     
     // Set component ID for CSS targeting
     placeAutocompleteElement.id = 'place-autocomplete-element';
@@ -422,13 +421,13 @@ const initPlacesAutocomplete = async () => {
         console.log("Place selected:", event);
         
         // Get place prediction from the event
-        const placePrediction = event.placePrediction;
-        const place = placePrediction.toPlace();
-        
-        // Fetch the fields we need
-        await place.fetchFields({
-          fields: ["formattedAddress", "displayName", "name", "addressComponents", "location"]
-        });
+const placePrediction = event.placePrediction;
+const place = placePrediction.toPlace();
+
+// Fetch the fields we need with the new API pattern
+await place.fetchFields({
+  fields: ["formattedAddress", "displayName", "name", "location"]
+});
         
         console.log("Fetched place fields:", place);
         
