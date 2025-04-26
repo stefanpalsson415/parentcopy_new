@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ArrowRight, ArrowLeft, Check, Brain, Heart, Scale, 
-  Clock, BarChart, Users, Command, Calendar, 
-  FileText, MessageSquare, Database, Activity, Shield, 
-  Zap, Star, Target, Lock, Award, ChevronRight,
-  ChevronDown, ChevronUp, AlertTriangle, RefreshCw,
-  PlusCircle, Layers, Key, Sparkles
-} from 'lucide-react';
+    ArrowRight, ArrowLeft, Check, Brain, Heart, Scale, 
+    Clock, BarChart, Users, Command, Calendar, 
+    FileText, MessageSquare, Database, Activity, Shield, 
+    Zap, Star, Target, Lock, Award, ChevronRight,
+    ChevronDown, ChevronUp, AlertTriangle, RefreshCw,
+    PlusCircle, Layers, Key, Sparkles, CheckCircle,
+    Camera, Code
+  } from 'lucide-react';
 import { 
   RadarChart, PolarGrid, PolarAngleAxis, 
   PolarRadiusAxis, Radar, Legend, 
