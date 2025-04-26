@@ -10,8 +10,16 @@ class ClaudeService {
     const isLocalhost = hostname === 'localhost' || hostname.includes('127.0.0.1');
     const isFirebase = hostname.includes('firebaseapp.com') || hostname.includes('web.app');
     
-    // Set the appropriate API URL - works with regional Firebase Functions
-    this.proxyUrl = '/api/claude';
+    // Set the appropriate API URL based on environment
+    if (isLocalhost) {
+      // For local development, use the Firebase proxy server on port 3001
+      this.proxyUrl = 'http://localhost:3001/api/claude';
+      console.log("Running in local development mode - using local proxy server");
+    } else {
+      // For production, use relative URL (handled by server-side routing)
+      this.proxyUrl = '/api/claude';
+      console.log("Running in production mode - using server-side routing");
+    }
     
     // Model settings
     this.model = 'claude-3-sonnet-20240229';
@@ -19,6 +27,15 @@ class ClaudeService {
     // Basic settings
     this.mockMode = false;
     this.debugMode = true; // Always enable logging for debugging
+    this.disableAICalls = false;
+    this.disableCalendarDetection = true;
+    this.retryCount = 3;
+    this.functionRegion = 'europe-west1'; // Match this to your deployment region
+    
+    // Whether to test the connection on load
+    this.testConnectionOnLoad = true;
+    
+    console.log(`Claude service initialized to use proxy server at ${this.proxyUrl}`);
     this.disableAICalls = false;
     this.disableCalendarDetection = true;
     this.retryCount = 3;
