@@ -2125,4 +2125,656 @@ const InvestorFunnel = () => {
                     </div>
                     <div className="pt-4 pb-6 text-center">
                       <h3 className="text-xl font-medium">Kimberly Palsson</h3>
-                      <p
+                      <p className="text-sm text-gray-500 mb-3">Co-Founder & CPO</p>
+                      <p className="text-sm text-gray-600 mb-3">
+                        Family psychology expert with deep experience in user experience design and relationship systems.
+                      </p>
+                      <div className="flex flex-wrap justify-center gap-2">
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs">Psychology</span>
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs">UX Design</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white shadow-sm rounded-lg overflow-hidden">
+                  <div className="h-40 bg-green-500"></div>
+                  <div className="-mt-16 px-4">
+                    <div className="w-24 h-24 rounded-full mx-auto overflow-hidden border-4 border-white bg-gray-100">
+                      {/* Image placeholder. In production this would be the person's photo */}
+                    </div>
+                    <div className="pt-4 pb-6 text-center">
+                      <h3 className="text-xl font-medium">Shane McMahon</h3>
+                      <p className="text-sm text-gray-500 mb-3">Co-Founder & CTO</p>
+                      <p className="text-sm text-gray-600 mb-3">
+                        Technical architect with expertise in AI systems, data security, and scalable platform development.
+                      </p>
+                      <div className="flex flex-wrap justify-center gap-2">
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs">AI Engineering</span>
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs">Security</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 p-6 rounded-lg">
+                <h3 className="text-xl font-medium mb-4 text-center">Scientific Advisors</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-white p-4 rounded-lg text-center">
+                    <div className="w-16 h-16 mx-auto rounded-full bg-gray-100 mb-2"></div>
+                    <h4 className="font-medium text-sm">Dr. Emily Carter</h4>
+                    <p className="text-xs text-gray-500">Family Psychology</p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg text-center">
+                    <div className="w-16 h-16 mx-auto rounded-full bg-gray-100 mb-2"></div>
+                    <h4 className="font-medium text-sm">Dr. Michael Wong</h4>
+                    <p className="text-xs text-gray-500">Cognitive Science</p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg text-center">
+                    <div className="w-16 h-16 mx-auto rounded-full bg-gray-100 mb-2"></div>
+                    <h4 className="font-medium text-sm">Dr. Sarah Johnson</h4>
+                    <p className="text-xs text-gray-500">Child Development</p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg text-center">
+                    <div className="w-16 h-16 mx-auto rounded-full bg-gray-100 mb-2"></div>
+                    <h4 className="font-medium text-sm">Dr. David Kim</h4>
+                    <p className="text-xs text-gray-500">AI Ethics</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      
+      // Slide 19: Financial Projections (with updated numbers)
+      case 19:
+        return (
+          <div className="min-h-[80vh] flex flex-col justify-center px-8">
+            <div className="max-w-4xl mx-auto">
+              <h2 className="text-3xl md:text-4xl font-light mb-6">Financial Projections</h2>
+              
+              <div className="grid md:grid-cols-2 gap-8">
+                <div>
+                  <h3 className="text-xl font-medium mb-4">Subscription Revenue Model</h3>
+                  <div className="bg-white p-6 rounded-lg border border-gray-200 mb-6">
+                    <div className="flex justify-between items-center mb-6">
+                      <h4 className="font-medium">€40/month</h4>
+                      <span className="px-3 py-1 bg-black text-white rounded-full text-sm">Premium Family Plan</span>
+                    </div>
+                    
+                    <div className="space-y-3 mb-6">
+                      <div className="flex items-start">
+                        <Check size={18} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                        <p className="text-sm">Full access to all Allie features and commands</p>
+                      </div>
+                      <div className="flex items-start">
+                        <Check size={18} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                        <p className="text-sm">Unlimited family members and devices</p>
+                      </div>
+                      <div className="flex items-start">
+                        <Check size={18} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                        <p className="text-sm">Private AI instance with no data sharing</p>
+                      </div>
+                      <div className="flex items-start">
+                        <Check size={18} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                        <p className="text-sm">Weekly optimizations and insights</p>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <div className="flex justify-between mb-1">
+                        <span className="text-sm">Gross Margin</span>
+                        <span className="text-sm font-medium">75%</span>
+                      </div>
+                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-green-500" style={{ width: '75%' }}></div>
+                      </div>
+                      <p className="mt-2 text-xs text-gray-500">Primary costs: Claude API, server infrastructure, and security</p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-black text-white p-6 rounded-lg">
+                    <h3 className="text-lg font-medium mb-3">Long-Term Value Creation</h3>
+                    <p className="text-sm mb-4">
+                      Earning a family's trust creates expansion opportunities far beyond the initial subscription:
+                    </p>
+                    
+                    <div className="space-y-4">
+                      <div className="flex items-start">
+                        <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
+                          <Key className="text-yellow-400" size={16} />
+                        </div>
+                        <div>
+                          <p className="font-medium">Trusted Platform Advantage</p>
+                          <p className="text-sm text-gray-300">If a family trusts us with their most private data, we can provide additional trusted services</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start">
+                        <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
+                          <Layers className="text-yellow-400" size={16} />
+                        </div>
+                        <div>
+                          <p className="font-medium">Expansion Potential</p>
+                          <p className="text-sm text-gray-300">E-commerce integration, educational platform, service recommendations—all built on trust</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="text-xl font-medium mb-4">Growth Projections</h3>
+                  
+                  <div className="flex border border-gray-200 rounded-lg mb-4 overflow-hidden">
+                    <button
+                      className={`flex-1 py-2 ${financialView === 'revenue' ? 'bg-black text-white' : 'bg-white text-gray-600'}`}
+                      onClick={() => setFinancialView('revenue')}
+                    >
+                      Revenue
+                    </button>
+                    <button
+                      className={`flex-1 py-2 ${financialView === 'users' ? 'bg-black text-white' : 'bg-white text-gray-600'}`}
+                      onClick={() => setFinancialView('users')}
+                    >
+                      Users
+                    </button>
+                    <button
+                      className={`flex-1 py-2 ${financialView === 'profit' ? 'bg-black text-white' : 'bg-white text-gray-600'}`}
+                      onClick={() => setFinancialView('profit')}
+                    >
+                      Profit
+                    </button>
+                  </div>
+                  
+                  <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        {financialView === 'revenue' ? (
+                          <AreaChart data={[
+                            { year: 'Year 0', value: 0 },
+                            { year: 'Year 1', value: 1000 * 40 * 12 },
+                            { year: 'Year 2', value: 10000 * 40 * 12 },
+                            { year: 'Year 3', value: 1000000 * 40 * 12 }
+                          ]}>
+                            <XAxis dataKey="year" />
+                            <YAxis tickFormatter={(value) => `€${value / 1000000}M`} />
+                            <Tooltip formatter={(value) => `€${(value / 1000000).toFixed(1)}M`} />
+                            <Area type="monotone" dataKey="value" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
+                          </AreaChart>
+                        ) : financialView === 'users' ? (
+                          <AreaChart data={[
+                            { year: 'Year 0', value: 0 },
+                            { year: 'Year 1', value: 1000 },
+                            { year: 'Year 2', value: 10000 },
+                            { year: 'Year 3', value: 1000000 }
+                          ]}>
+                            <XAxis dataKey="year" />
+                            <YAxis tickFormatter={(value) => value >= 1000000 ? `${value / 1000000}M` : `${value / 1000}K`} />
+                            <Tooltip formatter={(value) => value >= 1000000 ? `${(value / 1000000).toFixed(1)}M` : `${(value / 1000).toFixed(1)}K`} />
+                            <Area type="monotone" dataKey="value" stroke="#10b981" fill="#10b981" fillOpacity={0.2} />
+                          </AreaChart>
+                        ) : (
+                          <AreaChart data={[
+                            { year: 'Year 0', value: -2000000 },
+                            { year: 'Year 1', value: (1000 * 40 * 12 * 0.75) - 3000000 },
+                            { year: 'Year 2', value: (10000 * 40 * 12 * 0.75) - 5000000 },
+                            { year: 'Year 3', value: (1000000 * 40 * 12 * 0.75) - 50000000 }
+                          ]}>
+                            <XAxis dataKey="year" />
+                            <YAxis tickFormatter={(value) => `€${value / 1000000}M`} />
+                            <Tooltip formatter={(value) => `€${(value / 1000000).toFixed(1)}M`} />
+                            <Area type="monotone" dataKey="value" stroke="#8884d8" fill="#8884d8" fillOpacity={0.2} />
+                          </AreaChart>
+                        )}
+                      </ResponsiveContainer>
+                    </div>
+                    
+                    <div className="grid grid-cols-4 gap-2 mt-4 text-center">
+                      <div className="p-2">
+                        <p className="text-xs text-gray-500">Year 0</p>
+                        <p className="font-medium">0</p>
+                      </div>
+                      <div className="p-2">
+                        <p className="text-xs text-gray-500">Year 1</p>
+                        <p className="font-medium">1K</p>
+                      </div>
+                      <div className="p-2">
+                        <p className="text-xs text-gray-500">Year 2</p>
+                        <p className="font-medium">10K</p>
+                      </div>
+                      <div className="p-2">
+                        <p className="text-xs text-gray-500">Year 3</p>
+                        <p className="font-medium">1M</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white p-4 rounded-lg border border-gray-200">
+                    <h4 className="font-medium mb-3">Unit Economics</h4>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex justify-between mb-1">
+                          <p className="text-sm">Customer Acquisition Cost</p>
+                          <p className="text-sm font-medium">€120</p>
+                        </div>
+                        <p className="text-xs text-gray-500">Initial CAC for premium family segment</p>
+                      </div>
+                      
+                      <div>
+                        <div className="flex justify-between mb-1">
+                          <p className="text-sm">Lifetime Value</p>
+                          <p className="text-sm font-medium">€1,920</p>
+                        </div>
+                        <p className="text-xs text-gray-500">Based on €40/mo over 4-year average retention</p>
+                      </div>
+                      
+                      <div>
+                        <div className="flex justify-between mb-1">
+                          <p className="text-sm">LTV/CAC Ratio</p>
+                          <p className="text-sm font-medium">16x</p>
+                        </div>
+                        <p className="text-xs text-gray-500">Well above the 3x industry benchmark</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      
+      // Slide 20: Investment Ask
+      case 20:
+        return (
+          <div className="min-h-[80vh] flex flex-col justify-center px-8">
+            <div className="max-w-4xl mx-auto">
+              <h2 className="text-3xl md:text-4xl font-light mb-6">The Investment Opportunity</h2>
+              
+              <div className="grid md:grid-cols-2 gap-8">
+                <div>
+                  <h3 className="text-xl font-medium mb-4">Investment Ask</h3>
+                  <div className="bg-black text-white p-6 rounded-lg mb-6">
+                    <div className="grid grid-cols-2 gap-6 mb-6">
+                      <div className="text-center">
+                        <p className="text-3xl font-light mb-1">€2M</p>
+                        <p className="text-sm opacity-80">Investment</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-3xl font-light mb-1">€10M</p>
+                        <p className="text-sm opacity-80">Pre-Money Valuation</p>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-white bg-opacity-10 p-4 rounded-lg mb-6">
+                      <h4 className="font-medium mb-2 text-center">Use of Funds</h4>
+                      <div className="h-40">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={[
+                                { name: 'Product Development', value: 100 }
+                              ]}
+                              cx="50%"
+                              cy="50%"
+                              outerRadius={80}
+                              fill="#8884d8"
+                              dataKey="value"
+                              label
+                            >
+                              <Cell fill="#3b82f6" />
+                            </Pie>
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <p className="text-center text-sm">
+                        100% dedicated to product development
+                      </p>
+                    </div>
+                    
+                    <div className="text-center">
+                      <p className="text-sm opacity-80">
+                        Funds will enable us to build a best-in-class engineering team focused on delivering a robust, secure, and scalable product.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <h3 className="text-xl font-medium mb-4">Timeline to Success</h3>
+                  <div className="bg-white p-6 rounded-lg border border-gray-200">
+                    <h4 className="font-medium mb-4">18-Month Runway to Series A</h4>
+                    <div className="space-y-4">
+                      <div className="flex items-start">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
+                          <span className="text-blue-600 text-xs font-bold">1</span>
+                        </div>
+                        <div>
+                          <p className="font-medium">Months 1-6</p>
+                          <p className="text-sm text-gray-600">MVP development and initial market testing</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
+                          <span className="text-blue-600 text-xs font-bold">2</span>
+                        </div>
+                        <div>
+                          <p className="font-medium">Months 7-12</p>
+                          <p className="text-sm text-gray-600">Product refinement and market expansion</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
+                          <span className="text-blue-600 text-xs font-bold">3</span>
+                        </div>
+                        <div>
+                          <p className="font-medium">Months 13-18</p>
+                          <p className="text-sm text-gray-600">Scale user base and prepare for Series A</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="text-xl font-medium mb-4">Why Invest in Allie?</h3>
+                  <div className="bg-white p-6 rounded-lg border border-gray-200 mb-6">
+                    <h4 className="font-medium mb-3">Market Opportunity</h4>
+                    <div className="space-y-3">
+                      <div className="flex items-start">
+                        <Check size={18} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                        <p className="text-sm">Addressing a €29B global market with high-value customers</p>
+                      </div>
+                      <div className="flex items-start">
+                        <Check size={18} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                        <p className="text-sm">Solving a universal problem experienced by families worldwide</p>
+                      </div>
+                      <div className="flex items-start">
+                        <Check size={18} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                        <p className="text-sm">Attractive unit economics with 75% gross margins</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white p-6 rounded-lg border border-gray-200 mb-6">
+                    <h4 className="font-medium mb-3">Competitive Advantage</h4>
+                    <div className="space-y-3">
+                      <div className="flex items-start">
+                        <Check size={18} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                        <p className="text-sm">Science-based approach with proprietary task weighting system</p>
+                      </div>
+                      <div className="flex items-start">
+                        <Check size={18} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                        <p className="text-sm">Trust-based platform with potential for multiple revenue streams</p>
+                      </div>
+                      <div className="flex items-start">
+                        <Check size={18} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                        <p className="text-sm">Fortress-like privacy architecture as a market differentiator</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white p-6 rounded-lg border border-gray-200">
+                    <h4 className="font-medium mb-3">Team Expertise</h4>
+                    <div className="space-y-3">
+                      <div className="flex items-start">
+                        <Check size={18} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                        <p className="text-sm">Founders with complementary skills in operations, psychology, and technology</p>
+                      </div>
+                      <div className="flex items-start">
+                        <Check size={18} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                        <p className="text-sm">Scientific advisory board with domain expertise</p>
+                      </div>
+                      <div className="flex items-start">
+                        <Check size={18} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                        <p className="text-sm">Passionate about solving this problem with personal investment</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      
+      // Slide 21: Vision & Next Steps
+      case 21:
+        return (
+          <div className="min-h-[80vh] flex flex-col justify-center px-8">
+            <div className="max-w-4xl mx-auto">
+              <h2 className="text-3xl md:text-4xl font-light mb-6">Our Vision & Next Steps</h2>
+              
+              <div className="grid md:grid-cols-2 gap-8">
+                <div>
+                  <h3 className="text-xl font-medium mb-4">Vision for Impact</h3>
+                  <div className="bg-black text-white p-6 rounded-lg mb-6">
+                    <div className="space-y-4">
+                      <div className="flex items-start">
+                        <div className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
+                          <Brain size={20} />
+                        </div>
+                        <div>
+                          <p className="font-medium">Transform Family Dynamics</p>
+                          <p className="text-sm text-gray-300 mt-1">
+                            Create a new paradigm for family workload distribution based on science and equity
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start">
+                        <div className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
+                          <Heart size={20} />
+                        </div>
+                        <div>
+                          <p className="font-medium">Build Stronger Relationships</p>
+                          <p className="text-sm text-gray-300 mt-1">
+                            Reduce conflict and increase satisfaction in millions of households worldwide
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start">
+                        <div className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
+                          <Users size={20} />
+                        </div>
+                        <div>
+                          <p className="font-medium">Create Generational Impact</p>
+                          <p className="text-sm text-gray-300 mt-1">
+                            Change how children understand relationship equity by seeing it modeled at home
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="p-6 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-lg text-white">
+                    <h3 className="text-xl font-medium mb-3">Why Now?</h3>
+                    <p className="mb-4">
+                      We're at a critical inflection point where three forces converge:
+                    </p>
+                    <div className="space-y-3">
+                      <div className="flex items-start">
+                        <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0">
+                          <Zap size={16} className="text-white" />
+                        </div>
+                        <p className="text-sm">Family dynamics are changing faster than support systems can adapt</p>
+                      </div>
+                      <div className="flex items-start">
+                        <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0">
+                          <Zap size={16} className="text-white" />
+                        </div>
+                        <p className="text-sm">AI technology has matured enough to provide truly personalized support</p>
+                      </div>
+                      <div className="flex items-start">
+                        <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0">
+                          <Zap size={16} className="text-white" />
+                        </div>
+                        <p className="text-sm">Consumer readiness for AI-powered family solutions has reached critical mass</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="text-xl font-medium mb-4">Next Steps</h3>
+                  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-6">
+                    <h4 className="font-medium mb-4">What to Expect</h4>
+                    
+                    <div className="space-y-4">
+                      <div className="flex items-start">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
+                          <Check className="text-blue-600" size={16} />
+                        </div>
+                        <div>
+                          <p className="font-medium">Technical Demo</p>
+                          <p className="text-sm text-gray-600">
+                            Experience Allie's existing prototype and discuss the product roadmap
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
+                          <Check className="text-blue-600" size={16} />
+                        </div>
+                        <div>
+                          <p className="font-medium">Data Room Access</p>
+                          <p className="text-sm text-gray-600">
+                            In-depth market research, technical documentation, and financial models
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
+                          <Check className="text-blue-600" size={16} />
+                        </div>
+                        <div>
+                          <p className="font-medium">Team Discussions</p>
+                          <p className="text-sm text-gray-600">
+                            Deep dive conversations with founders and scientific advisors
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <h4 className="font-medium mb-4 text-center">Contact Information</h4>
+                    
+                    <div className="flex justify-center mb-6">
+                      <button className="px-6 py-3 bg-black text-white rounded-md hover:bg-gray-800 inline-flex items-center">
+                        Schedule a Meeting
+                        <ArrowRight size={16} className="ml-2" />
+                      </button>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 text-center">
+                      <div>
+                        <p className="font-medium">Stefan Palsson</p>
+                        <p className="text-sm text-gray-600">CEO & Co-Founder</p>
+                        <p className="text-sm text-blue-600 mt-1">stefan@allie.com</p>
+                      </div>
+                      <div>
+                        <p className="font-medium">Investor Relations</p>
+                        <p className="text-sm text-gray-600">For Due Diligence Requests</p>
+                        <p className="text-sm text-blue-600 mt-1">invest@allie.com</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-8 text-center">
+                <button
+                  onClick={() => goToSlide(1)}
+                  className="px-6 py-3 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Return to Start
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      
+      // Slide 22: Thank You / Closing
+      case 22:
+        return (
+          <div className="min-h-[80vh] flex items-center justify-center bg-black text-white px-8">
+            <div className="text-center max-w-4xl">
+              <h1 className="text-6xl md:text-8xl font-light mb-6 opacity-90">Thank You</h1>
+              <h2 className="text-xl md:text-3xl font-light mb-8 opacity-80">Join us in building the future of family balance</h2>
+              
+              <div className="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-6 mt-8">
+                <button
+                  onClick={() => goToSlide(20)}
+                  className="px-6 py-3 bg-white text-black rounded-md hover:bg-gray-100"
+                >
+                  Investment Details
+                </button>
+                <button
+                  onClick={() => goToSlide(1)}
+                  className="px-6 py-3 border border-white text-white rounded-md hover:bg-white hover:bg-opacity-10"
+                >
+                  Start Over
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      
+      default:
+        return (
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="text-center">
+              <h2 className="text-2xl mb-4">Slide not found</h2>
+              <button
+                onClick={() => goToSlide(1)}
+                className="px-4 py-2 bg-black text-white rounded"
+              >
+                Go to first slide
+              </button>
+            </div>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      {/* Navigation controls */}
+      <div className="fixed bottom-4 left-0 right-0 z-50 flex justify-center">
+        <div className="bg-white px-4 py-2 rounded-full shadow-lg flex items-center space-x-2">
+          <button
+            onClick={prevSlide}
+            disabled={currentSlide === 1}
+            className={`p-2 rounded-full ${currentSlide === 1 ? 'text-gray-400 cursor-not-allowed' : 'text-black hover:bg-gray-200'}`}
+          >
+            <ArrowLeft size={20} />
+          </button>
+          
+          <span className="px-2 text-sm">
+            {currentSlide} / {totalSlides}
+          </span>
+          
+          <button
+            onClick={nextSlide}
+            disabled={currentSlide === totalSlides}
+            className={`p-2 rounded-full ${currentSlide === totalSlides ? 'text-gray-400 cursor-not-allowed' : 'text-black hover:bg-gray-200'}`}
+          >
+            <ArrowRight size={20} />
+          </button>
+        </div>
+      </div>
+      
+      {/* Main content */}
+      <div className="flex-1">
+        {renderSlide()}
+      </div>
+    </div>
+  );
+};
+
+export default InvestorFunnel;
