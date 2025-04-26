@@ -30,33 +30,54 @@ const InvestorFunnel = () => {
     const [financialView, setFinancialView] = useState('revenue');
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     
-    const totalSlides = 23; // Updated to account for the new slide
+    const totalSlides = 24; // Updated to include children's role slide
+
     const sliderRef = useRef(null);
     
     // Navigate through demo steps
-const skipSlides = [10]; // Skip slide 10 (Core Product: Family Management)
+    const skipSlides = [10]; // Skip slide 10 (Core Product: Family Management)
 
-const nextSlide = () => {
-  let newSlide = currentSlide + 1;
-  // Skip any slides in the skipSlides array
-  while (skipSlides.includes(newSlide) && newSlide < totalSlides) {
-    newSlide++;
-  }
-  if (newSlide <= totalSlides) {
-    setCurrentSlide(newSlide);
-  }
-};
+    const nextSlide = () => {
+      let newSlide = currentSlide + 1;
+      // Special case: after slide 19, go to the Children's Role slide
+      if (currentSlide === 19) {
+        setCurrentSlide(23); // Go to Children's Role slide
+        return;
+      }
+      // Special case: after Children's Role slide, go to Investment Ask
+      if (currentSlide === 23) {
+        setCurrentSlide(20);
+        return;
+      }
+      // Skip any slides in the skipSlides array
+      while (skipSlides.includes(newSlide) && newSlide < totalSlides) {
+        newSlide++;
+      }
+      if (newSlide <= totalSlides) {
+        setCurrentSlide(newSlide);
+      }
+    };
 
-const prevSlide = () => {
-  let newSlide = currentSlide - 1;
-  // Skip any slides in the skipSlides array
-  while (skipSlides.includes(newSlide) && newSlide > 1) {
-    newSlide--;
-  }
-  if (newSlide >= 1) {
-    setCurrentSlide(newSlide);
-  }
-};
+    const prevSlide = () => {
+        let newSlide = currentSlide - 1;
+        // Special case: when on Investment Ask slide, go back to Children's Role slide
+        if (currentSlide === 20) {
+          setCurrentSlide(23);
+          return;
+        }
+        // Special case: when on Children's Role slide, go back to financial projections
+        if (currentSlide === 23) {
+          setCurrentSlide(19);
+          return;
+        }
+        // Skip any slides in the skipSlides array
+        while (skipSlides.includes(newSlide) && newSlide > 1) {
+          newSlide--;
+        }
+        if (newSlide >= 1) {
+          setCurrentSlide(newSlide);
+        }
+      };
 
 const goToSlide = (slide) => {
   if (slide >= 1 && slide <= totalSlides && !skipSlides.includes(slide)) {
@@ -346,28 +367,39 @@ case 3:
                 <p className="mb-6">What percentage of fathers vs. mothers believe household duties are shared equally?</p>
                 
                 <div className="mb-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Father's Perception:</label>
-                  {!quizAnswers.fatherPercent && (
-                    <input 
-                      type="range" 
-                      min="0" 
-                      max="100" 
-                      defaultValue="50"
-                      className="w-full"
-                      onMouseUp={(e) => handleQuizAnswer('fatherPercent', parseInt(e.target.value))}
-                      ref={sliderRef}
-                    />
-                  )}
-                  {quizAnswers.fatherPercent && (
-                    <div className="flex justify-between items-center">
-                      <div className="w-full bg-gray-200 rounded-full h-2.5">
-                        <div className="bg-black h-2.5 rounded-full" style={{ width: `${quizAnswers.fatherPercent}%` }}></div>
-                      </div>
-                      <span className="ml-3 font-medium">{quizAnswers.fatherPercent}%</span>
-                    </div>
-                  )}
-                </div>
-                
+  <label className="block text-sm font-medium text-gray-700 mb-1">Father's Perception:</label>
+  {!quizAnswers.fatherPercent && (
+    <div>
+      <input 
+        type="range" 
+        min="0" 
+        max="100" 
+        defaultValue="50"
+        className="w-full"
+        onMouseUp={(e) => handleQuizAnswer('fatherPercent', parseInt(e.target.value))}
+        ref={sliderRef}
+      />
+      <div className="flex justify-between text-xs text-gray-500 mt-1">
+        <span>0</span>
+        <span>100</span>
+      </div>
+    </div>
+  )}
+  {quizAnswers.fatherPercent && (
+    <div>
+      <div className="flex justify-between items-center">
+        <div className="w-full bg-gray-200 rounded-full h-2.5">
+          <div className="bg-black h-2.5 rounded-full" style={{ width: `${quizAnswers.fatherPercent}%` }}></div>
+        </div>
+        <span className="ml-3 font-medium">{quizAnswers.fatherPercent}%</span>
+      </div>
+      <div className="flex justify-between text-xs text-gray-500 mt-1">
+        <span>0</span>
+        <span>100</span>
+      </div>
+    </div>
+  )}
+</div>                
                 {quizAnswers.fatherPercent && !quizAnswers.motherPercent && (
                   <div className="mt-4 mb-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Mother's Perception:</label>
@@ -2446,8 +2478,8 @@ case 17:
         );
       
 
-// Slide 19.5: Children's Role in Change
-case 19.5:
+// Slide 23: Children's Role in Change
+case 23:
   return (
     <div className="min-h-[80vh] flex flex-col justify-center px-8">
       <div className="max-w-4xl mx-auto">
