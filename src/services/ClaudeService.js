@@ -509,6 +509,18 @@ if (!result) {
   return this.createPersonalizedResponse(lastUserMessage, context);
 }
 
+// Add a special catch for undefined or null response
+if (result === undefined || result === null) {
+  console.error("Claude API returned undefined or null");
+  return this.createPersonalizedResponse(lastUserMessage, context);
+}
+
+// Check if result is a string directly (some versions of Claude API may return direct text)
+if (typeof result === 'string') {
+  console.log("Claude API returned direct string response");
+  return result.trim();
+}
+
 // Check content structure with better logging
 if (!result.content) {
   console.error("Missing 'content' in Claude API response:", result);
@@ -525,30 +537,56 @@ if (!result.content[0]) {
   return this.createPersonalizedResponse(lastUserMessage, context);
 }
 
-// Check if text property exists and has a valid value
+// Check for text property with more robust fallbacks
 if (result.content[0].text === undefined || result.content[0].text === null) {
   console.error("'text' property is undefined in content:", result.content[0]);
   
-  // Try to extract text from a different format if possible
+  // Try different response formats that Claude might return
   if (result.content[0].type === "text" && result.content[0].value) {
     return result.content[0].value;
   }
   
-  // If there's any string content at all, use that
   if (typeof result.content[0] === 'string') {
     return result.content[0];
   }
   
-  // Last resort: check if the entire response is just a string
-  if (typeof result === 'string') {
-    return result;
+  if (result.message && typeof result.message === 'string') {
+    return result.message;
   }
   
+  if (result.completion && typeof result.completion === 'string') {
+    return result.completion;
+  }
+  
+  // Check if there's any usable text in the response at all
+  const responseStr = JSON.stringify(result);
+  if (responseStr && responseStr.length > 20) {
+    try {
+      // Try to extract any text content
+      const textMatch = responseStr.match(/"text":"([^"]+)"/);
+      if (textMatch && textMatch[1]) {
+        return textMatch[1];
+      }
+    } catch (e) {
+      // Ignore extraction errors
+    }
+  }
+  
+  // Last resort
+  console.log("Falling back to personalized response as no text could be extracted");
   return this.createPersonalizedResponse(lastUserMessage, context);
 }
 
-// Successfully extracted the text
-return result.content[0].text;
+// Successfully extracted the text - make sure it's not empty
+const extractedText = result.content[0].text;
+if (!extractedText || extractedText.trim() === '') {
+  console.error("Extracted text is empty");
+  return this.createPersonalizedResponse(lastUserMessage, context);
+}
+
+// Return successfully extracted text
+console.log("Successfully extracted text from Claude API response");
+return extractedText;
       } catch (error) {
         clearTimeout(timeoutId);
         console.error("Error in Claude API call:", error.message);
