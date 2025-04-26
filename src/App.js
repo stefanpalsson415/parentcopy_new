@@ -60,7 +60,7 @@ function GoogleMapsApiLoader() {
       return new Promise((resolve, reject) => {
         try {
           // Set a global callback that will be called when the API loads
-          // Set a global callback that will be called when the API loads
+// NEW CODE
 window.initGoogleMapsApi = () => {
   console.log("Google Maps API loaded successfully");
   
@@ -68,8 +68,8 @@ window.initGoogleMapsApi = () => {
     // Use window.google to access the global Google object
     if (window.google && window.google.maps) {
       // Import the places library using the recommended method
-      window.google.maps.importLibrary("places").then(({ Places }) => {
-        console.log("Places library loaded successfully:", Places.version);
+      window.google.maps.importLibrary("places").then((placesLibrary) => {
+        console.log("Places library loaded successfully");
         
         // Dispatch an event to notify components that the API is loaded
         window.dispatchEvent(new Event('google-maps-api-loaded'));

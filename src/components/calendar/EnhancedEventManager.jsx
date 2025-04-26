@@ -432,7 +432,7 @@ const initPlacesAutocomplete = async () => {
     }, 100);
     
     // Add event listener for place selection - use the correct event name
-    placeAutocompleteElement.addEventListener('gmp-placeselect', async (event) => {
+    placeAutocompleteElement.addEventListener('gmp-select', async (event) => {
       try {
         console.log("Place selected:", event);
         
