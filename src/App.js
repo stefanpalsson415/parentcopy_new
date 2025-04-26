@@ -38,83 +38,94 @@ import { EventProvider } from './contexts/EventContext';
 
 function GoogleMapsApiLoader() {
   useEffect(() => {
-    // Check if the script is already loaded
-    if (!window.google || !window.google.maps) {
-      // Define a global callback function for the script
-      window.initGoogleMapsApi = async () => {
-        console.log("Google Maps API loaded successfully");
-        
-        // Import the places library using the new method
-        try {
-          // Explicitly request the Places library with the right options
-          const placesLib = await window.google.maps.importLibrary("places");
-          console.log("Places library loaded successfully:", placesLib.version);
-          
-          // Preload the required APIs to improve performance
-          await Promise.all([
-            // Make sure the PlaceAutocompleteElement is available
-            window.google.maps.places.PlaceAutocompleteElement ? 
-              Promise.resolve() : 
-              import('@googlemaps/extended-component-library/place_autocomplete_element'),
-            
-            // Other potential components we might need
-            window.google.maps.places.AutocompleteService ? 
-              Promise.resolve() : 
-              window.google.maps.places.AutocompleteService
-          ]);
-          
-          // Dispatch an event to notify components that the API is loaded
-          window.dispatchEvent(new Event('google-maps-api-loaded'));
-        } catch (error) {
-          console.error("Error loading Places library:", error);
-          window.googleMapsLoadFailed = true;
-        }
-      };
-      
-      // Handle API loading errors globally
-      window.gm_authFailure = () => {
-        console.warn("Google Maps API authentication failed - using fallback mode");
-        window.googleMapsAuthFailed = true;
-      };
-
+    // Only load if not already loaded
+    if (window.google && window.google.maps) {
+      console.log("Google Maps API already loaded");
+      // Still dispatch the event to make sure components know it's ready
+      window.dispatchEvent(new Event('google-maps-api-loaded'));
+      return;
+    }
+    
+    // Create a clean load function following Google's recommended pattern
+    const loadGoogleMapsApi = () => {
       // Get API key from environment variables
       const apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
       
       if (!apiKey) {
         console.warn("Google Maps API key not found in environment variables");
         window.googleMapsLoadFailed = true;
-        return; // Don't load the API if no key is available
+        return Promise.reject(new Error("No API key available"));
       }
-
-      // Create and append the script tag - use v=weekly for latest features and specify libraries
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMapsApi&v=weekly&libraries=places`;
-      script.async = true;
-      script.defer = true;
       
-      // Handle loading errors
-      script.onerror = () => {
-        console.error("Error loading Google Maps API");
-        window.googleMapsLoadFailed = true;
-      };
-      
-      document.head.appendChild(script);
-      
-      return () => {
-        // Clean up
-        if (window.initGoogleMapsApi) {
-          delete window.initGoogleMapsApi;
+      return new Promise((resolve, reject) => {
+        try {
+          // Set a global callback that will be called when the API loads
+          window.initGoogleMapsApi = async () => {
+            console.log("Google Maps API loaded successfully");
+            
+            try {
+              // Import the places library using the recommended method
+              const { Places } = await google.maps.importLibrary("places");
+              console.log("Places library loaded successfully:", Places.version);
+              
+              // Dispatch an event to notify components that the API is loaded
+              window.dispatchEvent(new Event('google-maps-api-loaded'));
+              resolve(true);
+            } catch (error) {
+              console.error("Error initializing Places library:", error);
+              reject(error);
+            }
+          };
+          
+          // Create and append the script tag - use recommended loading pattern
+          const script = document.createElement('script');
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMapsApi&v=weekly&libraries=places`;
+          script.async = true;
+          script.defer = true;
+          
+          // Handle loading errors
+          script.onerror = (err) => {
+            console.error("Error loading Google Maps API", err);
+            window.googleMapsLoadFailed = true;
+            reject(new Error("Failed to load Google Maps API"));
+          };
+          
+          // Check for existing script to avoid duplicates
+          if (document.querySelector(`script[src^="https://maps.googleapis.com/maps/api/js"]`)) {
+            console.warn("Google Maps script already exists in DOM, not adding again");
+            return;
+          }
+          
+          document.head.appendChild(script);
+        } catch (err) {
+          console.error("Error setting up Google Maps API:", err);
+          reject(err);
         }
-        if (window.gm_authFailure) {
-          delete window.gm_authFailure;
-        }
-        // Optional: remove the script on unmount
-        const scriptElement = document.querySelector(`script[src^="https://maps.googleapis.com/maps/api/js"]`);
-        if (scriptElement) {
-          document.head.removeChild(scriptElement);
-        }
-      };
-    }
+      });
+    };
+    
+    // Load the API and handle errors
+    loadGoogleMapsApi().catch(error => {
+      console.error("Failed to initialize Google Maps API:", error);
+      window.googleMapsLoadFailed = true;
+    });
+    
+    // Handle API authentication failures
+    window.gm_authFailure = () => {
+      console.warn("Google Maps API authentication failed - using fallback mode");
+      window.googleMapsAuthFailed = true;
+    };
+    
+    return () => {
+      // Clean up
+      if (window.initGoogleMapsApi) {
+        delete window.initGoogleMapsApi;
+      }
+      if (window.gm_authFailure) {
+        delete window.gm_authFailure;
+      }
+      // We don't remove the script on unmount to prevent repeated loading
+    };
   }, []);
   
   return null; // This component doesn't render anything

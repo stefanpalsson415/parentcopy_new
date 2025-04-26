@@ -399,14 +399,17 @@ const initPlacesAutocomplete = async () => {
     `;
     document.head.appendChild(styleEl);
     
-    // Create the PlaceAutocompleteElement with enhanced options compatible with the new API
-console.log("Creating enhanced PlaceAutocompleteElement...");
-const placeAutocompleteElement = new window.google.maps.places.PlaceAutocompleteElement({
-  types: ['address', 'establishment'], // Allow addresses and points of interest
-  inputPlaceholder: 'Where is this event happening?',
-  // Optional: Add location bias to improve results relevance
-  locationBias: navigator.geolocation ? { center: { lat: 0, lng: 0 }, radius: 10000 } : undefined
-});
+    // Create the PlaceAutocompleteElement with the correct properties according to 2025 API
+    console.log("Creating PlaceAutocompleteElement with 2025 API...");
+    const placeAutocompleteElement = new window.google.maps.places.PlaceAutocompleteElement({
+      // IMPORTANT: Remove 'inputPlaceholder' which doesn't exist in the API
+      // Instead, we'll use CSS to style the input and add a placeholder through DOM
+      types: ['address', 'establishment'], // Allow addresses and points of interest
+      // Use correct property names according to 2025 API
+      locationBias: navigator.geolocation ? 
+        { radius: 10000, center: { lat: 0, lng: 0 } } : 
+        undefined
+    });
     
     // Set component ID for CSS targeting
     placeAutocompleteElement.id = 'place-autocomplete-element';
@@ -415,19 +418,38 @@ const placeAutocompleteElement = new window.google.maps.places.PlaceAutocomplete
     container.appendChild(placeAutocompleteElement);
     placeAutocompleteElementRef.current = placeAutocompleteElement;
     
-    // Add event listener for place selection
+    // Now set the placeholder through DOM manipulation after the element is added
+    setTimeout(() => {
+      try {
+        // Wait for shadow DOM to be created
+        const inputElement = placeAutocompleteElement.shadowRoot?.querySelector('input');
+        if (inputElement) {
+          inputElement.placeholder = 'Where is this event happening?';
+        }
+      } catch (e) {
+        console.warn("Could not set input placeholder:", e);
+      }
+    }, 100);
+    
+    // Add event listener for place selection - use the correct event name
     placeAutocompleteElement.addEventListener('gmp-placeselect', async (event) => {
       try {
         console.log("Place selected:", event);
         
         // Get place prediction from the event
-const placePrediction = event.placePrediction;
-const place = placePrediction.toPlace();
-
-// Fetch the fields we need with the new API pattern
-await place.fetchFields({
-  fields: ["formattedAddress", "displayName", "name", "location"]
-});
+        const placePrediction = event.placePrediction;
+        if (!placePrediction) {
+          console.error("No place prediction in event");
+          return;
+        }
+        
+        // Convert to Place and fetch fields
+        const place = placePrediction.toPlace();
+        
+        // Fetch the fields we need with the new API pattern
+        await place.fetchFields({
+          fields: ["formattedAddress", "displayName", "name", "location"]
+        });
         
         console.log("Fetched place fields:", place);
         
@@ -468,16 +490,19 @@ await place.fetchFields({
       
       // Initialize input with current location if available
       try {
-        const input = placeAutocompleteElement.querySelector('input');
-        if (input) {
-          input.value = event.location;
-        }
+        // Use setTimeout to ensure the shadow DOM has been created
+        setTimeout(() => {
+          const input = placeAutocompleteElement.shadowRoot?.querySelector('input');
+          if (input) {
+            input.value = event.location;
+          }
+        }, 100);
       } catch (err) {
         console.warn("Could not initialize input value:", err);
       }
     }
     
-    console.log("Enhanced PlaceAutocompleteElement initialized successfully");
+    console.log("PlaceAutocompleteElement initialized successfully");
     return true;
   } catch (error) {
     console.error("Error initializing Places API:", error);
