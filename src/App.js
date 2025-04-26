@@ -60,22 +60,33 @@ function GoogleMapsApiLoader() {
       return new Promise((resolve, reject) => {
         try {
           // Set a global callback that will be called when the API loads
-          window.initGoogleMapsApi = async () => {
-            console.log("Google Maps API loaded successfully");
-            
-            try {
-              // Import the places library using the recommended method
-              const { Places } = await google.maps.importLibrary("places");
-              console.log("Places library loaded successfully:", Places.version);
-              
-              // Dispatch an event to notify components that the API is loaded
-              window.dispatchEvent(new Event('google-maps-api-loaded'));
-              resolve(true);
-            } catch (error) {
-              console.error("Error initializing Places library:", error);
-              reject(error);
-            }
-          };
+          // Set a global callback that will be called when the API loads
+window.initGoogleMapsApi = () => {
+  console.log("Google Maps API loaded successfully");
+  
+  try {
+    // Use window.google to access the global Google object
+    if (window.google && window.google.maps) {
+      // Import the places library using the recommended method
+      window.google.maps.importLibrary("places").then(({ Places }) => {
+        console.log("Places library loaded successfully:", Places.version);
+        
+        // Dispatch an event to notify components that the API is loaded
+        window.dispatchEvent(new Event('google-maps-api-loaded'));
+        resolve(true);
+      }).catch(error => {
+        console.error("Error importing Places library:", error);
+        reject(error);
+      });
+    } else {
+      console.error("Google Maps API not available on window object");
+      reject(new Error("Google Maps API not available"));
+    }
+  } catch (error) {
+    console.error("Error initializing Places library:", error);
+    reject(error);
+  }
+};
           
           // Create and append the script tag - use recommended loading pattern
           const script = document.createElement('script');
