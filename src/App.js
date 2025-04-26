@@ -46,8 +46,23 @@ function GoogleMapsApiLoader() {
         
         // Import the places library using the new method
         try {
+          // Explicitly request the Places library with the right options
           const placesLib = await window.google.maps.importLibrary("places");
           console.log("Places library loaded successfully:", placesLib.version);
+          
+          // Preload the required APIs to improve performance
+          await Promise.all([
+            // Make sure the PlaceAutocompleteElement is available
+            window.google.maps.places.PlaceAutocompleteElement ? 
+              Promise.resolve() : 
+              import('@googlemaps/extended-component-library/place_autocomplete_element'),
+            
+            // Other potential components we might need
+            window.google.maps.places.AutocompleteService ? 
+              Promise.resolve() : 
+              window.google.maps.places.AutocompleteService
+          ]);
+          
           // Dispatch an event to notify components that the API is loaded
           window.dispatchEvent(new Event('google-maps-api-loaded'));
         } catch (error) {
@@ -71,9 +86,9 @@ function GoogleMapsApiLoader() {
         return; // Don't load the API if no key is available
       }
 
-      // Create and append the script tag - use v=weekly to ensure newest features
+      // Create and append the script tag - use v=weekly for latest features and specify libraries
       const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMapsApi&v=weekly`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMapsApi&v=weekly&libraries=places`;
       script.async = true;
       script.defer = true;
       

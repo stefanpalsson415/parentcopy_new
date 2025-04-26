@@ -326,7 +326,7 @@ const EnhancedEventManager = ({
     }
   }, [event.category, event.eventType, familyMembers]);
   
-  // Initialize Google Places Autocomplete
+ // Initialize Google Places Autocomplete
 const initPlacesAutocomplete = async () => {
   if (!window.google || !window.google.maps) {
     console.warn("Google Maps API not available");
@@ -364,11 +364,52 @@ const initPlacesAutocomplete = async () => {
       container.removeChild(container.firstChild);
     }
     
-    // Create the PlaceAutocompleteElement
-    console.log("Creating PlaceAutocompleteElement...");
-    const placeAutocompleteElement = new window.google.maps.places.PlaceAutocompleteElement();
+    // Add custom styles for the PlaceAutocompleteElement
+    // This targets the shadow DOM parts
+    const styleEl = document.createElement('style');
+    styleEl.textContent = `
+      #places-container {
+        width: 100%;
+      }
+      #place-autocomplete-element::part(input) {
+        width: 100%;
+        padding: 0.5rem;
+        border-radius: 0.375rem;
+        border: 1px solid #d1d5db;
+        font-family: Roboto, sans-serif;
+        font-size: 0.875rem;
+      }
+      #place-autocomplete-element::part(menu) {
+        margin-top: 0.25rem;
+        border-radius: 0.375rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        z-index: 100;
+      }
+      #place-autocomplete-element::part(item) {
+        padding: 0.5rem 0.75rem;
+        font-family: Roboto, sans-serif;
+        font-size: 0.875rem;
+      }
+      #place-autocomplete-element::part(item:hover) {
+        background-color: #f3f4f6;
+      }
+      #place-autocomplete-element::part(item[active]) {
+        background-color: #e5e7eb;
+      }
+    `;
+    document.head.appendChild(styleEl);
     
-    // Set component ID for possible CSS targeting
+    // Create the PlaceAutocompleteElement with enhanced options
+    console.log("Creating enhanced PlaceAutocompleteElement...");
+    const placeAutocompleteElement = new window.google.maps.places.PlaceAutocompleteElement({
+      types: ['address', 'establishment'], // Allow addresses and points of interest
+      fields: ['formatted_address', 'geometry', 'name', 'place_id'],
+      inputPlaceholder: 'Where is this event happening?',
+      // Optional: Add location bias to improve results relevance
+      locationBias: navigator.geolocation ? { center: { lat: 0, lng: 0 }, radius: 10000 } : undefined
+    });
+    
+    // Set component ID for CSS targeting
     placeAutocompleteElement.id = 'place-autocomplete-element';
     
     // Add it to the container
@@ -386,12 +427,12 @@ const initPlacesAutocomplete = async () => {
         
         // Fetch the fields we need
         await place.fetchFields({
-          fields: ["formattedAddress", "displayName", "name"]
+          fields: ["formattedAddress", "displayName", "name", "addressComponents", "location"]
         });
         
         console.log("Fetched place fields:", place);
         
-        // Extract location text
+        // Extract location text - prioritize formattedAddress for consistency
         let locationText = "";
         
         if (place.formattedAddress) {
@@ -404,7 +445,17 @@ const initPlacesAutocomplete = async () => {
         
         if (locationText) {
           console.log("Setting location to:", locationText);
-          setEvent(prev => ({ ...prev, location: locationText }));
+          // Update in a single state change to prevent UI flicker
+          setEvent(prev => ({ 
+            ...prev, 
+            location: locationText,
+            // Store coordinates if available for future use
+            coordinates: place.location ? { 
+              lat: place.location.lat, 
+              lng: place.location.lng 
+            } : prev.coordinates
+          }));
+          
           prevLocationRef.current = locationText;
         }
       } catch (error) {
@@ -412,12 +463,22 @@ const initPlacesAutocomplete = async () => {
       }
     });
     
-    // Save the current location value for synchronization
+    // Try to set initial location value if available
     if (event.location && prevLocationRef.current !== event.location) {
       prevLocationRef.current = event.location;
+      
+      // Initialize input with current location if available
+      try {
+        const input = placeAutocompleteElement.querySelector('input');
+        if (input) {
+          input.value = event.location;
+        }
+      } catch (err) {
+        console.warn("Could not initialize input value:", err);
+      }
     }
     
-    console.log("PlaceAutocompleteElement initialized successfully");
+    console.log("Enhanced PlaceAutocompleteElement initialized successfully");
     return true;
   } catch (error) {
     console.error("Error initializing Places API:", error);
@@ -2506,38 +2567,48 @@ useEffect(() => {
         </div>
         
         {/* Location Section */}
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">
-            Location
-          </label>
-          
-          {/* This div is the container for the Places API */}
-          <div id="places-container" className="border rounded-md overflow-hidden"></div>
-          
-          {/* Manual fallback input */}
-          {!placesInitialized && (
-            <div className="flex items-center border rounded-md overflow-hidden mt-2">
-              <div className="p-2 text-gray-400">
-                <MapPin size={16} />
-              </div>
-              <input
-                type="text"
-                id="location-input"
-                value={event.location || ''}
-                onChange={(e) => handleManualLocationInput(e.target.value)}
-                className="w-full p-2 text-sm border-0 focus:ring-0"
-                placeholder="Where is this event happening?"
-              />
-            </div>
-          )}
-          
-          {/* Current location value display */}
-          {event.location && (
-            <div className="text-xs text-blue-600 mt-1 pl-2">
-              Current location: {event.location}
-            </div>
-          )}
-        </div>
+<div>
+  <label className="block text-sm font-medium mb-1 text-gray-700">
+    Location
+  </label>
+  
+  {/* Container for Places API with improved styling */}
+  <div className="relative">
+    <div 
+      id="places-container" 
+      className="w-full border rounded-md overflow-hidden"
+    ></div>
+    
+    {/* Map pin icon to improve UI (positioned absolutely) */}
+    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-400">
+      <MapPin size={16} />
+    </div>
+  </div>
+  
+  {/* Manual fallback input */}
+  {!placesInitialized && (
+    <div className="flex items-center border rounded-md overflow-hidden mt-2">
+      <div className="p-2 text-gray-400">
+        <MapPin size={16} />
+      </div>
+      <input
+        type="text"
+        id="location-input"
+        value={event.location || ''}
+        onChange={(e) => handleManualLocationInput(e.target.value)}
+        className="w-full p-2 text-sm border-0 focus:ring-0"
+        placeholder="Where is this event happening?"
+      />
+    </div>
+  )}
+  
+  {/* Current location value display */}
+  {event.location && (
+    <div className="text-xs text-blue-600 mt-1 pl-2">
+      Current location: {event.location}
+    </div>
+  )}
+</div>
         
         {/* Event Attendees Section */}
         {(event.category === 'meeting' || event.eventType === 'meeting' || event.category === 'general') ? (
