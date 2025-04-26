@@ -201,171 +201,189 @@ const DashboardTab = () => {
     }
   }, [familyId, taskRecommendations, parents, currentWeek, loadCurrentWeekTasks]);
   
-  // Effect hook to load all dashboard data
-  useEffect(() => {
-    const loadDashboardData = async () => {
-      try {
-        // Set all sections to loading
-        setLoading({
-          harmonyPulse: true,
-          memberJourneys: true,
-          childDevelopment: true,
-          timeline: true,
-          impactHub: true
-        });
+ // Effect hook to load all dashboard data
+useEffect(() => {
+  const loadDashboardData = async () => {
+    try {
+      // Set all sections to loading
+      setLoading({
+        harmonyPulse: true,
+        memberJourneys: true,
+        childDevelopment: true,
+        timeline: true,
+        impactHub: true
+      });
+      
+      if (!familyId) {
+        console.log("No family ID available, cannot load dashboard data");
+        return;
+      }
+      
+      console.log("Loading dashboard data for family:", familyId);
+      
+      // 1. Calculate weighted scores for Harmony Pulse
+      if (fullQuestionSet && Object.keys(surveyResponses).length > 0) {
+        const scores = calculateBalanceScores(fullQuestionSet, surveyResponses, familyPriorities);
+        setWeightedScores(scores);
         
-        if (!familyId) {
-          console.log("No family ID available, cannot load dashboard data");
-          return;
+        // Update global state with weighted scores for other components
+        if (scores && typeof setGlobalWeightedScores === 'function') {
+          setGlobalWeightedScores(scores);
         }
         
-        console.log("Loading dashboard data for family:", familyId);
+        // Calculate harmony score (0-100) based on balance and other factors
+        const balanceScore = calculateHarmonyScore(scores);
+        setHarmonyScore(balanceScore);
         
-        // 1. Calculate weighted scores for Harmony Pulse
-        if (fullQuestionSet && Object.keys(surveyResponses).length > 0) {
-          const scores = calculateBalanceScores(fullQuestionSet, surveyResponses, familyPriorities);
-          setWeightedScores(scores);
-          
-          // Update global state with weighted scores for other components
-          if (scores && typeof setGlobalWeightedScores === 'function') {
-            setGlobalWeightedScores(scores);
-          }
-          
-          // Calculate harmony score (0-100) based on balance and other factors
-          const balanceScore = calculateHarmonyScore(scores);
-          setHarmonyScore(balanceScore);
-          
-          setLoading(prev => ({ ...prev, harmonyPulse: false }));
-        } else {
-          console.log("Insufficient data for weighted scores calculation");
-          setLoading(prev => ({ ...prev, harmonyPulse: false }));
-        }
-        
-        // 2. Generate member-specific insights using AI Service
-        const memberData = {};
-        
-        for (const member of familyMembers) {
-          // Different approach for parents vs children
-          if (isParent(member)) {
-            try {
-              // Use AllieAIService for parent insights
-              const insights = await AllieAIService.generateDashboardInsights(
-                familyId,
-                currentWeek,
-                { memberId: member.id, memberType: 'parent' }
-              );
-              
-              // Process and format the insights
-              memberData[member.id] = processParentInsights(member, insights);
-            } catch (error) {
-              console.error(`Error generating AI insights for parent ${member.id}:`, error);
-              // Fallback to regular analysis if AI fails
-              memberData[member.id] = await generateParentInsights(member);
-            }
-          } else if (isChild(member)) {
-            try {
-              // Use AllieAIService for child journey insights
-              const insights = await AllieAIService.generateDashboardInsights(
-                familyId,
-                currentWeek,
-                { memberId: member.id, memberType: 'child' }
-              );
-              
-              // Process and format the insights
-              memberData[member.id] = processChildJourneyInsights(member, insights);
-            } catch (error) {
-              console.error(`Error generating AI insights for child ${member.id}:`, error);
-              // Fallback to regular analysis if AI fails
-              memberData[member.id] = await generateChildJourneyInsights(member);
-            }
-          }
-        }
-        
-        setMemberInsights(memberData);
-        setLoading(prev => ({ ...prev, memberJourneys: false }));
-        
-        // 3. Load child tracking data for all children
-        const trackingData = {};
-        
-        for (const child of children) {
+        setLoading(prev => ({ ...prev, harmonyPulse: false }));
+      } else {
+        console.log("Insufficient data for weighted scores calculation");
+        setLoading(prev => ({ ...prev, harmonyPulse: false }));
+      }
+      
+      // Add a short delay before making more AI calls
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // 2. Generate member-specific insights using AI Service
+      const memberData = {};
+      
+      for (const member of familyMembers) {
+        // Different approach for parents vs children
+        if (isParent(member)) {
           try {
-            // Fetch child-specific tracking data from database
-            const childData = await fetchChildTrackingData(child.id);
-            trackingData[child.id] = childData;
-          } catch (error) {
-            console.error(`Error loading tracking data for child ${child.id}:`, error);
-            trackingData[child.id] = null;
-          }
-        }
-        
-        setChildTrackingData(trackingData);
-        
-        // 4. Generate child development insights using AI service
-        const childDevelopmentData = {};
-        
-        for (const child of children) {
-          try {
-            // Use AllieAIService to generate insights with real data
-            const insights = await AllieAIService.generateChildInsights(
-              familyId, 
-              { childId: child.id, childData: trackingData[child.id] }
+            // Use AllieAIService for parent insights
+            const insights = await AllieAIService.generateDashboardInsights(
+              familyId,
+              currentWeek,
+              { memberId: member.id, memberType: 'parent', componentId: 'memberJourneys' }
             );
             
-            childDevelopmentData[child.id] = insights;
+            // Process and format the insights
+            memberData[member.id] = processParentInsights(member, insights);
+            
+            // Add a small delay between API calls to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 300));
           } catch (error) {
-            console.error(`Error generating AI insights for child ${child.id}:`, error);
-            // Fallback to local generation if AI service fails
-            childDevelopmentData[child.id] = await generateChildDevelopmentInsights(child, trackingData[child.id]);
+            console.error(`Error generating AI insights for parent ${member.id}:`, error);
+            // Fallback to regular analysis if AI fails
+            memberData[member.id] = await generateParentInsights(member);
+          }
+        } else if (isChild(member)) {
+          try {
+            // Use AllieAIService for child journey insights
+            const insights = await AllieAIService.generateDashboardInsights(
+              familyId,
+              currentWeek,
+              { memberId: member.id, memberType: 'child', componentId: 'memberJourneys' }
+            );
+            
+            // Process and format the insights
+            memberData[member.id] = processChildJourneyInsights(member, insights);
+            
+            // Add a small delay between API calls to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 300));
+          } catch (error) {
+            console.error(`Error generating AI insights for child ${member.id}:`, error);
+            // Fallback to regular analysis if AI fails
+            memberData[member.id] = await generateChildJourneyInsights(member);
           }
         }
-        
-        setChildInsights(childDevelopmentData);
-        setLoading(prev => ({ ...prev, childDevelopment: false }));
-        
-        // 5. Build transformation timeline data
-        const timeline = await buildTimelineData();
-        setTimelineData(timeline);
-        setLoading(prev => ({ ...prev, timeline: false }));
-        
-        // 6. Calculate impact data using AI service
-        let impact;
-        try {
-          impact = await AllieAIService.generateBalanceImpactData(familyId, currentWeek);
-        } catch (error) {
-          console.error("Error generating AI impact data:", error);
-          // Fallback to local calculation if AI fails
-          impact = await calculateImpactData();
-        }
-        
-        setImpactData(impact);
-        setLoading(prev => ({ ...prev, impactHub: false }));
-        
-        // Set first parent as default selected member if none selected
-        if (!selectedMember && parents.length > 0) {
-          setSelectedMember(parents[0].id);
-        }
-        
-        // Set first child as default selected child if none selected
-        if (!selectedChildId && children.length > 0) {
-          setSelectedChildId(children[0].id);
-        }
-      } catch (error) {
-        console.error("Error loading dashboard data:", error);
-        
-        // Set all sections to not loading on error
-        setLoading({
-          harmonyPulse: false,
-          memberJourneys: false,
-          childDevelopment: false,
-          timeline: false,
-          impactHub: false
-        });
       }
-    };
-    
-    loadDashboardData();
-  }, [familyId, fullQuestionSet, surveyResponses, familyMembers, selectedMember, selectedChildId, completedWeeks, currentWeek, children, parents]);
+      
+      setMemberInsights(memberData);
+      setLoading(prev => ({ ...prev, memberJourneys: false }));
+      
+      // Add a short delay before making more AI calls
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // 3. Load child tracking data for all children
+      const trackingData = {};
+      
+      for (const child of children) {
+        try {
+          // Fetch child-specific tracking data from database
+          const childData = await fetchChildTrackingData(child.id);
+          trackingData[child.id] = childData;
+        } catch (error) {
+          console.error(`Error loading tracking data for child ${child.id}:`, error);
+          trackingData[child.id] = null;
+        }
+      }
+      
+      setChildTrackingData(trackingData);
+      
+      // 4. Generate child development insights using AI service
+      const childDevelopmentData = {};
+      
+      for (const child of children) {
+        try {
+          // Use AllieAIService to generate insights with real data
+          const insights = await AllieAIService.generateChildInsights(
+            familyId, 
+            { childId: child.id, childData: trackingData[child.id] }
+          );
+          
+          childDevelopmentData[child.id] = insights;
+          
+          // Add a small delay between API calls to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 300));
+        } catch (error) {
+          console.error(`Error generating AI insights for child ${child.id}:`, error);
+          // Fallback to local generation if AI service fails
+          childDevelopmentData[child.id] = await generateChildDevelopmentInsights(child, trackingData[child.id]);
+        }
+      }
+      
+      setChildInsights(childDevelopmentData);
+      setLoading(prev => ({ ...prev, childDevelopment: false }));
+      
+      // 5. Build transformation timeline data
+      const timeline = await buildTimelineData();
+      setTimelineData(timeline);
+      setLoading(prev => ({ ...prev, timeline: false }));
+      
+      // Add a longer delay before making the final AI call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // 6. Calculate impact data using AI service
+      let impact;
+      try {
+        impact = await AllieAIService.generateBalanceImpactData(familyId, currentWeek);
+      } catch (error) {
+        console.error("Error generating AI impact data:", error);
+        // Fallback to local calculation if AI fails
+        impact = await calculateImpactData();
+      }
+      
+      setImpactData(impact);
+      setLoading(prev => ({ ...prev, impactHub: false }));
+      
+      // Set first parent as default selected member if none selected
+      if (!selectedMember && parents.length > 0) {
+        setSelectedMember(parents[0].id);
+      }
+      
+      // Set first child as default selected child if none selected
+      if (!selectedChildId && children.length > 0) {
+        setSelectedChildId(children[0].id);
+      }
+    } catch (error) {
+      console.error("Error loading dashboard data:", error);
+      
+      // Set all sections to not loading on error
+      setLoading({
+        harmonyPulse: false,
+        memberJourneys: false,
+        childDevelopment: false,
+        timeline: false,
+        impactHub: false
+      });
+    }
+  };
   
+  loadDashboardData();
+}, [familyId, fullQuestionSet, surveyResponses, familyMembers, selectedMember, selectedChildId, completedWeeks, currentWeek, children, parents]);
+
   // Fetch child tracking data from database
   const fetchChildTrackingData = async (childId) => {
     if (!familyId || !childId) return null;

@@ -133,7 +133,7 @@ async generateBalanceImpactData(familyId, currentWeek) {
   try {
     console.log(`Generating balance impact data for family ${familyId}, week ${currentWeek}`);
     
-    // First try to get family data for context
+    // First try to get family data for context - use the correct function name
     const familyData = await this.getFamilyContext(familyId);
     
     // Create a prompt for Claude to generate impact insights
@@ -1711,12 +1711,28 @@ async processTravelFromChat(message, familyId) {
  * @returns {Promise<Array>} Array of personalized insights
  */
 // Corrected generateChildInsights method for src/services/AllieAIService.js
+// NEW CODE to replace it with improved loop protection
 async generateChildInsights(familyId, childrenData) {
   try {
     if (!familyId || !childrenData) {
       console.warn("Missing required parameters in generateChildInsights");
       return [];
     }
+    
+    // ADD LOOP PROTECTION - Check if we're already processing insights for this family
+    if (this._processingInsights && this._processingInsights[familyId]) {
+      console.log("Already processing insights for this family, returning fallback");
+      return this.getFallbackChildInsights(childrenData);
+    }
+    
+    // Set processing flag
+    if (!this._processingInsights) this._processingInsights = {};
+    this._processingInsights[familyId] = true;
+    
+    // Set timeout to clear flag after 10 seconds no matter what
+    setTimeout(() => {
+      if (this._processingInsights) this._processingInsights[familyId] = false;
+    }, 10000);
     
     console.log("Generating child insights for family:", familyId);
     
@@ -1829,11 +1845,18 @@ DO NOT wrap your response in markdown code blocks or use \`\`\`json. Return ONLY
       return responseData.insights;
     } catch (error) {
       console.error("Error generating child insights:", error);
+      // Clear processing flag
+      if (this._processingInsights) this._processingInsights[familyId] = false;
       return localInsights;
     }
   } catch (error) {
     console.error("Error in insight generation:", error);
+    // Clear processing flag
+    if (this._processingInsights) this._processingInsights[familyId] = false;
     return this.getFallbackChildInsights(childrenData);
+  } finally {
+    // Make sure we always clear the processing flag
+    if (this._processingInsights) this._processingInsights[familyId] = false;
   }
 }
 

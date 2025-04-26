@@ -189,27 +189,51 @@ class ClaudeService {
   async generateResponse(messages, context, options = {}) {
     try {
       // Add a call tracking mechanism to prevent infinite loops
-      if (!this._callTracker) {
-        this._callTracker = {
-          count: 0,
-          lastReset: Date.now()
-        };
-      }
-      
-      // Reset counter every 10 seconds
-      if (Date.now() - this._callTracker.lastReset > 10000) {
-        this._callTracker.count = 0;
-        this._callTracker.lastReset = Date.now();
-      }
-      
-      // Increment call count
-      this._callTracker.count++;
-      
-      // Prevent recursive calls that might cause freezing
-      if (this._callTracker.count > 5) {
-        console.warn("Too many API calls in a short period, throttling to prevent loops");
-        return "I'm processing multiple requests. Please wait a moment before asking another question.";
-      }
+      // NEW CODE with improved tracking and per-component throttling
+// Add a call tracking mechanism to prevent infinite loops
+if (!this._callTracker) {
+  this._callTracker = {
+    count: 0,
+    lastReset: Date.now(),
+    pendingComponents: new Set()
+  };
+}
+
+// Reset counter every 15 seconds (increased from 10)
+if (Date.now() - this._callTracker.lastReset > 15000) {
+  this._callTracker.count = 0;
+  this._callTracker.lastReset = Date.now();
+  this._callTracker.pendingComponents.clear();
+}
+
+// Get component identifier from context
+const componentId = context?.componentId || 'default';
+
+// Check if this component is already making a request
+if (this._callTracker.pendingComponents.has(componentId)) {
+  console.warn(`Component ${componentId} already has a pending request, throttling`);
+  return "I'm already processing a request from this component. Please wait for it to complete.";
+}
+
+// Add to pending components
+this._callTracker.pendingComponents.add(componentId);
+
+// Increment call count
+this._callTracker.count++;
+
+// Prevent recursive calls that might cause freezing
+if (this._callTracker.count > 8) { // Increased from 5 to 8
+  console.warn("Too many API calls in a short period, throttling to prevent loops");
+  return "I'm processing multiple requests. Please wait a moment before asking another question.";
+}
+
+// Add a try-finally block to ensure pendingComponents gets cleaned up
+try {
+  // Original API call code goes here
+} finally {
+  // Remove from pending components when done
+  this._callTracker.pendingComponents.delete(componentId);
+}
       
       // Early exit if AI calls are disabled
       if (this.disableAICalls) {
@@ -459,24 +483,66 @@ try {
   }
         
         // Try to parse the JSON with better error handling
-        let result;
-        try {
-          result = await response.json();
-        } catch (jsonError) {
-          console.error("Error parsing JSON from Claude API:", jsonError);
-          // Try to get the raw text to see what's wrong
-          const rawText = await response.text();
-          console.warn("Raw response text (first 200 chars):", rawText.substring(0, 200));
-          return this.createPersonalizedResponse(lastUserMessage, context);
-        }
-        
-        // Check for valid response
-        if (!result || !result.content || !result.content[0]) {
-          console.error("Invalid response format from Claude API:", result);
-          return this.createPersonalizedResponse(lastUserMessage, context);
-        }
-        
-        return result.content[0].text;
+let result;
+try {
+  result = await response.json();
+  
+  // Add more detailed logging to see the actual structure
+  console.log("Claude API response structure:", JSON.stringify(result).substring(0, 200) + "...");
+} catch (jsonError) {
+  console.error("Error parsing JSON from Claude API:", jsonError);
+  // Try to get the raw text to see what's wrong
+  const rawText = await response.text();
+  console.warn("Raw response text (first 200 chars):", rawText.substring(0, 200));
+  return this.createPersonalizedResponse(lastUserMessage, context);
+}
+
+// Enhanced validation with better error handling
+if (!result) {
+  console.error("Empty result from Claude API");
+  return this.createPersonalizedResponse(lastUserMessage, context);
+}
+
+// Check content structure with better logging
+if (!result.content) {
+  console.error("Missing 'content' in Claude API response:", result);
+  return this.createPersonalizedResponse(lastUserMessage, context);
+}
+
+if (!Array.isArray(result.content) || result.content.length === 0) {
+  console.error("'content' is not an array or is empty:", result.content);
+  return this.createPersonalizedResponse(lastUserMessage, context);
+}
+
+if (!result.content[0]) {
+  console.error("First content item is undefined:", result.content);
+  return this.createPersonalizedResponse(lastUserMessage, context);
+}
+
+// Check if text property exists and has a valid value
+if (result.content[0].text === undefined || result.content[0].text === null) {
+  console.error("'text' property is undefined in content:", result.content[0]);
+  
+  // Try to extract text from a different format if possible
+  if (result.content[0].type === "text" && result.content[0].value) {
+    return result.content[0].value;
+  }
+  
+  // If there's any string content at all, use that
+  if (typeof result.content[0] === 'string') {
+    return result.content[0];
+  }
+  
+  // Last resort: check if the entire response is just a string
+  if (typeof result === 'string') {
+    return result;
+  }
+  
+  return this.createPersonalizedResponse(lastUserMessage, context);
+}
+
+// Successfully extracted the text
+return result.content[0].text;
       } catch (error) {
         clearTimeout(timeoutId);
         console.error("Error in Claude API call:", error.message);
