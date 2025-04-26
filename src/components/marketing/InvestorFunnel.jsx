@@ -33,8 +33,42 @@ const InvestorFunnel = () => {
     const totalSlides = 22;
     const sliderRef = useRef(null);
     
+    const nextSlide = () => {
+      if (currentSlide < totalSlides) {
+        setCurrentSlide(currentSlide + 1);
+      }
+    };
+  
+    const prevSlide = () => {
+      if (currentSlide > 1) {
+        setCurrentSlide(currentSlide - 1);
+      }
+    };
+  
+    const goToSlide = (slide) => {
+      if (slide >= 1 && slide <= totalSlides) {
+        setCurrentSlide(slide);
+      }
+    };
+  
+    const handleKeyDown = (e) => {
+      if (e.key === 'ArrowRight') {
+        nextSlide();
+      } else if (e.key === 'ArrowLeft') {
+        prevSlide();
+      }
+    };
+    
+    // All useEffect hooks must be called before any conditional returns
     useEffect(() => {
       window.scrollTo(0, 0);
+    }, [currentSlide]);
+    
+    useEffect(() => {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+      };
     }, [currentSlide]);
   
     const handleCorrectPassword = () => {
@@ -44,40 +78,6 @@ const InvestorFunnel = () => {
     if (!isAuthenticated) {
       return <PasswordProtection onCorrectPassword={handleCorrectPassword} />;
     }
-  
-
-  const nextSlide = () => {
-    if (currentSlide < totalSlides) {
-      setCurrentSlide(currentSlide + 1);
-    }
-  };
-
-  const prevSlide = () => {
-    if (currentSlide > 1) {
-      setCurrentSlide(currentSlide - 1);
-    }
-  };
-
-  const goToSlide = (slide) => {
-    if (slide >= 1 && slide <= totalSlides) {
-      setCurrentSlide(slide);
-    }
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'ArrowRight') {
-      nextSlide();
-    } else if (e.key === 'ArrowLeft') {
-      prevSlide();
-    }
-  };
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [currentSlide]);
 
   const handleQuizAnswer = (question, answer) => {
     setQuizAnswers({
