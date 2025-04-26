@@ -60,39 +60,61 @@ function GoogleMapsApiLoader() {
       return new Promise((resolve, reject) => {
         try {
           // Set a global callback that will be called when the API loads
-// NEW CODE
-window.initGoogleMapsApi = () => {
-  console.log("Google Maps API loaded successfully");
-  
-  try {
-    // Use window.google to access the global Google object
-    if (window.google && window.google.maps) {
-      // Import the places library using the recommended method
-      window.google.maps.importLibrary("places").then((placesLibrary) => {
-        console.log("Places library loaded successfully");
-        
-        // Dispatch an event to notify components that the API is loaded
-        window.dispatchEvent(new Event('google-maps-api-loaded'));
-        resolve(true);
-      }).catch(error => {
-        console.error("Error importing Places library:", error);
-        reject(error);
-      });
-    } else {
-      console.error("Google Maps API not available on window object");
-      reject(new Error("Google Maps API not available"));
-    }
-  } catch (error) {
-    console.error("Error initializing Places library:", error);
-    reject(error);
-  }
-};
-          
+          window.initGoogleMapsApi = () => {
+            console.log("Google Maps API loaded successfully");
+            
+            try {
+              // Use window.google to access the global Google object
+              if (window.google && window.google.maps) {
+                console.log("Maps object available, attempting to load Places library");
+                
+                // Check if Places is already available
+                if (window.google.maps.places) {
+                  console.log("Places library already available");
+                  window.dispatchEvent(new Event('google-maps-api-loaded'));
+                  resolve(true);
+                  return;
+                }
+                
+                // Import the places library using the recommended method
+                window.google.maps.importLibrary("places").then((placesLibrary) => {
+                  console.log("Places library loaded successfully:", placesLibrary);
+                  
+                  // Check if the PlaceAutocompleteElement is available
+                  if (window.google.maps.places.PlaceAutocompleteElement) {
+                    console.log("PlaceAutocompleteElement is available (new API)");
+                  } else {
+                    console.log("PlaceAutocompleteElement not available, will use Autocomplete instead (legacy API)");
+                  }
+                  
+                  // Dispatch an event to notify components that the API is loaded
+                  window.dispatchEvent(new Event('google-maps-api-loaded'));
+                  resolve(true);
+                }).catch(error => {
+                  console.error("Error importing Places library:", error);
+                  // Even if the modern API fails, we can try to use the legacy approach
+                  if (window.google.maps.places && window.google.maps.places.Autocomplete) {
+                    console.log("Falling back to legacy Autocomplete API");
+                    window.dispatchEvent(new Event('google-maps-api-loaded'));
+                    resolve(true);
+                  } else {
+                    reject(error);
+                  }
+                });
+              } else {
+                console.error("Google Maps API not available on window object");
+                reject(new Error("Google Maps API not available"));
+              }
+            } catch (error) {
+              console.error("Error initializing Places library:", error);
+              reject(error);
+            }
+          };          
           // Create and append the script tag - use recommended loading pattern
           const script = document.createElement('script');
-          script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMapsApi&v=weekly&libraries=places`;
-          script.async = true;
-          script.defer = true;
+script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMapsApi&v=weekly&libraries=places,maps,geocoding`;
+script.async = true;
+script.defer = true;
           
           // Handle loading errors
           script.onerror = (err) => {

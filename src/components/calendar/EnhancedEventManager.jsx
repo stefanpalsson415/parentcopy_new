@@ -326,7 +326,7 @@ const EnhancedEventManager = ({
     }
   }, [event.category, event.eventType, familyMembers]);
   
- // Initialize Google Places Autocomplete
+ // NEW CODE (revised initPlacesAutocomplete function)
 const initPlacesAutocomplete = async () => {
   if (!window.google || !window.google.maps) {
     console.warn("Google Maps API not available");
@@ -346,10 +346,11 @@ const initPlacesAutocomplete = async () => {
       }
     }
 
-    // Verify the PlaceAutocompleteElement exists
-    if (!window.google.maps.places.PlaceAutocompleteElement) {
-      console.error("PlaceAutocompleteElement is not available");
-      return false;
+    // Check if we should use the legacy Autocomplete API instead
+    // This provides a fallback if PlaceAutocompleteElement is not available
+    const useLegacyAPI = !window.google.maps.places.PlaceAutocompleteElement;
+    if (useLegacyAPI) {
+      console.log("Using legacy Autocomplete API as a fallback");
     }
 
     const container = document.getElementById('places-container');
@@ -364,151 +365,185 @@ const initPlacesAutocomplete = async () => {
       container.removeChild(container.firstChild);
     }
     
-    // Add custom styles for the PlaceAutocompleteElement
-    // This targets the shadow DOM parts
-    const styleEl = document.createElement('style');
-    styleEl.textContent = `
-      #places-container {
-        width: 100%;
-      }
-      #place-autocomplete-element::part(input) {
-        width: 100%;
-        padding: 0.5rem;
-        border-radius: 0.375rem;
-        border: 1px solid #d1d5db;
-        font-family: Roboto, sans-serif;
-        font-size: 0.875rem;
-      }
-      #place-autocomplete-element::part(menu) {
-        margin-top: 0.25rem;
-        border-radius: 0.375rem;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        z-index: 100;
-      }
-      #place-autocomplete-element::part(item) {
-        padding: 0.5rem 0.75rem;
-        font-family: Roboto, sans-serif;
-        font-size: 0.875rem;
-      }
-      #place-autocomplete-element::part(item:hover) {
-        background-color: #f3f4f6;
-      }
-      #place-autocomplete-element::part(item[active]) {
-        background-color: #e5e7eb;
-      }
-    `;
-    document.head.appendChild(styleEl);
-    
-    // Create the PlaceAutocompleteElement with the correct properties according to 2025 API
-    console.log("Creating PlaceAutocompleteElement with 2025 API...");
-    const placeAutocompleteElement = new window.google.maps.places.PlaceAutocompleteElement({
-      // IMPORTANT: Remove 'inputPlaceholder' which doesn't exist in the API
-      // Instead, we'll use CSS to style the input and add a placeholder through DOM
-      types: ['address', 'establishment'], // Allow addresses and points of interest
-      // Use correct property names according to 2025 API
-      locationBias: navigator.geolocation ? 
-        { radius: 10000, center: { lat: 0, lng: 0 } } : 
-        undefined
-    });
-    
-    // Set component ID for CSS targeting
-    placeAutocompleteElement.id = 'place-autocomplete-element';
-    
-    // Add it to the container
-    container.appendChild(placeAutocompleteElement);
-    placeAutocompleteElementRef.current = placeAutocompleteElement;
-    
-    // Now set the placeholder through DOM manipulation after the element is added
-    setTimeout(() => {
-      try {
-        // Wait for shadow DOM to be created
-        const inputElement = placeAutocompleteElement.shadowRoot?.querySelector('input');
-        if (inputElement) {
-          inputElement.placeholder = 'Where is this event happening?';
-        }
-      } catch (e) {
-        console.warn("Could not set input placeholder:", e);
-      }
-    }, 100);
-    
-    // Add event listener for place selection - use the correct event name
-    placeAutocompleteElement.addEventListener('gmp-select', async (event) => {
-      try {
-        console.log("Place selected:", event);
-        
-        // Get place prediction from the event
-        const placePrediction = event.placePrediction;
-        if (!placePrediction) {
-          console.error("No place prediction in event");
-          return;
-        }
-        
-        // Convert to Place and fetch fields
-        const place = placePrediction.toPlace();
-        
-        // Fetch the fields we need with the new API pattern
-        await place.fetchFields({
-          fields: ["formattedAddress", "displayName", "name", "location"]
-        });
-        
-        console.log("Fetched place fields:", place);
-        
-        // Extract location text - prioritize formattedAddress for consistency
-        let locationText = "";
-        
-        if (place.formattedAddress) {
-          locationText = place.formattedAddress;
-        } else if (place.displayName) {
-          locationText = place.displayName;
-        } else if (place.name) {
-          locationText = place.name;
-        }
-        
-        if (locationText) {
-          console.log("Setting location to:", locationText);
-          // Update in a single state change to prevent UI flicker
-          setEvent(prev => ({ 
-            ...prev, 
-            location: locationText,
-            // Store coordinates if available for future use
-            coordinates: place.location ? { 
-              lat: place.location.lat, 
-              lng: place.location.lng 
-            } : prev.coordinates
-          }));
-          
-          prevLocationRef.current = locationText;
-        }
-      } catch (error) {
-        console.error("Error handling place selection:", error);
-      }
-    });
-    
-    // Try to set initial location value if available
-    if (event.location && prevLocationRef.current !== event.location) {
-      prevLocationRef.current = event.location;
+    if (useLegacyAPI) {
+      // Legacy approach - create a standard input element with Autocomplete
+      const input = document.createElement('input');
+      input.id = 'location-input-legacy';
+      input.className = 'w-full p-2 py-2.5 pl-9 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500';
+      input.placeholder = 'Where is this event happening?';
+      input.value = event.location || '';
+      container.appendChild(input);
       
-      // Initialize input with current location if available
-      try {
-        // Use setTimeout to ensure the shadow DOM has been created
-        setTimeout(() => {
-          const input = placeAutocompleteElement.shadowRoot?.querySelector('input');
-          if (input) {
-            input.value = event.location;
+      // Create Autocomplete instance
+      const autocomplete = new window.google.maps.places.Autocomplete(input, {
+        types: ['address', 'establishment'],
+      });
+      
+      // Add event listener
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        if (!place.geometry) return;
+        
+        const locationText = place.formatted_address || place.name || '';
+        console.log("Setting location to:", locationText);
+        
+        setEvent(prev => ({ 
+          ...prev, 
+          location: locationText,
+          coordinates: place.geometry?.location ? { 
+            lat: place.geometry.location.lat(), 
+            lng: place.geometry.location.lng() 
+          } : prev.coordinates
+        }));
+        
+        prevLocationRef.current = locationText;
+      });
+      
+      // Store reference
+      placeAutocompleteElementRef.current = input;
+      
+      console.log("Legacy Autocomplete initialized successfully");
+      return true;
+    } else {
+      // Modern approach with PlaceAutocompleteElement
+      // Add custom styles for the PlaceAutocompleteElement with improved positioning
+      const styleEl = document.createElement('style');
+      styleEl.textContent = `
+        #places-container {
+          width: 100%;
+          position: relative;
+        }
+        #place-autocomplete-element::part(input) {
+          width: 100%;
+          padding: 0.625rem 0.5rem 0.625rem 2rem; /* Added padding-left for icon */
+          border-radius: 0.375rem;
+          border: 1px solid #d1d5db;
+          font-family: Roboto, sans-serif;
+          font-size: 0.875rem;
+        }
+        #place-autocomplete-element::part(menu) {
+          margin-top: 0.25rem;
+          border-radius: 0.375rem;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+          z-index: 100;
+        }
+        #place-autocomplete-element::part(item) {
+          padding: 0.5rem 0.75rem;
+          font-family: Roboto, sans-serif;
+          font-size: 0.875rem;
+        }
+        #place-autocomplete-element::part(item:hover) {
+          background-color: #f3f4f6;
+        }
+        #place-autocomplete-element::part(item[active]) {
+          background-color: #e5e7eb;
+        }
+      `;
+      document.head.appendChild(styleEl);
+      
+      // Create the PlaceAutocompleteElement
+      console.log("Creating PlaceAutocompleteElement with 2025 API...");
+      const placeAutocompleteElement = new window.google.maps.places.PlaceAutocompleteElement({
+        types: ['address', 'establishment'],
+        locationBias: navigator.geolocation ? 
+          { radius: 10000, center: { lat: 0, lng: 0 } } : 
+          undefined
+      });
+      
+      // Set ID for CSS targeting
+      placeAutocompleteElement.id = 'place-autocomplete-element';
+      
+      // Add it to the container
+      container.appendChild(placeAutocompleteElement);
+      placeAutocompleteElementRef.current = placeAutocompleteElement;
+      
+      // Set placeholder and initialize value
+      setTimeout(() => {
+        try {
+          const inputElement = placeAutocompleteElement.shadowRoot?.querySelector('input');
+          if (inputElement) {
+            inputElement.placeholder = 'Where is this event happening?';
+            // Important: Move the icon inside the shadow DOM for proper positioning
+            const iconSpan = document.createElement('span');
+            iconSpan.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide-map-pin" style="color: #9ca3af; position: absolute; left: 8px; top: 50%; transform: translateY(-50%);"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>`;
+            
+            // Add the icon to the shadow DOM near the input
+            const inputParent = inputElement.parentNode;
+            if (inputParent) {
+              inputParent.style.position = 'relative';
+              inputParent.insertBefore(iconSpan, inputElement);
+            }
+            
+            // Set value if we have stored location
+            if (event.location) {
+              inputElement.value = event.location;
+            }
           }
-        }, 100);
-      } catch (err) {
-        console.warn("Could not initialize input value:", err);
-      }
+        } catch (e) {
+          console.warn("Could not modify shadow DOM:", e);
+        }
+      }, 200);
+      
+      // Add event listener for place selection
+      placeAutocompleteElement.addEventListener('gmp-select', async (event) => {
+        try {
+          console.log("Place selected:", event);
+          
+          // Get place prediction and convert to Place
+          const placePrediction = event.placePrediction;
+          if (!placePrediction) {
+            console.error("No place prediction in event");
+            return;
+          }
+          
+          // Convert to Place and fetch fields
+          const place = placePrediction.toPlace();
+          
+          // Fetch fields with the new API pattern
+          await place.fetchFields({
+            fields: ["formattedAddress", "displayName", "name", "location"]
+          });
+          
+          console.log("Fetched place fields:", place);
+          
+          // Extract location text with fallbacks
+          let locationText = place.formattedAddress || place.displayName || place.name || "";
+          
+          if (locationText) {
+            console.log("Setting location to:", locationText);
+            
+            // Update state with location and coordinates
+            setEvent(prev => ({ 
+              ...prev, 
+              location: locationText,
+              coordinates: place.location ? { 
+                lat: place.location.lat, 
+                lng: place.location.lng 
+              } : prev.coordinates
+            }));
+            
+            prevLocationRef.current = locationText;
+            
+            // Manually update fallback input if it exists
+            const fallbackInput = document.getElementById('location-input');
+            if (fallbackInput) {
+              fallbackInput.value = locationText;
+            }
+          }
+        } catch (error) {
+          console.error("Error handling place selection:", error);
+        }
+      });
+      
+      console.log("PlaceAutocompleteElement initialized successfully");
+      return true;
     }
-    
-    console.log("PlaceAutocompleteElement initialized successfully");
-    return true;
   } catch (error) {
     console.error("Error initializing Places API:", error);
     return false;
   }
 };
+
   
   // Initialize Places API after DOM is ready
 useEffect(() => {
@@ -574,7 +609,6 @@ useEffect(() => {
     prevLocationRef.current = value;
   };
   
-  // Handle form save
   const handleSave = async () => {
     try {
       setLoading(true);
@@ -591,6 +625,34 @@ useEffect(() => {
         setError("Please select a date and time");
         setLoading(false);
         return;
+      }
+      
+      // Check if we need to update location from input field
+      // This ensures we capture any manually entered text that might not be in state yet
+      const manualInput = document.getElementById('location-input');
+      if (manualInput && manualInput.value && manualInput.value !== event.location) {
+        handleManualLocationInput(manualInput.value);
+      }
+      
+      // Similarly, check if we need to update from the PlaceAutocompleteElement
+      if (placeAutocompleteElementRef.current) {
+        try {
+          if (typeof placeAutocompleteElementRef.current.shadowRoot === 'object') {
+            // Modern API case
+            const shadowInput = placeAutocompleteElementRef.current.shadowRoot?.querySelector('input');
+            if (shadowInput && shadowInput.value && shadowInput.value !== event.location) {
+              console.log("Updating location from shadow DOM input:", shadowInput.value);
+              setEvent(prev => ({ ...prev, location: shadowInput.value }));
+            }
+          } else if (placeAutocompleteElementRef.current.value && 
+                    placeAutocompleteElementRef.current.value !== event.location) {
+            // Legacy API case
+            console.log("Updating location from legacy input:", placeAutocompleteElementRef.current.value);
+            setEvent(prev => ({ ...prev, location: placeAutocompleteElementRef.current.value }));
+          }
+        } catch (e) {
+          console.warn("Error checking location input value:", e);
+        }
       }
       
       // Format the event for the calendar service
@@ -610,7 +672,7 @@ useEffect(() => {
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
         },
         location: event.location || '',
-        
+          
         // Add reminders if selected
         reminders: selectedReminders.length > 0 ? {
           useDefault: false,
@@ -2591,28 +2653,25 @@ useEffect(() => {
         </div>
         
         {/* Location Section */}
-<div>
+        <div>
   <label className="block text-sm font-medium mb-1 text-gray-700">
     Location
   </label>
   
-  {/* Container for Places API with improved styling */}
+  {/* Container for Places API */}
   <div className="relative">
     <div 
       id="places-container" 
-      className="w-full border rounded-md overflow-hidden"
+      className="w-full overflow-hidden"
     ></div>
     
-    {/* Map pin icon to improve UI (positioned absolutely) */}
-    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-400">
-      <MapPin size={16} />
-    </div>
+    {/* Icon is now injected within the component initialization */}
   </div>
   
-  {/* Manual fallback input */}
+  {/* Enhanced Manual fallback input */}
   {!placesInitialized && (
-    <div className="flex items-center border rounded-md overflow-hidden mt-2">
-      <div className="p-2 text-gray-400">
+    <div className="flex items-center border rounded-md overflow-hidden mt-2 relative">
+      <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-400">
         <MapPin size={16} />
       </div>
       <input
@@ -2620,20 +2679,20 @@ useEffect(() => {
         id="location-input"
         value={event.location || ''}
         onChange={(e) => handleManualLocationInput(e.target.value)}
-        className="w-full p-2 text-sm border-0 focus:ring-0"
+        className="w-full p-2 pl-9 text-sm border-0 focus:ring-0"
         placeholder="Where is this event happening?"
       />
     </div>
   )}
   
-  {/* Current location value display */}
+  {/* Updated Current location value display */}
   {event.location && (
-    <div className="text-xs text-blue-600 mt-1 pl-2">
-      Current location: {event.location}
+    <div className="text-xs text-blue-600 mt-1 flex items-center">
+      <MapPin size={12} className="mr-1" />
+      <span>Current location: <strong>{event.location}</strong></span>
     </div>
   )}
-</div>
-        
+</div>        
         {/* Event Attendees Section */}
         {(event.category === 'meeting' || event.eventType === 'meeting' || event.category === 'general') ? (
           <div>
