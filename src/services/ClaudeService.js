@@ -202,55 +202,44 @@ class ClaudeService {
   }
   
   
-
   async generateResponse(messages, context, options = {}) {
     try {
       // Add a call tracking mechanism to prevent infinite loops
-      // NEW CODE with improved tracking and per-component throttling
-// Add a call tracking mechanism to prevent infinite loops
-if (!this._callTracker) {
-  this._callTracker = {
-    count: 0,
-    lastReset: Date.now(),
-    pendingComponents: new Set()
-  };
-}
-
-// Reset counter every 15 seconds (increased from 10)
-if (Date.now() - this._callTracker.lastReset > 15000) {
-  this._callTracker.count = 0;
-  this._callTracker.lastReset = Date.now();
-  this._callTracker.pendingComponents.clear();
-}
-
-// Get component identifier from context
-const componentId = context?.componentId || 'default';
-
-// Check if this component is already making a request
-if (this._callTracker.pendingComponents.has(componentId)) {
-  console.warn(`Component ${componentId} already has a pending request, throttling`);
-  return "I'm already processing a request from this component. Please wait for it to complete.";
-}
-
-// Add to pending components
-this._callTracker.pendingComponents.add(componentId);
-
-// Increment call count
-this._callTracker.count++;
-
-// Prevent recursive calls that might cause freezing
-if (this._callTracker.count > 8) { // Increased from 5 to 8
-  console.warn("Too many API calls in a short period, throttling to prevent loops");
-  return "I'm processing multiple requests. Please wait a moment before asking another question.";
-}
-
-// Add a try-finally block to ensure pendingComponents gets cleaned up
-try {
-  // Original API call code goes here
-} finally {
-  // Remove from pending components when done
-  this._callTracker.pendingComponents.delete(componentId);
-}
+      if (!this._callTracker) {
+        this._callTracker = {
+          count: 0,
+          lastReset: Date.now(),
+          pendingComponents: new Set()
+        };
+      }
+      
+      // Reset counter every 15 seconds (increased from 10)
+      if (Date.now() - this._callTracker.lastReset > 15000) {
+        this._callTracker.count = 0;
+        this._callTracker.lastReset = Date.now();
+        this._callTracker.pendingComponents.clear();
+      }
+      
+      // Get component identifier from context
+      const componentId = context?.componentId || 'default';
+      
+      // Check if this component is already making a request
+      if (this._callTracker.pendingComponents.has(componentId)) {
+        console.warn(`Component ${componentId} already has a pending request, throttling`);
+        return "I'm already processing a request from this component. Please wait for it to complete.";
+      }
+      
+      // Add to pending components
+      this._callTracker.pendingComponents.add(componentId);
+      
+      // Increment call count
+      this._callTracker.count++;
+      
+      // Prevent recursive calls that might cause freezing
+      if (this._callTracker.count > 8) { // Increased from 5 to 8
+        console.warn("Too many API calls in a short period, throttling to prevent loops");
+        return "I'm processing multiple requests. Please wait a moment before asking another question.";
+      }
       
       // Early exit if AI calls are disabled
       if (this.disableAICalls) {
