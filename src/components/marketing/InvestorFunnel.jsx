@@ -30,26 +30,48 @@ const InvestorFunnel = () => {
     const [financialView, setFinancialView] = useState('revenue');
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     
-    const totalSlides = 22;
+    const totalSlides = 23; // Updated to account for the new slide
     const sliderRef = useRef(null);
     
-    const nextSlide = () => {
-      if (currentSlide < totalSlides) {
-        setCurrentSlide(currentSlide + 1);
-      }
-    };
-  
-    const prevSlide = () => {
-      if (currentSlide > 1) {
-        setCurrentSlide(currentSlide - 1);
-      }
-    };
-  
-    const goToSlide = (slide) => {
-      if (slide >= 1 && slide <= totalSlides) {
-        setCurrentSlide(slide);
-      }
-    };
+    // Navigate through demo steps
+const skipSlides = [10]; // Skip slide 10 (Core Product: Family Management)
+
+const nextSlide = () => {
+  let newSlide = currentSlide + 1;
+  // Skip any slides in the skipSlides array
+  while (skipSlides.includes(newSlide) && newSlide < totalSlides) {
+    newSlide++;
+  }
+  if (newSlide <= totalSlides) {
+    setCurrentSlide(newSlide);
+  }
+};
+
+const prevSlide = () => {
+  let newSlide = currentSlide - 1;
+  // Skip any slides in the skipSlides array
+  while (skipSlides.includes(newSlide) && newSlide > 1) {
+    newSlide--;
+  }
+  if (newSlide >= 1) {
+    setCurrentSlide(newSlide);
+  }
+};
+
+const goToSlide = (slide) => {
+  if (slide >= 1 && slide <= totalSlides && !skipSlides.includes(slide)) {
+    setCurrentSlide(slide);
+  } else if (slide >= 1 && slide <= totalSlides) {
+    // If we're trying to go to a skip slide, find the next valid slide
+    let validSlide = slide;
+    while (skipSlides.includes(validSlide) && validSlide <= totalSlides) {
+      validSlide++;
+    }
+    if (validSlide <= totalSlides) {
+      setCurrentSlide(validSlide);
+    }
+  }
+};
   
     const handleKeyDown = (e) => {
       if (e.key === 'ArrowRight') {
@@ -215,74 +237,102 @@ const InvestorFunnel = () => {
           </div>
         );
       
-      // Slide 3: The Demographic Challenge
-      case 3:
-        return (
-          <div className="min-h-[80vh] flex flex-col justify-center px-8">
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-3xl md:text-4xl font-light mb-6">A Global Crisis with Personal Impact</h2>
-              
-              <div className="grid md:grid-cols-2 gap-8">
-                <div>
-                  <h3 className="text-xl font-medium mb-4">The Demographic Shift</h3>
-                  <ul className="space-y-3">
-                    <li className="flex items-start">
-                      <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
-                        <ChevronRight className="text-blue-500" size={18} />
-                      </div>
-                      <p>Global fertility has fallen from <strong>5.1 births per woman in 1970</strong> to <strong>2.4 today</strong></p>
-                    </li>
-                    <li className="flex items-start">
-                      <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
-                        <ChevronRight className="text-blue-500" size={18} />
-                      </div>
-                      <p>In the U.S., fertility rate is now <strong>1.6</strong> — below replacement rate</p>
-                    </li>
-                    <li className="flex items-start">
-                      <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
-                        <ChevronRight className="text-blue-500" size={18} />
-                      </div>
-                      <p>As populations age, each young family must support <strong>more retirees</strong>, face <strong>higher taxes</strong>, and shoulder caregiving for <strong>both children and aging parents</strong></p>
-                    </li>
-                  </ul>
-                </div>
-                
-                <div className="bg-gray-50 p-6 rounded-lg">
-                  <h3 className="text-xl font-medium mb-4">Economic Consequences</h3>
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart
-                        data={[
-                          { year: 1970, ratio: 1 },
-                          { year: 1980, ratio: 1.3 },
-                          { year: 1990, ratio: 1.7 },
-                          { year: 2000, ratio: 2.2 },
-                          { year: 2010, ratio: 3.1 },
-                          { year: 2020, ratio: 4.3 },
-                          { year: 2025, ratio: 5.4 }
-                        ]}
-                        margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                      >
-                        <XAxis dataKey="year" />
-                        <YAxis />
-                        <Tooltip />
-                        <Area type="monotone" dataKey="ratio" stroke="#8884d8" fill="#8884d8" fillOpacity={0.3} />
-                      </AreaChart>
-                    </ResponsiveContainer>
+     // Slide 3: The Demographic Challenge
+case 3:
+    return (
+      <div className="min-h-[80vh] flex flex-col justify-center px-8">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-light mb-6">A Global Crisis with Personal Impact</h2>
+          
+          <div className="grid md:grid-cols-2 gap-8">
+            <div>
+              <h3 className="text-xl font-medium mb-4">The Demographic Shift</h3>
+              <ul className="space-y-3">
+                <li className="flex items-start">
+                  <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
+                    <ChevronRight className="text-blue-500" size={18} />
                   </div>
-                  <p className="text-center text-sm mt-2">Housing-Price-to-Income Ratios (1970-2025)</p>
-                </div>
-              </div>
+                  <p>Global fertility has fallen from <strong>5.1 births per woman in 1970</strong> to <strong>2.4 today</strong></p>
+                </li>
+                <li className="flex items-start">
+                  <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
+                    <ChevronRight className="text-blue-500" size={18} />
+                  </div>
+                  <p>In Europe, rates fall to <strong>1.5 in Germany</strong>, <strong>1.3 in Spain</strong>, and <strong>1.2 in Italy</strong> — creating workforce crises</p>
+                </li>
+                <li className="flex items-start">
+                  <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
+                    <ChevronRight className="text-blue-500" size={18} />
+                  </div>
+                  <p>As populations age, each young family must support <strong>more retirees</strong>, face <strong>higher taxes</strong>, and shoulder caregiving for <strong>both children and aging parents</strong></p>
+                </li>
+              </ul>
               
-              <div className="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <div className="flex items-start">
-                  <AlertTriangle className="text-yellow-600 mt-1 mr-3 flex-shrink-0" size={20} />
-                  <p>This economic squeeze isn't coming — <strong>it's already here</strong>. Families face unprecedented pressure with fewer resources and support systems than previous generations.</p>
+              <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                <h4 className="font-medium text-blue-800 mb-2">European Impact</h4>
+                <p className="text-sm text-blue-700">
+                  European companies are increasingly offering family-support benefits to attract talent in aging populations. Households with balanced workloads report <strong>42% higher workforce participation</strong> rates from secondary earners.
+                </p>
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 p-6 rounded-lg">
+              <h3 className="text-xl font-medium mb-4">Economic Consequences</h3>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={[
+                      { year: 1970, ratio: 1 },
+                      { year: 1980, ratio: 1.3 },
+                      { year: 1990, ratio: 1.7 },
+                      { year: 2000, ratio: 2.2 },
+                      { year: 2010, ratio: 3.1 },
+                      { year: 2020, ratio: 4.3 },
+                      { year: 2025, ratio: 5.4 }
+                    ]}
+                    margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                  >
+                    <XAxis dataKey="year" />
+                    <YAxis />
+                    <Tooltip />
+                    <Area type="monotone" dataKey="ratio" stroke="#8884d8" fill="#8884d8" fillOpacity={0.3} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="text-center text-sm mt-2">Housing-Price-to-Income Ratios (1970-2025)</p>
+              
+              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                <div className="p-2 bg-white rounded-lg shadow-sm">
+                  <p className="text-xs text-gray-500">Japan</p>
+                  <p className="font-medium text-red-500">-0.4%</p>
+                  <p className="text-xs">GDP Growth</p>
+                </div>
+                <div className="p-2 bg-white rounded-lg shadow-sm">
+                  <p className="text-xs text-gray-500">Italy</p>
+                  <p className="font-medium text-red-500">-0.1%</p>
+                  <p className="text-xs">GDP Growth</p>
+                </div>
+                <div className="p-2 bg-white rounded-lg shadow-sm">
+                  <p className="text-xs text-gray-500">Germany</p>
+                  <p className="font-medium text-amber-500">+0.3%</p>
+                  <p className="text-xs">GDP Growth</p>
                 </div>
               </div>
             </div>
           </div>
-        );
+          
+          <div className="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-start">
+              <AlertTriangle className="text-yellow-600 mt-1 mr-3 flex-shrink-0" size={20} />
+              <div>
+                <p className="mb-2"><strong>This economic squeeze isn't coming — it's already here.</strong> Families face unprecedented pressure with fewer resources and support systems than previous generations.</p>
+                <p className="text-sm text-yellow-700">In countries with better family support and workload balance, both birth rates and female workforce participation are higher, creating a virtuous economic cycle.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
       
       // Slide 4: The Awareness Gap (Interactive)
       case 4:
@@ -399,85 +449,114 @@ const InvestorFunnel = () => {
         );
       
       // Slide 5: The Mental Load Crisis (Interactive)
-      case 5:
-        return (
-          <div className="min-h-[80vh] flex flex-col justify-center px-8">
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-3xl md:text-4xl font-light mb-6">The Hidden Mental Load</h2>
-              
-              <div className="bg-gray-50 p-6 rounded-lg mb-8">
-                <h3 className="text-xl font-medium mb-4">Select what you think are the most burdensome tasks for parents</h3>
-                <p className="mb-6 text-sm text-gray-600">Choose what you believe are the most challenging administrative tasks for families</p>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  {[
-                    'Scheduling medical appointments',
-                    'Managing school communications',
-                    'Remembering birthdays & events',
-                    'Planning meals & grocery lists',
-                    'Coordinating childcare logistics',
-                    'Tracking developmental milestones',
-                    'Maintaining medical records',
-                    'Researching childcare options',
-                    'Planning family activities',
-                    'Managing household inventory',
-                    'Scheduling home maintenance',
-                    'Arranging playdates'
-                  ].map((task) => (
-                    <button
-                      key={task}
-                      className={`p-3 rounded-lg text-left text-sm ${
-                        taskSelections[task] 
-                          ? 'bg-black text-white' 
-                          : 'bg-white border border-gray-200 hover:border-gray-400'
-                      }`}
-                      onClick={() => toggleTaskSelection(task)}
-                    >
-                      {task}
-                    </button>
-                  ))}
-                </div>
-                
-                {Object.values(taskSelections).filter(Boolean).length > 0 && (
-                  <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                    <div className="flex items-start">
-                      <CheckCircle className="text-blue-600 mt-1 mr-3 flex-shrink-0" size={20} />
-                      <div>
-                        <p className="font-medium text-blue-800">Allie addresses ALL of these challenges and more!</p>
-                        <p className="mt-2 text-blue-700">
-                          The "mental load" of family management extends beyond visible tasks to include planning, anticipating needs, researching options, and maintaining family systems.
-                        </p>
-                      </div>
+case 5:
+    return (
+      <div className="min-h-[80vh] flex flex-col justify-center px-8">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-light mb-6">The Hidden Mental Load</h2>
+          
+          <div className="bg-gray-50 p-6 rounded-lg mb-8">
+            <h3 className="text-xl font-medium mb-4">Select what you think are the most burdensome tasks for parents</h3>
+            <p className="mb-6 text-sm text-gray-600">Choose what you believe are the most challenging administrative tasks for families</p>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+              {[
+                'Scheduling medical appointments',
+                'Managing school communications',
+                'Remembering birthdays & events',
+                'Planning meals & grocery lists',
+                'Coordinating childcare logistics',
+                'Tracking developmental milestones',
+                'Maintaining medical records',
+                'Researching childcare options',
+                'Planning family activities',
+                'Managing household inventory',
+                'Scheduling home maintenance',
+                'Arranging playdates'
+              ].map((task) => (
+                <button
+                  key={task}
+                  className={`p-3 rounded-lg text-left text-sm ${
+                    taskSelections[task] 
+                      ? 'bg-black text-white' 
+                      : 'bg-white border border-gray-200 hover:border-gray-400'
+                  }`}
+                  onClick={() => toggleTaskSelection(task)}
+                >
+                  {task}
+                </button>
+              ))}
+            </div>
+            
+            {Object.values(taskSelections).filter(Boolean).length > 0 && (
+              <div className="flex justify-center mt-4 mb-4">
+                <button
+                  onClick={() => setRevealAnswers({...revealAnswers, mentalLoad: true})}
+                  className="px-4 py-2 bg-black text-white rounded-lg"
+                >
+                  See How Allie Helps
+                </button>
+              </div>
+            )}
+            
+            {revealAnswers.mentalLoad && (
+              <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-start">
+                  <CheckCircle className="text-blue-600 mt-1 mr-3 flex-shrink-0" size={20} />
+                  <div>
+                    <p className="font-medium text-blue-800">Allie addresses ALL of these challenges and more!</p>
+                    <div className="mt-4 space-y-3">
+                      {Object.keys(taskSelections).filter(task => taskSelections[task]).map((task) => (
+                        <div key={`solution-${task}`} className="bg-white p-3 rounded-lg shadow-sm">
+                          <p className="font-medium text-sm">{task}</p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            {task === 'Scheduling medical appointments' && "Allie extracts appointment details from conversations, photos of referrals, or voice notes, adding them to your calendar with all relevant attachments and reminders."}
+                            {task === 'Managing school communications' && "Allie automatically organizes school emails, permission slips, and event notifications, creating actionable items and reminders from dense communications."}
+                            {task === 'Remembering birthdays & events' && "Allie maintains your social calendar, tracks special occasions, and suggests gift ideas or preparations based on your past preferences."}
+                            {task === 'Planning meals & grocery lists' && "Allie creates meal plans based on family preferences, dietary needs, and what's in your pantry, generating shopping lists that can be shared between partners."}
+                            {task === 'Coordinating childcare logistics' && "Allie manages childcare schedules, pickup/dropoff arrangements, and provides a single view of who's responsible for child supervision at all times."}
+                            {task === 'Tracking developmental milestones' && "Allie records and organizes developmental observations, creating a searchable timeline of growth and suggesting age-appropriate activities."}
+                            {task === 'Maintaining medical records' && "Allie securely stores medical documents, tracks medication schedules, and provides medication histories when needed for appointments."}
+                            {task === 'Researching childcare options' && "Allie helps organize research notes, compare providers, and store contact information in a structured format for easy decision-making."}
+                            {task === 'Planning family activities' && "Allie suggests activities based on family interests, weather, and available time, then handles all scheduling and preparation reminders."}
+                            {task === 'Managing household inventory' && "Allie tracks household supplies, predicts when items will run out based on usage patterns, and adds them to shopping lists automatically."}
+                            {task === 'Scheduling home maintenance' && "Allie maintains records of home systems, reminds you about seasonal maintenance, and stores contractor information for quick access."}
+                            {task === 'Arranging playdates' && "Allie keeps track of children's friends, parent contact information, and previous playdate history to simplify social calendar management."}
+                          </p>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                )}
+                </div>
               </div>
-              
-              <div className="bg-black text-white p-6 rounded-lg">
-                <h3 className="text-xl font-medium mb-4">Traditional Approaches Fail Because They Ignore:</h3>
-                
-                <ul className="space-y-4">
-                  <li className="flex items-start">
-                    <Brain className="text-pink-400 mt-1 mr-3 flex-shrink-0" size={20} />
-                    <p>The invisible cognitive work of planning and organizing</p>
-                  </li>
-                  <li className="flex items-start">
-                    <Heart className="text-pink-400 mt-1 mr-3 flex-shrink-0" size={20} />
-                    <p>Emotional labor of anticipating family needs</p>
-                  </li>
-                  <li className="flex items-start">
-                    <Clock className="text-pink-400 mt-1 mr-3 flex-shrink-0" size={20} />
-                    <p>The compounding effect of imbalance over time</p>
-                  </li>
-                  <li className="flex items-start">
-                    <Users className="text-pink-400 mt-1 mr-3 flex-shrink-0" size={20} />
-                    <p>Child development impacts of parental workload models</p>
-                  </li>
-                </ul>
-              </div>
-            </div>
+            )}
           </div>
-        );
+          
+          <div className="bg-black text-white p-6 rounded-lg">
+            <h3 className="text-xl font-medium mb-4">Traditional Approaches Fail Because They Ignore:</h3>
+            
+            <ul className="space-y-4">
+              <li className="flex items-start">
+                <Brain className="text-pink-400 mt-1 mr-3 flex-shrink-0" size={20} />
+                <p>The invisible cognitive work of planning and organizing</p>
+              </li>
+              <li className="flex items-start">
+                <Heart className="text-pink-400 mt-1 mr-3 flex-shrink-0" size={20} />
+                <p>Emotional labor of anticipating family needs</p>
+              </li>
+              <li className="flex items-start">
+                <Clock className="text-pink-400 mt-1 mr-3 flex-shrink-0" size={20} />
+                <p>The compounding effect of imbalance over time</p>
+              </li>
+              <li className="flex items-start">
+                <Users className="text-pink-400 mt-1 mr-3 flex-shrink-0" size={20} />
+                <p>Child development impacts of parental workload models</p>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
       
       // Slide 6: The Solution Introduction
       case 6:
@@ -792,22 +871,23 @@ const InvestorFunnel = () => {
                   </div>
                   
                   <div className="relative h-48 bg-white rounded-lg border border-gray-200 p-3">
-                    <div className="absolute bottom-2 left-2 right-2 h-20 bg-gray-50 rounded">
-                      <div className="absolute left-3 bottom-0 w-8 h-16 bg-green-500 rounded-t"></div>
-                      <div className="absolute left-16 bottom-0 w-8 h-16 bg-green-500 rounded-t"></div>
-                      <div className="absolute left-29 bottom-0 w-8 h-16 bg-green-500 rounded-t"></div>
-                      <div className="absolute left-42 bottom-0 w-8 h-16 bg-green-500 rounded-t"></div>
-                      <div className="absolute left-55 bottom-0 w-8 h-16 bg-green-500 rounded-t"></div>
-                      <div className="absolute right-3 bottom-0 w-8 h-10 bg-red-500 rounded-t"></div>
-                      
-                      <div className="absolute left-0 right-0 bottom-0 h-0.5 bg-gray-400"></div>
-                      
-                      <div className="absolute left-3 top-2 text-xs text-gray-600">Positive</div>
-                      <div className="absolute right-3 top-2 text-xs text-gray-600">Negative</div>
-                    </div>
-                    
-                    <p className="text-sm text-gray-600 absolute top-2 left-3">The 5:1 Positive to Negative Interaction Ratio</p>
-                  </div>
+  <p className="text-sm text-gray-600 mb-4">The 5:1 Positive to Negative Interaction Ratio</p>
+  <div className="h-32 flex items-end justify-between px-4">
+    <div className="flex items-end space-x-2">
+      <div className="w-10 h-24 bg-green-500 rounded-t"></div>
+      <div className="w-10 h-24 bg-green-500 rounded-t"></div>
+      <div className="w-10 h-24 bg-green-500 rounded-t"></div>
+      <div className="w-10 h-24 bg-green-500 rounded-t"></div>
+      <div className="w-10 h-24 bg-green-500 rounded-t"></div>
+      <div className="flex-grow"></div>
+      <div className="w-10 h-14 bg-red-500 rounded-t"></div>
+    </div>
+  </div>
+  <div className="flex justify-between mt-1 px-4">
+    <div className="text-xs text-gray-600">Positive</div>
+    <div className="text-xs text-gray-600">Negative</div>
+  </div>
+</div>
                 </div>
               </div>
               
@@ -1980,127 +2060,106 @@ const InvestorFunnel = () => {
         );
       
       // Slide 17: Current Status & Validation
-      case 17:
-        return (
-          <div className="min-h-[80vh] flex flex-col justify-center px-8">
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-3xl md:text-4xl font-light mb-6">Current Status & Validation</h2>
-              
-              <div className="grid md:grid-cols-3 gap-8 mb-8">
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-                      <Command className="text-blue-600" size={24} />
-                    </div>
-                    <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs">Completed</span>
-                  </div>
-                  <h3 className="text-lg font-medium mb-2">Market Research</h3>
-                  <ul className="space-y-2 text-sm">
-                    <li className="flex items-start">
-                      <Check size={14} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                      <span className="text-gray-600">3,000+ family survey analysis</span>
-                    </li>
-                    <li className="flex items-start">
-                      <Check size={14} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                      <span className="text-gray-600">Competitor landscape mapping</span>
-                    </li>
-                    <li className="flex items-start">
-                      <Check size={14} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                      <span className="text-gray-600">User pain point identification</span>
-                    </li>
-                  </ul>
+case 17:
+    return (
+      <div className="min-h-[80vh] flex flex-col justify-center px-8">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-light mb-6">Current Status & Validation</h2>
+          
+          <div className="grid md:grid-cols-3 gap-8 mb-8">
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+              <div className="flex justify-between items-start mb-4">
+                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                  <Command className="text-blue-600" size={24} />
                 </div>
-                
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                      <Code className="text-green-600" size={24} />
-                    </div>
-                    <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">In Progress</span>
-                  </div>
-                  <h3 className="text-lg font-medium mb-2">MVP Development</h3>
-                  <ul className="space-y-2 text-sm">
-                    <li className="flex items-start">
-                      <Check size={14} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                      <span className="text-gray-600">Core family management system</span>
-                    </li>
-                    <li className="flex items-start">
-                      <Check size={14} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                      <span className="text-gray-600">Load assessment engine</span>
-                    </li>
-                    <li className="flex items-start">
-                      <RefreshCw size={14} className="text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
-                      <span className="text-gray-600">Advanced AI integration</span>
-                    </li>
-                  </ul>
-                </div>
-                
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
-                      <Users className="text-amber-600" size={24} />
-                    </div>
-                    <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-xs">Starting Soon</span>
-                  </div>
-                  <h3 className="text-lg font-medium mb-2">Testing Program</h3>
-                  <ul className="space-y-2 text-sm">
-                    <li className="flex items-start">
-                      <CheckCircle size={14} className="text-amber-500 mt-0.5 mr-2 flex-shrink-0" />
-                      <span className="text-gray-600">20 families identified</span>
-                    </li>
-                    <li className="flex items-start">
-                      <Clock size={14} className="text-amber-500 mt-0.5 mr-2 flex-shrink-0" />
-                      <span className="text-gray-600">30-60 day validation period</span>
-                    </li>
-                    <li className="flex items-start">
-                      <BarChart size={14} className="text-amber-500 mt-0.5 mr-2 flex-shrink-0" />
-                      <span className="text-gray-600">Key metrics tracking</span>
-                    </li>
-                  </ul>
-                </div>
+                <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs">Completed</span>
               </div>
-              
-              <div className="bg-gray-50 p-6 rounded-lg">
-                <h3 className="text-xl font-medium mb-4">Key Success Metrics</h3>
-                
-                <div className="grid md:grid-cols-3 gap-4">
-                  <div className="bg-white p-4 rounded-lg border border-gray-200">
-                    <div className="mb-2">
-                      <h4 className="font-medium">Usage Rates</h4>
-                      <p className="text-sm text-gray-600">Target: 5+ sessions per week per family</p>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-600" style={{ width: '60%' }}></div>
-                    </div>
-                    <p className="text-right text-xs text-gray-500 mt-1">Current: 3 sessions/week</p>
-                  </div>
-                  
-                  <div className="bg-white p-4 rounded-lg border border-gray-200">
-                    <div className="mb-2">
-                      <h4 className="font-medium">Load Balance Improvement</h4>
-                      <p className="text-sm text-gray-600">Target: 20%+ reduction in imbalance</p>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div className="h-full bg-green-600" style={{ width: '85%' }}></div>
-                    </div>
-                    <p className="text-right text-xs text-gray-500 mt-1">Current: 17% reduction</p>
-                  </div>
-                  
-                  <div className="bg-white p-4 rounded-lg border border-gray-200">
-                    <div className="mb-2">
-                      <h4 className="font-medium">Family Satisfaction</h4>
-                      <p className="text-sm text-gray-600">Target: 85%+ satisfaction rate</p>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div className="h-full bg-purple-600" style={{ width: '90%' }}></div>
-                    </div>
-                    <p className="text-right text-xs text-gray-500 mt-1">Current: 76% satisfaction</p>
-                  </div>
+              <h3 className="text-lg font-medium mb-2">Market Research</h3>
+              <ul className="space-y-2 text-sm">
+                <li className="flex items-start">
+                  <Check size={14} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                  <span className="text-gray-600">3,000+ family survey analysis</span>
+                </li>
+                <li className="flex items-start">
+                  <Check size={14} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                  <span className="text-gray-600">Competitor landscape mapping</span>
+                </li>
+                <li className="flex items-start">
+                  <Check size={14} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                  <span className="text-gray-600">User pain point identification</span>
+                </li>
+              </ul>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+              <div className="flex justify-between items-start mb-4">
+                <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                  <Users className="text-green-600" size={24} />
                 </div>
+                <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs">Completed</span>
+              </div>
+              <h3 className="text-lg font-medium mb-2">Direct User Validation</h3>
+              <ul className="space-y-2 text-sm">
+                <li className="flex items-start">
+                  <Check size={14} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                  <span className="text-gray-600">In-depth interviews with 20+ families</span>
+                </li>
+                <li className="flex items-start">
+                  <Check size={14} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                  <span className="text-gray-600">Problem validation through targeted surveys</span>
+                </li>
+                <li className="flex items-start">
+                  <Check size={14} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                  <span className="text-gray-600">Pain point prioritization with real users</span>
+                </li>
+              </ul>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+              <div className="flex justify-between items-start mb-4">
+                <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
+                  <BarChart className="text-purple-600" size={24} />
+                </div>
+                <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">In Progress</span>
+              </div>
+              <h3 className="text-lg font-medium mb-2">Key Insights</h3>
+              <ul className="space-y-2 text-sm">
+                <li className="flex items-start">
+                  <Check size={14} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                  <span className="text-gray-600">87% reported significant mental load imbalance</span>
+                </li>
+                <li className="flex items-start">
+                  <Check size={14} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                  <span className="text-gray-600">92% would pay for an effective solution</span>
+                </li>
+                <li className="flex items-start">
+                  <Check size={14} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                  <span className="text-gray-600">Top pain point: "No one remembers everything"</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+          
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <h3 className="text-xl font-medium mb-4">Family Interview Highlights</h3>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="italic text-gray-700 text-sm mb-2">
+                  "The biggest issue in our household is that I'm expected to remember everything—doctor appointments, school events, birthday gifts—while also working full-time. The mental load is crushing me."
+                </p>
+                <p className="text-right text-xs text-gray-500">— Mother of two, Marketing Director</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="italic text-gray-700 text-sm mb-2">
+                  "I want to do more to help, but I don't even know what needs to be done. My wife says I should 'just know,' but how? We need a system that makes all these invisible tasks visible to everyone."
+                </p>
+                <p className="text-right text-xs text-gray-500">— Father of three, Software Engineer</p>
               </div>
             </div>
           </div>
-        );
+        </div>
+      </div>
+    );
       
       // Slide 18: Founding Team
       case 18:
@@ -2172,30 +2231,17 @@ const InvestorFunnel = () => {
               </div>
               
               <div className="bg-gray-50 p-6 rounded-lg">
-                <h3 className="text-xl font-medium mb-4 text-center">Scientific Advisors</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-white p-4 rounded-lg text-center">
-                    <div className="w-16 h-16 mx-auto rounded-full bg-gray-100 mb-2"></div>
-                    <h4 className="font-medium text-sm">Dr. Emily Carter</h4>
-                    <p className="text-xs text-gray-500">Family Psychology</p>
-                  </div>
-                  <div className="bg-white p-4 rounded-lg text-center">
-                    <div className="w-16 h-16 mx-auto rounded-full bg-gray-100 mb-2"></div>
-                    <h4 className="font-medium text-sm">Dr. Michael Wong</h4>
-                    <p className="text-xs text-gray-500">Cognitive Science</p>
-                  </div>
-                  <div className="bg-white p-4 rounded-lg text-center">
-                    <div className="w-16 h-16 mx-auto rounded-full bg-gray-100 mb-2"></div>
-                    <h4 className="font-medium text-sm">Dr. Sarah Johnson</h4>
-                    <p className="text-xs text-gray-500">Child Development</p>
-                  </div>
-                  <div className="bg-white p-4 rounded-lg text-center">
-                    <div className="w-16 h-16 mx-auto rounded-full bg-gray-100 mb-2"></div>
-                    <h4 className="font-medium text-sm">Dr. David Kim</h4>
-                    <p className="text-xs text-gray-500">AI Ethics</p>
-                  </div>
-                </div>
-              </div>
+  <h3 className="text-xl font-medium mb-4 text-center">Scientific Advisors</h3>
+  <p className="text-center text-gray-700 mb-4">
+    We're assembling world-class experts in family psychology, cognitive development, and AI ethics to ensure Allie is built on the strongest scientific foundation.
+  </p>
+  <div className="p-4 bg-blue-50 rounded-lg border border-blue-100 text-center">
+    <p className="text-blue-800 font-medium">Advisory board names coming soon</p>
+    <p className="text-sm text-blue-700 mt-2">
+      Our advisors include leaders from top research institutions in Europe and North America, bringing decades of combined expertise in family dynamics, behavioral science, and ethical AI implementation.
+    </p>
+  </div>
+</div>
             </div>
           </div>
         );
@@ -2399,12 +2445,133 @@ const InvestorFunnel = () => {
           </div>
         );
       
+
+// Slide 19.5: Children's Role in Change
+case 19.5:
+  return (
+    <div className="min-h-[80vh] flex flex-col justify-center px-8">
+      <div className="max-w-4xl mx-auto">
+        <h2 className="text-3xl md:text-4xl font-light mb-6">Breaking the Cycle: Children as Agents of Change</h2>
+        
+        <div className="grid md:grid-cols-2 gap-8 mb-8">
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <h3 className="text-xl font-medium mb-4 flex items-center">
+              <Users className="text-purple-500 mr-3" size={24} />
+              The Generational Impact
+            </h3>
+            <p className="text-gray-700 mb-4">
+              Gender-skewed roles are learned by watching parents. The imbalance we see today is perpetuated through generational modeling:
+            </p>
+            <ul className="space-y-3">
+              <li className="flex items-start">
+                <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-purple-500" />
+                <span className="font-light">If kids regularly see both parents sharing scheduling, emotional labor, and chores, they grow up expecting equality</span>
+              </li>
+              <li className="flex items-start">
+                <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-purple-500" />
+                <span className="font-light">Without intervention, today's imbalance repeats in the next generation's homes and workplaces</span>
+              </li>
+              <li className="flex items-start">
+                <ChevronRight size={18} className="mt-0.5 mr-2 flex-shrink-0 text-purple-500" />
+                <span className="font-light">Research shows children as young as 6 begin forming gender-role beliefs based on observed household dynamics</span>
+              </li>
+            </ul>
+          </div>
+          
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <h3 className="text-xl font-medium mb-4">Allie's Child-Inclusive Approach</h3>
+            <p className="text-gray-700 mb-4">
+              Allie actively involves children in rebalancing family workload:
+            </p>
+            <div className="space-y-4">
+              <div className="flex items-start">
+                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mr-3 flex-shrink-0">
+                  <Sparkles className="text-green-600" size={20} />
+                </div>
+                <div>
+                  <h4 className="font-medium">Age-Appropriate Participation</h4>
+                  <p className="text-sm text-gray-600">
+                    Kid-friendly surveys and responsibility systems that grow with their development
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-start">
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
+                  <Star className="text-blue-600" size={20} />
+                </div>
+                <div>
+                  <h4 className="font-medium">Family-wide Accountability</h4>
+                  <p className="text-sm text-gray-600">
+                    Children rate how parents performed ("Did Dad read the school email?"), raising stakes and driving accountability through pride, not nagging
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-start">
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center mr-3 flex-shrink-0">
+                  <Target className="text-amber-600" size={20} />
+                </div>
+                <div>
+                  <h4 className="font-medium">Skill Development</h4>
+                  <p className="text-sm text-gray-600">
+                    Building next-generation capabilities for equitable partnerships through practical experience
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-black text-white p-6 rounded-lg">
+          <h3 className="text-xl font-medium mb-4 text-center">Breaking the Cycle</h3>
+          <p className="text-center mb-6">
+            By creating a more balanced family environment today, Allie helps break the cycle of inequality that has persisted for generations.
+          </p>
+          <div className="flex justify-center">
+            <div className="max-w-md">
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-center px-4">
+                  <div className="w-16 h-16 rounded-full bg-white bg-opacity-10 mx-auto flex items-center justify-center mb-2">
+                    <Users size={24} className="text-white" />
+                  </div>
+                  <p className="text-sm">Previous Generation</p>
+                </div>
+                <ArrowRight className="text-white" size={24} />
+                <div className="text-center px-4">
+                  <div className="w-16 h-16 rounded-full bg-white bg-opacity-10 mx-auto flex items-center justify-center mb-2">
+                    <Users size={24} className="text-white" />
+                  </div>
+                  <p className="text-sm">Current Parents</p>
+                </div>
+                <ArrowRight className="text-white" size={24} />
+                <div className="text-center px-4">
+                  <div className="w-16 h-16 rounded-full bg-white bg-opacity-20 mx-auto flex items-center justify-center mb-2">
+                    <Users size={24} className="text-white" />
+                  </div>
+                  <p className="text-sm">Next Generation</p>
+                </div>
+              </div>
+              <div className="h-1 w-full bg-white bg-opacity-20 relative mb-2">
+                <div className="absolute top-0 left-0 h-full bg-green-400" style={{ width: '66%' }}></div>
+              </div>
+              <p className="text-sm text-center text-gray-300">
+                Allie intervenes at the critical middle stage, creating a new pattern that propagates forward
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+
       // Slide 20: Investment Ask
-      case 20:
-        return (
-          <div className="min-h-[80vh] flex flex-col justify-center px-8">
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-3xl md:text-4xl font-light mb-6">The Investment Opportunity</h2>
+case 20:
+    return (
+      <div className="min-h-[80vh] flex flex-col justify-center px-8">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-light mb-6">The Investment Opportunity</h2>
               
               <div className="grid md:grid-cols-2 gap-8">
                 <div>
@@ -2684,18 +2851,11 @@ const InvestorFunnel = () => {
                       </button>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4 text-center">
-                      <div>
-                        <p className="font-medium">Stefan Palsson</p>
-                        <p className="text-sm text-gray-600">CEO & Co-Founder</p>
-                        <p className="text-sm text-blue-600 mt-1">stefan@allie.com</p>
-                      </div>
-                      <div>
-                        <p className="font-medium">Investor Relations</p>
-                        <p className="text-sm text-gray-600">For Due Diligence Requests</p>
-                        <p className="text-sm text-blue-600 mt-1">invest@allie.com</p>
-                      </div>
-                    </div>
+                    <div className="text-center">
+  <p className="font-medium">Stefan Palsson</p>
+  <p className="text-sm text-gray-600">CEO & Co-Founder</p>
+  <p className="text-sm text-blue-600 mt-1">stefan@checkallie.com</p>
+</div>
                   </div>
                 </div>
               </div>
