@@ -7,6 +7,8 @@ import { useFamily } from './contexts/FamilyContext';
 import AboutUsPage from './components/marketing/AboutUsPage';
 import FamilyMemory from './components/marketing/FamilyMemoryPage';
 import HowThisWorksScreen from './components/education/HowThisWorksScreen';
+import InvestorFunnel from './components/marketing/InvestorFunnel';
+
 import ProductOverviewPage from './components/marketing/ProductOverviewPage'; 
 import BlogHomePage from './components/blog/BlogHomePage';
 import BlogArticlePage from './components/blog/BlogArticlePage';
@@ -31,6 +33,7 @@ import EmailOptIn from './components/marketing/EmailOptIn';
 import ClaudeDebugger from './components/debug/ClaudeDebugger';
 import './styles/atomicHabits.css';
 import { EventProvider } from './contexts/EventContext';
+
 
 
 // New code for App.js (GoogleMapsApiLoader component)
@@ -144,6 +147,8 @@ function AppRoutes() {
         <Route path="/payment" element={<PaymentScreen />} />
         <Route path="/dashboard" element={<DashboardScreen />} />
         <Route path="/debug/claude" element={<ClaudeDebugger />} />
+        <Route path="/investor" element={<InvestorFunnel />} />
+
         
         {/* Route for weekly check-in - directs kids to kid-friendly version */}
         <Route path="/weekly-check-in" element={

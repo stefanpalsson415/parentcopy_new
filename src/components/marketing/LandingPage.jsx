@@ -369,12 +369,24 @@ const LandingPage = () => {
             <p className="text-lg md:text-xl text-gray-600 mb-6 md:mb-8 font-light">
               Allie is your family's all-in-one assistant, using AI to balance workload, remember everything, and make family life smoother.
             </p>
-            <button 
-              onClick={() => navigate('/onboarding')}
-              className="w-full sm:w-auto px-6 py-3 md:px-8 md:py-4 bg-black text-white rounded-md text-base md:text-lg font-medium hover:bg-gray-800"
-            >
-              Get Started
-            </button>
+            <div className="flex flex-col items-center">
+  <button 
+    onClick={() => navigate('/onboarding')}
+    className="w-full sm:w-auto px-6 py-3 md:px-8 md:py-4 bg-black text-white rounded-md text-base md:text-lg font-medium hover:bg-gray-800 mb-4"
+  >
+    Get Started
+  </button>
+  
+  <div className="mt-4 text-center">
+    <p className="text-gray-600 mb-2">Are you an investor ready to be blown away?</p>
+    <button 
+      onClick={() => navigate('/investor')}
+      className="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-md hover:opacity-90"
+    >
+      Be Blown Away
+    </button>
+  </div>
+</div>
           </div>
           <div className="hidden md:block">
             <img 

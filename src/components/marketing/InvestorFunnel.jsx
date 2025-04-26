@@ -15,23 +15,35 @@ import {
   XAxis, YAxis, Tooltip, PieChart, Pie,
   Cell, LineChart, Line
 } from 'recharts';
+import PasswordProtection from '../shared/PasswordProtection';
+
 
 const InvestorFunnel = () => {
-  const navigate = useNavigate();
-  const [currentSlide, setCurrentSlide] = useState(1);
-  const [quizAnswers, setQuizAnswers] = useState({});
-  const [revealAnswers, setRevealAnswers] = useState({});
-  const [taskSelections, setTaskSelections] = useState({});
-  const [activeScienceCard, setActiveScienceCard] = useState(null);
-  const [activeCommandCenter, setActiveCommandCenter] = useState('calendar');
-  const [financialView, setFinancialView] = useState('revenue');
+    const navigate = useNavigate();
+    const [currentSlide, setCurrentSlide] = useState(1);
+    const [quizAnswers, setQuizAnswers] = useState({});
+    const [revealAnswers, setRevealAnswers] = useState({});
+    const [taskSelections, setTaskSelections] = useState({});
+    const [activeScienceCard, setActiveScienceCard] = useState(null);
+    const [activeCommandCenter, setActiveCommandCenter] = useState('calendar');
+    const [financialView, setFinancialView] = useState('revenue');
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    
+    const totalSlides = 22;
+    const sliderRef = useRef(null);
+    
+    useEffect(() => {
+      window.scrollTo(0, 0);
+    }, [currentSlide]);
   
-  const totalSlides = 22;
-  const sliderRef = useRef(null);
+    const handleCorrectPassword = () => {
+      setIsAuthenticated(true);
+    };
   
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [currentSlide]);
+    if (!isAuthenticated) {
+      return <PasswordProtection onCorrectPassword={handleCorrectPassword} />;
+    }
+  
 
   const nextSlide = () => {
     if (currentSlide < totalSlides) {
