@@ -34,12 +34,12 @@ constructor() {
 
   
   // Basic settings
-this.mockMode = false;
-this.debugMode = true; // Always enable logging for debugging
-this.disableAICalls = false;
-this.disableCalendarDetection = false; // <-- CHANGED TO FALSE
-this.retryCount = 3;
-this.functionRegion = 'europe-west1'; // Match this to your deployment region
+  this.mockMode = false;
+  this.debugMode = true; // Always enable logging for debugging
+  this.disableAICalls = false;
+  this.disableCalendarDetection = false; // <-- CHANGED TO FALSE to enable calendar detection
+  this.retryCount = 3;
+  this.functionRegion = 'europe-west1'; // Match this to your deployment region
   
   // Add connection test with retry capability
   setTimeout(() => {
@@ -669,75 +669,83 @@ if (!this.disableCalendarDetection && messageText.length > 0) {
   }
 }
 
-  // Updated version with loop protection
-  async extractCalendarRequest(message) {  
-    try {
-      // Check if we're already processing a calendar request to prevent recursion
-      if (this._processingCalendarRequest) {
-        console.log("Calendar request processing already in progress, skipping to prevent loops");
-        return null;
-      }
-      
-      // Set a flag to prevent recursive calls
-      this._processingCalendarRequest = true;
-      
-      // Add a timeout to force release the lock after 5 seconds
-      setTimeout(() => {
-        this._processingCalendarRequest = false;
-      }, 5000);
+  // In ClaudeService.js, update the extractCalendarRequest method
 
-      // Check if this is a calendar-related request first (keep this quick check)  
-      const calendarKeywords = [  
-        'add to calendar', 'schedule', 'appointment', 'meeting', 'event',   
-        'calendar', 'book', 'plan', 'sync', 'reminder', 'save date', 'date'  
-      ];  
-        
-      const isCalendarRequest = calendarKeywords.some(keyword =>   
-        message.toLowerCase().includes(keyword)  
-      );  
-        
-      if (!isCalendarRequest) {
-        this._processingCalendarRequest = false;
-        return null;  
-      }
-        
-      // Use UnifiedParserService to extract event details  
-      const UnifiedParserService = (await import('./UnifiedParserService')).default;  
-      const parsedEvent = await UnifiedParserService.parseEvent(message);  
-        
-      if (!parsedEvent || !parsedEvent.title) {  
-        console.warn("UnifiedParserService failed to extract event details");
-        this._processingCalendarRequest = false;
-        return null;  
-      }  
-        
-      console.log("AI-parsed event:", parsedEvent);  
-        
-      // Convert the parsed event to the format expected by processCalendarRequest  
-      const result = {  
-        type: parsedEvent.eventType || 'event',  
-        title: parsedEvent.title || 'New Event',  
-        dateTime: parsedEvent.dateTime, // ISO date string  
-        endDateTime: parsedEvent.endDateTime,  
-        location: parsedEvent.location || '',  
-        description: parsedEvent.description || '',  
-        childName: parsedEvent.childName || null,  
-        childId: parsedEvent.childId || null,  
-        hostParent: parsedEvent.hostName || '',  
-        extraDetails: parsedEvent.extraDetails || {},  
-        originalText: message  
-      };
-      
-      // Release the lock
+async extractCalendarRequest(message) {  
+  try {
+    // Check if we're already processing a calendar request to prevent recursion
+    if (this._processingCalendarRequest) {
+      console.log("Calendar request processing already in progress, skipping to prevent loops");
+      return null;
+    }
+    
+    // Set a flag to prevent recursive calls
+    this._processingCalendarRequest = true;
+    
+    // Add a timeout to force release the lock after 5 seconds
+    setTimeout(() => {
       this._processingCalendarRequest = false;
-      return result;
-    } catch (error) {  
-      console.error("Error extracting calendar event with AI:", error);
-      // Make sure to release the lock even if there's an error
+    }, 5000);
+
+    console.log(`Extracting calendar details from: "${message.substring(0, 100)}..."`);
+
+    // Check if this is a calendar-related request  
+    const calendarKeywords = [  
+      'add to calendar', 'schedule', 'appointment', 'meeting', 'event',   
+      'calendar', 'book', 'plan', 'sync', 'reminder', 'save date', 'date',
+      'doctor', 'dentist', 'dental', 'checkup', 'check-up', 'visit'
+    ];  
+      
+    const isCalendarRequest = calendarKeywords.some(keyword =>   
+      message.toLowerCase().includes(keyword)  
+    );  
+      
+    if (!isCalendarRequest) {
+      this._processingCalendarRequest = false;
+      return null;  
+    }
+      
+    // Use UnifiedParserService to extract event details  
+    const UnifiedParserService = (await import('./UnifiedParserService')).default;  
+    const parsedEvent = await UnifiedParserService.parseEvent(message);  
+      
+    if (!parsedEvent || !parsedEvent.title) {  
+      console.warn("UnifiedParserService failed to extract event details");
       this._processingCalendarRequest = false;
       return null;  
     }  
-  }
+      
+    console.log("AI-parsed event:", parsedEvent);  
+      
+    // Convert the parsed event to the format expected by processCalendarRequest  
+    const result = {  
+      type: parsedEvent.eventType || 'event',  
+      title: parsedEvent.title || 'New Event',  
+      dateTime: parsedEvent.dateTime, // ISO date string  
+      endDateTime: parsedEvent.endDateTime,  
+      location: parsedEvent.location || '',  
+      description: parsedEvent.description || '',  
+      childName: parsedEvent.childName || null,  
+      childId: parsedEvent.childId || null,
+      doctorName: parsedEvent.doctorName || parsedEvent.appointmentDetails?.doctorName,
+      hostParent: parsedEvent.hostName || '',  
+      extraDetails: {
+        ...(parsedEvent.extraDetails || {}),
+        appointmentDetails: parsedEvent.appointmentDetails || {}
+      },
+      originalText: message
+    };
+    
+    // Release the lock
+    this._processingCalendarRequest = false;
+    return result;
+  } catch (error) {  
+    console.error("Error extracting calendar event with AI:", error);
+    // Make sure to release the lock even if there's an error
+    this._processingCalendarRequest = false;
+    return null;  
+  }  
+}
 
 
   async extractAndCollectEventDetails(message, userId, familyId) {
@@ -801,7 +809,8 @@ if (!this.disableCalendarDetection && messageText.length > 0) {
     }
   }
 
-// Add this method to handle responses in the collection flow
+// In ClaudeService.js, update the handleEventCollectionResponse method
+
 async handleEventCollectionResponse(message, sessionId, step, userId, familyId) {
   try {
     // Import EventDetailCollectorService
@@ -821,20 +830,24 @@ async handleEventCollectionResponse(message, sessionId, step, userId, familyId) 
       const eventResult = await this.createEventFromCollectedData(eventData, userId, familyId);
       
       if (eventResult.success) {
-        // Format success message
+        // Format success message with more complete details
         let responseMessage = `Perfect! I've added this ${eventData.eventType || 'event'} to your calendar:\n\n`;
-responseMessage += `Event: ${eventData.title || "Appointment"}\n`;
+        responseMessage += `Event: ${eventData.title || "Appointment"}\n`;
 
-if (eventData.dateTime) {
-  try {
-    const eventDate = new Date(eventData.dateTime);
-    responseMessage += `Date: ${eventDate.toLocaleDateString()}\n`;
-    responseMessage += `Time: ${eventDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}\n`;
-  } catch (e) {
-    // Fallback if date parsing fails
-    responseMessage += `Date: ${eventData.dateTime}\n`;
-  }
-}
+        if (eventData.dateTime) {
+          try {
+            const eventDate = new Date(eventData.dateTime);
+            responseMessage += `Date: ${eventDate.toLocaleDateString('en-US', { 
+              weekday: 'long',
+              month: 'long', 
+              day: 'numeric'
+            })}\n`;
+            responseMessage += `Time: ${eventDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}\n`;
+          } catch (e) {
+            // Fallback if date parsing fails
+            responseMessage += `Date: ${eventData.dateTime}\n`;
+          }
+        }
         
         if (eventData.location) {
           responseMessage += `Location: ${eventData.location}\n`;
@@ -844,16 +857,27 @@ if (eventData.dateTime) {
           responseMessage += `For: ${eventData.childName}\n`;
         }
         
-        // Add any other helpful information
+        if (eventData.doctorName || eventData.appointmentDetails?.doctorName) {
+          responseMessage += `Doctor: ${eventData.doctorName || eventData.appointmentDetails.doctorName}\n`;
+        }
+        
+        // Add specific reminder information based on event type
         if (eventData.eventType === 'doctor' || eventData.eventType === 'dentist') {
-          responseMessage += `\nI'll send a reminder 24 hours before the appointment!`;
+          responseMessage += `\nI'll send a reminder 30 minutes before the appointment. You can view and manage this in your calendar.`;
         } else if (eventData.eventType === 'activity') {
-          responseMessage += `\nDon't forget ${eventData.equipmentNeeded || 'any necessary equipment'}!`;
+          responseMessage += `\nDon't forget ${eventData.activityDetails?.equipmentNeeded || 'any necessary equipment'}! I've added this to your family calendar.`;
+        } else {
+          responseMessage += `\nThis event has been added to your family calendar. You can view and edit it there anytime.`;
+        }
+        
+        // Trigger a UI refresh to ensure the calendar widget updates
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
         }
         
         return responseMessage;
       } else {
-        return "I had trouble adding this event to your calendar. Could you try again or check the calendar app directly?";
+        return "I had trouble adding this event to your calendar. Let's try again with a bit more information. What event would you like to add?";
       }
     } else {
       // Continue collection with next prompt
@@ -863,7 +887,7 @@ if (eventData.dateTime) {
       responseMessage += `\n\n(Step ${result.step} of ${result.totalSteps})`;
       
       // Add special marker for continued collection
-      responseMessage += `\n\n<event_collection session="${sessionId}" step="${result.step}">`;
+      responseMessage += `\n\n<!-- <event_collection session="${sessionId}" step="${result.step}"> -->`;
       
       return responseMessage;
     }
@@ -873,7 +897,8 @@ if (eventData.dateTime) {
   }
 }
 
-// Helper method to format collected event data
+// In ClaudeService.js, update the formatCollectedEventData method
+
 formatCollectedEventData(collectedData) {
   // Format the collected data into the structure expected by Calendar operations
   const eventData = {
@@ -881,9 +906,11 @@ formatCollectedEventData(collectedData) {
     // Ensure required fields have proper format
     title: collectedData.title || `${collectedData.eventType || 'Event'}`,
     // Format date and time if both are available
-    dateTime: collectedData.date && collectedData.time ? 
+    dateTime: collectedData.dateTime || (
+      collectedData.date && collectedData.time ? 
       new Date(`${collectedData.date}T${collectedData.time}`).toISOString() : 
-      collectedData.dateTime || new Date().toISOString(),
+      new Date().toISOString()
+    ),
     // Add any event-specific details to appropriate containers
     extraDetails: {
       ...(collectedData.extraDetails || {}),
@@ -892,46 +919,40 @@ formatCollectedEventData(collectedData) {
     }
   };
   
-  // Handle event-specific fields
+  // Make sure we have endDateTime
+  if (!eventData.endDateTime && eventData.dateTime) {
+    const startDate = new Date(eventData.dateTime);
+    const endDate = new Date(startDate);
+    endDate.setHours(endDate.getHours() + 1); // Default 1 hour duration
+    eventData.endDateTime = endDate.toISOString();
+  }
+  
+  // Handle event-specific fields based on type
   if (collectedData.eventType === 'dentist' || collectedData.eventType === 'doctor') {
+    eventData.category = 'appointment';
+    
+    // Enhance appointment details
     eventData.appointmentDetails = {
-      doctorName: collectedData.doctorName,
-      location: collectedData.location,
-      reasonForVisit: collectedData.reasonForVisit,
-      insuranceInfo: collectedData.insuranceInfo,
-      formsNeeded: collectedData.formsNeeded,
-      fastingRequired: collectedData.fastingRequired,
-      bringRecords: collectedData.bringRecords,
-      transportation: collectedData.transportation,
-      followUpDate: collectedData.followUpDate,
-      costsAndCopays: collectedData.costsAndCopays
+      ...(eventData.appointmentDetails || {}),
+      doctorName: collectedData.doctorName || collectedData.appointmentDetails?.doctorName || "Unknown",
+      reasonForVisit: collectedData.reasonForVisit || collectedData.appointmentDetails?.reasonForVisit || "",
+      duration: collectedData.duration || collectedData.appointmentDetails?.duration || 60,
+      location: collectedData.location || ""
     };
+    
+    // If we have a doctor but no title, create appropriate title
+    if (collectedData.doctorName && !collectedData.title) {
+      eventData.title = `${collectedData.eventType === 'dentist' ? 'Dentist' : 'Doctor'} Appointment with ${collectedData.doctorName}`;
+    }
   } else if (collectedData.eventType === 'activity') {
+    eventData.category = 'activity';
+    
     eventData.activityDetails = {
-      activityType: collectedData.activityType,
-      coach: collectedData.coach,
-      equipmentNeeded: collectedData.equipmentNeeded,
-      parentAttendance: collectedData.parentAttendance,
-      weatherContingency: collectedData.weatherContingency,
-      seasonDuration: collectedData.seasonDuration,
-      fees: collectedData.fees,
-      uniform: collectedData.uniform,
-      communicationMethod: collectedData.communicationMethod
-    };
-  } else if (collectedData.eventType === 'birthday') {
-    eventData.birthdayDetails = {
-      birthdayChildName: collectedData.birthdayChildName,
-      birthdayChildAge: collectedData.birthdayChildAge,
-      guestList: collectedData.guestList,
-      theme: collectedData.theme,
-      foodArrangements: collectedData.foodArrangements,
-      activities: collectedData.activities,
-      budget: collectedData.budget,
-      favors: collectedData.favors,
-      setupCleanup: collectedData.setupCleanup,
-      weatherBackup: collectedData.weatherBackup,
-      isInvitation: collectedData.isInvitation || false,
-      rsvpDeadline: collectedData.rsvpDeadline
+      ...(eventData.activityDetails || {}),
+      activityType: collectedData.activityType || collectedData.activityDetails?.activityType || "",
+      coach: collectedData.coach || collectedData.activityDetails?.coach || "",
+      equipmentNeeded: collectedData.equipmentNeeded || collectedData.activityDetails?.equipmentNeeded || "",
+      parentAttendance: collectedData.parentAttendance || collectedData.activityDetails?.parentAttendance || false
     };
   }
   
@@ -939,6 +960,8 @@ formatCollectedEventData(collectedData) {
 }
 
 // In ClaudeService.js, enhance the createEventFromCollectedData method:
+
+// In ClaudeService.js, update the createEventFromCollectedData method
 
 async createEventFromCollectedData(eventData, userId, familyId) {
   try {
@@ -954,7 +977,8 @@ async createEventFromCollectedData(eventData, userId, familyId) {
       type: eventData.eventType || "general",
       dateTime: eventData.dateTime,
       userId: userId,
-      familyId: familyId
+      familyId: familyId,
+      doctorName: eventData.doctorName || eventData.appointmentDetails?.doctorName
     });
     
     // Ensure we have valid date values
@@ -964,14 +988,15 @@ async createEventFromCollectedData(eventData, userId, familyId) {
       new Date(eventData.endDateTime) : 
       new Date(startDate.getTime() + 60 * 60 * 1000); // Default to 1 hour later
     
-    // Prepare the event for the calendar with defaults for required fields
+    // Prepare the event for the calendar with all required fields
     const event = {
       title: eventData.title || "Untitled Event",
       summary: eventData.title || "Untitled Event",
       description: eventData.description || "",
       location: eventData.location || "",
+      // Make sure eventType is set appropriately
       eventType: eventData.eventType || "general",
-      category: eventData.category || "general",
+      category: eventData.category || eventData.eventType || "general",
       // Add user and family IDs
       userId,
       familyId,
@@ -995,40 +1020,108 @@ async createEventFromCollectedData(eventData, userId, familyId) {
       creationSource: 'allie-chat'
     };
     
-    // Only add optional fields if they exist
+    // Add child-specific fields if present
     if (eventData.childId) event.childId = eventData.childId;
     if (eventData.childName) event.childName = eventData.childName;
     if (eventData.attendingParentId) event.attendingParentId = eventData.attendingParentId;
-    if (eventData.extraDetails) event.extraDetails = eventData.extraDetails;
     
-    console.log("📅 Formatted event object:", event);
-    
-    // Use CalendarService to add the event
-    const result = await CalendarService.addEvent(event, userId);
-    console.log("📅 Calendar service result:", result);
-    
-    // Trigger a more robust UI refresh by dispatching multiple events
-    if (typeof window !== 'undefined' && result.success) {
-      console.log("📅 Dispatching calendar refresh events");
-      
-      // Use the specific event-added event with details
-      window.dispatchEvent(new CustomEvent('calendar-event-added', {
-        detail: {
-          eventId: result.eventId,
-          addedViaChat: true
-        }
-      }));
-      
-      // Add a delayed generic refresh for components that might miss the first event
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-      }, 500);
+    // Add doctor name for medical appointments
+    if (eventData.doctorName || eventData.appointmentDetails?.doctorName) {
+      event.doctorName = eventData.doctorName || eventData.appointmentDetails.doctorName;
     }
     
-    return {
-      success: result.success,
-      eventId: result.eventId
-    };
+    // Add appointment-specific details with default structure
+    if (eventData.eventType === 'doctor' || eventData.eventType === 'dentist') {
+      event.appointmentDetails = eventData.appointmentDetails || {
+        doctorName: eventData.doctorName || "Unknown",
+        reasonForVisit: "",
+        duration: 60
+      };
+      
+      // Also add these to extraDetails to ensure they're saved
+      event.extraDetails = {
+        ...(eventData.extraDetails || {}),
+        appointmentDetails: event.appointmentDetails,
+        doctorName: event.doctorName,
+        creationSource: 'allie-chat',
+        parsedWithAI: true
+      };
+    } else {
+      // For non-medical events, just add generic extraDetails
+      event.extraDetails = {
+        ...(eventData.extraDetails || {}),
+        creationSource: 'allie-chat',
+        parsedWithAI: true
+      };
+    }
+    
+    console.log("📅 Final event object ready for saving:", event);
+    
+    // Use CalendarService to add the event with error handling
+    try {
+      const CalendarService = (await import('./CalendarService')).default;
+      const result = await CalendarService.addEvent(event, userId);
+      console.log("📅 Calendar service result:", result);
+      
+      // Handle potential errors from calendar service
+      if (!result.success) {
+        console.error("Calendar service reported error:", result.error);
+        return { success: false, error: result.error || "Unknown error from calendar service" };
+      }
+      
+      // Trigger UI refresh with multiple events to ensure components update
+      if (typeof window !== 'undefined') {
+        console.log("📅 Dispatching calendar refresh events");
+        
+        // Use the specific event-added event with details
+        window.dispatchEvent(new CustomEvent('calendar-event-added', {
+          detail: {
+            eventId: result.eventId,
+            addedViaChat: true
+          }
+        }));
+        
+        // Add a delayed generic refresh for components that might miss the first event
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        }, 500);
+        
+        // Add another refresh after a longer delay to ensure widget updates
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+          console.log("Dispatched delayed refresh event");
+        }, 1500);
+      }
+      
+      return {
+        success: true,
+        eventId: result.eventId
+      };
+    } catch (calendarError) {
+      console.error("Error calling CalendarService:", calendarError);
+      
+      // Try alternate direct method if CalendarService fails
+      try {
+        // Import EventStore directly as a fallback
+        const eventStore = (await import('./EventStore')).default;
+        const result = await eventStore.addEvent(event, userId, familyId);
+        
+        console.log("📅 EventStore fallback result:", result);
+        
+        // Trigger UI refresh
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        }
+        
+        return {
+          success: true,
+          eventId: result.eventId || result.firestoreId
+        };
+      } catch (storeError) {
+        console.error("Even fallback event store failed:", storeError);
+        return { success: false, error: storeError.message };
+      }
+    }
   } catch (error) {
     console.error("Error creating event from collected data:", error);
     return { success: false, error: error.message };

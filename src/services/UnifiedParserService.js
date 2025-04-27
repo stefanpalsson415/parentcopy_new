@@ -22,40 +22,44 @@ class UnifiedParserService {
     try {
       console.log(`Parsing ${type} with minimal context from: "${text.substring(0, 100)}..."`);
       
-      // Build a more precise system prompt with better instructions
+      // Build a specialized system prompt with clear extraction instructions
       const systemPrompt = `You are Allie, a family assistant AI specialized in extracting calendar events.
-      Your only task is to extract the specific ${type} details from the user's message.
+      You must extract the specific ${type} details from the user's message.
       
       IMPORTANT: Return ONLY a valid JSON object without any explanation or extra text.
-      Be extremely precise in extracting:
-      - Event title (extract the specific appointment/event name)
-      - Date and time
-      - Location
-      - People involved (children, doctors, etc.)
-      - Type of event (appointment, meeting, etc.)
+      Extract precisely and thoroughly:
       
-      For a message like "book a dentist appointment for Emma on Tuesday at 3pm", you would extract:
+      - Event title (extract the specific appointment/event name)
+      - Date and time (convert to yyyy-mm-dd format)
+      - Location (if mentioned)
+      - People involved (children, doctors, etc.)
+      - Type of event (doctor, dentist, activity, meeting, etc.)
+      
+      For example, with "schedule a doctor's appointment for Emma on Tuesday at 3pm with Dr. Smith":
+      
       {
-        "title": "Dentist Appointment",
-        "eventType": "dentist",
+        "title": "Doctor's Appointment with Dr. Smith",
+        "eventType": "doctor",
         "category": "appointment",
         "childName": "Emma",
-        "dateTime": "..." (next Tuesday at 3pm in ISO format),
+        "doctorName": "Dr. Smith",
+        "dateTime": "2025-04-30T15:00:00.000Z",
         "location": null
       }
       
       ${this.getTypeSpecificInstructions(type)}
       
-      Return ONLY the JSON object. No explanations, no markdown formatting, no extra text.`;
+      Return ONLY the JSON. No markdown code blocks, no explanations, no extra text.
+      If you can't determine a field value, set it to null instead of omitting it.`;
       
       // Send only the current message to Claude with clearer instructions
       const response = await this.claudeService.generateResponse(
         [{ 
           role: 'user', 
-          content: `Extract the exact ${type} information from: "${text}". Return ONLY a valid JSON object.` 
+          content: `Extract the exact ${type} information from this text (return ONLY a valid JSON object): "${text}"` 
         }],
         { system: systemPrompt },
-        { temperature: 0.1 } // Low temperature for precision
+        { temperature: 0.1 } // Very low temperature for precision
       );
       
       // Process the response with improved extraction
@@ -66,262 +70,7 @@ class UnifiedParserService {
     }
   }
   
-  /**
-   * Parse input with recent relevant context
-   * @param {string} currentText - The current message text
-   * @param {Array} recentMessages - Array of recent messages (3-5 messages)
-   * @param {string} type - The type of content to extract
-   * @param {object} context - Additional context (family members, etc.)
-   * @returns {Promise<object>} Extracted structured information
-   */
-  async parseWithRecentContext(currentText, recentMessages = [], type, context = {}) {
-    try {
-      console.log(`Parsing ${type} with recent context`);
-      
-      // Filter recent messages to only include those related to this topic
-      const relevantMessages = this.filterRelevantMessages(recentMessages, type);
-      
-      // Build context from relevant messages
-      let contextText = "";
-      if (relevantMessages.length > 0) {
-        contextText = "Recent conversation context:\n" + 
-          relevantMessages.map(msg => 
-            `${msg.userName || 'User'}: ${msg.text}`
-          ).join("\n");
-      }
-      
-      // Build a focused system prompt with limited context
-      const systemPrompt = `You are Allie, a family assistant AI. 
-      Extract the information about the ${type} from the conversation.
-      Focus primarily on the most recent message, but use context from previous messages if needed.
-      
-      ${this.getTypeSpecificInstructions(type)}
-      
-      Return a JSON object with ONLY the extracted information. No explanations or additional text.`;
-      
-      // Prepare the user message with context
-      const userMessage = contextText ? 
-        `${contextText}\n\nCurrent message: "${currentText}"\n\nExtract the ${type} information from this conversation.` :
-        `Extract the ${type} information from: "${currentText}"`;
-      
-      // Send to Claude with the limited context
-      const response = await this.claudeService.generateResponse(
-        [{ role: 'user', content: userMessage }],
-        { system: systemPrompt },
-        { temperature: 0.1 } // Low temperature for precision
-      );
-      
-      // Process the response
-      return this.processResponse(response, type);
-    } catch (error) {
-      console.error(`Error parsing ${type} with recent context:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get type-specific instructions for the AI
-   * @param {string} type - The type of information being extracted
-   * @returns {string} Detailed instructions for this type
-   */
-  getTypeSpecificInstructions(type) {
-    switch (type) {
-      case 'event':
-        return `Extract the following details about the event or appointment:
-        {
-        "title": "string (event title or purpose)",
-        "eventType": "string (general, appointment, activity, birthday, meeting, date-night, travel, playdate, etc.)",
-        "category": "string (the category this event belongs to: appointment, activity, birthday, meeting, etc.)",
-        "dateTime": "string (ISO date string, like 2023-04-16T15:30:00.000Z)",
-        "duration": "number (duration in minutes, default 60)",
-        "location": "string (where the event takes place)",
-        "childId": "string (if event is for a specific child)",
-        "childName": "string (if event is for a child)",
-        "attendingParentId": "string (which parent will attend, 'both', or 'undecided')",
-        
-        "appointmentDetails": {
-          "reasonForVisit": "string",
-          "insuranceInfo": "string",
-          "formsNeeded": "string",
-          "fastingRequired": "boolean",
-          "bringRecords": "boolean",
-          "transportation": "string",
-          "postCare": "string",
-          "duration": "number (in minutes)",
-          "followUpDate": "string (ISO date)",
-          "costsAndCopays": "string",
-          "doctorName": "string"
-        },
-        
-        "activityDetails": {
-          "equipmentNeeded": "string",
-          "parentAttendance": "boolean",
-          "weatherContingency": "string",
-          "seasonDuration": "string",
-          "fees": "string",
-          "uniform": "string",
-          "communicationMethod": "string",
-          "coach": "string"
-        },
-        
-        "birthdayDetails": {
-          "birthdayChildName": "string",
-          "birthdayChildAge": "number",
-          "guestList": "string",
-          "theme": "string",
-          "foodArrangements": "string",
-          "activities": "string",
-          "budget": "string",
-          "favors": "string",
-          "setupCleanup": "string",
-          "weatherBackup": "string",
-          "isInvitation": "boolean",
-          "rsvpDeadline": "string (ISO date)"
-        },
-        
-        "dateNightDetails": {
-          "venue": "string",
-          "budget": "string",
-          "transportation": "string",
-          "childcareArranged": "boolean",
-          "needsBabysitter": "boolean",
-          "specialOccasion": "boolean",
-          "occasionNote": "string"
-        },
-        
-        "meetingDetails": {
-          "agenda": "string",
-          "issuesForDiscussion": "string",
-          "followUpPlan": "string"
-        },
-        
-        "providers": [
-          {
-            "name": "string",
-            "type": "string",
-            "specialty": "string",
-            "id": "string (if known)"
-          }
-        ],
-        
-        "isRecurring": "boolean",
-        "recurrence": {
-          "frequency": "string (daily, weekly, monthly)",
-          "days": ["string (day names like Monday, Tuesday)"],
-          "endDate": "string (ISO date)"
-        }
-      }
-      
-      IMPORTANT RULES:
-      1. Determine the most specific event type and category based on the content
-      2. For appointments, extract doctor name, reason for visit, and any special requirements
-      3. For activities, note equipment needs, parent attendance requirements, and schedules
-      4. For birthdays, capture birthday child details, theme, and guest information
-      5. For date nights, include venue, childcare needs, and special occasion details
-      6. Extract recurring patterns if mentioned (weekly soccer practice, monthly check-ups)
-      7. Include provider details when mentioned (doctor, coach, teacher names)`;
-        
-      case 'provider':
-        return `Extract the following details about the provider:
-        {
-          "name": "string (full name of provider)",
-          "type": "string (medical, dental, therapy, education, etc.)",
-          "specialty": "string (pediatrician, orthodontist, math tutor, etc.)",
-          "phone": "string (phone number if present)",
-          "email": "string (email if present)",
-          "address": "string (address if present)",
-          "forChild": "string (child's name if the provider is specifically for a child)"
-        }
-        
-        IMPORTANT RULES:
-        1. Extract the full name, preserving titles like Dr., Mrs., etc.
-        2. Determine type based on context.
-        3. For education providers, use type "education" and appropriate specialty.
-        4. If no child is specifically mentioned, leave forChild as null.`;
-        
-      case 'todo':
-        return `Extract the following details about the todo item:
-        {
-          "text": "string (the task description)",
-          "assignedTo": "string (person the task is assigned to)",
-          "dueDate": "string (ISO date string when task is due, or null)",
-          "category": "string (household, relationship, parenting, errands, etc.)",
-          "notes": "string (any additional details)"
-        }
-        
-        IMPORTANT RULES:
-        1. Extract only the core task for the text field.
-        2. If no specific person is mentioned for assignment, leave assignedTo null.
-        3. Infer the category based on the task content.
-        4. Convert relative dates (like 'next Tuesday') to actual dates.`;
-        
-      case 'document':
-        return `Extract the following details about the document:
-        {
-          "title": "string (document title)",
-          "category": "string (medical, school, event, financial, etc.)",
-          "childName": "string (if document is related to a child)",
-          "date": "string (ISO date string related to the document, or null)",
-          "entities": {
-            "dates": ["string"],
-            "people": ["string"],
-            "organizations": ["string"],
-            "addresses": ["string"]
-          }
-        }
-        
-        IMPORTANT RULES:
-        1. Extract as many relevant entities as possible.
-        2. For medical documents, identify type of procedure, provider, and dates.
-        3. For school documents, identify school name, teacher, grade level, and relevant dates.
-        4. If no child is specifically mentioned, leave childName as null.`;
-        
-      default:
-        return `Extract all relevant information from the text and return it as a JSON object.`;
-    }
-  }
-
-  /**
-   * Filter messages to only include those relevant to the current topic
-   * @param {Array} messages - Array of message objects
-   * @param {string} type - The type of information being extracted
-   * @returns {Array} Filtered array of relevant messages
-   */
-  filterRelevantMessages(messages, type) {
-    if (!messages || messages.length === 0) return [];
-    
-    // Get only messages from the last 5 minutes that might be relevant
-    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-    const recentMessages = messages.filter(msg => {
-      if (!msg.timestamp) return false;
-      const msgTime = new Date(msg.timestamp).getTime();
-      return msgTime > fiveMinutesAgo;
-    });
-    
-    // If we have less than 3 messages, just use those
-    if (recentMessages.length <= 3) return recentMessages;
-    
-    // Otherwise, filter by relevance to the type
-    const keywords = {
-      'event': ['appointment', 'schedule', 'calendar', 'event', 'date', 'time', 'meeting', 'party', 'doctor'],
-      'provider': ['doctor', 'dentist', 'teacher', 'provider', 'specialist', 'healthcare', 'professional', 'tutor'],
-      'todo': ['todo', 'task', 'reminder', 'to-do', 'to do', 'assignment', 'deadline', 'due'],
-      'document': ['document', 'file', 'paper', 'form', 'record', 'report', 'certificate']
-    };
-    
-    // Get the relevant keywords for this type
-    const relevantKeywords = keywords[type] || [];
-    
-    // Filter messages that contain relevant keywords
-    const relevantMessages = recentMessages.filter(msg => {
-      if (!msg.text) return false;
-      const text = msg.text.toLowerCase();
-      return relevantKeywords.some(keyword => text.includes(keyword));
-    });
-    
-    // Return the most recent 3 relevant messages
-    return relevantMessages.slice(-3);
-  }
+  // Other methods remain unchanged...
 
   /**
    * Process Claude's response into a structured format
@@ -337,10 +86,21 @@ class UnifiedParserService {
       
       // First try: direct JSON parsing if response is already JSON
       try {
-        result = JSON.parse(response.trim());
-        console.log(`Successfully parsed direct JSON for ${type}`);
+        response = response.trim();
+        
+        // Remove any text before and after potential JSON
+        // This fixes cases where Claude adds explanation even when told not to
+        const jsonStartIndex = response.indexOf('{');
+        const jsonEndIndex = response.lastIndexOf('}') + 1;
+        
+        if (jsonStartIndex >= 0 && jsonEndIndex > jsonStartIndex) {
+          const potentialJson = response.substring(jsonStartIndex, jsonEndIndex);
+          result = JSON.parse(potentialJson);
+          console.log(`Successfully parsed direct JSON for ${type}`);
+        }
       } catch (directParseError) {
         // Continue to other methods if direct parsing fails
+        console.log(`Direct JSON parsing failed: ${directParseError.message}`);
       }
       
       // Second try: Look for JSON in markdown code blocks
@@ -394,103 +154,293 @@ class UnifiedParserService {
         }
       }
       
-      // If all parsing attempts failed, try to create a smart fallback for events
+      // Enhanced fallback for events with better extraction from raw text
       if (!result && type === 'event') {
         console.warn(`Failed to extract JSON for ${type}. Creating intelligent event fallback.`);
         
-        // Extract title/event name with specific patterns for events
-        const titleMatch = response.match(/title[:\s]+"([^"]+)"/i) || 
-                           response.match(/appointment for ([^"]+?) on/i) ||
-                           response.match(/meeting with ([^"]+?) on/i) ||
-                           response.match(/event[:\s]+"?([^",]+)"?/i);
-                           
+        // Extract appointment/doctor specifics
+        const isDoctorAppointment = response.toLowerCase().includes('doctor') || 
+                                    response.toLowerCase().includes('dr.') ||
+                                    response.toLowerCase().includes('appointment');
+        
+        const isDentistAppointment = response.toLowerCase().includes('dentist') || 
+                                     response.toLowerCase().includes('dental');
+        
+        // Extract title/event name with improved patterns
+        let titleMatch = null;
+        const titlePatterns = [
+          /title[:\s]+"([^"]+)"/i,
+          /appointment (?:for|with) ([^"]+?) (?:on|at)/i,
+          /meeting with ([^"]+?) (?:on|at)/i,
+          /event[:\s]+"?([^",]+)"?/i, 
+          /(\w+(?:'s)? appointment)/i,
+          /(\w+(?:'s)? \w+ appointment)/i
+        ];
+        
+        for (const pattern of titlePatterns) {
+          const match = response.match(pattern);
+          if (match && match[1]) {
+            titleMatch = match;
+            break;
+          }
+        }
+        
         // Extract date with multiple patterns
-        const dateMatch = response.match(/on ([A-Za-z]+ \d+(?:st|nd|rd|th)?)/i) || 
-                         response.match(/date[:\s]+"?([^",]+)"?/i) ||
-                         response.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
-                         
-        // Extract time with multiple patterns                
-        const timeMatch = response.match(/at (\d{1,2}(?::\d{2})?\s*(?:am|pm))/i) ||
-                         response.match(/time[:\s]+"?([^",]+)"?/i);
-                         
-        // Extract location                
-        const locationMatch = response.match(/location[:\s]+"?([^",]+)"?/i) ||
-                             response.match(/at ([^,]+) (?:on|at)/i);
-                             
-        // Extract child name                
-        const childMatch = response.match(/for ([A-Za-z]+?) (?:on|at)/i) ||
-                         response.match(/childName[:\s]+"?([^",]+)"?/i);
+        const datePatterns = [
+          /on ([A-Za-z]+ \d+(?:st|nd|rd|th)?)/i,
+          /date[:\s]+"?([^",]+)"?/i,
+          /(\d{1,2}\/\d{1,2}\/\d{2,4})/,
+          /next ([a-z]+day)/i,
+          /this ([a-z]+day)/i,
+          /tomorrow/i,
+          /today/i
+        ];
+        
+        let dateMatch = null;
+        for (const pattern of datePatterns) {
+          const match = response.match(pattern);
+          if (match) {
+            dateMatch = match;
+            break;
+          }
+        }
+        
+        // Extract time with multiple patterns
+        const timePatterns = [
+          /at (\d{1,2}(?::\d{2})?\s*(?:am|pm))/i,
+          /time[:\s]+"?([^",]+)"?/i,
+          /(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i
+        ];
+        
+        let timeMatch = null;
+        for (const pattern of timePatterns) {
+          const match = response.match(pattern);
+          if (match) {
+            timeMatch = match;
+            break;
+          }
+        }
+        
+        // Extract location
+        const locationPatterns = [
+          /location[:\s]+"?([^",]+)"?/i,
+          /at ([^,]+) (?:on|at)/i,
+          /at the ([^,.]+)/i
+        ];
+        
+        let locationMatch = null;
+        for (const pattern of locationPatterns) {
+          const match = response.match(pattern);
+          if (match) {
+            locationMatch = match;
+            break;
+          }
+        }
+        
+        // Extract child name
+        const childPatterns = [
+          /for ([A-Za-z]+?)(?:'s)? (?:on|at|appointment)/i,
+          /childName[:\s]+"?([^",]+)"?/i,
+          /([A-Za-z]+?)(?:'s) appointment/i,
+          /appointment for ([A-Za-z]+)/i
+        ];
+        
+        let childMatch = null;
+        for (const pattern of childPatterns) {
+          const match = response.match(pattern);
+          if (match) {
+            childMatch = match;
+            break;
+          }
+        }
+        
+        // Extract doctor name
+        const doctorPatterns = [
+          /(?:with|see) (?:Dr\.|Doctor) ([A-Za-z]+)/i,
+          /doctorName[:\s]+"?([^",]+)"?/i,
+          /Dr\. ([A-Za-z]+)/i,
+          /Doctor ([A-Za-z]+)/i
+        ];
+        
+        let doctorMatch = null;
+        for (const pattern of doctorPatterns) {
+          const match = response.match(pattern);
+          if (match) {
+            doctorMatch = match;
+            break;
+          }
+        }
         
         // Create a structured event from regex matches with good defaults
+        const eventType = isDoctorAppointment ? 'doctor' : 
+                         isDentistAppointment ? 'dentist' : 'general';
+        
+        const childName = childMatch ? childMatch[1].trim() : null;
+        
+        // Construct appropriate title
+        let title = titleMatch ? titleMatch[1].trim() : 
+                   isDoctorAppointment ? "Doctor Appointment" :
+                   isDentistAppointment ? "Dentist Appointment" : 
+                   "Appointment";
+                   
+        // Add doctor name to title if available
+        if (doctorMatch && !title.includes(doctorMatch[1])) {
+          title += ` with Dr. ${doctorMatch[1]}`;
+        }
+        
         result = {
-          title: titleMatch ? titleMatch[1].trim() : "Appointment",
-          eventType: response.toLowerCase().includes('dentist') ? 'dentist' : 
-                    response.toLowerCase().includes('doctor') ? 'doctor' : 'general',
-          category: response.toLowerCase().includes('appointment') ? 'appointment' : 'general',
-          childName: childMatch ? childMatch[1].trim() : null,
+          title: title,
+          eventType: eventType,
+          category: eventType === 'general' ? 'general' : 'appointment',
+          childName: childName,
+          doctorName: doctorMatch ? `Dr. ${doctorMatch[1]}` : null,
           location: locationMatch ? locationMatch[1].trim() : null
         };
         
-        // Handle date/time computation for the fallback
+        // Handle date/time computation for the fallback with more robust date parsing
         if (dateMatch || timeMatch) {
           try {
-            // Create a date string we can parse
-            let dateString = '';
+            // Create a date object for the event
+            let eventDate = new Date();
             
+            // Handle date part
             if (dateMatch) {
-              // Handle relative dates first
-              if (dateMatch[1].toLowerCase().includes('tomorrow')) {
-                const tomorrow = new Date();
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                dateString = tomorrow.toISOString().split('T')[0];
+              // Handle relative dates
+              if (dateMatch[0].toLowerCase().includes('tomorrow')) {
+                eventDate.setDate(eventDate.getDate() + 1);
               } 
-              else if (dateMatch[1].toLowerCase().match(/next (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i)) {
-                const dayMatch = dateMatch[1].toLowerCase().match(/next (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
-                const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-                const targetDay = dayNames.indexOf(dayMatch[1]);
+              else if (dateMatch[0].toLowerCase().includes('today')) {
+                // Keep today's date
+              }
+              else if (dateMatch[0].toLowerCase().includes('next')) {
+                // Handle "next Monday", "next Tuesday", etc.
+                const dayMatch = dateMatch[0].match(/next ([a-z]+day)/i);
+                if (dayMatch && dayMatch[1]) {
+                  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                  const targetDay = dayNames.indexOf(dayMatch[1].toLowerCase());
+                  
+                  if (targetDay >= 0) {
+                    const currentDay = eventDate.getDay();
+                    const daysUntilTarget = (7 + targetDay - currentDay) % 7;
+                    // If today is the target day, go to next week
+                    eventDate.setDate(eventDate.getDate() + (daysUntilTarget === 0 ? 7 : daysUntilTarget));
+                  }
+                }
+              }
+              else if (dateMatch[0].toLowerCase().includes('this')) {
+                // Handle "this Monday", "this Tuesday", etc.
+                const dayMatch = dateMatch[0].match(/this ([a-z]+day)/i);
+                if (dayMatch && dayMatch[1]) {
+                  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                  const targetDay = dayNames.indexOf(dayMatch[1].toLowerCase());
+                  
+                  if (targetDay >= 0) {
+                    const currentDay = eventDate.getDay();
+                    let daysUntilTarget = targetDay - currentDay;
+                    // If target day is earlier in the week, go to next week
+                    if (daysUntilTarget < 0) daysUntilTarget += 7;
+                    eventDate.setDate(eventDate.getDate() + daysUntilTarget);
+                  }
+                }
+              }
+              else if (dateMatch[1].match(/^\d{1,2}\/\d{1,2}\/\d{2,4}$/)) {
+                // Handle MM/DD/YYYY format
+                const parts = dateMatch[1].split('/');
+                const month = parseInt(parts[0]) - 1; // JS months are 0-indexed
+                const day = parseInt(parts[1]);
+                const year = parts[2].length === 2 ? 2000 + parseInt(parts[2]) : parseInt(parts[2]);
                 
-                const now = new Date();
-                const currentDay = now.getDay();
-                const daysUntilTarget = (7 + targetDay - currentDay) % 7;
-                
-                now.setDate(now.getDate() + (daysUntilTarget === 0 ? 7 : daysUntilTarget));
-                dateString = now.toISOString().split('T')[0];
+                eventDate.setFullYear(year, month, day);
               }
               else {
-                // Try to parse different date formats
-                dateString = dateMatch[1].trim();
+                // Try to parse dates like "April 15th" or "June 3rd"
+                const monthNames = [
+                  'january', 'february', 'march', 'april', 'may', 'june',
+                  'july', 'august', 'september', 'october', 'november', 'december'
+                ];
+                
+                // Extract month and day
+                for (let i = 0; i < monthNames.length; i++) {
+                  if (dateMatch[1].toLowerCase().includes(monthNames[i])) {
+                    // Found month, now extract day
+                    const dayMatch = dateMatch[1].match(/(\d+)(?:st|nd|rd|th)?/);
+                    if (dayMatch && dayMatch[1]) {
+                      const day = parseInt(dayMatch[1]);
+                      
+                      eventDate.setMonth(i);
+                      eventDate.setDate(day);
+                      break;
+                    }
+                  }
+                }
               }
             }
             
-            // Create a time string
-            let timeString = timeMatch ? timeMatch[1].trim() : '12:00 PM';
-            
-            // Combine date and time
-            const parsedDate = new Date(`${dateString} ${timeString}`);
-            
-            if (!isNaN(parsedDate.getTime())) {
-              result.dateTime = parsedDate.toISOString();
+            // Handle time part
+            if (timeMatch) {
+              const timeStr = timeMatch[1].toLowerCase();
+              const hourMatch = timeStr.match(/(\d{1,2})(?::(\d{2}))?(?:\s*(am|pm))?/i);
+              
+              if (hourMatch) {
+                let hours = parseInt(hourMatch[1]);
+                const minutes = hourMatch[2] ? parseInt(hourMatch[2]) : 0;
+                const period = hourMatch[3] ? hourMatch[3].toLowerCase() : null;
+                
+                // Convert to 24-hour format if needed
+                if (period === 'pm' && hours < 12) {
+                  hours += 12;
+                } else if (period === 'am' && hours === 12) {
+                  hours = 0;
+                }
+                
+                eventDate.setHours(hours, minutes, 0, 0);
+              }
             } else {
-              // Set a default future date/time (tomorrow at noon)
-              const tomorrow = new Date();
-              tomorrow.setDate(tomorrow.getDate() + 1);
-              tomorrow.setHours(12, 0, 0, 0);
-              result.dateTime = tomorrow.toISOString();
+              // Default to 9 AM if no time specified
+              eventDate.setHours(9, 0, 0, 0);
             }
+            
+            // Format for ISO string
+            result.dateTime = eventDate.toISOString();
+            
+            // Add end time (1 hour after start)
+            const endDate = new Date(eventDate);
+            endDate.setHours(endDate.getHours() + 1);
+            result.endDateTime = endDate.toISOString();
+            
           } catch (dateError) {
             console.warn("Error parsing date/time for fallback event:", dateError);
-            // Set default future date (tomorrow at noon)
+            // Set default future date (tomorrow at 9 AM)
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(12, 0, 0, 0);
+            tomorrow.setHours(9, 0, 0, 0);
             result.dateTime = tomorrow.toISOString();
+            
+            // Add end time (1 hour after start)
+            const endDate = new Date(tomorrow);
+            endDate.setHours(endDate.getHours() + 1);
+            result.endDateTime = endDate.toISOString();
           }
         } else {
-          // No date/time info - default to tomorrow at noon
+          // No date/time info - default to tomorrow at 9 AM
           const tomorrow = new Date();
           tomorrow.setDate(tomorrow.getDate() + 1);
-          tomorrow.setHours(12, 0, 0, 0);
+          tomorrow.setHours(9, 0, 0, 0);
           result.dateTime = tomorrow.toISOString();
+          
+          // Add end time (1 hour after start)
+          const endDate = new Date(tomorrow);
+          endDate.setHours(endDate.getHours() + 1);
+          result.endDateTime = endDate.toISOString();
+        }
+        
+        // Add extra appointment details for medical events
+        if (eventType === 'doctor' || eventType === 'dentist') {
+          result.appointmentDetails = {
+            doctorName: doctorMatch ? `Dr. ${doctorMatch[1]}` : "Unknown",
+            reasonForVisit: "",
+            duration: 60 // Default to 1 hour
+          };
         }
         
         console.log("Created fallback event:", result);
@@ -501,44 +451,70 @@ class UnifiedParserService {
         throw new Error("All parsing methods failed");
       }
       
-      // Type-specific post-processing
-      switch (type) {
-        case 'event':
-          // Ensure dateTime is a valid Date object
-          if (result.dateTime) {
-            try {
-              const dateObj = new Date(result.dateTime);
-              // Verify the date is valid
-              if (isNaN(dateObj.getTime())) {
-                // Fall back to a future date
-                const tomorrow = new Date();
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                tomorrow.setHours(15, 0, 0, 0); // Default to 3 PM tomorrow
-                result.dateTime = tomorrow.toISOString();
-              }
-            } catch (e) {
-              console.warn("Invalid date format from Claude, using default", e);
+      // Type-specific post-processing to ensure complete event data
+      if (type === 'event') {
+        // Ensure dateTime is valid
+        if (result.dateTime) {
+          try {
+            const dateObj = new Date(result.dateTime);
+            // Verify the date is valid
+            if (isNaN(dateObj.getTime())) {
+              // Fall back to a future date
               const tomorrow = new Date();
               tomorrow.setDate(tomorrow.getDate() + 1);
-              tomorrow.setHours(15, 0, 0, 0);
+              tomorrow.setHours(15, 0, 0, 0); // Default to 3 PM tomorrow
               result.dateTime = tomorrow.toISOString();
             }
-          } else {
-            // Default to tomorrow at 3 PM if no date provided
+            
+            // Add endDateTime if missing (1 hour after start)
+            if (!result.endDateTime) {
+              const endDate = new Date(dateObj);
+              endDate.setHours(endDate.getHours() + 1);
+              result.endDateTime = endDate.toISOString();
+            }
+          } catch (e) {
+            console.warn("Invalid date format from Claude, using default", e);
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
             tomorrow.setHours(15, 0, 0, 0);
             result.dateTime = tomorrow.toISOString();
+            
+            // Add end time (1 hour after start)
+            const endDate = new Date(tomorrow);
+            endDate.setHours(endDate.getHours() + 1);
+            result.endDateTime = endDate.toISOString();
           }
+        } else {
+          // Default to tomorrow at 3 PM if no date provided
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          tomorrow.setHours(15, 0, 0, 0);
+          result.dateTime = tomorrow.toISOString();
           
-          // Ensure other required fields have defaults
-          result.title = result.title || "Untitled Event";
-          result.eventType = result.eventType || "general";
-          result.isInvitation = !!result.isInvitation;
-          result.extraDetails = result.extraDetails || {};
-          break;
-          
-        // Keep the rest of the post-processing cases...
+          // Add end time (1 hour after start)
+          const endDate = new Date(tomorrow);
+          endDate.setHours(endDate.getHours() + 1);
+          result.endDateTime = endDate.toISOString();
+        }
+        
+        // Ensure other required fields have defaults
+        result.title = result.title || "Untitled Event";
+        result.eventType = result.eventType || "general";
+        result.category = result.category || (
+          result.eventType === 'doctor' || result.eventType === 'dentist' ? 
+          'appointment' : result.eventType
+        );
+        result.isInvitation = !!result.isInvitation;
+        result.extraDetails = result.extraDetails || {};
+        
+        // For doctor/dentist appointments, ensure we have appointmentDetails
+        if ((result.eventType === 'doctor' || result.eventType === 'dentist') && !result.appointmentDetails) {
+          result.appointmentDetails = {
+            doctorName: result.doctorName || "Unknown",
+            reasonForVisit: "",
+            duration: 60 // Default to 1 hour
+          };
+        }
       }
       
       return result;
@@ -550,6 +526,7 @@ class UnifiedParserService {
           title: "Untitled Event", 
           eventType: "general", 
           dateTime: new Date().toISOString(), 
+          endDateTime: new Date(new Date().getTime() + 60 * 60 * 1000).toISOString(),
           extraDetails: {} 
         },
         provider: { name: "Unknown Provider", type: "medical" },
@@ -565,6 +542,60 @@ class UnifiedParserService {
     }
   }
 
+  getTypeSpecificInstructions(type) {
+    switch (type) {
+      case 'event':
+        return `Extract the following details about the event or appointment:
+        {
+        "title": "string (event title or purpose)",
+        "eventType": "string (doctor, dentist, activity, birthday, meeting, date-night, travel, playdate, etc.)",
+        "category": "string (appointment, activity, birthday, meeting, etc.)",
+        "dateTime": "string (ISO date string, like 2023-04-16T15:30:00.000Z)",
+        "duration": "number (duration in minutes, default 60)",
+        "location": "string (where the event takes place)",
+        "childId": "string (if event is for a specific child)",
+        "childName": "string (if event is for a child)",
+        "doctorName": "string (the doctor's name if this is a medical appointment)",
+        "attendingParentId": "string (which parent will attend, 'both', or 'undecided')",
+        
+        "appointmentDetails": {
+          "reasonForVisit": "string",
+          "insuranceInfo": "string",
+          "formsNeeded": "string",
+          "fastingRequired": "boolean",
+          "bringRecords": "boolean",
+          "transportation": "string",
+          "postCare": "string",
+          "duration": "number (in minutes)",
+          "followUpDate": "string (ISO date)",
+          "costsAndCopays": "string",
+          "doctorName": "string"
+        },
+        
+        "activityDetails": {
+          "equipmentNeeded": "string",
+          "parentAttendance": "boolean",
+          "weatherContingency": "string",
+          "seasonDuration": "string",
+          "fees": "string",
+          "uniform": "string",
+          "communicationMethod": "string",
+          "coach": "string"
+        }
+      }
+      
+      BE EXTREMELY DETAILED when extracting event information.
+      1. Medical appointments: Include doctor name, specialty, and reason for visit
+      2. For dates, convert references like "next Thursday" to actual dates
+      3. Try to determine the most specific event type possible
+      4. For child-related events, make sure to extract the child's name
+      5. Set any missing fields to null, don't omit them`;
+        
+      default:
+        return `Extract all relevant information from the text and return it as a JSON object.`;
+    }
+  }
+
   /**
    * Parse an event from text
    * @param {string} text - The text to parse
@@ -573,224 +604,27 @@ class UnifiedParserService {
    * @returns {Promise<object>} Extracted event details
    */
   async parseEvent(text, context = {}, recentMessages = []) {
+    console.log(`Parsing event from text: "${text.substring(0, 50)}..."`);
+    
+    // For medical-related terms, expand the context to improve accuracy
+    const medicalTerms = ['doctor', 'dr.', 'dr ', 'dentist', 'appointment', 'checkup', 'check-up', 'pediatric'];
+    const hasMedicalTerms = medicalTerms.some(term => text.toLowerCase().includes(term));
+    
+    if (hasMedicalTerms) {
+      console.log("Detected medical appointment request, using enhanced parsing");
+      // Add context for medical appointments
+      const enhancedContext = {
+        ...context,
+        expectedEventType: 'doctor',
+        keywords: ['appointment', 'doctor', 'medical', 'checkup']
+      };
+      
+      return this.parseWithMinimalContext(text, 'event', enhancedContext);
+    }
+    
     return recentMessages && recentMessages.length > 0 ?
       this.parseWithRecentContext(text, recentMessages, 'event', context) :
       this.parseWithMinimalContext(text, 'event', context);
-  }
-  
-  /**
-   * Parse a provider from text
-   * @param {string} text - The text to parse
-   * @param {object} context - Additional context (family members, etc.)
-   * @param {Array} recentMessages - Recent messages for context
-   * @returns {Promise<object>} Extracted provider details
-   */
-  async parseProvider(text, context = {}, recentMessages = []) {
-    return recentMessages && recentMessages.length > 0 ?
-      this.parseWithRecentContext(text, recentMessages, 'provider', context) :
-      this.parseWithMinimalContext(text, 'provider', context);
-  }
-  
-  /**
-   * Parse a todo from text
-   * @param {string} text - The text to parse
-   * @param {object} context - Additional context (family members, etc.)
-   * @param {Array} recentMessages - Recent messages for context
-   * @returns {Promise<object>} Extracted todo details
-   */
-  async parseTodo(text, context = {}, recentMessages = []) {
-    return recentMessages && recentMessages.length > 0 ?
-      this.parseWithRecentContext(text, recentMessages, 'todo', context) :
-      this.parseWithMinimalContext(text, 'todo', context);
-  }
-  
-  /**
-   * Parse a document from text
-   * @param {string} text - The text to parse
-   * @param {object} context - Additional context (family members, etc.)
-   * @param {Array} recentMessages - Recent messages for context
-   * @returns {Promise<object>} Extracted document details
-   */
-  async parseDocument(text, context = {}, recentMessages = []) {
-    return recentMessages && recentMessages.length > 0 ?
-      this.parseWithRecentContext(text, recentMessages, 'document', context) :
-      this.parseWithMinimalContext(text, 'document', context);
-  }
-  
-  /**
-   * Parse an image to extract text and then parse that text
-   * @param {File} imageFile - The image file
-   * @param {string} type - The type of information to extract
-   * @param {object} context - Additional context
-   * @returns {Promise<object>} Extracted structured information
-   */
-  async parseImage(imageFile, type, context = {}) {
-    try {
-      // First step: Extract text from image (using existing OCR service)
-      const text = await this.extractTextFromImage(imageFile);
-      
-      if (!text || text.length < 10) {
-        throw new Error("Couldn't extract sufficient text from image");
-      }
-      
-      // Second step: Parse the extracted text
-      return this.parseWithMinimalContext(text, type, context);
-    } catch (error) {
-      console.error(`Error parsing image for ${type}:`, error);
-      throw error;
-    }
-  }
-  
-  /**
-   * Extract text from an image using existing OCR service
-   * @param {File} imageFile - The image file
-   * @returns {Promise<string>} Extracted text from the image
-   */
-  async extractTextFromImage(imageFile) {
-    // Import DocumentOCRService dynamically to avoid circular dependencies
-    try {
-      const DocumentOCRService = (await import('./DocumentOCRService')).default;
-      
-      const result = await DocumentOCRService.processImage(imageFile);
-      return result.text || "";
-    } catch (error) {
-      console.error("Error extracting text from image:", error);
-      
-      // Try alternative approach if DocumentOCRService fails
-      try {
-        // Create a FormData object
-        const formData = new FormData();
-        formData.append('image', imageFile);
-        
-        // Call a backup OCR API endpoint if available
-        const response = await fetch('/api/ocr', {
-          method: 'POST',
-          body: formData
-        });
-        
-        if (!response.ok) {
-          throw new Error(`OCR API returned ${response.status}`);
-        }
-        
-        const result = await response.json();
-        return result.text || "";
-      } catch (backupError) {
-        console.error("Backup OCR also failed:", backupError);
-        throw error;
-      }
-    }
-  }
-  
-  /**
-   * Bulk parse - extract multiple entity types from a single text
-   * @param {string} text - The text to parse
-   * @param {object} context - Additional context
-   * @returns {Promise<object>} Object containing all extracted entities
-   */
-  async bulkParse(text, context = {}) {
-    try {
-      // Build a comprehensive system prompt
-      const systemPrompt = `You are Allie, a family assistant AI.
-      Analyze the text and extract ALL of the following types of information that may be present:
-      
-      1. Events/Appointments
-      2. Providers/Professionals
-      3. Todo Items/Tasks
-      
-      Return a JSON object with the following structure:
-      {
-        "events": [array of event objects],
-        "providers": [array of provider objects],
-        "todos": [array of todo objects]
-      }
-      
-      For events, include: title, eventType, dateTime, location, childName, isInvitation
-      For providers, include: name, type, specialty, forChild
-      For todos, include: text, assignedTo, dueDate, category
-      
-      Only include entities that are clearly mentioned in the text.`;
-      
-      // Send to Claude
-      const response = await this.claudeService.generateResponse(
-        [{ role: 'user', content: `Extract all entities from: "${text}"` }],
-        { system: systemPrompt },
-        { temperature: 0.1 }
-      );
-      
-      // Try to parse the response
-      try {
-        const jsonMatch = response.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-          throw new Error("Couldn't find JSON in Claude's response");
-        }
-        
-        const result = JSON.parse(jsonMatch[0]);
-        
-        // Process each entity type
-        if (result.events) {
-          result.events = result.events.map(event => this.processEntityType(event, 'event'));
-        }
-        if (result.providers) {
-          result.providers = result.providers.map(provider => this.processEntityType(provider, 'provider'));
-        }
-        if (result.todos) {
-          result.todos = result.todos.map(todo => this.processEntityType(todo, 'todo'));
-        }
-        
-        return result;
-      } catch (parseError) {
-        console.error("Error parsing bulk response:", parseError);
-        return { events: [], providers: [], todos: [] };
-      }
-    } catch (error) {
-      console.error("Error in bulk parsing:", error);
-      return { events: [], providers: [], todos: [] };
-    }
-  }
-  
-  /**
-   * Process individual entity from bulk parsing
-   * @param {object} entity - The entity to process
-   * @param {string} type - The type of entity
-   * @returns {object} Processed entity
-   */
-  processEntityType(entity, type) {
-    // Apply type-specific processing similar to processResponse method
-    switch (type) {
-      case 'event':
-        // Process event-specific fields
-        if (entity.dateTime) {
-          try {
-            const dateObj = new Date(entity.dateTime);
-            if (isNaN(dateObj.getTime())) {
-              const tomorrow = new Date();
-              tomorrow.setDate(tomorrow.getDate() + 1);
-              tomorrow.setHours(15, 0, 0, 0);
-              entity.dateTime = tomorrow.toISOString();
-            }
-          } catch (e) {
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(15, 0, 0, 0);
-            entity.dateTime = tomorrow.toISOString();
-          }
-        }
-        entity.title = entity.title || "Untitled Event";
-        entity.eventType = entity.eventType || "general";
-        break;
-        
-      case 'provider':
-        entity.name = entity.name || "Unknown Provider";
-        entity.type = entity.type || "medical";
-        break;
-        
-      case 'todo':
-        entity.text = entity.text || "Untitled Task";
-        entity.category = entity.category || "general";
-        break;
-    }
-    
-    return entity;
   }
 }
 

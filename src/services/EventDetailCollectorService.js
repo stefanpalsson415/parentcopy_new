@@ -151,18 +151,41 @@ class EventDetailCollectorService {
    * @param {object} initialData - Initially extracted event data
    * @returns {Promise<object>} First prompt for missing information
    */
-  async startCollection(familyId, sessionId, initialData) {
+  // In EventDetailCollectorService.js, update the startCollection method
+
+async startCollection(familyId, sessionId, initialData) {
     try {
       console.log("Starting event detail collection:", { familyId, sessionId, initialData });
       
-      // Determine event type from initial data
+      // Determine event type from initial data with better detection
       const eventType = this.determineEventType(initialData);
+      
+      // Enhance the initial data based on event type
+      let enhancedInitialData = { ...initialData };
+      
+      // For medical appointments, ensure we capture doctor name correctly
+      if (eventType === 'doctor' || eventType === 'dentist') {
+        // If doctorName exists, make sure it's in appointmentDetails too
+        if (initialData.doctorName && (!initialData.appointmentDetails || !initialData.appointmentDetails.doctorName)) {
+          enhancedInitialData.appointmentDetails = {
+            ...(initialData.appointmentDetails || {}),
+            doctorName: initialData.doctorName
+          };
+        }
+        // If it's in appointmentDetails but not at top level, add it
+        else if (initialData.appointmentDetails?.doctorName && !initialData.doctorName) {
+          enhancedInitialData.doctorName = initialData.appointmentDetails.doctorName;
+        }
+        
+        // Ensure category is set to appointment
+        enhancedInitialData.category = 'appointment';
+      }
       
       // Initialize session data
       const sessionData = {
         familyId,
         eventType,
-        collectedData: { ...initialData },
+        collectedData: enhancedInitialData,
         currentStep: 0,
         missingFields: []
       };
@@ -170,6 +193,9 @@ class EventDetailCollectorService {
       // Identify missing required fields
       const requirements = this.eventTypeRequirements[eventType] || this.eventTypeRequirements['general'];
       sessionData.missingFields = this.identifyMissingFields(sessionData.collectedData, requirements);
+      
+      // Log what fields we'll collect
+      console.log(`Will collect these missing fields: ${sessionData.missingFields.join(', ')}`);
       
       // Save session data
       this.activeCollectionSessions[sessionId] = sessionData;
@@ -183,6 +209,70 @@ class EventDetailCollectorService {
       console.error("Error starting collection flow:", error);
       throw error;
     }
+  }
+  
+  determineEventType(initialData) {
+    // First check if we have an explicit event type
+    if (initialData.eventType) {
+      const type = initialData.eventType.toLowerCase();
+      
+      // Enhanced detection with more keywords
+      if (type.includes('dentist') || type.includes('dental') || 
+          (initialData.title && initialData.title.toLowerCase().includes('dentist'))) {
+        return 'dentist';
+      } else if (type.includes('doctor') || type.includes('medical') || type.includes('appointment') || 
+                 type.includes('pediatr') || type.includes('check-up') || type.includes('checkup') ||
+                 (initialData.title && (
+                   initialData.title.toLowerCase().includes('doctor') || 
+                   initialData.title.toLowerCase().includes('dr.') ||
+                   initialData.title.toLowerCase().includes('checkup')
+                 ))) {
+        return 'doctor';
+      } else if (type.includes('soccer') || type.includes('practice') || type.includes('lesson') || 
+                  type.includes('class') || type.includes('music') || type.includes('sport')) {
+        return 'activity';
+      } else if (type.includes('birthday')) {
+        return 'birthday';
+      } else if (type.includes('meeting')) {
+        return 'meeting';
+      } else if (type.includes('conference') || type.includes('teacher')) {
+        return 'parent-teacher';
+      } else if (type.includes('date') || type.includes('night out')) {
+        return 'date-night';
+      } else if (type.includes('trip') || type.includes('travel')) {
+        return 'travel';
+      } else if (type.includes('vacation')) {
+        return 'vacation';
+      } else if (type.includes('playdate') || type.includes('play date')) {
+        return 'playdate';
+      }
+    }
+    
+    // If no explicit type, check for doctor name which indicates a medical appointment
+    if (initialData.doctorName || initialData.appointmentDetails?.doctorName) {
+      return 'doctor';
+    }
+    
+    // If we have a title, check for keywords
+    if (initialData.title) {
+      const title = initialData.title.toLowerCase();
+      
+      if (title.includes('dentist') || title.includes('dental')) {
+        return 'dentist';
+      } else if (title.includes('doctor') || title.includes('dr.') || 
+                 title.includes('medical') || title.includes('appointment') ||
+                 title.includes('checkup') || title.includes('check-up')) {
+        return 'doctor';
+      } else if (title.includes('birthday')) {
+        return 'birthday';
+      } else if (title.includes('practice') || title.includes('lesson') || 
+                 title.includes('class') || title.includes('activity')) {
+        return 'activity';
+      }
+    }
+    
+    // Default to general event type
+    return 'general';
   }
 
   /**
