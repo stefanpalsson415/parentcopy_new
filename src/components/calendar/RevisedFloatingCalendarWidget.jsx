@@ -108,18 +108,29 @@ const lastRefreshTimeRef = useRef(0);
 useEffect(() => {
   const DEBOUNCE_INTERVAL = 1000; // Wait 1 second between refreshes
   
-  const handleForceRefresh = () => {
-    const now = Date.now();
-    // Only refresh if enough time has passed since last refresh
-    if (now - lastRefreshTimeRef.current > DEBOUNCE_INTERVAL) {
-      console.log("Force calendar refresh triggered (debounced)");
-      lastRefreshTimeRef.current = now;
-      setLastRefresh(now);
-      resetEventCache();
-    } else {
-      console.log("Refresh request debounced - too soon after previous refresh");
+  // In RevisedFloatingCalendarWidget.jsx - enhanced handleForceRefresh function
+const handleForceRefresh = async () => {
+  const now = Date.now();
+  if (now - lastRefreshTimeRef.current > DEBOUNCE_INTERVAL) {
+    console.log("Force calendar refresh triggered");
+    lastRefreshTimeRef.current = now;
+    
+    // Reset local cache
+    resetEventCache();
+    
+    // IMPORTANT: Directly call refreshEvents from context instead of just updating lastRefresh
+    if (typeof refreshEvents === 'function') {
+      try {
+        await refreshEvents();
+      } catch (error) {
+        console.warn("Error refreshing events:", error);
+      }
     }
-  };
+    
+    // Update lastRefresh as fallback
+    setLastRefresh(now);
+  }
+};
   
   const refreshEvents = (e) => {
     const now = Date.now();
