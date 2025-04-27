@@ -60,6 +60,7 @@ const RevisedFloatingCalendarWidget = () => {
   const [loading, setLoading] = useState(false);
   const [showEventManager, setShowEventManager] = useState(false);
   const [showAiParseInfo, setShowAiParseInfo] = useState(false);
+  
 
   // Event collections
   const [eventCache, setEventCache] = useState(new Map()); // Cache for deduplication
@@ -78,6 +79,7 @@ const RevisedFloatingCalendarWidget = () => {
   // Refs
   const widgetRef = useRef(null);
   const dragHandleRef = useRef(null);
+
   
   // Initialize error handling
   useEffect(() => {
@@ -99,9 +101,11 @@ const RevisedFloatingCalendarWidget = () => {
   }, [isOpen]);
   
   // Listen for calendar update events with debouncing to prevent infinite loops
+// Add this ref at the top level of the component, outside any useEffect
+const lastRefreshTimeRef = useRef(0);
+
+// Then modify the useEffect to use this ref
 useEffect(() => {
-  // Use a ref to track last refresh time to prevent too-frequent refreshes
-  const lastRefreshTimeRef = useRef(0);
   const DEBOUNCE_INTERVAL = 1000; // Wait 1 second between refreshes
   
   const handleForceRefresh = () => {
