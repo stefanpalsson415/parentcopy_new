@@ -533,7 +533,7 @@ const eventsQuery = query(
     }
   }
 
-  // In EventStore.js, update the refreshEvents method to be more robust
+  /// In EventStore.js, update the refreshEvents method to be more robust
 // NEW CODE
 async refreshEvents(userId, familyId = null, cycleNumber = null) {
   if (!userId) return [];

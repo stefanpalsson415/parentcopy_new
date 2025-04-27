@@ -194,6 +194,9 @@ export function useEvents(options = {}) {
     // In src/hooks/useEvent.js
 // Enhance the refreshEvents function around line 180-200
 
+// In src/hooks/useEvent.js
+// Enhance the refreshEvents function around line 180-200
+
 const refreshEvents = useCallback(async () => {
   if (!currentUser) return;
   

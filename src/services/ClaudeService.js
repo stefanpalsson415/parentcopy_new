@@ -933,6 +933,21 @@ formatCollectedEventData(collectedData) {
 // Helper method to create event from collected data
 async createEventFromCollectedData(eventData, userId, familyId) {
   try {
+    // Validate required parameters
+    if (!userId) {
+      console.error("Missing userId for event creation");
+      return { success: false, error: "Missing user ID" };
+    }
+    
+    // Log the incoming data for debugging
+    console.log("Creating event with data:", {
+      title: eventData.title,
+      type: eventData.eventType,
+      dateTime: eventData.dateTime,
+      userId: userId,
+      familyId: familyId
+    });
+    
     // Prepare the event for the calendar
     const event = {
       ...eventData,
@@ -958,9 +973,23 @@ async createEventFromCollectedData(eventData, userId, familyId) {
     // Use CalendarService to add the event
     const result = await CalendarService.addEvent(event, userId);
     
-    // Trigger UI refresh
+    // Trigger UI refresh with multiple attempts
     if (typeof window !== 'undefined') {
+      console.log("Dispatching calendar refresh events after adding event");
+      
+      // Immediate refresh
       window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+      
+      // Follow-up refreshes to ensure UI updates
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        console.log("Sending delayed refresh event (500ms)");
+      }, 500);
+      
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+        console.log("Sending delayed refresh event (1500ms)");
+      }, 1500);
     }
     
     return {

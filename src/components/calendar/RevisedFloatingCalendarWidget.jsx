@@ -650,7 +650,7 @@ const handleEventAdd = async (event) => {
     }
   };
   
-  // NEW CODE
+ // NEW CODE
 const handleUpdateEvent = async (updatedEvent) => {
   try {
     setPendingAction('update');
@@ -1342,7 +1342,6 @@ const getEventsForSelectedDate = () => {
         <Calendar size={24} />
       </button>
       
-      {/* Enhanced Event Manager - handles both creating new events and viewing/editing existing ones */}
 {/* Enhanced Event Manager - handles both creating new events and viewing/editing existing ones */}
 {(showEventManager || (selectedEvent && isEditingEvent)) && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
