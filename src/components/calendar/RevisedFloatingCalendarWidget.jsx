@@ -98,30 +98,48 @@ const RevisedFloatingCalendarWidget = () => {
     }
   }, [isOpen]);
   
-  // Listen for calendar update events
-  useEffect(() => {
-    const handleForceRefresh = () => {
-      console.log("Force calendar refresh triggered");
-      setLastRefresh(Date.now());
+  // Listen for calendar update events with debouncing to prevent infinite loops
+useEffect(() => {
+  // Use a ref to track last refresh time to prevent too-frequent refreshes
+  const lastRefreshTimeRef = useRef(0);
+  const DEBOUNCE_INTERVAL = 1000; // Wait 1 second between refreshes
+  
+  const handleForceRefresh = () => {
+    const now = Date.now();
+    // Only refresh if enough time has passed since last refresh
+    if (now - lastRefreshTimeRef.current > DEBOUNCE_INTERVAL) {
+      console.log("Force calendar refresh triggered (debounced)");
+      lastRefreshTimeRef.current = now;
+      setLastRefresh(now);
       resetEventCache();
-    };
-    
-    const refreshEvents = (e) => {
+    } else {
+      console.log("Refresh request debounced - too soon after previous refresh");
+    }
+  };
+  
+  const refreshEvents = (e) => {
+    const now = Date.now();
+    // Only refresh if enough time has passed since last refresh
+    if (now - lastRefreshTimeRef.current > DEBOUNCE_INTERVAL) {
       console.log("Calendar event refresh triggered", e?.type || 'manual refresh');
+      lastRefreshTimeRef.current = now;
       resetEventCache();
-      setLastRefresh(Date.now());
-    };
-    
-    window.addEventListener('force-calendar-refresh', handleForceRefresh);
-    window.addEventListener('calendar-event-added', refreshEvents);
-    window.addEventListener('calendar-child-event-added', refreshEvents);
-    
-    return () => {
-      window.removeEventListener('force-calendar-refresh', handleForceRefresh);
-      window.removeEventListener('calendar-event-added', refreshEvents);
-      window.removeEventListener('calendar-child-event-added', refreshEvents);
-    };
-  }, []);
+      setLastRefresh(now);
+    } else {
+      console.log("Event refresh debounced - too soon after previous refresh");
+    }
+  };
+  
+  window.addEventListener('force-calendar-refresh', handleForceRefresh);
+  window.addEventListener('calendar-event-added', refreshEvents);
+  window.addEventListener('calendar-child-event-added', refreshEvents);
+  
+  return () => {
+    window.removeEventListener('force-calendar-refresh', handleForceRefresh);
+    window.removeEventListener('calendar-event-added', refreshEvents);
+    window.removeEventListener('calendar-child-event-added', refreshEvents);
+  };
+}, []);
   
   // Drag to resize functionality
   useEffect(() => {
@@ -261,16 +279,30 @@ const RevisedFloatingCalendarWidget = () => {
   
   // Add event handlers
   // In RevisedFloatingCalendarWidget.jsx
+// In RevisedFloatingCalendarWidget.jsx
 const handleEventClick = async (event) => {
+  // First verify we have a valid event object to prevent errors
+  if (!event || typeof event !== 'object') {
+    console.error("Clicked on invalid event:", event);
+    CalendarService.showNotification("Cannot open event details - invalid event data", "error");
+    return;
+  }
+
   // Create a properly formatted event object for the editor
+  // with better date handling to avoid issues
   const formattedEvent = {
     ...event,
     // Make sure we have these fields properly set
-    title: event.title || event.summary,
+    title: event.title || event.summary || 'Untitled Event',
     description: event.description || '',
     location: event.location || '',
-    dateTime: event.dateObj?.toISOString() || event.start?.dateTime || new Date().toISOString(),
-    endDateTime: event.dateEndObj?.toISOString() || event.end?.dateTime,
+    // Handle dates more carefully to avoid invalid date objects
+    dateTime: (event.dateObj instanceof Date && !isNaN(event.dateObj)) 
+      ? event.dateObj.toISOString() 
+      : (event.start?.dateTime || new Date().toISOString()),
+    endDateTime: (event.dateEndObj instanceof Date && !isNaN(event.dateEndObj))
+      ? event.dateEndObj.toISOString()
+      : (event.end?.dateTime || new Date(new Date().getTime() + 60*60*1000).toISOString()),
     childId: event.childId || null,
     childName: event.childName || null,
     attendingParentId: event.attendingParentId || null,
@@ -282,16 +314,21 @@ const handleEventClick = async (event) => {
     firestoreId: event.firestoreId || event.id
   };
   
+  // Store the selected event
   setSelectedEvent(formattedEvent);
   
-  // Check for conflicts
-  const conflicts = await checkForEventConflicts(event);
-  setConflictingEvents(conflicts);
-  
-  // Skip EventDetails and go directly to EnhancedEventManager
-  setShowEventDetails(false);
-  setIsEditingEvent(true);
-  setEditedEvent(formattedEvent);
+  try {
+    // Check for conflicts
+    const conflicts = await checkForEventConflicts(event);
+    setConflictingEvents(conflicts);
+    
+    // Show the event in the editor
+    setShowEventDetails(true); // Changed to true for better UX - show details first
+    setIsEditingEvent(false); // Don't immediately go into edit mode
+  } catch (error) {
+    console.error("Error preparing event for viewing:", error);
+    CalendarService.showNotification("Error loading event details", "error");
+  }
 };
   
 const handleEventAdd = async (event) => {
@@ -1004,71 +1041,74 @@ console.log(`Event date update from source ${dateSrc}:`, newDate.toISOString());
    * @returns {Array} Filtered events for selected date
    */
 
-const getEventsForSelectedDate = () => {
-  if (!selectedDate) return [];
-  
-  console.log(`Getting events for ${selectedDate.toDateString()}, total events: ${events.length}`);
-  
-  return events.filter(event => {
-    // Ensure we have a valid date object
-    let eventDate = null;
+  const getEventsForSelectedDate = () => {
+    if (!selectedDate) return [];
     
-    if (event.dateObj instanceof Date && !isNaN(event.dateObj)) {
-      eventDate = event.dateObj;
-    } else if (event.start?.dateTime) {
-      eventDate = new Date(event.start.dateTime);
-    } else if (event.start?.date) {
-      eventDate = new Date(event.start.date);
-    } else if (event.dateTime) {
-      eventDate = new Date(event.dateTime);
-    } else if (event.date) {
-      eventDate = new Date(event.date);
-    }
+    // Use a safer approach without excessive logging
+    // This was causing console spam and potential performance issues
     
-    // Skip events with invalid dates
-    if (!eventDate || isNaN(eventDate.getTime())) {
-      console.warn("Skipping event with invalid date:", event.title || event.summary);
-      return false;
-    }
-    
-    // Log for debugging
-    console.log(`Comparing event date: ${eventDate.toDateString()} with selected: ${selectedDate.toDateString()}`, 
-                `Event title: ${event.title || event.summary}`);
-    
-    // Check date match - only compare year, month, day (not time)
-    const dateMatch = eventDate.getDate() === selectedDate.getDate() &&
-                     eventDate.getMonth() === selectedDate.getMonth() &&
-                     eventDate.getFullYear() === selectedDate.getFullYear();
-    
-    // If date doesn't match, return false immediately
-    if (!dateMatch) return false;
-    
-    // Check member filter
-    if (selectedMember !== 'all') {
-      // For child events
-      if (event.childName && selectedMember !== event.childId && selectedMember !== event.childName) {
+    return events.filter(event => {
+      // Ensure we have a valid date object
+      let eventDate = null;
+      
+      try {
+        if (event.dateObj instanceof Date && !isNaN(event.dateObj.getTime())) {
+          eventDate = event.dateObj;
+        } else if (event.start?.dateTime) {
+          eventDate = new Date(event.start.dateTime);
+        } else if (event.start?.date) {
+          eventDate = new Date(event.start.date);
+        } else if (event.dateTime) {
+          eventDate = new Date(event.dateTime);
+        } else if (event.date) {
+          eventDate = new Date(event.date);
+        }
+        
+        // Skip events with invalid dates
+        if (!eventDate || isNaN(eventDate.getTime())) {
+          // Avoid console spam by not logging every invalid date
+          return false;
+        }
+        
+        // Check date match - only compare year, month, day (not time)
+        const dateMatch = eventDate.getDate() === selectedDate.getDate() &&
+                        eventDate.getMonth() === selectedDate.getMonth() &&
+                        eventDate.getFullYear() === selectedDate.getFullYear();
+        
+        // If date doesn't match, return false immediately
+        if (!dateMatch) return false;
+        
+        // Check member filter
+        if (selectedMember !== 'all') {
+          // For child events
+          if (event.childName && selectedMember !== event.childId && selectedMember !== event.childName) {
+            return false;
+          }
+          
+          // For parent-assigned tasks
+          if (event.assignedTo && selectedMember !== event.assignedTo && 
+              event.assignedToName && selectedMember !== event.assignedToName) {
+            return false;
+          }
+          
+          // For family events, check attendees
+          const hasSelectedMember = event.attendees?.some(
+            attendee => attendee.id === selectedMember || attendee.name === selectedMember
+          );
+          
+          if (!hasSelectedMember && !event.childName && !event.assignedTo) {
+            return false;
+          }
+        }
+        
+        return true;
+      } catch (err) {
+        // Safely handle any parse errors
+        console.warn("Error processing event date", err);
         return false;
       }
-      
-      // For parent-assigned tasks
-      if (event.assignedTo && selectedMember !== event.assignedTo && 
-          event.assignedToName && selectedMember !== event.assignedToName) {
-        return false;
-      }
-      
-      // For family events, check attendees
-      const hasSelectedMember = event.attendees?.some(
-        attendee => attendee.id === selectedMember || attendee.name === selectedMember
-      );
-      
-      if (!hasSelectedMember && !event.childName && !event.assignedTo) {
-        return false;
-      }
-    }
-    
-    return true;
-  });
-};
+    });
+  };
   
   /**
    * Filter events based on the current view type including AI parsed events

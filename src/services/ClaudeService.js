@@ -973,24 +973,19 @@ async createEventFromCollectedData(eventData, userId, familyId) {
     // Use CalendarService to add the event
     const result = await CalendarService.addEvent(event, userId);
     
-    // Trigger UI refresh with multiple attempts
-    if (typeof window !== 'undefined') {
-      console.log("Dispatching calendar refresh events after adding event");
-      
-      // Immediate refresh
-      window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-      
-      // Follow-up refreshes to ensure UI updates
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-        console.log("Sending delayed refresh event (500ms)");
-      }, 500);
-      
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-        console.log("Sending delayed refresh event (1500ms)");
-      }, 1500);
+    // Trigger UI refresh just ONCE to avoid refresh loops
+if (typeof window !== 'undefined') {
+  console.log("Dispatching single calendar refresh event after adding event");
+  
+  // Use the calendar-event-added event which carries more specific data
+  // and avoid using the generic force-calendar-refresh that can cause loops
+  window.dispatchEvent(new CustomEvent('calendar-event-added', {
+    detail: {
+      eventId: result.eventId,
+      addedViaChat: true
     }
+  }));
+}
     
     return {
       success: result.success,
