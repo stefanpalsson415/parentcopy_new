@@ -263,6 +263,24 @@ class ClaudeService {
           context
         );
       }
+
+      // Add timeout to ensure we get a response or fallback
+const timeoutPromise = new Promise((_, reject) => 
+  setTimeout(() => reject(new Error("Request timed out")), 20000)
+);
+
+const responsePromise = fetch(this.proxyUrl, {
+  method: 'POST',
+  headers: {
+    'Accept': 'application/json',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify(payload),
+  signal: controller.signal
+});
+
+const response = await Promise.race([responsePromise, timeoutPromise]);
+console.log("Got response from Claude API proxy:", response.status);
       
       // Format system prompt with family context
       const systemPrompt = this.formatSystemPrompt(context || {});
@@ -608,6 +626,9 @@ class ClaudeService {
           console.error("Extracted text is empty");
           return this.createPersonalizedResponse(lastUserMessage, context);
         }
+
+
+        
 
         // Return successfully extracted text
         console.log("Successfully extracted text from Claude API response");

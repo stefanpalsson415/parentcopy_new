@@ -176,47 +176,46 @@ export function AuthProvider({ children }) {
     }
   }
 
-  // In AuthContext.js - Find and replace the useEffect hook that sets up the auth state listener
-useEffect(() => {
-  let isMounted = true;
-  
-  const unsubscribe = onAuthStateChanged(auth, async (user) => {
-    if (!isMounted) return;
-    setCurrentUser(user);
+  useEffect(() => {
+    let isMounted = true;
     
-    if (user) {
-      try {
-        // Load all families first
-        await loadAllFamilies(user.uid);
-        
-        // Then load the primary family data
-        await loadFamilyData(user.uid);
-      } catch (error) {
-        console.error("Error loading family data on auth change:", error);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!isMounted) return;
+      setCurrentUser(user);
+      
+      if (user) {
+        try {
+          // Load all families first
+          await loadAllFamilies(user.uid);
+          
+          // Then load the primary family data
+          await loadFamilyData(user.uid);
+        } catch (error) {
+          console.error("Error loading family data on auth change:", error);
+        }
+      } else {
+        // Clear family data on logout
+        setFamilyData(null);
+        setAvailableFamilies([]);
       }
-    } else {
-      // Clear family data on logout
-      setFamilyData(null);
-      setAvailableFamilies([]);
-    }
-    
-    setLoading(false);
-  });
-
-  // Add a timeout to prevent hanging indefinitely
-  const timeout = setTimeout(() => {
-    if (isMounted) {
-      console.log("Auth loading timeout - forcing render");
+      
       setLoading(false);
-    }
-  }, 10000); // Increase from 5 to 10 seconds timeout
+    });
   
-  return () => {
-    isMounted = false;
-    clearTimeout(timeout);
-    unsubscribe();
-  };
-}, []);
+    // Add a timeout to prevent hanging indefinitely
+    const timeout = setTimeout(() => {
+      if (isMounted) {
+        console.log("Auth loading timeout - forcing render");
+        setLoading(false);
+      }
+    }, 10000); // Increase from 5 to 10 seconds timeout
+    
+    return () => {
+      isMounted = false;
+      clearTimeout(timeout);
+      unsubscribe();
+    };
+  }, []);
 
   // Context value
   const value = {

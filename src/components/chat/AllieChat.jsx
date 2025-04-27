@@ -852,6 +852,23 @@ const handleSend = useCallback(async () => {
         setImagePreview(null);
       }
       
+      // Save user message to database first
+      const savedMessage = await ChatPersistenceService.saveMessage(userMessage);
+      
+      // If saving failed, show error
+      if (!savedMessage.success) {
+        console.error("Failed to save message:", savedMessage.error);
+        setMessages(prev => [...prev, {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: "I couldn't save your message. Please try again in a moment.",
+          timestamp: new Date().toISOString(),
+          error: true
+        }]);
+        setLoading(false);
+        return;
+      }      
       // First check if this is a meeting-related message
       const meetingResponse = processMeetingStage(currentMessageText);
       
@@ -1038,35 +1055,38 @@ if (meetingResponse) {
       }
       
       // If we get here, we need to use the general AI response
-      // Remove the processing message first
-      setMessages(prev => prev.filter(msg => msg !== processingMessage));
-      
-      // Get recent messages for context
-      const recentContext = [...getRecentMessages(5), userMessage]; // Only use last 5 messages
-      const aiResponse = await EnhancedChatService.getAIResponse(
-        currentMessageText, 
-        familyId, 
-        recentContext
-      );
-      
-      // Add AI response to messages
-      const allieMessage = {
-        id: Date.now().toString(), // Temporary ID 
-        familyId,
-        sender: 'allie',
-        userName: 'Allie',
-        text: aiResponse,
-        timestamp: new Date().toISOString()
-      };
-      
-      // Save AI message to database
-      const savedAIMessage = await ChatPersistenceService.saveMessage(allieMessage);
-      if (savedAIMessage.success && savedAIMessage.messageId) {
-        allieMessage.id = savedAIMessage.messageId;
-      }
-      
-      // Update messages state with AI response
-      setMessages(prev => [...prev, allieMessage]);
+// Remove the processing message first
+setMessages(prev => prev.filter(msg => msg !== processingMessage));
+
+// Get recent messages for context
+const recentContext = [...getRecentMessages(5), userMessage]; // Only use last 5 messages
+const aiResponse = await EnhancedChatService.getAIResponse(
+  currentMessageText, 
+  familyId, 
+  recentContext
+);
+
+// Add AI response to messages - ensure we never have undefined text
+const allieMessage = {
+  id: Date.now().toString(), // Temporary ID 
+  familyId,
+  sender: 'allie',
+  userName: 'Allie',
+  text: aiResponse || "I'm sorry, I couldn't generate a response right now. Please try again.",
+  timestamp: new Date().toISOString()
+};
+
+// Only save if we have actual text content
+if (allieMessage.text && allieMessage.text.trim() !== '') {
+  // Save AI message to database
+  const savedAIMessage = await ChatPersistenceService.saveMessage(allieMessage);
+  if (savedAIMessage.success && savedAIMessage.messageId) {
+    allieMessage.id = savedAIMessage.messageId;
+  }
+}
+
+// Update messages state with AI response
+setMessages(prev => [...prev, allieMessage]);
       
       setLoading(false);
     } catch (error) {
