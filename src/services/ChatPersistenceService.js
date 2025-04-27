@@ -28,46 +28,56 @@ class ChatPersistenceService {
  * @param {object} message - The message to save
  * @returns {Promise<object>} Result with success status and message ID
  */
-  async saveMessage(message) {
-    try {
-      // Better message validation
-      if (!message) {
-        console.error("Cannot save null/undefined message");
-        return { success: false, error: "Invalid message object" };
+ // NEW CODE
+async saveMessage(message) {
+  try {
+    // Better message validation
+    if (!message) {
+      console.error("Cannot save null/undefined message");
+      return { success: false, error: "Invalid message object" };
+    }
+    
+    // Strict validation for message text
+    if (!message.text || message.text.trim() === '') {
+      console.error("Attempted to save message with empty/undefined text");
+      
+      // If this is an AI response (sender is 'allie'), use a proper fallback
+      if (message.sender === 'allie') {
+        message.text = "I'm sorry, I couldn't generate a response right now. Please try again in a moment.";
+        console.warn("Using fallback text for empty AI response");
+      } else if (!message.text) {
+        // For user messages, we should reject saving if text is empty
+        return { success: false, error: "Cannot save message with empty text" };
       }
-      
-      // Improved logging that won't show "undefined..."
-      console.log("ChatPersistenceService.saveMessage called with:", {
-        text: message.text ? `${message.text.substring(0, 50)}...` : "[No text content]",
-        sender: message.sender || "unknown",
-        familyId: message.familyId,
-        timestamp: message.timestamp || new Date().toISOString()
-      });
-      
-      if (!message.familyId) {
-        console.error("Cannot save message without familyId", message);
-        return { success: false, error: "Missing familyId" };
-      }
-      
-      // Check for empty/undefined text and provide a fallback message
-      if (!message.text) {
-        console.warn("Attempted to save message with empty/undefined text, using fallback");
-      }
-      
-      // Ensure required fields exist with better fallbacks
-      const enhancedMessage = {
-        ...message,
-        text: message.text || "I'm sorry, I couldn't generate a response. Please try again.",
-        sender: message.sender || "unknown",
-        createdAt: serverTimestamp(),
-        timestamp: message.timestamp || new Date().toISOString(),
-        // Add a searchable field for full-text search
-        searchText: (message.text || "").toLowerCase(),
-        // Add message version for future format compatibility
-        messageVersion: 2,
-        // Add message hash for deduplication if needed
-        messageHash: this.generateMessageHash(message)
-      };
+    }
+    
+    // Improved logging that won't show "undefined..."
+    console.log("ChatPersistenceService.saveMessage called with:", {
+      text: message.text ? `${message.text.substring(0, 50)}...` : "[No text content]",
+      sender: message.sender || "unknown",
+      familyId: message.familyId,
+      timestamp: message.timestamp || new Date().toISOString()
+    });
+    
+    if (!message.familyId) {
+      console.error("Cannot save message without familyId", message);
+      return { success: false, error: "Missing familyId" };
+    }
+    
+    // Ensure required fields exist with better fallbacks
+    const enhancedMessage = {
+      ...message,
+      text: message.text, // We've already validated this above
+      sender: message.sender || "unknown",
+      createdAt: serverTimestamp(),
+      timestamp: message.timestamp || new Date().toISOString(),
+      // Add a searchable field for full-text search
+      searchText: (message.text || "").toLowerCase(),
+      // Add message version for future format compatibility
+      messageVersion: 2,
+      // Add message hash for deduplication if needed
+      messageHash: this.generateMessageHash(message)
+    };
       
       // Save to Firestore with retry logic
       let docRef = null;

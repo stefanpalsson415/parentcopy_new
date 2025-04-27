@@ -214,33 +214,36 @@ class ClaudeService {
   }
   
   
-  async generateResponse(messages, context, options = {}) {
+  // NEW CODE (replace the whole generateResponse method)
+async generateResponse(messages, context, options = {}) {
+  try {
+    // Add a call tracking mechanism to prevent infinite loops
+    if (!this._callTracker) {
+      this._callTracker = {
+        count: 0,
+        lastReset: Date.now(),
+        pendingComponents: new Set()
+      };
+    }
+    
+    // Reset counter every 20 seconds (increased from 15)
+    if (Date.now() - this._callTracker.lastReset > 20000) {
+      this._callTracker.count = 0;
+      this._callTracker.lastReset = Date.now();
+      this._callTracker.pendingComponents.clear();
+    }
+    
+    // Get component identifier from context
+    const componentId = context?.componentId || 'default';
+    
+    // Check if this component is already making a request
+    if (this._callTracker.pendingComponents.has(componentId)) {
+      console.warn(`Component ${componentId} already has a pending request, throttling`);
+      const fallbackResponse = "I'm already processing a request from this component. Please wait for it to complete.";
+      return fallbackResponse;
+    }
+    
     try {
-      // Add a call tracking mechanism to prevent infinite loops
-      if (!this._callTracker) {
-        this._callTracker = {
-          count: 0,
-          lastReset: Date.now(),
-          pendingComponents: new Set()
-        };
-      }
-      
-      // Reset counter every 15 seconds (increased from 10)
-      if (Date.now() - this._callTracker.lastReset > 15000) {
-        this._callTracker.count = 0;
-        this._callTracker.lastReset = Date.now();
-        this._callTracker.pendingComponents.clear();
-      }
-      
-      // Get component identifier from context
-      const componentId = context?.componentId || 'default';
-      
-      // Check if this component is already making a request
-      if (this._callTracker.pendingComponents.has(componentId)) {
-        console.warn(`Component ${componentId} already has a pending request, throttling`);
-        return "I'm already processing a request from this component. Please wait for it to complete.";
-      }
-      
       // Add to pending components
       this._callTracker.pendingComponents.add(componentId);
       
@@ -248,7 +251,7 @@ class ClaudeService {
       this._callTracker.count++;
       
       // Prevent recursive calls that might cause freezing
-      if (this._callTracker.count > 8) { // Increased from 5 to 8
+      if (this._callTracker.count > 8) {
         console.warn("Too many API calls in a short period, throttling to prevent loops");
         return "I'm processing multiple requests. Please wait a moment before asking another question.";
       }
@@ -263,24 +266,6 @@ class ClaudeService {
           context
         );
       }
-
-      // Add timeout to ensure we get a response or fallback
-const timeoutPromise = new Promise((_, reject) => 
-  setTimeout(() => reject(new Error("Request timed out")), 20000)
-);
-
-const responsePromise = fetch(this.proxyUrl, {
-  method: 'POST',
-  headers: {
-    'Accept': 'application/json',
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify(payload),
-  signal: controller.signal
-});
-
-const response = await Promise.race([responsePromise, timeoutPromise]);
-console.log("Got response from Claude API proxy:", response.status);
       
       // Format system prompt with family context
       const systemPrompt = this.formatSystemPrompt(context || {});
@@ -311,7 +296,6 @@ console.log("Got response from Claude API proxy:", response.status);
       }
       
       // Reduce context size if needed (Claude has token limits)
-      // Keep the most recent messages, ensuring we have context but don't exceed limits
       if (formattedMessages.length > 20) {
         const contextLimit = 20;
         // Always keep the last message
@@ -330,124 +314,6 @@ console.log("Got response from Claude API proxy:", response.status);
         }
       }
       
-      // Check for calendar confirmation or calendar request  
-      const lastUserMessage = formattedMessages[formattedMessages.length - 1].content || "";
-
-      // Check if the previous message had a calendar confirmation token  
-      let previousMessage = "";  
-      if (formattedMessages.length > 1) {  
-        previousMessage = formattedMessages[formattedMessages.length - 2].content || "";  
-      }
-
-      // If a calendar request is being explicitly requested, process it.
-      // Otherwise skip the automatic detection to prevent recursive API calls
-      if (options.forceCalendarCheck && !this.disableCalendarDetection) {
-        const confirmationMatch = previousMessage.match(/\<calendar\_confirmation token="(\[^"\]+)"\>/);  
-        if (confirmationMatch && confirmationMatch[1]) {  
-          const confirmationToken = confirmationMatch[1];  
-          console.log("Found calendar confirmation token:", confirmationToken);  
-            
-          // Handle the confirmation response  
-          return this.handleCalendarConfirmation(lastUserMessage, confirmationToken, auth.currentUser?.uid);  
-        }
-
-        // Check if the last message appears to be a standalone calendar request  
-        const calendarIndicators = [  
-          'add to calendar', 'schedule', 'appointment', 'meeting', 'event',  
-          'create a', 'make a', 'add a', 'book a', 'plan a',  
-          'dentist', 'doctor', 'birthday', 'party', 'invitation'  
-        ];
-
-        const isLikelyCalendarRequest = calendarIndicators.some(indicator =>   
-          lastUserMessage.toLowerCase().includes(indicator)  
-        );
-
-        if (isLikelyCalendarRequest) {  
-          console.log("Detected likely calendar request in latest message");  
-            
-          // Use async/await with the new async extractCalendarRequest method  
-          try {  
-            const calendarEventData = await this.extractCalendarRequest(lastUserMessage);  
-              
-            if (calendarEventData) {  
-              // Process only the calendar request from the most recent message  
-              console.log("Successfully extracted calendar data, processing only this request");  
-              return this.processCalendarRequest(calendarEventData, context);  
-            }  
-          } catch (calendarError) {  
-            console.error("Error extracting calendar event:", calendarError);    
-            // Continue with normal Claude processing if calendar extraction fails  
-          }  
-        }
-      }
-      // Check if the last message appears to be a task/todo request
-      // This can be outside the calendar check condition as it's separate functionality
-      const taskIndicators = [
-        'add task', 'add a task', 'create task', 'create a task',
-        'add todo', 'add a todo', 'create todo', 'create a todo',
-        'add to my list', 'add to list', 'add to tasks', 
-        'remind me to', 'don\'t forget to', 'need to', 'chore'
-      ];
-
-      const isLikelyTaskRequest = taskIndicators.some(indicator =>
-        lastUserMessage.toLowerCase().includes(indicator)
-      );
-
-      if (isLikelyTaskRequest) {
-        console.log("Detected likely task request in latest message");
-        
-        try {
-          // Import AllieAIService dynamically
-          const AllieAIService = (await import('./AllieAIService')).default;
-          
-          // Process the task
-          const result = await AllieAIService.processTaskFromChat(
-            lastUserMessage,
-            context.familyId || '',
-            auth.currentUser?.uid
-          );
-          
-          if (result.success) {
-            return `I've added "${result.task.title}" to your tasks${result.task.assignedToName ? ` and assigned it to ${result.task.assignedToName}` : ''}. You'll find it in the ${result.task.column === 'this-week' ? 'This Week' : result.task.column === 'in-progress' ? 'In Progress' : 'Upcoming'} column on your task board.`;
-          }
-        } catch (taskError) {
-          console.error("Error processing task request:", taskError);
-          // Continue with normal Claude processing if task handling fails
-        }
-      }
-      
-      // If we have too many messages, consider using a focused subset
-      // for non-calendar queries to avoid responding to everything at once
-      if (formattedMessages.length > 5) {
-        // Check if the last message is a specific, standalone question
-        const standaloneIndicators = [
-          'what', 'why', 'how', 'when', 'who', 
-          'can you', 'could you', 'will you', 'would you',
-          '?'
-        ];
-        
-        const isLikelyStandaloneQuestion = standaloneIndicators.some(indicator => 
-          lastUserMessage.toLowerCase().includes(indicator)
-        );
-        
-        if (isLikelyStandaloneQuestion) {
-          if (this.debugMode) {
-            console.log("Detected standalone question, focusing response on latest message");
-          }
-          // Create a focused subset of messages: some context + latest message
-          const focusedMessages = [
-            ...formattedMessages.slice(-3, -1), // Some context
-            formattedMessages[formattedMessages.length - 1] // Latest message
-          ];
-          
-          // Update for logging
-          if (this.debugMode) {
-            console.log(`Using focused context of ${focusedMessages.length} messages`);
-          }
-          formattedMessages = focusedMessages;
-        }
-      }
-      
       // Prepare request payload for Claude API
       const payload = {
         model: this.model,
@@ -457,20 +323,10 @@ console.log("Got response from Claude API proxy:", response.status);
         system: systemPrompt
       };
       
-      // Add a timeout to the API call
+      // Add a timeout to the API call - increased to 60 seconds
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45000); // Increased timeout to 45 seconds
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
       
-      // Make the API call through our proxy server with better error handling
-      if (this.debugMode) {
-        console.log("Attempting to connect to proxy at:", this.proxyUrl);
-        console.log("Request payload:", {
-          model: payload.model,
-          messages: payload.messages.length,
-          systemLength: payload.system?.length || 0
-        });
-      }
-
       try {
         // First check if we're in mock mode or AI calls are disabled
         if (this.mockMode || this.disableAICalls) {
@@ -483,11 +339,12 @@ console.log("Got response from Claude API proxy:", response.status);
           );
         }
 
-        // Add timeout to ensure we get a response or fallback
+        // Add timeout to ensure we get a response or fallback - increased timeout to 45 seconds
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Request timed out")), 20000)
+          setTimeout(() => reject(new Error("Request timed out")), 45000)
         );
 
+        console.log("Making request to Claude API:", this.proxyUrl);
         const responsePromise = fetch(this.proxyUrl, {
           method: 'POST',
           headers: {
@@ -520,7 +377,14 @@ console.log("Got response from Claude API proxy:", response.status);
           } catch (e) {}
           
           // Return a personalized response
-          return this.createPersonalizedResponse(lastUserMessage, context);
+          const fallbackResponse = this.createPersonalizedResponse(
+            typeof messages[messages.length - 1] === 'object' 
+              ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "") 
+              : "",
+            context
+          );
+          console.log("Returning fallback response:", fallbackResponse.substring(0, 100) + "...");
+          return fallbackResponse;
         }
         
         // Check content type for HTML
@@ -528,7 +392,12 @@ console.log("Got response from Claude API proxy:", response.status);
         if (contentType && contentType.includes('text/html')) {
           console.error("Received HTML instead of JSON - API endpoint misconfigured");
           this.enableFallbackMode();
-          return this.createPersonalizedResponse(lastUserMessage, context);
+          return this.createPersonalizedResponse(
+            typeof messages[messages.length - 1] === 'object'
+              ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
+              : "",
+            context
+          );
         }
               
         // Try to parse the JSON with better error handling
@@ -543,23 +412,48 @@ console.log("Got response from Claude API proxy:", response.status);
           // Try to get the raw text to see what's wrong
           const rawText = await response.text();
           console.warn("Raw response text (first 200 chars):", rawText.substring(0, 200));
-          return this.createPersonalizedResponse(lastUserMessage, context);
+          return this.createPersonalizedResponse(
+            typeof messages[messages.length - 1] === 'object'
+              ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
+              : "",
+            context
+          );
         }
 
         // Enhanced validation with better error handling
         if (!result) {
           console.error("Empty result from Claude API");
-          return this.createPersonalizedResponse(lastUserMessage, context);
+          const fallbackResponse = this.createPersonalizedResponse(
+            typeof messages[messages.length - 1] === 'object'
+              ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
+              : "",
+            context
+          );
+          return fallbackResponse;
         }
 
         // Add a special catch for undefined or null response
         if (result === undefined || result === null) {
           console.error("Claude API returned undefined or null");
-          return this.createPersonalizedResponse(lastUserMessage, context);
+          return this.createPersonalizedResponse(
+            typeof messages[messages.length - 1] === 'object'
+              ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
+              : "",
+            context
+          );
         }
 
         // Check if result is a string directly (some versions of Claude API may return direct text)
         if (typeof result === 'string') {
+          if (!result || result.trim() === '') {
+            console.error("Claude API returned empty string response");
+            return this.createPersonalizedResponse(
+              typeof messages[messages.length - 1] === 'object'
+                ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
+                : "",
+              context
+            );
+          }
           console.log("Claude API returned direct string response");
           return result.trim();
         }
@@ -567,17 +461,32 @@ console.log("Got response from Claude API proxy:", response.status);
         // Check content structure with better logging
         if (!result.content) {
           console.error("Missing 'content' in Claude API response:", result);
-          return this.createPersonalizedResponse(lastUserMessage, context);
+          return this.createPersonalizedResponse(
+            typeof messages[messages.length - 1] === 'object'
+              ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
+              : "",
+            context
+          );
         }
 
         if (!Array.isArray(result.content) || result.content.length === 0) {
           console.error("'content' is not an array or is empty:", result.content);
-          return this.createPersonalizedResponse(lastUserMessage, context);
+          return this.createPersonalizedResponse(
+            typeof messages[messages.length - 1] === 'object'
+              ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
+              : "",
+            context
+          );
         }
 
         if (!result.content[0]) {
           console.error("First content item is undefined:", result.content);
-          return this.createPersonalizedResponse(lastUserMessage, context);
+          return this.createPersonalizedResponse(
+            typeof messages[messages.length - 1] === 'object'
+              ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
+              : "",
+            context
+          );
         }
 
         // Check for text property with more robust fallbacks
@@ -617,21 +526,28 @@ console.log("Got response from Claude API proxy:", response.status);
           
           // Last resort
           console.log("Falling back to personalized response as no text could be extracted");
-          return this.createPersonalizedResponse(lastUserMessage, context);
+          return this.createPersonalizedResponse(
+            typeof messages[messages.length - 1] === 'object'
+              ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
+              : "",
+            context
+          );
         }
 
         // Successfully extracted the text - make sure it's not empty
         const extractedText = result.content[0].text;
         if (!extractedText || extractedText.trim() === '') {
           console.error("Extracted text is empty");
-          return this.createPersonalizedResponse(lastUserMessage, context);
+          return this.createPersonalizedResponse(
+            typeof messages[messages.length - 1] === 'object'
+              ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
+              : "",
+            context
+          );
         }
 
-
-        
-
         // Return successfully extracted text
-        console.log("Successfully extracted text from Claude API response");
+        console.log("Successfully extracted text from Claude API response of length:", extractedText.length);
         return extractedText;
       } catch (error) {
         clearTimeout(timeoutId);
@@ -659,17 +575,23 @@ console.log("Got response from Claude API proxy:", response.status);
           context
         );
       }
-    } catch (finalError) {
-      console.error("Unhandled error in Claude service:", finalError);
-      
-      // Ultimate fallback to prevent undefined responses
-      const userQuery = typeof messages[messages.length - 1] === 'object' 
-        ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "your request") 
-        : "your request";
-      
-      return `I'm having trouble processing ${userQuery} right now. Please try again in a moment. If the problem persists, you can try refreshing the page.`;
+    } finally {
+      // Always remove from pending components to prevent lockout
+      if (this._callTracker && this._callTracker.pendingComponents) {
+        this._callTracker.pendingComponents.delete(componentId);
+      }
     }
+  } catch (finalError) {
+    console.error("Unhandled error in Claude service:", finalError);
+    
+    // Ultimate fallback to prevent undefined responses
+    const userQuery = typeof messages[messages.length - 1] === 'object' 
+      ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "your request") 
+      : "your request";
+    
+    return `I'm having trouble processing ${userQuery} right now. Please try again in a moment. If the problem persists, you can try refreshing the page.`;
   }
+}
 
   // Updated version with loop protection
   async extractCalendarRequest(message) {  

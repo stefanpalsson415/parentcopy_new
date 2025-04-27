@@ -1051,39 +1051,84 @@ if (!savedMessage.success) {
         return;
       }
       
-      // If we get here, we need to use the general AI response
+      // NEW CODE
+// If we get here, we need to use the general AI response
 // Remove the processing message first
 setMessages(prev => prev.filter(msg => msg !== processingMessage));
 
-// Get recent messages for context
-const recentContext = [...getRecentMessages(5), userMessage]; // Only use last 5 messages
-const aiResponse = await EnhancedChatService.getAIResponse(
-  currentMessageText, 
-  familyId, 
-  recentContext
-);
-
-// Add AI response to messages - ensure we never have undefined text
-const allieMessage = {
-  id: Date.now().toString(), // Temporary ID 
+// Show typing indicator
+setMessages(prev => [...prev, {
   familyId,
   sender: 'allie',
   userName: 'Allie',
-  text: aiResponse || "I'm sorry, I couldn't generate a response right now. Please try again.",
+  isTyping: true,
   timestamp: new Date().toISOString()
-};
+}]);
 
-// Only save if we have actual text content
-if (allieMessage.text && allieMessage.text.trim() !== '') {
-  // Save AI message to database
+try {
+  // Get recent messages for context
+  const recentContext = [...getRecentMessages(5), userMessage]; // Only use last 5 messages
+  const aiResponse = await EnhancedChatService.getAIResponse(
+    currentMessageText, 
+    familyId, 
+    recentContext
+  );
+
+  // Strict validation of AI response
+  let responseText = aiResponse;
+  if (!responseText || typeof responseText !== 'string' || responseText.trim() === '') {
+    console.error("Received empty response from EnhancedChatService, using fallback");
+    responseText = "I'm sorry, I couldn't generate a response right now. Please try again in a moment.";
+  }
+
+  // Create a validated message object
+  const allieMessage = {
+    id: Date.now().toString(), // Temporary ID 
+    familyId,
+    sender: 'allie',
+    userName: 'Allie',
+    text: responseText,
+    timestamp: new Date().toISOString()
+  };
+
+  // Save the validated message to the database
   const savedAIMessage = await ChatPersistenceService.saveMessage(allieMessage);
   if (savedAIMessage.success && savedAIMessage.messageId) {
     allieMessage.id = savedAIMessage.messageId;
   }
-}
 
-// Update messages state with AI response
-setMessages(prev => [...prev, allieMessage]);
+  // Remove typing indicator and add actual response
+  setMessages(prev => 
+    prev.filter(msg => !msg.isTyping).concat(allieMessage)
+  );
+} catch (aiError) {
+  console.error("Error getting AI response:", aiError);
+  
+  // Create a fallback message for errors
+  const fallbackMessage = {
+    id: Date.now().toString(),
+    familyId,
+    sender: 'allie',
+    userName: 'Allie',
+    text: "I'm experiencing some technical difficulties right now. Please try again in a moment.",
+    timestamp: new Date().toISOString()
+  };
+  
+  // Save the fallback message
+  try {
+    const savedFallback = await ChatPersistenceService.saveMessage(fallbackMessage);
+    if (savedFallback.success && savedFallback.messageId) {
+      fallbackMessage.id = savedFallback.messageId;
+    }
+  } catch (saveError) {
+    console.error("Error saving fallback message:", saveError);
+  }
+  
+  // Remove typing indicator and add fallback
+  setMessages(prev => 
+    prev.filter(msg => !msg.isTyping).concat(fallbackMessage)
+  );
+}
       
       setLoading(false);
     } catch (error) {

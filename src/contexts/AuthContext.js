@@ -176,46 +176,71 @@ export function AuthProvider({ children }) {
     }
   }
 
-  useEffect(() => {
-    let isMounted = true;
+  // NEW CODE
+useEffect(() => {
+  let isMounted = true;
+  
+  // First set loading to true
+  setLoading(true);
+  
+  // Set a flag to track if auth state has been checked
+  let authStateChecked = false;
+  
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    if (!isMounted) return;
     
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!isMounted) return;
-      setCurrentUser(user);
-      
-      if (user) {
-        try {
-          // Load all families first
-          await loadAllFamilies(user.uid);
-          
-          // Then load the primary family data
+    // Mark that auth state has been checked
+    authStateChecked = true;
+    
+    console.log("Auth state changed:", user ? `User logged in: ${user.uid}` : "No user");
+    setCurrentUser(user);
+    
+    if (user) {
+      try {
+        console.log("Loading family data for user:", user.uid);
+        
+        // Load all families first
+        const families = await loadAllFamilies(user.uid);
+        console.log(`Loaded ${families.length} families for user`);
+        
+        // Then load the primary family data
+        if (families && families.length > 0) {
           await loadFamilyData(user.uid);
-        } catch (error) {
-          console.error("Error loading family data on auth change:", error);
         }
-      } else {
-        // Clear family data on logout
-        setFamilyData(null);
-        setAvailableFamilies([]);
+      } catch (error) {
+        console.error("Error loading family data on auth change:", error);
+      }
+    } else {
+      // Clear family data on logout
+      setFamilyData(null);
+      setAvailableFamilies([]);
+    }
+    
+    if (isMounted) {
+      setLoading(false);
+    }
+  });
+
+  // Add a timeout to prevent hanging indefinitely - increased to 30 seconds
+  const timeout = setTimeout(() => {
+    if (isMounted) {
+      console.log("Auth loading timeout - forcing render");
+      
+      // If auth state hasn't been checked yet, this is a real timeout
+      if (!authStateChecked) {
+        console.warn("Auth state was never checked - possible Firebase issue");
       }
       
       setLoading(false);
-    });
+    }
+  }, 30000); // Increased to 30 seconds for slower connections
   
-    // Add a timeout to prevent hanging indefinitely
-    const timeout = setTimeout(() => {
-      if (isMounted) {
-        console.log("Auth loading timeout - forcing render");
-        setLoading(false);
-      }
-    }, 10000); // Increase from 5 to 10 seconds timeout
-    
-    return () => {
-      isMounted = false;
-      clearTimeout(timeout);
-      unsubscribe();
-    };
-  }, []);
+  return () => {
+    isMounted = false;
+    clearTimeout(timeout);
+    unsubscribe();
+  };
+}, []);
 
   // Context value
   const value = {

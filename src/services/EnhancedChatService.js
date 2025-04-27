@@ -1507,7 +1507,7 @@ async getAIResponse(message, familyId, messageHistory = []) {
     try {
       // Log critical debug information before Claude API call
       console.log("Calling Claude API with:", {
-        messagesCount: formattedMessages.length,
+        messagesCount: formattedMessages.length, 
         intentCategory: analysis.intent?.split('.')[0] || 'unknown',
         confidence: analysis.confidence || 0
       });
@@ -1548,6 +1548,26 @@ async getAIResponse(message, familyId, messageHistory = []) {
     console.error("Error getting AI response:", error);
     return "I'm sorry, I encountered an issue processing your request. Please try again.";
   }
+}
+
+// Add helper method to get current user from message history
+getCurrentUserFromHistory(messageHistory) {
+  if (!messageHistory || messageHistory.length === 0) {
+    return null;
+  }
+  
+  // Find the most recent user message
+  for (let i = messageHistory.length - 1; i >= 0; i--) {
+    const msg = messageHistory[i];
+    if (msg.sender !== 'allie') {
+      return {
+        id: msg.sender,
+        name: msg.userName
+      };
+    }
+  }
+  
+  return null;
 }
 
 // Add helper method to get current user from message history
