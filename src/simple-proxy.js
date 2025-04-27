@@ -34,8 +34,7 @@ app.post('/api/claude', async (req, res) => {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'x-api-key': apiKey
+        'anthropic-version': '2023-06-01'
       }
     });
     

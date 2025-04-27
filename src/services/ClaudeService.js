@@ -30,7 +30,8 @@ constructor() {
   }
   
   // Model settings
-  this.model = 'claude-3-sonnet-20240229';
+  this.model = 'claude-3-5-sonnet-20240620';  // Update to the latest Claude model
+
   
   // Basic settings
   this.mockMode = false;
