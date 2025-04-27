@@ -524,9 +524,46 @@ class EventDetailCollectorService {
    */
   async persistSessionData(sessionId, sessionData) {
     try {
+      // Create a clean copy of data with no undefined values
+      const cleanData = { ...sessionData };
+      
+      // Check if collectedData exists
+      if (cleanData.collectedData) {
+        const cleanCollectedData = { ...cleanData.collectedData };
+        
+        // Ensure endDateTime is defined
+        if (cleanCollectedData.endDateTime === undefined) {
+          // If we have a dateTime, calculate endDateTime (1 hour later)
+          if (cleanCollectedData.dateTime) {
+            const startDate = new Date(cleanCollectedData.dateTime);
+            const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // 1 hour later
+            cleanCollectedData.endDateTime = endDate.toISOString();
+          } else {
+            // If no dateTime, don't include endDateTime
+            delete cleanCollectedData.endDateTime;
+          }
+        }
+        
+        // Remove any other undefined values in collectedData
+        Object.keys(cleanCollectedData).forEach(key => {
+          if (cleanCollectedData[key] === undefined) {
+            delete cleanCollectedData[key];
+          }
+        });
+        
+        cleanData.collectedData = cleanCollectedData;
+      }
+      
+      // Remove any undefined values at the top level
+      Object.keys(cleanData).forEach(key => {
+        if (cleanData[key] === undefined) {
+          delete cleanData[key];
+        }
+      });
+      
       const sessionRef = doc(db, "eventCollectionSessions", sessionId);
       await setDoc(sessionRef, {
-        ...sessionData,
+        ...cleanData,
         updatedAt: new Date().toISOString()
       });
     } catch (error) {

@@ -336,6 +336,18 @@ class UnifiedParserService {
             console.log(`Found JSON in markdown code block for ${type}`);
           } catch (markdownError) {
             console.warn(`Error parsing JSON from markdown for ${type}:`, markdownError);
+            // Try to clean the JSON string before parsing again
+            try {
+              const cleanedJson = markdownMatch[1]
+                .replace(/\\n/g, ' ')
+                .replace(/\\"/g, '"')
+                .replace(/\\/g, '\\')
+                .replace(/\\t/g, ' ');
+              result = JSON.parse(cleanedJson);
+              console.log(`Parsed JSON with cleaning for ${type}`);
+            } catch (cleaningError) {
+              console.warn(`Cleaning failed for ${type}:`, cleaningError);
+            }
           }
         }
       }

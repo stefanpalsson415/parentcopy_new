@@ -34,12 +34,12 @@ constructor() {
 
   
   // Basic settings
-  this.mockMode = false;
-  this.debugMode = true; // Always enable logging for debugging
-  this.disableAICalls = false;
-  this.disableCalendarDetection = true;
-  this.retryCount = 3;
-  this.functionRegion = 'europe-west1'; // Match this to your deployment region
+this.mockMode = false;
+this.debugMode = true; // Always enable logging for debugging
+this.disableAICalls = false;
+this.disableCalendarDetection = false; // <-- CHANGED TO FALSE
+this.retryCount = 3;
+this.functionRegion = 'europe-west1'; // Match this to your deployment region
   
   // Add connection test with retry capability
   setTimeout(() => {
@@ -941,25 +941,38 @@ async createEventFromCollectedData(eventData, userId, familyId) {
     
     // Enhanced logging for debugging
     console.log("📅 Creating event from collected data:", {
-      title: eventData.title,
-      type: eventData.eventType,
+      title: eventData.title || "Untitled Event",
+      type: eventData.eventType || "general",
       dateTime: eventData.dateTime,
       userId: userId,
       familyId: familyId
     });
     
-    // Prepare the event for the calendar
+    // Ensure we have valid date values
+    const startDateTime = eventData.dateTime || new Date().toISOString();
+    const startDate = new Date(startDateTime);
+    const endDate = eventData.endDateTime ? 
+      new Date(eventData.endDateTime) : 
+      new Date(startDate.getTime() + 60 * 60 * 1000); // Default to 1 hour later
+    
+    // Prepare the event for the calendar with defaults for required fields
     const event = {
-      ...eventData,
+      title: eventData.title || "Untitled Event",
+      summary: eventData.title || "Untitled Event",
+      description: eventData.description || "",
+      location: eventData.location || "",
+      eventType: eventData.eventType || "general",
+      category: eventData.category || "general",
+      // Add user and family IDs
       userId,
       familyId,
-      summary: eventData.title,
+      // Ensure proper datetime format
       start: {
-        dateTime: eventData.dateTime,
+        dateTime: startDate.toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       },
       end: {
-        dateTime: eventData.endDateTime || new Date(new Date(eventData.dateTime).getTime() + 60 * 60 * 1000).toISOString(),
+        dateTime: endDate.toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       },
       reminders: {
@@ -972,6 +985,12 @@ async createEventFromCollectedData(eventData, userId, familyId) {
       source: 'allie-chat',
       creationSource: 'allie-chat'
     };
+    
+    // Only add optional fields if they exist
+    if (eventData.childId) event.childId = eventData.childId;
+    if (eventData.childName) event.childName = eventData.childName;
+    if (eventData.attendingParentId) event.attendingParentId = eventData.attendingParentId;
+    if (eventData.extraDetails) event.extraDetails = eventData.extraDetails;
     
     console.log("📅 Formatted event object:", event);
     
