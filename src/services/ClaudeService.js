@@ -3,7 +3,7 @@ import CalendarService from './CalendarService';
 import { auth } from './firebase';
 
 class ClaudeService {
-  // NEW IMPLEMENTATION
+// NEW IMPLEMENTATION
 constructor() {
   // Determine environment type
   const hostname = window.location.hostname;
@@ -50,51 +50,33 @@ constructor() {
 
 // New helper method for connection testing with retry
 async testConnectionWithRetry(attempts = 2) {
-for (let i = 0; i < attempts; i++) {
-  try {
-    const success = await this.testProxyConnection();
-    if (success) {
-      console.log("✅ Claude API connection test passed!");
-      return;
-    } else {
-      console.warn(`❌ Claude API connection test failed (attempt ${i+1}/${attempts})`);
-      
-      // If we have a fallback URL and this isn't the last attempt, try the fallback
-      if (this.fallbackProxyUrl && i === 0) {
-        console.log("Trying fallback proxy URL:", this.fallbackProxyUrl);
-        this.proxyUrl = this.fallbackProxyUrl;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const success = await this.testProxyConnection();
+      if (success) {
+        console.log("✅ Claude API connection test passed!");
+        return;
+      } else {
+        console.warn(`❌ Claude API connection test failed (attempt ${i+1}/${attempts})`);
+        
+        // If we have a fallback URL and this isn't the last attempt, try the fallback
+        if (this.fallbackProxyUrl && i === 0) {
+          console.log("Trying fallback proxy URL:", this.fallbackProxyUrl);
+          this.proxyUrl = this.fallbackProxyUrl;
+        }
       }
+    } catch (err) {
+      console.error(`❌ Error testing Claude API connection (attempt ${i+1}/${attempts}):`, err);
     }
-  } catch (err) {
-    console.error(`❌ Error testing Claude API connection (attempt ${i+1}/${attempts}):`, err);
   }
-}
 
-// If all attempts fail, enable fallback mode
-console.error("All Claude API connection attempts failed - enabling fallback mode");
-this.enableFallbackMode();
+  // If all attempts fail, enable fallback mode
+  console.error("All Claude API connection attempts failed - enabling fallback mode");
+  this.enableFallbackMode();
 }
     
-    // Auto-test connection on initialization with longer delay
-    if (this.testConnectionOnLoad) {
-      console.log("Will test Claude API connection in 3 seconds...");
-      setTimeout(() => {
-        this.testProxyConnection()
-          .then(success => {
-            if (!success) {
-              console.warn("Claude API connection test failed on initialization. Check server configuration.");
-              this.enableFallbackMode();
-            } else {
-              console.log("Claude API connection test successful!");
-            }
-          })
-          .catch(err => {
-            console.error("Error during Claude API connection test:", err);
-            this.enableFallbackMode();
-          });
-      }, 3000); // Increased delay to ensure app is fully loaded
-    }
-  }
+    
+  
   
   async testProxyConnection() {
     try {
