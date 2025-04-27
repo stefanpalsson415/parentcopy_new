@@ -282,6 +282,65 @@ async generateResponse(messages, context, options = {}) {
         });
       }
       
+// Inside generateResponse method, after checking if AI calls are disabled
+// Add event detail collection detection
+const lastMessage = messages[messages.length - 1];
+const messageText = lastMessage.content || lastMessage.text || "";
+
+// Check for event collection markers in previous AI responses
+const eventCollectionMarker = context?.previousAIMessages?.find(msg => 
+  msg.includes('<event_collection session=')
+);
+
+if (eventCollectionMarker) {
+  // Extract session ID and step
+  const sessionMatch = eventCollectionMarker.match(/<event_collection session="([^"]+)" step="(\d+)">/);
+  if (sessionMatch) {
+    const [_, sessionId, step] = sessionMatch;
+    // Handle collection response
+    return this.handleEventCollectionResponse(
+      messageText, 
+      sessionId, 
+      parseInt(step), 
+      context.userId,  // FIXED: removed undefined userId fallback
+      context.familyId
+    );
+  }
+}
+
+// Check for calendar request 
+if (!this.disableCalendarDetection && messageText.length > 0) {
+  // Check for common calendar request indicators
+  const calendarKeywords = [
+    'add to calendar', 'schedule', 'appointment', 'meeting', 'event',
+    'calendar', 'book', 'plan', 'sync', 'reminder', 'save date'
+  ];
+  
+  const isCalendarRequest = calendarKeywords.some(keyword =>
+    messageText.toLowerCase().includes(keyword)
+  );
+  
+  if (isCalendarRequest) {
+    // Use enhanced event detail collection flow instead of old calendar handling
+    try {
+      const detailCollectionResponse = await this.extractAndCollectEventDetails(
+        messageText, 
+        context.userId,  // FIXED: removed undefined userId fallback
+        context.familyId
+      );
+      
+      if (detailCollectionResponse) {
+        return detailCollectionResponse;
+      }
+    } catch (error) {
+      console.error("Error in calendar detail collection:", error);
+      // Fall through to normal processing if calendar handling fails
+    }
+  }
+}
+
+
+      
       // Check if messages is an array of our internal message format
       let formattedMessages;
       if (messages.length > 0 && messages[0].sender) {
@@ -680,6 +739,241 @@ async generateResponse(messages, context, options = {}) {
       return null;  
     }  
   }
+
+
+// New method for ClaudeService.js to integrate with EventDetailCollectorService
+async extractAndCollectEventDetails(message, userId, familyId) {
+  try {
+    // First extract basic event details
+    const basicEventData = await this.extractCalendarRequest(message);
+    
+    if (!basicEventData) {
+      return null;
+    }
+    
+    // Import EventDetailCollectorService
+    const EventDetailCollectorService = (await import('./EventDetailCollectorService')).default;
+    
+    // Create a unique session ID
+    const sessionId = `event-${userId}-${Date.now()}`;
+    
+    // Start collection flow
+    const initialPrompt = await EventDetailCollectorService.startCollection(
+      familyId,
+      sessionId,
+      basicEventData
+    );
+    
+    // Format response for the user
+    let responseMessage = `I'd like to add this ${basicEventData.type || 'event'} to your calendar. `;
+    responseMessage += `Let's make sure I have all the details:\n\n`;
+    
+    if (basicEventData.title) {
+      responseMessage += `Event: ${basicEventData.title}\n`;
+    }
+    
+    if (basicEventData.dateTime) {
+      const eventDate = new Date(basicEventData.dateTime);
+      responseMessage += `Date: ${eventDate.toLocaleDateString()}\n`;
+      responseMessage += `Time: ${eventDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}\n`;
+    }
+    
+    if (basicEventData.location) {
+      responseMessage += `Location: ${basicEventData.location}\n`;
+    }
+    
+    if (basicEventData.childName) {
+      responseMessage += `For: ${basicEventData.childName}\n`;
+    }
+    
+    responseMessage += `\n${initialPrompt.prompt}`;
+    
+    // Add special marker for event collection
+    responseMessage += `\n\n<event_collection session="${sessionId}" step="1">`;
+    
+    return responseMessage;
+  } catch (error) {
+    console.error("Error extracting and collecting event details:", error);
+    return "I encountered an issue while trying to create this event. Let's try again with a bit more detail. Could you describe the event again?";
+  }
+}
+
+// Add this method to handle responses in the collection flow
+async handleEventCollectionResponse(message, sessionId, step, userId, familyId) {
+  try {
+    // Import EventDetailCollectorService
+    const EventDetailCollectorService = (await import('./EventDetailCollectorService')).default;
+    
+    // Process the user's response
+    const result = await EventDetailCollectorService.processResponse(sessionId, message);
+    
+    if (result.status === 'completed') {
+      // Collection is complete, create the event
+      const completeData = await EventDetailCollectorService.completeSession(sessionId);
+      
+      // Format the final event data
+      const eventData = this.formatCollectedEventData(completeData);
+      
+      // Create the event
+      const eventResult = await this.createEventFromCollectedData(eventData, userId, familyId);
+      
+      if (eventResult.success) {
+        // Format success message
+        let responseMessage = `Perfect! I've added this ${eventData.eventType || 'event'} to your calendar:\n\n`;
+        responseMessage += `Event: ${eventData.title}\n`;
+        
+        if (eventData.dateTime) {
+          const eventDate = new Date(eventData.dateTime);
+          responseMessage += `Date: ${eventDate.toLocaleDateString()}\n`;
+          responseMessage += `Time: ${eventDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}\n`;
+        }
+        
+        if (eventData.location) {
+          responseMessage += `Location: ${eventData.location}\n`;
+        }
+        
+        if (eventData.childName) {
+          responseMessage += `For: ${eventData.childName}\n`;
+        }
+        
+        // Add any other helpful information
+        if (eventData.eventType === 'doctor' || eventData.eventType === 'dentist') {
+          responseMessage += `\nI'll send a reminder 24 hours before the appointment!`;
+        } else if (eventData.eventType === 'activity') {
+          responseMessage += `\nDon't forget ${eventData.equipmentNeeded || 'any necessary equipment'}!`;
+        }
+        
+        return responseMessage;
+      } else {
+        return "I had trouble adding this event to your calendar. Could you try again or check the calendar app directly?";
+      }
+    } else {
+      // Continue collection with next prompt
+      let responseMessage = result.prompt;
+      
+      // Add context about progress
+      responseMessage += `\n\n(Step ${result.step} of ${result.totalSteps})`;
+      
+      // Add special marker for continued collection
+      responseMessage += `\n\n<event_collection session="${sessionId}" step="${result.step}">`;
+      
+      return responseMessage;
+    }
+  } catch (error) {
+    console.error("Error handling event collection response:", error);
+    return "I encountered an issue processing your response. Let's start over with creating the event. Could you describe it again?";
+  }
+}
+
+// Helper method to format collected event data
+formatCollectedEventData(collectedData) {
+  // Format the collected data into the structure expected by Calendar operations
+  const eventData = {
+    ...collectedData,
+    // Ensure required fields have proper format
+    title: collectedData.title || `${collectedData.eventType || 'Event'}`,
+    // Format date and time if both are available
+    dateTime: collectedData.date && collectedData.time ? 
+      new Date(`${collectedData.date}T${collectedData.time}`).toISOString() : 
+      collectedData.dateTime || new Date().toISOString(),
+    // Add any event-specific details to appropriate containers
+    extraDetails: {
+      ...(collectedData.extraDetails || {}),
+      creationSource: 'guided-chat',
+      parsedWithAI: true
+    }
+  };
+  
+  // Handle event-specific fields
+  if (collectedData.eventType === 'dentist' || collectedData.eventType === 'doctor') {
+    eventData.appointmentDetails = {
+      doctorName: collectedData.doctorName,
+      location: collectedData.location,
+      reasonForVisit: collectedData.reasonForVisit,
+      insuranceInfo: collectedData.insuranceInfo,
+      formsNeeded: collectedData.formsNeeded,
+      fastingRequired: collectedData.fastingRequired,
+      bringRecords: collectedData.bringRecords,
+      transportation: collectedData.transportation,
+      followUpDate: collectedData.followUpDate,
+      costsAndCopays: collectedData.costsAndCopays
+    };
+  } else if (collectedData.eventType === 'activity') {
+    eventData.activityDetails = {
+      activityType: collectedData.activityType,
+      coach: collectedData.coach,
+      equipmentNeeded: collectedData.equipmentNeeded,
+      parentAttendance: collectedData.parentAttendance,
+      weatherContingency: collectedData.weatherContingency,
+      seasonDuration: collectedData.seasonDuration,
+      fees: collectedData.fees,
+      uniform: collectedData.uniform,
+      communicationMethod: collectedData.communicationMethod
+    };
+  } else if (collectedData.eventType === 'birthday') {
+    eventData.birthdayDetails = {
+      birthdayChildName: collectedData.birthdayChildName,
+      birthdayChildAge: collectedData.birthdayChildAge,
+      guestList: collectedData.guestList,
+      theme: collectedData.theme,
+      foodArrangements: collectedData.foodArrangements,
+      activities: collectedData.activities,
+      budget: collectedData.budget,
+      favors: collectedData.favors,
+      setupCleanup: collectedData.setupCleanup,
+      weatherBackup: collectedData.weatherBackup,
+      isInvitation: collectedData.isInvitation || false,
+      rsvpDeadline: collectedData.rsvpDeadline
+    };
+  }
+  
+  return eventData;
+}
+
+// Helper method to create event from collected data
+async createEventFromCollectedData(eventData, userId, familyId) {
+  try {
+    // Prepare the event for the calendar
+    const event = {
+      ...eventData,
+      userId,
+      familyId,
+      summary: eventData.title,
+      start: {
+        dateTime: eventData.dateTime,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: eventData.endDateTime || new Date(new Date(eventData.dateTime).getTime() + 60 * 60 * 1000).toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      reminders: {
+        useDefault: false,
+        overrides: [
+          {'method': 'popup', 'minutes': 30}
+        ]
+      }
+    };
+    
+    // Use CalendarService to add the event
+    const result = await CalendarService.addEvent(event, userId);
+    
+    // Trigger UI refresh
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+    }
+    
+    return {
+      success: result.success,
+      eventId: result.eventId
+    };
+  } catch (error) {
+    console.error("Error creating event from collected data:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+
 
   async processCalendarRequest(eventData, context) {  
     try {  
