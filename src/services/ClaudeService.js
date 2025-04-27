@@ -5,21 +5,45 @@ import { auth } from './firebase';
 class ClaudeService {
   constructor() {
     // Determine environment type
-    const hostname = window.location.hostname;
-    const isProduction = hostname === 'checkallie.com' || hostname === 'www.checkallie.com';
-    const isLocalhost = hostname === 'localhost' || hostname.includes('127.0.0.1');
-    const isFirebase = hostname.includes('firebaseapp.com') || hostname.includes('web.app');
-    
-    // Set the appropriate API URL based on environment
-    if (isLocalhost) {
-      // For local development, use the Firebase proxy server on port 3001
-      this.proxyUrl = 'http://localhost:3001/api/claude';
-      console.log("Running in local development mode - using local proxy server");
-    } else {
-      // For production, use relative URL (handled by server-side routing)
-      this.proxyUrl = '/api/claude';
-      console.log("Running in production mode - using server-side routing");
-    }
+const hostname = window.location.hostname;
+const isProduction = hostname === 'checkallie.com' || hostname === 'www.checkallie.com';
+const isLocalhost = hostname === 'localhost' || hostname.includes('127.0.0.1');
+const isFirebase = hostname.includes('firebaseapp.com') || hostname.includes('web.app');
+
+// Add immediate connection test
+setTimeout(() => {
+  this.testProxyConnection()
+    .then(success => {
+      if (success) {
+        console.log("✅ Claude API connection test passed!");
+      } else {
+        console.error("❌ Claude API connection test failed - check your network and API configuration");
+        this.enableFallbackMode();
+      }
+    })
+    .catch(err => {
+      console.error("❌ Error testing Claude API connection:", err);
+      this.enableFallbackMode();
+    });
+}, 1000);
+
+
+
+
+// Set the appropriate API URL based on environment
+if (isLocalhost) {
+  // For local development, use the Firebase proxy server on port 3001
+  this.proxyUrl = 'http://localhost:3001/api/claude';
+  console.log("Running in local development mode - using local proxy server");
+} else if (isFirebase || isProduction) {
+  // For Firebase hosting or production domain, use the direct Cloud Functions URL
+  this.proxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude';
+  console.log("Running in production - using direct Cloud Functions URL:", this.proxyUrl);
+} else {
+  // Fallback for other environments
+  this.proxyUrl = '/api/claude';
+  console.log("Running in unknown environment - using relative URL");
+}
     
     // Model settings
     this.model = 'claude-3-sonnet-20240229';
@@ -434,6 +458,11 @@ if (isLikelyTaskRequest) {
       // Make the API call through our proxy server with better error handling
 if (this.debugMode) {
   console.log("Attempting to connect to proxy at:", this.proxyUrl);
+  console.log("Request payload:", {
+    model: payload.model,
+    messages: payload.messages.length,
+    systemLength: payload.system?.length || 0
+  });
 }
 
 try {
@@ -448,7 +477,12 @@ try {
     );
   }
 
-  const response = await fetch(this.proxyUrl, {
+  // Add timeout to ensure we get a response or fallback
+  const timeoutPromise = new Promise((_, reject) => 
+    setTimeout(() => reject(new Error("Request timed out")), 20000)
+  );
+
+  const responsePromise = fetch(this.proxyUrl, {
     method: 'POST',
     headers: {
       'Accept': 'application/json',
@@ -457,6 +491,9 @@ try {
     body: JSON.stringify(payload),
     signal: controller.signal
   });
+
+  const response = await Promise.race([responsePromise, timeoutPromise]);
+  console.log("Got response from Claude API proxy:", response.status);
   
   clearTimeout(timeoutId);
   
@@ -587,20 +624,31 @@ if (!extractedText || extractedText.trim() === '') {
 // Return successfully extracted text
 console.log("Successfully extracted text from Claude API response");
 return extractedText;
-      } catch (error) {
-        clearTimeout(timeoutId);
-        console.error("Error in Claude API call:", error.message);
-        
-        // Only use fallback for certain errors
-        if (error.message?.includes("timeout") || error.message?.includes("network")) {
-          console.log("Using fallback response due to network/timeout error");
-          return this.createPersonalizedResponse(
-            typeof messages[messages.length - 1] === 'object' 
-              ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "") 
-              : "", 
-            context
-          );
-        }
+} catch (error) {
+  clearTimeout(timeoutId);
+  console.error("Error in Claude API call:", error.message);
+  console.error("Full error:", error);
+  
+  // Handle any type of error with a fallback response
+  console.log("Network or API error detected - using fallback response");
+  
+  // Test the connection
+  setTimeout(() => {
+    fetch(this.proxyUrl + '/test')
+      .then(r => console.log("Claude API test response:", r.status))
+      .catch(e => {
+        console.error("Claude API is unreachable:", e);
+        this.enableFallbackMode();
+      });
+  }, 100);
+  
+  // Always return a fallback response to avoid undefined
+  return this.createPersonalizedResponse(
+    typeof messages[messages.length - 1] === 'object' 
+      ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "") 
+      : "", 
+    context
+  );
         
         // For other errors, retry with simpler prompt
         try {
@@ -659,6 +707,8 @@ return extractedText;
           );
         }
       }
+
+
     } catch (error) {
       console.error("Error in Claude API call:", error.message);
       
@@ -670,6 +720,17 @@ return extractedText;
         context
       );
     }
+  } catch (finalError) {
+    console.error("Unhandled error in Claude service:", finalError);
+    
+    // Ultimate fallback to prevent undefined responses
+    const userQuery = typeof messages[messages.length - 1] === 'object' 
+      ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "your request") 
+      : "your request";
+    
+    return `I'm having trouble processing ${userQuery} right now. Please try again in a moment. If the problem persists, you can try refreshing the page.`;
+  }
+    
   }
 
   // Updated version with loop protection

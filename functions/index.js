@@ -6,9 +6,9 @@ const cors = require('cors');
 // Create a single Express app for all Claude-related endpoints
 const app = express();
 
-// Apply CORS middleware with more explicit configuration
+// Apply CORS middleware with more permissive configuration
 const corsOptions = {
-  origin: ['https://checkallie.com', 'https://www.checkallie.com', 'http://localhost:3000'],
+  origin: '*',  // Allow all origins - you can restrict this in production
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'anthropic-version'],
   credentials: true
