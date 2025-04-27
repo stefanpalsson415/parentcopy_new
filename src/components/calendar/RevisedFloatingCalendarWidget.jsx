@@ -1296,6 +1296,9 @@ console.log(`Event date update from source ${dateSrc}:`, newDate.toISOString());
               )}
             </div>
           )}
+
+
+          
           
 {/* Selected Date Events Component */}
 <EventsList

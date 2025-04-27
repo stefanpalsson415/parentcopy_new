@@ -533,12 +533,12 @@ const eventsQuery = query(
     }
   }
 
-  /// In EventStore.js, update the refreshEvents method to be more robust
-// NEW CODE
+  // In EventStore.js, replace the refreshEvents method with this enhanced version:
+
 async refreshEvents(userId, familyId = null, cycleNumber = null) {
   if (!userId) return [];
   
-  console.log("Forced refresh of events for user:", userId);
+  console.log("📅 Forced refresh of events for user:", userId);
   
   // Clear cache completely
   this.eventCache.clear();
@@ -546,6 +546,7 @@ async refreshEvents(userId, familyId = null, cycleNumber = null) {
   
   // Run a direct database query with no filters to get all events
   try {
+    console.log("📅 Running direct Firestore query for all user events");
     const eventsQuery = query(
       collection(db, "events"),
       where("userId", "==", userId)
@@ -587,16 +588,14 @@ async refreshEvents(userId, familyId = null, cycleNumber = null) {
       this.eventCache.set(standardizedEvent.universalId, standardizedEvent);
     });
     
-    console.log(`Direct query found ${events.length} events`);
+    console.log(`📅 Direct query found ${events.length} events`);
     
-    // If we have specific criteria, try to fetch that specific event explicitly
-    if (familyId && cycleNumber) {
-      try {
-        const dueDateEvent = await this.getCycleDueDateEvent(familyId, cycleNumber);
-        console.log("Refreshed specific cycle event:", dueDateEvent?.firestoreId);
-      } catch (error) {
-        console.error("Error refreshing cycle due date:", error);
-      }
+    // Log events from chat to verify they're being loaded
+    const chatEvents = events.filter(e => e.source === 'allie-chat' || e.creationSource === 'allie-chat');
+    if (chatEvents.length > 0) {
+      console.log(`📅 Found ${chatEvents.length} events created from chat:`, 
+        chatEvents.map(e => ({title: e.title, date: e.dateObj?.toISOString(), id: e.firestoreId}))
+      );
     }
     
     // Notify listeners with a small delay to ensure event processing
@@ -609,7 +608,7 @@ async refreshEvents(userId, familyId = null, cycleNumber = null) {
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
       }
-    }, 50);
+    }, 100);
     
     return events;
   } catch (error) {

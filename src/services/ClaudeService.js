@@ -214,7 +214,6 @@ async testConnectionWithRetry(attempts = 2) {
   }
   
   
-  // NEW CODE (replace the whole generateResponse method)
 async generateResponse(messages, context, options = {}) {
   try {
     // Add a call tracking mechanism to prevent infinite loops
@@ -930,7 +929,8 @@ formatCollectedEventData(collectedData) {
   return eventData;
 }
 
-// Helper method to create event from collected data
+// In ClaudeService.js, enhance the createEventFromCollectedData method:
+
 async createEventFromCollectedData(eventData, userId, familyId) {
   try {
     // Validate required parameters
@@ -939,8 +939,8 @@ async createEventFromCollectedData(eventData, userId, familyId) {
       return { success: false, error: "Missing user ID" };
     }
     
-    // Log the incoming data for debugging
-    console.log("Creating event with data:", {
+    // Enhanced logging for debugging
+    console.log("📅 Creating event from collected data:", {
       title: eventData.title,
       type: eventData.eventType,
       dateTime: eventData.dateTime,
@@ -967,25 +967,35 @@ async createEventFromCollectedData(eventData, userId, familyId) {
         overrides: [
           {'method': 'popup', 'minutes': 30}
         ]
-      }
+      },
+      // Add a special source flag to track chat-created events
+      source: 'allie-chat',
+      creationSource: 'allie-chat'
     };
+    
+    console.log("📅 Formatted event object:", event);
     
     // Use CalendarService to add the event
     const result = await CalendarService.addEvent(event, userId);
+    console.log("📅 Calendar service result:", result);
     
-    // Trigger UI refresh just ONCE to avoid refresh loops
-if (typeof window !== 'undefined') {
-  console.log("Dispatching single calendar refresh event after adding event");
-  
-  // Use the calendar-event-added event which carries more specific data
-  // and avoid using the generic force-calendar-refresh that can cause loops
-  window.dispatchEvent(new CustomEvent('calendar-event-added', {
-    detail: {
-      eventId: result.eventId,
-      addedViaChat: true
+    // Trigger a more robust UI refresh by dispatching multiple events
+    if (typeof window !== 'undefined' && result.success) {
+      console.log("📅 Dispatching calendar refresh events");
+      
+      // Use the specific event-added event with details
+      window.dispatchEvent(new CustomEvent('calendar-event-added', {
+        detail: {
+          eventId: result.eventId,
+          addedViaChat: true
+        }
+      }));
+      
+      // Add a delayed generic refresh for components that might miss the first event
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+      }, 500);
     }
-  }));
-}
     
     return {
       success: result.success,
