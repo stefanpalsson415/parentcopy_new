@@ -870,16 +870,16 @@ const handleSend = useCallback(async () => {
         return;
       }      
       // First check if this is a meeting-related message
-      const meetingResponse = processMeetingStage(currentMessageText);
-      
-      // Modify the meeting response part in handleSend
+const meetingResponse = processMeetingStage(currentMessageText);
+
+// Modify the meeting response part in handleSend
 if (meetingResponse) {
   // This is a meeting-related message
   // Save user message to database
-  const savedMessage = await ChatPersistenceService.saveMessage(userMessage);
+  const meetingSavedMessage = await ChatPersistenceService.saveMessage(userMessage);
   
-  if (!savedMessage.success) {
-    console.error("Failed to save message:", savedMessage.error);
+  if (!meetingSavedMessage.success) {
+    console.error("Failed to save message:", meetingSavedMessage.error);
     setMessages(prev => [...prev, {
       familyId,
       sender: 'allie',
@@ -927,25 +927,22 @@ if (meetingResponse) {
   setLoading(false);
   return;
 }
-      
-      // If not a meeting message, proceed with normal flow
-      // Save message to database first
-      const savedMessage = await ChatPersistenceService.saveMessage(userMessage);
-      
-      // If saving failed, show error
-      if (!savedMessage.success) {
-        console.error("Failed to save message:", savedMessage.error);
-        setMessages(prev => [...prev, {
-          familyId,
-          sender: 'allie',
-          userName: 'Allie',
-          text: "I couldn't save your message. Please try again in a moment.",
-          timestamp: new Date().toISOString(),
-          error: true
-        }]);
-        setLoading(false);
-        return;
-      }
+
+
+// If saving failed, show error
+if (!savedMessage.success) {
+  console.error("Failed to save message:", savedMessage.error);
+  setMessages(prev => [...prev, {
+    familyId,
+    sender: 'allie',
+    userName: 'Allie',
+    text: "I couldn't save your message. Please try again in a moment.",
+    timestamp: new Date().toISOString(),
+    error: true
+  }]);
+  setLoading(false);
+  return;
+}
       
       // Show processing message while we analyze the input
       const processingMessage = {
