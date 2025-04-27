@@ -1380,7 +1380,6 @@ if (familyContext.familyId) {
 }
 
 
-/// Update getAIResponse method to use the proper message format for Claude
 async getAIResponse(message, familyId, messageHistory = []) {
   try {
     // Get family context
@@ -1505,16 +1504,46 @@ async getAIResponse(message, familyId, messageHistory = []) {
     const formattedMessages = ChatPersistenceService.formatMessagesForClaude(messageHistory);
     
     // If not a specialized request, use Claude for general response with enhanced context
-    return await ClaudeService.generateResponse(
-      formattedMessages, 
-      {
-        ...familyContext,
-        currentIntent: analysis.intent,
-        currentEntities: analysis.entities,
-        conversationContext: analysis.conversationContext,
-        promptOptimizations
+    try {
+      // Log critical debug information before Claude API call
+      console.log("Calling Claude API with:", {
+        messagesCount: formattedMessages.length,
+        intentCategory: analysis.intent?.split('.')[0] || 'unknown',
+        confidence: analysis.confidence || 0
+      });
+      
+      // Add a wrapper try-catch specifically for the Claude API call
+      const claudeResponse = await ClaudeService.generateResponse(
+        formattedMessages, 
+        {
+          ...familyContext,
+          currentIntent: analysis.intent,
+          currentEntities: analysis.entities,
+          conversationContext: analysis.conversationContext,
+          promptOptimizations
+        }
+      );
+      
+      // Validate the response from Claude before returning it
+      if (claudeResponse === undefined || claudeResponse === null) {
+        console.error("Claude API returned undefined/null response");
+        return "I'm sorry, I couldn't generate a response right now. Please try again in a moment.";
       }
-    );
+      
+      if (typeof claudeResponse !== 'string' || claudeResponse.trim() === '') {
+        console.error("Claude API returned invalid response type or empty string:", 
+          typeof claudeResponse, claudeResponse ? claudeResponse.substring(0, 50) : 'empty');
+        return "I'm sorry, I couldn't process your request properly. Please try again.";
+      }
+      
+      console.log("Claude API returned valid response of length:", claudeResponse.length);
+      return claudeResponse;
+    } catch (claudeError) {
+      console.error("Error in Claude API call:", claudeError);
+      // Generate a fallback response using context if possible
+      return this.generateFallbackResponse(message, familyContext, analysis.intent) || 
+        "I'm sorry, but I'm having trouble connecting to my language processing system. Please try again in a moment.";
+    }
   } catch (error) {
     console.error("Error getting AI response:", error);
     return "I'm sorry, I encountered an issue processing your request. Please try again.";

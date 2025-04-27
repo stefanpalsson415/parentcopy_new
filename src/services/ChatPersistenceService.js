@@ -30,10 +30,16 @@ class ChatPersistenceService {
  */
   async saveMessage(message) {
     try {
-      // Add detailed logging for debugging
+      // Better message validation
+      if (!message) {
+        console.error("Cannot save null/undefined message");
+        return { success: false, error: "Invalid message object" };
+      }
+      
+      // Improved logging that won't show "undefined..."
       console.log("ChatPersistenceService.saveMessage called with:", {
-        text: message.text?.substring(0, 50) + "...",
-        sender: message.sender,
+        text: message.text ? `${message.text.substring(0, 50)}...` : "[No text content]",
+        sender: message.sender || "unknown",
         familyId: message.familyId,
         timestamp: message.timestamp || new Date().toISOString()
       });
@@ -43,10 +49,15 @@ class ChatPersistenceService {
         return { success: false, error: "Missing familyId" };
       }
       
-      // Ensure required fields exist
+      // Check for empty/undefined text and provide a fallback message
+      if (!message.text) {
+        console.warn("Attempted to save message with empty/undefined text, using fallback");
+      }
+      
+      // Ensure required fields exist with better fallbacks
       const enhancedMessage = {
         ...message,
-        text: message.text || "",
+        text: message.text || "I'm sorry, I couldn't generate a response. Please try again.",
         sender: message.sender || "unknown",
         createdAt: serverTimestamp(),
         timestamp: message.timestamp || new Date().toISOString(),

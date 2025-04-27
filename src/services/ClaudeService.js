@@ -1264,12 +1264,12 @@ class ClaudeService {
     }
   }
   
-  // Create personalized response from context
-  createPersonalizedResponse(userMessage, context) {
-    const userMessageLower = userMessage.toLowerCase();
+  createPersonalizedResponse(userMessage, context = {}) {
+    // Safely handle undefined userMessage
+    const userMessageLower = userMessage ? userMessage.toLowerCase() : "";
     
-    // Get family name
-    const familyName = context.familyName || "your family";
+    // Safely handle undefined context
+    const familyName = context?.familyName || "your family";
     
     // Try to give responses based on actual data
     if (userMessageLower.includes("survey") || userMessageLower.includes("result")) {
