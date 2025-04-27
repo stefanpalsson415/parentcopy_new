@@ -79,6 +79,7 @@ const RevisedFloatingCalendarWidget = () => {
   // Refs
   const widgetRef = useRef(null);
   const dragHandleRef = useRef(null);
+  const DEBOUNCE_INTERVAL = 1000; // Wait 1 second between refreshes
 
   
   // Initialize error handling
@@ -104,11 +105,7 @@ const RevisedFloatingCalendarWidget = () => {
 // Add this ref at the top level of the component, outside any useEffect
 const lastRefreshTimeRef = useRef(0);
 
-// Then modify the useEffect to use this ref
-useEffect(() => {
-  const DEBOUNCE_INTERVAL = 1000; // Wait 1 second between refreshes
-  
-  // In RevisedFloatingCalendarWidget.jsx - enhanced handleForceRefresh function
+// In RevisedFloatingCalendarWidget.jsx - enhanced handleForceRefresh function
 const handleForceRefresh = async () => {
   const now = Date.now();
   if (now - lastRefreshTimeRef.current > DEBOUNCE_INTERVAL) {
@@ -131,6 +128,11 @@ const handleForceRefresh = async () => {
     setLastRefresh(now);
   }
 };
+
+
+// THEN MODIFY THE USEEFFECT THAT USES THIS FUNCTION (around line 185-220)
+useEffect(() => {
+  const DEBOUNCE_INTERVAL = 1000; // Wait 1 second between refreshes
   
   const refreshEvents = (e) => {
     const now = Date.now();
@@ -1213,17 +1215,7 @@ console.log(`Event date update from source ${dateSrc}:`, newDate.toISOString());
 <CalendarHeader 
   onClose={() => setIsOpen(false)} 
   onMinimize={() => setIsOpen(false)}
-  onRefresh={() => {
-    console.log("Manual refresh triggered");
-    // Reset the event cache first
-    resetEventCache();
-    // Update lastRefresh to trigger re-fetch
-    setLastRefresh(Date.now());
-    // Explicitly trigger event refresh from EventContext
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-    }
-  }}
+  onRefresh={handleForceRefresh}
 />
         
         {/* Calendar content */}

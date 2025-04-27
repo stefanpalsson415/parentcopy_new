@@ -1570,25 +1570,7 @@ getCurrentUserFromHistory(messageHistory) {
   return null;
 }
 
-// Add helper method to get current user from message history
-getCurrentUserFromHistory(messageHistory) {
-  if (!messageHistory || messageHistory.length === 0) {
-    return null;
-  }
-  
-  // Find the most recent user message
-  for (let i = messageHistory.length - 1; i >= 0; i--) {
-    const msg = messageHistory[i];
-    if (msg.sender !== 'allie') {
-      return {
-        id: msg.sender,
-        name: msg.userName
-      };
-    }
-  }
-  
-  return null;
-}
+
   
   // Generate a fallback response when AI fails
   generateFallbackResponse(text, familyData, intent) {
