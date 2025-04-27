@@ -3,49 +3,97 @@ import CalendarService from './CalendarService';
 import { auth } from './firebase';
 
 class ClaudeService {
-  constructor() {
-    // Determine environment type
-    const hostname = window.location.hostname;
-    const isProduction = hostname === 'checkallie.com' || hostname === 'www.checkallie.com';
-    const isLocalhost = hostname === 'localhost' || hostname.includes('127.0.0.1');
-    const isFirebase = hostname.includes('firebaseapp.com') || hostname.includes('web.app');
+  // NEW IMPLEMENTATION
+constructor() {
+  // Determine environment type
+  const hostname = window.location.hostname;
+  const isProduction = hostname === 'checkallie.com' || hostname === 'www.checkallie.com';
+  const isLocalhost = hostname === 'localhost' || hostname.includes('127.0.0.1');
+  const isFirebase = hostname.includes('firebaseapp.com') || hostname.includes('web.app');
+
+  // Set the appropriate API URL based on environment
+  if (isLocalhost) {
+    // For local development, first try the local proxy server
+    this.proxyUrl = 'http://localhost:3001/api/claude';
+    console.log("Running in local development mode - using local proxy server");
+    
+    // Add a fallback option for when the local server isn't running
+    this.fallbackProxyUrl = '/api/claude';
+  } else if (isFirebase || isProduction) {
+    // For Firebase hosting or production domain, use the direct Cloud Functions URL
+    this.proxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude';
+    console.log("Running in production - using direct Cloud Functions URL:", this.proxyUrl);
+  } else {
+    // Fallback for other environments
+    this.proxyUrl = '/api/claude';
+    console.log("Running in unknown environment - using relative URL");
+  }
   
-    // Set the appropriate API URL based on environment
-    if (isLocalhost) {
-      // For local development, first try the local proxy server
-      this.proxyUrl = 'http://localhost:3001/api/claude';
-      console.log("Running in local development mode - using local proxy server");
-      
-      // Add a fallback option for when the local server isn't running
-      this.fallbackProxyUrl = '/api/claude';
-    } else if (isFirebase || isProduction) {
-      // For Firebase hosting or production domain, use the direct Cloud Functions URL
-      this.proxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude';
-      console.log("Running in production - using direct Cloud Functions URL:", this.proxyUrl);
+  // Model settings
+  this.model = 'claude-3-sonnet-20240229';
+  
+  // Basic settings
+  this.mockMode = false;
+  this.debugMode = true; // Always enable logging for debugging
+  this.disableAICalls = false;
+  this.disableCalendarDetection = true;
+  this.retryCount = 3;
+  this.functionRegion = 'europe-west1'; // Match this to your deployment region
+  
+  // Add connection test with retry capability
+  setTimeout(() => {
+    this.testConnectionWithRetry();
+  }, 1000);
+  
+  console.log(`Claude service initialized to use proxy server at ${this.proxyUrl}`);
+}
+
+// New helper method for connection testing with retry
+async testConnectionWithRetry(attempts = 2) {
+for (let i = 0; i < attempts; i++) {
+  try {
+    const success = await this.testProxyConnection();
+    if (success) {
+      console.log("✅ Claude API connection test passed!");
+      return;
     } else {
-      // Fallback for other environments
-      this.proxyUrl = '/api/claude';
-      console.log("Running in unknown environment - using relative URL");
+      console.warn(`❌ Claude API connection test failed (attempt ${i+1}/${attempts})`);
+      
+      // If we have a fallback URL and this isn't the last attempt, try the fallback
+      if (this.fallbackProxyUrl && i === 0) {
+        console.log("Trying fallback proxy URL:", this.fallbackProxyUrl);
+        this.proxyUrl = this.fallbackProxyUrl;
+      }
     }
+  } catch (err) {
+    console.error(`❌ Error testing Claude API connection (attempt ${i+1}/${attempts}):`, err);
+  }
+}
+
+// If all attempts fail, enable fallback mode
+console.error("All Claude API connection attempts failed - enabling fallback mode");
+this.enableFallbackMode();
+}
     
-    // Model settings
-    this.model = 'claude-3-sonnet-20240229';
-    
-    // Basic settings
-    this.mockMode = false;
-    this.debugMode = true; // Always enable logging for debugging
-    this.disableAICalls = false;
-    this.disableCalendarDetection = true;
-    this.retryCount = 3;
-    this.functionRegion = 'europe-west1'; // Match this to your deployment region
-    this.testConnectionOnLoad = false; // Set this explicitly
-    
-    // Add connection test with retry capability
-    setTimeout(() => {
-      this.testConnectionWithRetry();
-    }, 1000);
-    
-    console.log(`Claude service initialized to use proxy server at ${this.proxyUrl}`);
+    // Auto-test connection on initialization with longer delay
+    if (this.testConnectionOnLoad) {
+      console.log("Will test Claude API connection in 3 seconds...");
+      setTimeout(() => {
+        this.testProxyConnection()
+          .then(success => {
+            if (!success) {
+              console.warn("Claude API connection test failed on initialization. Check server configuration.");
+              this.enableFallbackMode();
+            } else {
+              console.log("Claude API connection test successful!");
+            }
+          })
+          .catch(err => {
+            console.error("Error during Claude API connection test:", err);
+            this.enableFallbackMode();
+          });
+      }, 3000); // Increased delay to ensure app is fully loaded
+    }
   }
   
   async testProxyConnection() {
