@@ -3,60 +3,77 @@ import CalendarService from './CalendarService';
 import { auth } from './firebase';
 
 class ClaudeService {
-  constructor() {
-    // Determine environment type
-    const hostname = window.location.hostname;
-    const isProduction = hostname === 'checkallie.com' || hostname === 'www.checkallie.com';
-    const isLocalhost = hostname === 'localhost' || hostname.includes('127.0.0.1');
-    const isFirebase = hostname.includes('firebaseapp.com') || hostname.includes('web.app');
+  // NEW IMPLEMENTATION
+constructor() {
+  // Determine environment type
+  const hostname = window.location.hostname;
+  const isProduction = hostname === 'checkallie.com' || hostname === 'www.checkallie.com';
+  const isLocalhost = hostname === 'localhost' || hostname.includes('127.0.0.1');
+  const isFirebase = hostname.includes('firebaseapp.com') || hostname.includes('web.app');
 
-    // Add immediate connection test
-    setTimeout(() => {
-      this.testProxyConnection()
-        .then(success => {
-          if (success) {
-            console.log("✅ Claude API connection test passed!");
-          } else {
-            console.error("❌ Claude API connection test failed - check your network and API configuration");
-            this.enableFallbackMode();
-          }
-        })
-        .catch(err => {
-          console.error("❌ Error testing Claude API connection:", err);
-          this.enableFallbackMode();
-        });
-    }, 1000);
+  // Set the appropriate API URL based on environment
+  if (isLocalhost) {
+    // For local development, first try the local proxy server
+    this.proxyUrl = 'http://localhost:3001/api/claude';
+    console.log("Running in local development mode - using local proxy server");
+    
+    // Add a fallback option for when the local server isn't running
+    this.fallbackProxyUrl = '/api/claude';
+  } else if (isFirebase || isProduction) {
+    // For Firebase hosting or production domain, use the direct Cloud Functions URL
+    this.proxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude';
+    console.log("Running in production - using direct Cloud Functions URL:", this.proxyUrl);
+  } else {
+    // Fallback for other environments
+    this.proxyUrl = '/api/claude';
+    console.log("Running in unknown environment - using relative URL");
+  }
+  
+  // Model settings
+  this.model = 'claude-3-sonnet-20240229';
+  
+  // Basic settings
+  this.mockMode = false;
+  this.debugMode = true; // Always enable logging for debugging
+  this.disableAICalls = false;
+  this.disableCalendarDetection = true;
+  this.retryCount = 3;
+  this.functionRegion = 'europe-west1'; // Match this to your deployment region
+  
+  // Add connection test with retry capability
+  setTimeout(() => {
+    this.testConnectionWithRetry();
+  }, 1000);
+  
+  console.log(`Claude service initialized to use proxy server at ${this.proxyUrl}`);
+}
 
-    // Set the appropriate API URL based on environment
-    if (isLocalhost) {
-      // For local development, use the Firebase proxy server on port 3001
-      this.proxyUrl = 'http://localhost:3001/api/claude';
-      console.log("Running in local development mode - using local proxy server");
-    } else if (isFirebase || isProduction) {
-      // For Firebase hosting or production domain, use the direct Cloud Functions URL
-      this.proxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude';
-      console.log("Running in production - using direct Cloud Functions URL:", this.proxyUrl);
+// New helper method for connection testing with retry
+async testConnectionWithRetry(attempts = 2) {
+for (let i = 0; i < attempts; i++) {
+  try {
+    const success = await this.testProxyConnection();
+    if (success) {
+      console.log("✅ Claude API connection test passed!");
+      return;
     } else {
-      // Fallback for other environments
-      this.proxyUrl = '/api/claude';
-      console.log("Running in unknown environment - using relative URL");
+      console.warn(`❌ Claude API connection test failed (attempt ${i+1}/${attempts})`);
+      
+      // If we have a fallback URL and this isn't the last attempt, try the fallback
+      if (this.fallbackProxyUrl && i === 0) {
+        console.log("Trying fallback proxy URL:", this.fallbackProxyUrl);
+        this.proxyUrl = this.fallbackProxyUrl;
+      }
     }
-    
-    // Model settings
-    this.model = 'claude-3-sonnet-20240229';
-    
-    // Basic settings
-    this.mockMode = false;
-    this.debugMode = true; // Always enable logging for debugging
-    this.disableAICalls = false;
-    this.disableCalendarDetection = true;
-    this.retryCount = 3;
-    this.functionRegion = 'europe-west1'; // Match this to your deployment region
-    
-    // Whether to test the connection on load
-    this.testConnectionOnLoad = true;
-    
-    console.log(`Claude service initialized to use proxy server at ${this.proxyUrl}`);
+  } catch (err) {
+    console.error(`❌ Error testing Claude API connection (attempt ${i+1}/${attempts}):`, err);
+  }
+}
+
+// If all attempts fail, enable fallback mode
+console.error("All Claude API connection attempts failed - enabling fallback mode");
+this.enableFallbackMode();
+}
     
     // Auto-test connection on initialization with longer delay
     if (this.testConnectionOnLoad) {
@@ -407,11 +424,29 @@ async generateResponse(messages, context, options = {}) {
           
           // Add more detailed logging to see the actual structure
           console.log("Claude API response structure:", JSON.stringify(result).substring(0, 200) + "...");
+          
+          // Immediate validation of result
+          if (!result) {
+            throw new Error("Empty result object from Claude API");
+          }
         } catch (jsonError) {
           console.error("Error parsing JSON from Claude API:", jsonError);
           // Try to get the raw text to see what's wrong
-          const rawText = await response.text();
-          console.warn("Raw response text (first 200 chars):", rawText.substring(0, 200));
+          let rawText = "";
+          try {
+            rawText = await response.text();
+            console.warn("Raw response text (first 200 chars):", rawText.substring(0, 200));
+            
+            // Try to extract text content if it's in the raw response
+            const textMatch = rawText.match(/"text":"([^"]+)"/);
+            if (textMatch && textMatch[1]) {
+              return textMatch[1];
+            }
+          } catch (e) {
+            console.error("Error getting raw text:", e);
+          }
+          
+          // Return a strongly-typed fallback response
           return this.createPersonalizedResponse(
             typeof messages[messages.length - 1] === 'object'
               ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")

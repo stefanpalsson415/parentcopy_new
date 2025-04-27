@@ -29,6 +29,9 @@ class ChatPersistenceService {
  * @returns {Promise<object>} Result with success status and message ID
  */
  // NEW CODE
+// Current code in ChatPersistenceService.js (around line 15-120)
+// REPLACE WITH:
+
 async saveMessage(message) {
   try {
     // Better message validation
@@ -37,16 +40,26 @@ async saveMessage(message) {
       return { success: false, error: "Invalid message object" };
     }
     
-    // Strict validation for message text
-    if (!message.text || message.text.trim() === '') {
-      console.error("Attempted to save message with empty/undefined text");
+    // CRITICAL: Explicit validation for message text
+    if (!message.text) {
+      console.error("Attempted to save message with undefined text");
       
       // If this is an AI response (sender is 'allie'), use a proper fallback
       if (message.sender === 'allie') {
         message.text = "I'm sorry, I couldn't generate a response right now. Please try again in a moment.";
         console.warn("Using fallback text for empty AI response");
-      } else if (!message.text) {
+      } else {
         // For user messages, we should reject saving if text is empty
+        return { success: false, error: "Cannot save message with empty text" };
+      }
+    } else if (message.text.trim() === '') {
+      // Explicit handling for empty strings
+      console.error("Attempted to save message with empty text string");
+      
+      if (message.sender === 'allie') {
+        message.text = "I'm sorry, I couldn't generate a response right now. Please try again in a moment.";
+        console.warn("Using fallback text for empty AI response");
+      } else {
         return { success: false, error: "Cannot save message with empty text" };
       }
     }
@@ -78,54 +91,54 @@ async saveMessage(message) {
       // Add message hash for deduplication if needed
       messageHash: this.generateMessageHash(message)
     };
-      
-      // Save to Firestore with retry logic
-      let docRef = null;
-      let retryCount = 0;
-      const maxRetries = 3;
-      
-      while (retryCount < maxRetries && !docRef) {
-        try {
-          docRef = await addDoc(collection(db, "chatMessages"), enhancedMessage);
-        } catch (saveError) {
-          retryCount++;
-          console.warn(`Chat message save attempt ${retryCount} failed:`, saveError);
-          if (retryCount >= maxRetries) throw saveError;
-          // Wait before retry (exponential backoff)
-          await new Promise(resolve => setTimeout(resolve, 300 * Math.pow(2, retryCount)));
-        }
-      }
-      
-      // Update family's last message timestamp
+    
+    // Save to Firestore with retry logic
+    let docRef = null;
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries && !docRef) {
       try {
-        const familyRef = doc(db, "families", message.familyId);
-        await setDoc(familyRef, {
-          lastChatActivity: serverTimestamp(),
-          lastMessage: {
-            text: message.text?.substring(0, 100) || "",
-            sender: message.sender,
-            timestamp: serverTimestamp()
-          }
-        }, { merge: true });
-      } catch (e) {
-        console.warn("Failed to update family's last chat activity:", e);
-        // Non-critical error, don't fail the entire save operation
+        docRef = await addDoc(collection(db, "chatMessages"), enhancedMessage);
+      } catch (saveError) {
+        retryCount++;
+        console.warn(`Chat message save attempt ${retryCount} failed:`, saveError);
+        if (retryCount >= maxRetries) throw saveError;
+        // Wait before retry (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 300 * Math.pow(2, retryCount)));
       }
-      
-      console.log(`Message successfully saved with ID: ${docRef.id}`);
-      
-      // Update cache immediately for fast local access
-      this.addToMessageCache(message.familyId, {
-        id: docRef.id,
-        ...enhancedMessage
-      });
-      
-      return { success: true, messageId: docRef.id };
-    } catch (error) {
-      console.error("Error saving message:", error);
-      return { success: false, error: error.message };
     }
+    
+    // Update family's last message timestamp
+    try {
+      const familyRef = doc(db, "families", message.familyId);
+      await setDoc(familyRef, {
+        lastChatActivity: serverTimestamp(),
+        lastMessage: {
+          text: message.text?.substring(0, 100) || "",
+          sender: message.sender,
+          timestamp: serverTimestamp()
+        }
+      }, { merge: true });
+    } catch (e) {
+      console.warn("Failed to update family's last chat activity:", e);
+      // Non-critical error, don't fail the entire save operation
+    }
+    
+    console.log(`Message successfully saved with ID: ${docRef.id}`);
+    
+    // Update cache immediately for fast local access
+    this.addToMessageCache(message.familyId, {
+      id: docRef.id,
+      ...enhancedMessage
+    });
+    
+    return { success: true, messageId: docRef.id };
+  } catch (error) {
+    console.error("Error saving message:", error);
+    return { success: false, error: error.message };
   }
+}
 
   // In ChatPersistenceService.js after saveMessage
 async deleteMessage(messageId, familyId) {
