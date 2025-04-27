@@ -740,62 +740,66 @@ if (!this.disableCalendarDetection && messageText.length > 0) {
   }
 
 
-// New method for ClaudeService.js to integrate with EventDetailCollectorService
-async extractAndCollectEventDetails(message, userId, familyId) {
-  try {
-    // First extract basic event details
-    const basicEventData = await this.extractCalendarRequest(message);
-    
-    if (!basicEventData) {
-      return null;
+  async extractAndCollectEventDetails(message, userId, familyId) {
+    try {
+      // First extract basic event details
+      const basicEventData = await this.extractCalendarRequest(message);
+      
+      if (!basicEventData) {
+        return null;
+      }
+      
+      // Import EventDetailCollectorService
+      const EventDetailCollectorService = (await import('./EventDetailCollectorService')).default;
+      
+      // Create a unique session ID
+      const sessionId = `event-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 5)}`;
+      
+      // Start collection flow
+      const initialPrompt = await EventDetailCollectorService.startCollection(
+        familyId,
+        sessionId,
+        basicEventData
+      );
+      
+      // Format response for the user
+      let responseMessage = `I'd like to add this ${basicEventData.type || 'event'} to your calendar. `;
+      responseMessage += `Let's make sure I have all the details:\n\n`;
+      
+      if (basicEventData.title) {
+        responseMessage += `Event: ${basicEventData.title}\n`;
+      }
+      
+      if (basicEventData.dateTime) {
+        try {
+          const eventDate = new Date(basicEventData.dateTime);
+          responseMessage += `Date: ${eventDate.toLocaleDateString()}\n`;
+          responseMessage += `Time: ${eventDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}\n`;
+        } catch (e) {
+          // Fallback if date parsing fails
+          responseMessage += `Date: Still to be determined\n`;
+        }
+      }
+      
+      if (basicEventData.location) {
+        responseMessage += `Location: ${basicEventData.location}\n`;
+      }
+      
+      if (basicEventData.childName) {
+        responseMessage += `For: ${basicEventData.childName}\n`;
+      }
+      
+      responseMessage += `\n${initialPrompt.prompt}`;
+      
+      // Add special marker for event collection (hidden in HTML comment)
+      responseMessage += `\n\n<!-- <event_collection session="${sessionId}" step="1"> -->`;
+      
+      return responseMessage;
+    } catch (error) {
+      console.error("Error extracting and collecting event details:", error);
+      return "I encountered an issue while trying to create this event. Let's try again with a bit more detail. Could you describe the event again?";
     }
-    
-    // Import EventDetailCollectorService
-    const EventDetailCollectorService = (await import('./EventDetailCollectorService')).default;
-    
-    // Create a unique session ID
-    const sessionId = `event-${userId}-${Date.now()}`;
-    
-    // Start collection flow
-    const initialPrompt = await EventDetailCollectorService.startCollection(
-      familyId,
-      sessionId,
-      basicEventData
-    );
-    
-    // Format response for the user
-    let responseMessage = `I'd like to add this ${basicEventData.type || 'event'} to your calendar. `;
-    responseMessage += `Let's make sure I have all the details:\n\n`;
-    
-    if (basicEventData.title) {
-      responseMessage += `Event: ${basicEventData.title}\n`;
-    }
-    
-    if (basicEventData.dateTime) {
-      const eventDate = new Date(basicEventData.dateTime);
-      responseMessage += `Date: ${eventDate.toLocaleDateString()}\n`;
-      responseMessage += `Time: ${eventDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}\n`;
-    }
-    
-    if (basicEventData.location) {
-      responseMessage += `Location: ${basicEventData.location}\n`;
-    }
-    
-    if (basicEventData.childName) {
-      responseMessage += `For: ${basicEventData.childName}\n`;
-    }
-    
-    responseMessage += `\n${initialPrompt.prompt}`;
-    
-    // Add special marker for event collection
-    responseMessage += `\n\n<event_collection session="${sessionId}" step="1">`;
-    
-    return responseMessage;
-  } catch (error) {
-    console.error("Error extracting and collecting event details:", error);
-    return "I encountered an issue while trying to create this event. Let's try again with a bit more detail. Could you describe the event again?";
   }
-}
 
 // Add this method to handle responses in the collection flow
 async handleEventCollectionResponse(message, sessionId, step, userId, familyId) {
@@ -819,13 +823,18 @@ async handleEventCollectionResponse(message, sessionId, step, userId, familyId) 
       if (eventResult.success) {
         // Format success message
         let responseMessage = `Perfect! I've added this ${eventData.eventType || 'event'} to your calendar:\n\n`;
-        responseMessage += `Event: ${eventData.title}\n`;
-        
-        if (eventData.dateTime) {
-          const eventDate = new Date(eventData.dateTime);
-          responseMessage += `Date: ${eventDate.toLocaleDateString()}\n`;
-          responseMessage += `Time: ${eventDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}\n`;
-        }
+responseMessage += `Event: ${eventData.title || "Appointment"}\n`;
+
+if (eventData.dateTime) {
+  try {
+    const eventDate = new Date(eventData.dateTime);
+    responseMessage += `Date: ${eventDate.toLocaleDateString()}\n`;
+    responseMessage += `Time: ${eventDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}\n`;
+  } catch (e) {
+    // Fallback if date parsing fails
+    responseMessage += `Date: ${eventData.dateTime}\n`;
+  }
+}
         
         if (eventData.location) {
           responseMessage += `Location: ${eventData.location}\n`;
