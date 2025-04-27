@@ -5,45 +5,42 @@ import { auth } from './firebase';
 class ClaudeService {
   constructor() {
     // Determine environment type
-const hostname = window.location.hostname;
-const isProduction = hostname === 'checkallie.com' || hostname === 'www.checkallie.com';
-const isLocalhost = hostname === 'localhost' || hostname.includes('127.0.0.1');
-const isFirebase = hostname.includes('firebaseapp.com') || hostname.includes('web.app');
+    const hostname = window.location.hostname;
+    const isProduction = hostname === 'checkallie.com' || hostname === 'www.checkallie.com';
+    const isLocalhost = hostname === 'localhost' || hostname.includes('127.0.0.1');
+    const isFirebase = hostname.includes('firebaseapp.com') || hostname.includes('web.app');
 
-// Add immediate connection test
-setTimeout(() => {
-  this.testProxyConnection()
-    .then(success => {
-      if (success) {
-        console.log("✅ Claude API connection test passed!");
-      } else {
-        console.error("❌ Claude API connection test failed - check your network and API configuration");
-        this.enableFallbackMode();
-      }
-    })
-    .catch(err => {
-      console.error("❌ Error testing Claude API connection:", err);
-      this.enableFallbackMode();
-    });
-}, 1000);
+    // Add immediate connection test
+    setTimeout(() => {
+      this.testProxyConnection()
+        .then(success => {
+          if (success) {
+            console.log("✅ Claude API connection test passed!");
+          } else {
+            console.error("❌ Claude API connection test failed - check your network and API configuration");
+            this.enableFallbackMode();
+          }
+        })
+        .catch(err => {
+          console.error("❌ Error testing Claude API connection:", err);
+          this.enableFallbackMode();
+        });
+    }, 1000);
 
-
-
-
-// Set the appropriate API URL based on environment
-if (isLocalhost) {
-  // For local development, use the Firebase proxy server on port 3001
-  this.proxyUrl = 'http://localhost:3001/api/claude';
-  console.log("Running in local development mode - using local proxy server");
-} else if (isFirebase || isProduction) {
-  // For Firebase hosting or production domain, use the direct Cloud Functions URL
-  this.proxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude';
-  console.log("Running in production - using direct Cloud Functions URL:", this.proxyUrl);
-} else {
-  // Fallback for other environments
-  this.proxyUrl = '/api/claude';
-  console.log("Running in unknown environment - using relative URL");
-}
+    // Set the appropriate API URL based on environment
+    if (isLocalhost) {
+      // For local development, use the Firebase proxy server on port 3001
+      this.proxyUrl = 'http://localhost:3001/api/claude';
+      console.log("Running in local development mode - using local proxy server");
+    } else if (isFirebase || isProduction) {
+      // For Firebase hosting or production domain, use the direct Cloud Functions URL
+      this.proxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude';
+      console.log("Running in production - using direct Cloud Functions URL:", this.proxyUrl);
+    } else {
+      // Fallback for other environments
+      this.proxyUrl = '/api/claude';
+      console.log("Running in unknown environment - using relative URL");
+    }
     
     // Model settings
     this.model = 'claude-3-sonnet-20240229';
@@ -51,15 +48,6 @@ if (isLocalhost) {
     // Basic settings
     this.mockMode = false;
     this.debugMode = true; // Always enable logging for debugging
-    this.disableAICalls = false;
-    this.disableCalendarDetection = true;
-    this.retryCount = 3;
-    this.functionRegion = 'europe-west1'; // Match this to your deployment region
-    
-    // Whether to test the connection on load
-    this.testConnectionOnLoad = true;
-    
-    console.log(`Claude service initialized to use proxy server at ${this.proxyUrl}`);
     this.disableAICalls = false;
     this.disableCalendarDetection = true;
     this.retryCount = 3;
@@ -375,40 +363,40 @@ if (isLocalhost) {
         }
       }
       // Check if the last message appears to be a task/todo request
-// This can be outside the calendar check condition as it's separate functionality
-const taskIndicators = [
-  'add task', 'add a task', 'create task', 'create a task',
-  'add todo', 'add a todo', 'create todo', 'create a todo',
-  'add to my list', 'add to list', 'add to tasks', 
-  'remind me to', 'don\'t forget to', 'need to', 'chore'
-];
+      // This can be outside the calendar check condition as it's separate functionality
+      const taskIndicators = [
+        'add task', 'add a task', 'create task', 'create a task',
+        'add todo', 'add a todo', 'create todo', 'create a todo',
+        'add to my list', 'add to list', 'add to tasks', 
+        'remind me to', 'don\'t forget to', 'need to', 'chore'
+      ];
 
-const isLikelyTaskRequest = taskIndicators.some(indicator =>
-  lastUserMessage.toLowerCase().includes(indicator)
-);
+      const isLikelyTaskRequest = taskIndicators.some(indicator =>
+        lastUserMessage.toLowerCase().includes(indicator)
+      );
 
-if (isLikelyTaskRequest) {
-  console.log("Detected likely task request in latest message");
-  
-  try {
-    // Import AllieAIService dynamically
-    const AllieAIService = (await import('./AllieAIService')).default;
-    
-    // Process the task
-    const result = await AllieAIService.processTaskFromChat(
-      lastUserMessage,
-      context.familyId || '',
-      auth.currentUser?.uid
-    );
-    
-    if (result.success) {
-      return `I've added "${result.task.title}" to your tasks${result.task.assignedToName ? ` and assigned it to ${result.task.assignedToName}` : ''}. You'll find it in the ${result.task.column === 'this-week' ? 'This Week' : result.task.column === 'in-progress' ? 'In Progress' : 'Upcoming'} column on your task board.`;
-    }
-  } catch (taskError) {
-    console.error("Error processing task request:", taskError);
-    // Continue with normal Claude processing if task handling fails
-  }
-}
+      if (isLikelyTaskRequest) {
+        console.log("Detected likely task request in latest message");
+        
+        try {
+          // Import AllieAIService dynamically
+          const AllieAIService = (await import('./AllieAIService')).default;
+          
+          // Process the task
+          const result = await AllieAIService.processTaskFromChat(
+            lastUserMessage,
+            context.familyId || '',
+            auth.currentUser?.uid
+          );
+          
+          if (result.success) {
+            return `I've added "${result.task.title}" to your tasks${result.task.assignedToName ? ` and assigned it to ${result.task.assignedToName}` : ''}. You'll find it in the ${result.task.column === 'this-week' ? 'This Week' : result.task.column === 'in-progress' ? 'In Progress' : 'Upcoming'} column on your task board.`;
+          }
+        } catch (taskError) {
+          console.error("Error processing task request:", taskError);
+          // Continue with normal Claude processing if task handling fails
+        }
+      }
       
       // If we have too many messages, consider using a focused subset
       // for non-calendar queries to avoid responding to everything at once
@@ -456,281 +444,210 @@ if (isLikelyTaskRequest) {
       const timeoutId = setTimeout(() => controller.abort(), 45000); // Increased timeout to 45 seconds
       
       // Make the API call through our proxy server with better error handling
-if (this.debugMode) {
-  console.log("Attempting to connect to proxy at:", this.proxyUrl);
-  console.log("Request payload:", {
-    model: payload.model,
-    messages: payload.messages.length,
-    systemLength: payload.system?.length || 0
-  });
-}
-
-try {
-  // First check if we're in mock mode or AI calls are disabled
-  if (this.mockMode || this.disableAICalls) {
-    console.log("Using fallback response (mock mode or AI calls disabled)");
-    return this.createPersonalizedResponse(
-      typeof messages[messages.length - 1] === 'object' 
-        ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "") 
-        : "", 
-      context
-    );
-  }
-
-  // Add timeout to ensure we get a response or fallback
-  const timeoutPromise = new Promise((_, reject) => 
-    setTimeout(() => reject(new Error("Request timed out")), 20000)
-  );
-
-  const responsePromise = fetch(this.proxyUrl, {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(payload),
-    signal: controller.signal
-  });
-
-  const response = await Promise.race([responsePromise, timeoutPromise]);
-  console.log("Got response from Claude API proxy:", response.status);
-  
-  clearTimeout(timeoutId);
-  
-  if (!response.ok) {
-    console.warn("Claude proxy returned error status:", response.status);
-    // Try to get more details about the error
-    let errorDetails = "";
-    try {
-      const errorText = await response.text();
-      // Check if we got HTML instead of JSON (common Firebase Hosting issue)
-      if (errorText.toLowerCase().includes('<!doctype html>') || 
-          errorText.toLowerCase().includes('<html>')) {
-        console.error("Received HTML instead of API response - enabling fallback mode");
-        this.enableFallbackMode();
+      if (this.debugMode) {
+        console.log("Attempting to connect to proxy at:", this.proxyUrl);
+        console.log("Request payload:", {
+          model: payload.model,
+          messages: payload.messages.length,
+          systemLength: payload.system?.length || 0
+        });
       }
-      errorDetails = errorText.substring(0, 200); // Get first 200 chars of error
-      console.warn("Error details from proxy:", errorDetails);
-    } catch (e) {}
-    
-    // Return a personalized response
-    return this.createPersonalizedResponse(lastUserMessage, context);
-  }
-  
-  // Check content type for HTML
-  const contentType = response.headers.get('content-type');
-  if (contentType && contentType.includes('text/html')) {
-    console.error("Received HTML instead of JSON - API endpoint misconfigured");
-    this.enableFallbackMode();
-    return this.createPersonalizedResponse(lastUserMessage, context);
-  }
-        
-        // Try to parse the JSON with better error handling
-let result;
-try {
-  result = await response.json();
-  
-  // Add more detailed logging to see the actual structure
-  console.log("Claude API response structure:", JSON.stringify(result).substring(0, 200) + "...");
-} catch (jsonError) {
-  console.error("Error parsing JSON from Claude API:", jsonError);
-  // Try to get the raw text to see what's wrong
-  const rawText = await response.text();
-  console.warn("Raw response text (first 200 chars):", rawText.substring(0, 200));
-  return this.createPersonalizedResponse(lastUserMessage, context);
-}
 
-// Enhanced validation with better error handling
-if (!result) {
-  console.error("Empty result from Claude API");
-  return this.createPersonalizedResponse(lastUserMessage, context);
-}
-
-// Add a special catch for undefined or null response
-if (result === undefined || result === null) {
-  console.error("Claude API returned undefined or null");
-  return this.createPersonalizedResponse(lastUserMessage, context);
-}
-
-// Check if result is a string directly (some versions of Claude API may return direct text)
-if (typeof result === 'string') {
-  console.log("Claude API returned direct string response");
-  return result.trim();
-}
-
-// Check content structure with better logging
-if (!result.content) {
-  console.error("Missing 'content' in Claude API response:", result);
-  return this.createPersonalizedResponse(lastUserMessage, context);
-}
-
-if (!Array.isArray(result.content) || result.content.length === 0) {
-  console.error("'content' is not an array or is empty:", result.content);
-  return this.createPersonalizedResponse(lastUserMessage, context);
-}
-
-if (!result.content[0]) {
-  console.error("First content item is undefined:", result.content);
-  return this.createPersonalizedResponse(lastUserMessage, context);
-}
-
-// Check for text property with more robust fallbacks
-if (result.content[0].text === undefined || result.content[0].text === null) {
-  console.error("'text' property is undefined in content:", result.content[0]);
-  
-  // Try different response formats that Claude might return
-  if (result.content[0].type === "text" && result.content[0].value) {
-    return result.content[0].value;
-  }
-  
-  if (typeof result.content[0] === 'string') {
-    return result.content[0];
-  }
-  
-  if (result.message && typeof result.message === 'string') {
-    return result.message;
-  }
-  
-  if (result.completion && typeof result.completion === 'string') {
-    return result.completion;
-  }
-  
-  // Check if there's any usable text in the response at all
-  const responseStr = JSON.stringify(result);
-  if (responseStr && responseStr.length > 20) {
-    try {
-      // Try to extract any text content
-      const textMatch = responseStr.match(/"text":"([^"]+)"/);
-      if (textMatch && textMatch[1]) {
-        return textMatch[1];
-      }
-    } catch (e) {
-      // Ignore extraction errors
-    }
-  }
-  
-  // Last resort
-  console.log("Falling back to personalized response as no text could be extracted");
-  return this.createPersonalizedResponse(lastUserMessage, context);
-}
-
-// Successfully extracted the text - make sure it's not empty
-const extractedText = result.content[0].text;
-if (!extractedText || extractedText.trim() === '') {
-  console.error("Extracted text is empty");
-  return this.createPersonalizedResponse(lastUserMessage, context);
-}
-
-// Return successfully extracted text
-console.log("Successfully extracted text from Claude API response");
-return extractedText;
-} catch (error) {
-  clearTimeout(timeoutId);
-  console.error("Error in Claude API call:", error.message);
-  console.error("Full error:", error);
-  
-  // Handle any type of error with a fallback response
-  console.log("Network or API error detected - using fallback response");
-  
-  // Test the connection
-  setTimeout(() => {
-    fetch(this.proxyUrl + '/test')
-      .then(r => console.log("Claude API test response:", r.status))
-      .catch(e => {
-        console.error("Claude API is unreachable:", e);
-        this.enableFallbackMode();
-      });
-  }, 100);
-  
-  // Always return a fallback response to avoid undefined
-  return this.createPersonalizedResponse(
-    typeof messages[messages.length - 1] === 'object' 
-      ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "") 
-      : "", 
-    context
-  );
-        
-        // For other errors, retry with simpler prompt
-        try {
-          console.log("Retrying with simplified prompt...");
-          // Create a more focused system prompt
-          const simplifiedSystemPrompt = `You are Allie, an AI assistant focused on family workload balance.
-          Today's date is ${new Date().toLocaleDateString()}.
-          
-          IMPORTANT: Give specific answers about the family data you have access to:
-          - Family: ${context.familyName || 'Unknown'}
-          - Survey data: ${context.surveyData?.mamaPercentage ? `Mama: ${context.surveyData.mamaPercentage.toFixed(1)}%, Papa: ${(100 - context.surveyData.mamaPercentage).toFixed(1)}%` : 'Not yet available'}
-          - Tasks: ${context.tasks?.length || 0} active tasks
-          
-          REMEMBER: Always be specific and precise when referring to this family's data.
-          DO NOT say "I have access to the family's data" - instead SHOW that access by mentioning specific data points.
-          
-          ABOUT SURVEY QUESTIONS: Be informative about all survey questions. Explain why they're asked, how their weights are calculated, and the impact of each factor (frequency, invisibility, emotional labor, child development) on task importance.`;
-          
-          // Extract last user message for the retry
-          const lastMessageContent = typeof messages[messages.length - 1] === 'object'
-            ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
-            : "";
-          
-          // Make a simpler request
-          const response = await fetch(this.proxyUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: this.model,
-              max_tokens: 2000,
-              temperature: 0.7,
-              messages: [{ role: "user", content: lastMessageContent }],
-              system: simplifiedSystemPrompt
-            })
-          });
-          
-          if (response.ok) {
-            const result = await response.json();
-            if (result && result.content && result.content[0]) {
-              return result.content[0].text;
-            }
-          }
-          
-          // If retry fails, fall back to default response
+      try {
+        // First check if we're in mock mode or AI calls are disabled
+        if (this.mockMode || this.disableAICalls) {
+          console.log("Using fallback response (mock mode or AI calls disabled)");
           return this.createPersonalizedResponse(
-            lastMessageContent, 
-            context
-          );
-        } catch (retryError) {
-          console.error("Retry also failed:", retryError);
-          return this.createPersonalizedResponse(
-            typeof messages[messages.length - 1] === 'object'
-              ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
-              : "",
+            typeof messages[messages.length - 1] === 'object' 
+              ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "") 
+              : "", 
             context
           );
         }
+
+        // Add timeout to ensure we get a response or fallback
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Request timed out")), 20000)
+        );
+
+        const responsePromise = fetch(this.proxyUrl, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+
+        const response = await Promise.race([responsePromise, timeoutPromise]);
+        console.log("Got response from Claude API proxy:", response.status);
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          console.warn("Claude proxy returned error status:", response.status);
+          // Try to get more details about the error
+          let errorDetails = "";
+          try {
+            const errorText = await response.text();
+            // Check if we got HTML instead of JSON (common Firebase Hosting issue)
+            if (errorText.toLowerCase().includes('<!doctype html>') || 
+                errorText.toLowerCase().includes('<html>')) {
+              console.error("Received HTML instead of API response - enabling fallback mode");
+              this.enableFallbackMode();
+            }
+            errorDetails = errorText.substring(0, 200); // Get first 200 chars of error
+            console.warn("Error details from proxy:", errorDetails);
+          } catch (e) {}
+          
+          // Return a personalized response
+          return this.createPersonalizedResponse(lastUserMessage, context);
+        }
+        
+        // Check content type for HTML
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('text/html')) {
+          console.error("Received HTML instead of JSON - API endpoint misconfigured");
+          this.enableFallbackMode();
+          return this.createPersonalizedResponse(lastUserMessage, context);
+        }
+              
+        // Try to parse the JSON with better error handling
+        let result;
+        try {
+          result = await response.json();
+          
+          // Add more detailed logging to see the actual structure
+          console.log("Claude API response structure:", JSON.stringify(result).substring(0, 200) + "...");
+        } catch (jsonError) {
+          console.error("Error parsing JSON from Claude API:", jsonError);
+          // Try to get the raw text to see what's wrong
+          const rawText = await response.text();
+          console.warn("Raw response text (first 200 chars):", rawText.substring(0, 200));
+          return this.createPersonalizedResponse(lastUserMessage, context);
+        }
+
+        // Enhanced validation with better error handling
+        if (!result) {
+          console.error("Empty result from Claude API");
+          return this.createPersonalizedResponse(lastUserMessage, context);
+        }
+
+        // Add a special catch for undefined or null response
+        if (result === undefined || result === null) {
+          console.error("Claude API returned undefined or null");
+          return this.createPersonalizedResponse(lastUserMessage, context);
+        }
+
+        // Check if result is a string directly (some versions of Claude API may return direct text)
+        if (typeof result === 'string') {
+          console.log("Claude API returned direct string response");
+          return result.trim();
+        }
+
+        // Check content structure with better logging
+        if (!result.content) {
+          console.error("Missing 'content' in Claude API response:", result);
+          return this.createPersonalizedResponse(lastUserMessage, context);
+        }
+
+        if (!Array.isArray(result.content) || result.content.length === 0) {
+          console.error("'content' is not an array or is empty:", result.content);
+          return this.createPersonalizedResponse(lastUserMessage, context);
+        }
+
+        if (!result.content[0]) {
+          console.error("First content item is undefined:", result.content);
+          return this.createPersonalizedResponse(lastUserMessage, context);
+        }
+
+        // Check for text property with more robust fallbacks
+        if (result.content[0].text === undefined || result.content[0].text === null) {
+          console.error("'text' property is undefined in content:", result.content[0]);
+          
+          // Try different response formats that Claude might return
+          if (result.content[0].type === "text" && result.content[0].value) {
+            return result.content[0].value;
+          }
+          
+          if (typeof result.content[0] === 'string') {
+            return result.content[0];
+          }
+          
+          if (result.message && typeof result.message === 'string') {
+            return result.message;
+          }
+          
+          if (result.completion && typeof result.completion === 'string') {
+            return result.completion;
+          }
+          
+          // Check if there's any usable text in the response at all
+          const responseStr = JSON.stringify(result);
+          if (responseStr && responseStr.length > 20) {
+            try {
+              // Try to extract any text content
+              const textMatch = responseStr.match(/"text":"([^"]+)"/);
+              if (textMatch && textMatch[1]) {
+                return textMatch[1];
+              }
+            } catch (e) {
+              // Ignore extraction errors
+            }
+          }
+          
+          // Last resort
+          console.log("Falling back to personalized response as no text could be extracted");
+          return this.createPersonalizedResponse(lastUserMessage, context);
+        }
+
+        // Successfully extracted the text - make sure it's not empty
+        const extractedText = result.content[0].text;
+        if (!extractedText || extractedText.trim() === '') {
+          console.error("Extracted text is empty");
+          return this.createPersonalizedResponse(lastUserMessage, context);
+        }
+
+        // Return successfully extracted text
+        console.log("Successfully extracted text from Claude API response");
+        return extractedText;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        console.error("Error in Claude API call:", error.message);
+        console.error("Full error:", error);
+        
+        // Handle any type of error with a fallback response
+        console.log("Network or API error detected - using fallback response");
+        
+        // Test the connection
+        setTimeout(() => {
+          fetch(this.proxyUrl + '/test')
+            .then(r => console.log("Claude API test response:", r.status))
+            .catch(e => {
+              console.error("Claude API is unreachable:", e);
+              this.enableFallbackMode();
+            });
+        }, 100);
+        
+        // Always return a fallback response to avoid undefined
+        return this.createPersonalizedResponse(
+          typeof messages[messages.length - 1] === 'object' 
+            ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "") 
+            : "", 
+          context
+        );
       }
-
-
-    } catch (error) {
-      console.error("Error in Claude API call:", error.message);
+    } catch (finalError) {
+      console.error("Unhandled error in Claude service:", finalError);
       
-      // Return fallback response
-      return this.createPersonalizedResponse(
-        typeof messages[messages.length - 1] === 'object'
-          ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "")
-          : "",
-        context
-      );
+      // Ultimate fallback to prevent undefined responses
+      const userQuery = typeof messages[messages.length - 1] === 'object' 
+        ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "your request") 
+        : "your request";
+      
+      return `I'm having trouble processing ${userQuery} right now. Please try again in a moment. If the problem persists, you can try refreshing the page.`;
     }
-  } catch (finalError) {
-    console.error("Unhandled error in Claude service:", finalError);
-    
-    // Ultimate fallback to prevent undefined responses
-    const userQuery = typeof messages[messages.length - 1] === 'object' 
-      ? (messages[messages.length - 1].content || messages[messages.length - 1].text || "your request") 
-      : "your request";
-    
-    return `I'm having trouble processing ${userQuery} right now. Please try again in a moment. If the problem persists, you can try refreshing the page.`;
-  }
-    
   }
 
   // Updated version with loop protection
