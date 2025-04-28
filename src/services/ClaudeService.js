@@ -9,7 +9,6 @@ constructor() {
   const hostname = window.location.hostname;
   const isProduction = hostname === 'checkallie.com' || hostname === 'www.checkallie.com';
   const isLocalhost = hostname === 'localhost' || hostname.includes('127.0.0.1');
-  const isFirebase = hostname.includes('firebaseapp.com') || hostname.includes('web.app');
 
   // Set the appropriate API URL based on environment
   if (isLocalhost) {
@@ -18,43 +17,40 @@ constructor() {
     console.log("Running in local development mode - using local proxy server");
     
     // Add a fallback option for when the local server isn't running
-    this.fallbackProxyUrl = '/api/claude';
-  } else if (isFirebase || isProduction) {
-    // For Firebase hosting or production domain, use the direct Cloud Functions URL
-    this.proxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude';
-    console.log("Running in production - using direct Cloud Functions URL:", this.proxyUrl);
+    this.fallbackProxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude';
   } else {
-    // Fallback for other environments
-    this.proxyUrl = '/api/claude';
-    console.log("Running in unknown environment - using relative URL");
+    // For production domain, use the direct Cloud Functions URL
+    this.proxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude';
+    console.log("Running in production - using Cloud Functions URL:", this.proxyUrl);
+    
+    // Production fallback is the same URL but with a different path format
+    this.fallbackProxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude/api/claude';
   }
   
   // Model settings
   this.model = 'claude-3-5-sonnet-20240620';  // Update to the latest Claude model
 
-  
   // Basic settings
   this.mockMode = false;
   this.debugMode = true; // Always enable logging for debugging
   this.disableAICalls = false;
   
   // CRITICAL FIX: Explicitly set this to false and log it
-  this.disableCalendarDetection = false; // <-- EXPLICITLY FALSE to enable calendar detection
+  this.disableCalendarDetection = false;
   console.log("🔴 Calendar detection explicitly enabled in constructor:", !this.disableCalendarDetection);
   
   this.retryCount = 3;
   this.functionRegion = 'europe-west1'; // Match this to your deployment region
   
-  // Add connection test with retry capability
+  // Add connection test with retry capability - delay slightly to ensure browser is ready
   setTimeout(() => {
     this.testConnectionWithRetry();
-  }, 1000);
+  }, 1500);
   
   console.log(`Claude service initialized to use proxy server at ${this.proxyUrl}`);
 }
 
-// New helper method for connection testing with retry
-async testConnectionWithRetry(attempts = 2) {
+async testConnectionWithRetry(attempts = 3) {
   for (let i = 0; i < attempts; i++) {
     try {
       const success = await this.testProxyConnection();
@@ -67,7 +63,28 @@ async testConnectionWithRetry(attempts = 2) {
         // If we have a fallback URL and this isn't the last attempt, try the fallback
         if (this.fallbackProxyUrl && i === 0) {
           console.log("Trying fallback proxy URL:", this.fallbackProxyUrl);
+          
+          // Save the original URL
+          const originalUrl = this.proxyUrl;
+          
+          // Try the fallback
           this.proxyUrl = this.fallbackProxyUrl;
+          const fallbackSuccess = await this.testProxyConnection();
+          
+          if (fallbackSuccess) {
+            console.log("✅ Fallback URL connection successful!");
+            return;
+          } else {
+            // If fallback also failed, and we have more attempts, try direct cloud function
+            if (i < attempts - 1) {
+              // Try direct root URL as last resort
+              this.proxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude';
+              console.log("Trying direct cloud function URL:", this.proxyUrl);
+            } else {
+              // Restore original URL for the last attempt
+              this.proxyUrl = originalUrl;
+            }
+          }
         }
       }
     } catch (err) {
@@ -76,102 +93,100 @@ async testConnectionWithRetry(attempts = 2) {
   }
 
   // If all attempts fail, enable fallback mode
-  console.error("All Claude API connection attempts failed - enabling fallback mode");
+  console.error("❌ All Claude API connection attempts failed - enabling fallback mode");
   this.enableFallbackMode();
 }
     
     
   
   
-  async testProxyConnection() {
-    try {
-      // If we're already in mock/disabled mode, don't bother testing
-      if (this.mockMode || this.disableAICalls) {
-        console.log("Skipping proxy test - already in mock/disabled mode");
-        return false;
-      }
-      
-      console.log("Testing proxy connection at:", this.proxyUrl);
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout for slower networks
-      
-      try {
-        // Log the full URL being requested for debugging
-        const testUrl = `${this.proxyUrl}/test`;
-        console.log("Full test URL:", testUrl);
-        
-        const response = await fetch(testUrl, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache, no-store'
-          },
-          signal: controller.signal,
-          // Add cache-busting query parameter
-          cache: 'no-store'
-        });
-        
-        clearTimeout(timeoutId);
-        console.log("Proxy test response status:", response.status);
-        
-        if (response.ok) {
-          // First check if the response is HTML instead of JSON
-          const contentType = response.headers.get('content-type');
-          console.log("Response content type:", contentType);
-          
-          if (contentType && contentType.includes('text/html')) {
-            console.error("Received HTML instead of JSON - API endpoint misconfigured");
-            // Get the response text to help debug
-            const text = await response.text();
-            console.error("HTML response received:", text.substring(0, 200));
-            return false;
-          }
-          
-          try {
-            const data = await response.json();
-            console.log("Proxy test response data:", data);
-            return true;
-          } catch (jsonError) {
-            console.error("Failed to parse JSON response:", jsonError);
-            // Let's try to see what we received
-            const text = await response.text();
-            console.log("Raw response:", text.substring(0, 200));
-            return false;
-          }
-        } else {
-          // For non-OK responses, log detailed information
-          console.error(`Proxy test failed with status: ${response.status}`);
-          try {
-            const text = await response.text();
-            console.error("Error response:", text.substring(0, 500));
-            
-            // Check if this is a CORS error
-            if (response.status === 0 || !response.status) {
-              console.error("Possible CORS issue detected");
-            }
-          } catch (e) {
-            console.error("Could not read error response");
-          }
-          return false;
-        }
-      } catch (fetchError) {
-        clearTimeout(timeoutId);
-        
-        if (fetchError.name === 'AbortError') {
-          console.error("Proxy test timed out after 10 seconds");
-        } else {
-          console.error("Error testing proxy connection:", fetchError);
-          console.error("Error details:", fetchError.message);
-        }
-        return false;
-      }
-    } catch (error) {
-      console.error("Error in proxy test:", error);
+async testProxyConnection() {
+  try {
+    // If we're already in mock/disabled mode, don't bother testing
+    if (this.mockMode || this.disableAICalls) {
+      console.log("Skipping proxy test - already in mock/disabled mode");
       return false;
     }
+    
+    console.log("Testing proxy connection at:", this.proxyUrl);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    try {
+      // Log the full URL being requested for debugging
+      const testUrl = `${this.proxyUrl}/test`;
+      console.log("Full test URL:", testUrl);
+      
+      const response = await fetch(testUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+          // Remove the cache-control header to avoid CORS issues
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      console.log("Proxy test response status:", response.status);
+      
+      if (response.ok) {
+        // First check if the response is HTML instead of JSON
+        const contentType = response.headers.get('content-type');
+        console.log("Response content type:", contentType);
+        
+        if (contentType && contentType.includes('text/html')) {
+          console.error("Received HTML instead of JSON - API endpoint misconfigured");
+          // Get the response text to help debug
+          const text = await response.text();
+          console.error("HTML response received:", text.substring(0, 200));
+          return false;
+        }
+        
+        try {
+          const data = await response.json();
+          console.log("Proxy test response data:", data);
+          return true;
+        } catch (jsonError) {
+          console.error("Failed to parse JSON response:", jsonError);
+          // Let's try to see what we received
+          const text = await response.text();
+          console.log("Raw response:", text.substring(0, 200));
+          return false;
+        }
+      } else {
+        // For non-OK responses, log detailed information
+        console.error(`Proxy test failed with status: ${response.status}`);
+        try {
+          const text = await response.text();
+          console.error("Error response:", text.substring(0, 500));
+          
+          // Check if this is a CORS error
+          if (response.status === 0 || !response.status) {
+            console.error("Possible CORS issue detected");
+          }
+        } catch (e) {
+          console.error("Could not read error response");
+        }
+        return false;
+      }
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError.name === 'AbortError') {
+        console.error("Proxy test timed out after 10 seconds");
+      } else {
+        console.error("Error testing proxy connection:", fetchError);
+        console.error("Error details:", fetchError.message);
+      }
+      return false;
+    }
+  } catch (error) {
+    console.error("Error in proxy test:", error);
+    return false;
   }
+}
   
   // Add this new method
   enableFallbackMode() {
