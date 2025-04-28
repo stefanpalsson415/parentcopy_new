@@ -671,22 +671,9 @@ if (!this.disableCalendarDetection && messageText.length > 0) {
 
   // In ClaudeService.js, update the extractCalendarRequest method
 
+// In src/services/ClaudeService.js, update the extractCalendarRequest method
 async extractCalendarRequest(message) {  
   try {
-    // Check if we're already processing a calendar request to prevent recursion
-    if (this._processingCalendarRequest) {
-      console.log("Calendar request processing already in progress, skipping to prevent loops");
-      return null;
-    }
-    
-    // Set a flag to prevent recursive calls
-    this._processingCalendarRequest = true;
-    
-    // Add a timeout to force release the lock after 5 seconds
-    setTimeout(() => {
-      this._processingCalendarRequest = false;
-    }, 5000);
-
     console.log(`Extracting calendar details from: "${message.substring(0, 100)}..."`);
 
     // Check if this is a calendar-related request  
@@ -701,7 +688,6 @@ async extractCalendarRequest(message) {
     );  
       
     if (!isCalendarRequest) {
-      this._processingCalendarRequest = false;
       return null;  
     }
       
@@ -711,7 +697,6 @@ async extractCalendarRequest(message) {
       
     if (!parsedEvent || !parsedEvent.title) {  
       console.warn("UnifiedParserService failed to extract event details");
-      this._processingCalendarRequest = false;
       return null;  
     }  
       
@@ -736,13 +721,9 @@ async extractCalendarRequest(message) {
       originalText: message
     };
     
-    // Release the lock
-    this._processingCalendarRequest = false;
     return result;
   } catch (error) {  
     console.error("Error extracting calendar event with AI:", error);
-    // Make sure to release the lock even if there's an error
-    this._processingCalendarRequest = false;
     return null;  
   }  
 }
@@ -963,6 +944,7 @@ formatCollectedEventData(collectedData) {
 
 // In ClaudeService.js, update the createEventFromCollectedData method
 
+// In src/services/ClaudeService.js, update the createEventFromCollectedData method
 async createEventFromCollectedData(eventData, userId, familyId) {
   try {
     // Validate required parameters
@@ -1030,7 +1012,7 @@ async createEventFromCollectedData(eventData, userId, familyId) {
       event.doctorName = eventData.doctorName || eventData.appointmentDetails.doctorName;
     }
     
-    // Add appointment-specific details with default structure
+    // Add appointment-specific details
     if (eventData.eventType === 'doctor' || eventData.eventType === 'dentist') {
       event.appointmentDetails = eventData.appointmentDetails || {
         doctorName: eventData.doctorName || "Unknown",
@@ -1057,69 +1039,59 @@ async createEventFromCollectedData(eventData, userId, familyId) {
     
     console.log("📅 Final event object ready for saving:", event);
     
-    // Use CalendarService to add the event with error handling
+    // First try using EventStore directly instead of CalendarService
     try {
-      const CalendarService = (await import('./CalendarService')).default;
-      const result = await CalendarService.addEvent(event, userId);
-      console.log("📅 Calendar service result:", result);
+      // Import EventStore directly
+      const eventStore = (await import('./EventStore')).default;
+      const result = await eventStore.addEvent(event, userId, familyId);
       
-      // Handle potential errors from calendar service
-      if (!result.success) {
-        console.error("Calendar service reported error:", result.error);
-        return { success: false, error: result.error || "Unknown error from calendar service" };
-      }
+      console.log("📅 EventStore direct result:", result);
       
       // Trigger UI refresh with multiple events to ensure components update
       if (typeof window !== 'undefined') {
-        console.log("📅 Dispatching calendar refresh events");
-        
-        // Use the specific event-added event with details
+        // Dispatch event-added event
         window.dispatchEvent(new CustomEvent('calendar-event-added', {
           detail: {
-            eventId: result.eventId,
+            eventId: result.eventId || result.firestoreId,
             addedViaChat: true
           }
         }));
         
-        // Add a delayed generic refresh for components that might miss the first event
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-        }, 500);
+        // Also dispatch a general refresh event
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
         
-        // Add another refresh after a longer delay to ensure widget updates
+        // Add a third delayed refresh for components that might miss the first events
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-          console.log("Dispatched delayed refresh event");
-        }, 1500);
+        }, 1000);
       }
       
       return {
         success: true,
-        eventId: result.eventId
+        eventId: result.eventId || result.firestoreId || result.universalId
       };
-    } catch (calendarError) {
-      console.error("Error calling CalendarService:", calendarError);
+    } catch (storeError) {
+      console.error("Error using EventStore directly:", storeError);
       
-      // Try alternate direct method if CalendarService fails
+      // Fall back to CalendarService
       try {
-        // Import EventStore directly as a fallback
-        const eventStore = (await import('./EventStore')).default;
-        const result = await eventStore.addEvent(event, userId, familyId);
+        const CalendarService = (await import('./CalendarService')).default;
+        const result = await CalendarService.addEvent(event, userId);
         
-        console.log("📅 EventStore fallback result:", result);
+        console.log("📅 Calendar service result:", result);
         
         // Trigger UI refresh
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
         }
         
-        return {
-          success: true,
-          eventId: result.eventId || result.firestoreId
+        return { 
+          success: true, 
+          eventId: result.eventId || result.firestoreId 
         };
-      } catch (storeError) {
-        console.error("Even fallback event store failed:", storeError);
-        return { success: false, error: storeError.message };
+      } catch (calendarError) {
+        console.error("Error from CalendarService:", calendarError);
+        return { success: false, error: calendarError.message };
       }
     }
   } catch (error) {

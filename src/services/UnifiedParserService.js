@@ -78,469 +78,289 @@ class UnifiedParserService {
    * @param {string} type - The type of information being extracted
    * @returns {object} Structured data extracted from the response
    */
-  processResponse(response, type) {
+  // In src/services/UnifiedParserService.js, replace the processResponse method with this improved version:
+processResponse(response, type) {
+  try {
+    // Enhanced JSON extraction logic with better fallbacks
+    let result = null;
+    console.log(`Processing ${type} response of length ${response.length}`);
+    
+    // First try: direct JSON parsing if response is already JSON
     try {
-      // Enhanced JSON extraction logic with better fallbacks
-      let result = null;
-      console.log(`Processing ${type} response of length ${response.length}`);
+      // Trim the response to remove any whitespace
+      response = response.trim();
       
-      // First try: direct JSON parsing if response is already JSON
-      try {
-        response = response.trim();
-        
-        // Remove any text before and after potential JSON
-        // This fixes cases where Claude adds explanation even when told not to
-        const jsonStartIndex = response.indexOf('{');
-        const jsonEndIndex = response.lastIndexOf('}') + 1;
-        
-        if (jsonStartIndex >= 0 && jsonEndIndex > jsonStartIndex) {
-          const potentialJson = response.substring(jsonStartIndex, jsonEndIndex);
-          result = JSON.parse(potentialJson);
+      // Check if the response is already a valid JSON
+      if (response.startsWith('{') && response.endsWith('}')) {
+        try {
+          result = JSON.parse(response);
           console.log(`Successfully parsed direct JSON for ${type}`);
+          return result;
+        } catch (e) {
+          // Continue to other methods
         }
-      } catch (directParseError) {
-        // Continue to other methods if direct parsing fails
-        console.log(`Direct JSON parsing failed: ${directParseError.message}`);
       }
       
-      // Second try: Look for JSON in markdown code blocks
-      if (!result) {
-        const markdownJsonRegex = /```(?:json)?\s*({[\s\S]*?})\s*```/;
-        const markdownMatch = response.match(markdownJsonRegex);
-        if (markdownMatch && markdownMatch[1]) {
+      // If not a direct JSON, look for JSON in the text using a more robust extractor
+      const jsonRegex = /{(?:[^{}]|{(?:[^{}]|{[^{}]*})*})*}/g;
+      const matches = response.match(jsonRegex);
+      
+      if (matches && matches.length > 0) {
+        for (const match of matches) {
           try {
-            result = JSON.parse(markdownMatch[1]);
-            console.log(`Found JSON in markdown code block for ${type}`);
-          } catch (markdownError) {
-            console.warn(`Error parsing JSON from markdown for ${type}:`, markdownError);
-            // Try to clean the JSON string before parsing again
-            try {
-              const cleanedJson = markdownMatch[1]
-                .replace(/\\n/g, ' ')
-                .replace(/\\"/g, '"')
-                .replace(/\\/g, '\\')
-                .replace(/\\t/g, ' ');
-              result = JSON.parse(cleanedJson);
-              console.log(`Parsed JSON with cleaning for ${type}`);
-            } catch (cleaningError) {
-              console.warn(`Cleaning failed for ${type}:`, cleaningError);
-            }
-          }
-        }
-      }
-      
-      // Third try: Standard regex extraction with better pattern
-      if (!result) {
-        const jsonPattern = /{[\s\S]*?(?:"[^"]*"[\s\S]*?:[\s\S]*?(?:,|})[\s\S]*?)*}/g;
-        const jsonMatches = response.match(jsonPattern);
-        
-        if (jsonMatches && jsonMatches.length > 0) {
-          for (const match of jsonMatches) {
-            try {
-              // Clean the JSON string to ensure it's valid
-              const cleanJSON = match
-                .replace(/\\'/g, "'")
-                .replace(/\\"/g, '"')
-                .replace(/\n/g, ' ');
-              
-              result = JSON.parse(cleanJSON);
-              console.log(`Extracted JSON using improved regex for ${type}`);
-              break;
-            } catch (regexError) {
-              // Try next match if this one fails
-              continue;
-            }
-          }
-        }
-      }
-      
-      // Enhanced fallback for events with better extraction from raw text
-      if (!result && type === 'event') {
-        console.warn(`Failed to extract JSON for ${type}. Creating intelligent event fallback.`);
-        
-        // Extract appointment/doctor specifics
-        const isDoctorAppointment = response.toLowerCase().includes('doctor') || 
-                                    response.toLowerCase().includes('dr.') ||
-                                    response.toLowerCase().includes('appointment');
-        
-        const isDentistAppointment = response.toLowerCase().includes('dentist') || 
-                                     response.toLowerCase().includes('dental');
-        
-        // Extract title/event name with improved patterns
-        let titleMatch = null;
-        const titlePatterns = [
-          /title[:\s]+"([^"]+)"/i,
-          /appointment (?:for|with) ([^"]+?) (?:on|at)/i,
-          /meeting with ([^"]+?) (?:on|at)/i,
-          /event[:\s]+"?([^",]+)"?/i, 
-          /(\w+(?:'s)? appointment)/i,
-          /(\w+(?:'s)? \w+ appointment)/i
-        ];
-        
-        for (const pattern of titlePatterns) {
-          const match = response.match(pattern);
-          if (match && match[1]) {
-            titleMatch = match;
-            break;
-          }
-        }
-        
-        // Extract date with multiple patterns
-        const datePatterns = [
-          /on ([A-Za-z]+ \d+(?:st|nd|rd|th)?)/i,
-          /date[:\s]+"?([^",]+)"?/i,
-          /(\d{1,2}\/\d{1,2}\/\d{2,4})/,
-          /next ([a-z]+day)/i,
-          /this ([a-z]+day)/i,
-          /tomorrow/i,
-          /today/i
-        ];
-        
-        let dateMatch = null;
-        for (const pattern of datePatterns) {
-          const match = response.match(pattern);
-          if (match) {
-            dateMatch = match;
-            break;
-          }
-        }
-        
-        // Extract time with multiple patterns
-        const timePatterns = [
-          /at (\d{1,2}(?::\d{2})?\s*(?:am|pm))/i,
-          /time[:\s]+"?([^",]+)"?/i,
-          /(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i
-        ];
-        
-        let timeMatch = null;
-        for (const pattern of timePatterns) {
-          const match = response.match(pattern);
-          if (match) {
-            timeMatch = match;
-            break;
-          }
-        }
-        
-        // Extract location
-        const locationPatterns = [
-          /location[:\s]+"?([^",]+)"?/i,
-          /at ([^,]+) (?:on|at)/i,
-          /at the ([^,.]+)/i
-        ];
-        
-        let locationMatch = null;
-        for (const pattern of locationPatterns) {
-          const match = response.match(pattern);
-          if (match) {
-            locationMatch = match;
-            break;
-          }
-        }
-        
-        // Extract child name
-        const childPatterns = [
-          /for ([A-Za-z]+?)(?:'s)? (?:on|at|appointment)/i,
-          /childName[:\s]+"?([^",]+)"?/i,
-          /([A-Za-z]+?)(?:'s) appointment/i,
-          /appointment for ([A-Za-z]+)/i
-        ];
-        
-        let childMatch = null;
-        for (const pattern of childPatterns) {
-          const match = response.match(pattern);
-          if (match) {
-            childMatch = match;
-            break;
-          }
-        }
-        
-        // Extract doctor name
-        const doctorPatterns = [
-          /(?:with|see) (?:Dr\.|Doctor) ([A-Za-z]+)/i,
-          /doctorName[:\s]+"?([^",]+)"?/i,
-          /Dr\. ([A-Za-z]+)/i,
-          /Doctor ([A-Za-z]+)/i
-        ];
-        
-        let doctorMatch = null;
-        for (const pattern of doctorPatterns) {
-          const match = response.match(pattern);
-          if (match) {
-            doctorMatch = match;
-            break;
-          }
-        }
-        
-        // Create a structured event from regex matches with good defaults
-        const eventType = isDoctorAppointment ? 'doctor' : 
-                         isDentistAppointment ? 'dentist' : 'general';
-        
-        const childName = childMatch ? childMatch[1].trim() : null;
-        
-        // Construct appropriate title
-        let title = titleMatch ? titleMatch[1].trim() : 
-                   isDoctorAppointment ? "Doctor Appointment" :
-                   isDentistAppointment ? "Dentist Appointment" : 
-                   "Appointment";
-                   
-        // Add doctor name to title if available
-        if (doctorMatch && !title.includes(doctorMatch[1])) {
-          title += ` with Dr. ${doctorMatch[1]}`;
-        }
-        
-        result = {
-          title: title,
-          eventType: eventType,
-          category: eventType === 'general' ? 'general' : 'appointment',
-          childName: childName,
-          doctorName: doctorMatch ? `Dr. ${doctorMatch[1]}` : null,
-          location: locationMatch ? locationMatch[1].trim() : null
-        };
-        
-        // Handle date/time computation for the fallback with more robust date parsing
-        if (dateMatch || timeMatch) {
-          try {
-            // Create a date object for the event
-            let eventDate = new Date();
-            
-            // Handle date part
-            if (dateMatch) {
-              // Handle relative dates
-              if (dateMatch[0].toLowerCase().includes('tomorrow')) {
-                eventDate.setDate(eventDate.getDate() + 1);
-              } 
-              else if (dateMatch[0].toLowerCase().includes('today')) {
-                // Keep today's date
-              }
-              else if (dateMatch[0].toLowerCase().includes('next')) {
-                // Handle "next Monday", "next Tuesday", etc.
-                const dayMatch = dateMatch[0].match(/next ([a-z]+day)/i);
-                if (dayMatch && dayMatch[1]) {
-                  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-                  const targetDay = dayNames.indexOf(dayMatch[1].toLowerCase());
-                  
-                  if (targetDay >= 0) {
-                    const currentDay = eventDate.getDay();
-                    const daysUntilTarget = (7 + targetDay - currentDay) % 7;
-                    // If today is the target day, go to next week
-                    eventDate.setDate(eventDate.getDate() + (daysUntilTarget === 0 ? 7 : daysUntilTarget));
-                  }
-                }
-              }
-              else if (dateMatch[0].toLowerCase().includes('this')) {
-                // Handle "this Monday", "this Tuesday", etc.
-                const dayMatch = dateMatch[0].match(/this ([a-z]+day)/i);
-                if (dayMatch && dayMatch[1]) {
-                  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-                  const targetDay = dayNames.indexOf(dayMatch[1].toLowerCase());
-                  
-                  if (targetDay >= 0) {
-                    const currentDay = eventDate.getDay();
-                    let daysUntilTarget = targetDay - currentDay;
-                    // If target day is earlier in the week, go to next week
-                    if (daysUntilTarget < 0) daysUntilTarget += 7;
-                    eventDate.setDate(eventDate.getDate() + daysUntilTarget);
-                  }
-                }
-              }
-              else if (dateMatch[1].match(/^\d{1,2}\/\d{1,2}\/\d{2,4}$/)) {
-                // Handle MM/DD/YYYY format
-                const parts = dateMatch[1].split('/');
-                const month = parseInt(parts[0]) - 1; // JS months are 0-indexed
-                const day = parseInt(parts[1]);
-                const year = parts[2].length === 2 ? 2000 + parseInt(parts[2]) : parseInt(parts[2]);
-                
-                eventDate.setFullYear(year, month, day);
-              }
-              else {
-                // Try to parse dates like "April 15th" or "June 3rd"
-                const monthNames = [
-                  'january', 'february', 'march', 'april', 'may', 'june',
-                  'july', 'august', 'september', 'october', 'november', 'december'
-                ];
-                
-                // Extract month and day
-                for (let i = 0; i < monthNames.length; i++) {
-                  if (dateMatch[1].toLowerCase().includes(monthNames[i])) {
-                    // Found month, now extract day
-                    const dayMatch = dateMatch[1].match(/(\d+)(?:st|nd|rd|th)?/);
-                    if (dayMatch && dayMatch[1]) {
-                      const day = parseInt(dayMatch[1]);
-                      
-                      eventDate.setMonth(i);
-                      eventDate.setDate(day);
-                      break;
-                    }
-                  }
-                }
-              }
-            }
-            
-            // Handle time part
-            if (timeMatch) {
-              const timeStr = timeMatch[1].toLowerCase();
-              const hourMatch = timeStr.match(/(\d{1,2})(?::(\d{2}))?(?:\s*(am|pm))?/i);
-              
-              if (hourMatch) {
-                let hours = parseInt(hourMatch[1]);
-                const minutes = hourMatch[2] ? parseInt(hourMatch[2]) : 0;
-                const period = hourMatch[3] ? hourMatch[3].toLowerCase() : null;
-                
-                // Convert to 24-hour format if needed
-                if (period === 'pm' && hours < 12) {
-                  hours += 12;
-                } else if (period === 'am' && hours === 12) {
-                  hours = 0;
-                }
-                
-                eventDate.setHours(hours, minutes, 0, 0);
-              }
-            } else {
-              // Default to 9 AM if no time specified
-              eventDate.setHours(9, 0, 0, 0);
-            }
-            
-            // Format for ISO string
-            result.dateTime = eventDate.toISOString();
-            
-            // Add end time (1 hour after start)
-            const endDate = new Date(eventDate);
-            endDate.setHours(endDate.getHours() + 1);
-            result.endDateTime = endDate.toISOString();
-            
-          } catch (dateError) {
-            console.warn("Error parsing date/time for fallback event:", dateError);
-            // Set default future date (tomorrow at 9 AM)
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(9, 0, 0, 0);
-            result.dateTime = tomorrow.toISOString();
-            
-            // Add end time (1 hour after start)
-            const endDate = new Date(tomorrow);
-            endDate.setHours(endDate.getHours() + 1);
-            result.endDateTime = endDate.toISOString();
-          }
-        } else {
-          // No date/time info - default to tomorrow at 9 AM
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          tomorrow.setHours(9, 0, 0, 0);
-          result.dateTime = tomorrow.toISOString();
-          
-          // Add end time (1 hour after start)
-          const endDate = new Date(tomorrow);
-          endDate.setHours(endDate.getHours() + 1);
-          result.endDateTime = endDate.toISOString();
-        }
-        
-        // Add extra appointment details for medical events
-        if (eventType === 'doctor' || eventType === 'dentist') {
-          result.appointmentDetails = {
-            doctorName: doctorMatch ? `Dr. ${doctorMatch[1]}` : "Unknown",
-            reasonForVisit: "",
-            duration: 60 // Default to 1 hour
-          };
-        }
-        
-        console.log("Created fallback event:", result);
-      }
-      
-      // If we still don't have a result, use fallbacks
-      if (!result) {
-        throw new Error("All parsing methods failed");
-      }
-      
-      // Type-specific post-processing to ensure complete event data
-      if (type === 'event') {
-        // Ensure dateTime is valid
-        if (result.dateTime) {
-          try {
-            const dateObj = new Date(result.dateTime);
-            // Verify the date is valid
-            if (isNaN(dateObj.getTime())) {
-              // Fall back to a future date
-              const tomorrow = new Date();
-              tomorrow.setDate(tomorrow.getDate() + 1);
-              tomorrow.setHours(15, 0, 0, 0); // Default to 3 PM tomorrow
-              result.dateTime = tomorrow.toISOString();
-            }
-            
-            // Add endDateTime if missing (1 hour after start)
-            if (!result.endDateTime) {
-              const endDate = new Date(dateObj);
-              endDate.setHours(endDate.getHours() + 1);
-              result.endDateTime = endDate.toISOString();
-            }
+            result = JSON.parse(match);
+            console.log(`Extracted JSON using regex for ${type}`);
+            return result;
           } catch (e) {
-            console.warn("Invalid date format from Claude, using default", e);
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(15, 0, 0, 0);
-            result.dateTime = tomorrow.toISOString();
-            
-            // Add end time (1 hour after start)
-            const endDate = new Date(tomorrow);
-            endDate.setHours(endDate.getHours() + 1);
-            result.endDateTime = endDate.toISOString();
+            // Try next match
+            continue;
           }
-        } else {
-          // Default to tomorrow at 3 PM if no date provided
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          tomorrow.setHours(15, 0, 0, 0);
-          result.dateTime = tomorrow.toISOString();
-          
-          // Add end time (1 hour after start)
-          const endDate = new Date(tomorrow);
-          endDate.setHours(endDate.getHours() + 1);
-          result.endDateTime = endDate.toISOString();
-        }
-        
-        // Ensure other required fields have defaults
-        result.title = result.title || "Untitled Event";
-        result.eventType = result.eventType || "general";
-        result.category = result.category || (
-          result.eventType === 'doctor' || result.eventType === 'dentist' ? 
-          'appointment' : result.eventType
-        );
-        result.isInvitation = !!result.isInvitation;
-        result.extraDetails = result.extraDetails || {};
-        
-        // For doctor/dentist appointments, ensure we have appointmentDetails
-        if ((result.eventType === 'doctor' || result.eventType === 'dentist') && !result.appointmentDetails) {
-          result.appointmentDetails = {
-            doctorName: result.doctorName || "Unknown",
-            reasonForVisit: "",
-            duration: 60 // Default to 1 hour
-          };
         }
       }
+    } catch (directParseError) {
+      // Continue to markdown parsing if direct parsing fails
+      console.log(`Direct JSON parsing failed: ${directParseError.message}`);
+    }
+    
+    // Look for JSON in markdown code blocks
+    const markdownJsonRegex = /```(?:json)?\s*({[\s\S]*?})\s*```/;
+    const markdownMatch = response.match(markdownJsonRegex);
+    if (markdownMatch && markdownMatch[1]) {
+      try {
+        result = JSON.parse(markdownMatch[1]);
+        console.log(`Found JSON in markdown code block for ${type}`);
+        return result;
+      } catch (markdownError) {
+        console.warn(`Error parsing JSON from markdown for ${type}:`, markdownError);
+      }
+    }
+    
+    // If no valid JSON found, create a structured event from the response
+    if (type === 'event') {
+      console.log(`Creating intelligent event fallback for: "${response.substring(0, 100)}..."`);
       
+      // Extract relevant information using regex
+      result = this.createFallbackEvent(response);
+      console.log("Created fallback event:", result);
       return result;
-    } catch (error) {
-      console.error(`Error processing Claude's response for ${type}:`, error);
-      // Return a basic object based on the type
-      const fallbacks = {
-        event: { 
-          title: "Untitled Event", 
-          eventType: "general", 
-          dateTime: new Date().toISOString(), 
-          endDateTime: new Date(new Date().getTime() + 60 * 60 * 1000).toISOString(),
-          extraDetails: {} 
-        },
-        provider: { name: "Unknown Provider", type: "medical" },
-        todo: { text: "New Task", category: "general" },
-        document: { 
-          title: "Unknown Document", 
-          category: "general",
-          entities: { dates: [], people: [], organizations: [], addresses: [] }
-        }
+    }
+    
+    throw new Error("All parsing methods failed");
+    
+  } catch (error) {
+    console.error(`Error processing ${type} response:`, error);
+    
+    // Return a basic fallback based on the type
+    if (type === 'event') {
+      return { 
+        title: "Untitled Event", 
+        eventType: "general", 
+        dateTime: new Date().toISOString(), 
+        endDateTime: new Date(new Date().getTime() + 60 * 60 * 1000).toISOString(),
+        extraDetails: {} 
       };
-      
-      return fallbacks[type] || {};
+    }
+    
+    return {};
+  }
+}
+
+// Add this new helper method to UnifiedParserService.js
+createFallbackEvent(text) {
+  // Determine if this is a medical appointment
+  const isMedicalAppointment = 
+    text.toLowerCase().includes('doctor') || 
+    text.toLowerCase().includes('dentist') || 
+    text.toLowerCase().includes('appointment');
+  
+  // Extract title with improved patterns
+  let title = "Appointment";
+  const titlePatterns = [
+    /title[:\s]+"([^"]+)"/i,
+    /appointment (?:for|with) ([^"]+?) (?:on|at)/i,
+    /meeting with ([^"]+?) (?:on|at)/i,
+    /event[:\s]+"?([^",]+)"?/i, 
+    /(\w+(?:'s)? appointment)/i
+  ];
+  
+  for (const pattern of titlePatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      title = match[1].trim();
+      break;
     }
   }
+  
+  // Extract child name
+  let childName = null;
+  const childPatterns = [
+    /for ([A-Za-z]+?)(?:'s)? (?:on|at|appointment)/i,
+    /childName[:\s]+"?([^",]+)"?/i,
+    /([A-Za-z]+?)(?:'s) appointment/i,
+    /appointment for ([A-Za-z]+)/i
+  ];
+  
+  for (const pattern of childPatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      childName = match[1].trim();
+      break;
+    }
+  }
+  
+  // Extract doctor name
+  let doctorName = null;
+  const doctorPatterns = [
+    /(?:with|see) (?:Dr\.|Doctor) ([A-Za-z]+)/i,
+    /doctorName[:\s]+"?([^",]+)"?/i,
+    /Dr\. ([A-Za-z]+)/i,
+    /Doctor ([A-Za-z]+)/i
+  ];
+  
+  for (const pattern of doctorPatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      doctorName = `Dr. ${match[1].trim()}`;
+      break;
+    }
+  }
+  
+  // Extract date and time
+  let dateTime = new Date();
+  dateTime.setDate(dateTime.getDate() + 1); // Default to tomorrow
+  dateTime.setHours(15, 0, 0, 0); // Default to 3 PM
+  
+  const datePatterns = [
+    /on ([A-Za-z]+ \d+(?:st|nd|rd|th)?)/i,
+    /next ([a-z]+day)/i,
+    /tomorrow/i
+  ];
+  
+  const timePatterns = [
+    /at (\d{1,2}(?::\d{2})?\s*(?:am|pm))/i,
+    /(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i
+  ];
+  
+  // Process date
+  for (const pattern of datePatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      if (match[0].toLowerCase().includes('tomorrow')) {
+        // Already set to tomorrow by default
+      } else if (match[0].toLowerCase().includes('next')) {
+        // Handle "next Monday", "next Tuesday", etc.
+        const dayName = match[1].toLowerCase();
+        const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const dayIndex = days.findIndex(d => dayName.includes(d));
+        
+        if (dayIndex >= 0) {
+          const today = dateTime.getDay();
+          let daysToAdd = (dayIndex - today + 7) % 7;
+          if (daysToAdd === 0) daysToAdd = 7; // If today, go to next week
+          dateTime.setDate(dateTime.getDate() + daysToAdd - 1); // -1 because we already added 1 day
+        }
+      } else {
+        // Try to parse specific date like "January 5th"
+        try {
+          const dateStr = match[1];
+          const parsedDate = new Date(dateStr);
+          if (!isNaN(parsedDate.getTime())) {
+            dateTime = parsedDate;
+          }
+        } catch (e) {
+          // Keep default if parsing fails
+        }
+      }
+      break;
+    }
+  }
+  
+  // Process time
+  for (const pattern of timePatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      const timeStr = match[1].toLowerCase();
+      const hourMatch = timeStr.match(/(\d{1,2})(?::(\d{2}))?(?:\s*(am|pm))?/i);
+      
+      if (hourMatch) {
+        let hours = parseInt(hourMatch[1]);
+        const minutes = hourMatch[2] ? parseInt(hourMatch[2]) : 0;
+        const period = hourMatch[3] ? hourMatch[3].toLowerCase() : null;
+        
+        // Convert to 24-hour format if needed
+        if (period === 'pm' && hours < 12) {
+          hours += 12;
+        } else if (period === 'am' && hours === 12) {
+          hours = 0;
+        }
+        
+        dateTime.setHours(hours, minutes, 0, 0);
+      }
+      break;
+    }
+  }
+  
+  // Extract location
+  let location = null;
+  const locationPatterns = [
+    /location[:\s]+"?([^",]+)"?/i,
+    /at ([^,]+) (?:on|at)/i,
+    /at the ([^,.]+)/i
+  ];
+  
+  for (const pattern of locationPatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      location = match[1].trim();
+      break;
+    }
+  }
+  
+  // Create end time (1 hour after start by default)
+  const endDateTime = new Date(dateTime);
+  endDateTime.setHours(endDateTime.getHours() + 1);
+  
+  // Determine appropriate event type and category
+  let eventType = "general";
+  let category = "general";
+  
+  if (text.toLowerCase().includes('dentist') || text.toLowerCase().includes('dental')) {
+    eventType = "dentist";
+    category = "appointment";
+  } else if (text.toLowerCase().includes('doctor') || text.toLowerCase().includes('appointment')) {
+    eventType = "doctor";
+    category = "appointment";
+  } else if (text.toLowerCase().includes('meeting')) {
+    eventType = "meeting";
+    category = "meeting";
+  }
+  
+  // Create appointment details if relevant
+  let appointmentDetails = null;
+  if (eventType === "doctor" || eventType === "dentist") {
+    appointmentDetails = {
+      doctorName: doctorName || "Unknown",
+      reasonForVisit: "",
+      duration: 60
+    };
+  }
+  
+  // Return the structured event
+  return {
+    title: title,
+    eventType: eventType,
+    category: category,
+    childName: childName,
+    doctorName: doctorName,
+    location: location,
+    dateTime: dateTime.toISOString(),
+    endDateTime: endDateTime.toISOString(),
+    appointmentDetails: appointmentDetails,
+    extraDetails: {
+      parsedWithAI: true
+    }
+  };
+}
 
   getTypeSpecificInstructions(type) {
     switch (type) {

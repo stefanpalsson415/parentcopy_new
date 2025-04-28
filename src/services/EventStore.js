@@ -11,6 +11,11 @@ class EventStore {
     this.listeners = new Set();
     this.eventCache = new Map();
     this.lastRefresh = Date.now();
+    
+    // Check for pending events on initialization
+    if (typeof window !== 'undefined') {
+      setTimeout(() => this.checkAndRecoverPendingEvents(), 5000);
+    }
   }
 
   // Get a standardized event object with all required fields
@@ -141,112 +146,139 @@ class EventStore {
     return Math.abs(hash).toString(36);
   }
 
-  // Add a new event
-  async addEvent(eventData, userId, familyId) {
-    try {
-      if (!userId) throw new Error("User ID is required");
+  // In src/services/EventStore.js, update the addEvent method
+async addEvent(eventData, userId, familyId) {
+  try {
+    if (!userId) throw new Error("User ID is required");
 
-      // Standardize and validate the event
-      const standardizedEvent = this.standardizeEvent({
-        ...eventData,
-        userId,
-        familyId
-      });
-      
-      // Enhanced duplicate detection - check signature AND time proximity
-const eventsQuery = query(
-    collection(db, "events"),
-    where("eventSignature", "==", standardizedEvent.eventSignature),
-    where("userId", "==", userId)
-  );
-  
-  const querySnapshot = await getDocs(eventsQuery);
-  
-  // If we found potential duplicates, check for date/time proximity
-  if (!querySnapshot.empty) {
-    // Check each match to find true duplicates (same day or very close in time)
-    const matches = [];
-    
-    querySnapshot.forEach((docSnapshot) => {
-      const potentialDuplicate = docSnapshot.data();
-      
-      // Get the start times for comparison
-      const newEventStart = new Date(standardizedEvent.start.dateTime);
-      const existingEventStart = new Date(potentialDuplicate.start.dateTime);
-      
-      // Calculate time difference in hours
-      const timeDiff = Math.abs(newEventStart - existingEventStart) / (1000 * 60 * 60);
-      
-      // Check if events are on the same day or within 3 hours of each other
-      const sameDay = newEventStart.toISOString().split('T')[0] === 
-                     existingEventStart.toISOString().split('T')[0];
-                     
-      if (sameDay || timeDiff <= 3) {
-        matches.push(potentialDuplicate);
-      }
+    // Log the attempt
+    console.log("EventStore: Adding event:", { 
+      title: eventData.title || "Untitled", 
+      type: eventData.eventType || "general",
+      userId, 
+      familyId
+    });
+
+    // Standardize and validate the event
+    const standardizedEvent = this.standardizeEvent({
+      ...eventData,
+      userId,
+      familyId
     });
     
-    // If we have matches, return the closest one as the duplicate
-    if (matches.length > 0) {
-      // Sort by closeness in time if we have multiple matches
-      matches.sort((a, b) => {
-        const timeA = new Date(a.start.dateTime);
-        const timeB = new Date(b.start.dateTime);
-        const newTime = new Date(standardizedEvent.start.dateTime);
+    // Enhanced duplicate detection
+    try {
+      const eventsQuery = query(
+        collection(db, "events"),
+        where("eventSignature", "==", standardizedEvent.eventSignature),
+        where("userId", "==", userId)
+      );
+      
+      const querySnapshot = await getDocs(eventsQuery);
+      
+      if (!querySnapshot.empty) {
+        // Found potential duplicate
+        const existingEvent = querySnapshot.docs[0].data();
+        console.log("Duplicate event detected:", existingEvent.firestoreId);
         
-        return Math.abs(timeA - newTime) - Math.abs(timeB - newTime);
-      });
-      
-      const existingEvent = matches[0];
-      console.log("Duplicate event detected, returning existing event", existingEvent.firestoreId);
-      
-      // Update cache with the existing event
-      this.eventCache.set(existingEvent.universalId, existingEvent);
-      
-      return {
-        success: true,
-        eventId: existingEvent.firestoreId,
-        universalId: existingEvent.universalId,
-        isDuplicate: true,
-        existingEvent: existingEvent
-      };
+        // Update cache with the existing event
+        this.eventCache.set(existingEvent.universalId, existingEvent);
+        
+        return {
+          success: true,
+          eventId: existingEvent.firestoreId,
+          universalId: existingEvent.universalId,
+          isDuplicate: true,
+          existingEvent: existingEvent
+        };
+      }
+    } catch (dupError) {
+      // Log but continue even if duplicate check fails
+      console.warn("Duplicate check failed:", dupError);
     }
-  }
       
-      // Save to Firestore
-      const eventCollection = collection(db, "events");
-      const eventRef = doc(eventCollection);
-      const firestoreId = eventRef.id;
-      
-      await setDoc(eventRef, {
-        ...standardizedEvent,
-        firestoreId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-      
-      // Update cache
-      this.eventCache.set(standardizedEvent.universalId, {
-        ...standardizedEvent,
-        firestoreId
-      });
-      
-      // Notify listeners
-      this.notifyListeners('add', {
-        ...standardizedEvent,
-        firestoreId
-      });
-      
-      return {
-        success: true,
-        eventId: firestoreId,
-        universalId: standardizedEvent.universalId
-      };
-    } catch (error) {
-      console.error("Error adding event:", error);
-      return { success: false, error: error.message };
+    // Save to Firestore with retry logic
+    let eventRef = null;
+    let firestoreId = null;
+    
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        console.log(`Attempt ${attempt} to save event to Firestore`);
+        
+        // Create a new document in the events collection
+        const eventCollection = collection(db, "events");
+        const docRef = doc(eventCollection);
+        firestoreId = docRef.id;
+        
+        // Add the Firestore ID to the event data
+        const eventToSave = {
+          ...standardizedEvent,
+          firestoreId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        };
+        
+        // Save to Firestore
+        await setDoc(docRef, eventToSave);
+        eventRef = docRef;
+        console.log(`Event saved successfully on attempt ${attempt} with ID: ${firestoreId}`);
+        break;
+      } catch (saveError) {
+        console.error(`Error on save attempt ${attempt}:`, saveError);
+        
+        if (attempt === 3) throw saveError;
+        
+        // Wait before retrying with exponential backoff
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 500));
+      }
     }
+    
+    if (!eventRef) {
+      throw new Error("Failed to save event after multiple attempts");
+    }
+    
+    // Update cache
+    this.eventCache.set(standardizedEvent.universalId, {
+      ...standardizedEvent,
+      firestoreId
+    });
+    
+    // Notify listeners
+    this.notifyListeners('add', {
+      ...standardizedEvent,
+      firestoreId
+    });
+    
+    console.log("Event successfully added and listeners notified");
+    
+    return {
+      success: true,
+      eventId: firestoreId,
+      universalId: standardizedEvent.universalId
+    };
+  } catch (error) {
+    console.error("Error adding event:", error);
+    
+    // Create last-ditch attempt to save event to localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        const pendingEvents = JSON.parse(localStorage.getItem('pendingEvents') || '[]');
+        pendingEvents.push({
+          event: eventData,
+          timestamp: Date.now(),
+          userId,
+          familyId
+        });
+        localStorage.setItem('pendingEvents', JSON.stringify(pendingEvents));
+        console.log("Event saved to localStorage as fallback");
+      } catch (localStorageError) {
+        console.error("LocalStorage fallback failed:", localStorageError);
+      }
+    }
+    
+    return { success: false, error: error.message };
   }
+}
 
   clearCache() {
     console.log("Clearing event cache");
@@ -254,6 +286,34 @@ const eventsQuery = query(
     this.lastRefresh = Date.now();
     return true;
   }
+
+// Add this new method to src/services/EventStore.js
+async checkAndRecoverPendingEvents() {
+  if (typeof window === 'undefined') return;
+  
+  try {
+    const pendingEvents = JSON.parse(localStorage.getItem('pendingEvents') || '[]');
+    
+    if (pendingEvents.length > 0) {
+      console.log(`Found ${pendingEvents.length} pending events to recover`);
+      
+      for (const item of pendingEvents) {
+        try {
+          await this.addEvent(item.event, item.userId, item.familyId);
+        } catch (error) {
+          console.error("Error recovering event:", error);
+        }
+      }
+      
+      // Clear pending events after recovery attempt
+      localStorage.removeItem('pendingEvents');
+    }
+  } catch (error) {
+    console.error("Error checking for pending events:", error);
+  }
+}
+
+
 
   // Update an existing event
   async updateEvent(eventId, updateData, userId) {
@@ -535,6 +595,7 @@ const eventsQuery = query(
 
   // In EventStore.js, replace the refreshEvents method with this enhanced version:
 
+// In src/services/EventStore.js, update the refreshEvents method
 async refreshEvents(userId, familyId = null, cycleNumber = null) {
   if (!userId) return [];
   
@@ -559,23 +620,7 @@ async refreshEvents(userId, familyId = null, cycleNumber = null) {
     querySnapshot.forEach((doc) => {
       const eventData = doc.data();
       
-      // Convert string dates to Date objects for consistent handling
-      if (eventData.dateTime && !eventData.dateObj) {
-        eventData.dateObj = new Date(eventData.dateTime);
-      }
-      
-      if (eventData.endDateTime && !eventData.dateEndObj) {
-        eventData.dateEndObj = new Date(eventData.endDateTime);
-      }
-      
-      if (eventData.start?.dateTime && !eventData.dateObj) {
-        eventData.dateObj = new Date(eventData.start.dateTime);
-      }
-      
-      if (eventData.end?.dateTime && !eventData.dateEndObj) {
-        eventData.dateEndObj = new Date(eventData.end.dateTime);
-      }
-      
+      // Standardize the event
       const standardizedEvent = this.standardizeEvent({
         ...eventData,
         firestoreId: doc.id
@@ -589,14 +634,6 @@ async refreshEvents(userId, familyId = null, cycleNumber = null) {
     });
     
     console.log(`📅 Direct query found ${events.length} events`);
-    
-    // Log events from chat to verify they're being loaded
-    const chatEvents = events.filter(e => e.source === 'allie-chat' || e.creationSource === 'allie-chat');
-    if (chatEvents.length > 0) {
-      console.log(`📅 Found ${chatEvents.length} events created from chat:`, 
-        chatEvents.map(e => ({title: e.title, date: e.dateObj?.toISOString(), id: e.firestoreId}))
-      );
-    }
     
     // Notify listeners with a small delay to ensure event processing
     setTimeout(() => {

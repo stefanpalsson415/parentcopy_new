@@ -1076,6 +1076,48 @@ async isInitialOnboardingPhase(familyId) {
   }
 }
 
+// Add this new method to src/services/EnhancedChatService.js
+async handleEventCollectionResponse(message, sessionId, step, familyId, userId) {
+  try {
+    console.log(`Handling event collection response for session ${sessionId}, step ${step}`);
+    
+    // Import needed services
+    const EventDetailCollectorService = (await import('./EventDetailCollectorService')).default;
+    const ClaudeService = (await import('./ClaudeService')).default;
+    
+    // Process the response
+    const result = await EventDetailCollectorService.processResponse(sessionId, message);
+    
+    if (result.status === 'completed') {
+      // Collection is complete
+      console.log("Event collection complete, creating event");
+      
+      // Get the collected data
+      const completeData = await EventDetailCollectorService.completeSession(sessionId);
+      
+      // Format for calendar
+      const eventData = ClaudeService.formatCollectedEventData(completeData);
+      
+      // Create the event
+      const createResult = await ClaudeService.createEventFromCollectedData(eventData, userId, familyId);
+      
+      if (createResult.success) {
+        // Successfully created event
+        return `Great! I've added "${eventData.title}" to your calendar for ${new Date(eventData.dateTime).toLocaleString()}. You can view it in your calendar now.`;
+      } else {
+        return `I had some trouble adding this to your calendar. Please try again or add it directly from the calendar tab.`;
+      }
+    } else {
+      // Continue collection
+      return result.prompt;
+    }
+  } catch (error) {
+    console.error("Error handling event collection response:", error);
+    return "I encountered an issue while processing your event details. Let's try again from the beginning. What would you like to add to your calendar?";
+  }
+}
+
+
 
 // Handle shared todo requests for the relationship tab
 async handleSharedTodoRequest(text, familyContext, userId) {
@@ -1380,6 +1422,7 @@ if (familyContext.familyId) {
 }
 
 
+// In src/services/EnhancedChatService.js, update the getAIResponse method
 async getAIResponse(message, familyId, messageHistory = []) {
   try {
     // Get family context
@@ -1401,7 +1444,46 @@ async getAIResponse(message, familyId, messageHistory = []) {
       }
     );
 
-    // First check for todos since this is common and needs special handling
+    // First check: specifically look for calendar-related phrases first
+    const calendarIndicators = [
+      'add to calendar', 
+      'schedule an appointment', 
+      'doctor appointment', 
+      'dentist appointment',
+      'book a meeting',
+      'create event',
+      'make appointment'
+    ];
+    
+    const isDirectCalendarRequest = calendarIndicators.some(phrase => 
+      message.toLowerCase().includes(phrase)
+    );
+    
+    if (isDirectCalendarRequest) {
+      console.log("Detected direct calendar request, bypassing other handlers");
+      
+      try {
+        // Import ClaudeService
+        const ClaudeService = (await import('./ClaudeService')).default;
+        
+        // Try to extract and collect event details
+        const detailCollectionResponse = await ClaudeService.extractAndCollectEventDetails(
+          message, 
+          this.getCurrentUserFromHistory(messageHistory)?.id,
+          familyId
+        );
+        
+        if (detailCollectionResponse) {
+          console.log("✅ Calendar processing successful");
+          return detailCollectionResponse;
+        }
+      } catch (calendarError) {
+        console.error("Error in direct calendar processing:", calendarError);
+        // Continue with regular processing if direct handling fails
+      }
+    }
+
+    // Check for todos since this is common and needs special handling
     const todoKeywords = ['todo', 'to-do', 'to do', 'add a task', 'create a task', 'make a task'];
     const isTodoRequest = todoKeywords.some(keyword => message.toLowerCase().includes(keyword));
     
@@ -1416,131 +1498,48 @@ async getAIResponse(message, familyId, messageHistory = []) {
       }
     }
     
-    // Check if this is a domain-specific request we can handle directly
-    if (analysis.intent === 'provider.add' && analysis.confidence > 0.6) {
-      // Provider creation request
-      const result = await ProviderChatService.processProviderRequest(message, analysis.entities, familyId);
-      if (result.success) {
-        return result.message;
-      }
-    } 
-    else if (analysis.intent === 'medical.appointment.add' && analysis.confidence > 0.6) {
-      // Medical appointment request
-      const result = await MedicalChatService.processAppointmentRequest(message, analysis.entities, {
-        ...familyContext,
-        currentUser: this.getCurrentUserFromHistory(messageHistory)
-      });
-      if (result.success) {
-        return result.message;
-      }
-    } 
-    else if (analysis.intent === 'task.add' && analysis.confidence > 0.6) {
-      // Task creation request
-      const result = await TaskChatService.processTaskRequest(message, analysis.entities, {
-        ...familyContext,
-        currentUser: this.getCurrentUserFromHistory(messageHistory)
-      });
-      if (result.success) {
-        return result.message;
-      }
-    } 
-    else if (analysis.intent === 'task.complete' && analysis.confidence > 0.6) {
-      // Task completion request
-      const result = await TaskChatService.processTaskCompletion(message, familyId);
-      if (result.success) {
-        return result.message;
-      }
-    } 
-    else if (analysis.intent === 'relationship.date' && analysis.confidence > 0.6) {
-      // Date night request
-      const result = await RelationshipChatService.processDateNightRequest(message, analysis.entities, {
-        ...familyContext,
-        currentUser: this.getCurrentUserFromHistory(messageHistory)
-      });
-      if (result.success) {
-        return result.message;
-      }
-    } 
-    else if (analysis.intent === 'relationship.gratitude' && analysis.confidence > 0.6) {
-      // Gratitude message request
-      const result = await RelationshipChatService.processGratitudeRequest(message, {
-        ...familyContext,
-        currentUser: this.getCurrentUserFromHistory(messageHistory)
-      });
-      if (result.success) {
-        return result.message;
-      }
-    }
-    // Check for clarification intents
-    else if (analysis.intent === 'clarification.who' || analysis.intent === 'clarification.when') {
-      // Handle disambiguation with context awareness
-      return this.handleDisambiguation(analysis, familyContext, messageHistory);
-    }
-    // Check for conversation feedback
-    else if (analysis.intent === 'conversation.feedback') {
-      // Process feedback and improve future responses
-      this.processFeedbackIntent(message, familyId, messageHistory);
-    }
-    
-    // Check for calendar events
-    if (message.toLowerCase().includes('schedule') || 
-        message.toLowerCase().includes('calendar') || 
-        message.toLowerCase().includes('appointment')) {
-      // Handle calendar event
-      const calendarResponse = await this.handleCalendarRequest(message, familyContext, 
-        this.getCurrentUserFromHistory(messageHistory)?.id);
-      if (calendarResponse) {
-        return calendarResponse;
-      }
-    }
-    
-    // Check for FAQ response before falling back to Claude
-    const faqResponse = ConsolidatedNLU.getFAQResponse(message);
-    if (faqResponse) {
-      return faqResponse;
-    }
-    
     // Format messages for Claude API using our helper
     const formattedMessages = ChatPersistenceService.formatMessagesForClaude(messageHistory);
     
-    // If not a specialized request, use Claude for general response with enhanced context
-    try {
-      // Log critical debug information before Claude API call
-      console.log("Calling Claude API with:", {
-        messagesCount: formattedMessages.length, 
-        intentCategory: analysis.intent?.split('.')[0] || 'unknown',
-        confidence: analysis.confidence || 0
+    // Add the current message to the end if it's not already there
+    if (formattedMessages.length === 0 || 
+        formattedMessages[formattedMessages.length - 1].content !== message) {
+      formattedMessages.push({
+        role: 'user',
+        content: message
       });
+    }
+    
+    try {
+      // Enhanced context with current message
+      const enhancedContext = {
+        ...familyContext,
+        currentIntent: analysis.intent,
+        currentEntities: analysis.entities,
+        conversationContext: analysis.conversationContext,
+        promptOptimizations,
+        userId: this.getCurrentUserFromHistory(messageHistory)?.id,
+        previousAIMessages: messageHistory
+          .filter(msg => msg.sender === 'allie')
+          .map(msg => msg.text)
+          .slice(-3)
+      };
       
-      // Add a wrapper try-catch specifically for the Claude API call
+      // Send to Claude for response
       const claudeResponse = await ClaudeService.generateResponse(
-        formattedMessages, 
-        {
-          ...familyContext,
-          currentIntent: analysis.intent,
-          currentEntities: analysis.entities,
-          conversationContext: analysis.conversationContext,
-          promptOptimizations
-        }
+        formattedMessages,
+        enhancedContext,
+        { temperature: 0.7 }
       );
       
-      // Validate the response from Claude before returning it
-      if (claudeResponse === undefined || claudeResponse === null) {
-        console.error("Claude API returned undefined/null response");
-        return "I'm sorry, I couldn't generate a response right now. Please try again in a moment.";
+      // Check if response contains event collection marker
+      if (claudeResponse.includes('<event_collection session=')) {
+        console.log("🎯 Event collection flow detected in response");
       }
       
-      if (typeof claudeResponse !== 'string' || claudeResponse.trim() === '') {
-        console.error("Claude API returned invalid response type or empty string:", 
-          typeof claudeResponse, claudeResponse ? claudeResponse.substring(0, 50) : 'empty');
-        return "I'm sorry, I couldn't process your request properly. Please try again.";
-      }
-      
-      console.log("Claude API returned valid response of length:", claudeResponse.length);
       return claudeResponse;
     } catch (claudeError) {
       console.error("Error in Claude API call:", claudeError);
-      // Generate a fallback response using context if possible
       return this.generateFallbackResponse(message, familyContext, analysis.intent) || 
         "I'm sorry, but I'm having trouble connecting to my language processing system. Please try again in a moment.";
     }
