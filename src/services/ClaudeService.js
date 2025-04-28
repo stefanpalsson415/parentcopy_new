@@ -703,23 +703,40 @@ async extractCalendarRequest(message) {
     console.log("AI-parsed event:", parsedEvent);  
       
     // Convert the parsed event to the format expected by processCalendarRequest  
-    const result = {  
-      type: parsedEvent.eventType || 'event',  
-      title: parsedEvent.title || 'New Event',  
-      dateTime: parsedEvent.dateTime, // ISO date string  
-      endDateTime: parsedEvent.endDateTime,  
-      location: parsedEvent.location || '',  
-      description: parsedEvent.description || '',  
-      childName: parsedEvent.childName || null,  
-      childId: parsedEvent.childId || null,
-      doctorName: parsedEvent.doctorName || parsedEvent.appointmentDetails?.doctorName,
-      hostParent: parsedEvent.hostName || '',  
-      extraDetails: {
-        ...(parsedEvent.extraDetails || {}),
-        appointmentDetails: parsedEvent.appointmentDetails || {}
-      },
-      originalText: message
-    };
+const result = {  
+  type: parsedEvent.eventType || 'event',  
+  title: parsedEvent.title || 'New Event',  
+  dateTime: parsedEvent.dateTime, // ISO date string  
+  endDateTime: parsedEvent.endDateTime,  
+  location: parsedEvent.location || '',  
+  description: parsedEvent.description || '',  
+  childName: parsedEvent.childName || null,  
+  childId: parsedEvent.childId || null,
+  doctorName: parsedEvent.doctorName || parsedEvent.appointmentDetails?.doctorName,
+  hostParent: parsedEvent.hostName || '',  
+  extraDetails: {
+    ...(parsedEvent.extraDetails || {}),
+    appointmentDetails: parsedEvent.appointmentDetails || {}
+  },
+  originalText: message
+};
+
+// Extract date and time as separate fields for EventDetailCollectorService
+if (parsedEvent.dateTime) {
+  try {
+    const eventDate = new Date(parsedEvent.dateTime);
+    
+    // Add date in YYYY-MM-DD format
+    result.date = eventDate.toISOString().split('T')[0];
+    
+    // Add time in HH:MM format (24-hour)
+    result.time = eventDate.toTimeString().substring(0, 5);
+    
+    console.log(`Extracted separate date (${result.date}) and time (${result.time}) from datetime`);
+  } catch (e) {
+    console.error("Error extracting date and time components:", e);
+  }
+}
     
     return result;
   } catch (error) {  
