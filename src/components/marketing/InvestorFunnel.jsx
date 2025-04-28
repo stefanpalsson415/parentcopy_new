@@ -2250,7 +2250,7 @@ case 17:
                       {/* Image placeholder. In production this would be the person's photo */}
                     </div>
                     <div className="pt-4 pb-6 text-center">
-                      <h3 className="text-xl font-medium">Shane McMahon</h3>
+                      <h3 className="text-xl font-medium">Shane Culp</h3>
                       <p className="text-sm text-gray-500 mb-3">Co-Founder & CTO</p>
                       <p className="text-sm text-gray-600 mb-3">
                         Technical architect with expertise in AI systems, data security, and scalable platform development.
@@ -2281,203 +2281,144 @@ case 17:
         );
       
       // Slide 19: Financial Projections (with updated numbers)
-      case 19:
-        return (
-          <div className="min-h-[80vh] flex flex-col justify-center px-8">
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-3xl md:text-4xl font-light mb-6">Financial Projections</h2>
-              
-              <div className="grid md:grid-cols-2 gap-8">
+      // Slide 19: Speed & Experience
+case 19:
+  return (
+    <div className="min-h-[80vh] flex flex-col justify-center px-8">
+      <div className="max-w-4xl mx-auto">
+        <h2 className="text-3xl md:text-4xl font-light mb-6">We Have to Move Fast</h2>
+        
+        <div className="grid md:grid-cols-2 gap-8">
+          <div>
+            <h3 className="text-xl font-medium mb-4">Speed is Our Competitive Edge</h3>
+            <div className="bg-black text-white p-6 rounded-lg mb-6">
+              <div className="flex items-start mb-5">
+                <RefreshCw className="text-yellow-400 mt-1 mr-3 flex-shrink-0" size={24} />
                 <div>
-                  <h3 className="text-xl font-medium mb-4">Subscription Revenue Model</h3>
-                  <div className="bg-white p-6 rounded-lg border border-gray-200 mb-6">
-                    <div className="flex justify-between items-center mb-6">
-                      <h4 className="font-medium">€40/month</h4>
-                      <span className="px-3 py-1 bg-black text-white rounded-full text-sm">Premium Family Plan</span>
-                    </div>
-                    
-                    <div className="space-y-3 mb-6">
-                      <div className="flex items-start">
-                        <Check size={18} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                        <p className="text-sm">Full access to all Allie features and commands</p>
-                      </div>
-                      <div className="flex items-start">
-                        <Check size={18} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                        <p className="text-sm">Unlimited family members and devices</p>
-                      </div>
-                      <div className="flex items-start">
-                        <Check size={18} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                        <p className="text-sm">Private AI instance with no data sharing</p>
-                      </div>
-                      <div className="flex items-start">
-                        <Check size={18} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                        <p className="text-sm">Weekly optimizations and insights</p>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <div className="flex justify-between mb-1">
-                        <span className="text-sm">Gross Margin</span>
-                        <span className="text-sm font-medium">75%</span>
-                      </div>
-                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-green-500" style={{ width: '75%' }}></div>
-                      </div>
-                      <p className="mt-2 text-xs text-gray-500">Primary costs: Claude API, server infrastructure, and security</p>
-                    </div>
+                  <p className="font-medium">The New Market Reality</p>
+                  <p className="text-sm mt-2 text-gray-300">
+                    In today's market, tech stacks, patents, or having 100 engineers is not a moat. Everyone has access to the same technology. The key to winning is <span className="font-bold text-yellow-300">speed</span>.
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-start">
+                <Zap className="text-yellow-400 mt-1 mr-3 flex-shrink-0" size={24} />
+                <div>
+                  <p className="font-medium">Our Speed Advantage</p>
+                  <p className="text-sm mt-2 text-gray-300">
+                    We move faster because we:
+                  </p>
+                  <ul className="space-y-2 mt-2 text-sm text-gray-300">
+                    <li className="flex items-start">
+                      <Check size={16} className="text-green-400 mt-0.5 mr-2 flex-shrink-0" />
+                      <span>Understand that speed is all that counts right now</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check size={16} className="text-green-400 mt-0.5 mr-2 flex-shrink-0" />
+                      <span>Have a lean, agile team structure built for rapid iteration</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check size={16} className="text-green-400 mt-0.5 mr-2 flex-shrink-0" />
+                      <span>Make decisions quickly with minimal bureaucracy</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg border border-gray-200">
+              <h4 className="font-medium mb-3">Parents Building for Parents</h4>
+              <p className="text-gray-700 mb-4">
+                We're building Allie at its core for <strong>us as parents</strong> to solve a universal problem. We live and breathe these challenges every day. 
+              </p>
+              <div className="p-4 bg-blue-50 rounded-lg">
+                <p className="italic text-blue-800 text-sm">
+                  "You have to be parents to truly solve this problem. Our personal stake drives us to create something that actually works for families, not just looks good in a pitch deck."
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div>
+            <h3 className="text-xl font-medium mb-4">Decades of Scale-Up Experience</h3>
+            <div className="bg-white p-6 rounded-lg border border-gray-200 mb-6">
+              <h4 className="font-medium mb-3">Our Collective Experience</h4>
+              <p className="text-gray-700 mb-4">
+                Our team brings 30+ years of experience scaling successful startups across multiple industries:
+              </p>
+              
+              <div className="space-y-4">
+                <div className="flex items-start">
+                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mr-3 flex-shrink-0">
+                    <Award className="text-green-600" size={18} />
                   </div>
-                  
-                  <div className="bg-black text-white p-6 rounded-lg">
-                    <h3 className="text-lg font-medium mb-3">Long-Term Value Creation</h3>
-                    <p className="text-sm mb-4">
-                      Earning a family's trust creates expansion opportunities far beyond the initial subscription:
+                  <div>
+                    <p className="font-medium">Global Tech Leaders</p>
+                    <p className="text-sm text-gray-600">
+                      Leadership roles at Spotify, Pandora, and other category-defining platforms
                     </p>
-                    
-                    <div className="space-y-4">
-                      <div className="flex items-start">
-                        <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
-                          <Key className="text-yellow-400" size={16} />
-                        </div>
-                        <div>
-                          <p className="font-medium">Trusted Platform Advantage</p>
-                          <p className="text-sm text-gray-300">If a family trusts us with their most private data, we can provide additional trusted services</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-start">
-                        <div className="w-8 h-8 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
-                          <Layers className="text-yellow-400" size={16} />
-                        </div>
-                        <div>
-                          <p className="font-medium">Expansion Potential</p>
-                          <p className="text-sm text-gray-300">E-commerce integration, educational platform, service recommendations—all built on trust</p>
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 </div>
                 
-                <div>
-                  <h3 className="text-xl font-medium mb-4">Growth Projections</h3>
-                  
-                  <div className="flex border border-gray-200 rounded-lg mb-4 overflow-hidden">
-                    <button
-                      className={`flex-1 py-2 ${financialView === 'revenue' ? 'bg-black text-white' : 'bg-white text-gray-600'}`}
-                      onClick={() => setFinancialView('revenue')}
-                    >
-                      Revenue
-                    </button>
-                    <button
-                      className={`flex-1 py-2 ${financialView === 'users' ? 'bg-black text-white' : 'bg-white text-gray-600'}`}
-                      onClick={() => setFinancialView('users')}
-                    >
-                      Users
-                    </button>
-                    <button
-                      className={`flex-1 py-2 ${financialView === 'profit' ? 'bg-black text-white' : 'bg-white text-gray-600'}`}
-                      onClick={() => setFinancialView('profit')}
-                    >
-                      Profit
-                    </button>
+                <div className="flex items-start">
+                  <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center mr-3 flex-shrink-0">
+                    <Target className="text-purple-600" size={18} />
                   </div>
-                  
-                  <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        {financialView === 'revenue' ? (
-                          <AreaChart data={[
-                            { year: 'Year 0', value: 0 },
-                            { year: 'Year 1', value: 1000 * 40 * 12 },
-                            { year: 'Year 2', value: 10000 * 40 * 12 },
-                            { year: 'Year 3', value: 1000000 * 40 * 12 }
-                          ]}>
-                            <XAxis dataKey="year" />
-                            <YAxis tickFormatter={(value) => `€${value / 1000000}M`} />
-                            <Tooltip formatter={(value) => `€${(value / 1000000).toFixed(1)}M`} />
-                            <Area type="monotone" dataKey="value" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
-                          </AreaChart>
-                        ) : financialView === 'users' ? (
-                          <AreaChart data={[
-                            { year: 'Year 0', value: 0 },
-                            { year: 'Year 1', value: 1000 },
-                            { year: 'Year 2', value: 10000 },
-                            { year: 'Year 3', value: 1000000 }
-                          ]}>
-                            <XAxis dataKey="year" />
-                            <YAxis tickFormatter={(value) => value >= 1000000 ? `${value / 1000000}M` : `${value / 1000}K`} />
-                            <Tooltip formatter={(value) => value >= 1000000 ? `${(value / 1000000).toFixed(1)}M` : `${(value / 1000).toFixed(1)}K`} />
-                            <Area type="monotone" dataKey="value" stroke="#10b981" fill="#10b981" fillOpacity={0.2} />
-                          </AreaChart>
-                        ) : (
-                          <AreaChart data={[
-                            { year: 'Year 0', value: -2000000 },
-                            { year: 'Year 1', value: (1000 * 40 * 12 * 0.75) - 3000000 },
-                            { year: 'Year 2', value: (10000 * 40 * 12 * 0.75) - 5000000 },
-                            { year: 'Year 3', value: (1000000 * 40 * 12 * 0.75) - 50000000 }
-                          ]}>
-                            <XAxis dataKey="year" />
-                            <YAxis tickFormatter={(value) => `€${value / 1000000}M`} />
-                            <Tooltip formatter={(value) => `€${(value / 1000000).toFixed(1)}M`} />
-                            <Area type="monotone" dataKey="value" stroke="#8884d8" fill="#8884d8" fillOpacity={0.2} />
-                          </AreaChart>
-                        )}
-                      </ResponsiveContainer>
-                    </div>
-                    
-                    <div className="grid grid-cols-4 gap-2 mt-4 text-center">
-                      <div className="p-2">
-                        <p className="text-xs text-gray-500">Year 0</p>
-                        <p className="font-medium">0</p>
-                      </div>
-                      <div className="p-2">
-                        <p className="text-xs text-gray-500">Year 1</p>
-                        <p className="font-medium">1K</p>
-                      </div>
-                      <div className="p-2">
-                        <p className="text-xs text-gray-500">Year 2</p>
-                        <p className="font-medium">10K</p>
-                      </div>
-                      <div className="p-2">
-                        <p className="text-xs text-gray-500">Year 3</p>
-                        <p className="font-medium">1M</p>
-                      </div>
-                    </div>
+                  <div>
+                    <p className="font-medium">Growth & Scaling Expertise</p>
+                    <p className="text-sm text-gray-600">
+                      Scaled FirstVet from concept to market leader across multiple countries
+                    </p>
                   </div>
-                  
-                  <div className="bg-white p-4 rounded-lg border border-gray-200">
-                    <h4 className="font-medium mb-3">Unit Economics</h4>
-                    
-                    <div className="space-y-4">
-                      <div>
-                        <div className="flex justify-between mb-1">
-                          <p className="text-sm">Customer Acquisition Cost</p>
-                          <p className="text-sm font-medium">€120</p>
-                        </div>
-                        <p className="text-xs text-gray-500">Initial CAC for premium family segment</p>
-                      </div>
-                      
-                      <div>
-                        <div className="flex justify-between mb-1">
-                          <p className="text-sm">Lifetime Value</p>
-                          <p className="text-sm font-medium">€1,920</p>
-                        </div>
-                        <p className="text-xs text-gray-500">Based on €40/mo over 4-year average retention</p>
-                      </div>
-                      
-                      <div>
-                        <div className="flex justify-between mb-1">
-                          <p className="text-sm">LTV/CAC Ratio</p>
-                          <p className="text-sm font-medium">16x</p>
-                        </div>
-                        <p className="text-xs text-gray-500">Well above the 3x industry benchmark</p>
-                      </div>
-                    </div>
+                </div>
+                
+                <div className="flex items-start">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center mr-3 flex-shrink-0">
+                    <Users className="text-amber-600" size={18} />
+                  </div>
+                  <div>
+                    <p className="font-medium">Family-Focused Innovation</p>
+                    <p className="text-sm text-gray-600">
+                      Founded and grown BeginLearning and other platforms serving families and children
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
+            
+            <div className="p-6 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg text-white">
+              <h3 className="text-xl font-medium mb-4">Our Unique Advantage</h3>
+              <div className="flex items-start">
+                <div className="w-12 h-12 rounded-full bg-white bg-opacity-10 flex items-center justify-center mr-4 flex-shrink-0">
+                  <Sparkles className="text-yellow-300" size={24} />
+                </div>
+                <div>
+                  <p className="mb-3">
+                    <strong>We combine three critical elements:</strong>
+                  </p>
+                  <ul className="space-y-2">
+                    <li className="flex items-start">
+                      <Check size={16} className="text-yellow-300 mt-0.5 mr-2 flex-shrink-0" />
+                      <span>A focus on speed as our primary competitive advantage</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check size={16} className="text-yellow-300 mt-0.5 mr-2 flex-shrink-0" />
+                      <span>Decades of experience scaling startups to millions of users</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check size={16} className="text-yellow-300 mt-0.5 mr-2 flex-shrink-0" />
+                      <span>Personal investment as parents in solving this universal problem</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           </div>
-        );
+        </div>
+      </div>
+    </div>
+  );
       
 
 // Slide 20: Children's Role in Change
