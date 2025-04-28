@@ -30,55 +30,41 @@ const InvestorFunnel = () => {
     const [financialView, setFinancialView] = useState('revenue');
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     
-    const totalSlides = 24; // Updated to include children's role slide
+    const totalSlides = 23; // Updated to include children's role slide
 
     const sliderRef = useRef(null);
     
     // Navigate through demo steps
-    const skipSlides = [10]; // Skip slide 10 (Core Product: Family Management)
+    const skipSlides = [10, 17];
 
-    const nextSlide = () => {
-      let newSlide = currentSlide + 1;
-      // Special case: after slide 19, go to the Children's Role slide
-      if (currentSlide === 19) {
-        setCurrentSlide(23); // Go to Children's Role slide
-        return;
-      }
-      // Special case: after Children's Role slide, go to Investment Ask
-      if (currentSlide === 23) {
-        setCurrentSlide(20);
-        return;
-      }
-      // Skip any slides in the skipSlides array
-      while (skipSlides.includes(newSlide) && newSlide < totalSlides) {
-        newSlide++;
-      }
-      if (newSlide <= totalSlides) {
-        setCurrentSlide(newSlide);
-      }
-    };
+ // Skip slide 10 (Core Product: Family Management)
 
-    const prevSlide = () => {
-        let newSlide = currentSlide - 1;
-        // Special case: when on Investment Ask slide, go back to Children's Role slide
-        if (currentSlide === 20) {
-          setCurrentSlide(23);
-          return;
-        }
-        // Special case: when on Children's Role slide, go back to financial projections
-        if (currentSlide === 23) {
-          setCurrentSlide(19);
-          return;
-        }
-        // Skip any slides in the skipSlides array
-        while (skipSlides.includes(newSlide) && newSlide > 1) {
-          newSlide--;
-        }
-        if (newSlide >= 1) {
-          setCurrentSlide(newSlide);
-        }
-      };
+ const nextSlide = () => {
+  let newSlide = currentSlide + 1;
+  // Special case: after slide 19, go to the Children's Role slide (now slide 20)
+  if (currentSlide === 19) {
+    setCurrentSlide(20); // Go to Children's Role slide
+    return;
+  }
+  // Skip any slides in the skipSlides array
+  while (skipSlides.includes(newSlide) && newSlide < totalSlides) {
+    newSlide++;
+  }
+  if (newSlide <= totalSlides) {
+    setCurrentSlide(newSlide);
+  }
+};
 
+const prevSlide = () => {
+  let newSlide = currentSlide - 1;
+  // Skip any slides in the skipSlides array
+  while (skipSlides.includes(newSlide) && newSlide > 1) {
+    newSlide--;
+  }
+  if (newSlide >= 1) {
+    setCurrentSlide(newSlide);
+  }
+};
 const goToSlide = (slide) => {
   if (slide >= 1 && slide <= totalSlides && !skipSlides.includes(slide)) {
     setCurrentSlide(slide);
@@ -356,129 +342,146 @@ case 3:
     );
       
       // Slide 4: The Awareness Gap (Interactive)
-      case 4:
-        return (
-          <div className="min-h-[80vh] flex flex-col justify-center px-8">
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-3xl md:text-4xl font-light mb-6">The Critical Perception Gap</h2>
+case 4:
+  return (
+    <div className="min-h-[80vh] flex flex-col justify-center px-8">
+      <div className="max-w-4xl mx-auto">
+        <h2 className="text-3xl md:text-4xl font-light mb-6">The Critical Perception Gap</h2>
+        
+        <div className="bg-gray-50 p-6 rounded-lg mb-8">
+          <h3 className="text-xl font-medium mb-4">Guess the Gap</h3>
+          <p className="mb-6">What percentage of fathers vs. mothers believe household duties are shared equally?</p>
+          
+          <div className="mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Father's Perception:</label>
+            {!quizAnswers.fatherPercent && (
+              <div>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="100" 
+                  defaultValue="50"
+                  className="w-full"
+                  onMouseUp={(e) => handleQuizAnswer('fatherPercent', parseInt(e.target.value))}
+                  ref={sliderRef}
+                />
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>0%</span>
+                  <span>100%</span>
+                </div>
+              </div>
+            )}
+            {quizAnswers.fatherPercent && (
+              <div>
+                <div className="flex justify-between items-center">
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div className="bg-black h-2.5 rounded-full" style={{ width: `${quizAnswers.fatherPercent}%` }}></div>
+                  </div>
+                  <span className="ml-3 font-medium">{quizAnswers.fatherPercent}%</span>
+                </div>
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>0%</span>
+                  <span>100%</span>
+                </div>
+              </div>
+            )}
+          </div>                
+          
+          {quizAnswers.fatherPercent && !quizAnswers.motherPercent && (
+            <div className="mt-4 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Mother's Perception:</label>
+              <input 
+                type="range" 
+                min="0" 
+                max="100" 
+                defaultValue="50"
+                className="w-full"
+                onMouseUp={(e) => handleQuizAnswer('motherPercent', parseInt(e.target.value))}
+              />
+              <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <span>0%</span>
+                <span>100%</span>
+              </div>
+            </div>
+          )}
+          
+          {quizAnswers.motherPercent && (
+            <div className="mt-4 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Mother's Perception:</label>
+              <div className="flex justify-between items-center">
+                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                  <div className="bg-pink-500 h-2.5 rounded-full" style={{ width: `${quizAnswers.motherPercent}%` }}></div>
+                </div>
+                <span className="ml-3 font-medium">{quizAnswers.motherPercent}%</span>
+              </div>
+              <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <span>0%</span>
+                <span>100%</span>
+              </div>
+            </div>
+          )}
+          
+          {quizAnswers.fatherPercent && quizAnswers.motherPercent && !revealAnswers.parentGap && (
+            <button
+              onClick={() => revealQuizAnswer('parentGap')}
+              className="mt-6 px-4 py-2 bg-black text-white rounded-lg"
+            >
+              Reveal Reality
+            </button>
+          )}
+          
+          {revealAnswers.parentGap && (
+            <div className="mt-6 p-4 bg-white rounded-lg border border-gray-200">
+              <h4 className="font-medium mb-2">The Reality</h4>
               
-              <div className="bg-gray-50 p-6 rounded-lg mb-8">
-                <h3 className="text-xl font-medium mb-4">Guess the Gap</h3>
-                <p className="mb-6">What percentage of fathers vs. mothers believe household duties are shared equally?</p>
-                
-                <div className="mb-2">
-  <label className="block text-sm font-medium text-gray-700 mb-1">Father's Perception:</label>
-  {!quizAnswers.fatherPercent && (
-    <div>
-      <input 
-        type="range" 
-        min="0" 
-        max="100" 
-        defaultValue="50"
-        className="w-full"
-        onMouseUp={(e) => handleQuizAnswer('fatherPercent', parseInt(e.target.value))}
-        ref={sliderRef}
-      />
-      <div className="flex justify-between text-xs text-gray-500 mt-1">
-        <span>0</span>
-        <span>100</span>
-      </div>
-    </div>
-  )}
-  {quizAnswers.fatherPercent && (
-    <div>
-      <div className="flex justify-between items-center">
-        <div className="w-full bg-gray-200 rounded-full h-2.5">
-          <div className="bg-black h-2.5 rounded-full" style={{ width: `${quizAnswers.fatherPercent}%` }}></div>
-        </div>
-        <span className="ml-3 font-medium">{quizAnswers.fatherPercent}%</span>
-      </div>
-      <div className="flex justify-between text-xs text-gray-500 mt-1">
-        <span>0</span>
-        <span>100</span>
-      </div>
-    </div>
-  )}
-</div>                
-                {quizAnswers.fatherPercent && !quizAnswers.motherPercent && (
-                  <div className="mt-4 mb-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Mother's Perception:</label>
-                    <input 
-                      type="range" 
-                      min="0" 
-                      max="100" 
-                      defaultValue="50"
-                      className="w-full"
-                      onMouseUp={(e) => handleQuizAnswer('motherPercent', parseInt(e.target.value))}
-                    />
+              <div className="mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Father's Perception:</label>
+                <div className="flex justify-between items-center">
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div className="bg-black h-2.5 rounded-full" style={{ width: '59%' }}></div>
                   </div>
-                )}
-                
-                {quizAnswers.motherPercent && (
-                  <div className="mt-4 mb-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Mother's Perception:</label>
-                    <div className="flex justify-between items-center">
-                      <div className="w-full bg-gray-200 rounded-full h-2.5">
-                        <div className="bg-pink-500 h-2.5 rounded-full" style={{ width: `${quizAnswers.motherPercent}%` }}></div>
-                      </div>
-                      <span className="ml-3 font-medium">{quizAnswers.motherPercent}%</span>
-                    </div>
-                  </div>
-                )}
-                
-                {quizAnswers.fatherPercent && quizAnswers.motherPercent && !revealAnswers.parentGap && (
-                  <button
-                    onClick={() => revealQuizAnswer('parentGap')}
-                    className="mt-6 px-4 py-2 bg-black text-white rounded-lg"
-                  >
-                    Reveal Reality
-                  </button>
-                )}
-                
-                {revealAnswers.parentGap && (
-                  <div className="mt-6 p-4 bg-white rounded-lg border border-gray-200">
-                    <h4 className="font-medium mb-2">The Reality</h4>
-                    
-                    <div className="mb-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Father's Perception:</label>
-                      <div className="flex justify-between items-center">
-                        <div className="w-full bg-gray-200 rounded-full h-2.5">
-                          <div className="bg-black h-2.5 rounded-full" style={{ width: '59%' }}></div>
-                        </div>
-                        <span className="ml-3 font-medium">59%</span>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-4 mb-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Mother's Perception:</label>
-                      <div className="flex justify-between items-center">
-                        <div className="w-full bg-gray-200 rounded-full h-2.5">
-                          <div className="bg-pink-500 h-2.5 rounded-full" style={{ width: '31%' }}></div>
-                        </div>
-                        <span className="ml-3 font-medium">31%</span>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-4 p-3 bg-yellow-50 rounded border border-yellow-200">
-                      <p className="font-medium text-yellow-800">28% awareness gap</p>
-                      <p className="text-sm text-yellow-700 mt-1">
-                        59% of fathers say household duties are shared equally, while only 31% of mothers agree.
-                      </p>
-                    </div>
-                    
-                    <p className="mt-4 text-gray-600 text-sm">
-                      Both partners believe they each do <strong>most</strong> of the work, adding up to an impossible 131%.
-                    </p>
-                  </div>
-                )}
+                  <span className="ml-3 font-medium">59%</span>
+                </div>
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>0%</span>
+                  <span>100%</span>
+                </div>
               </div>
               
-              <p className="text-lg font-light">
-                This perception gap creates daily conflict in millions of homes, as each partner genuinely believes they're shouldering the majority of responsibilities.
+              <div className="mt-4 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mother's Perception:</label>
+                <div className="flex justify-between items-center">
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div className="bg-pink-500 h-2.5 rounded-full" style={{ width: '31%' }}></div>
+                  </div>
+                  <span className="ml-3 font-medium">31%</span>
+                </div>
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>0%</span>
+                  <span>100%</span>
+                </div>
+              </div>
+              
+              <div className="mt-4 p-3 bg-yellow-50 rounded border border-yellow-200">
+                <p className="font-medium text-yellow-800">28% awareness gap</p>
+                <p className="text-sm text-yellow-700 mt-1">
+                  59% of fathers say household duties are shared equally, while only 31% of mothers agree.
+                </p>
+              </div>
+              
+              <p className="mt-4 text-gray-600 text-sm">
+                Both partners believe they each do <strong>most</strong> of the work, adding up to an impossible 131%.
               </p>
             </div>
-          </div>
-        );
+          )}
+        </div>
+        
+        <p className="text-lg font-light">
+          This perception gap creates daily conflict in millions of homes, as each partner genuinely believes they're shouldering the majority of responsibilities.
+        </p>
+      </div>
+    </div>
+  );
       
       // Slide 5: The Mental Load Crisis (Interactive)
 case 5:
@@ -598,48 +601,47 @@ case 5:
               <h2 className="text-3xl md:text-4xl font-light mb-6">Introducing Allie: Your Family's Private AI Partner</h2>
               
               <div className="grid md:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-lg shadow-sm">
-                  <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4">
-                    <Command className="text-blue-600" size={24} />
-                  </div>
-                  <h3 className="text-lg font-medium mb-2">Smart Family Management</h3>
-                  <ul className="space-y-2 text-sm">
-                    <li className="flex items-start">
-                      <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                      <span>Personalized chore and reward system</span>
-                    </li>
-                    <li className="flex items-start">
-                      <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                      <span>Family-specific currency ("[Family Name] Bucks")</span>
-                    </li>
-                    <li className="flex items-start">
-                      <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                      <span>Cross-device synchronization</span>
-                    </li>
-                  </ul>
-                </div>
+              <div className="bg-white p-6 rounded-lg shadow-sm">
+  <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4">
+    <Heart className="text-blue-600" size={24} />
+  </div>
+  <h3 className="text-lg font-medium mb-2">Relationship Dashboard</h3>
+  <ul className="space-y-2 text-sm">
+    <li className="flex items-start">
+      <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+      <span>Real-time relationship health metrics</span>
+    </li>
+    <li className="flex items-start">
+      <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+      <span>Balance visualization and tracking</span>
+    </li>
+    <li className="flex items-start">
+      <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+      <span>Weekly relationship strengthening suggestions</span>
+    </li>
+  </ul>
+</div>
                 
-                <div className="bg-white p-6 rounded-lg shadow-sm">
-                  <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center mb-4">
-                    <Scale className="text-purple-600" size={24} />
-                  </div>
-                  <h3 className="text-lg font-medium mb-2">Parental Load Balancing</h3>
-                  <ul className="space-y-2 text-sm">
-                    <li className="flex items-start">
-                      <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                      <span>80-question scientific assessment</span>
-                    </li>
-                    <li className="flex items-start">
-                      <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                      <span>Weekly progress tracking</span>
-                    </li>
-                    <li className="flex items-start">
-                      <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                      <span>AI-powered task rebalancing</span>
-                    </li>
-                  </ul>
-                </div>
-                
+<div className="bg-white p-6 rounded-lg shadow-sm">
+  <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center mb-4">
+    <Scale className="text-purple-600" size={24} />
+  </div>
+  <h3 className="text-lg font-medium mb-2">Parental Load Balancing</h3>
+  <ul className="space-y-2 text-sm">
+    <li className="flex items-start">
+      <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+      <span>72-question scientific assessment</span>
+    </li>
+    <li className="flex items-start">
+      <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+      <span>Weekly 20-question survey tracking</span>
+    </li>
+    <li className="flex items-start">
+      <Check size={16} className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+      <span>AI-powered task rebalancing</span>
+    </li>
+  </ul>
+</div>                
                 <div className="bg-white p-6 rounded-lg shadow-sm">
                   <div className="w-12 h-12 rounded-full bg-pink-100 flex items-center justify-center mb-4">
                     <Brain className="text-pink-600" size={24} />
@@ -2478,8 +2480,8 @@ case 17:
         );
       
 
-// Slide 23: Children's Role in Change
-case 23:
+// Slide 20: Children's Role in Change
+case 20:
   return (
     <div className="min-h-[80vh] flex flex-col justify-center px-8">
       <div className="max-w-4xl mx-auto">
@@ -2598,8 +2600,8 @@ case 23:
   );
 
 
-      // Slide 20: Investment Ask
-case 20:
+      // Slide 21: Investment Ask
+case 21:
     return (
       <div className="min-h-[80vh] flex flex-col justify-center px-8">
         <div className="max-w-4xl mx-auto">
@@ -2751,8 +2753,8 @@ case 20:
           </div>
         );
       
-      // Slide 21: Vision & Next Steps
-      case 21:
+      // Slide 22: Vision & Next Steps
+      case 22:
         return (
           <div className="min-h-[80vh] flex flex-col justify-center px-8">
             <div className="max-w-4xl mx-auto">
@@ -2904,8 +2906,8 @@ case 20:
           </div>
         );
       
-      // Slide 22: Thank You / Closing
-      case 22:
+      // Slide 23: Thank You / Closing
+      case 23:
         return (
           <div className="min-h-[80vh] flex items-center justify-center bg-black text-white px-8">
             <div className="text-center max-w-4xl">
