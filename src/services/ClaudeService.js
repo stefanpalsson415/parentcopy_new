@@ -288,12 +288,12 @@ const messageText = lastMessage.content || lastMessage.text || "";
 
 // Check for event collection markers in previous AI responses
 const eventCollectionMarker = context?.previousAIMessages?.find(msg => 
-  msg.includes('<event_collection session=')
+  msg.includes('<voiceNote>event_collection:')
 );
 
 if (eventCollectionMarker) {
   // Extract session ID and step
-  const sessionMatch = eventCollectionMarker.match(/<event_collection session="([^"]+)" step="(\d+)">/);
+  const sessionMatch = eventCollectionMarker.match(/<voiceNote>event_collection:([^:]+):(\d+)<\/antml:voiceNote>/);
   if (sessionMatch) {
     const [_, sessionId, step] = sessionMatch;
     // Handle collection response
@@ -301,7 +301,7 @@ if (eventCollectionMarker) {
       messageText, 
       sessionId, 
       parseInt(step), 
-      context.userId,  // FIXED: removed undefined userId fallback
+      context.userId,
       context.familyId
     );
   }
@@ -797,8 +797,8 @@ if (parsedEvent.dateTime) {
       
       responseMessage += `\n${initialPrompt.prompt}`;
       
-      // Add special marker for event collection (hidden in HTML comment)
-      responseMessage += `\n\n<!-- <event_collection session="${sessionId}" step="1"> -->`;
+      // Add special marker for event collection with a special format that won't be visible
+responseMessage += `\n\n<voiceNote>event_collection:${sessionId}:1</voiceNote>`;
       
       return responseMessage;
     } catch (error) {
@@ -885,7 +885,7 @@ async handleEventCollectionResponse(message, sessionId, step, userId, familyId) 
       responseMessage += `\n\n(Step ${result.step} of ${result.totalSteps})`;
       
       // Add special marker for continued collection
-      responseMessage += `\n\n<!-- <event_collection session="${sessionId}" step="${result.step}"> -->`;
+responseMessage += `\n\n<voiceNote>event_collection:${sessionId}:${result.step}</voiceNote>`;
       
       return responseMessage;
     }

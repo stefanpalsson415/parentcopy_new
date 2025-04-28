@@ -6,139 +6,178 @@ class EventDetailCollectorService {
   constructor() {
     // Define required fields for each event type
     this.eventTypeRequirements = {
-      'dentist': {
-        required: ['date', 'time', 'childName', 'location', 'doctorName', 'insuranceInfo'],
-        optional: ['formsNeeded', 'fastingRequired', 'bringRecords', 'transportation', 'followUpDate', 'costsAndCopays'],
-        prompts: {
-          doctorName: "Which dentist will you be seeing?",
-          location: "Where is the dentist office located?",
-          insuranceInfo: "Should I note any insurance information for this appointment?",
-          formsNeeded: "Are there any forms you need to complete beforehand?",
-          fastingRequired: "Is any fasting required before this appointment?",
-          bringRecords: "Do you need to bring previous dental records?",
-          transportation: "How will you get to the appointment?",
-          followUpDate: "Would you like to schedule a follow-up appointment?",
-          costsAndCopays: "Should I note any expected costs or copays?"
+        'dentist': {
+          required: ['date', 'time', 'childName', 'location', 'doctorName', 'insuranceInfo'],
+          optional: ['formsNeeded', 'fastingRequired', 'bringRecords', 'transportation', 'followUpDate', 'costsAndCopays'],
+          prompts: {
+            childName: "Which child is this dental appointment for?",
+            doctorName: "Which dentist will you be seeing?",
+            location: "Where is the dentist office located?",
+            date: "What date is this appointment scheduled for?",
+            time: "What time is the appointment?",
+            insuranceInfo: "Should I note any insurance information for this appointment?",
+            formsNeeded: "Are there any forms you need to complete beforehand?",
+            fastingRequired: "Is any fasting required before this appointment?",
+            bringRecords: "Do you need to bring previous dental records?",
+            transportation: "How will you get to the appointment?",
+            followUpDate: "Would you like to schedule a follow-up appointment?",
+            costsAndCopays: "Should I note any expected costs or copays?"
+          }
+        },
+        'doctor': {
+          required: ['date', 'time', 'childName', 'location', 'doctorName', 'reasonForVisit'],
+          optional: ['insuranceInfo', 'formsNeeded', 'fastingRequired', 'bringRecords', 'transportation', 'followUpDate', 'costsAndCopays'],
+          prompts: {
+            childName: "Which child is this doctor appointment for?",
+            doctorName: "Which doctor will you be seeing?",
+            location: "Where is the doctor's office located?",
+            date: "What date is this appointment scheduled for?",
+            time: "What time is the appointment?",
+            reasonForVisit: "What's the reason for this visit?",
+            insuranceInfo: "Should I note any insurance information?",
+            formsNeeded: "Are there any forms needed for this appointment?",
+            transportation: "How will you get to the appointment?"
+          }
+        },
+        'activity': {
+          required: ['activityType', 'date', 'time', 'location', 'childName'],
+          optional: ['coach', 'equipmentNeeded', 'parentAttendance', 'weatherContingency', 'fees', 'uniform', 'teammates', 'duration', 'carpooling'],
+          prompts: {
+            childName: "Which child is participating in this activity?",
+            activityType: "What type of activity is this? (e.g., soccer, music, dance)",
+            date: "What date is this activity scheduled for?",
+            time: "What time does the activity start?",
+            location: "Where will this activity take place?",
+            coach: "Who's the coach or instructor for this activity?",
+            equipmentNeeded: "Is there any equipment needed for this activity?",
+            parentAttendance: "Does a parent need to stay for this activity?",
+            duration: "How long does this activity usually last?",
+            carpooling: "Are there carpooling arrangements for this activity?",
+            uniform: "Is there a specific uniform or dress code required?"
+          }
+        },
+        'birthday': {
+          required: ['date', 'time', 'location', 'birthdayChildName', 'birthdayChildAge', 'guestList'],
+          optional: ['theme', 'foodArrangements', 'activities', 'budget', 'gifts', 'favors', 'setupCleanup', 'weatherBackup', 'rsvpDeadline'],
+          prompts: {
+            childName: "Which of your children will be attending this birthday party?",
+            birthdayChildName: "Whose birthday party is this?",
+            birthdayChildAge: "How old will they be turning?",
+            date: "What date is the birthday party?",
+            time: "What time does the party start?",
+            location: "Where will the party be held?",
+            guestList: "Who's invited to the party?",
+            theme: "Is there a theme for the birthday party?",
+            foodArrangements: "What are the plans for food and cake?",
+            activities: "What activities are planned for the party?",
+            budget: "Is there a budget you'd like to set for the party?",
+            gifts: "Any gift preferences to note?",
+            favors: "Will there be party favors for guests?",
+            setupCleanup: "Who's helping with setup and cleanup?",
+            weatherBackup: "Is there a backup plan if weather is bad?"
+          }
+        },
+        'meeting': {
+          required: ['title', 'date', 'time', 'agenda'],
+          optional: ['location', 'participants', 'issuesForDiscussion', 'meetingGoals', 'trackingMethod', 'followUpPlan'],
+          prompts: {
+            title: "What's the title or purpose of this meeting?",
+            date: "What date is the meeting scheduled for?",
+            time: "What time is the meeting?",
+            location: "Where will the meeting take place?",
+            agenda: "What items should be on the agenda for this meeting?",
+            issuesForDiscussion: "What specific issues need to be discussed?",
+            participants: "Who needs to attend this meeting?",
+            meetingGoals: "What do you hope to accomplish in this meeting?",
+            followUpPlan: "How will you follow up after the meeting?"
+          }
+        },
+        'parent-teacher': {
+          required: ['date', 'time', 'location', 'childName', 'teacherName'],
+          optional: ['academicPerformance', 'concernsToDiscuss', 'questionsToAsk', 'previousGoals', 'upcomingGoals', 'testSchedules'],
+          prompts: {
+            childName: "Which child is this parent-teacher conference for?",
+            teacherName: "What's the teacher's name?",
+            date: "What date is the conference scheduled for?",
+            time: "What time is the conference?",
+            location: "Where will the conference take place?",
+            academicPerformance: "Are there specific subjects to discuss?",
+            concernsToDiscuss: "Are there any specific concerns you want to address?",
+            questionsToAsk: "Do you have specific questions for the teacher?",
+            previousGoals: "What goals were set in the previous conference?",
+            upcomingGoals: "What goals would you like to set going forward?"
+          }
+        },
+        'date-night': {
+          required: ['date', 'time', 'childcareArranged'],
+          optional: ['venue', 'budget', 'transportation', 'needsBabysitter', 'specialOccasion', 'reservations', 'dresscode'],
+          prompts: {
+            date: "What date is your date night planned for?",
+            time: "What time will you be going out?",
+            venue: "Where are you planning to go for your date night?",
+            childcareArranged: "Have you arranged childcare for the kids?",
+            needsBabysitter: "Do you need help finding a babysitter?",
+            budget: "Do you have a budget in mind for this date night?",
+            transportation: "How will you get there?",
+            specialOccasion: "Is this for a special occasion?",
+            reservations: "Should I note any reservation details?"
+          }
+        },
+        'travel': {
+          required: ['title', 'startDate', 'endDate', 'destination', 'participants'],
+          optional: ['accommodation', 'transportation', 'packingList', 'petCare', 'houseSecurity', 'emergencyContacts', 'travelDocuments', 'activities'],
+          prompts: {
+            title: "What would you like to call this trip?",
+            startDate: "When will you be departing?",
+            endDate: "When will you be returning?",
+            destination: "Where are you planning to go?",
+            participants: "Who will be going on this trip?",
+            childName: "Which children are going on this trip?",
+            accommodation: "Where will you be staying?",
+            transportation: "How will you be traveling there?",
+            packingList: "Would you like to create a packing list for this trip?",
+            activities: "Are there specific activities planned for this trip?",
+            petCare: "Do you need to arrange pet care during your absence?",
+            houseSecurity: "Any house security arrangements to note?"
+          }
+        },
+        'vacation': {
+          required: ['title', 'startDate', 'endDate', 'destination', 'participants'],
+          optional: ['accommodation', 'transportation', 'packingList', 'petCare', 'houseSecurity', 'emergencyContacts', 'travelDocuments', 'activities', 'budget'],
+          prompts: {
+            title: "What would you like to call this vacation?",
+            startDate: "When will your vacation begin?",
+            endDate: "When will you be returning from vacation?",
+            destination: "Where are you planning to vacation?",
+            participants: "Who will be going on this vacation?",
+            childName: "Which children are going on this vacation?",
+            accommodation: "Where will you be staying?",
+            transportation: "How will you be traveling there?",
+            budget: "What's the budget for this vacation?",
+            activities: "Any specific activities or excursions planned?",
+            packingList: "Would you like to create a packing list for everyone?",
+            petCare: "Do you need to arrange pet care while away?",
+            houseSecurity: "Any house security arrangements to note?"
+          }
+        },
+        'playdate': {
+          required: ['date', 'time', 'location', 'childName', 'otherChildren'],
+          optional: ['activities', 'foodPlans', 'transportation', 'dropoffPickup', 'endTime', 'parentStaying', 'specialNeeds'],
+          prompts: {
+            childName: "Which of your children is having the playdate?",
+            otherChildren: "Which other children will be at the playdate?",
+            date: "What date is the playdate scheduled for?",
+            time: "What time will the playdate start?",
+            location: "Where will the playdate take place?",
+            activities: "What activities are planned for the playdate?",
+            foodPlans: "What are the plans for food or snacks?",
+            endTime: "What time will the playdate end?",
+            parentStaying: "Will a parent be staying for the playdate?",
+            dropoffPickup: "Who will be handling drop-off and pickup?",
+            specialNeeds: "Are there any allergies or special needs to note?"
+          }
         }
-      },
-      'doctor': {
-        required: ['date', 'time', 'childName', 'location', 'doctorName', 'reasonForVisit'],
-        optional: ['insuranceInfo', 'formsNeeded', 'fastingRequired', 'bringRecords', 'transportation', 'followUpDate', 'costsAndCopays'],
-        prompts: {
-          doctorName: "Which doctor will you be seeing?",
-          location: "Where is the doctor's office located?",
-          reasonForVisit: "What's the reason for this visit?",
-          insuranceInfo: "Should I note any insurance information?",
-          formsNeeded: "Are there any forms needed for this appointment?",
-          transportation: "How will you get to the appointment?"
-        }
-      },
-      'activity': {
-        required: ['activityType', 'date', 'time', 'location', 'childName'],
-        optional: ['coach', 'equipmentNeeded', 'parentAttendance', 'weatherContingency', 'fees', 'uniform', 'teammates', 'duration', 'carpooling'],
-        prompts: {
-          activityType: "What type of activity is this? (e.g., soccer, music, dance)",
-          coach: "Who's the coach or instructor for this activity?",
-          equipmentNeeded: "Is there any equipment needed for this activity?",
-          parentAttendance: "Does a parent need to stay for this activity?",
-          duration: "How long does this activity usually last?",
-          carpooling: "Are there carpooling arrangements for this activity?",
-          uniform: "Is there a specific uniform or dress code required?"
-        }
-      },
-      'birthday': {
-        required: ['date', 'time', 'location', 'birthdayChildName', 'birthdayChildAge', 'guestList'],
-        optional: ['theme', 'foodArrangements', 'activities', 'budget', 'gifts', 'favors', 'setupCleanup', 'weatherBackup', 'rsvpDeadline'],
-        prompts: {
-          theme: "Is there a theme for the birthday party?",
-          guestList: "Who's invited to the party?",
-          foodArrangements: "What are the plans for food and cake?",
-          activities: "What activities are planned for the party?",
-          budget: "Is there a budget you'd like to set for the party?",
-          gifts: "Any gift preferences to note?",
-          favors: "Will there be party favors for guests?",
-          setupCleanup: "Who's helping with setup and cleanup?",
-          weatherBackup: "Is there a backup plan if weather is bad?"
-        }
-      },
-      'meeting': {
-        required: ['title', 'date', 'time', 'agenda'],
-        optional: ['location', 'participants', 'issuesForDiscussion', 'meetingGoals', 'trackingMethod', 'followUpPlan'],
-        prompts: {
-          agenda: "What items should be on the agenda for this meeting?",
-          issuesForDiscussion: "What specific issues need to be discussed?",
-          participants: "Who needs to attend this meeting?",
-          meetingGoals: "What do you hope to accomplish in this meeting?",
-          followUpPlan: "How will you follow up after the meeting?"
-        }
-      },
-      'parent-teacher': {
-        required: ['date', 'time', 'location', 'childName', 'teacherName'],
-        optional: ['academicPerformance', 'concernsToDiscuss', 'questionsToAsk', 'previousGoals', 'upcomingGoals', 'testSchedules'],
-        prompts: {
-          teacherName: "What's the teacher's name?",
-          academicPerformance: "Are there specific subjects to discuss?",
-          concernsToDiscuss: "Are there any specific concerns you want to address?",
-          questionsToAsk: "Do you have specific questions for the teacher?",
-          previousGoals: "What goals were set in the previous conference?",
-          upcomingGoals: "What goals would you like to set going forward?"
-        }
-      },
-      'date-night': {
-        required: ['date', 'time', 'childcareArranged'],
-        optional: ['venue', 'budget', 'transportation', 'needsBabysitter', 'specialOccasion', 'reservations', 'dresscode'],
-        prompts: {
-          venue: "Where are you planning to go for your date night?",
-          childcareArranged: "Have you arranged childcare for the kids?",
-          needsBabysitter: "Do you need help finding a babysitter?",
-          budget: "Do you have a budget in mind for this date night?",
-          transportation: "How will you get there?",
-          specialOccasion: "Is this for a special occasion?",
-          reservations: "Should I note any reservation details?"
-        }
-      },
-      'travel': {
-        required: ['title', 'startDate', 'endDate', 'destination', 'participants'],
-        optional: ['accommodation', 'transportation', 'packingList', 'petCare', 'houseSecurity', 'emergencyContacts', 'travelDocuments', 'activities'],
-        prompts: {
-          destination: "Where are you planning to go?",
-          accommodation: "Where will you be staying?",
-          participants: "Who will be going on this trip?",
-          transportation: "How will you be traveling there?",
-          packingList: "Would you like to create a packing list for this trip?",
-          activities: "Are there specific activities planned for this trip?",
-          petCare: "Do you need to arrange pet care during your absence?",
-          houseSecurity: "Any house security arrangements to note?"
-        }
-      },
-      'vacation': {
-        required: ['title', 'startDate', 'endDate', 'destination', 'participants'],
-        optional: ['accommodation', 'transportation', 'packingList', 'petCare', 'houseSecurity', 'emergencyContacts', 'travelDocuments', 'activities', 'budget'],
-        prompts: {
-          destination: "Where are you planning to vacation?",
-          accommodation: "Where will you be staying?",
-          transportation: "How will you be traveling there?",
-          budget: "What's the budget for this vacation?",
-          activities: "Any specific activities or excursions planned?",
-          packingList: "Would you like to create a packing list for everyone?",
-          petCare: "Do you need to arrange pet care while away?",
-          houseSecurity: "Any house security arrangements to note?"
-        }
-      },
-      'playdate': {
-        required: ['date', 'time', 'location', 'childName', 'otherChildren'],
-        optional: ['activities', 'foodPlans', 'transportation', 'dropoffPickup', 'endTime', 'parentStaying', 'specialNeeds'],
-        prompts: {
-          otherChildren: "Which other children will be at the playdate?",
-          activities: "What activities are planned for the playdate?",
-          foodPlans: "What are the plans for food or snacks?",
-          endTime: "What time will the playdate end?",
-          parentStaying: "Will a parent be staying for the playdate?",
-          dropoffPickup: "Who will be handling drop-off and pickup?",
-          specialNeeds: "Are there any allergies or special needs to note?"
-        }
-      }
-    };
+      };
 
     // In-memory store for active collection sessions
     this.activeCollectionSessions = {};
@@ -212,13 +251,20 @@ async startCollection(familyId, sessionId, initialData) {
   }
   
   determineEventType(initialData) {
+    console.log("Determining event type from data:", initialData);
+    
+    // Check original text if available for broader context
+    const originalText = initialData.originalText || "";
+    
     // First check if we have an explicit event type
     if (initialData.eventType) {
       const type = initialData.eventType.toLowerCase();
       
       // Enhanced detection with more keywords
       if (type.includes('dentist') || type.includes('dental') || 
-          (initialData.title && initialData.title.toLowerCase().includes('dentist'))) {
+          (initialData.title && initialData.title.toLowerCase().includes('dentist')) ||
+          (originalText.toLowerCase().includes('dentist'))) {
+        console.log("Detected event type: dentist");
         return 'dentist';
       } else if (type.includes('doctor') || type.includes('medical') || type.includes('appointment') || 
                  type.includes('pediatr') || type.includes('check-up') || type.includes('checkup') ||
@@ -226,30 +272,57 @@ async startCollection(familyId, sessionId, initialData) {
                    initialData.title.toLowerCase().includes('doctor') || 
                    initialData.title.toLowerCase().includes('dr.') ||
                    initialData.title.toLowerCase().includes('checkup')
-                 ))) {
+                 )) ||
+                 (originalText.toLowerCase().includes('doctor') || 
+                  originalText.toLowerCase().includes('dr.') || 
+                  originalText.toLowerCase().match(/dr\s+[a-z]+/i))) {
+        console.log("Detected event type: doctor");
         return 'doctor';
       } else if (type.includes('soccer') || type.includes('practice') || type.includes('lesson') || 
-                  type.includes('class') || type.includes('music') || type.includes('sport')) {
+                  type.includes('class') || type.includes('music') || type.includes('sport') ||
+                  (originalText.toLowerCase().match(/(?:soccer|basketball|baseball|dance|piano|guitar|swim)/i))) {
+        console.log("Detected event type: activity");
         return 'activity';
-      } else if (type.includes('birthday')) {
+      } else if (type.includes('birthday') || originalText.toLowerCase().includes('birthday')) {
+        console.log("Detected event type: birthday");
         return 'birthday';
-      } else if (type.includes('meeting')) {
+      } else if (type.includes('meeting') || originalText.toLowerCase().includes('meeting')) {
+        console.log("Detected event type: meeting");
         return 'meeting';
-      } else if (type.includes('conference') || type.includes('teacher')) {
+      } else if (type.includes('conference') || type.includes('teacher') || 
+                 originalText.toLowerCase().includes('parent-teacher') ||
+                 originalText.toLowerCase().includes('teacher conference')) {
+        console.log("Detected event type: parent-teacher");
         return 'parent-teacher';
-      } else if (type.includes('date') || type.includes('night out')) {
+      } else if (type.includes('date') || type.includes('night out') || 
+                 originalText.toLowerCase().includes('date night')) {
+        console.log("Detected event type: date-night");
         return 'date-night';
-      } else if (type.includes('trip') || type.includes('travel')) {
+      } else if (type.includes('trip') || type.includes('travel') || 
+                 originalText.toLowerCase().match(/(?:trip|travel|going to)/i)) {
+        console.log("Detected event type: travel");
         return 'travel';
-      } else if (type.includes('vacation')) {
+      } else if (type.includes('vacation') || originalText.toLowerCase().includes('vacation')) {
+        console.log("Detected event type: vacation");
         return 'vacation';
-      } else if (type.includes('playdate') || type.includes('play date')) {
+      } else if (type.includes('playdate') || type.includes('play date') || 
+                 originalText.toLowerCase().includes('playdate') ||
+                 originalText.toLowerCase().includes('play date')) {
+        console.log("Detected event type: playdate");
         return 'playdate';
       }
     }
     
+    // Check for doctor by name pattern in original text
+    // This catches phrases like "appointment with Dr. Smith"
+    if (originalText.toLowerCase().match(/(?:with|see)\s+(?:dr\.?|doctor)\s+[a-z]+/i)) {
+      console.log("Detected event type from doctor name pattern: doctor");
+      return 'doctor';
+    }
+    
     // If no explicit type, check for doctor name which indicates a medical appointment
     if (initialData.doctorName || initialData.appointmentDetails?.doctorName) {
+      console.log("Detected event type from doctor name field: doctor");
       return 'doctor';
     }
     
@@ -258,20 +331,42 @@ async startCollection(familyId, sessionId, initialData) {
       const title = initialData.title.toLowerCase();
       
       if (title.includes('dentist') || title.includes('dental')) {
+        console.log("Detected event type from title: dentist");
         return 'dentist';
       } else if (title.includes('doctor') || title.includes('dr.') || 
                  title.includes('medical') || title.includes('appointment') ||
                  title.includes('checkup') || title.includes('check-up')) {
+        console.log("Detected event type from title: doctor");
         return 'doctor';
       } else if (title.includes('birthday')) {
+        console.log("Detected event type from title: birthday");
         return 'birthday';
       } else if (title.includes('practice') || title.includes('lesson') || 
-                 title.includes('class') || title.includes('activity')) {
+                 title.includes('class') || title.includes('activity') ||
+                 title.match(/(?:soccer|basketball|baseball|dance|piano|guitar|swim)/i)) {
+        console.log("Detected event type from title: activity");
         return 'activity';
       }
     }
     
+    // Check original text for more keywords
+    if (originalText) {
+      const text = originalText.toLowerCase();
+      
+      if (text.includes('appt') || text.includes('appointment')) {
+        // Check if it's dental or medical
+        if (text.includes('dental') || text.includes('dentist') || text.includes('teeth')) {
+          console.log("Detected event type from text keywords: dentist");
+          return 'dentist';
+        } else {
+          console.log("Detected event type from text keywords: doctor");
+          return 'doctor';
+        }
+      }
+    }
+    
     // Default to general event type
+    console.log("Could not determine specific event type, using: general");
     return 'general';
   }
 
@@ -363,9 +458,30 @@ async startCollection(familyId, sessionId, initialData) {
         };
       }
       
-      // Get prompt for this field
-      const requirements = this.eventTypeRequirements[sessionData.eventType] || this.eventTypeRequirements['general'];
-      const prompt = requirements.prompts[currentField] || `What is the ${currentField} for this ${sessionData.eventType}?`;
+      // Get prompt for this field with improved defaults
+const requirements = this.eventTypeRequirements[sessionData.eventType] || this.eventTypeRequirements['general'];
+let prompt;
+
+// If we have a specific prompt, use it
+if (requirements.prompts && requirements.prompts[currentField]) {
+  prompt = requirements.prompts[currentField];
+} else {
+  // Create a natural-sounding prompt based on the field name
+  const fieldDisplayNames = {
+    'childName': "which child this is for",
+    'date': "what date",
+    'time': "what time",
+    'location': "where",
+    'title': "what to call this event",
+    'doctorName': "which doctor you'll be seeing",
+    'reasonForVisit': "the reason for this visit",
+    'endDateTime': "what time it ends",
+    'duration': "how long it will last"
+  };
+  
+  const displayName = fieldDisplayNames[currentField] || currentField.replace(/([A-Z])/g, ' $1').toLowerCase();
+  prompt = `Could you tell me ${displayName} for this ${sessionData.eventType}?`;
+}
       
       // Add some context and a fun tone
       let contextualPrompt = this.addContextToPrompt(prompt, currentField, sessionData);
@@ -396,31 +512,83 @@ async startCollection(familyId, sessionId, initialData) {
     // Add context based on what we already know
     const data = sessionData.collectedData;
     
-    // Add some variety and personality to the prompts
-    const promptVariations = [
-      // Fun intros
-      `Ooh, let's make sure we get all the details right! ${basePrompt}`,
-      `Almost there! ${basePrompt}`,
-      `Let's keep building this out. ${basePrompt}`,
-      
-      // Context-aware prompts
-      data.childName ? `For ${data.childName}'s ${sessionData.eventType}, ${basePrompt.toLowerCase()}` : basePrompt,
-      
-      // Field-specific fun prompts
-      field === 'location' ? `Where is this happening? I'll make sure everyone gets there on time!` : null,
-      field === 'equipmentNeeded' ? `Don't forget the gear! What equipment is needed for this?` : null,
-      field === 'activities' ? `What fun activities are planned? I'll make sure everyone's prepared!` : null,
-      field === 'foodPlans' ? `Time for the important question: what's the food situation?` : null,
-      
-      // Informative prompts with tips
-      field === 'packingList' ? `Would you like me to help create a packing list? (I'm really good at remembering essentials!)` : null,
-      field === 'transportation' ? `How is everyone getting there? (I can remind you about travel times later)` : null
-    ].filter(Boolean);
+    // Create different intro phrases based on progress
+    const introVariations = sessionData.currentStep === 0 ? [
+      // First question intros
+      "Great! Let's get this on your calendar. ",
+      "I'll add this to your calendar! ",
+      "Let's get all the details for your calendar. "
+    ] : [
+      // Follow-up question intros
+      "Thanks! Just a few more details. ",
+      "Got it! Also, ",
+      "Perfect! Now, "
+    ];
     
-    // Pick a random variation that applies
-    const randomPrompt = promptVariations[Math.floor(Math.random() * promptVariations.length)];
+    const intro = introVariations[Math.floor(Math.random() * introVariations.length)];
     
-    return randomPrompt;
+    // Create context-aware prompts based on event type and collected data
+    let contextPrefix = "";
+    
+    // Add context about the event type and child if known
+    if (data.childName && sessionData.eventType) {
+      if (sessionData.eventType === 'doctor' || sessionData.eventType === 'dentist') {
+        contextPrefix = `For ${data.childName}'s ${sessionData.eventType} appointment, `;
+      } else if (sessionData.eventType === 'activity') {
+        contextPrefix = `For ${data.childName}'s ${data.activityType || 'activity'}, `;
+      } else if (sessionData.eventType === 'playdate') {
+        contextPrefix = `For ${data.childName}'s playdate, `;
+      } else {
+        contextPrefix = `For ${data.childName}'s ${sessionData.eventType}, `;
+      }
+    } 
+    // Just event type without child name
+    else if (sessionData.eventType) {
+      if (sessionData.eventType === 'doctor' || sessionData.eventType === 'dentist') {
+        contextPrefix = `For this ${sessionData.eventType} appointment, `;
+      } else if (sessionData.eventType === 'date-night') {
+        contextPrefix = `For your date night, `;
+      } else if (sessionData.eventType === 'travel' || sessionData.eventType === 'vacation') {
+        contextPrefix = `For your ${sessionData.eventType}, `;
+      } else {
+        contextPrefix = `For this ${sessionData.eventType}, `;
+      }
+    }
+    
+    // Special field-specific conversational prompts
+    let fieldPrompt = basePrompt;
+    
+    if (field === 'location') {
+      fieldPrompt = `Where is this happening? I'll make sure everyone gets there on time!`;
+    } else if (field === 'equipmentNeeded') {
+      fieldPrompt = `Don't forget the gear! What equipment is needed for this?`;
+    } else if (field === 'activities') {
+      fieldPrompt = `What fun activities are planned? I'll make sure everyone's prepared!`;
+    } else if (field === 'foodPlans') {
+      fieldPrompt = `Time for the important question: what's the food situation?`;
+    } else if (field === 'packingList') {
+      fieldPrompt = `Would you like me to help create a packing list? (I'm really good at remembering essentials!)`;
+    } else if (field === 'transportation') {
+      fieldPrompt = `How is everyone getting there? (I can remind you about travel times later)`;
+    }
+    
+    // Put it all together with variety based on step and progress
+    let finalPrompt;
+    
+    // First question gets a full intro
+    if (sessionData.currentStep === 0) {
+      finalPrompt = `${intro}${contextPrefix}${fieldPrompt.toLowerCase()}`;
+    } 
+    // Later questions can be more direct
+    else if (sessionData.currentStep < sessionData.missingFields.length - 1) {
+      finalPrompt = `${intro}${contextPrefix}${fieldPrompt.toLowerCase()}`;
+    } 
+    // Last question gets a "almost done" intro
+    else {
+      finalPrompt = `Almost done! ${contextPrefix}${fieldPrompt.toLowerCase()}`;
+    }
+    
+    return finalPrompt;
   }
 
   /**
@@ -587,24 +755,78 @@ async startCollection(familyId, sessionId, initialData) {
   identifyMissingFields(data, requirements) {
     const missing = [];
     
-    // Check required fields
+    console.log("Identifying missing fields for event type:", data.eventType);
+    console.log("Current data:", JSON.stringify(data, null, 2));
+    
+    // Check required fields with better validation
     for (const field of requirements.required) {
-      if (!data[field] || data[field] === '') {
+      // More thorough check for field existence and meaningful content
+      const hasValue = field in data && 
+                       data[field] !== undefined && 
+                       data[field] !== null && 
+                       data[field] !== '';
+      
+      // Skip fields that are derived from other fields
+      if (field === 'dateTime' && (data.date || data.time)) {
+        continue;
+      }
+      
+      // Skip title if we already have appointment type and other identifiers
+      if (field === 'title' && 
+          (data.eventType === 'doctor' || data.eventType === 'dentist') && 
+          data.doctorName) {
+        continue;
+      }
+      
+      // Skip endDateTime if we have dateTime (we can calculate it)
+      if (field === 'endDateTime' && data.dateTime) {
+        continue;
+      }
+      
+      if (!hasValue) {
         missing.push(field);
+        console.log(`Field '${field}' is missing`);
       }
     }
     
-    // Add high-priority optional fields based on event type
-    if (data.eventType === 'appointment' && !data.reasonForVisit) {
-      missing.push('reasonForVisit');
+    // Only add high-priority optional fields if we have most required fields
+    // This way we focus on essential information first
+    if (missing.length <= 2) {
+      // Add high-priority optional fields based on event type
+      if ((data.eventType === 'doctor' || data.eventType === 'appointment') && 
+          !data.reasonForVisit && !missing.includes('reasonForVisit')) {
+        missing.push('reasonForVisit');
+      }
+      
+      if (data.eventType === 'activity' && 
+          !data.equipmentNeeded && !missing.includes('equipmentNeeded')) {
+        missing.push('equipmentNeeded');
+      }
+      
+      // For dentist visits, ask about insurance info
+      if (data.eventType === 'dentist' && 
+          !data.insuranceInfo && !missing.includes('insuranceInfo')) {
+        missing.push('insuranceInfo');
+      }
     }
     
-    if (data.eventType === 'activity' && !data.equipmentNeeded) {
-      missing.push('equipmentNeeded');
-    }
+    // Sort missing fields by importance
+    const priorityOrder = ['date', 'time', 'childName', 'doctorName', 'location'];
+    missing.sort((a, b) => {
+      const aIndex = priorityOrder.indexOf(a);
+      const bIndex = priorityOrder.indexOf(b);
+      
+      if (aIndex === -1 && bIndex === -1) return 0;
+      if (aIndex === -1) return 1;
+      if (bIndex === -1) return -1;
+      return aIndex - bIndex;
+    });
     
-    // Limit to 5 fields at a time to avoid overwhelming the user
-    return missing.slice(0, 5);
+    console.log("Identified missing fields:", missing);
+    
+    // Limit to 3 fields at a time to avoid overwhelming the user
+    // This makes the experience more conversational
+    return missing.slice(0, 3);
   }
 
   /**

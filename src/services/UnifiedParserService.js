@@ -241,64 +241,126 @@ createFallbackEvent(text) {
     /(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i
   ];
   
-  // Process date
-  for (const pattern of datePatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      if (match[0].toLowerCase().includes('tomorrow')) {
-        // Already set to tomorrow by default
-      } else if (match[0].toLowerCase().includes('next')) {
-        // Handle "next Monday", "next Tuesday", etc.
-        const dayName = match[1].toLowerCase();
-        const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-        const dayIndex = days.findIndex(d => dayName.includes(d));
-        
-        if (dayIndex >= 0) {
-          const today = dateTime.getDay();
-          let daysToAdd = (dayIndex - today + 7) % 7;
-          if (daysToAdd === 0) daysToAdd = 7; // If today, go to next week
-          dateTime.setDate(dateTime.getDate() + daysToAdd - 1); // -1 because we already added 1 day
-        }
-      } else {
-        // Try to parse specific date like "January 5th"
-        try {
-          const dateStr = match[1];
-          const parsedDate = new Date(dateStr);
-          if (!isNaN(parsedDate.getTime())) {
-            dateTime = parsedDate;
-          }
-        } catch (e) {
-          // Keep default if parsing fails
-        }
-      }
-      break;
-    }
-  }
-  
-  // Process time
-  for (const pattern of timePatterns) {
-    const match = text.match(pattern);
-    if (match && match[1]) {
-      const timeStr = match[1].toLowerCase();
-      const hourMatch = timeStr.match(/(\d{1,2})(?::(\d{2}))?(?:\s*(am|pm))?/i);
+  // Process date with enhanced relative date handling
+for (const pattern of datePatterns) {
+  const match = text.match(pattern);
+  if (match) {
+    if (match[0].toLowerCase().includes('tomorrow')) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(dateTime.getHours(), dateTime.getMinutes(), 0, 0);
+      dateTime = tomorrow;
+      console.log("Set date to tomorrow:", dateTime.toISOString());
+    } else if (match[0].toLowerCase().includes('next')) {
+      // Handle "next Monday", "next Tuesday", etc.
+      const dayName = match[1].toLowerCase();
+      const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const dayIndex = days.findIndex(d => dayName.includes(d));
       
-      if (hourMatch) {
-        let hours = parseInt(hourMatch[1]);
-        const minutes = hourMatch[2] ? parseInt(hourMatch[2]) : 0;
-        const period = hourMatch[3] ? hourMatch[3].toLowerCase() : null;
+      if (dayIndex >= 0) {
+        // Get today's day
+        const today = new Date().getDay();
+        // Calculate days to add to get to the next occurrence of that day
+        let daysToAdd = (dayIndex - today + 7) % 7;
+        if (daysToAdd === 0) daysToAdd = 7; // If today, go to next week
         
-        // Convert to 24-hour format if needed
-        if (period === 'pm' && hours < 12) {
-          hours += 12;
-        } else if (period === 'am' && hours === 12) {
-          hours = 0;
+        // Create a new date for the target day
+        const targetDate = new Date();
+        targetDate.setDate(targetDate.getDate() + daysToAdd);
+        // Keep the time from dateTime
+        targetDate.setHours(dateTime.getHours(), dateTime.getMinutes(), 0, 0);
+        dateTime = targetDate;
+        console.log(`Set date to next ${days[dayIndex]}:`, dateTime.toISOString());
+      }
+    } else if (match[0].toLowerCase().includes('today')) {
+      // Handle "today" references
+      const today = new Date();
+      today.setHours(dateTime.getHours(), dateTime.getMinutes(), 0, 0);
+      dateTime = today;
+      console.log("Set date to today:", dateTime.toISOString());
+    } else {
+      // Try to parse specific date like "January 5th"
+      try {
+        const dateStr = match[1];
+        // Handle formats like "January 5th" and "Jan 5"
+        let parsedDate;
+        
+        // Try parsing with different formats
+        if (dateStr.match(/\d{1,2}(?:st|nd|rd|th)?/)) {
+          // Handle "5th of January" type formats
+          const monthMatch = dateStr.match(/([A-Za-z]+)/i);
+          const dayMatch = dateStr.match(/(\d{1,2})(?:st|nd|rd|th)?/);
+          
+          if (monthMatch && dayMatch) {
+            const monthName = monthMatch[1];
+            const day = parseInt(dayMatch[1]);
+            
+            // Get month index
+            const months = ['january','february','march','april','may','june',
+                           'july','august','september','october','november','december'];
+            const monthIndex = months.findIndex(m => monthName.toLowerCase().includes(m.toLowerCase()));
+            
+            if (monthIndex >= 0 && day > 0 && day <= 31) {
+              parsedDate = new Date();
+              parsedDate.setMonth(monthIndex);
+              parsedDate.setDate(day);
+              // Keep the time from dateTime
+              parsedDate.setHours(dateTime.getHours(), dateTime.getMinutes(), 0, 0);
+            }
+          }
+        } else {
+          // Try standard date parsing
+          parsedDate = new Date(dateStr);
         }
         
-        dateTime.setHours(hours, minutes, 0, 0);
+        if (parsedDate && !isNaN(parsedDate.getTime())) {
+          dateTime = parsedDate;
+          console.log("Parsed specific date:", dateTime.toISOString());
+        }
+      } catch (e) {
+        console.warn("Error parsing specific date:", e);
+        // Keep default if parsing fails
       }
-      break;
     }
+    break;
   }
+}
+  
+  // Process time with enhanced time format support
+for (const pattern of timePatterns) {
+  const match = text.match(pattern);
+  if (match && match[1]) {
+    const timeStr = match[1].toLowerCase();
+    // Enhanced pattern to capture different time formats
+    const hourMatch = timeStr.match(/(\d{1,2})(?::(\d{2}))?(?:\s*(am|pm))?/i);
+    
+    if (hourMatch) {
+      let hours = parseInt(hourMatch[1]);
+      const minutes = hourMatch[2] ? parseInt(hourMatch[2]) : 0;
+      
+      // Get period (am/pm) - either explicitly mentioned or inferred
+      let period = hourMatch[3] ? hourMatch[3].toLowerCase() : null;
+      
+      // If no period specified but hour is 1-11, assume PM for times like "3:00" (3 PM)
+      // This is a reasonable assumption for most appointments
+      if (!period && hours >= 1 && hours <= 11) {
+        period = 'pm';
+      }
+      
+      // Convert to 24-hour format if needed
+      if (period === 'pm' && hours < 12) {
+        hours += 12;
+      } else if (period === 'am' && hours === 12) {
+        hours = 0;
+      }
+      
+      // Set the time
+      dateTime.setHours(hours, minutes, 0, 0);
+      console.log(`Set time to ${hours}:${minutes} (${period || '24hr'})`, dateTime.toLocaleTimeString());
+    }
+    break;
+  }
+}
   
   // Extract location
   let location = null;
