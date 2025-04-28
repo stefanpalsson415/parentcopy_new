@@ -1163,96 +1163,69 @@ async extractAndCollectEventDetails(message, userId, familyId) {
   }
 }
 
-// In ClaudeService.js, update the handleEventCollectionResponse method
-
+// In src/services/ClaudeService.js, replace the handleEventCollectionResponse method with this improved version:
 async handleEventCollectionResponse(message, sessionId, step, userId, familyId) {
   try {
-    // Import EventDetailCollectorService
+    console.log(`Processing event collection response for session ${sessionId}, step ${step}`);
+    
+    // Import needed services
     const EventDetailCollectorService = (await import('./EventDetailCollectorService')).default;
     
-    // Process the user's response
+    // Process the response
     const result = await EventDetailCollectorService.processResponse(sessionId, message);
     
     if (result.status === 'completed') {
-      // Collection is complete, create the event
-      const completeData = await EventDetailCollectorService.completeSession(sessionId);
+      // Collection is complete
+      console.log("Event collection complete, creating event");
       
-      // Format the final event data
+      // Get the collected data
+      const completeData = await EventDetailCollectorService.completeSession(sessionId);
+      console.log("Collected complete data:", completeData);
+      
+      // Format for calendar
       const eventData = this.formatCollectedEventData(completeData);
+      console.log("Formatted event data:", eventData);
       
       // Create the event
-      const eventResult = await this.createEventFromCollectedData(eventData, userId, familyId);
+      const createResult = await this.createEventFromCollectedData(eventData, userId, familyId);
+      console.log("Event creation result:", createResult);
       
-      if (eventResult.success) {
-        // Format success message with more complete details
-        let responseMessage = `Perfect! I've added this ${eventData.eventType || 'event'} to your calendar:\n\n`;
-        responseMessage += `Event: ${eventData.title || "Appointment"}\n`;
-
-        if (eventData.dateTime) {
-          try {
-            const eventDate = new Date(eventData.dateTime);
-            responseMessage += `Date: ${eventDate.toLocaleDateString('en-US', { 
-              weekday: 'long',
-              month: 'long', 
-              day: 'numeric'
-            })}\n`;
-            responseMessage += `Time: ${eventDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}\n`;
-          } catch (e) {
-            // Fallback if date parsing fails
-            responseMessage += `Date: ${eventData.dateTime}\n`;
-          }
-        }
-        
-        if (eventData.location) {
-          responseMessage += `Location: ${eventData.location}\n`;
-        }
-        
-        if (eventData.childName) {
-          responseMessage += `For: ${eventData.childName}\n`;
-        }
-        
-        if (eventData.doctorName || eventData.appointmentDetails?.doctorName) {
-          responseMessage += `Doctor: ${eventData.doctorName || eventData.appointmentDetails.doctorName}\n`;
-        }
-        
-        // Add specific reminder information based on event type
-        if (eventData.eventType === 'doctor' || eventData.eventType === 'dentist') {
-          responseMessage += `\nI'll send a reminder 30 minutes before the appointment. You can view and manage this in your calendar.`;
-        } else if (eventData.eventType === 'activity') {
-          responseMessage += `\nDon't forget ${eventData.activityDetails?.equipmentNeeded || 'any necessary equipment'}! I've added this to your family calendar.`;
-        } else {
-          responseMessage += `\nThis event has been added to your family calendar. You can view and edit it there anytime.`;
-        }
-        
-        // Trigger a UI refresh to ensure the calendar widget updates
+      if (createResult.success) {
+        // Force multiple calendar refreshes to ensure UI updates
         if (typeof window !== 'undefined') {
+          // Immediate refresh
           window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+          
+          // Delayed refreshes to handle race conditions
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+            console.log("Sending delayed refresh (500ms)");
+          }, 500);
+          
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+            console.log("Sending final refresh (1500ms)");
+          }, 1500);
         }
         
-        return responseMessage;
+        // Successfully created event
+        return `Great! I've added "${eventData.title}" to your calendar for ${new Date(eventData.dateTime).toLocaleString()}. You can view it in your calendar now.`;
       } else {
-        return "I had trouble adding this event to your calendar. Let's try again with a bit more information. What event would you like to add?";
+        return `I had some trouble adding this to your calendar. Please try again or add it directly from the calendar tab.`;
       }
     } else {
-      // Continue collection with next prompt
-      let responseMessage = result.prompt;
-      
-      // Add context about progress
-      responseMessage += `\n\n(Step ${result.step} of ${result.totalSteps})`;
-      
-      // Add special marker for continued collection
-responseMessage += `\n\n<voiceNote>event_collection:${sessionId}:${result.step}</voiceNote>`;
-      
-      return responseMessage;
+      // Continue collection
+      return result.prompt;
     }
   } catch (error) {
     console.error("Error handling event collection response:", error);
-    return "I encountered an issue processing your response. Let's start over with creating the event. Could you describe it again?";
+    return "I encountered an issue while processing your event details. Let's try again from the beginning. What would you like to add to your calendar?";
   }
 }
 
 // In ClaudeService.js, update the formatCollectedEventData method
 
+// In ClaudeService.js, replace the formatCollectedEventData method with this improved version:
 formatCollectedEventData(collectedData) {
   // Format the collected data into the structure expected by Calendar operations
   const eventData = {
@@ -1310,6 +1283,21 @@ formatCollectedEventData(collectedData) {
     };
   }
   
+  // Add special fix for missing childName (found in the Firebase screenshot)
+  if (collectedData.originalText && !eventData.childName) {
+    // Try to extract child name from original text
+    const childNameMatch = collectedData.originalText.match(/for\s+(\w+)/i);
+    if (childNameMatch && childNameMatch[1]) {
+      const possibleChildName = childNameMatch[1];
+      // Don't use words like "appointment", "meeting", etc. as child names
+      const nonChildWords = ['appointment', 'meeting', 'doctor', 'dentist', 'myself', 'me'];
+      if (!nonChildWords.includes(possibleChildName.toLowerCase())) {
+        eventData.childName = possibleChildName;
+        console.log("Extracted child name from text:", possibleChildName);
+      }
+    }
+  }
+  
   return eventData;
 }
 
@@ -1319,12 +1307,12 @@ async createEventFromCollectedData(eventData, userId, familyId) {
   try {
     // Validate required parameters
     if (!userId) {
-      console.error("❌ Missing userId for event creation");
+      console.error("Missing userId for event creation");
       return { success: false, error: "Missing user ID" };
     }
     
     // Enhanced logging for debugging
-    console.log("🔴 Creating event from collected data:", {
+    console.log("Creating event from collected data:", {
       title: eventData.title || "Untitled Event",
       type: eventData.eventType || "general",
       dateTime: eventData.dateTime,
@@ -1413,24 +1401,23 @@ async createEventFromCollectedData(eventData, userId, familyId) {
       };
     }
     
-    console.log("🔴 Final event object ready for saving:", event);
+    console.log("Final event object ready for saving:", event);
     
-    // First, attempt to use direct Firebase approach with EventStore
+    // CRITICAL FIX: First try to use EventStore directly
     try {
-      console.log("📝 Attempting direct EventStore approach first");
-      const eventStore = (await import('./EventStore')).default;
+      const { default: eventStore } = await import('./EventStore');
       
-      // Force an optimistic cache clear before adding
+      // Force a cache clear before adding the event
       if (typeof eventStore.clearCache === 'function') {
         eventStore.clearCache();
       }
       
+      // Add the event directly to the events collection
       const result = await eventStore.addEvent(event, userId, familyId);
-      
-      console.log("📝 Direct EventStore result:", result);
+      console.log("Direct EventStore result:", result);
       
       if (result.success) {
-        // CRITICAL: Dispatch multiple notification events
+        // Dispatch comprehensive notification events
         this.dispatchCalendarNotifications(event, result);
         
         return {
@@ -1438,45 +1425,37 @@ async createEventFromCollectedData(eventData, userId, familyId) {
           eventId: result.eventId || result.firestoreId || result.universalId
         };
       }
-    } catch (directError) {
-      console.error("❌ Error with direct EventStore approach:", directError);
+    } catch (error) {
+      console.error("Error with direct EventStore approach:", error);
     }
     
-    // If direct approach failed, try UnifiedEventService
+    // If direct method failed, try using UnifiedEventService
     try {
-      console.log("📝 Trying UnifiedEventService approach");
-      // Import UnifiedEventService dynamically
-      const UnifiedEventService = (await import('./UnifiedEventService')).default;
+      const { default: UnifiedEventService } = await import('./UnifiedEventService');
       
-      // Add event through the unified service with source metadata
+      // Add event through the unified service
       const result = await UnifiedEventService.addEvent(
         event, 
         userId, 
         familyId, 
-        { 
-          source: 'chat',
-          assistant: 'claude',
-          collectionMethod: 'guided'
-        }
+        { source: 'chat' }
       );
       
-      console.log("📝 UnifiedEventService result:", result);
+      console.log("UnifiedEventService result:", result);
       
-      // Dispatch additional notification events
+      // Dispatch notification events
       this.dispatchCalendarNotifications(event, result);
       
       return {
         success: true,
         eventId: result.eventId || result.firestoreId || result.universalId
       };
-    } catch (unifiedError) {
-      console.error("❌ Error using UnifiedEventService:", unifiedError);
+    } catch (error) {
+      console.error("Error using UnifiedEventService:", error);
     }
     
-    // Final fallback - try Firebase directly
+    // As a last resort, try Firebase directly
     try {
-      console.log("📝 Final fallback: using direct Firebase insertion");
-      
       const { collection, addDoc, serverTimestamp } = (await import('firebase/firestore'));
       const { db } = (await import('./firebase'));
       
@@ -1490,7 +1469,7 @@ async createEventFromCollectedData(eventData, userId, familyId) {
       // Add to Firestore events collection
       const docRef = await addDoc(collection(db, "events"), firestoreEvent);
       
-      console.log("📝 Direct Firebase insertion successful:", docRef.id);
+      console.log("Direct Firebase insertion successful:", docRef.id);
       
       // Dispatch notifications
       this.dispatchCalendarNotifications(event, { 
@@ -1502,14 +1481,54 @@ async createEventFromCollectedData(eventData, userId, familyId) {
         success: true,
         eventId: docRef.id
       };
-    } catch (firebaseError) {
-      console.error("❌ All approaches failed. Final error:", firebaseError);
-      return { success: false, error: firebaseError.message };
+    } catch (error) {
+      console.error("All approaches failed. Final error:", error);
+      return { success: false, error: error.message };
     }
   } catch (error) {
-    console.error("❌ Error creating event from collected data:", error);
+    console.error("Error creating event from collected data:", error);
     return { success: false, error: error.message };
   }
+}
+
+// Add this helper method to handle notifications
+dispatchCalendarNotifications(event, result) {
+  if (typeof window === 'undefined') return;
+  
+  console.log("Dispatching calendar notifications");
+  
+  // First set of notifications
+  window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+  
+  // Add event-specific notification with detailed data
+  window.dispatchEvent(new CustomEvent('calendar-event-added', {
+    detail: { 
+      eventId: result.eventId || result.firestoreId || result.universalId,
+      event: event
+    }
+  }));
+  
+  // Add child-specific event if applicable
+  if (event.childId || event.childName) {
+    window.dispatchEvent(new CustomEvent('calendar-child-event-added', {
+      detail: { 
+        eventId: result.eventId || result.firestoreId || result.universalId,
+        childId: event.childId,
+        childName: event.childName
+      }
+    }));
+  }
+  
+  // Add staggered refresh events to handle race conditions
+  setTimeout(() => {
+    console.log("Sending delayed force-calendar-refresh event (500ms)");
+    window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+  }, 500);
+  
+  setTimeout(() => {
+    console.log("Sending final force-calendar-refresh event (1500ms)");
+    window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+  }, 1500);
 }
 
 // Add this helper method to handle notifications

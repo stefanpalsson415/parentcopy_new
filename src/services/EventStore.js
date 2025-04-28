@@ -200,6 +200,32 @@ standardizeEvent(eventData) {
     source: standardizedEvent.source
   });
   
+// In the standardizeEvent method in EventStore.js, add this fix after line 86 (after standardizedEvent creation)
+// In file: src/services/EventStore.js
+// Add right before the return statement in standardizeEvent method:
+
+// Ensure we don't have undefined values that might cause Firebase errors
+Object.keys(standardizedEvent).forEach(key => {
+  if (standardizedEvent[key] === undefined) {
+    delete standardizedEvent[key];
+  }
+});
+
+// Ensure critical fields have fallback values
+if (!standardizedEvent.title) standardizedEvent.title = "Untitled Event";
+if (!standardizedEvent.eventType) standardizedEvent.eventType = "general";
+if (!standardizedEvent.category) standardizedEvent.category = "general";
+
+// Log the final standardized event
+console.log("✅ Final standardized event:", {
+  title: standardizedEvent.title,
+  date: standardizedEvent.date,
+  eventType: standardizedEvent.eventType,
+  childName: standardizedEvent.childName
+});
+
+
+
   return standardizedEvent;
 }
   
