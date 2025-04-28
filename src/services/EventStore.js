@@ -18,31 +18,45 @@ class EventStore {
     }
   }
 
-  // Get a standardized event object with all required fields
   standardizeEvent(eventData) {
-    // Get date objects from various possible sources
+    // Get date objects from various possible sources with better error handling
     let startDate = null;
-    if (eventData.dateObj instanceof Date) {
-      startDate = eventData.dateObj;
-    } else if (eventData.start?.dateTime) {
-      startDate = new Date(eventData.start.dateTime);
-    } else if (eventData.dateTime) {
-      startDate = new Date(eventData.dateTime);
-    } else if (eventData.date) {
-      startDate = new Date(eventData.date);
-    } else {
+    try {
+      if (eventData.dateObj instanceof Date && !isNaN(eventData.dateObj.getTime())) {
+        startDate = eventData.dateObj;
+        console.log("Using dateObj for start date:", startDate.toISOString());
+      } else if (eventData.start?.dateTime) {
+        startDate = new Date(eventData.start.dateTime);
+        console.log("Using start.dateTime for start date:", startDate.toISOString());
+      } else if (eventData.dateTime) {
+        startDate = new Date(eventData.dateTime);
+        console.log("Using dateTime for start date:", startDate.toISOString());
+      } else if (eventData.date) {
+        startDate = new Date(eventData.date);
+        console.log("Using date for start date:", startDate.toISOString());
+      } else {
+        startDate = new Date();
+        console.log("No date found, using current time for start date");
+      }
+    } catch (error) {
+      console.error("Error parsing start date:", error, "Using current time instead");
       startDate = new Date();
     }
 
-    // Calculate end date (default 1 hour duration)
+    // Calculate end date (default 1 hour duration) with better error handling
     let endDate = null;
-    if (eventData.dateEndObj instanceof Date) {
-      endDate = eventData.dateEndObj;
-    } else if (eventData.end?.dateTime) {
-      endDate = new Date(eventData.end.dateTime);
-    } else if (eventData.endDateTime) {
-      endDate = new Date(eventData.endDateTime);
-    } else {
+    try {
+      if (eventData.dateEndObj instanceof Date && !isNaN(eventData.dateEndObj.getTime())) {
+        endDate = eventData.dateEndObj;
+      } else if (eventData.end?.dateTime) {
+        endDate = new Date(eventData.end.dateTime);
+      } else if (eventData.endDateTime) {
+        endDate = new Date(eventData.endDateTime);
+      } else {
+        endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+      }
+    } catch (error) {
+      console.error("Error parsing end date:", error, "Using start date + 1 hour instead");
       endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
     }
 
@@ -60,19 +74,45 @@ class EventStore {
     // Generate a unique, permanent ID if not provided
     const universalId = eventData.universalId || eventData.id || `event-${uuidv4()}`;
 
-    // Create signature for deduplication
-    const signatureBase = `${eventData.title || eventData.summary || ""}-${startDate.toISOString().split('T')[0]}-${
-      eventData.childId || eventData.childName || ""
-    }-${eventData.eventType || eventData.category || ""}`.toLowerCase();
+    // Create signature for deduplication with more reliable field access
+    const title = eventData.title || eventData.summary || "";
+    const childInfo = eventData.childId || eventData.childName || "";
+    const category = eventData.eventType || eventData.category || "general";
+    const dateString = startDate.toISOString().split('T')[0];
+    
+    const signatureBase = `${title}-${dateString}-${childInfo}-${category}`.toLowerCase();
     
     // Calculate a deterministic hash for this event to aid in deduplication
     const eventSignature = `sig-${this.hashString(signatureBase)}`;
 
-    // Return a fully standardized event object
+    // IMPROVED: Standardize attendees format if provided
+    let attendees = [];
+    if (eventData.attendees && Array.isArray(eventData.attendees)) {
+      attendees = eventData.attendees.map(attendee => {
+        // Handle both string and object formats
+        if (typeof attendee === 'string') {
+          return { id: attendee, name: attendee, role: 'general' };
+        }
+        
+        // Ensure ID, name, and role always exist
+        return {
+          id: attendee.id || 'unknown-id',
+          name: attendee.name || 'Unknown Attendee',
+          role: attendee.role || 'general',
+          ...attendee
+        };
+      });
+    }
+
+    // IMPROVED: Ensure we have document and providers arrays
+    const documents = Array.isArray(eventData.documents) ? eventData.documents : [];
+    const providers = Array.isArray(eventData.providers) ? eventData.providers : [];
+
+    // Return a fully standardized event object with ALL required fields
     return {
       // Identity fields
       id: eventData.id || eventData.firestoreId || universalId,
-      firestoreId: eventData.firestoreId || eventData.id,
+      firestoreId: eventData.firestoreId || eventData.id || null,
       universalId: universalId,
       eventSignature: eventSignature,
       
@@ -107,19 +147,35 @@ class EventStore {
       childId: eventData.childId || null,
       childName: eventData.childName || null,
       attendingParentId: eventData.attendingParentId || null,
-      siblingIds: eventData.siblingIds || [],
-      siblingNames: eventData.siblingNames || [],
+      siblingIds: Array.isArray(eventData.siblingIds) ? eventData.siblingIds : [],
+      siblingNames: Array.isArray(eventData.siblingNames) ? eventData.siblingNames : [],
       
-      // Family members attending
-      attendees: eventData.attendees || [],
+      // Family members attending - now properly standardized
+      attendees: attendees,
       
-      // Document and provider relationships
-      documents: eventData.documents || [],
-      providers: eventData.providers || [],
+      // Document and provider relationships - now properly standardized
+      documents: documents,
+      providers: providers,
+      
+      // Doctor name (crucial for appointments) - explicitly added
+      doctorName: eventData.doctorName || eventData.appointmentDetails?.doctorName || null,
+      
+      // Add appointment-specific details if this is a medical appointment
+      appointmentDetails: eventData.appointmentDetails || null,
+      
+      // Add activity-specific details if present
+      activityDetails: eventData.activityDetails || null,
       
       // Additional metadata
-      extraDetails: eventData.extraDetails || {},
-      source: eventData.source || "manual",
+      extraDetails: {
+        ...(eventData.extraDetails || {}),
+        // Ensure these critical fields exist for chat-created events
+        creationSource: eventData.extraDetails?.creationSource || eventData.source || "manual",
+        parsedWithAI: eventData.extraDetails?.parsedWithAI || false
+      },
+      
+      // Keep original source field but ensure it exists
+      source: eventData.source || eventData.extraDetails?.creationSource || "manual",
       linkedEntity: eventData.linkedEntity || null,
       
       // Enhanced context
@@ -391,7 +447,6 @@ async checkAndRecoverPendingEvents() {
     }
   }
 
-  // Get events by user ID and date range
   async getEventsForUser(userId, startDate = null, endDate = null) {
     try {
       if (!userId) throw new Error("User ID is required");
@@ -407,35 +462,78 @@ async checkAndRecoverPendingEvents() {
         endDate.setDate(endDate.getDate() + 60);
       }
       
-      // Query Firestore
+      // Query Firestore - IMPROVED: No additional filters that might exclude events
       const eventsQuery = query(
         collection(db, "events"),
         where("userId", "==", userId)
       );
       
+      console.log(`Fetching events for user ${userId}`);
       const querySnapshot = await getDocs(eventsQuery);
+      console.log(`Retrieved ${querySnapshot.size} events from Firebase`);
+      
       const events = [];
       
-      // Process results
+      // Process results with more robust logging
       querySnapshot.forEach((doc) => {
-        const eventData = doc.data();
-        const standardizedEvent = this.standardizeEvent({
-          ...eventData,
-          firestoreId: doc.id
-        });
-        
-        // Check if within date range
-        const eventStartDate = new Date(standardizedEvent.start.dateTime);
-        if (eventStartDate >= startDate && eventStartDate <= endDate) {
-          events.push(standardizedEvent);
+        try {
+          const eventData = doc.data();
+          const standardizedEvent = this.standardizeEvent({
+            ...eventData,
+            firestoreId: doc.id
+          });
           
-          // Update cache
-          this.eventCache.set(standardizedEvent.universalId, standardizedEvent);
+          // IMPROVED: More flexible date handling with fallbacks
+          let eventStartDate;
+          try {
+            if (standardizedEvent.start?.dateTime) {
+              eventStartDate = new Date(standardizedEvent.start.dateTime);
+            } else if (standardizedEvent.dateTime) {
+              eventStartDate = new Date(standardizedEvent.dateTime);
+            } else if (standardizedEvent.dateObj) {
+              eventStartDate = standardizedEvent.dateObj;
+            } else if (standardizedEvent.date) {
+              eventStartDate = new Date(standardizedEvent.date);
+            } else {
+              console.warn(`Event ${doc.id} missing date/time fields, using current date`);
+              eventStartDate = new Date();
+            }
+          } catch (dateError) {
+            console.error(`Error parsing date for event ${doc.id}:`, dateError);
+            eventStartDate = new Date(); // Fallback to current date
+          }
+          
+          // Add event regardless of date if date parsing failed
+          const dateParsingFailed = isNaN(eventStartDate.getTime());
+          const withinDateRange = dateParsingFailed || 
+                                 (eventStartDate >= startDate && eventStartDate <= endDate);
+          
+          if (withinDateRange) {
+            // Log source for debugging
+            console.log(`Adding event: "${standardizedEvent.title || 'Untitled'}" from source "${standardizedEvent.source || 'unknown'}", id=${doc.id}`);
+            
+            events.push(standardizedEvent);
+            
+            // Update cache
+            this.eventCache.set(standardizedEvent.universalId, standardizedEvent);
+          }
+        } catch (docError) {
+          console.error(`Error processing event document ${doc.id}:`, docError);
         }
       });
       
-      // Sort by date
-      return events.sort((a, b) => new Date(a.start.dateTime) - new Date(b.start.dateTime));
+      console.log(`Processed ${events.length} events within date range`);
+      
+      // Sort by date with error handling
+      return events.sort((a, b) => {
+        try {
+          const dateA = new Date(a.start?.dateTime || a.dateTime || a.date || Date.now());
+          const dateB = new Date(b.start?.dateTime || b.dateTime || b.date || Date.now());
+          return dateA - dateB;
+        } catch (e) {
+          return 0; // If date parsing fails, don't change order
+        }
+      });
     } catch (error) {
       console.error("Error getting events:", error);
       return [];

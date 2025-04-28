@@ -130,33 +130,51 @@ const handleForceRefresh = async () => {
 };
 
 
-// THEN MODIFY THE USEEFFECT THAT USES THIS FUNCTION (around line 185-220)
 useEffect(() => {
   const DEBOUNCE_INTERVAL = 1000; // Wait 1 second between refreshes
   
-  const refreshEvents = (e) => {
+  const refreshEventsHandler = (e) => {
     const now = Date.now();
     // Only refresh if enough time has passed since last refresh
     if (now - lastRefreshTimeRef.current > DEBOUNCE_INTERVAL) {
       console.log("Calendar event refresh triggered", e?.type || 'manual refresh');
       lastRefreshTimeRef.current = now;
+      
+      // IMPROVED: Reset cache AND call the context's refreshEvents() method
       resetEventCache();
-      setLastRefresh(now);
+      
+      // FIXED: Use the context's refreshEvents function, not just state update
+      if (typeof refreshEvents === 'function') {
+        console.log("Calling context refreshEvents() from event handler");
+        refreshEvents().catch(err => console.error("Error refreshing events:", err));
+      } else {
+        console.log("No refreshEvents function available, falling back to state update");
+        setLastRefresh(now);
+      }
     } else {
       console.log("Event refresh debounced - too soon after previous refresh");
     }
   };
   
+  // IMPROVED: Add event listener for the specific calendar-event-updated event
   window.addEventListener('force-calendar-refresh', handleForceRefresh);
-  window.addEventListener('calendar-event-added', refreshEvents);
-  window.addEventListener('calendar-child-event-added', refreshEvents);
+  window.addEventListener('calendar-event-added', refreshEventsHandler);
+  window.addEventListener('calendar-child-event-added', refreshEventsHandler);
+  window.addEventListener('calendar-event-updated', refreshEventsHandler);
+  
+  // ADDED: Initial load when component mounts
+  console.log("Calendar widget mounted, performing initial data load");
+  if (typeof refreshEvents === 'function') {
+    refreshEvents().catch(err => console.error("Error in initial refresh:", err));
+  }
   
   return () => {
     window.removeEventListener('force-calendar-refresh', handleForceRefresh);
-    window.removeEventListener('calendar-event-added', refreshEvents);
-    window.removeEventListener('calendar-child-event-added', refreshEvents);
+    window.removeEventListener('calendar-event-added', refreshEventsHandler);
+    window.removeEventListener('calendar-child-event-added', refreshEventsHandler);
+    window.removeEventListener('calendar-event-updated', refreshEventsHandler);
   };
-}, []);
+}, [refreshEvents]); // FIXED: Add refreshEvents as a dependency
   
   // Drag to resize functionality
   useEffect(() => {
@@ -1259,15 +1277,38 @@ console.log(`Event date update from source ${dateSrc}:`, newDate.toISOString());
           />
           
           {/* Add Event Button */}
-          <div className="mb-4 mt-1">
-            <button
-              onClick={() => setShowEventManager(true)}
-              className="w-full py-2 px-3 bg-black text-white rounded text-sm hover:bg-gray-800 transition-colors flex items-center justify-center"
-            >
-              <PlusCircle size={16} className="mr-2" />
-              Add New Event
-            </button>
-          </div>
+<div className="mb-4 mt-1">
+  <button
+    onClick={() => setShowEventManager(true)}
+    className="w-full py-2 px-3 bg-black text-white rounded text-sm hover:bg-gray-800 transition-colors flex items-center justify-center"
+  >
+    <PlusCircle size={16} className="mr-2" />
+    Add New Event
+  </button>
+  
+  {/* ADDED: Debug refresh button */}
+  <button
+    onClick={() => {
+      console.log("Manual calendar refresh triggered by user");
+      // Reset cache
+      resetEventCache();
+      // Call context refresh if available
+      if (typeof refreshEvents === 'function') {
+        refreshEvents().catch(err => console.error("Error refreshing events:", err));
+      }
+      // Update lastRefresh as fallback
+      setLastRefresh(Date.now());
+      // Dispatch DOM event for other components
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+      }
+    }}
+    className="w-full py-1 px-3 bg-gray-200 text-gray-700 rounded text-xs hover:bg-gray-300 transition-colors flex items-center justify-center mt-1"
+  >
+    <Calendar size={12} className="mr-1" />
+    Refresh Calendar
+  </button>
+</div>
           
           {/* AI Parse Info Button - only show if we have AI parsed events */}
           {events.some(event => event.extraDetails?.parsedWithAI) && (
