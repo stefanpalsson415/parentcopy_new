@@ -106,6 +106,8 @@ const RevisedFloatingCalendarWidget = () => {
 const lastRefreshTimeRef = useRef(0);
 
 // In RevisedFloatingCalendarWidget.jsx - enhanced handleForceRefresh function
+// NEW CODE in RevisedFloatingCalendarWidget.jsx handleForceRefresh function
+// In RevisedFloatingCalendarWidget.jsx - enhanced handleForceRefresh function
 const handleForceRefresh = async () => {
   const now = Date.now();
   
@@ -1090,7 +1092,8 @@ console.log(`Event date update from source ${dateSrc}:`, newDate.toISOString());
     );
   }
   
-  /**
+
+/**
  * Get events for currently selected date with improved date comparison
  * @returns {Array} Filtered events for selected date
  */

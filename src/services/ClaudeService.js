@@ -3,7 +3,7 @@ import CalendarService from './CalendarService';
 import { auth } from './firebase';
 
 class ClaudeService {
-// NEW IMPLEMENTATION
+// NEW CODE in ClaudeService.js constructor
 constructor() {
   // Determine environment type
   const hostname = window.location.hostname;
@@ -37,7 +37,11 @@ constructor() {
   this.mockMode = false;
   this.debugMode = true; // Always enable logging for debugging
   this.disableAICalls = false;
-  this.disableCalendarDetection = false; // <-- CHANGED TO FALSE to enable calendar detection
+  
+  // CRITICAL FIX: Explicitly set this to false and log it
+  this.disableCalendarDetection = false; // <-- EXPLICITLY FALSE to enable calendar detection
+  console.log("🔴 Calendar detection explicitly enabled in constructor:", !this.disableCalendarDetection);
+  
   this.retryCount = 3;
   this.functionRegion = 'europe-west1'; // Match this to your deployment region
   
@@ -314,6 +318,14 @@ console.log("Calendar detection enabled:", !this.disableCalendarDetection);
 // FIXED: Log the actual runtime flag value
 console.log("Runtime disableCalendarDetection flag:", this.disableCalendarDetection);
 
+// NEW CODE in ClaudeService.js generateResponse method
+// Check for calendar request 
+console.log("Checking for calendar intent in message:", messageText.substring(0, 50) + (messageText.length > 50 ? "..." : ""));
+console.log("Calendar detection enabled:", !this.disableCalendarDetection);
+
+// FIXED: Log the actual runtime flag value
+console.log("Runtime disableCalendarDetection flag:", this.disableCalendarDetection);
+
 if (!this.disableCalendarDetection && messageText.length > 0) {
   // IMPROVED: Expanded list of calendar keywords for better detection
   const calendarKeywords = [
@@ -342,6 +354,23 @@ if (!this.disableCalendarDetection && messageText.length > 0) {
   
   // Combined check
   const isCalendarRequest = hasKeyword || hasAppointmentPattern;
+  
+  console.log("Calendar detection result:", { 
+    hasKeyword, 
+    hasAppointmentPattern, 
+    isCalendarRequest 
+  });
+  
+  if (isCalendarRequest) {
+    // IMPROVED: Better error handling and context validation
+    console.log("Detected calendar intent, attempting to extract details");
+    
+    // Validate required context
+    if (!context.userId) {
+      console.warn("Missing userId in context, cannot proceed with calendar extraction");
+      // Return special marker to indicate we detected calendar intent but couldn't proceed
+      return "I'd like to add this to your calendar, but I need you to be logged in first. Once you're logged in, I can help you schedule events and send reminders.";
+    }
   
   console.log("Calendar detection result:", { 
     hasKeyword, 
@@ -1071,12 +1100,8 @@ formatCollectedEventData(collectedData) {
   return eventData;
 }
 
-// In ClaudeService.js, enhance the createEventFromCollectedData method:
 
-// In ClaudeService.js, update the createEventFromCollectedData method
-
-// In ClaudeService.js, update the createEventFromCollectedData method
-
+// NEW CODE in ClaudeService.js createEventFromCollectedData method
 async createEventFromCollectedData(eventData, userId, familyId) {
   try {
     // Validate required parameters

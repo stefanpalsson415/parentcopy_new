@@ -18,7 +18,8 @@ class EventStore {
     }
   }
 
- // In EventStore.js, update the standardizeEvent method
+ // NEW CODE in EventStore.js standardizeEvent method
+// CORRECTED CODE for EventStore.js standardizeEvent method
 standardizeEvent(eventData) {
   // Get date objects from various possible sources with improved error handling and logging
   let startDate = null;
