@@ -326,6 +326,7 @@ console.log("Calendar detection enabled:", !this.disableCalendarDetection);
 // FIXED: Log the actual runtime flag value
 console.log("Runtime disableCalendarDetection flag:", this.disableCalendarDetection);
 
+// NEW CODE (complete fixed section)
 if (!this.disableCalendarDetection && messageText.length > 0) {
   // IMPROVED: Expanded list of calendar keywords for better detection
   const calendarKeywords = [
@@ -354,23 +355,6 @@ if (!this.disableCalendarDetection && messageText.length > 0) {
   
   // Combined check
   const isCalendarRequest = hasKeyword || hasAppointmentPattern;
-  
-  console.log("Calendar detection result:", { 
-    hasKeyword, 
-    hasAppointmentPattern, 
-    isCalendarRequest 
-  });
-  
-  if (isCalendarRequest) {
-    // IMPROVED: Better error handling and context validation
-    console.log("Detected calendar intent, attempting to extract details");
-    
-    // Validate required context
-    if (!context.userId) {
-      console.warn("Missing userId in context, cannot proceed with calendar extraction");
-      // Return special marker to indicate we detected calendar intent but couldn't proceed
-      return "I'd like to add this to your calendar, but I need you to be logged in first. Once you're logged in, I can help you schedule events and send reminders.";
-    }
   
   console.log("Calendar detection result:", { 
     hasKeyword, 
