@@ -2,6 +2,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import eventStore from '../services/EventStore';
 import { useAuth } from '../contexts/AuthContext';
+import UnifiedEventService from '../services/UnifiedEventService';
+
 
 export function useEvents(options = {}) {
     const [events, setEvents] = useState([]);
@@ -190,8 +192,16 @@ const refreshEvents = useCallback(async () => {
     // Import UnifiedEventService dynamically to avoid circular dependencies
     const UnifiedEventService = (await import('../services/UnifiedEventService')).default;
     
-    // First, explicitly clear the event cache
+    // First, clear the cache through the instance, not the class
+try {
+  if (UnifiedEventService && typeof UnifiedEventService.clearCache === 'function') {
     UnifiedEventService.clearCache();
+  } else {
+    console.log("Cache clearing not available, continuing with refresh");
+  }
+} catch (e) {
+  console.warn("Error clearing event cache:", e);
+}
     
     // Then force reload with a completely new fetch directly from DB
     const refreshedEvents = await UnifiedEventService.refreshEvents(
