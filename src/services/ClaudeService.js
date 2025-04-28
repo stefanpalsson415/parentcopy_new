@@ -944,7 +944,6 @@ formatCollectedEventData(collectedData) {
 
 // In ClaudeService.js, update the createEventFromCollectedData method
 
-// In src/services/ClaudeService.js, update the createEventFromCollectedData method
 async createEventFromCollectedData(eventData, userId, familyId) {
   try {
     // Validate required parameters
@@ -1039,59 +1038,44 @@ async createEventFromCollectedData(eventData, userId, familyId) {
     
     console.log("📅 Final event object ready for saving:", event);
     
-    // First try using EventStore directly instead of CalendarService
+    // Use UnifiedEventService instead of direct EventStore or CalendarService
     try {
-      // Import EventStore directly
-      const eventStore = (await import('./EventStore')).default;
-      const result = await eventStore.addEvent(event, userId, familyId);
+      // Import UnifiedEventService dynamically
+      const UnifiedEventService = (await import('./UnifiedEventService')).default;
       
-      console.log("📅 EventStore direct result:", result);
+      // Add event through the unified service with source metadata
+      const result = await UnifiedEventService.addEvent(
+        event, 
+        userId, 
+        familyId, 
+        { 
+          source: 'chat',
+          assistant: 'claude',
+          collectionMethod: 'guided'
+        }
+      );
       
-      // Trigger UI refresh with multiple events to ensure components update
-      if (typeof window !== 'undefined') {
-        // Dispatch event-added event
-        window.dispatchEvent(new CustomEvent('calendar-event-added', {
-          detail: {
-            eventId: result.eventId || result.firestoreId,
-            addedViaChat: true
-          }
-        }));
-        
-        // Also dispatch a general refresh event
-        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-        
-        // Add a third delayed refresh for components that might miss the first events
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-        }, 1000);
-      }
+      console.log("📅 UnifiedEventService result:", result);
       
       return {
         success: true,
         eventId: result.eventId || result.firestoreId || result.universalId
       };
-    } catch (storeError) {
-      console.error("Error using EventStore directly:", storeError);
+    } catch (error) {
+      console.error("Error using UnifiedEventService:", error);
       
-      // Fall back to CalendarService
+      // Final fallback - try direct EventStore as last resort
       try {
-        const CalendarService = (await import('./CalendarService')).default;
-        const result = await CalendarService.addEvent(event, userId);
+        const eventStore = (await import('./EventStore')).default;
+        const result = await eventStore.addEvent(event, userId, familyId);
         
-        console.log("📅 Calendar service result:", result);
-        
-        // Trigger UI refresh
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-        }
-        
-        return { 
-          success: true, 
-          eventId: result.eventId || result.firestoreId 
+        return {
+          success: true,
+          eventId: result.eventId || result.firestoreId || result.universalId
         };
-      } catch (calendarError) {
-        console.error("Error from CalendarService:", calendarError);
-        return { success: false, error: calendarError.message };
+      } catch (lastError) {
+        console.error("Final fallback also failed:", lastError);
+        return { success: false, error: lastError.message };
       }
     }
   } catch (error) {

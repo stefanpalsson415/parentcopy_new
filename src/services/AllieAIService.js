@@ -928,8 +928,6 @@ async createOrFindProvider(familyId, name, specialty, email, phone, address = ""
   }
 }
 
-// New method in AllieAIService.js to process events from chat for all types
-
 async processEventFromChat(message, familyId, eventType = null, childId = null) {
   try {
     if (!familyId) return { success: false, error: "Family ID is required" };
@@ -1007,16 +1005,25 @@ async processEventFromChat(message, familyId, eventType = null, childId = null) 
       }
     };
     
-    // Save to calendar
-    const { addEvent } = (await import('../contexts/EventContext')).useEvents();
-    const result = await addEvent(completeEvent);
+    // Use UnifiedEventService instead of directly calling useEvents or EventStore
+    // Import UnifiedEventService dynamically
+    const UnifiedEventService = (await import('./UnifiedEventService')).default;
+    
+    // Use the userId from the family context or fallback to a default
+    const userId = familyContext.currentUser?.uid || 'default-user';
+    
+    // Save event using the unified service
+    const result = await UnifiedEventService.addEvent(
+      completeEvent, 
+      userId, 
+      familyId,
+      { 
+        source: 'ai-service',
+        messageSource: message.substring(0, 100) // Store a snippet of the source message
+      }
+    );
     
     if (result.success) {
-      // Trigger calendar refresh
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-      }
-      
       return { 
         success: true, 
         eventId: result.eventId,

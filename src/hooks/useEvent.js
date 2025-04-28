@@ -137,59 +137,42 @@ export function useEvents(options = {}) {
     }, [currentUser, startDate, endDate, familyId, cycleNumber, childId, category, filterBy]);
   
     // Add a new event with enhanced handling for docs and providers
-    const addEvent = useCallback(async (eventData) => {
-      if (!currentUser) return { success: false, error: 'User not authenticated' };
-      
-      // Ensure we have arrays for documents and providers if they don't exist
-      const enhancedEventData = {
-        ...eventData,
-        documents: eventData.documents || [],
-        providers: eventData.providers || [],
-        // Standardize attendees format if provided
-        attendees: eventData.attendees ? eventData.attendees.map(attendee => {
-          // Ensure each attendee has id, name, role
-          if (typeof attendee === 'string') {
-            return { id: attendee, name: attendee, role: 'general' };
-          }
-          return {
-            id: attendee.id || 'unknown-id',
-            name: attendee.name || 'Unknown',
-            role: attendee.role || 'general',
-            ...attendee
-          };
-        }) : []
-      };
-      
-      return await eventStore.addEvent(enhancedEventData, currentUser.uid, familyId);
-    }, [currentUser, familyId]);
+const addEvent = useCallback(async (eventData) => {
+  if (!currentUser) return { success: false, error: 'User not authenticated' };
+  
+  // Import UnifiedEventService dynamically to avoid circular dependencies
+  const UnifiedEventService = (await import('../services/UnifiedEventService')).default;
+  
+  // Use the unified service with the 'context' entry point source
+  return await UnifiedEventService.addEvent(
+    eventData, 
+    currentUser.uid, 
+    familyId,
+    { source: 'react-context' }
+  );
+}, [currentUser, familyId]);
   
     // Update an event with enhanced handling
-    const updateEvent = useCallback(async (eventId, updateData) => {
-      if (!currentUser) return { success: false, error: 'User not authenticated' };
-      
-      // Process attendees if being updated
-      if (updateData.attendees) {
-        updateData.attendees = updateData.attendees.map(attendee => {
-          if (typeof attendee === 'string') {
-            return { id: attendee, name: attendee, role: 'general' };
-          }
-          return {
-            id: attendee.id || 'unknown-id',
-            name: attendee.name || 'Unknown',
-            role: attendee.role || 'general',
-            ...attendee
-          };
-        });
-      }
-      
-      return await eventStore.updateEvent(eventId, updateData, currentUser.uid);
-    }, [currentUser]);
+const updateEvent = useCallback(async (eventId, updateData) => {
+  if (!currentUser) return { success: false, error: 'User not authenticated' };
+  
+  // Import UnifiedEventService dynamically to avoid circular dependencies
+  const UnifiedEventService = (await import('../services/UnifiedEventService')).default;
+  
+  // Use unified service for event updates
+  return await UnifiedEventService.updateEvent(eventId, updateData, currentUser.uid);
+}, [currentUser]);
   
     // Delete an event
-    const deleteEvent = useCallback(async (eventId) => {
-      if (!currentUser) return { success: false, error: 'User not authenticated' };
-      return await eventStore.deleteEvent(eventId, currentUser.uid);
-    }, [currentUser]);
+const deleteEvent = useCallback(async (eventId) => {
+  if (!currentUser) return { success: false, error: 'User not authenticated' };
+  
+  // Import UnifiedEventService dynamically to avoid circular dependencies
+  const UnifiedEventService = (await import('../services/UnifiedEventService')).default;
+  
+  // Use unified service for event deletion
+  return await UnifiedEventService.deleteEvent(eventId, currentUser.uid);
+}, [currentUser]);
   
     // In src/hooks/useEvent.js
 // Enhance the refreshEvents function around line 180-200
@@ -204,11 +187,14 @@ const refreshEvents = useCallback(async () => {
   setLoading(true);
   
   try {
-    // First, explicitly clear the event cache in EventStore
-    eventStore.clearCache();
+    // Import UnifiedEventService dynamically to avoid circular dependencies
+    const UnifiedEventService = (await import('../services/UnifiedEventService')).default;
+    
+    // First, explicitly clear the event cache
+    UnifiedEventService.clearCache();
     
     // Then force reload with a completely new fetch directly from DB
-    const refreshedEvents = await eventStore.refreshEvents(
+    const refreshedEvents = await UnifiedEventService.refreshEvents(
       currentUser.uid, 
       familyId, 
       cycleNumber
@@ -243,13 +229,6 @@ const refreshEvents = useCallback(async () => {
     setTimeout(() => {
       setEvents(filteredEvents);
     }, 50);
-    
-    // Force additional DOM refresh with an event
-    if (typeof window !== 'undefined') {
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-      }, 100);
-    }
   } catch (error) {
     console.error("Error refreshing events:", error);
   } finally {
