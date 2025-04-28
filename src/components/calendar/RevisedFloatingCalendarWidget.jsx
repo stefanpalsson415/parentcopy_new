@@ -108,24 +108,43 @@ const lastRefreshTimeRef = useRef(0);
 // In RevisedFloatingCalendarWidget.jsx - enhanced handleForceRefresh function
 const handleForceRefresh = async () => {
   const now = Date.now();
+  
+  // Log force refresh event regardless of debouncing 
+  console.log("🔴 Force calendar refresh requested at", new Date(now).toLocaleTimeString());
+  
   if (now - lastRefreshTimeRef.current > DEBOUNCE_INTERVAL) {
-    console.log("Force calendar refresh triggered");
+    console.log("🔴 Force calendar refresh executing - passed debounce check");
     lastRefreshTimeRef.current = now;
     
     // Reset local cache
     resetEventCache();
     
-    // IMPORTANT: Directly call refreshEvents from context instead of just updating lastRefresh
+    // IMPORTANT: Directly call refreshEvents from context first with explicit debugging
     if (typeof refreshEvents === 'function') {
       try {
+        console.log("🔴 Calling explicit refreshEvents() from context");
         await refreshEvents();
+        console.log("🔴 Explicit refreshEvents() completed");
       } catch (error) {
-        console.warn("Error refreshing events:", error);
+        console.warn("🔴 Error refreshing events:", error);
       }
+    } else {
+      console.log("🔴 No refreshEvents function available, using lastRefresh update");
+      setLastRefresh(now);
     }
     
-    // Update lastRefresh as fallback
-    setLastRefresh(now);
+    // Also reset selected date to force re-render
+    const currentSelectedDate = new Date(selectedDate);
+    setSelectedDate(new Date(currentSelectedDate));
+    
+    // Log events after refresh
+    console.log("🔴 Events after refresh:", events.map(e => ({
+      title: e.title,
+      date: e.dateObj instanceof Date ? e.dateObj.toDateString() : 'Invalid Date',
+      source: e.source
+    })));
+  } else {
+    console.log("🔴 Force calendar refresh debounced - too soon after previous refresh");
   }
 };
 
@@ -1072,78 +1091,86 @@ console.log(`Event date update from source ${dateSrc}:`, newDate.toISOString());
   }
   
   /**
-   * Get events for currently selected date with filtering
-   * @returns {Array} Filtered events for selected date
-   */
-
-  const getEventsForSelectedDate = () => {
-    if (!selectedDate) return [];
+ * Get events for currently selected date with improved date comparison
+ * @returns {Array} Filtered events for selected date
+ */
+const getEventsForSelectedDate = () => {
+  if (!selectedDate) return [];
+  
+  // This new approach will properly handle date comparison regardless of time component
+  console.log("🔴 Finding events for date:", selectedDate.toDateString());
+  
+  return events.filter(event => {
+    // Ensure we have a valid date object with better handling
+    let eventDate = null;
     
-    // Use a safer approach without excessive logging
-    // This was causing console spam and potential performance issues
-    
-    return events.filter(event => {
-      // Ensure we have a valid date object
-      let eventDate = null;
+    try {
+      // Try to get the date from any of the possible date fields
+      if (event.dateObj instanceof Date && !isNaN(event.dateObj.getTime())) {
+        eventDate = event.dateObj;
+      } else if (event.start?.dateTime) {
+        eventDate = new Date(event.start.dateTime);
+      } else if (event.start?.date) {
+        eventDate = new Date(event.start.date);
+      } else if (event.dateTime) {
+        eventDate = new Date(event.dateTime);
+      } else if (event.date) {
+        eventDate = new Date(event.date);
+      }
       
-      try {
-        if (event.dateObj instanceof Date && !isNaN(event.dateObj.getTime())) {
-          eventDate = event.dateObj;
-        } else if (event.start?.dateTime) {
-          eventDate = new Date(event.start.dateTime);
-        } else if (event.start?.date) {
-          eventDate = new Date(event.start.date);
-        } else if (event.dateTime) {
-          eventDate = new Date(event.dateTime);
-        } else if (event.date) {
-          eventDate = new Date(event.date);
-        }
-        
-        // Skip events with invalid dates
-        if (!eventDate || isNaN(eventDate.getTime())) {
-          // Avoid console spam by not logging every invalid date
+      // Skip events with invalid dates
+      if (!eventDate || isNaN(eventDate.getTime())) {
+        return false;
+      }
+      
+      // CRITICAL FIX: Use toDateString() for comparison to ignore time component
+      const eventDateString = eventDate.toDateString();
+      const selectedDateString = selectedDate.toDateString();
+      
+      // Log match info for debugging
+      console.log(`🔴 Comparing dates: Event (${event.title}): ${eventDateString}, Selected: ${selectedDateString}`);
+      
+      const dateMatch = eventDateString === selectedDateString;
+      
+      // If date doesn't match, return false immediately
+      if (!dateMatch) return false;
+      
+      // Check member filter
+      if (selectedMember !== 'all') {
+        // For child events
+        if (event.childName && selectedMember !== event.childId && selectedMember !== event.childName) {
           return false;
         }
         
-        // Check date match - only compare year, month, day (not time)
-        const dateMatch = eventDate.getDate() === selectedDate.getDate() &&
-                        eventDate.getMonth() === selectedDate.getMonth() &&
-                        eventDate.getFullYear() === selectedDate.getFullYear();
-        
-        // If date doesn't match, return false immediately
-        if (!dateMatch) return false;
-        
-        // Check member filter
-        if (selectedMember !== 'all') {
-          // For child events
-          if (event.childName && selectedMember !== event.childId && selectedMember !== event.childName) {
-            return false;
-          }
-          
-          // For parent-assigned tasks
-          if (event.assignedTo && selectedMember !== event.assignedTo && 
-              event.assignedToName && selectedMember !== event.assignedToName) {
-            return false;
-          }
-          
-          // For family events, check attendees
-          const hasSelectedMember = event.attendees?.some(
-            attendee => attendee.id === selectedMember || attendee.name === selectedMember
-          );
-          
-          if (!hasSelectedMember && !event.childName && !event.assignedTo) {
-            return false;
-          }
+        // For parent-assigned tasks
+        if (event.assignedTo && selectedMember !== event.assignedTo && 
+            event.assignedToName && selectedMember !== event.assignedToName) {
+          return false;
         }
         
-        return true;
-      } catch (err) {
-        // Safely handle any parse errors
-        console.warn("Error processing event date", err);
-        return false;
+        // For family events, check attendees
+        const hasSelectedMember = event.attendees?.some(
+          attendee => attendee.id === selectedMember || attendee.name === selectedMember
+        );
+        
+        if (!hasSelectedMember && !event.childName && !event.assignedTo) {
+          return false;
+        }
       }
-    });
-  };
+      
+      // Log successful matches
+      if (dateMatch) {
+        console.log(`🔴 Found matching event: "${event.title}" for date ${eventDateString}`);
+      }
+      
+      return dateMatch;
+    } catch (err) {
+      // Safely handle any parse errors
+      console.warn("Error processing event date", err);
+      return false;
+    }
+  });
+};
   
   /**
    * Filter events based on the current view type including AI parsed events

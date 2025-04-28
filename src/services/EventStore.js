@@ -18,178 +18,189 @@ class EventStore {
     }
   }
 
-  standardizeEvent(eventData) {
-    // Get date objects from various possible sources with better error handling
-    let startDate = null;
-    try {
-      if (eventData.dateObj instanceof Date && !isNaN(eventData.dateObj.getTime())) {
-        startDate = eventData.dateObj;
-        console.log("Using dateObj for start date:", startDate.toISOString());
-      } else if (eventData.start?.dateTime) {
-        startDate = new Date(eventData.start.dateTime);
-        console.log("Using start.dateTime for start date:", startDate.toISOString());
-      } else if (eventData.dateTime) {
-        startDate = new Date(eventData.dateTime);
-        console.log("Using dateTime for start date:", startDate.toISOString());
-      } else if (eventData.date) {
-        startDate = new Date(eventData.date);
-        console.log("Using date for start date:", startDate.toISOString());
-      } else {
-        startDate = new Date();
-        console.log("No date found, using current time for start date");
-      }
-    } catch (error) {
-      console.error("Error parsing start date:", error, "Using current time instead");
-      startDate = new Date();
-    }
-
-    // Calculate end date (default 1 hour duration) with better error handling
-    let endDate = null;
-    try {
-      if (eventData.dateEndObj instanceof Date && !isNaN(eventData.dateEndObj.getTime())) {
-        endDate = eventData.dateEndObj;
-      } else if (eventData.end?.dateTime) {
-        endDate = new Date(eventData.end.dateTime);
-      } else if (eventData.endDateTime) {
-        endDate = new Date(eventData.endDateTime);
-      } else {
-        endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
-      }
-    } catch (error) {
-      console.error("Error parsing end date:", error, "Using start date + 1 hour instead");
-      endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
-    }
-
-    // Make sure startDate and endDate are valid dates
-    if (isNaN(startDate.getTime())) {
-      console.warn("Invalid start date detected, using current time instead");
-      startDate = new Date();
-    }
-
-    if (isNaN(endDate.getTime())) {
-      console.warn("Invalid end date detected, using start date + 1 hour instead");
-      endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
-    }
-
-    // Generate a unique, permanent ID if not provided
-    const universalId = eventData.universalId || eventData.id || `event-${uuidv4()}`;
-
-    // Create signature for deduplication with more reliable field access
-    const title = eventData.title || eventData.summary || "";
-    const childInfo = eventData.childId || eventData.childName || "";
-    const category = eventData.eventType || eventData.category || "general";
-    const dateString = startDate.toISOString().split('T')[0];
+ // In EventStore.js, update the standardizeEvent method
+standardizeEvent(eventData) {
+  // Get date objects from various possible sources with improved error handling and logging
+  let startDate = null;
+  try {
+    console.log("🔴 Standardizing event:", eventData.title || "Untitled", "Source:", eventData.source || "unknown");
     
-    const signatureBase = `${title}-${dateString}-${childInfo}-${category}`.toLowerCase();
-    
-    // Calculate a deterministic hash for this event to aid in deduplication
-    const eventSignature = `sig-${this.hashString(signatureBase)}`;
-
-    // IMPROVED: Standardize attendees format if provided
-    let attendees = [];
-    if (eventData.attendees && Array.isArray(eventData.attendees)) {
-      attendees = eventData.attendees.map(attendee => {
-        // Handle both string and object formats
-        if (typeof attendee === 'string') {
-          return { id: attendee, name: attendee, role: 'general' };
-        }
-        
-        // Ensure ID, name, and role always exist
-        return {
-          id: attendee.id || 'unknown-id',
-          name: attendee.name || 'Unknown Attendee',
-          role: attendee.role || 'general',
-          ...attendee
-        };
-      });
+    if (eventData.dateObj instanceof Date && !isNaN(eventData.dateObj.getTime())) {
+      startDate = eventData.dateObj;
+      console.log("🔴 Using dateObj for start date:", startDate.toISOString());
+    } else if (eventData.start?.dateTime) {
+      startDate = new Date(eventData.start.dateTime);
+      console.log("🔴 Using start.dateTime for start date:", startDate.toISOString());
+    } else if (eventData.dateTime) {
+      startDate = new Date(eventData.dateTime);
+      console.log("🔴 Using dateTime for start date:", startDate.toISOString());
+    } else if (eventData.date) {
+      startDate = new Date(eventData.date);
+      console.log("🔴 Using date for start date:", startDate.toISOString());
+    } else {
+      startDate = new Date();
+      console.log("🔴 No date found, using current time for start date");
     }
-
-    // IMPROVED: Ensure we have document and providers arrays
-    const documents = Array.isArray(eventData.documents) ? eventData.documents : [];
-    const providers = Array.isArray(eventData.providers) ? eventData.providers : [];
-
-    // Return a fully standardized event object with ALL required fields
-    return {
-      // Identity fields
-      id: eventData.id || eventData.firestoreId || universalId,
-      firestoreId: eventData.firestoreId || eventData.id || null,
-      universalId: universalId,
-      eventSignature: eventSignature,
-      
-      // Core event data
-      title: eventData.title || eventData.summary || "Untitled Event",
-      summary: eventData.summary || eventData.title || "Untitled Event",
-      description: eventData.description || "",
-      
-      // Date information in all required formats for backwards compatibility
-      date: startDate.toISOString(),
-      dateTime: startDate.toISOString(),
-      dateObj: startDate,
-      dateEndObj: endDate,
-      endDateTime: endDate.toISOString(),
-      start: {
-        dateTime: startDate.toISOString(),
-        timeZone: eventData.start?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      end: {
-        dateTime: endDate.toISOString(),
-        timeZone: eventData.end?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      
-      // Classification
-      location: eventData.location || "",
-      category: eventData.category || eventData.eventType || "general",
-      eventType: eventData.eventType || eventData.category || "general",
-      
-      // Relation fields
-      familyId: eventData.familyId,
-      userId: eventData.userId,
-      childId: eventData.childId || null,
-      childName: eventData.childName || null,
-      attendingParentId: eventData.attendingParentId || null,
-      siblingIds: Array.isArray(eventData.siblingIds) ? eventData.siblingIds : [],
-      siblingNames: Array.isArray(eventData.siblingNames) ? eventData.siblingNames : [],
-      
-      // Family members attending - now properly standardized
-      attendees: attendees,
-      
-      // Document and provider relationships - now properly standardized
-      documents: documents,
-      providers: providers,
-      
-      // Doctor name (crucial for appointments) - explicitly added
-      doctorName: eventData.doctorName || eventData.appointmentDetails?.doctorName || null,
-      
-      // Add appointment-specific details if this is a medical appointment
-      appointmentDetails: eventData.appointmentDetails || null,
-      
-      // Add activity-specific details if present
-      activityDetails: eventData.activityDetails || null,
-      
-      // Additional metadata
-      extraDetails: {
-        ...(eventData.extraDetails || {}),
-        // Ensure these critical fields exist for chat-created events
-        creationSource: eventData.extraDetails?.creationSource || eventData.source || "manual",
-        parsedWithAI: eventData.extraDetails?.parsedWithAI || false
-      },
-      
-      // Keep original source field but ensure it exists
-      source: eventData.source || eventData.extraDetails?.creationSource || "manual",
-      linkedEntity: eventData.linkedEntity || null,
-      
-      // Enhanced context
-      reminders: eventData.reminders || {
-        useDefault: true,
-        overrides: []
-      },
-      notes: eventData.notes || eventData.extraDetails?.notes || "",
-      
-      // Timestamps
-      createdAt: eventData.createdAt || new Date().toISOString(),
-      updatedAt: eventData.updatedAt || new Date().toISOString()
-    };
+  } catch (error) {
+    console.error("🔴 Error parsing start date:", error, "Using current time instead");
+    startDate = new Date();
   }
+
+  // Calculate end date (default 1 hour duration) with better error handling
+  let endDate = null;
+  try {
+    if (eventData.dateEndObj instanceof Date && !isNaN(eventData.dateEndObj.getTime())) {
+      endDate = eventData.dateEndObj;
+    } else if (eventData.end?.dateTime) {
+      endDate = new Date(eventData.end.dateTime);
+    } else if (eventData.endDateTime) {
+      endDate = new Date(eventData.endDateTime);
+    } else {
+      endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+    }
+  } catch (error) {
+    console.error("🔴 Error parsing end date:", error, "Using start date + 1 hour instead");
+    endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+  }
+
+  // Make sure startDate and endDate are valid dates
+  if (isNaN(startDate.getTime())) {
+    console.warn("🔴 Invalid start date detected, using current time instead");
+    startDate = new Date();
+  }
+
+  if (isNaN(endDate.getTime())) {
+    console.warn("🔴 Invalid end date detected, using start date + 1 hour instead");
+    endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+  }
+
+  // Generate a unique, permanent ID if not provided 
+  const universalId = eventData.universalId || eventData.id || `event-${uuidv4()}`;
+
+  // Create signature for deduplication with more reliable field access
+  const title = eventData.title || eventData.summary || "";
+  const childInfo = eventData.childId || eventData.childName || "";
+  const category = eventData.eventType || eventData.category || "general";
+  const dateString = startDate.toISOString().split('T')[0];
+  
+  const signatureBase = `${title}-${dateString}-${childInfo}-${category}`.toLowerCase();
+  
+  // Calculate a deterministic hash for this event to aid in deduplication
+  const eventSignature = `sig-${this.hashString(signatureBase)}`;
+
+  // Standardize attendees format if provided
+  let attendees = [];
+  if (eventData.attendees && Array.isArray(eventData.attendees)) {
+    attendees = eventData.attendees.map(attendee => {
+      // Handle both string and object formats
+      if (typeof attendee === 'string') {
+        return { id: attendee, name: attendee, role: 'general' };
+      }
+      
+      // Ensure ID, name, and role always exist
+      return {
+        id: attendee.id || 'unknown-id',
+        name: attendee.name || 'Unknown Attendee',
+        role: attendee.role || 'general',
+        ...attendee
+      };
+    });
+  }
+
+  // Ensure we have document and providers arrays
+  const documents = Array.isArray(eventData.documents) ? eventData.documents : [];
+  const providers = Array.isArray(eventData.providers) ? eventData.providers : [];
+
+  // Return a fully standardized event object with ALL required fields
+  const standardizedEvent = {
+    // Identity fields
+    id: eventData.id || eventData.firestoreId || universalId,
+    firestoreId: eventData.firestoreId || eventData.id || null,
+    universalId: universalId,
+    eventSignature: eventSignature,
+    
+    // Core event data
+    title: eventData.title || eventData.summary || "Untitled Event",
+    summary: eventData.summary || eventData.title || "Untitled Event",
+    description: eventData.description || "",
+    
+    // Date information in all required formats for backwards compatibility
+    date: startDate.toISOString(),
+    dateTime: startDate.toISOString(),
+    dateObj: startDate,
+    dateEndObj: endDate,
+    endDateTime: endDate.toISOString(),
+    start: {
+      dateTime: startDate.toISOString(),
+      timeZone: eventData.start?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone
+    },
+    end: {
+      dateTime: endDate.toISOString(),
+      timeZone: eventData.end?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone
+    },
+    
+    // Classification
+    location: eventData.location || "",
+    category: eventData.category || eventData.eventType || "general",
+    eventType: eventData.eventType || eventData.category || "general",
+    
+    // Relation fields
+    familyId: eventData.familyId,
+    userId: eventData.userId,
+    childId: eventData.childId || null,
+    childName: eventData.childName || null,
+    attendingParentId: eventData.attendingParentId || null,
+    siblingIds: Array.isArray(eventData.siblingIds) ? eventData.siblingIds : [],
+    siblingNames: Array.isArray(eventData.siblingNames) ? eventData.siblingNames : [],
+    
+    // Family members attending - now properly standardized
+    attendees: attendees,
+    
+    // Document and provider relationships - now properly standardized
+    documents: documents,
+    providers: providers,
+    
+    // Doctor name (crucial for appointments) - explicitly added
+    doctorName: eventData.doctorName || eventData.appointmentDetails?.doctorName || null,
+    
+    // Add appointment-specific details if this is a medical appointment
+    appointmentDetails: eventData.appointmentDetails || null,
+    
+    // Add activity-specific details if present
+    activityDetails: eventData.activityDetails || null,
+    
+    // Additional metadata
+    extraDetails: {
+      ...(eventData.extraDetails || {}),
+      // Ensure these critical fields exist for chat-created events
+      creationSource: eventData.extraDetails?.creationSource || eventData.source || "manual",
+      parsedWithAI: eventData.extraDetails?.parsedWithAI || false
+    },
+    
+    // Keep original source field but ensure it exists
+    source: eventData.source || eventData.extraDetails?.creationSource || "manual",
+    linkedEntity: eventData.linkedEntity || null,
+    
+    // Enhanced context
+    reminders: eventData.reminders || {
+      useDefault: true,
+      overrides: []
+    },
+    notes: eventData.notes || eventData.extraDetails?.notes || "",
+    
+    // Timestamps
+    createdAt: eventData.createdAt || new Date().toISOString(),
+    updatedAt: eventData.updatedAt || new Date().toISOString()
+  };
+  
+  console.log("🔴 Standardized event:", {
+    title: standardizedEvent.title,
+    date: standardizedEvent.dateObj.toDateString(),
+    source: standardizedEvent.source
+  });
+  
+  return standardizedEvent;
+}
   
   // Simple hash function for generating event signatures
   hashString(str) {

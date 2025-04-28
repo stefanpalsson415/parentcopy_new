@@ -1075,6 +1075,8 @@ formatCollectedEventData(collectedData) {
 
 // In ClaudeService.js, update the createEventFromCollectedData method
 
+// In ClaudeService.js, update the createEventFromCollectedData method
+
 async createEventFromCollectedData(eventData, userId, familyId) {
   try {
     // Validate required parameters
@@ -1084,7 +1086,7 @@ async createEventFromCollectedData(eventData, userId, familyId) {
     }
     
     // Enhanced logging for debugging
-    console.log("📅 Creating event from collected data:", {
+    console.log("🔴 Creating event from collected data:", {
       title: eventData.title || "Untitled Event",
       type: eventData.eventType || "general",
       dateTime: eventData.dateTime,
@@ -1112,7 +1114,7 @@ async createEventFromCollectedData(eventData, userId, familyId) {
       // Add user and family IDs
       userId,
       familyId,
-      // Ensure proper datetime format
+      // Ensure proper datetime format - CRITICAL PART
       start: {
         dateTime: startDate.toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -1121,6 +1123,12 @@ async createEventFromCollectedData(eventData, userId, familyId) {
         dateTime: endDate.toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       },
+      // Also include these date formats for maximum compatibility
+      date: startDate.toISOString(),
+      dateTime: startDate.toISOString(), 
+      dateObj: startDate,
+      dateEndObj: endDate,
+      endDateTime: endDate.toISOString(),
       reminders: {
         useDefault: false,
         overrides: [
@@ -1167,7 +1175,7 @@ async createEventFromCollectedData(eventData, userId, familyId) {
       };
     }
     
-    console.log("📅 Final event object ready for saving:", event);
+    console.log("🔴 Final event object ready for saving:", event);
     
     // Use UnifiedEventService instead of direct EventStore or CalendarService
     try {
@@ -1186,38 +1194,44 @@ async createEventFromCollectedData(eventData, userId, familyId) {
         }
       );
       
-      console.log("📅 UnifiedEventService result:", result);
+      console.log("🔴 UnifiedEventService result:", result);
       
-      // ADDED: Dispatch additional notification events for maximum compatibility
+      // CRITICAL CHANGE: Dispatch additional notification events with timeout
       if (result.success && typeof window !== 'undefined') {
-        console.log("Dispatching additional calendar notification events");
+        console.log("🔴 Dispatching multiple calendar notification events");
         
-        // Trigger all possible notification mechanisms
+        // First immediate set of notifications
         window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
         
         // Add event-specific notification with detailed data
         window.dispatchEvent(new CustomEvent('calendar-event-added', {
           detail: { 
             eventId: result.eventId || result.firestoreId || result.universalId,
-            event: eventData
+            event: event
           }
         }));
         
         // Add child-specific event if applicable
-        if (eventData.childId || eventData.childName) {
+        if (event.childId || event.childName) {
           window.dispatchEvent(new CustomEvent('calendar-child-event-added', {
             detail: { 
               eventId: result.eventId || result.firestoreId || result.universalId,
-              childId: eventData.childId,
-              childName: eventData.childName
+              childId: event.childId,
+              childName: event.childName
             }
           }));
         }
         
-        // Extra forceful refresh with delay (helps with race conditions)
+        // Add a second delayed set of notifications to handle race conditions
         setTimeout(() => {
+          console.log("🔴 Sending delayed force-calendar-refresh event");
           window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-          console.log("Sent delayed force-calendar-refresh event");
+          
+          // And a final refresh after another short delay
+          setTimeout(() => {
+            console.log("🔴 Sending final force-calendar-refresh event");
+            window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+          }, 1000);
         }, 500);
       }
       
@@ -1232,6 +1246,12 @@ async createEventFromCollectedData(eventData, userId, familyId) {
       try {
         const eventStore = (await import('./EventStore')).default;
         const result = await eventStore.addEvent(event, userId, familyId);
+        
+        // Dispatch the same notifications here too
+        if (result.success && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+          setTimeout(() => window.dispatchEvent(new CustomEvent('force-calendar-refresh')), 500);
+        }
         
         return {
           success: true,
