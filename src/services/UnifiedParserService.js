@@ -478,6 +478,86 @@ for (const pattern of timePatterns) {
     }
   }
 
+/**
+ * Parse provider information from text
+ * @param {string} text - The text to parse
+ * @param {object} context - Additional context (family members, etc.)
+ * @returns {Promise<object>} Extracted provider details
+ */
+async parseProvider(text, context = {}) {
+  try {
+    console.log(`Parsing provider information from text: "${text.substring(0, 50)}..."`);
+    
+    // Prepare system prompt for Claude
+    const systemPrompt = `You are Allie's provider extraction AI. 
+Extract provider information from the user's message.
+
+Extract the following fields in JSON format:
+- name: Provider's name (required)
+- type: Provider type (medical, education, activity, childcare, services, etc.)
+- specialty: Provider's specific role or specialty
+- email: Provider's email if mentioned
+- phone: Provider's phone number if mentioned
+- address: Provider's address or location if mentioned
+- notes: Any additional relevant information
+
+Return ONLY valid JSON without any markdown code blocks or extra text:
+{
+  "name": "string (provider name)",
+  "type": "string (provider type)",
+  "specialty": "string (provider specialty)",
+  "email": "string or null",
+  "phone": "string or null",
+  "address": "string or null",
+  "notes": "string or null"
+}`;
+
+    // Create user message
+    const userMessage = `Extract provider details from this text: "${text}"`;
+    
+    // Call Claude API with minimal temperature for more predictable extraction
+    const response = await this.claudeService.generateResponse(
+      [{ role: 'user', content: userMessage }],
+      { system: systemPrompt },
+      { temperature: 0.1 }
+    );
+    
+    // Process response - handle both direct JSON and text with JSON
+    const extractedData = this.processResponse(response, 'provider');
+    
+    // If we successfully extracted provider details, return them
+    if (extractedData && extractedData.name) {
+      console.log("Successfully extracted provider details:", extractedData);
+      return extractedData;
+    }
+    
+    // If extraction failed, return minimal structure
+    console.log("Failed to extract complete provider details, returning minimal structure");
+    return {
+      name: "Unknown Provider",
+      type: "medical",
+      specialty: "",
+      email: null,
+      phone: null,
+      address: null,
+      notes: text // Include original text as notes
+    };
+  } catch (error) {
+    console.error("Error parsing provider information:", error);
+    // Return minimal structure in case of error
+    return {
+      name: "Unknown Provider",
+      type: "medical",
+      specialty: "",
+      email: null,
+      phone: null,
+      address: null,
+      notes: text
+    };
+  }
+}
+
+
   /**
    * Parse an event from text
    * @param {string} text - The text to parse

@@ -455,11 +455,11 @@ async generateBalanceExperiments(familyId, weightedScores) {
         }
         
         // If UnifiedParserService failed or returned no results, use our direct extraction
-        if (!providerDetails || !providerDetails.name || providerDetails.name === "Unknown Provider") {
-          console.log("Using direct extraction method");
-          providerDetails = this.extractProviderInfo(message);
-          console.log("Direct extraction results:", providerDetails);
-        }
+if (!providerDetails || !providerDetails.name || providerDetails.name === "Unknown Provider") {
+  console.log("Using direct extraction method");
+  providerDetails = this.extractProviderDetails(message);  // CORRECTED METHOD NAME
+  console.log("Direct extraction results:", providerDetails);
+}
         
         // Final validation of provider details
         if (!providerDetails.name || providerDetails.name === "Unknown Provider") {
