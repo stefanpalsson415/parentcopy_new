@@ -1422,7 +1422,6 @@ if (familyContext.familyId) {
 }
 
 
-// In src/services/EnhancedChatService.js, update the getAIResponse method
 async getAIResponse(message, familyId, messageHistory = []) {
   try {
     // Get family context
@@ -1498,22 +1497,24 @@ async getAIResponse(message, familyId, messageHistory = []) {
       }
     }
 
+    // Provider keywords - EXPANDED LIST
     const providerKeywords = ['add coach', 'new coach', 'add teacher', 'new teacher', 
       'add doctor', 'add provider', 'tennis coach', 'swim coach',
-      'new trainer', 'new instructor'];
-const isProviderRequest = providerKeywords.some(keyword => 
-message.toLowerCase().includes(keyword)
-);
+      'new trainer', 'new instructor', 'babysitter', 'add babysitter', 
+      'new babysitter', 'nanny', 'add nanny', 'new nanny', 'childcare'];
+    const isProviderRequest = providerKeywords.some(keyword => 
+      message.toLowerCase().includes(keyword)
+    );
 
-if (isProviderRequest) {
-console.log("Detected provider request, handling with specialized service");
-const providerResponse = await this.handleProviderRequest(message, familyContext);
+    if (isProviderRequest) {
+      console.log("Detected provider request, handling with specialized service");
+      const providerResponse = await this.handleProviderRequest(message, familyContext);
 
-if (providerResponse) {
-console.log("Provider request handled successfully");
-return providerResponse;
-}
-}
+      if (providerResponse) {
+        console.log("Provider request handled successfully");
+        return providerResponse; // RETURN HERE! Don't proceed to Claude
+      }
+    }
     
     // Format messages for Claude API using our helper
     const formattedMessages = ChatPersistenceService.formatMessagesForClaude(messageHistory);
