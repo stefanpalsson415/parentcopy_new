@@ -411,102 +411,275 @@ async generateBalanceExperiments(familyId, weightedScores) {
 
 
 
-async processProviderFromChat(message, familyId) {
-  try {
-    if (!familyId) return { success: false, error: "Family ID is required" };
-    
-    console.log("Processing provider from chat:", message);
-    
-    // Get family context
-    const familyContext = {
-      familyId,
-      // We'll add more context if available
-    };
-    
+  async processProviderFromChat(message, familyId) {
     try {
-      // Use our new UnifiedParserService to extract provider details
-      const providerDetails = await UnifiedParserService.parseProvider(message, familyContext);
+      if (!familyId) {
+        console.error("Missing familyId in processProviderFromChat");
+        return { success: false, error: "Family ID is required" };
+      }
       
+      console.log("🔄 Processing provider from chat:", message.substring(0, 50) + "...");
+      console.log("Family ID:", familyId);
+      
+      // First try to use the UnifiedParserService if available
+      let providerDetails;
+      try {
+        const UnifiedParserService = (await import('./UnifiedParserService')).default;
+        console.log("Using UnifiedParserService to parse provider details");
+        providerDetails = await UnifiedParserService.parseProvider(message, { familyId });
+        
+        if (providerDetails) {
+          console.log("UnifiedParserService extracted details:", providerDetails);
+        }
+      } catch (parserError) {
+        console.error("Error with UnifiedParserService:", parserError);
+        console.log("Falling back to direct extraction");
+        // Handle parser unavailable - fall back to direct extraction
+        providerDetails = null;
+      }
+      
+      // If UnifiedParserService failed or returned no results, use our direct extraction
+      if (!providerDetails || !providerDetails.name || providerDetails.name === "Unknown Provider") {
+        console.log("Using direct extraction method");
+        providerDetails = this.extractProviderInfo(message);
+        console.log("Direct extraction results:", providerDetails);
+      }
+      
+      // Final validation of provider details
       if (!providerDetails.name || providerDetails.name === "Unknown Provider") {
+        console.error("Failed to extract provider name");
         return { 
           success: false, 
           error: "Could not determine the provider's name from your message" 
         };
       }
       
-      console.log("Saving provider details:", providerDetails);
+      // Add comprehensive logging for what we're about to save
+      console.log("🔄 Ready to save provider details:", {
+        name: providerDetails.name,
+        type: providerDetails.type,
+        specialty: providerDetails.specialty,
+        email: providerDetails.email || "none",
+        notes: providerDetails.notes?.substring(0, 50) || "none"
+      });
       
-      // Load ProviderService dynamically if needed
+      // Load ProviderService with better error handling and logging
       let ProviderService;
       try {
         ProviderService = (await import('./ProviderService')).default;
-      } catch (error) {
-        console.error("Failed to import ProviderService:", error);
-        // Create an inline version if import fails - FIXED to use healthcareProviders collection
+        console.log("Successfully imported ProviderService");
+      } catch (importError) {
+        console.error("❌ Failed to import ProviderService:", importError);
+        
+        // Create an inline version if import fails, but use the right collection this time
+        console.log("Creating inline version of ProviderService");
         ProviderService = {
           saveProvider: async (familyId, providerData) => {
             try {
-              // Use healthcareProviders collection to match ProviderService implementation
-              const providersRef = collection(db, "healthcareProviders");
+              console.log("Inline saveProvider using providers collection");
+              const providersRef = collection(db, "providers");
               const docRef = await addDoc(providersRef, {
                 ...providerData,
                 familyId,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
               });
+              console.log("Provider saved with ID:", docRef.id);
               return { success: true, providerId: docRef.id, isNew: true };
             } catch (error) {
-              console.error("Error saving provider:", error);
+              console.error("❌ Error in inline saveProvider:", error);
               return { success: false, error: error.message };
             }
           }
         };
       }
       
-      // Save provider to database
+      // Set family ID and save to database
       providerDetails.familyId = familyId;
+      console.log("🔄 Calling saveProvider method");
       const result = await ProviderService.saveProvider(familyId, providerDetails);
       
+      // Comprehensive logging of the result
+      console.log("🔄 SaveProvider result:", result);
+      
       if (result.success) {
-        // Improved event dispatching for UI refresh
+        console.log("✅ Provider saved successfully with ID:", result.providerId);
+        
+        // Enhanced event dispatching for UI refresh
         if (typeof window !== 'undefined') {
-          // Dispatch the event multiple times to ensure components react
+          console.log("Dispatching UI refresh events");
+          
+          // Immediate events
           window.dispatchEvent(new CustomEvent('provider-added'));
-          
-          // Add a delayed event for components that might miss the first one
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('provider-added'));
-            console.log("Sent delayed provider-added event");
-          }, 1000);
-          
-          // Force a more general refresh
           window.dispatchEvent(new CustomEvent('force-data-refresh'));
+          window.dispatchEvent(new CustomEvent('directory-refresh-needed'));
+          
+          // Stagger additional events to ensure components have time to mount and react
+          setTimeout(() => {
+            console.log("Sending delayed provider refresh events (500ms)");
+            window.dispatchEvent(new CustomEvent('provider-added'));
+            window.dispatchEvent(new CustomEvent('directory-refresh-needed'));
+          }, 500);
+          
+          setTimeout(() => {
+            console.log("Sending final provider refresh events (1500ms)");
+            window.dispatchEvent(new CustomEvent('provider-added'));
+            window.dispatchEvent(new CustomEvent('force-data-refresh'));
+          }, 1500);
         }
-
+        
+        // Create appropriate response message based on provider type
+        let successMessage;
+        if (providerDetails.type === 'childcare') {
+          successMessage = `Successfully added ${providerDetails.specialty || "babysitter"} ${providerDetails.name} to your contacts.`;
+        } else if (providerDetails.type === 'education') {
+          successMessage = `Successfully added ${providerDetails.specialty || "teacher"} ${providerDetails.name} to your provider directory.`;
+        } else if (providerDetails.type === 'medical') {
+          successMessage = `Successfully added Dr. ${providerDetails.name} to your healthcare providers.`;
+        } else {
+          successMessage = `Successfully added ${providerDetails.name} to your ${providerDetails.type} providers.`;
+        }
+  
         return { 
           success: true, 
           providerId: result.providerId,
           providerDetails: providerDetails,
           isNew: result.isNew,
-          message: `Successfully added ${providerDetails.type === 'education' ? 'teacher' : 'provider'} ${providerDetails.name} to your provider directory.`
+          message: successMessage
         };
       } else {
-        return { 
-          success: false, 
-          error: result.error || "Failed to create provider" 
-        };
+        console.error("❌ Failed to save provider:", result.error);
+        
+        // One more backup attempt directly with Firebase
+        try {
+          console.log("Attempting direct Firebase save as backup");
+          const { collection, addDoc, serverTimestamp } = (await import('firebase/firestore'));
+          const { db } = (await import('./firebase'));
+          
+          const providersRef = collection(db, "providers");
+          const docRef = await addDoc(providersRef, {
+            ...providerDetails,
+            familyId,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+          
+          console.log("✅ Direct Firebase backup save successful:", docRef.id);
+          
+          // Dispatch events for UI refresh
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('provider-added'));
+            window.dispatchEvent(new CustomEvent('force-data-refresh'));
+          }
+          
+          return { 
+            success: true, 
+            providerId: docRef.id,
+            providerDetails: providerDetails,
+            isNew: true,
+            message: `Successfully added ${providerDetails.name} to your contacts.`
+          };
+        } catch (backupError) {
+          console.error("❌ Backup Firebase save also failed:", backupError);
+          return { 
+            success: false, 
+            error: result.error || "Failed to create provider" 
+          };
+        }
       }
     } catch (error) {
-      console.error("Error processing provider details:", error);
+      console.error("❌ Unhandled error in processProviderFromChat:", error);
       return { success: false, error: error.message };
     }
+  }
+
+// In src/services/AllieAIService.js
+
+/**
+ * Special method to handle babysitter-specific requests
+ * @param {string} message - The chat message
+ * @param {string} familyId - Family ID
+ * @param {string} childId - Optional child ID
+ * @returns {Promise<object>} Result of babysitter creation
+ */
+async processBabysitterRequest(message, familyId, childId = null) {
+  try {
+    console.log("Processing babysitter request:", message);
+    
+    // Extract babysitter information from the message
+    const babysitterInfo = {
+      name: null,
+      email: null,
+      phone: null,
+      childName: null,
+      childId: childId
+    };
+    
+    // Extract name using patterns
+    const nameMatches = message.match(/name(?:\s+is)?\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i) || 
+                         message.match(/([a-zA-Z]+(?:\s+[a-zA-Z]+)?)\s+(?:is|as)\s+(?:a|the)?\s+babysitter/i);
+    
+    if (nameMatches && nameMatches[1]) {
+      babysitterInfo.name = nameMatches[1].trim();
+    }
+    
+    // Extract email
+    const emailMatch = message.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/i);
+    if (emailMatch && emailMatch[1]) {
+      babysitterInfo.email = emailMatch[1];
+    }
+    
+    // Extract phone number if present
+    const phoneMatch = message.match(/(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})/);
+    if (phoneMatch && phoneMatch[1]) {
+      babysitterInfo.phone = phoneMatch[1];
+    }
+    
+    // Extract child information if not provided
+    if (!childId) {
+      const childMatch = message.match(/for\s+([a-zA-Z]+)/i);
+      if (childMatch && childMatch[1]) {
+        babysitterInfo.childName = childMatch[1].trim();
+        
+        // Try to get child ID if family context is available
+        try {
+          const familyContext = await this.getFamilyContext(familyId);
+          if (familyContext && familyContext.children) {
+            const matchedChild = familyContext.children.find(
+              child => child.name.toLowerCase() === babysitterInfo.childName.toLowerCase()
+            );
+            
+            if (matchedChild) {
+              babysitterInfo.childId = matchedChild.id;
+            }
+          }
+        } catch (contextError) {
+          console.warn("Error getting family context:", contextError);
+        }
+      }
+    }
+    
+    // Prepare provider data for saving
+    const providerData = {
+      name: babysitterInfo.name,
+      type: "childcare",
+      specialty: "Babysitter",
+      email: babysitterInfo.email || "",
+      phone: babysitterInfo.phone || "",
+      notes: babysitterInfo.childName ? `Babysitter for ${babysitterInfo.childName}` : "",
+      childId: babysitterInfo.childId
+    };
+    
+    console.log("Creating babysitter as provider:", providerData);
+    
+    // Use our provider processing logic to save the babysitter
+    return await this.processProviderFromChat(message, familyId);
   } catch (error) {
-    console.error("Error processing provider from chat:", error);
+    console.error("Error processing babysitter request:", error);
     return { success: false, error: error.message };
   }
 }
 
-// In src/services/AllieAIService.js
 
 // Enhanced version of processChildChat
 async processChildChat(message, child, childData, familyId, contextData = null) {
@@ -731,11 +904,48 @@ async extractProviderDetails(message) {
     
     // Check for direct name mentions using common patterns
     let name = null;
-    let type = "medical";
+    let type = "medical"; // Default type
     let specialty = "";
     let email = "";
+    let childName = null;
     
-    // Try to extract name using pattern "name is X"
+    // Enhanced type detection - check for babysitter/childcare first
+    if (message.toLowerCase().includes("babysitter") || 
+        message.toLowerCase().includes("baby sitter") || 
+        message.toLowerCase().includes("nanny") || 
+        message.toLowerCase().includes("childcare")) {
+      type = "childcare";
+      specialty = message.toLowerCase().includes("nanny") ? "Nanny" : "Babysitter";
+      console.log("Detected childcare provider type:", specialty);
+      
+      // Look for patterns specific to babysitters like "for [child name]"
+      const childPattern = /(?:for|watching)\s+([A-Za-z]+)(?:\s|,|\.)/i;
+      const childMatch = message.match(childPattern);
+      if (childMatch && childMatch[1]) {
+        childName = childMatch[1].trim();
+        console.log("Found child name for babysitter:", childName);
+      }
+    }
+    // Then check other provider types
+    else if (message.toLowerCase().includes("music teacher") || 
+        message.toLowerCase().includes("guitar teacher") ||
+        message.toLowerCase().includes("piano teacher")) {
+      type = "education";
+      specialty = message.toLowerCase().includes("guitar") ? "Guitar Teacher" : 
+                message.toLowerCase().includes("piano") ? "Piano Teacher" : "Music Teacher";
+      console.log("Detected education provider type:", specialty);
+    } else if (message.toLowerCase().includes("teacher")) {
+      type = "education";
+      specialty = "Teacher";
+      console.log("Detected general teacher");
+    } else if (message.toLowerCase().includes("dentist") || 
+              message.toLowerCase().includes("dental")) {
+      type = "medical";
+      specialty = "Dentist";
+      console.log("Detected dental provider");
+    }
+    
+    // Try to extract name using pattern "name is X" - general for all provider types
     const nameIsPattern = /(?:name is|named|called)\s+([A-Za-z]+(?: [A-Za-z]+){0,2})/i;
     const nameIsMatch = message.match(nameIsPattern);
     if (nameIsMatch && nameIsMatch[1]) {
@@ -743,39 +953,54 @@ async extractProviderDetails(message) {
       console.log("Found name using 'name is' pattern:", name);
     }
     
-    // Try to extract teacher type
-    if (message.toLowerCase().includes("music teacher") || 
-        message.toLowerCase().includes("guitar teacher") ||
-        message.toLowerCase().includes("piano teacher")) {
-      type = "education";
-      specialty = message.toLowerCase().includes("guitar") ? "Guitar Teacher" : 
-                message.toLowerCase().includes("piano") ? "Piano Teacher" : "Music Teacher";
-    } else if (message.toLowerCase().includes("teacher")) {
-      type = "education";
-      specialty = "Teacher";
+    // Additional extraction patterns for babysitters
+    if (type === "childcare" && !name) {
+      // For babysitters, try these patterns
+      const babysitterPatterns = [
+        /([A-Za-z]+(?: [A-Za-z]+){0,2})\s+(?:is|as)\s+(?:a|the)?\s+babysitter/i,
+        /new\s+babysitter\s+(?:named|called)?\s+([A-Za-z]+(?: [A-Za-z]+){0,2})/i,
+        /babysitter(?:'s| is| named| called)?\s+([A-Za-z]+(?: [A-Za-z]+){0,2})/i
+      ];
+      
+      for (const pattern of babysitterPatterns) {
+        const match = message.match(pattern);
+        if (match && match[1]) {
+          name = match[1].trim();
+          console.log("Found babysitter name using pattern:", name);
+          break;
+        }
+      }
     }
     
-    // Extract email if present
+    // Extract email if present - works for all provider types
     const emailMatch = message.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
     if (emailMatch && emailMatch[1]) {
       email = emailMatch[1].trim();
       console.log("Found email:", email);
     }
     
+    // Extract phone if present
+    const phoneMatch = message.match(/(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})/);
+    const phone = phoneMatch ? phoneMatch[0] : "";
+    if (phone) {
+      console.log("Found phone number:", phone);
+    }
+    
     // If we still don't have a name, try to use Claude to extract the details
     if (!name) {
       try {
+        console.log("Using Claude to extract structured provider data");
         // Use Claude API to extract structured data
         const systemPrompt = `You are an AI that extracts provider information from text.
         Extract the following details in a structured JSON format:
         - name: Provider's name (e.g., Dr. Smith, Jane Doe, or any full name mentioned)
         - type: Provider type (e.g., medical, education, activity, childcare, services)
-        - specialty: Provider's specialty (e.g., pediatrician, dentist, piano teacher, tutor)
+        - specialty: Provider's specialty (e.g., pediatrician, dentist, piano teacher, tutor, babysitter)
         - email: Provider's email if mentioned
         - phone: Provider's phone if mentioned
-        - address: Provider's address or location if mentioned
+        - childName: Name of child this provider is for (if mentioned)
         
-        IMPORTANT: Return ONLY valid JSON with no other text. Be very careful to extract full names like "Sart Lee Tang" or "John Smith" correctly.`;
+        IMPORTANT: Return ONLY valid JSON with no other text. Be very careful to extract full names correctly.`;
         
         const userMessage = `Extract provider details from this message: "${message}"`;
         
@@ -791,6 +1016,8 @@ async extractProviderDetails(message) {
         
         if (jsonString) {
           const details = JSON.parse(jsonString);
+          console.log("Claude extracted data:", details);
+          
           if (details.name) {
             name = details.name;
             console.log("Claude extracted name:", name);
@@ -798,23 +1025,12 @@ async extractProviderDetails(message) {
           if (details.type) type = details.type;
           if (details.specialty) specialty = details.specialty;
           if (details.email) email = details.email;
+          if (details.phone) phone = details.phone;
+          if (details.childName && !childName) childName = details.childName;
         }
       } catch (claudeError) {
         console.error("Error using Claude to extract provider details:", claudeError);
         // Continue with manual extraction if Claude fails
-      }
-    }
-    
-    // If still no name, try additional extraction patterns
-    if (!name) {
-      // For music teachers format "X is a Y teacher for Z"
-      const teacherPattern = /([A-Za-z]+(?: [A-Za-z]+){0,2})\s+is\s+a\s+([a-z]+)\s+teacher\s+for/i;
-      const teacherMatch = message.match(teacherPattern);
-      if (teacherMatch && teacherMatch[1]) {
-        name = teacherMatch[1].trim();
-        specialty = teacherMatch[2] ? `${teacherMatch[2].charAt(0).toUpperCase() + teacherMatch[2].slice(1)} Teacher` : "Teacher";
-        type = "education";
-        console.log("Found teacher name:", name, "specialty:", specialty);
       }
     }
     
@@ -837,6 +1053,15 @@ async extractProviderDetails(message) {
         }
       }
       
+      // For single word names (more common with babysitters)
+      if (possibleNames.length === 0) {
+        for (const word of words) {
+          if (/^[A-Z][a-z]{2,}$/.test(word)) {
+            possibleNames.push(word);
+          }
+        }
+      }
+      
       // If we found possible names, use the longest one (most likely to be a full name)
       if (possibleNames.length > 0) {
         name = possibleNames.sort((a, b) => b.length - a.length)[0];
@@ -849,14 +1074,21 @@ async extractProviderDetails(message) {
       name = "Unknown Provider";
     }
     
+    // Create notes field that includes child information if available
+    let notes = message; // Default to original message
+    if (childName) {
+      notes = `Babysitter for ${childName}. ${message}`;
+    }
+    
     const result = {
       name: name,
       type: type,
       specialty: specialty,
       email: email || "",
-      phone: "",
+      phone: phone || "",
       address: "",
-      notes: message // Use original message as notes
+      notes: notes,
+      childName: childName // Include child name in the result
     };
     
     console.log("Final extracted provider details:", result);
