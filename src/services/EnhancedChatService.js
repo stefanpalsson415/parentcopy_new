@@ -1796,32 +1796,36 @@ async forceCompleteOnboarding(familyId) {
 async handleProviderRequest(text, familyContext) {
   try {
     // Check if this is a provider-related request
-    const intent = this.nlu.detectIntent(text);
-    const isProviderIntent = [
-      'healthcare.provider',
-      'healthcare.doctor',
-      'healthcare.add_provider'
-    ].includes(intent);
-    
-    if (!isProviderIntent) {
-      // Expanded list of provider keywords
-      const providerKeywords = [
-        'add doctor', 'new doctor', 'healthcare provider', 
-        'add provider', 'doctor for', 'pediatrician', 
-        'family doctor', 'our doctor', 'children\'s doctor',
-        'add teacher', 'new teacher', 'music teacher',
-        'add a teacher', 'tutor', 'instructor',
-        'can you add', 'add a', 'in providers'
-      ];
-      
-      const hasProviderKeyword = providerKeywords.some(keyword => 
-        text.toLowerCase().includes(keyword)
-      );
-      
-      if (!hasProviderKeyword) return null;
-    }
+const intent = this.nlu.detectIntent(text);
+const isProviderIntent = [
+  'healthcare.provider',
+  'healthcare.doctor',
+  'healthcare.add_provider'
+].includes(intent);
+
+if (!isProviderIntent) {
+  // Expanded list of provider keywords
+  const providerKeywords = [
+    'add doctor', 'new doctor', 'healthcare provider', 
+    'add provider', 'doctor for', 'pediatrician', 
+    'family doctor', 'our doctor', 'children\'s doctor',
+    'add teacher', 'new teacher', 'music teacher',
+    'add a teacher', 'tutor', 'instructor',
+    'can you add', 'add a', 'in providers',
+    'babysitter', 'add babysitter', 'new babysitter',
+    'nanny', 'add nanny', 'new nanny', 'childcare'
+  ];
+  
+  const hasProviderKeyword = providerKeywords.some(keyword => 
+    text.toLowerCase().includes(keyword)
+  );
+  
+  if (!hasProviderKeyword) return null;
+}
     
     console.log("Handling provider request:", text);
+    console.log("Attempting to process provider with familyId:", familyContext.familyId);
+
     
     // Get AllieAIService
     let AllieAIService;
@@ -1834,6 +1838,8 @@ async handleProviderRequest(text, familyContext) {
     
     // Process the provider request
     const result = await AllieAIService.processProviderFromChat(text, familyContext.familyId);
+    console.log("Provider processing result:", result);
+
     
     if (result.success) {
       // Format success message
