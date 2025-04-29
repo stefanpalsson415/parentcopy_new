@@ -1482,6 +1482,35 @@ async getAIResponse(message, familyId, messageHistory = []) {
       }
     }
 
+    // Add more explicit provider detection
+    if (!isDirectCalendarRequest && (
+        message.toLowerCase().includes("add provider") ||
+        message.toLowerCase().includes("add a provider") ||
+        message.toLowerCase().includes("new provider") ||
+        message.toLowerCase().includes("add doctor") ||
+        message.toLowerCase().includes("add dr") ||
+        message.toLowerCase().includes("add therapist") ||
+        message.toLowerCase().includes("want to add a provider")
+    )) {
+      console.log("🔍 Detected explicit provider request, handling with provider service");
+      
+      try {
+        // Import AllieAIService dynamically
+        const AllieAIService = (await import('./AllieAIService')).default;
+        
+        // Process the provider directly
+        const result = await AllieAIService.processProviderFromChat(message, familyContext.familyId);
+        console.log("Provider processing result:", result);
+        
+        if (result && result.success) {
+          console.log("✅ Provider request handled successfully");
+          return `I've added ${result.providerDetails.name} as a provider for your family. You can find them in your Family Provider Directory.`;
+        }
+      } catch (error) {
+        console.error("Error processing provider request:", error);
+      }
+    }
+
     // Check for todos since this is common and needs special handling
     const todoKeywords = ['todo', 'to-do', 'to do', 'add a task', 'create a task', 'make a task'];
     const isTodoRequest = todoKeywords.some(keyword => message.toLowerCase().includes(keyword));
@@ -1496,29 +1525,6 @@ async getAIResponse(message, familyId, messageHistory = []) {
         return todoResponse;
       }
     }
-
-    // In src/services/EnhancedChatService.js
-// Find the getAIResponse method (around line 3200)
-// Add this code after the todo handling section and before the Claude API call
-
-// Provider keywords - EXPANDED LIST
-const providerKeywords = ['add coach', 'new coach', 'add teacher', 'new teacher', 
-  'add doctor', 'add provider', 'tennis coach', 'swim coach',
-  'new trainer', 'new instructor', 'babysitter', 'add babysitter', 
-  'new babysitter', 'nanny', 'add nanny', 'new nanny', 'childcare'];
-const isProviderRequest = providerKeywords.some(keyword => 
-  message.toLowerCase().includes(keyword)
-);
-
-if (isProviderRequest) {
-  console.log("Detected provider request, handling with specialized service");
-  const providerResponse = await this.handleProviderRequest(message, familyContext);
-
-  if (providerResponse) {
-    console.log("Provider request handled successfully");
-    return providerResponse; // RETURN HERE! Don't proceed to Claude
-  }
-}
     
     // Format messages for Claude API using our helper
     const formattedMessages = ChatPersistenceService.formatMessagesForClaude(messageHistory);

@@ -409,179 +409,227 @@ async generateBalanceExperiments(familyId, weightedScores) {
     }
   }
 
+// In src/services/AllieAIService.js
+// Add this method
 
-
-  async processProviderFromChat(message, familyId) {
-    try {
-      if (!familyId) {
-        console.error("Missing familyId in processProviderFromChat");
-        return { success: false, error: "Family ID is required" };
-      }
-      
-      // Prevent parallel processing of the same message
-      const messageKey = `${familyId}-${message.substring(0, 20)}`;
-      if (this._processingProviders && this._processingProviders[messageKey]) {
-        console.log("Already processing this provider message, avoiding duplicate");
-        return { 
-          success: false, 
-          error: "A similar request is already being processed",
-          duplicate: true
-        };
-      }
-      
-      // Set processing flag
-      if (!this._processingProviders) this._processingProviders = {};
-      this._processingProviders[messageKey] = true;
-      
-      try {
-        console.log("🔄 Processing provider from chat:", message.substring(0, 50) + "...");
-        console.log("Family ID:", familyId);
-        
-        // First try to use the UnifiedParserService if available
-        let providerDetails;
-        try {
-          const UnifiedParserService = (await import('./UnifiedParserService')).default;
-          console.log("Using UnifiedParserService to parse provider details");
-          providerDetails = await UnifiedParserService.parseProvider(message, { familyId });
-          
-          if (providerDetails) {
-            console.log("UnifiedParserService extracted details:", providerDetails);
-          }
-        } catch (parserError) {
-          console.error("Error with UnifiedParserService:", parserError);
-          console.log("Falling back to direct extraction");
-          // Handle parser unavailable - fall back to direct extraction
-          providerDetails = null;
-        }
-        
-        // If UnifiedParserService failed or returned no results, use our direct extraction
-if (!providerDetails || !providerDetails.name || providerDetails.name === "Unknown Provider") {
-  console.log("Using direct extraction method");
-  providerDetails = this.extractProviderDetails(message);  // CORRECTED METHOD NAME
-  console.log("Direct extraction results:", providerDetails);
-}
-        
-        // Final validation of provider details
-        if (!providerDetails.name || providerDetails.name === "Unknown Provider") {
-          console.error("Failed to extract provider name");
-          return { 
-            success: false, 
-            error: "Could not determine the provider's name from your message" 
-          };
-        }
-        
-        // Add comprehensive logging for what we're about to save
-        console.log("🔄 Ready to save provider details:", {
-          name: providerDetails.name,
-          type: providerDetails.type,
-          specialty: providerDetails.specialty,
-          email: providerDetails.email || "none",
-          notes: providerDetails.notes?.substring(0, 50) || "none"
-        });
-        
-        // Load ProviderService with better error handling and logging
-        let ProviderService;
-        try {
-          ProviderService = (await import('./ProviderService')).default;
-          console.log("Successfully imported ProviderService");
-        } catch (importError) {
-          console.error("❌ Failed to import ProviderService:", importError);
-          
-          // Create an inline version if import fails, but use the right collection this time
-          console.log("Creating inline version of ProviderService");
-          ProviderService = {
-            saveProvider: async (familyId, providerData) => {
-              try {
-                console.log("Inline saveProvider using providers collection");
-                const providersRef = collection(db, "providers");
-                const docRef = await addDoc(providersRef, {
-                  ...providerData,
-                  familyId,
-                  createdAt: serverTimestamp(),
-                  updatedAt: serverTimestamp()
-                });
-                console.log("Provider saved with ID:", docRef.id);
-                return { success: true, providerId: docRef.id, isNew: true };
-              } catch (error) {
-                console.error("❌ Error in inline saveProvider:", error);
-                return { success: false, error: error.message };
-              }
-            }
-          };
-        }
-        
-        // Set family ID and save to database
-        providerDetails.familyId = familyId;
-        console.log("🔄 Calling saveProvider method");
-        const result = await ProviderService.saveProvider(familyId, providerDetails);
-        
-        // Comprehensive logging of the result
-        console.log("🔄 SaveProvider result:", result);
-        
-        if (result.success) {
-          console.log("✅ Provider saved successfully with ID:", result.providerId);
-          
-          // No need to dispatch multiple events - the ProviderService now handles this properly
-          // Just dispatch a single event with all the necessary data
-          if (typeof window !== 'undefined') {
-            console.log("Dispatching single provider-added event with complete data");
-            window.dispatchEvent(new CustomEvent('provider-added', {
-              detail: {
-                providerId: result.providerId,
-                provider: providerDetails,
-                familyId
-              }
-            }));
-          }
-          
-          // Create appropriate response message based on provider type
-          let successMessage;
-          if (providerDetails.type === 'childcare') {
-            successMessage = `Successfully added ${providerDetails.specialty || "babysitter"} ${providerDetails.name} to your contacts.`;
-          } else if (providerDetails.type === 'education') {
-            successMessage = `Successfully added ${providerDetails.specialty || "teacher"} ${providerDetails.name} to your provider directory.`;
-          } else if (providerDetails.type === 'medical') {
-            successMessage = `Successfully added Dr. ${providerDetails.name} to your healthcare providers.`;
-          } else {
-            successMessage = `Successfully added ${providerDetails.name} to your ${providerDetails.type} providers.`;
-          }
+extractProviderDetails(message) {
+  console.log("Extracting provider details from:", message);
   
-          return { 
-            success: true, 
-            providerId: result.providerId,
-            providerDetails: providerDetails,
-            isNew: result.isNew,
-            message: successMessage
-          };
-        } else if (result.deferred) {
-          // If the save was deferred, provide a friendly message
-          return {
-            success: true, // Still report success to the user
-            deferred: true,
-            message: `Provider ${providerDetails.name} is being processed. The directory will update shortly.`
-          };
-        } else {
-          console.error("❌ Failed to save provider:", result.error);
-          
-          // Don't attempt backup Firebase save since that can cause duplicate providers
-          return { 
-            success: false, 
-            error: result.error || "Failed to create provider" 
-          };
-        }
-      } finally {
-        // Clear processing flag after a short delay
-        setTimeout(() => {
-          if (this._processingProviders) {
-            delete this._processingProviders[messageKey];
-          }
-        }, 3000);
-      }
-    } catch (error) {
-      console.error("❌ Unhandled error in processProviderFromChat:", error);
-      return { success: false, error: error.message };
+  // Highly specific pattern match for common provider formats
+  let name = null;
+  let type = "medical";
+  let specialty = "";
+  let childName = null;
+  
+  // Check for doctor patterns
+  if (message.toLowerCase().includes("dr.") || 
+      message.toLowerCase().includes("doctor") || 
+      message.toLowerCase().includes("therapist") ||
+      message.toLowerCase().includes("provider")) {
+    
+    // Get name with dr. prefix
+    const drPattern = /(?:dr\.|doctor)\s+([A-Za-z]+(?: [A-Za-z]+)?)/i;
+    const drMatch = message.match(drPattern);
+    if (drMatch && drMatch[1]) {
+      name = "Dr. " + drMatch[1].trim();
+      console.log("Found doctor name:", name);
+    }
+    
+    // Check for therapist
+    if (message.toLowerCase().includes("therapist")) {
+      specialty = "Therapist";
+    } else if (message.toLowerCase().includes("dentist")) {
+      specialty = "Dentist";
     }
   }
+  
+  // Last resort: look for "add X as a provider" or "add provider X"
+  if (!name) {
+    const providerPatterns = [
+      /add\s+([A-Za-z]+(?: [A-Za-z]+)?)\s+(?:as|like|to be)?\s+(?:a|the)?\s+provider/i,
+      /add\s+(?:a|the)?\s+provider\s+(?:named|called)?\s+([A-Za-z]+(?: [A-Za-z]+)?)/i
+    ];
+    
+    for (const pattern of providerPatterns) {
+      const match = message.match(pattern);
+      if (match && match[1]) {
+        name = match[1].trim();
+        console.log("Found provider name:", name);
+        break;
+      }
+    }
+  }
+  
+  // Check for "for X" to find child name
+  const forPattern = /for\s+([A-Za-z]+)/i;
+  const forMatch = message.match(forPattern);
+  if (forMatch && forMatch[1]) {
+    childName = forMatch[1].trim();
+    console.log("Found 'for' child:", childName);
+  }
+  
+  // EMERGENCY FALLBACK: Extract any name-like word
+  if (!name) {
+    const words = message.split(/\s+/);
+    for (let i = 0; i < words.length; i++) {
+      if (/^[A-Z][a-z]{2,}$/.test(words[i])) {
+        if (i+1 < words.length && /^[A-Z][a-z]{2,}$/.test(words[i+1])) {
+          name = words[i] + " " + words[i+1];
+          break;
+        }
+        name = words[i];
+      }
+    }
+  }
+  
+  // If we found both a child name and no specialty, assume it's education
+  if (childName && !specialty) {
+    type = "education";
+    specialty = "Teacher";
+  }
+  
+  // Final fallback
+  if (!name) {
+    name = "Provider " + Date.now().toString(36).substring(2, 7);
+  }
+  
+  console.log("Final provider details:", {
+    name, type, specialty, childName
+  });
+  
+  // Create notes that include child information if available
+  let notes = message;
+  if (childName) {
+    notes = `Provider for ${childName}. ${message}`;
+  }
+  
+  return {
+    name: name,
+    type: type,
+    specialty: specialty || (type === "medical" ? "Doctor" : "Provider"),
+    email: "",
+    phone: "",
+    address: "",
+    notes: notes,
+    childName: childName
+  };
+}
+
+
+  // In src/services/AllieAIService.js
+// Replace the processProviderFromChat method
+async processProviderFromChat(message, familyId) {
+  try {
+    if (!familyId) {
+      console.error("Missing familyId in processProviderFromChat");
+      return { success: false, error: "Family ID is required" };
+    }
+    
+    console.log("🔄 DIRECT Processing provider from chat:", message.substring(0, 50) + "...");
+    console.log("Family ID:", familyId);
+    
+    // IMPORTANT: Add direct log to see if this function is being called
+    console.log("🚨 processProviderFromChat CALLED with message:", message);
+    
+    // First try direct extraction
+    const providerDetails = this.extractProviderDetails(message);  
+    console.log("Direct extraction results:", providerDetails);
+    
+    // Final validation of provider details
+    if (!providerDetails.name || providerDetails.name === "Unknown Provider") {
+      console.error("Failed to extract provider name");
+      return { 
+        success: false, 
+        error: "Could not determine the provider's name from your message" 
+      };
+    }
+    
+    // Add comprehensive logging for what we're about to save
+    console.log("🔄 Ready to save provider details:", {
+      name: providerDetails.name,
+      type: providerDetails.type,
+      specialty: providerDetails.specialty,
+      email: providerDetails.email || "none",
+      notes: providerDetails.notes?.substring(0, 50) || "none"
+    });
+    
+    // Load ProviderService with better error handling and logging
+    let ProviderService;
+    try {
+      const { default: imported } = await import('./ProviderService');
+      ProviderService = imported;
+      console.log("Successfully imported ProviderService");
+    } catch (importError) {
+      console.error("❌ Failed to import ProviderService:", importError);
+      
+      // Create an inline version if import fails
+      console.log("Creating inline version of ProviderService");
+      ProviderService = {
+        saveProvider: async (familyId, providerData) => {
+          try {
+            console.log("Using EMERGENCY inline saveProvider with providers collection");
+            const { db } = await import('./firebase');
+            const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
+            const providersRef = collection(db, "providers");
+            const docRef = await addDoc(providersRef, {
+              ...providerData,
+              familyId,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            });
+            console.log("EMERGENCY Provider saved with ID:", docRef.id);
+            return { success: true, providerId: docRef.id, isNew: true };
+          } catch (error) {
+            console.error("❌ Error in inline saveProvider:", error);
+            return { success: false, error: error.message };
+          }
+        }
+      };
+    }
+    
+    // Set family ID and save to database
+    providerDetails.familyId = familyId;
+    console.log("🔄 Calling saveProvider method DIRECTLY");
+    const result = await ProviderService.saveProvider(familyId, providerDetails);
+    
+    // Comprehensive logging of the result
+    console.log("🔄 SaveProvider result:", result);
+    
+    if (result.success) {
+      console.log("✅ Provider saved successfully with ID:", result.providerId);
+      
+      // No need to dispatch multiple events - the ProviderService now handles this properly
+      // Just dispatch a single event with all the necessary data
+      if (typeof window !== 'undefined') {
+        console.log("Dispatching single provider-added event with complete data");
+        window.dispatchEvent(new CustomEvent('provider-added', {
+          detail: {
+            providerId: result.providerId,
+            provider: providerDetails,
+            familyId
+          }
+        }));
+      }
+      
+      return { 
+        success: true, 
+        providerId: result.providerId,
+        providerDetails: providerDetails,
+        isNew: result.isNew,
+        message: `Successfully added ${providerDetails.name} to your provider directory.`
+      };
+    } else {
+      console.error("❌ Failed to save provider:", result.error);
+      return { 
+        success: false, 
+        error: result.error || "Failed to create provider" 
+      };
+    }
+  } catch (error) {
+    console.error("❌ Unhandled error in processProviderFromChat:", error);
+    return { success: false, error: error.message };
+  }
+}
 
 // In src/services/AllieAIService.js
 
