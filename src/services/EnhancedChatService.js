@@ -1497,6 +1497,23 @@ async getAIResponse(message, familyId, messageHistory = []) {
         return todoResponse;
       }
     }
+
+    const providerKeywords = ['add coach', 'new coach', 'add teacher', 'new teacher', 
+      'add doctor', 'add provider', 'tennis coach', 'swim coach',
+      'new trainer', 'new instructor'];
+const isProviderRequest = providerKeywords.some(keyword => 
+message.toLowerCase().includes(keyword)
+);
+
+if (isProviderRequest) {
+console.log("Detected provider request, handling with specialized service");
+const providerResponse = await this.handleProviderRequest(message, familyContext);
+
+if (providerResponse) {
+console.log("Provider request handled successfully");
+return providerResponse;
+}
+}
     
     // Format messages for Claude API using our helper
     const formattedMessages = ChatPersistenceService.formatMessagesForClaude(messageHistory);
