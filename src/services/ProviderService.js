@@ -174,8 +174,13 @@ async saveProvider(familyId, providerData) {
       return { success: false, error: "Family ID is required" };
     }
     
-    // Prevent redundant saves with simple lockout
-    if (window._providerSaveInProgress) {
+    // Create a unique key for this specific save operation
+    const saveKey = `provider_save_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    
+    // Check if any save operation is in progress, but only block for 5 seconds max
+    if (window._providerSaveInProgress && 
+        window._providerSaveTimestamp && 
+        Date.now() - window._providerSaveTimestamp < 5000) {
       console.log("Provider save already in progress, deferring request");
       return { 
         success: false, 
@@ -184,32 +189,51 @@ async saveProvider(familyId, providerData) {
       };
     }
     
+    // Set new save timestamp and flag
     window._providerSaveInProgress = true;
+    window._providerSaveTimestamp = Date.now();
+    window._currentSaveKey = saveKey;
+    
+    console.log(`🔄 Starting provider save operation (${saveKey}) for family:`, familyId);
     
     try {
-      console.log("Saving provider for family:", familyId, providerData);
-      
-      // Determine the correct collection based on provider type
-      let collectionName = "providers"; // Default to general providers collection
+      // CRITICAL FIX: ALWAYS use "providers" collection for consistency
+      const collectionName = "providers";
       
       // Log detailed provider info
       console.log("Provider details:", {
-        name: providerData.name,
-        type: providerData.type,
-        specialty: providerData.specialty,
-        email: providerData.email || "none"
+        name: providerData.name || "Unnamed Provider",
+        type: providerData.type || "medical",
+        specialty: providerData.specialty || "Unknown",
+        email: providerData.email || "none",
+        saveKey: saveKey
       });
       
       // First check if this provider already exists (by name and type)
       const providersRef = collection(db, collectionName);
-      const q = query(
-        providersRef,
-        where("familyId", "==", familyId),
-        where("name", "==", providerData.name),
-        where("type", "==", providerData.type || "medical")
+      
+      // IMPROVEMENT: More robust query to handle null/undefined values
+      const queryParams = [where("familyId", "==", familyId)];
+      
+      if (providerData.name) {
+        queryParams.push(where("name", "==", providerData.name));
+      }
+      
+      if (providerData.type) {
+        queryParams.push(where("type", "==", providerData.type));
+      }
+      
+      const q = query(providersRef, ...queryParams);
+      
+      // Add timeout to prevent hanging
+      const queryPromise = getDocs(q);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Query timed out")), 7000)
       );
       
-      const querySnapshot = await getDocs(q);
+      // Race the query against the timeout
+      const querySnapshot = await Promise.race([queryPromise, timeoutPromise]);
+      
       let providerId;
       let isNew = true;
       
@@ -220,44 +244,96 @@ async saveProvider(familyId, providerData) {
         
         console.log(`Updating existing provider ${providerId} in collection ${collectionName}`);
         
-        await updateDoc(doc(db, collectionName, providerId), {
-          ...providerData,
-          updatedAt: serverTimestamp()
-        });
+        // IMPROVEMENT: Add retry logic for update
+        let updateSuccess = false;
+        let attempts = 0;
+        const maxAttempts = 3;
         
-        console.log("Updated existing provider:", providerId);
+        while (!updateSuccess && attempts < maxAttempts) {
+          try {
+            attempts++;
+            await updateDoc(doc(db, collectionName, providerId), {
+              ...providerData,
+              updatedAt: serverTimestamp()
+            });
+            updateSuccess = true;
+            console.log(`Updated existing provider (attempt ${attempts}):`, providerId);
+          } catch (updateError) {
+            console.warn(`Update attempt ${attempts} failed:`, updateError);
+            // Wait between retries
+            if (attempts < maxAttempts) {
+              await new Promise(r => setTimeout(r, 500 * attempts));
+            } else {
+              throw updateError; // Rethrow if all attempts fail
+            }
+          }
+        }
       } else {
         // Create new provider
         console.log(`Creating new provider in collection ${collectionName}`);
         
-        const newProviderRef = await addDoc(providersRef, {
+        // IMPORTANT: Make sure we have required fields
+        const providerToAdd = {
           ...providerData,
+          name: providerData.name || "Unnamed Provider",
+          type: providerData.type || "medical",
           familyId,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
-        });
+        };
         
-        providerId = newProviderRef.id;
-        console.log("Created new provider with ID:", providerId);
+        // IMPROVEMENT: Add retry logic for creation
+        let createSuccess = false;
+        let attempts = 0;
+        const maxAttempts = 3;
+        
+        while (!createSuccess && attempts < maxAttempts) {
+          try {
+            attempts++;
+            const newProviderRef = await addDoc(providersRef, providerToAdd);
+            providerId = newProviderRef.id;
+            createSuccess = true;
+            console.log(`Created new provider with ID (attempt ${attempts}):`, providerId);
+          } catch (createError) {
+            console.warn(`Create attempt ${attempts} failed:`, createError);
+            // Wait between retries
+            if (attempts < maxAttempts) {
+              await new Promise(r => setTimeout(r, 500 * attempts));
+            } else {
+              throw createError; // Rethrow if all attempts fail
+            }
+          }
+        }
       }
       
-      // Dispatch events to update UI components - but only once
-      if (typeof window !== 'undefined') {
-        console.log("Dispatching provider-added event");
-        
-        // Use a unified event with all the information
-        const providerEvent = new CustomEvent('provider-added', {
-          detail: {
-            providerId,
-            isNew,
-            provider: providerData
-          }
-        });
-        window.dispatchEvent(providerEvent);
-        
-        // Also dispatch directory-refresh-needed without the additional events
-        window.dispatchEvent(new CustomEvent('directory-refresh-needed'));
-      }
+      console.log(`Provider operation completed successfully (${saveKey})`);
+      
+      // IMPROVEMENT: Use setTimeout to ensure Firebase operation completes
+      // before dispatching events
+      setTimeout(() => {
+        // Dispatch events to update UI components - but only once
+        if (typeof window !== 'undefined') {
+          console.log(`Dispatching provider events after successful save (${saveKey})`);
+          
+          // Use a unified event with all the information
+          const providerEvent = new CustomEvent('provider-added', {
+            detail: {
+              providerId,
+              isNew,
+              provider: providerData
+            }
+          });
+          window.dispatchEvent(providerEvent);
+          
+          // Also dispatch directory-refresh-needed 
+          window.dispatchEvent(new CustomEvent('directory-refresh-needed'));
+          
+          // Add another delayed refresh for any components that might load later
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('force-data-refresh'));
+          }, 1500);
+        }
+      }, 500); // Give Firebase time to fully commit the changes
       
       return { 
         success: true, 
@@ -265,10 +341,14 @@ async saveProvider(familyId, providerData) {
         isNew
       };
     } finally {
-      // Ensure we clear the flag even if there's an error
-      setTimeout(() => {
+      // Ensure we clear the flag even if there's an error, but only if this is the current operation
+      if (window._currentSaveKey === saveKey) {
+        console.log(`Clearing provider save lock (${saveKey})`);
         window._providerSaveInProgress = false;
-      }, 500);
+        window._currentSaveKey = null;
+      } else {
+        console.log(`Not clearing provider save lock - different operation in progress (${saveKey} vs ${window._currentSaveKey})`);
+      }
     }
   } catch (error) {
     console.error("Error saving provider:", error);
@@ -277,8 +357,18 @@ async saveProvider(familyId, providerData) {
       message: error.message,
       stack: error.stack,
       familyId: familyId,
-      providerName: providerData.name
+      providerName: providerData?.name || "Unknown"
     });
+    
+    // Auto-clear any stuck locks after 10 seconds
+    setTimeout(() => {
+      if (window._providerSaveInProgress) {
+        console.log("Automatically clearing stuck provider save lock");
+        window._providerSaveInProgress = false;
+        window._currentSaveKey = null;
+      }
+    }, 10000);
+    
     return { success: false, error: error.message };
   }
 }

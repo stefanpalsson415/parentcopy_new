@@ -1098,11 +1098,15 @@ async extractProviderDetails(message) {
   }
 }
 
-// Enhanced version of createOrFindProvider to include more details
-async createOrFindProvider(familyId, name, specialty, email, phone, address = "", notes = "") {
+async createOrFindProvider(familyId, name, specialty, email, phone) {
   try {
-    // Check if provider already exists
-    const providersRef = collection(db, "healthcareProviders");
+    if (!familyId || !name) {
+      console.warn("Missing required parameters in createOrFindProvider");
+      return null;
+    }
+    
+    // CRITICAL FIX: Use "providers" collection consistently
+    const providersRef = collection(db, "providers");
     const q = query(
       providersRef, 
       where("familyId", "==", familyId),
@@ -1111,21 +1115,9 @@ async createOrFindProvider(familyId, name, specialty, email, phone, address = ""
     
     const querySnapshot = await getDocs(q);
     if (!querySnapshot.empty) {
-      // Update existing provider with any new info
-      const providerDoc = querySnapshot.docs[0];
-      const providerId = providerDoc.id;
-      const existingData = providerDoc.data();
-      
-      // Update with new data if provided
-      await updateDoc(doc(db, "healthcareProviders", providerId), {
-        specialty: specialty || existingData.specialty,
-        email: email || existingData.email,
-        phone: phone || existingData.phone,
-        address: address || existingData.address,
-        notes: notes || existingData.notes,
-        updatedAt: serverTimestamp()
-      });
-      
+      // Return existing provider
+      const providerId = querySnapshot.docs[0].id;
+      console.log(`Found existing provider ${providerId} for ${name}`);
       return providerId;
     }
     
@@ -1135,20 +1127,39 @@ async createOrFindProvider(familyId, name, specialty, email, phone, address = ""
       specialty: specialty || "General Practitioner",
       email: email || "",
       phone: phone || "",
-      address: address || "",
-      notes: notes || "",
+      address: "",
+      notes: "",
       familyId,
+      type: specialty?.toLowerCase()?.includes('dentist') ? 'medical' : 
+           specialty?.toLowerCase()?.includes('teacher') ? 'education' : 'medical',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
     
+    console.log(`Creating new provider for ${name} in providers collection`);
     const docRef = await addDoc(providersRef, providerData);
+    
+    // Trigger refresh events
+    if (typeof window !== 'undefined') {
+      // Delay event to ensure Firebase operation completes
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('provider-added', {
+          detail: {
+            providerId: docRef.id,
+            isNew: true,
+            provider: providerData
+          }
+        }));
+      }, 500);
+    }
+    
     return docRef.id;
   } catch (error) {
     console.error("Error creating/finding provider:", error);
     return null;
   }
 }
+
 
 async processEventFromChat(message, familyId, eventType = null, childId = null) {
   try {
