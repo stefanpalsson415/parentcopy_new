@@ -372,115 +372,140 @@ useEffect(() => {
           <RefreshCw size={24} className="animate-spin text-gray-400" />
         </div>
       ) : filteredProviders.length > 0 ? (
-        <div className={viewMode === 'card' 
-          ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-          : "space-y-2"
-        }>
-          {filteredProviders.map(provider => (
-            <div 
-              key={provider.id} 
-              className={`border rounded-lg p-4 hover:bg-gray-50 ${
-                viewMode === 'list' ? "flex items-center justify-between" : ""
-              }`}
-            >
-              {viewMode === 'card' ? (
-                <div>
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center">
-                      <div className="p-2 rounded-full bg-purple-50 mr-3">
-                        {getProviderTypeInfo(provider.type)?.icon || <User size={16} className="text-purple-500" />}
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-md">{provider.name}</h3>
-                        <p className="text-sm text-gray-600">{provider.specialty}</p>
-                      </div>
-                    </div>
-                    <div className="flex space-x-1">
-                      <button
-                        onClick={() => openProviderModal(provider)}
-                        className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                        title="Edit"
-                      >
-                        <Edit size={16} />
-                      </button>
-                      <button
-                        onClick={() => confirmDelete(provider)}
-                        className="p-1 text-red-600 hover:bg-red-50 rounded"
-                        title="Delete"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {/* Contact details */}
-                  <div className="space-y-2 text-sm text-gray-600">
-                    {provider.phone && (
-                      <div className="flex items-center">
-                        <Phone size={14} className="mr-2 text-gray-400" />
-                        <a href={`tel:${provider.phone}`} className="hover:text-blue-600">
-                          {provider.phone}
-                        </a>
-                      </div>
-                    )}
-                    {provider.email && (
-                      <div className="flex items-center">
-                        <Mail size={14} className="mr-2 text-gray-400" />
-                        <a href={`mailto:${provider.email}`} className="hover:text-blue-600">
-                          {provider.email}
-                        </a>
-                      </div>
-                    )}
-                    {provider.address && (
-                      <div className="flex items-start">
-                        <MapPin size={14} className="mr-2 text-gray-400 mt-1 shrink-0" />
-                        <span>{provider.address}</span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Notes */}
-                  {provider.notes && (
-                    <div className="mt-3 pt-3 border-t border-gray-100">
-                      <p className="text-sm text-gray-600">{provider.notes}</p>
-                    </div>
-                  )}
-                </div>
+        // Updated code for the provider card section in src/components/document/ProviderDirectory.jsx
+// Replace the existing rendering of filteredProviders (around line 368) with this:
+
+<div className={viewMode === 'card' 
+  ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" // Increased gap from 4 to 6
+  : "space-y-3" // Increased from 2 to 3
+}>
+  {filteredProviders.map(provider => (
+    <div 
+      key={provider.id} 
+      className={`border rounded-lg p-5 hover:bg-gray-50 ${
+        viewMode === 'list' ? "flex items-center justify-between" : ""
+      }`}
+    >
+      {viewMode === 'card' ? (
+        <div>
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-center">
+              {/* Add avatar for provider */}
+              <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center mr-3 flex-shrink-0">
+                {provider.profilePicture ? (
+                  <img 
+                    src={provider.profilePicture} 
+                    alt={provider.name} 
+                    className="h-10 w-10 rounded-full object-cover"
+                  />
+                ) : (
+                  <span className="text-purple-600 font-medium text-lg">
+                    {provider.name?.charAt(0)?.toUpperCase() || getProviderTypeInfo(provider.type)?.icon || <User size={16} className="text-purple-500" />}
+                  </span>
+                )}
+              </div>
+              <div>
+                <h3 className="font-medium text-md">{provider.name}</h3>
+                <p className="text-sm text-gray-600">{provider.specialty}</p>
+              </div>
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => openProviderModal(provider)}
+                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                title="Edit"
+              >
+                <Edit size={16} />
+              </button>
+              <button
+                onClick={() => confirmDelete(provider)}
+                className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                title="Delete"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
+          
+          {/* Contact details with improved spacing */}
+          <div className="space-y-2.5 text-sm text-gray-600 mt-4">
+            {provider.phone && (
+              <div className="flex items-center">
+                <Phone size={14} className="mr-3 text-gray-400" />
+                <a href={`tel:${provider.phone}`} className="hover:text-blue-600">
+                  {provider.phone}
+                </a>
+              </div>
+            )}
+            {provider.email && (
+              <div className="flex items-center">
+                <Mail size={14} className="mr-3 text-gray-400" />
+                <a href={`mailto:${provider.email}`} className="hover:text-blue-600 truncate">
+                  {provider.email}
+                </a>
+              </div>
+            )}
+            {provider.address && (
+              <div className="flex items-start">
+                <MapPin size={14} className="mr-3 text-gray-400 mt-1 shrink-0" />
+                <span>{provider.address}</span>
+              </div>
+            )}
+          </div>
+          
+          {/* Notes */}
+          {provider.notes && (
+            <div className="mt-4 pt-3 border-t border-gray-100">
+              <p className="text-sm text-gray-600">{provider.notes}</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center">
+            {/* Add avatar for provider in list view */}
+            <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center mr-3 flex-shrink-0">
+              {provider.profilePicture ? (
+                <img 
+                  src={provider.profilePicture} 
+                  alt={provider.name} 
+                  className="h-10 w-10 rounded-full object-cover"
+                />
               ) : (
-                <>
-                  <div className="flex items-center">
-                    <div className="p-2 rounded-full bg-purple-50 mr-3">
-                      {getProviderTypeInfo(provider.type)?.icon || <User size={16} className="text-purple-500" />}
-                    </div>
-                    <div>
-                      <h3 className="font-medium">{provider.name}</h3>
-                      <p className="text-sm text-gray-600">{provider.specialty}</p>
-                      {provider.phone && (
-                        <p className="text-sm text-gray-600">{provider.phone}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex space-x-1">
-                    <button
-                      onClick={() => openProviderModal(provider)}
-                      className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                      title="Edit"
-                    >
-                      <Edit size={16} />
-                    </button>
-                    <button
-                      onClick={() => confirmDelete(provider)}
-                      className="p-1 text-red-600 hover:bg-red-50 rounded"
-                      title="Delete"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </>
+                <span className="text-purple-600 font-medium text-lg">
+                  {provider.name?.charAt(0)?.toUpperCase() || getProviderTypeInfo(provider.type)?.icon || <User size={16} className="text-purple-500" />}
+                </span>
               )}
             </div>
-          ))}
-        </div>
+            <div>
+              <h3 className="font-medium">{provider.name}</h3>
+              <p className="text-sm text-gray-600">{provider.specialty}</p>
+              {provider.phone && (
+                <p className="text-sm text-gray-600">{provider.phone}</p>
+              )}
+            </div>
+          </div>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => openProviderModal(provider)}
+              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+              title="Edit"
+            >
+              <Edit size={16} />
+            </button>
+            <button
+              onClick={() => confirmDelete(provider)}
+              className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+              title="Delete"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  ))}
+</div>
       ) : (
         <div className="text-center py-10 bg-gray-50 rounded-lg">
           <User size={40} className="text-gray-300 mx-auto mb-2" />
