@@ -167,6 +167,7 @@ extractProviderInfo(message) {
 // Replace in src/services/ProviderService.js
 // Replace the existing saveProvider method (starting around line 110)
 
+// Replace this method in src/services/ProviderService.js
 async saveProvider(familyId, providerData) {
   try {
     if (!familyId) {

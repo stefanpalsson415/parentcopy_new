@@ -888,6 +888,8 @@ processChildResponse(response, originalMessage, child) {
 
 
 
+// In src/services/AllieAIService.js
+// Replace or add this method
 async extractProviderDetails(message) {
   try {
     console.log("Extracting provider details from message:", message);
@@ -936,12 +938,12 @@ async extractProviderDetails(message) {
     }
     
     // Try to extract name using pattern "name is X" - general for all provider types
-const nameIsPattern = /(?:(?:her|his|their)?\s*name is|named|called)\s+([A-Za-z]+(?: [A-Za-z]+){0,2})/i;
-const nameIsMatch = message.match(nameIsPattern);
-if (nameIsMatch && nameIsMatch[1]) {
-  name = nameIsMatch[1].trim();
-  console.log("Found name using 'name is' pattern:", name);
-}
+    const nameIsPattern = /(?:(?:her|his|their)?\s*name is|named|called)\s+([A-Za-z]+(?: [A-Za-z]+){0,2})/i;
+    const nameIsMatch = message.match(nameIsPattern);
+    if (nameIsMatch && nameIsMatch[1]) {
+      name = nameIsMatch[1].trim();
+      console.log("Found name using 'name is' pattern:", name);
+    }
     
     // Additional extraction patterns for babysitters
     if (type === "childcare" && !name) {

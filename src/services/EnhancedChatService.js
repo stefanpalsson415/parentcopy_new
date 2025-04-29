@@ -1497,24 +1497,28 @@ async getAIResponse(message, familyId, messageHistory = []) {
       }
     }
 
-    // Provider keywords - EXPANDED LIST
-    const providerKeywords = ['add coach', 'new coach', 'add teacher', 'new teacher', 
-      'add doctor', 'add provider', 'tennis coach', 'swim coach',
-      'new trainer', 'new instructor', 'babysitter', 'add babysitter', 
-      'new babysitter', 'nanny', 'add nanny', 'new nanny', 'childcare'];
-    const isProviderRequest = providerKeywords.some(keyword => 
-      message.toLowerCase().includes(keyword)
-    );
+    // In src/services/EnhancedChatService.js
+// Find the getAIResponse method (around line 3200)
+// Add this code after the todo handling section and before the Claude API call
 
-    if (isProviderRequest) {
-      console.log("Detected provider request, handling with specialized service");
-      const providerResponse = await this.handleProviderRequest(message, familyContext);
+// Provider keywords - EXPANDED LIST
+const providerKeywords = ['add coach', 'new coach', 'add teacher', 'new teacher', 
+  'add doctor', 'add provider', 'tennis coach', 'swim coach',
+  'new trainer', 'new instructor', 'babysitter', 'add babysitter', 
+  'new babysitter', 'nanny', 'add nanny', 'new nanny', 'childcare'];
+const isProviderRequest = providerKeywords.some(keyword => 
+  message.toLowerCase().includes(keyword)
+);
 
-      if (providerResponse) {
-        console.log("Provider request handled successfully");
-        return providerResponse; // RETURN HERE! Don't proceed to Claude
-      }
-    }
+if (isProviderRequest) {
+  console.log("Detected provider request, handling with specialized service");
+  const providerResponse = await this.handleProviderRequest(message, familyContext);
+
+  if (providerResponse) {
+    console.log("Provider request handled successfully");
+    return providerResponse; // RETURN HERE! Don't proceed to Claude
+  }
+}
     
     // Format messages for Claude API using our helper
     const formattedMessages = ChatPersistenceService.formatMessagesForClaude(messageHistory);
@@ -1793,37 +1797,15 @@ async forceCompleteOnboarding(familyId) {
 
 
 
-async handleProviderRequest(text, familyContext) {
+// Replace the handleProviderRequest method in src/services/EnhancedChatService.js
+async handleProviderRequest(message, familyContext) {
   try {
-    // Check if this is a provider-related request
-const intent = this.nlu.detectIntent(text);
-const isProviderIntent = [
-  'healthcare.provider',
-  'healthcare.doctor',
-  'healthcare.add_provider'
-].includes(intent);
-
-if (!isProviderIntent) {
-  // Expanded list of provider keywords
-  const providerKeywords = [
-    'add doctor', 'new doctor', 'healthcare provider', 
-    'add provider', 'doctor for', 'pediatrician', 
-    'family doctor', 'our doctor', 'children\'s doctor',
-    'add teacher', 'new teacher', 'music teacher',
-    'add a teacher', 'tutor', 'instructor',
-    'can you add', 'add a', 'in providers',
-    'babysitter', 'add babysitter', 'new babysitter',
-    'nanny', 'add nanny', 'new nanny', 'childcare'
-  ];
-  
-  const hasProviderKeyword = providerKeywords.some(keyword => 
-    text.toLowerCase().includes(keyword)
-  );
-  
-  if (!hasProviderKeyword) return null;
-}
+    if (!familyContext.familyId) {
+      console.error("Missing familyId in handleProviderRequest");
+      return { success: false, error: "Family ID is required" };
+    }
     
-    console.log("Handling provider request:", text);
+    console.log("Handling provider request:", message);
     console.log("Attempting to process provider with familyId:", familyContext.familyId);
 
     
@@ -1837,7 +1819,7 @@ if (!isProviderIntent) {
     }
     
     // Process the provider request
-    const result = await AllieAIService.processProviderFromChat(text, familyContext.familyId);
+    const result = await AllieAIService.processProviderFromChat(message, familyContext.familyId);
     console.log("Provider processing result:", result);
 
     
@@ -1854,11 +1836,11 @@ if (!isProviderIntent) {
       }
       
       // For children teachers, add extra context
-      if (text.toLowerCase().includes("for") && 
-          (result.providerDetails.type === "education" || text.toLowerCase().includes("teacher"))) {
+      if (message.toLowerCase().includes("for") && 
+          (result.providerDetails.type === "education" || message.toLowerCase().includes("teacher"))) {
         // Extract child name
         const forPattern = /for\s+([a-z]+)/i;
-        const forMatch = text.match(forPattern);
+        const forMatch = message.match(forPattern);
         if (forMatch && forMatch[1]) {
           response += `For: ${forMatch[1].charAt(0).toUpperCase() + forMatch[1].slice(1)}\n`;
         }
