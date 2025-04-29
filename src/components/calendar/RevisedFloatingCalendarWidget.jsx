@@ -105,11 +105,15 @@ const RevisedFloatingCalendarWidget = () => {
 // Add this ref at the top level of the component, outside any useEffect
 const lastRefreshTimeRef = useRef(0);
 
-// In RevisedFloatingCalendarWidget.jsx - enhanced handleForceRefresh function
-// NEW CODE in RevisedFloatingCalendarWidget.jsx handleForceRefresh function
-// In RevisedFloatingCalendarWidget.jsx - enhanced handleForceRefresh function
+// In RevisedFloatingCalendarWidget.jsx - improved handleForceRefresh function
 const handleForceRefresh = async () => {
   const now = Date.now();
+  
+  // Check if we're already processing a refresh
+  if (window._calendarRefreshInProgress) {
+    console.log("🔴 Calendar refresh already in progress, skipping");
+    return;
+  }
   
   // Log force refresh event regardless of debouncing 
   console.log("🔴 Force calendar refresh requested at", new Date(now).toLocaleTimeString());
@@ -118,33 +122,41 @@ const handleForceRefresh = async () => {
     console.log("🔴 Force calendar refresh executing - passed debounce check");
     lastRefreshTimeRef.current = now;
     
-    // Reset local cache
-    resetEventCache();
+    // Set flag to prevent parallel refreshes
+    window._calendarRefreshInProgress = true;
     
-    // IMPORTANT: Directly call refreshEvents from context first with explicit debugging
-    if (typeof refreshEvents === 'function') {
-      try {
-        console.log("🔴 Calling explicit refreshEvents() from context");
-        await refreshEvents();
-        console.log("🔴 Explicit refreshEvents() completed");
-      } catch (error) {
-        console.warn("🔴 Error refreshing events:", error);
+    try {
+      // Reset local cache
+      resetEventCache();
+      
+      // IMPORTANT: Directly call refreshEvents from context first with explicit debugging
+      if (typeof refreshEvents === 'function') {
+        try {
+          console.log("🔴 Calling explicit refreshEvents() from context");
+          await refreshEvents();
+          console.log("🔴 Explicit refreshEvents() completed");
+        } catch (error) {
+          console.warn("🔴 Error refreshing events:", error);
+        }
+      } else {
+        console.log("🔴 No refreshEvents function available, using lastRefresh update");
+        setLastRefresh(now);
       }
-    } else {
-      console.log("🔴 No refreshEvents function available, using lastRefresh update");
-      setLastRefresh(now);
+      
+      // Also reset selected date to force re-render
+      const currentSelectedDate = new Date(selectedDate);
+      setSelectedDate(new Date(currentSelectedDate));
+      
+      // Log events after refresh
+      console.log("🔴 Events after refresh:", events.map(e => ({
+        title: e.title,
+        date: e.dateObj instanceof Date ? e.dateObj.toDateString() : 'Invalid Date',
+        source: e.source
+      })));
+    } finally {
+      // Clear the flag whether refresh succeeds or fails
+      window._calendarRefreshInProgress = false;
     }
-    
-    // Also reset selected date to force re-render
-    const currentSelectedDate = new Date(selectedDate);
-    setSelectedDate(new Date(currentSelectedDate));
-    
-    // Log events after refresh
-    console.log("🔴 Events after refresh:", events.map(e => ({
-      title: e.title,
-      date: e.dateObj instanceof Date ? e.dateObj.toDateString() : 'Invalid Date',
-      source: e.source
-    })));
   } else {
     console.log("🔴 Force calendar refresh debounced - too soon after previous refresh");
   }

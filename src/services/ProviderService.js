@@ -174,81 +174,102 @@ async saveProvider(familyId, providerData) {
       return { success: false, error: "Family ID is required" };
     }
     
-    console.log("Saving provider for family:", familyId, providerData);
-    
-    // Determine the correct collection based on provider type
-    let collectionName = "providers"; // Default to general providers collection
-    
-    // Log detailed provider info
-    console.log("Provider details:", {
-      name: providerData.name,
-      type: providerData.type,
-      specialty: providerData.specialty,
-      email: providerData.email || "none"
-    });
-    
-    // First check if this provider already exists (by name and type)
-    const providersRef = collection(db, collectionName);
-    const q = query(
-      providersRef,
-      where("familyId", "==", familyId),
-      where("name", "==", providerData.name),
-      where("type", "==", providerData.type || "medical")
-    );
-    
-    const querySnapshot = await getDocs(q);
-    let providerId;
-    let isNew = true;
-    
-    if (!querySnapshot.empty) {
-      // Update existing provider
-      providerId = querySnapshot.docs[0].id;
-      isNew = false;
-      
-      console.log(`Updating existing provider ${providerId} in collection ${collectionName}`);
-      
-      await updateDoc(doc(db, collectionName, providerId), {
-        ...providerData,
-        updatedAt: serverTimestamp()
-      });
-      
-      console.log("Updated existing provider:", providerId);
-    } else {
-      // Create new provider
-      console.log(`Creating new provider in collection ${collectionName}`);
-      
-      const newProviderRef = await addDoc(providersRef, {
-        ...providerData,
-        familyId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-      
-      providerId = newProviderRef.id;
-      console.log("Created new provider with ID:", providerId);
+    // Prevent redundant saves with simple lockout
+    if (window._providerSaveInProgress) {
+      console.log("Provider save already in progress, deferring request");
+      return { 
+        success: false, 
+        error: "Another save operation is in progress",
+        deferred: true
+      };
     }
     
-    // Dispatch events to update UI components
-    if (typeof window !== 'undefined') {
-      console.log("Dispatching provider-added event");
-      window.dispatchEvent(new CustomEvent('provider-added'));
+    window._providerSaveInProgress = true;
+    
+    try {
+      console.log("Saving provider for family:", familyId, providerData);
       
-      // Send additional events for other components
-      window.dispatchEvent(new CustomEvent('force-data-refresh'));
+      // Determine the correct collection based on provider type
+      let collectionName = "providers"; // Default to general providers collection
       
-      // Add delayed events to ensure all components update
-      setTimeout(() => {
-        console.log("Sending delayed provider update events");
-        window.dispatchEvent(new CustomEvent('provider-added'));
+      // Log detailed provider info
+      console.log("Provider details:", {
+        name: providerData.name,
+        type: providerData.type,
+        specialty: providerData.specialty,
+        email: providerData.email || "none"
+      });
+      
+      // First check if this provider already exists (by name and type)
+      const providersRef = collection(db, collectionName);
+      const q = query(
+        providersRef,
+        where("familyId", "==", familyId),
+        where("name", "==", providerData.name),
+        where("type", "==", providerData.type || "medical")
+      );
+      
+      const querySnapshot = await getDocs(q);
+      let providerId;
+      let isNew = true;
+      
+      if (!querySnapshot.empty) {
+        // Update existing provider
+        providerId = querySnapshot.docs[0].id;
+        isNew = false;
+        
+        console.log(`Updating existing provider ${providerId} in collection ${collectionName}`);
+        
+        await updateDoc(doc(db, collectionName, providerId), {
+          ...providerData,
+          updatedAt: serverTimestamp()
+        });
+        
+        console.log("Updated existing provider:", providerId);
+      } else {
+        // Create new provider
+        console.log(`Creating new provider in collection ${collectionName}`);
+        
+        const newProviderRef = await addDoc(providersRef, {
+          ...providerData,
+          familyId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        
+        providerId = newProviderRef.id;
+        console.log("Created new provider with ID:", providerId);
+      }
+      
+      // Dispatch events to update UI components - but only once
+      if (typeof window !== 'undefined') {
+        console.log("Dispatching provider-added event");
+        
+        // Use a unified event with all the information
+        const providerEvent = new CustomEvent('provider-added', {
+          detail: {
+            providerId,
+            isNew,
+            provider: providerData
+          }
+        });
+        window.dispatchEvent(providerEvent);
+        
+        // Also dispatch directory-refresh-needed without the additional events
         window.dispatchEvent(new CustomEvent('directory-refresh-needed'));
-      }, 1000);
+      }
+      
+      return { 
+        success: true, 
+        providerId,
+        isNew
+      };
+    } finally {
+      // Ensure we clear the flag even if there's an error
+      setTimeout(() => {
+        window._providerSaveInProgress = false;
+      }, 500);
     }
-    
-    return { 
-      success: true, 
-      providerId,
-      isNew
-    };
   } catch (error) {
     console.error("Error saving provider:", error);
     // Log more details about the error
@@ -263,6 +284,45 @@ async saveProvider(familyId, providerData) {
 }
   
 
+/**
+ * Delete a provider from the database
+ * @param {string} familyId - Family ID
+ * @param {string} providerId - Provider ID to delete
+ * @returns {Promise<Object>} Result with success status
+ */
+async deleteProvider(familyId, providerId) {
+  try {
+    if (!familyId || !providerId) {
+      console.error("Missing familyId or providerId in deleteProvider");
+      return { success: false, error: "Family ID and Provider ID are required" };
+    }
+    
+    console.log(`Deleting provider ${providerId} for family ${familyId}`);
+    
+    // Delete from Firestore
+    await deleteDoc(doc(db, "providers", providerId));
+    
+    console.log("Provider deleted successfully");
+    
+    // Dispatch events to update UI components
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('provider-added'));
+      window.dispatchEvent(new CustomEvent('force-data-refresh'));
+      
+      // Add delayed refresh to ensure UI updates
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('directory-refresh-needed'));
+      }, 500);
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting provider:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+
   /**
    * Get all providers for a family
    * @param {string} familyId - Family ID
@@ -270,7 +330,8 @@ async saveProvider(familyId, providerData) {
    */
   async getProviders(familyId) {
     try {
-      const providersRef = collection(this.db, "healthcareProviders");
+      // CRITICAL FIX: Use "providers" collection to match where we save data
+      const providersRef = collection(this.db, "providers");
       const q = query(
         providersRef, 
         where("familyId", "==", familyId)
@@ -286,6 +347,7 @@ async saveProvider(familyId, providerData) {
         });
       });
       
+      console.log(`Retrieved ${providers.length} providers for family ${familyId}`);
       return providers;
     } catch (error) {
       console.error("Error getting providers:", error);

@@ -101,10 +101,43 @@ const ProviderDirectory = ({
     
     return true;
   });
+
+
+  // Set up event listeners for provider refresh
+useEffect(() => {
+  const handleDirectoryRefresh = () => {
+    console.log("Directory refresh event received, reloading providers");
+    // Force refresh by toggling search query
+    setSearchQuery(prev => prev + " ");
+    setSearchQuery(prev => prev.trim());
+    
+    // Force a UI refresh by dispatching a custom event
+    window.dispatchEvent(new CustomEvent('force-data-refresh'));
+  };
+  
+  // Listen for the refresh event
+  window.addEventListener('directory-refresh-needed', handleDirectoryRefresh);
+  window.addEventListener('provider-added', handleDirectoryRefresh);
+  
+  // Clean up
+  return () => {
+    window.removeEventListener('directory-refresh-needed', handleDirectoryRefresh);
+    window.removeEventListener('provider-added', handleDirectoryRefresh);
+  };
+}, []);
   
   useEffect(() => {
     const handleProviderAdded = () => {
       console.log("Provider added event received in ProviderDirectory");
+      
+      // Check if this provider added event originated from this component
+      if (window._handlingProviderRefresh) {
+        console.log("Ignoring provider-added event since we're already handling a refresh");
+        return;
+      }
+      
+      // Set a flag to prevent recursive refreshes
+      window._handlingProviderRefresh = true;
       
       // Force refresh of providers directly
       if (onAddProvider || familyId) {
@@ -115,7 +148,7 @@ const ProviderDirectory = ({
           window.dispatchEvent(new CustomEvent('load-providers', { detail: { familyId } }));
         }
         
-        // Try to trigger reloads on parent components
+        // Try to trigger reloads on parent components - but only do this once
         window.dispatchEvent(new CustomEvent('family-data-updated'));
         window.dispatchEvent(new CustomEvent('force-data-refresh'));
         
@@ -125,12 +158,11 @@ const ProviderDirectory = ({
           // Force re-render by dispatching a specific event
           window.dispatchEvent(new CustomEvent('directory-refresh-needed'));
           
-          // Re-dispatch provider-added as a fallback
-          window.dispatchEvent(new CustomEvent('provider-added'));
-          
-          // Also refresh calendar as some components might depend on it
-          window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+          // Clear the flag after completing refresh
+          window._handlingProviderRefresh = false;
         }, 1000);
+      } else {
+        window._handlingProviderRefresh = false;
       }
     };
   

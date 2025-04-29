@@ -735,60 +735,76 @@ async checkAndRecoverPendingEvents() {
 async refreshEvents(userId, familyId = null, cycleNumber = null) {
   if (!userId) return [];
   
+  // Prevent recursive refreshes
+  if (this._refreshInProgress) {
+    console.log("📅 Refresh already in progress, skipping duplicate call");
+    return this._lastRefreshResult || [];
+  }
+  
   console.log("📅 Forced refresh of events for user:", userId);
   
-  // Clear cache completely
-  this.eventCache.clear();
-  this.lastRefresh = Date.now();
+  this._refreshInProgress = true;
   
-  // Run a direct database query with no filters to get all events
   try {
-    console.log("📅 Running direct Firestore query for all user events");
-    const eventsQuery = query(
-      collection(db, "events"),
-      where("userId", "==", userId)
-    );
+    // Clear cache completely
+    this.eventCache.clear();
+    this.lastRefresh = Date.now();
     
-    const querySnapshot = await getDocs(eventsQuery);
-    const events = [];
-    
-    // Process results
-    querySnapshot.forEach((doc) => {
-      const eventData = doc.data();
+    // Run a direct database query with no filters to get all events
+    try {
+      console.log("📅 Running direct Firestore query for all user events");
+      const eventsQuery = query(
+        collection(db, "events"),
+        where("userId", "==", userId)
+      );
       
-      // Standardize the event
-      const standardizedEvent = this.standardizeEvent({
-        ...eventData,
-        firestoreId: doc.id
+      const querySnapshot = await getDocs(eventsQuery);
+      const events = [];
+      
+      // Process results
+      querySnapshot.forEach((doc) => {
+        const eventData = doc.data();
+        
+        // Standardize the event
+        const standardizedEvent = this.standardizeEvent({
+          ...eventData,
+          firestoreId: doc.id
+        });
+        
+        // Add all events regardless of date range
+        events.push(standardizedEvent);
+        
+        // Update cache
+        this.eventCache.set(standardizedEvent.universalId, standardizedEvent);
       });
       
-      // Add all events regardless of date range
-      events.push(standardizedEvent);
+      console.log(`📅 Direct query found ${events.length} events`);
       
-      // Update cache
-      this.eventCache.set(standardizedEvent.universalId, standardizedEvent);
-    });
-    
-    console.log(`📅 Direct query found ${events.length} events`);
-    
-    // Notify listeners with a small delay to ensure event processing
+      // Store the result for any duplicate refreshes that happen during this one
+      this._lastRefreshResult = events;
+      
+      // Notify listeners with a small delay to ensure event processing
+      // But don't dispatch additional refresh events that could cause loops
+      setTimeout(() => {
+        events.forEach(event => {
+          this.notifyListeners('update', event);
+        });
+      }, 100);
+      
+      return events;
+    } catch (error) {
+      console.error("Error in direct refresh:", error);
+      
+      // Fall back to regular getEventsForUser
+      const fallbackEvents = await this.getEventsForUser(userId);
+      this._lastRefreshResult = fallbackEvents;
+      return fallbackEvents;
+    }
+  } finally {
+    // Always clear the in-progress flag
     setTimeout(() => {
-      events.forEach(event => {
-        this.notifyListeners('update', event);
-      });
-      
-      // Also dispatch a DOM event for overall refresh
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-      }
-    }, 100);
-    
-    return events;
-  } catch (error) {
-    console.error("Error in direct refresh:", error);
-    
-    // Fall back to regular getEventsForUser
-    return await this.getEventsForUser(userId);
+      this._refreshInProgress = false;
+    }, 200); // Short delay to prevent immediate re-entry
   }
 }
 }

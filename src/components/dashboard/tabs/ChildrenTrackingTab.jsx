@@ -773,18 +773,151 @@ const ChildrenTrackingTab = () => {
 
   // Open provider directory
 const handleOpenProviders = () => {
+  // Before showing directory, load providers
+  setLoadingProviders(true);
+  
+  // Define provider functions with proper implementations
+  const handleAddProvider = async (providerData) => {
+    try {
+      console.log("Adding provider:", providerData);
+      
+      // Import ProviderService dynamically to ensure it's loaded
+      const { default: ProviderService } = await import('../../../services/ProviderService');
+      
+      // Call the actual service method
+      const result = await ProviderService.saveProvider(familyId, {
+        ...providerData,
+        familyId: familyId
+      });
+      
+      if (result.success) {
+        setAllieMessage({
+          type: 'success',
+          text: `Successfully added ${providerData.name} to your providers!`
+        });
+        
+        // Force refresh providers list
+        window.dispatchEvent(new CustomEvent('provider-added'));
+        
+        // Also force data refresh
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('force-data-refresh'));
+        }, 500);
+        
+        return true;
+      } else {
+        setAllieMessage({
+          type: 'error',
+          text: `Failed to add provider: ${result.error || 'Unknown error'}`
+        });
+        return false;
+      }
+    } catch (error) {
+      console.error("Error adding provider:", error);
+      setAllieMessage({
+        type: 'error',
+        text: 'There was an error adding the provider. Please try again.'
+      });
+      return false;
+    }
+  };
+  
+  const handleUpdateProvider = async (providerData) => {
+    try {
+      const { default: ProviderService } = await import('../../../services/ProviderService');
+      const result = await ProviderService.saveProvider(familyId, providerData);
+      
+      if (result.success) {
+        setAllieMessage({
+          type: 'success',
+          text: `Successfully updated ${providerData.name}`
+        });
+        return true;
+      } else {
+        setAllieMessage({
+          type: 'error',
+          text: `Failed to update provider: ${result.error || 'Unknown error'}`
+        });
+        return false;
+      }
+    } catch (error) {
+      console.error("Error updating provider:", error);
+      setAllieMessage({
+        type: 'error',
+        text: 'There was an error updating the provider. Please try again.'
+      });
+      return false;
+    }
+  };
+  
+  const handleDeleteProvider = async (providerId) => {
+    try {
+      const { default: ProviderService } = await import('../../../services/ProviderService');
+      // We need to implement a deleteProvider method if it doesn't exist
+      if (typeof ProviderService.deleteProvider === 'function') {
+        const result = await ProviderService.deleteProvider(familyId, providerId);
+        if (result.success) {
+          setAllieMessage({
+            type: 'success',
+            text: 'Provider deleted successfully'
+          });
+          return true;
+        }
+      }
+      
+      // Fallback: Try direct Firestore delete
+      const { doc, deleteDoc } = await import('firebase/firestore');
+      const { db } = await import('../../../services/firebase');
+      await deleteDoc(doc(db, "providers", providerId));
+      
+      setAllieMessage({
+        type: 'success',
+        text: 'Provider deleted successfully'
+      });
+      return true;
+    } catch (error) {
+      console.error("Error deleting provider:", error);
+      setAllieMessage({
+        type: 'error',
+        text: 'There was an error deleting the provider. Please try again.'
+      });
+      return false;
+    }
+  };
+  
+  // Load providers
+const loadProviders = async () => {
+  try {
+    setLoadingProviders(true);
+    const { default: ProviderService } = await import('../../../services/ProviderService');
+    const providers = await ProviderService.getProviders(familyId);
+    setHealthcareProviders(providers);
+    setLoadingProviders(false);
+    return providers;
+  } catch (error) {
+    console.error("Error loading providers:", error);
+    setHealthcareProviders([]);
+    setLoadingProviders(false);
+    return [];
+  }
+};
+
+// Load providers initially
+loadProviders().then(initialProviders => {
+  // Now open the directory with loaded providers
   setActiveComponent({
     type: 'providerDirectory',
     props: {
       familyId: familyId,
-      providers: healthcareProviders,
-      loadingProviders: loadingProviders,
-      onAddProvider: () => {}, // Implement if needed
-      onUpdateProvider: () => {}, // Implement if needed
-      onDeleteProvider: () => {}, // Implement if needed
+      providers: initialProviders, // Use the providers we just loaded
+      loadingProviders: false, // We've finished loading
+      onAddProvider: handleAddProvider,
+      onUpdateProvider: handleUpdateProvider,
+      onDeleteProvider: handleDeleteProvider,
       onClose: () => setActiveComponent(null)
     }
   });
+});
 };
 
   return (
