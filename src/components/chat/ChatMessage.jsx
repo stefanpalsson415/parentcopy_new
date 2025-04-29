@@ -41,9 +41,12 @@ const ChatMessage = ({ message, showFeedback = true, onReact = null, onDelete = 
     ));
   };
   
-  // Function to add line breaks to text
+  // Function to add line breaks to text and filter out voiceNote tags
   const formatWithLineBreaks = (text) => {
     if (!text) return '';
+    
+    // Filter out any voiceNote tags first
+    text = text.replace(/<voiceNote>.*?<\/voiceNote>/g, '');
     
     return text.split('\n').map((line, i) => (
       <React.Fragment key={i}>

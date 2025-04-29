@@ -758,6 +758,22 @@ if (requirements.prompts && requirements.prompts[currentField]) {
     console.log("Identifying missing fields for event type:", data.eventType);
     console.log("Current data:", JSON.stringify(data, null, 2));
     
+    // Before checking required fields, check if we have child name in the original text
+    if (!data.childName && data.originalText) {
+      // Look for patterns like "for [name]" in the original text
+      const childNameMatch = data.originalText.match(/for\s+(\w+)(?:\s+(?:next|on|at|this)|\s*$)/i);
+      if (childNameMatch && childNameMatch[1]) {
+        // Found a potential child name
+        const potentialChildName = childNameMatch[1];
+        // Check that it's not a common word
+        const nonChildWords = ['myself', 'me', 'appointment', 'meeting', 'doctor', 'dentist'];
+        if (!nonChildWords.includes(potentialChildName.toLowerCase())) {
+          console.log(`Found child name "${potentialChildName}" in original text, using it`);
+          data.childName = potentialChildName;
+        }
+      }
+    }
+    
     // Check required fields with better validation
     for (const field of requirements.required) {
       // More thorough check for field existence and meaningful content
@@ -780,6 +796,13 @@ if (requirements.prompts && requirements.prompts[currentField]) {
       
       // Skip endDateTime if we have dateTime (we can calculate it)
       if (field === 'endDateTime' && data.dateTime) {
+        continue;
+      }
+      
+      // Skip childName if we have it in the 'for' field (common in medical appointments)
+      if (field === 'childName' && data.for && typeof data.for === 'string') {
+        console.log(`Using "for" field value "${data.for}" as childName`);
+        data.childName = data.for;
         continue;
       }
       

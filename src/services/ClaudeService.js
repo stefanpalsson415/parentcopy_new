@@ -766,7 +766,6 @@ if (!this.disableCalendarDetection && messageText.length > 0) {
   }
 }
 
-// In src/services/ClaudeService.js, replace the extractCalendarRequest method with this improved version:
 async extractCalendarRequest(message) {  
   try {
     console.log(`🔄 Extracting calendar details from: "${message.substring(0, 100)}..."`);
@@ -776,7 +775,7 @@ async extractCalendarRequest(message) {
       'add to calendar', 'schedule', 'appointment', 'meeting', 'event',   
       'calendar', 'book', 'plan', 'sync', 'reminder', 'save date', 'date',
       'doctor', 'dentist', 'dental', 'checkup', 'check-up', 'visit',
-      'put on calendar', 'create event', 'set up meeting'
+      'put on calendar', 'create event', 'set up meeting', 'appt'
     ];  
       
     const isCalendarRequest = calendarKeywords.some(keyword =>   
@@ -789,6 +788,22 @@ async extractCalendarRequest(message) {
     }
     
     console.log("✅ Detected as calendar request, extracting details"); 
+    
+    // PRE-PROCESS: Check for common appointment patterns before parsing
+    const childNameMatch = message.match(/for\s+(\w+)(?:\s+(?:next|on|at|this))/i);
+    const doctorMatch = message.match(/(?:doctor|dr\.?)\s+(\w+)/i);
+    const dateMatch = message.match(/(?:next|this)\s+(\w+day)/i);
+    const timeMatch = message.match(/(?:at|@)\s*(\d+(?::\d+)?\s*(?:am|pm)?)/i);
+    
+    // Log pre-processing findings
+    if (childNameMatch || doctorMatch) {
+      console.log("🎯 Pre-processing found:", { 
+        childName: childNameMatch ? childNameMatch[1] : null,
+        doctorName: doctorMatch ? doctorMatch[1] : null,
+        dateHint: dateMatch ? dateMatch[1] : null,
+        timeHint: timeMatch ? timeMatch[1] : null
+      });
+    }
       
     // Use UnifiedParserService to extract event details  
     const UnifiedParserService = (await import('./UnifiedParserService')).default;  
@@ -796,9 +811,25 @@ async extractCalendarRequest(message) {
     
     // Log the result of parsing
     console.log("🔍 UnifiedParserService parsing result:", parsedEvent);
-      
-    if (!parsedEvent) {  
-      console.warn("❌ UnifiedParserService failed to extract event details");
+    
+    // Enhance the parsed event with our pre-processing results
+    let enhancedEvent = { ...(parsedEvent || {}) };
+    
+    // If the parser missed the child name but we found it in pre-processing, add it
+    if (childNameMatch && !enhancedEvent.childName) {
+      enhancedEvent.childName = childNameMatch[1];
+      console.log("✨ Enhanced with child name:", enhancedEvent.childName);
+    }
+    
+    // If the parser missed the doctor name but we found it in pre-processing, add it
+    if (doctorMatch && !enhancedEvent.doctorName) {
+      enhancedEvent.doctorName = doctorMatch[1];
+      console.log("✨ Enhanced with doctor name:", enhancedEvent.doctorName);
+    }
+    
+    // If we don't have enough information, run fallback extraction
+    if (!enhancedEvent.title && !enhancedEvent.eventType) {
+      console.warn("❌ Enhanced parser still lacks basic event details");
       
       // Fallback extraction if parser failed
       const title = this.extractTitleFallback(message);
@@ -806,44 +837,55 @@ async extractCalendarRequest(message) {
       
       if (title && dateTime) {
         console.log("✅ Using fallback extraction method");
-        return {
-          type: 'event',
+        enhancedEvent = {
+          type: 'appointment',
           title: title,
           dateTime: dateTime.toISOString(),
           location: '',
           description: 'Added from Allie chat',
-          originalText: message
+          originalText: message,
+          childName: childNameMatch ? childNameMatch[1] : null,
+          doctorName: doctorMatch ? doctorMatch[1] : null
         };
       }
+    }
+    
+    // If we still don't have a valid event, return null
+    if (!enhancedEvent || (!enhancedEvent.title && !enhancedEvent.eventType)) {
+      console.warn("❌ Failed to extract sufficient event details");
+      return null;
+    }
       
-      return null;  
-    }  
+    console.log("✅ Enhanced event data:", enhancedEvent);  
       
-    console.log("✅ AI-parsed event:", parsedEvent);  
-      
-    // Convert the parsed event to the format expected by processCalendarRequest  
+    // Convert the parsed event to the format expected by processCalendarRequest
+    // with better default handling
     const result = {  
-      type: parsedEvent.eventType || 'event',  
-      title: parsedEvent.title || 'New Event',  
-      dateTime: parsedEvent.dateTime || new Date().toISOString(), 
-      endDateTime: parsedEvent.endDateTime,  
-      location: parsedEvent.location || '',  
-      description: parsedEvent.description || '',  
-      childName: parsedEvent.childName || null,  
-      childId: parsedEvent.childId || null,
-      doctorName: parsedEvent.doctorName || parsedEvent.appointmentDetails?.doctorName,
-      hostParent: parsedEvent.hostName || '',  
+      type: enhancedEvent.eventType || 'appointment',  
+      title: enhancedEvent.title || (enhancedEvent.doctorName ? 
+             `Doctor Appointment with Dr. ${enhancedEvent.doctorName}` : 
+             'Doctor Appointment'),
+      dateTime: enhancedEvent.dateTime || new Date().toISOString(), 
+      endDateTime: enhancedEvent.endDateTime,  
+      location: enhancedEvent.location || '',  
+      description: enhancedEvent.description || '',  
+      childName: enhancedEvent.childName,  
+      childId: enhancedEvent.childId || null,
+      doctorName: enhancedEvent.doctorName || enhancedEvent.appointmentDetails?.doctorName,
+      hostParent: enhancedEvent.hostName || '',  
       extraDetails: {
-        ...(parsedEvent.extraDetails || {}),
-        appointmentDetails: parsedEvent.appointmentDetails || {}
+        ...(enhancedEvent.extraDetails || {}),
+        appointmentDetails: enhancedEvent.appointmentDetails || {
+          doctorName: enhancedEvent.doctorName
+        }
       },
       originalText: message
     };
 
     // Extract date and time as separate fields for EventDetailCollectorService
-    if (parsedEvent.dateTime || result.dateTime) {
+    if (enhancedEvent.dateTime || result.dateTime) {
       try {
-        const eventDate = new Date(parsedEvent.dateTime || result.dateTime);
+        const eventDate = new Date(enhancedEvent.dateTime || result.dateTime);
         
         // Add date in YYYY-MM-DD format
         result.date = eventDate.toISOString().split('T')[0];
