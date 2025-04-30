@@ -516,117 +516,122 @@ extractProviderDetails(message) {
 }
 
 
-  // In src/services/AllieAIService.js
-// Replace the processProviderFromChat method
+  // NEW CODE for AllieAIService.js
 async processProviderFromChat(message, familyId) {
   try {
     if (!familyId) {
-      console.error("Missing familyId in processProviderFromChat");
+      console.error("❌ ERROR: Missing familyId in processProviderFromChat");
       return { success: false, error: "Family ID is required" };
     }
     
-    console.log("🔄 DIRECT Processing provider from chat:", message.substring(0, 50) + "...");
-    console.log("Family ID:", familyId);
+    console.log("🔍 DIAGNOSTIC: Processing provider from chat:");
+    console.log("📝 Message:", message);
+    console.log("👪 Family ID:", familyId);
     
-    // IMPORTANT: Add direct log to see if this function is being called
-    console.log("🚨 processProviderFromChat CALLED with message:", message);
+    // Extract provider details
+    const providerDetails = this.extractProviderDetails(message);
+    console.log("🔎 Extracted provider details:", providerDetails);
     
-    // First try direct extraction
-    const providerDetails = this.extractProviderDetails(message);  
-    console.log("Direct extraction results:", providerDetails);
-    
-    // Final validation of provider details
+    // Validate provider details
     if (!providerDetails.name || providerDetails.name === "Unknown Provider") {
-      console.error("Failed to extract provider name");
+      console.error("❌ ERROR: Could not extract provider name");
       return { 
         success: false, 
         error: "Could not determine the provider's name from your message" 
       };
     }
     
-    // Add comprehensive logging for what we're about to save
-    console.log("🔄 Ready to save provider details:", {
-      name: providerDetails.name,
-      type: providerDetails.type,
-      specialty: providerDetails.specialty,
-      email: providerDetails.email || "none",
-      notes: providerDetails.notes?.substring(0, 50) || "none"
-    });
+    // DIRECT FIREBASE APPROACH - Bypass ProviderService for diagnostic purposes
+    console.log("⚡ DIAGNOSTIC: Using direct Firebase approach to save provider");
     
-    // Load ProviderService with better error handling and logging
-    let ProviderService;
     try {
-      const { default: imported } = await import('./ProviderService');
-      ProviderService = imported;
-      console.log("Successfully imported ProviderService");
-    } catch (importError) {
-      console.error("❌ Failed to import ProviderService:", importError);
+      // Import Firebase directly
+      const { db } = await import('./firebase');
+      const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
       
-      // Create an inline version if import fails
-      console.log("Creating inline version of ProviderService");
-      ProviderService = {
-        saveProvider: async (familyId, providerData) => {
-          try {
-            console.log("Using EMERGENCY inline saveProvider with providers collection");
-            const { db } = await import('./firebase');
-            const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
-            const providersRef = collection(db, "providers");
-            const docRef = await addDoc(providersRef, {
-              ...providerData,
-              familyId,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp()
-            });
-            console.log("EMERGENCY Provider saved with ID:", docRef.id);
-            return { success: true, providerId: docRef.id, isNew: true };
-          } catch (error) {
-            console.error("❌ Error in inline saveProvider:", error);
-            return { success: false, error: error.message };
-          }
-        }
+      // Prepare provider data
+      const providerToAdd = {
+        ...providerDetails,
+        familyId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       };
-    }
-    
-    // Set family ID and save to database
-    providerDetails.familyId = familyId;
-    console.log("🔄 Calling saveProvider method DIRECTLY");
-    const result = await ProviderService.saveProvider(familyId, providerDetails);
-    
-    // Comprehensive logging of the result
-    console.log("🔄 SaveProvider result:", result);
-    
-    if (result.success) {
-      console.log("✅ Provider saved successfully with ID:", result.providerId);
       
-      // No need to dispatch multiple events - the ProviderService now handles this properly
-      // Just dispatch a single event with all the necessary data
+      console.log("📤 Sending data directly to Firebase 'providers' collection:", providerToAdd);
+      
+      // Add to 'providers' collection
+      const providersRef = collection(db, "providers");
+      const docRef = await addDoc(providersRef, providerToAdd);
+      const providerId = docRef.id;
+      
+      console.log("✅ SUCCESS: Provider directly added to Firebase with ID:", providerId);
+      
+      // Dispatch an event to notify components
+      console.log("🔔 Dispatching provider-added event");
       if (typeof window !== 'undefined') {
-        console.log("Dispatching single provider-added event with complete data");
         window.dispatchEvent(new CustomEvent('provider-added', {
           detail: {
-            providerId: result.providerId,
-            provider: providerDetails,
+            providerId,
+            provider: providerToAdd,
             familyId
           }
         }));
+        
+        // Also dispatch directory refresh events
+        window.dispatchEvent(new CustomEvent('directory-refresh-needed'));
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('force-data-refresh'));
+        }, 500);
       }
       
       return { 
         success: true, 
-        providerId: result.providerId,
-        providerDetails: providerDetails,
-        isNew: result.isNew,
+        providerId,
+        providerDetails,
+        isNew: true,
         message: `Successfully added ${providerDetails.name} to your provider directory.`
       };
-    } else {
-      console.error("❌ Failed to save provider:", result.error);
-      return { 
-        success: false, 
-        error: result.error || "Failed to create provider" 
-      };
+    } catch (directFirebaseError) {
+      console.error("❌ CRITICAL ERROR in direct Firebase save:", directFirebaseError);
+      console.error("Error details:", {
+        code: directFirebaseError.code,
+        message: directFirebaseError.message,
+        stack: directFirebaseError.stack
+      });
+      
+      // As a last resort, try the original ProviderService approach
+      console.log("⚠️ Trying fallback approach using ProviderService");
+      try {
+        const { default: ProviderService } = await import('./ProviderService');
+        
+        providerDetails.familyId = familyId;
+        const result = await ProviderService.saveProvider(familyId, providerDetails);
+        
+        console.log("🔄 ProviderService fallback result:", result);
+        
+        if (result.success) {
+          console.log("✅ Provider saved successfully via fallback");
+          return { 
+            success: true, 
+            providerId: result.providerId,
+            providerDetails,
+            isNew: result.isNew,
+            message: `Successfully added ${providerDetails.name} to your provider directory.`
+          };
+        } else {
+          throw new Error(result.error || "Failed to create provider via ProviderService");
+        }
+      } catch (fallbackError) {
+        console.error("❌ Both direct and fallback approaches failed:", fallbackError);
+        return { success: false, error: "Failed to create provider after multiple attempts" };
+      }
     }
   } catch (error) {
     console.error("❌ Unhandled error in processProviderFromChat:", error);
+    console.error("Full error details:", {
+      message: error.message,
+      stack: error.stack
+    });
     return { success: false, error: error.message };
   }
 }
