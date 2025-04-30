@@ -1482,7 +1482,9 @@ async getAIResponse(message, familyId, messageHistory = []) {
       }
     }
 
-    // Add more explicit provider detection
+    // In src/services/EnhancedChatService.js, in the getAIResponse method, add this after the calendar detection block:
+
+// Add more explicit provider detection
 if (!isDirectCalendarRequest && (
   message.toLowerCase().includes("add provider") ||
   message.toLowerCase().includes("add a provider") ||
@@ -1497,23 +1499,23 @@ if (!isDirectCalendarRequest && (
   message.toLowerCase().includes("add a violin teacher") ||
   message.toLowerCase().includes("add violin teacher")
 )) {
-console.log("🔍 Detected explicit provider request, handling with provider service");
+  console.log("🔍 Detected explicit provider request, handling with provider service");
 
-try {
-  // Import AllieAIService dynamically
-  const AllieAIService = (await import('./AllieAIService')).default;
-  
-  // Process the provider directly
-  const result = await AllieAIService.processProviderFromChat(message, familyContext.familyId);
-  console.log("Provider processing result:", result);
-  
-  if (result && result.success) {
-    console.log("✅ Provider request handled successfully");
-    return `I've added ${result.providerDetails.name} as a provider for your family. You can find them in your Family Provider Directory.`;
+  try {
+    // Import AllieAIService dynamically
+    const AllieAIService = (await import('./AllieAIService')).default;
+    
+    // Process the provider directly
+    const result = await AllieAIService.processProviderFromChat(message, familyContext.familyId);
+    console.log("Provider processing result:", result);
+    
+    if (result && result.success) {
+      console.log("✅ Provider request handled successfully");
+      return `I've added ${result.providerDetails.name} as a provider for your family. You can find them in your Family Provider Directory.`;
+    }
+  } catch (error) {
+    console.error("Error processing provider request:", error);
   }
-} catch (error) {
-  console.error("Error processing provider request:", error);
-}
 }
 
     // Check for todos since this is common and needs special handling

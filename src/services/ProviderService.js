@@ -18,8 +18,10 @@ class ProviderService {
     this.db = db;
   }
 
-  // Debug method to test provider creation directly
-async testDirectProviderCreation(familyId) {
+ 
+
+// Replace the testDirectProviderCreation function in ProviderService.js with this version:
+async testDirectProviderCreation(familyId, shouldDelete = false) {
   try {
     console.log("🧪 RUNNING DIRECT PROVIDER CREATION TEST");
     
@@ -28,12 +30,24 @@ async testDirectProviderCreation(familyId) {
       return false;
     }
     
-    // Create test provider
+    // List all collections in Firestore to help diagnose
+    console.log("🔍 Checking available collections in Firestore");
+    try {
+      const { listCollections } = await import('firebase/firestore');
+      const collections = await listCollections(this.db);
+      console.log("📚 Available collections:", collections.map(c => c.id));
+    } catch (listError) {
+      console.warn("⚠️ Unable to list collections:", listError);
+    }
+    
+    // Create test provider with timestamp to make it distinctive
+    const timestamp = new Date().toISOString();
     const testProvider = {
-      name: "Test Provider " + new Date().toISOString().substring(11, 19),
+      name: "Test Provider " + timestamp.substring(11, 19),
       type: "education",
-      specialty: "Test Teacher",
+      specialty: "Test Teacher (Keep This)",
       email: "test@example.com",
+      notes: "Test provider created at " + timestamp,
       familyId: familyId
     };
     
@@ -49,16 +63,35 @@ async testDirectProviderCreation(familyId) {
       updatedAt: serverTimestamp()
     });
     
-    console.log("✅ Test provider created with ID:", docRef.id);
+    const providerId = docRef.id;
+    console.log("✅ Test provider created with ID:", providerId);
+    console.log("🔍 IMPORTANT: Look for this provider in Firestore collection 'providers' with ID:", providerId);
     
     // Verify creation
-    const docSnapshot = await getDoc(doc(this.db, "providers", docRef.id));
+    const docSnapshot = await getDoc(doc(this.db, "providers", providerId));
     
     if (docSnapshot.exists()) {
       console.log("✅ Verified provider exists in Firestore");
-      // Clean up by deleting the test provider
-      await deleteDoc(doc(this.db, "providers", docRef.id));
-      console.log("🧹 Test provider cleaned up");
+      
+      // Delete only if requested
+      if (shouldDelete) {
+        // Delete the test provider
+        await deleteDoc(doc(this.db, "providers", providerId));
+        console.log("🧹 Test provider cleaned up");
+      } else {
+        console.log("🔒 Test provider NOT deleted - you can find it in Firestore");
+        console.log("🌟 Provider path: /providers/" + providerId);
+      }
+      
+      // Force refresh the UI
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('provider-added'));
+        window.dispatchEvent(new CustomEvent('directory-refresh-needed'));
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('force-data-refresh'));
+        }, 500);
+      }
+      
       return true;
     } else {
       console.error("❌ Provider verification failed");
@@ -74,6 +107,57 @@ async testDirectProviderCreation(familyId) {
     return false;
   }
 }
+
+// In src/services/ProviderService.js, add this method
+
+/**
+ * Process a provider creation request from chat
+ * @param {string} message - The chat message
+ * @param {string} familyId - The family ID
+ * @returns {Promise<object>} The result of the operation
+ */
+async processProviderFromChat(message, familyId) {
+  try {
+    console.log("🔄 Processing provider from chat:", { message: message.substring(0, 100), familyId });
+    
+    if (!familyId) {
+      console.error("❌ No family ID provided for provider creation");
+      return { success: false, error: "Family ID is required" };
+    }
+    
+    // Extract provider details from message
+    const providerDetails = this.extractProviderInfo(message);
+    console.log("📋 Extracted provider details:", providerDetails);
+    
+    // Ensure we have a valid name
+    if (!providerDetails.name || providerDetails.name === "Unknown Provider") {
+      console.error("❌ Could not extract provider name from message");
+      return { success: false, error: "Could not determine provider name" };
+    }
+    
+    // Add the familyId to the provider data
+    providerDetails.familyId = familyId;
+    
+    // Save the provider
+    console.log("💾 Saving provider to database:", providerDetails);
+    const result = await this.saveProvider(familyId, providerDetails);
+    console.log("📥 Provider save result:", result);
+    
+    return {
+      success: result.success,
+      providerId: result.providerId,
+      isNew: result.isNew,
+      providerDetails
+    };
+  } catch (error) {
+    console.error("❌ Error processing provider from chat:", error);
+    return {
+      success: false,
+      error: error.message || "Error processing provider request"
+    };
+  }
+}
+
 // In src/services/ProviderService.js, add this method
 
 /**

@@ -126,31 +126,7 @@ safelyParseJSON(jsonString, defaultValue) {
   }
 }
 
-// Add to src/services/AllieAIService.js
 
-/**
- * Process a provider from chat request
- * @param {string} message - User message
- * @param {string} familyId - Family ID
- * @returns {Promise<object>} Processing result
- */
-async processProviderFromChat(message, familyId) {
-  try {
-    console.log("🔄 Processing provider from chat in AllieAIService:", { 
-      message: message.substring(0, 100), 
-      familyId 
-    });
-    
-    // Import ProviderService dynamically
-    const { default: ProviderService } = await import('./ProviderService');
-    
-    // Process the provider through ProviderService
-    return await ProviderService.processProviderFromChat(message, familyId);
-  } catch (error) {
-    console.error("❌ Error in processProviderFromChat:", error);
-    return { success: false, error: error.message };
-  }
-}
 
 
 /**
@@ -542,6 +518,8 @@ extractProviderDetails(message) {
   }
 }
 
+// In src/services/AllieAIService.js
+// Add or replace the processProviderFromChat method with this improved version
 
 async processProviderFromChat(message, familyId) {
   try {
@@ -554,34 +532,26 @@ async processProviderFromChat(message, familyId) {
     console.log(`Message: "${message.substring(0, 100)}..."`);
     console.log(`Family ID: ${familyId}`);
     
-    // Extract provider details using the service's method
+    // Extract provider details from message
     const providerDetails = this.extractProviderDetails(message);
     
-    // Log the extracted information for diagnostics
-    console.log("Extracted provider details:", {
-      name: providerDetails.name || "(missing)",
-      type: providerDetails.type || "(missing)",
-      specialty: providerDetails.specialty || "(none)",
-      email: providerDetails.email || "(none)"
-    });
-    
-    // Validate the essential fields
-    if (!providerDetails.name) {
-      console.error("Could not determine provider name from message");
+    // Ensure we have a valid name
+    if (!providerDetails.name || providerDetails.name === "Unknown Provider") {
+      console.error("Could not extract provider name from message");
       return { 
         success: false, 
         error: "I couldn't determine the provider's name. Please specify their name clearly." 
       };
     }
     
-    // SIMPLIFIED: Use a clean approach - import the service explicitly
-    const { default: ProviderService } = await import('./ProviderService');
-    
     // Add familyId to provider details
     providerDetails.familyId = familyId;
     
     // Log what we're about to do
     console.log(`Attempting to save provider "${providerDetails.name}" for family ${familyId}`);
+    
+    // SIMPLIFIED: Use a clean approach - import the service explicitly
+    const { default: ProviderService } = await import('./ProviderService');
     
     // Save provider using the service
     const result = await ProviderService.saveProvider(familyId, providerDetails);
@@ -623,6 +593,7 @@ async processProviderFromChat(message, familyId) {
     };
   }
 }
+
 
 // In src/services/AllieAIService.js
 
@@ -929,8 +900,7 @@ processChildResponse(response, originalMessage, child) {
 
 
 
-// In src/services/AllieAIService.js
-// Replace or add this method
+// In src/services/AllieAIService.js, add or replace the extractProviderDetails method
 async extractProviderDetails(message) {
   try {
     console.log("Extracting provider details from message:", message);
