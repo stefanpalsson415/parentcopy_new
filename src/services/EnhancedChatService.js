@@ -1429,48 +1429,13 @@ if (familyContext.familyId) {
 
 async getAIResponse(message, familyContext, messageHistory = [], options = {}) {
   try {
-    // Check if this is an action request that should be handled by IntentActionService
-    try {
-      const { default: IntentActionService } = await import('./IntentActionService');
-      
-      // Quick check for common action patterns
-      const actionPatterns = [
-        'add provider', 'add a provider', 'add teacher', 'add a teacher',
-        'piano teacher', 'music teacher', 'harmonica teacher',
-        'add task', 'add to calendar', 'schedule appointment'
-      ];
-      
-      const mightBeAction = actionPatterns.some(pattern => 
-        message.toLowerCase().includes(pattern)
-      );
-      
-      if (mightBeAction) {
-        console.log("Detected potential action request, checking with IntentActionService");
-        
-        // Use IntentActionService to determine if this is an action and process it
-        const intentResult = await IntentActionService.processUserRequest(
-          message, 
-          familyContext.familyId, 
-          this.currentUser?.uid
-        );
-        
-        // If successfully processed as an action, return the result
-        if (intentResult.success) {
-          console.log("Request successfully processed by IntentActionService");
-          return intentResult.message || "I've completed that action for you.";
-        } else {
-          // If it was determined to be an action but processing failed, log the error
-          console.log("Request identified as action but processing failed:", intentResult.error);
-          // Continue with normal processing
-        }
-      }
-    } catch (actionError) {
-      console.error("Error checking/processing action:", actionError);
-      // Continue with normal processing
-    }
-
     // Log input request
     console.log(`Getting AI response for: "${message.substring(0, 100)}..."`);
+    console.log("🔎 Context details:", {
+      hasFamilyId: !!familyContext?.familyId,
+      hasUserId: !!this.currentUser?.uid,
+      messageLength: message.length
+    });
     
     // Ensure context is valid
     if (!familyContext) {
@@ -1478,6 +1443,36 @@ async getAIResponse(message, familyContext, messageHistory = [], options = {}) {
       familyContext = {};
     }
     
+    // Check if this is an action request that should be handled by IntentActionService
+    try {
+      const { default: IntentActionService } = await import('./IntentActionService');
+      
+      console.log("Checking if message is an actionable request with IntentActionService");
+      
+      // Process through IntentActionService to see if it's an actionable request
+      const actionResult = await IntentActionService.processUserRequest(
+        message, 
+        familyContext.familyId, 
+        this.currentUser?.uid
+      );
+      
+      // If successfully processed as an action, return the result
+      if (actionResult.success) {
+        console.log("Request successfully processed by IntentActionService:", actionResult);
+        return actionResult.message || "I've completed that action for you.";
+      } else if (actionResult.error && actionResult.error !== "I'm not sure what you'd like me to do.") {
+        // If it was determined to be an action but processing failed, log the error
+        console.log("Request identified as action but processing failed:", actionResult.error);
+        return actionResult.message || "I understood what you wanted to do, but encountered an issue while processing your request.";
+      }
+      
+      // If IntentActionService didn't handle it, continue with normal processing
+      console.log("Request not identified as an action, continuing with conversational AI");
+    } catch (actionError) {
+      console.error("Error checking/processing action:", actionError);
+      // Continue with normal processing
+    }
+
     // Format messages for Claude
     const formattedMessages = messageHistory.map(msg => ({
       role: msg.sender === 'allie' ? 'assistant' : 'user',
@@ -1493,113 +1488,6 @@ async getAIResponse(message, familyContext, messageHistory = [], options = {}) {
       });
     }
     
-    // Lookup or survey message handling
-    let specialResponse = null;
-    
-    // Try lookups first if it seems like a lookup query
-    if (!specialResponse && message.toLowerCase().includes('calendar') || 
-        message.toLowerCase().includes('what') || 
-        message.toLowerCase().includes('show') || 
-        message.toLowerCase().includes('find')) {
-      try {
-        const maybeCalendarResult = await this.lookupCalendarEvent(
-          message, familyContext.familyId, this.currentUser?.uid
-        );
-        
-        if (maybeCalendarResult.success) {
-          specialResponse = maybeCalendarResult.message;
-        }
-      } catch (lookupError) {
-        console.error("Error during calendar lookup:", lookupError);
-      }
-    }
-    
-    // Check if this is a survey question
-    if (!specialResponse && (message.toLowerCase().includes('survey') || 
-         message.toLowerCase().includes('question') || 
-         message.toLowerCase().includes('weight'))) {
-      try {
-        const surveyResult = await this.answerSurveyQuestion(message, familyContext);
-        if (surveyResult) {
-          specialResponse = surveyResult;
-        }
-      } catch (surveyError) {
-        console.error("Error handling survey question:", surveyError);
-      }
-    }
-    
-    // Check for direct calendar request (e.g. "add to calendar...")
-    let isDirectCalendarRequest = false;
-    
-    if (!specialResponse) {
-      const calendarIndicators = [
-        'add to calendar', 
-        'schedule', 
-        'add event', 
-        'create event',
-        'set up appointment',
-        'book appointment',
-        'add appointment'
-      ];
-      
-      isDirectCalendarRequest = calendarIndicators.some(indicator => 
-        message.toLowerCase().includes(indicator)
-      );
-      
-      if (isDirectCalendarRequest) {
-        try {
-          console.log("Detected calendar request, forwarding to calendar service");
-          
-          const { default: ClaudeService } = await import('./ClaudeService');
-          
-          // Extract and collect event details
-          const result = await ClaudeService.extractAndCollectEventDetails(
-            message, 
-            this.currentUser?.uid, 
-            familyContext.familyId
-          );
-          
-          if (result) {
-            specialResponse = result;
-          }
-        } catch (calendarError) {
-          console.error("Error processing calendar request:", calendarError);
-        }
-      }
-    }
-    
-    // Handle provider request
-    if (!specialResponse && !isDirectCalendarRequest) {
-      // Check if this looks like a provider request
-      const providerIndicators = [
-        'add provider', 
-        'add a provider', 
-        'add doctor', 
-        'add teacher',
-        'music teacher',
-        'piano teacher',
-        'harmonica teacher',
-        'violin teacher'
-      ];
-      
-      const isProviderRequest = providerIndicators.some(indicator => 
-        message.toLowerCase().includes(indicator)
-      );
-      
-      if (isProviderRequest) {
-        try {
-          specialResponse = await this.handleProviderRequest(message, familyContext);
-        } catch (providerError) {
-          console.error("Error handling provider request:", providerError);
-        }
-      }
-    }
-    
-    // Return special response if we have one
-    if (specialResponse) {
-      return specialResponse;
-    }
-    
     // Import services dynamically
     const { default: ClaudeService } = await import('./ClaudeService');
     
@@ -1608,7 +1496,8 @@ async getAIResponse(message, familyContext, messageHistory = [], options = {}) {
       // Add detailed context for Claude
       const enhancedContext = {
         ...familyContext,
-        currentIntent: this.determineIntent(message)
+        currentIntent: message ? this.determineIntent(message) : null,
+        userId: this.currentUser?.uid
       };
       
       // Add current entities if available
@@ -1640,8 +1529,8 @@ async getAIResponse(message, familyContext, messageHistory = [], options = {}) {
       return response;
     } catch (claudeError) {
       console.error("Error getting response from Claude:", claudeError);
-  return "I'm sorry, but I'm having trouble connecting to my language processing system. Please try again in a moment.";
-}
+      return "I'm sorry, but I'm having trouble connecting to my language processing system. Please try again in a moment.";
+    }
   } catch (error) {
     console.error("Error getting AI response:", error);
     return "I'm sorry, I encountered an issue processing your request. Please try again.";
@@ -1748,26 +1637,15 @@ async processActionableRequest(message, familyId, userId) {
  */
 determineIntent(message) {
   try {
-    // Use the NLU component to detect intent
+    // Use the NLU component to detect intent if available
     if (this.nlu && typeof this.nlu.detectIntent === 'function') {
-      return this.nlu.detectIntent(message);
+      const intent = this.nlu.detectIntent(message);
+      console.log(`Intent detected by NLU: ${intent}`);
+      return intent;
     }
     
-    // Fallback to basic intent detection if NLU is not available
-    const intentPatterns = {
-      'calendar.add': ['add to calendar', 'schedule', 'appointment'],
-      'provider.add': ['add provider', 'add a provider', 'new provider', 'save doctor'],
-      'task.add': ['add task', 'new task', 'create todo'],
-      'child.track': ['track growth', 'record height', 'child milestone']
-    };
-    
-    const messageLower = message.toLowerCase();
-    for (const [intent, patterns] of Object.entries(intentPatterns)) {
-      if (patterns.some(pattern => messageLower.includes(pattern))) {
-        return intent;
-      }
-    }
-    
+    // Otherwise, we'll rely on IntentActionService's identifyIntent
+    // which will be called separately and uses AI for classification
     return null;
   } catch (error) {
     console.error("Error determining intent:", error);
@@ -1959,21 +1837,30 @@ async handleProviderRequest(message, familyContext) {
       return { success: false, error: "Family ID is required" };
     }
     
-    console.log("⭐ DIAGNOSTIC: Processing provider request");
+    console.log("⭐ Processing provider request");
     console.log(`Message: "${message.substring(0, 100)}..."`);
     console.log(`Family ID: ${familyContext.familyId}`);
     
-    // CRITICAL FIX: Import AllieAIService dynamically to ensure it's loaded
-    const AllieAIService = (await import('./AllieAIService')).default;
+    // Import services dynamically
+    const { default: ClaudeService } = await import('./ClaudeService');
+    const { default: ProviderService } = await import('./ProviderService');
     
-    // Process the provider directly
-    const result = await AllieAIService.processProviderFromChat(message, familyContext.familyId);
-    console.log("Provider processing result:", result);
-
+    // Use AI to extract provider details
+    const providerDetails = await ClaudeService.extractEntityWithAI(message, 'provider');
     
-    if (result && result.success) {
-      console.log("✅ Provider request handled successfully");
-      return `I've added ${result.providerDetails.name} as a provider for your family. You can find them in your Family Provider Directory.`;
+    if (!providerDetails || !providerDetails.name) {
+      return "I couldn't identify the provider details. Could you please provide the provider's name and type (like doctor, teacher, etc.)?";
+    }
+    
+    // Add familyId
+    providerDetails.familyId = familyContext.familyId;
+    
+    // Save the provider
+    console.log("Saving provider to database:", providerDetails);
+    const result = await ProviderService.saveProvider(familyContext.familyId, providerDetails);
+    
+    if (result.success) {
+      return `I've added ${providerDetails.name} as a ${providerDetails.type || 'provider'} for your family. You can find them in your Family Provider Directory.`;
     }
     
     return `I wasn't able to add this provider to your directory. ${result.error || "Please try again with more details about the provider."} You can also add providers manually in the Family Provider Directory section.`;

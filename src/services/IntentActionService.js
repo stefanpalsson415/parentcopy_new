@@ -40,84 +40,17 @@ class IntentActionService {
       [ActionTypes.QUERY_PROVIDERS]: this.handleQueryProviders
     };
       
-    // In src/services/IntentActionService.js, update the this.intentMapping in the constructor:
+    // In the constructor, replace this.intentMapping with:
 this.intentMapping = {
-    // Provider intents
+    // This is now just used as a fallback if AI classification fails
     'add provider': ActionTypes.ADD_PROVIDER,
-    'add a provider': ActionTypes.ADD_PROVIDER,
-    'add teacher': ActionTypes.ADD_PROVIDER,
-    'add a teacher': ActionTypes.ADD_PROVIDER,
-    'music teacher': ActionTypes.ADD_PROVIDER,
-    'piano teacher': ActionTypes.ADD_PROVIDER,
-    'harmonica teacher': ActionTypes.ADD_PROVIDER,
-    'violin teacher': ActionTypes.ADD_PROVIDER,
-    'guitar teacher': ActionTypes.ADD_PROVIDER,
-    'doctor': ActionTypes.ADD_PROVIDER,
-    'dentist': ActionTypes.ADD_PROVIDER,
-    'pediatrician': ActionTypes.ADD_PROVIDER,
-    'coach': ActionTypes.ADD_PROVIDER,
-    'tutor': ActionTypes.ADD_PROVIDER,
-    
-    // Calendar/event intents
-    'add to calendar': ActionTypes.ADD_EVENT,
-    'schedule': ActionTypes.ADD_EVENT,
     'add event': ActionTypes.ADD_EVENT,
-    'create event': ActionTypes.ADD_EVENT,
-    'plan event': ActionTypes.ADD_EVENT,
-    'birthday': ActionTypes.ADD_EVENT,
-    'appointment': ActionTypes.ADD_APPOINTMENT,
-    'doctor appointment': ActionTypes.ADD_APPOINTMENT,
-    'dentist appointment': ActionTypes.ADD_APPOINTMENT,
-    'check-up': ActionTypes.ADD_APPOINTMENT,
-    'checkup': ActionTypes.ADD_APPOINTMENT,
-    'medical visit': ActionTypes.ADD_APPOINTMENT,
-    
-    // Task intents
     'add task': ActionTypes.ADD_TASK,
-    'create task': ActionTypes.ADD_TASK,
-    'assign task': ActionTypes.ADD_TASK,
-    'todo': ActionTypes.ADD_TASK,
-    'to-do': ActionTypes.ADD_TASK,
-    'to do': ActionTypes.ADD_TASK,
-    'complete task': ActionTypes.COMPLETE_TASK,
-    'finish task': ActionTypes.COMPLETE_TASK,
-    'done task': ActionTypes.COMPLETE_TASK,
-    'task is done': ActionTypes.COMPLETE_TASK,
-    'reassign task': ActionTypes.REASSIGN_TASK,
-    
-    // Growth tracking
     'track growth': ActionTypes.TRACK_GROWTH,
-    'record height': ActionTypes.TRACK_GROWTH,
-    'record weight': ActionTypes.TRACK_GROWTH,
-    'growth data': ActionTypes.TRACK_GROWTH,
-    'weight measurement': ActionTypes.TRACK_GROWTH,
-    'height measurement': ActionTypes.TRACK_GROWTH,
-    
-    // Document intents
     'add document': ActionTypes.ADD_DOCUMENT,
-    'upload document': ActionTypes.ADD_DOCUMENT,
-    'save document': ActionTypes.ADD_DOCUMENT,
-    'store document': ActionTypes.ADD_DOCUMENT,
-    'medical record': ActionTypes.ADD_DOCUMENT,
-    'school document': ActionTypes.ADD_DOCUMENT,
-    
-    // Relationship
-    'date night': ActionTypes.SCHEDULE_DATE_NIGHT,
-    'couple time': ActionTypes.SCHEDULE_DATE_NIGHT,
-    'relationship activity': ActionTypes.SCHEDULE_DATE_NIGHT,
-    'couple activity': ActionTypes.SCHEDULE_DATE_NIGHT,
-    
-    // Queries
-    'what tasks': ActionTypes.QUERY_TASKS,
-    'show tasks': ActionTypes.QUERY_TASKS,
-    'task list': ActionTypes.QUERY_TASKS,
-    'pending tasks': ActionTypes.QUERY_TASKS,
-    'show calendar': ActionTypes.QUERY_CALENDAR,
-    'what events': ActionTypes.QUERY_CALENDAR,
-    'upcoming events': ActionTypes.QUERY_CALENDAR,
-    'find providers': ActionTypes.QUERY_PROVIDERS,
-    'show providers': ActionTypes.QUERY_PROVIDERS,
-    'list providers': ActionTypes.QUERY_PROVIDERS
+    'query calendar': ActionTypes.QUERY_CALENDAR,
+    'query tasks': ActionTypes.QUERY_TASKS,
+    'query providers': ActionTypes.QUERY_PROVIDERS
   };
     
     // For tracking statistics
@@ -134,13 +67,13 @@ this.stats = {
   }
 
   /**
-   * Process a user request from chat
-   * @param {string} message - User message
-   * @param {string} familyId - Family ID
-   * @param {string} userId - User ID
-   * @returns {Promise<object>} Result of the action
-   */
-  async processUserRequest(message, familyId, userId) {
+ * Process a user request from chat
+ * @param {string} message - User message
+ * @param {string} familyId - Family ID
+ * @param {string} userId - User ID
+ * @returns {Promise<object>} Result of the action
+ */
+async processUserRequest(message, familyId, userId) {
     try {
       console.log("Processing user request:", message);
       this.stats.totalRequests++;
@@ -150,7 +83,7 @@ this.stats = {
         return createErrorResult("I need more information to process your request.");
       }
       
-      // Step 1: Identify the intent
+      // Step 1: Identify the intent using AI classification
       const intent = await this.identifyIntent(message);
       console.log("Identified intent:", intent);
       
@@ -198,22 +131,11 @@ this.stats = {
   }
   
   /**
-   * Identify the intent from the user message
-   * @param {string} message - User message
-   * @returns {Promise<string>} Intent identifier
-   */
-  async identifyIntent(message) {
-    // First try simple keyword matching (fast)
-    const messageLC = message.toLowerCase();
-    
-    for (const [keyword, intent] of Object.entries(this.intentMapping)) {
-      if (messageLC.includes(keyword)) {
-        console.log(`Intent matched via keyword "${keyword}" -> ${intent}`);
-        return intent;
-      }
-    }
-    
-    // If no simple match, use Claude to extract intent
+ * Identify the intent from the user message
+ * @param {string} message - User message
+ * @returns {Promise<string>} Intent identifier
+ */
+async identifyIntent(message) {
     try {
       console.log("Using Claude for intent classification");
       
@@ -357,6 +279,23 @@ this.stats = {
         "I encountered an error while adding this provider. Please try being more specific about the provider's name and type.",
         error.message
       );
+    }
+  }
+
+  /**
+ * Debug method to test intent classification directly
+ * @param {string} message - Message to classify
+ * @returns {Promise<string>} Classified intent
+ */
+async debugClassifyIntent(message) {
+    try {
+      console.log("🔍 Debug classification for:", message);
+      const intent = await this.identifyIntent(message);
+      console.log("🔍 Classified as:", intent);
+      return intent;
+    } catch (error) {
+      console.error("Error in debug classification:", error);
+      return null;
     }
   }
 

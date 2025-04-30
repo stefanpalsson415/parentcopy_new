@@ -13,10 +13,10 @@ class AIOrchestrator {
   }
   
   /**
-   * Initialize all AI services with proper dependencies
-   */
-  async initialize() {
-    if (this.initialized) return;
+ * Initialize all AI services with proper dependencies
+ */
+async initialize() {
+    if (this.initialized) return { success: true };
     
     console.log("Initializing AI Orchestrator and services");
     
@@ -28,14 +28,16 @@ class AIOrchestrator {
       
       // Connect services together
       IntentActionService.claudeService = ClaudeService;
-
       
-      // Set calendar detection flags properly
-      ClaudeService.disableCalendarDetection = false;
-      ClaudeService.currentProcessingContext = {
-        isProcessingProvider: false,
-        isProcessingTask: false
-      };
+      // Extract auth context from current user if available
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        this.setAuthContext({
+          userId: currentUser.uid,
+          timestamp: Date.now()
+        });
+        console.log("Authentication context initialized from current user");
+      }
       
       // Track initialization time
       this.initTime = new Date();
@@ -77,7 +79,52 @@ class AIOrchestrator {
       };
     }
   }
+
+  /**
+ * Ensure authentication context is properly set for all services
+ * @param {Object} context - User context with authentication data
+ */
+setAuthContext(context) {
+    if (!context || !context.userId) return;
+    
+    this.authContext = {
+      userId: context.userId,
+      familyId: context.familyId,
+      timestamp: Date.now()
+    };
+    
+    // Update services that need auth context
+    if (ClaudeService) {
+      ClaudeService.authContext = this.authContext;
+    }
+    
+    console.log("Auth context set successfully:", this.authContext);
+  }
   
+/**
+ * Force authentication context to be available (for debugging)
+ * @param {string} userId - User ID to force
+ * @param {string} familyId - Family ID to force
+ */
+forceAuthContext(userId, familyId) {
+    this.authContext = {
+      userId: userId || 'debug-user-id',
+      familyId: familyId || 'debug-family-id',
+      timestamp: Date.now(),
+      isForced: true
+    };
+    
+    // Update all services
+    if (ClaudeService) {
+      ClaudeService.authContext = this.authContext;
+    }
+    
+    console.log("AUTH CONTEXT FORCED for debugging:", this.authContext);
+    return this.authContext;
+  }
+
+
+
   /**
    * Get system status for all AI services
    * @returns {Object} Status information for services

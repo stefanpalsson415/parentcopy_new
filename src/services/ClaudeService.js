@@ -311,14 +311,13 @@ async generateResponse(messages, context, options = {}) {
 const lastMessage = messages[messages.length - 1];
 const messageText = lastMessage.content || lastMessage.text || "";
 
-// Check for event collection markers in previous AI responses
 const eventCollectionMarker = context?.previousAIMessages?.find(msg => 
   msg.includes('<voiceNote>event_collection:')
 );
 
 if (eventCollectionMarker) {
   // Extract session ID and step
-  const sessionMatch = eventCollectionMarker.match(/<voiceNote>event_collection:([^:]+):(\d+)<\/antml:voiceNote>/);
+  const sessionMatch = eventCollectionMarker.match(/<voiceNote>event_collection:([^:]+):(\d+)<\/voiceNote>/);
   if (sessionMatch) {
     const [_, sessionId, step] = sessionMatch;
     // Handle collection response
@@ -775,139 +774,62 @@ async extractCalendarRequest(message) {
   try {
     console.log(`🔄 Extracting calendar details from: "${message.substring(0, 100)}..."`);
 
-    // Enhanced calendar keywords for better detection
-    const calendarKeywords = [  
-      'add to calendar', 'schedule', 'appointment', 'meeting', 'event',   
-      'calendar', 'book', 'plan', 'sync', 'reminder', 'save date', 'date',
-      'doctor', 'dentist', 'dental', 'checkup', 'check-up', 'visit',
-      'put on calendar', 'create event', 'set up meeting', 'appt'
-    ];  
-      
-    const isCalendarRequest = calendarKeywords.some(keyword =>   
-      message.toLowerCase().includes(keyword)  
-    );  
-      
-    if (!isCalendarRequest) {
-      console.log("❌ Not detected as calendar request");
-      return null;  
-    }
-    
-    console.log("✅ Detected as calendar request, extracting details"); 
-    
-    // PRE-PROCESS: Check for common appointment patterns before parsing
-    const childNameMatch = message.match(/for\s+(\w+)(?:\s+(?:next|on|at|this))/i);
-    const doctorMatch = message.match(/(?:doctor|dr\.?)\s+(\w+)/i);
-    const dateMatch = message.match(/(?:next|this)\s+(\w+day)/i);
-    const timeMatch = message.match(/(?:at|@)\s*(\d+(?::\d+)?\s*(?:am|pm)?)/i);
-    
-    // Log pre-processing findings
-    if (childNameMatch || doctorMatch) {
-      console.log("🎯 Pre-processing found:", { 
-        childName: childNameMatch ? childNameMatch[1] : null,
-        doctorName: doctorMatch ? doctorMatch[1] : null,
-        dateHint: dateMatch ? dateMatch[1] : null,
-        timeHint: timeMatch ? timeMatch[1] : null
-      });
-    }
-      
-    // Use UnifiedParserService to extract event details  
-    const UnifiedParserService = (await import('./UnifiedParserService')).default;  
-    const parsedEvent = await UnifiedParserService.parseEvent(message, {}, []);
-    
-    // Log the result of parsing
-    console.log("🔍 UnifiedParserService parsing result:", parsedEvent);
-    
-    // Enhance the parsed event with our pre-processing results
-    let enhancedEvent = { ...(parsedEvent || {}) };
-    
-    // If the parser missed the child name but we found it in pre-processing, add it
-    if (childNameMatch && !enhancedEvent.childName) {
-      enhancedEvent.childName = childNameMatch[1];
-      console.log("✨ Enhanced with child name:", enhancedEvent.childName);
-    }
-    
-    // If the parser missed the doctor name but we found it in pre-processing, add it
-    if (doctorMatch && !enhancedEvent.doctorName) {
-      enhancedEvent.doctorName = doctorMatch[1];
-      console.log("✨ Enhanced with doctor name:", enhancedEvent.doctorName);
-    }
-    
-    // If we don't have enough information, run fallback extraction
-    if (!enhancedEvent.title && !enhancedEvent.eventType) {
-      console.warn("❌ Enhanced parser still lacks basic event details");
-      
-      // Fallback extraction if parser failed
-      const title = this.extractTitleFallback(message);
-      const dateTime = this.extractDateTimeFallback(message);
-      
-      if (title && dateTime) {
-        console.log("✅ Using fallback extraction method");
-        enhancedEvent = {
-          type: 'appointment',
-          title: title,
-          dateTime: dateTime.toISOString(),
-          location: '',
-          description: 'Added from Allie chat',
-          originalText: message,
-          childName: childNameMatch ? childNameMatch[1] : null,
-          doctorName: doctorMatch ? doctorMatch[1] : null
-        };
+    // Use AI model to extract event details
+    const systemPrompt = `You are an assistant that extracts calendar event details.
+    From the user's message, extract the following information:
+    - Event title/name
+    - Date and time
+    - Location (if mentioned)
+    - People involved (if mentioned)
+    - Event type or category
+    - Any other relevant details
+
+    Return a JSON object with these extracted details. If information is missing, leave the field empty.
+    Include dateTime (ISO format if possible), title, location, description, and any other relevant fields.`;
+
+    const response = await this.generateResponse(
+      [{ role: 'user', content: `Extract calendar event details from: "${message}"` }],
+      { system: systemPrompt },
+      { temperature: 0.1 }
+    );
+
+    let eventData;
+    try {
+      // Find and parse JSON in the response
+      const jsonMatch = response.match(/({[\s\S]*?})/);
+      if (jsonMatch) {
+        eventData = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error("Could not extract JSON from response");
       }
+    } catch (parseError) {
+      console.warn("Error parsing extracted event data:", parseError);
+      
+      // Fallback extraction if parsing fails
+      eventData = {
+        title: this.extractTitleFallback(message),
+        dateTime: this.extractDateTimeFallback(message).toISOString(),
+        description: 'Added from Allie chat',
+        source: 'allie-chat'
+      };
     }
     
-    // If we still don't have a valid event, return null
-    if (!enhancedEvent || (!enhancedEvent.title && !enhancedEvent.eventType)) {
-      console.warn("❌ Failed to extract sufficient event details");
-      return null;
-    }
-      
-    console.log("✅ Enhanced event data:", enhancedEvent);  
-      
-    // Convert the parsed event to the format expected by processCalendarRequest
-    // with better default handling
-    const result = {  
-      type: enhancedEvent.eventType || 'appointment',  
-      title: enhancedEvent.title || (enhancedEvent.doctorName ? 
-             `Doctor Appointment with Dr. ${enhancedEvent.doctorName}` : 
-             'Doctor Appointment'),
-      dateTime: enhancedEvent.dateTime || new Date().toISOString(), 
-      endDateTime: enhancedEvent.endDateTime,  
-      location: enhancedEvent.location || '',  
-      description: enhancedEvent.description || '',  
-      childName: enhancedEvent.childName,  
-      childId: enhancedEvent.childId || null,
-      doctorName: enhancedEvent.doctorName || enhancedEvent.appointmentDetails?.doctorName,
-      hostParent: enhancedEvent.hostName || '',  
-      extraDetails: {
-        ...(enhancedEvent.extraDetails || {}),
-        appointmentDetails: enhancedEvent.appointmentDetails || {
-          doctorName: enhancedEvent.doctorName
-        }
-      },
+    console.log("✅ Extracted event data:", eventData);  
+    
+    // Build result with proper structure
+    return {  
+      type: eventData.eventType || eventData.category || 'event',  
+      title: eventData.title || "New Event",
+      dateTime: eventData.dateTime || new Date().toISOString(), 
+      endDateTime: eventData.endDateTime,  
+      location: eventData.location || '',  
+      description: eventData.description || '',  
+      person: eventData.person || eventData.childName,
+      childName: eventData.childName,  
+      childId: eventData.childId || null,
+      extraDetails: eventData,
       originalText: message
     };
-
-    // Extract date and time as separate fields for EventDetailCollectorService
-    if (enhancedEvent.dateTime || result.dateTime) {
-      try {
-        const eventDate = new Date(enhancedEvent.dateTime || result.dateTime);
-        
-        // Add date in YYYY-MM-DD format
-        result.date = eventDate.toISOString().split('T')[0];
-        
-        // Add time in HH:MM format (24-hour)
-        result.time = eventDate.toTimeString().substring(0, 5);
-        
-        console.log(`✅ Extracted separate date (${result.date}) and time (${result.time}) from datetime`);
-      } catch (e) {
-        console.error("❌ Error extracting date and time components:", e);
-      }
-    }
-    
-    // Log the final result object
-    console.log("✅ Extracted calendar details:", result);
-    
-    return result;
   } catch (error) {  
     console.error("❌ Error extracting calendar event with AI:", error);
     return null;  
@@ -1031,6 +953,96 @@ extractDateTimeFallback(message) {
   tomorrow.setHours(12, 0, 0, 0);
   return tomorrow;
 }
+
+
+/**
+ * Use AI to extract entities of any specified type
+ * @param {string} message - User message
+ * @param {string} entityType - Type of entity to extract
+ * @param {object} options - Extraction options
+ * @returns {Promise<object>} Extracted entity data
+ */
+async extractEntityWithAI(message, entityType, options = {}) {
+  try {
+    console.log(`🔄 Using AI to extract ${entityType} from: "${message.substring(0, 100)}..."`);
+    
+    const templates = {
+      provider: `You are an assistant that extracts healthcare or service provider details.
+      From the user's message, extract the following information:
+      - Provider name
+      - Provider type (medical, education, childcare, etc.)
+      - Specialty/role
+      - Contact information (phone, email)
+      - Location/address (if mentioned)
+      - Any other relevant details
+
+      Return a JSON object with these extracted details. If information is missing, leave the field empty.`,
+      
+      event: `You are an assistant that extracts calendar event details.
+      From the user's message, extract the following information:
+      - Event title/name
+      - Date and time
+      - Location (if mentioned)
+      - People involved (if mentioned)
+      - Event type or category
+      - Any other relevant details
+
+      Return a JSON object with these extracted details. If information is missing, leave the field empty.`,
+      
+      task: `You are an assistant that extracts task details.
+      From the user's message, extract the following information:
+      - Task title/description
+      - Due date (if mentioned)
+      - Who it's assigned to (if mentioned)
+      - Priority level (if mentioned)
+      - Category (if mentioned)
+      - Any other relevant details
+
+      Return a JSON object with these extracted details. If information is missing, leave the field empty.`,
+      
+      growth: `You are an assistant that extracts child growth measurement details.
+      From the user's message, extract the following information:
+      - Child's name (if mentioned)
+      - Height/length measurement (with units)
+      - Weight measurement (with units)
+      - Date of measurement (if mentioned)
+      - Clothing or shoe size (if mentioned)
+      - Any other relevant details
+
+      Return a JSON object with these extracted details. If information is missing, leave the field empty.`
+    };
+    
+    const systemPrompt = templates[entityType] || 
+      `Extract all information related to ${entityType} from the user's message and return as a JSON object.`;
+    
+    const response = await this.generateResponse(
+      [{ role: 'user', content: `Extract ${entityType} details from: "${message}"` }],
+      { system: systemPrompt },
+      { temperature: 0.1 }
+    );
+    
+    // Extract and parse JSON from response
+    let entityData;
+    try {
+      const jsonMatch = response.match(/({[\s\S]*?})/);
+      if (jsonMatch) {
+        entityData = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error(`Could not extract ${entityType} JSON from response`);
+      }
+    } catch (parseError) {
+      console.warn(`Error parsing extracted ${entityType} data:`, parseError);
+      return null;
+    }
+    
+    console.log(`✅ Extracted ${entityType} data:`, entityData);
+    return entityData;
+  } catch (error) {
+    console.error(`❌ Error extracting ${entityType} with AI:`, error);
+    return null;
+  }
+}
+
 
 
 // In src/services/ClaudeService.js, replace the extractAndCollectEventDetails method with this improved version:
