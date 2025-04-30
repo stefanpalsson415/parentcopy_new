@@ -3,6 +3,8 @@ import ClaudeService from './ClaudeService';
 import { createSuccessResult, createErrorResult } from '../utils/ActionResultBuilder';
 import { ActionTypes } from '../utils/ActionTypes';
 import ConversationContext from './ConversationContext';
+import ActionLearningSystem from './ActionLearningSystem';
+
 
 /**
  * Intent Action Service
@@ -125,6 +127,8 @@ class IntentActionService {
     };
     
     this.claudeService = null;
+    IntentActionService.setClaudeService(ClaudeService);
+
   }
 
   /**
@@ -171,6 +175,15 @@ class IntentActionService {
       } else {
         this.stats.failedActions++;
       }
+      await ActionLearningSystem.recordAction(
+        intent,   
+        message,   
+        result.success,   
+        {   
+          error: result.error || null,
+          entityCount: Object.keys(result.data || {}).length  
+        }
+      );
       
       return result;
       
