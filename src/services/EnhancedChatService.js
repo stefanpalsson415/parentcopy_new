@@ -16,6 +16,7 @@ import FeedbackLearningSystem from './FeedbackLearningSystem';
 import ChatPersistenceService from './ChatPersistenceService';
 
 
+
 import { 
   collection, 
   query, 
@@ -40,6 +41,18 @@ class EnhancedChatService {
     this.conversationContext = {};
     this.sessionIntents = {};
     this.feedbackLog = {};
+    this.recentResponses = [];
+    
+    // Add a reference to current user from auth
+    if (auth.currentUser) {
+      this.currentUser = auth.currentUser;
+    }
+    
+    // Listen for auth state changes
+    auth.onAuthStateChanged(user => {
+      this.currentUser = user;
+      console.log("EnhancedChatService updated auth state:", user?.uid);
+    });
   }
   
   async loadMessages(familyId, options = {}) {
@@ -1497,7 +1510,7 @@ async getAIResponse(message, familyContext, messageHistory = [], options = {}) {
       const enhancedContext = {
         ...familyContext,
         currentIntent: message ? this.determineIntent(message) : null,
-        userId: this.currentUser?.uid
+        userId: auth.currentUser?.uid || familyContext.userId || this.currentUser?.uid
       };
       
       // Add current entities if available
