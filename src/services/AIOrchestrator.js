@@ -2,6 +2,8 @@
 import ClaudeService from './ClaudeService';
 import IntentActionService from './IntentActionService';
 import EnhancedChatService from './EnhancedChatService';
+import { auth } from './firebase'; // Add this import statement
+
 
 /**
  * AI System Orchestrator
