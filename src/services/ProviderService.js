@@ -272,6 +272,7 @@ extractProviderInfo(message) {
 
 // In src/services/ProviderService.js, enhance the saveProvider method
 
+// In src/services/ProviderService.js
 async saveProvider(familyId, providerData) {
   try {
     if (!familyId) {
@@ -295,6 +296,10 @@ async saveProvider(familyId, providerData) {
       }
     });
     
+    // IMPROVED: Use explicit imports to ensure they're available
+    const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
+    const { db } = await import('./firebase');
+    
     // Prepare provider data with required fields
     const providerToAdd = {
       ...providerData,
@@ -305,14 +310,22 @@ async saveProvider(familyId, providerData) {
       updatedAt: serverTimestamp()
     };
     
-    // Use a consistent collection name
-    const providersRef = collection(this.db, "providers");
+    // CRITICAL: Ensure we're using the correct collection name consistently
+    const providersRef = collection(db, "providers");
+    console.log("📁 Using providers collection:", providersRef.path);
+    
+    // IMPROVED: Add more detailed logging
+    console.log("📤 Sending data to Firebase:", JSON.stringify(providerToAdd, null, 2));
     
     // Add the document to the collection
     const docRef = await addDoc(providersRef, providerToAdd);
     const providerId = docRef.id;
     
     console.log(`✅ Provider added successfully with ID: ${providerId}`);
+    
+    // IMPROVED: Verify the data was actually written
+    const docSnapshot = await getDoc(doc(db, "providers", providerId));
+    console.log("✅ Verified provider exists in Firebase:", docSnapshot.exists());
     
     // Trigger UI updates
     if (typeof window !== 'undefined') {
@@ -339,7 +352,23 @@ async saveProvider(familyId, providerData) {
       provider: providerToAdd
     };
   } catch (error) {
+    // IMPROVED: More detailed error logging
     console.error("❌ Error saving provider:", error);
+    console.error("Error details:", {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+    
+    // IMPROVED: Send event to notify about error
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('provider-save-error', {
+        detail: {
+          error: error.message
+        }
+      }));
+    }
+    
     return { 
       success: false, 
       error: error.message || "Unknown error" 
