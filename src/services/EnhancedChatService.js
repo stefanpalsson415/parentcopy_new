@@ -1483,33 +1483,38 @@ async getAIResponse(message, familyId, messageHistory = []) {
     }
 
     // Add more explicit provider detection
-    if (!isDirectCalendarRequest && (
-        message.toLowerCase().includes("add provider") ||
-        message.toLowerCase().includes("add a provider") ||
-        message.toLowerCase().includes("new provider") ||
-        message.toLowerCase().includes("add doctor") ||
-        message.toLowerCase().includes("add dr") ||
-        message.toLowerCase().includes("add therapist") ||
-        message.toLowerCase().includes("want to add a provider")
-    )) {
-      console.log("🔍 Detected explicit provider request, handling with provider service");
-      
-      try {
-        // Import AllieAIService dynamically
-        const AllieAIService = (await import('./AllieAIService')).default;
-        
-        // Process the provider directly
-        const result = await AllieAIService.processProviderFromChat(message, familyContext.familyId);
-        console.log("Provider processing result:", result);
-        
-        if (result && result.success) {
-          console.log("✅ Provider request handled successfully");
-          return `I've added ${result.providerDetails.name} as a provider for your family. You can find them in your Family Provider Directory.`;
-        }
-      } catch (error) {
-        console.error("Error processing provider request:", error);
-      }
-    }
+if (!isDirectCalendarRequest && (
+  message.toLowerCase().includes("add provider") ||
+  message.toLowerCase().includes("add a provider") ||
+  message.toLowerCase().includes("new provider") ||
+  message.toLowerCase().includes("add doctor") ||
+  message.toLowerCase().includes("add dr") ||
+  message.toLowerCase().includes("add therapist") ||
+  message.toLowerCase().includes("want to add a provider") ||
+  // Add key patterns for teachers and other provider types
+  message.toLowerCase().includes("add a teacher") ||
+  message.toLowerCase().includes("add teacher") ||
+  message.toLowerCase().includes("add a violin teacher") ||
+  message.toLowerCase().includes("add violin teacher")
+)) {
+console.log("🔍 Detected explicit provider request, handling with provider service");
+
+try {
+  // Import AllieAIService dynamically
+  const AllieAIService = (await import('./AllieAIService')).default;
+  
+  // Process the provider directly
+  const result = await AllieAIService.processProviderFromChat(message, familyContext.familyId);
+  console.log("Provider processing result:", result);
+  
+  if (result && result.success) {
+    console.log("✅ Provider request handled successfully");
+    return `I've added ${result.providerDetails.name} as a provider for your family. You can find them in your Family Provider Directory.`;
+  }
+} catch (error) {
+  console.error("Error processing provider request:", error);
+}
+}
 
     // Check for todos since this is common and needs special handling
     const todoKeywords = ['todo', 'to-do', 'to do', 'add a task', 'create a task', 'make a task'];
@@ -1575,7 +1580,7 @@ async getAIResponse(message, familyId, messageHistory = []) {
     console.error("Error getting AI response:", error);
     return "I'm sorry, I encountered an issue processing your request. Please try again.";
   }
-}
+} 
 
 // Add helper method to get current user from message history
 getCurrentUserFromHistory(messageHistory) {

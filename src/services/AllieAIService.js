@@ -413,106 +413,103 @@ async generateBalanceExperiments(familyId, weightedScores) {
 // Add this method
 
 extractProviderDetails(message) {
-  console.log("Extracting provider details from:", message);
-  
-  // Highly specific pattern match for common provider formats
-  let name = null;
-  let type = "medical";
-  let specialty = "";
-  let childName = null;
-  
-  // Check for doctor patterns
-  if (message.toLowerCase().includes("dr.") || 
-      message.toLowerCase().includes("doctor") || 
-      message.toLowerCase().includes("therapist") ||
-      message.toLowerCase().includes("provider")) {
+  try {
+    // Start with empty details object
+    const providerDetails = {
+      name: null,
+      type: 'education', // Default to education for teachers
+      specialty: '',
+      email: '',
+      phone: '',
+      address: '',
+      notes: message // Keep original message as notes
+    };
     
-    // Get name with dr. prefix
-    const drPattern = /(?:dr\.|doctor)\s+([A-Za-z]+(?: [A-Za-z]+)?)/i;
-    const drMatch = message.match(drPattern);
-    if (drMatch && drMatch[1]) {
-      name = "Dr. " + drMatch[1].trim();
-      console.log("Found doctor name:", name);
-    }
+    console.log("Extracting provider details from:", message.substring(0, 100));
     
-    // Check for therapist
-    if (message.toLowerCase().includes("therapist")) {
-      specialty = "Therapist";
-    } else if (message.toLowerCase().includes("dentist")) {
-      specialty = "Dentist";
-    }
-  }
-  
-  // Last resort: look for "add X as a provider" or "add provider X"
-  if (!name) {
-    const providerPatterns = [
-      /add\s+([A-Za-z]+(?: [A-Za-z]+)?)\s+(?:as|like|to be)?\s+(?:a|the)?\s+provider/i,
-      /add\s+(?:a|the)?\s+provider\s+(?:named|called)?\s+([A-Za-z]+(?: [A-Za-z]+)?)/i
+    // Extract provider name
+    const namePatterns = [
+      /(?:his|her) name is ([a-zA-Z\s]+)/i,
+      /name is ([a-zA-Z\s]+)/i,
+      /add (?:a|the) ([a-zA-Z\s]+) (?:teacher|instructor|doctor|therapist)/i,
+      /add ([a-zA-Z\s]+) (?:as|to)/i
     ];
     
-    for (const pattern of providerPatterns) {
+    for (const pattern of namePatterns) {
       const match = message.match(pattern);
       if (match && match[1]) {
-        name = match[1].trim();
-        console.log("Found provider name:", name);
+        providerDetails.name = match[1].trim();
+        console.log("Found provider name:", providerDetails.name);
         break;
       }
     }
-  }
-  
-  // Check for "for X" to find child name
-  const forPattern = /for\s+([A-Za-z]+)/i;
-  const forMatch = message.match(forPattern);
-  if (forMatch && forMatch[1]) {
-    childName = forMatch[1].trim();
-    console.log("Found 'for' child:", childName);
-  }
-  
-  // EMERGENCY FALLBACK: Extract any name-like word
-  if (!name) {
-    const words = message.split(/\s+/);
-    for (let i = 0; i < words.length; i++) {
-      if (/^[A-Z][a-z]{2,}$/.test(words[i])) {
-        if (i+1 < words.length && /^[A-Z][a-z]{2,}$/.test(words[i+1])) {
-          name = words[i] + " " + words[i+1];
-          break;
-        }
-        name = words[i];
+    
+    // Determine provider type and specialty
+    if (message.toLowerCase().includes("violin teacher") || 
+        message.toLowerCase().includes("music teacher") ||
+        message.toLowerCase().includes("teacher")) {
+      providerDetails.type = "education";
+      
+      // Extract specific teacher type
+      if (message.toLowerCase().includes("violin")) {
+        providerDetails.specialty = "Violin Teacher";
+      } else if (message.toLowerCase().includes("piano")) {
+        providerDetails.specialty = "Piano Teacher";
+      } else if (message.toLowerCase().includes("music")) {
+        providerDetails.specialty = "Music Teacher";
+      } else {
+        providerDetails.specialty = "Teacher";
+      }
+    } else if (message.toLowerCase().includes("doctor") || 
+               message.toLowerCase().includes("dr.") || 
+               message.toLowerCase().includes("pediatrician")) {
+      providerDetails.type = "medical";
+      providerDetails.specialty = "Doctor";
+    }
+    
+    // Extract email
+    const emailPattern = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+    const emailMatches = message.match(emailPattern);
+    if (emailMatches && emailMatches.length > 0) {
+      providerDetails.email = emailMatches[0];
+      console.log("Found email:", providerDetails.email);
+    }
+    
+    // If we still don't have a name, make a best guess
+    if (!providerDetails.name) {
+      // Look for capitalized names
+      const nameGuessPattern = /\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\b/;
+      const nameGuess = message.match(nameGuessPattern);
+      if (nameGuess && nameGuess[1]) {
+        providerDetails.name = nameGuess[1];
+        console.log("Guessed provider name from capitalization:", providerDetails.name);
       }
     }
+    
+    // Add family member match if it appears to be for a child
+    if (message.toLowerCase().includes("for ")) {
+      const forPattern = /for\s+([a-zA-Z]+)/i;
+      const forMatch = message.match(forPattern);
+      if (forMatch && forMatch[1]) {
+        providerDetails.forChild = forMatch[1];
+        console.log("Provider appears to be for child:", providerDetails.forChild);
+      }
+    }
+    
+    // Log the extracted data
+    console.log("Extracted provider details:", providerDetails);
+    
+    return providerDetails;
+  } catch (error) {
+    console.error("Error extracting provider details:", error);
+    return {
+      name: "Unknown Provider",
+      type: "education",
+      specialty: "Teacher",
+      email: "",
+      notes: message
+    };
   }
-  
-  // If we found both a child name and no specialty, assume it's education
-  if (childName && !specialty) {
-    type = "education";
-    specialty = "Teacher";
-  }
-  
-  // Final fallback
-  if (!name) {
-    name = "Provider " + Date.now().toString(36).substring(2, 7);
-  }
-  
-  console.log("Final provider details:", {
-    name, type, specialty, childName
-  });
-  
-  // Create notes that include child information if available
-  let notes = message;
-  if (childName) {
-    notes = `Provider for ${childName}. ${message}`;
-  }
-  
-  return {
-    name: name,
-    type: type,
-    specialty: specialty || (type === "medical" ? "Doctor" : "Provider"),
-    email: "",
-    phone: "",
-    address: "",
-    notes: notes,
-    childName: childName
-  };
 }
 
 
