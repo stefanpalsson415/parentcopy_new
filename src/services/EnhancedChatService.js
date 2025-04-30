@@ -1640,9 +1640,8 @@ async getAIResponse(message, familyContext, messageHistory = [], options = {}) {
       return response;
     } catch (claudeError) {
       console.error("Error getting response from Claude:", claudeError);
-      return 
-        "I'm sorry, but I'm having trouble connecting to my language processing system. Please try again in a moment.";
-    }
+  return "I'm sorry, but I'm having trouble connecting to my language processing system. Please try again in a moment.";
+}
   } catch (error) {
     console.error("Error getting AI response:", error);
     return "I'm sorry, I encountered an issue processing your request. Please try again.";
