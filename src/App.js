@@ -33,6 +33,8 @@ import EmailOptIn from './components/marketing/EmailOptIn';
 import ClaudeDebugger from './components/debug/ClaudeDebugger';
 import './styles/atomicHabits.css';
 import { EventProvider } from './contexts/EventContext';
+import AIOrchestrator from './services/AIOrchestrator';
+
 
 
 
@@ -137,6 +139,20 @@ script.defer = true;
       });
     };
     
+
+    AIOrchestrator.initialize()
+    .then(result => {
+      if (result.success) {
+        console.log("✅ AI Orchestrator initialized successfully");
+      } else {
+        console.warn("⚠️ AI Orchestrator initialization failed:", result.error);
+      }
+    })
+    .catch(error => {
+      console.error("❌ Error initializing AI:", error);
+    });
+
+
     // Load the API and handle errors
     loadGoogleMapsApi().catch(error => {
       console.error("Failed to initialize Google Maps API:", error);
@@ -215,6 +231,8 @@ function AppRoutes() {
         <Route path="/dashboard" element={<DashboardScreen />} />
         <Route path="/debug/claude" element={<ClaudeDebugger />} />
         <Route path="/investor" element={<InvestorFunnel />} />
+        <Route path="/debug/ai" element={<AIDebugPanel />} />
+
 
         
         {/* Route for weekly check-in - directs kids to kid-friendly version */}

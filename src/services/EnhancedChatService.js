@@ -1634,6 +1634,51 @@ getCurrentUserFromHistory(messageHistory) {
   }
   
 
+// In src/services/EnhancedChatService.js
+// Add this new method to the class
+
+/**
+ * Process actionable request using the IntentActionService
+ * @param {string} message - User message
+ * @param {string} familyId - Family ID
+ * @param {string} userId - User ID
+ * @returns {Promise<object|null>} Result or null if not actionable
+ */
+async processActionableRequest(message, familyId, userId) {
+  try {
+    console.log("Checking if message is an actionable request:", message);
+    
+    // Import service dynamically to avoid circular dependencies
+    const { default: IntentActionService } = await import('./IntentActionService');
+    
+    // Check if this is potentially an action request
+    const actionKeywords = ['add', 'create', 'schedule', 'track', 'record', 
+                         'upload', 'make', 'set up', 'assign', 'list', 'show'];
+    
+    const isActionable = actionKeywords.some(keyword => 
+      message.toLowerCase().includes(keyword)
+    );
+    
+    if (!isActionable) {
+      return null; // Not an actionable request
+    }
+    
+    console.log("Potential actionable request detected, processing");
+    
+    // Process with IntentActionService
+    const result = await IntentActionService.processUserRequest(message, familyId, userId);
+    
+    console.log("Action processing result:", result);
+    
+    return result; // May be successful or failed, but was identified as actionable
+  } catch (error) {
+    console.error("Error processing actionable request:", error);
+    return null;
+  }
+}
+
+
+
 // Add these new methods to EnhancedChatService
 /**
  * Handle disambiguation requests using conversation context

@@ -39,6 +39,14 @@ constructor() {
   this.disableCalendarDetection = false;
   console.log("🔴 Calendar detection explicitly enabled in constructor:", !this.disableCalendarDetection);
   
+  this.currentProcessingContext = {
+    isProcessingProvider: false,
+    isProcessingTask: false
+  };
+}
+
+
+
   this.retryCount = 3;
   this.functionRegion = 'europe-west1'; // Match this to your deployment region
   
