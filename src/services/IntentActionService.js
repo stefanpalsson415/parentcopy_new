@@ -44,17 +44,19 @@ class IntentActionService {
     this.intentMapping = {
       // Provider intents
       'add provider': ActionTypes.ADD_PROVIDER,
-      'add a provider': ActionTypes.ADD_PROVIDER,
-      'add teacher': ActionTypes.ADD_PROVIDER,
-      'add a teacher': ActionTypes.ADD_PROVIDER,
-      'music teacher': ActionTypes.ADD_PROVIDER,
-      'piano teacher': ActionTypes.ADD_PROVIDER,
-      'violin teacher': ActionTypes.ADD_PROVIDER,
-      'doctor': ActionTypes.ADD_PROVIDER,
-      'dentist': ActionTypes.ADD_PROVIDER,
-      'pediatrician': ActionTypes.ADD_PROVIDER,
-      'coach': ActionTypes.ADD_PROVIDER,
-      'tutor': ActionTypes.ADD_PROVIDER,
+  'add a provider': ActionTypes.ADD_PROVIDER,
+  'add teacher': ActionTypes.ADD_PROVIDER,
+  'add a teacher': ActionTypes.ADD_PROVIDER,
+  'music teacher': ActionTypes.ADD_PROVIDER,
+  'piano teacher': ActionTypes.ADD_PROVIDER,
+  'harmonica teacher': ActionTypes.ADD_PROVIDER,
+  'violin teacher': ActionTypes.ADD_PROVIDER,
+  'guitar teacher': ActionTypes.ADD_PROVIDER,
+  'doctor': ActionTypes.ADD_PROVIDER,
+  'dentist': ActionTypes.ADD_PROVIDER,
+  'pediatrician': ActionTypes.ADD_PROVIDER,
+  'coach': ActionTypes.ADD_PROVIDER,
+  'tutor': ActionTypes.ADD_PROVIDER,
       
       // Calendar/event intents
       'add to calendar': ActionTypes.ADD_EVENT,
@@ -283,13 +285,19 @@ class IntentActionService {
    * @param {string} userId - User ID
    * @returns {Promise<object>} Result of adding provider
    */
-  async handleAddProvider(message, familyId, userId) {
+  // In src/services/IntentActionService.js, update the handleAddProvider method
+async handleAddProvider(message, familyId, userId) {
     try {
       console.log("Handling add provider request:", message);
       
       // Set context flag to avoid calendar detection interference
       if (this.claudeService) {
-        this.claudeService.currentProcessingContext.isProcessingProvider = true;
+        this.claudeService.currentProcessingContext = {
+          isProcessingProvider: true,
+          isProcessingTask: false
+        };
+        // Explicitly disable calendar detection during provider processing
+        this.claudeService.disableCalendarDetection = true;
       }
       
       // Import services dynamically to avoid circular dependencies
@@ -299,9 +307,10 @@ class IntentActionService {
       const result = await AllieAIService.processProviderFromChat(message, familyId);
       console.log("Provider processing result:", result);
       
-      // Clear context flag
+      // Reset context flags
       if (this.claudeService) {
         this.claudeService.currentProcessingContext.isProcessingProvider = false;
+        this.claudeService.disableCalendarDetection = false;
       }
       
       if (result && result.success) {

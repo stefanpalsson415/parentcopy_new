@@ -1423,6 +1423,47 @@ if (familyContext.familyId) {
 
 
 async getAIResponse(message, familyId, messageHistory = []) {
+  // In src/services/EnhancedChatService.js, update the getAIResponse method
+// Add this code before any other processing
+
+// Check if this is an action request that should be handled by IntentActionService
+try {
+  const IntentActionService = (await import('./IntentActionService')).default;
+  
+  // Quick check for common action patterns
+  const actionPatterns = [
+    'add provider', 'add a provider', 'add teacher', 'add a teacher',
+    'piano teacher', 'music teacher', 'harmonica teacher',
+    'add task', 'add to calendar', 'schedule appointment'
+  ];
+  
+  const mightBeAction = actionPatterns.some(pattern => 
+    message.toLowerCase().includes(pattern)
+  );
+  
+  if (mightBeAction) {
+    console.log("Detected potential action request, checking with IntentActionService");
+    
+    // Use IntentActionService to determine if this is an action and process it
+    const intentResult = await IntentActionService.processUserRequest(
+      message, 
+      familyContext.familyId, 
+      currentUser?.uid
+    );
+    
+    // If successfully processed as an action, return the result
+    if (intentResult.success) {
+      console.log("Request successfully processed by IntentActionService");
+      return intentResult.message || "I've completed that action for you.";
+    } else {
+      // If it was determined to be an action but processing failed, log the error
+      console.log("Request identified as action but processing failed:", intentResult.error);
+      // Continue with normal processing
+    }
+  }
+} catch (actionError) {
+  console.error("Error checking/processing action:", actionError);
+}
   try {
     // Get family context
     const familyContext = await this.getFamilyContext(familyId);
