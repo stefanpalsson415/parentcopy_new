@@ -23,6 +23,9 @@ import {
   addDoc
 } from 'firebase/firestore';
 
+
+
+
 /**
  * Comprehensive AI service for Allie app that handles all AI interactions
  * Combines functionality from EnhancedAIService and AllieAIEngineService
@@ -122,6 +125,33 @@ safelyParseJSON(jsonString, defaultValue) {
     return defaultValue;
   }
 }
+
+// Add to src/services/AllieAIService.js
+
+/**
+ * Process a provider from chat request
+ * @param {string} message - User message
+ * @param {string} familyId - Family ID
+ * @returns {Promise<object>} Processing result
+ */
+async processProviderFromChat(message, familyId) {
+  try {
+    console.log("🔄 Processing provider from chat in AllieAIService:", { 
+      message: message.substring(0, 100), 
+      familyId 
+    });
+    
+    // Import ProviderService dynamically
+    const { default: ProviderService } = await import('./ProviderService');
+    
+    // Process the provider through ProviderService
+    return await ProviderService.processProviderFromChat(message, familyId);
+  } catch (error) {
+    console.error("❌ Error in processProviderFromChat:", error);
+    return { success: false, error: error.message };
+  }
+}
+
 
 /**
  * Generate balance impact data based on family history

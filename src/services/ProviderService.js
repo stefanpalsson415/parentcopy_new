@@ -74,7 +74,55 @@ async testDirectProviderCreation(familyId) {
     return false;
   }
 }
+// In src/services/ProviderService.js, add this method
 
+/**
+ * Process a provider creation request from chat
+ * @param {string} message - The chat message
+ * @param {string} familyId - The family ID
+ * @returns {Promise<object>} The result of the operation
+ */
+async processProviderFromChat(message, familyId) {
+  try {
+    console.log("🔄 Processing provider from chat:", { message: message.substring(0, 100), familyId });
+    
+    if (!familyId) {
+      console.error("❌ No family ID provided for provider creation");
+      return { success: false, error: "Family ID is required" };
+    }
+    
+    // Extract provider details from message
+    const providerDetails = this.extractProviderInfo(message);
+    console.log("📋 Extracted provider details:", providerDetails);
+    
+    // Ensure we have a valid name
+    if (!providerDetails.name || providerDetails.name === "Unknown Provider") {
+      console.error("❌ Could not extract provider name from message");
+      return { success: false, error: "Could not determine provider name" };
+    }
+    
+    // Add the familyId to the provider data
+    providerDetails.familyId = familyId;
+    
+    // Save the provider
+    console.log("💾 Saving provider to database:", providerDetails);
+    const result = await this.saveProvider(familyId, providerDetails);
+    console.log("📥 Provider save result:", result);
+    
+    return {
+      success: result.success,
+      providerId: result.providerId,
+      isNew: result.isNew,
+      providerDetails
+    };
+  } catch (error) {
+    console.error("❌ Error processing provider from chat:", error);
+    return {
+      success: false,
+      error: error.message || "Error processing provider request"
+    };
+  }
+}
 
 
 /**
@@ -222,7 +270,9 @@ extractProviderInfo(message) {
    */
  // Add or update this method in src/services/ProviderService.js
 
- async saveProvider(familyId, providerData) {
+// In src/services/ProviderService.js, enhance the saveProvider method
+
+async saveProvider(familyId, providerData) {
   try {
     if (!familyId) {
       console.error("❌ No family ID provided");
@@ -234,7 +284,7 @@ extractProviderInfo(message) {
       return { success: false, error: "Provider name is required" };
     }
     
-    console.log("💾 SIMPLIFIED PROVIDER SAVE STARTING");
+    console.log("💾 SAVING PROVIDER TO DATABASE");
     console.log("📝 Input data:", {
       familyId,
       provider: {
@@ -255,29 +305,27 @@ extractProviderInfo(message) {
       updatedAt: serverTimestamp()
     };
     
-    // DIRECT FIRESTORE: Using a single consistent collection name 
-    const providersRef = collection(db, "providers");
+    // Use a consistent collection name
+    const providersRef = collection(this.db, "providers");
     
-    // Simplest possible approach - add the document to the collection
+    // Add the document to the collection
     const docRef = await addDoc(providersRef, providerToAdd);
     const providerId = docRef.id;
     
     console.log(`✅ Provider added successfully with ID: ${providerId}`);
     
-    // Trigger UI updates with a reliable approach
+    // Trigger UI updates
     if (typeof window !== 'undefined') {
-      // Single robust event dispatch that all components can listen for
       console.log("🔔 Dispatching provider-added event");
-      const event = new CustomEvent('provider-added', {
+      window.dispatchEvent(new CustomEvent('provider-added', {
         detail: {
           providerId,
           providerName: providerData.name,
           isNew: true
         }
-      });
-      window.dispatchEvent(event);
+      }));
       
-      // Force other refreshes if needed
+      // Force other refreshes
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('directory-refresh-needed'));
         window.dispatchEvent(new CustomEvent('force-data-refresh'));
@@ -291,18 +339,10 @@ extractProviderInfo(message) {
       provider: providerToAdd
     };
   } catch (error) {
-    // Better error logging for debugging
-    console.error("❌ CRITICAL ERROR in saveProvider:", error);
-    console.error("Error details:", {
-      name: error.name,
-      message: error.message,
-      code: error.code || 'unknown',
-      stack: error.stack
-    });
-    
+    console.error("❌ Error saving provider:", error);
     return { 
       success: false, 
-      error: error.message || "Unknown Firebase error" 
+      error: error.message || "Unknown error" 
     };
   }
 }
