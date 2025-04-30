@@ -20,6 +20,8 @@ import SurveyScreen from '../survey/SurveyScreen';
 //import ClaudeService from '../../services/ClaudeService';
 import { FloatingCalendar } from '../calendar';
 import UserAvatar from '../common/UserAvatar';
+import { db, auth } from '../../services/firebase';
+
 
 
 
