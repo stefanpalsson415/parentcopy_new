@@ -1427,6 +1427,24 @@ async getAIResponse(message, familyId, messageHistory = []) {
     // Get family context
     const familyContext = await this.getFamilyContext(familyId);
     
+    // Get current user ID
+    const userId = this.getCurrentUserFromHistory(messageHistory)?.id;
+    
+    // FIRST: Try to process as an actionable request
+    const actionResult = await this.processActionableRequest(message, familyId, userId);
+    
+    if (actionResult) {
+      if (actionResult.success) {
+        // Action was successfully processed
+        return actionResult.message;
+      } else if (actionResult.message && 
+                (actionResult.message.includes("I'm not sure") || 
+                 actionResult.message.includes("I encountered an error") ||
+                 actionResult.message.includes("I don't yet have the capability"))) {
+        // Identified as an action but couldn't process it - return the error
+        return actionResult.message;
+      }
+    
     // Use the enhanced IntentClassifier instead of basic AdvancedNLU
     const analysis = IntentClassifier.analyzeMessage(
       message, 
@@ -1648,7 +1666,7 @@ async processActionableRequest(message, familyId, userId) {
   try {
     console.log("Checking if message is an actionable request:", message);
     
-    // Import service dynamically to avoid circular dependencies
+    // Import the IntentActionService
     const { default: IntentActionService } = await import('./IntentActionService');
     
     // Check if this is potentially an action request

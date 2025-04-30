@@ -34,6 +34,8 @@ import ClaudeDebugger from './components/debug/ClaudeDebugger';
 import './styles/atomicHabits.css';
 import { EventProvider } from './contexts/EventContext';
 import AIOrchestrator from './services/AIOrchestrator';
+import AIDebugPanel from './components/debug/AIDebugPanel';
+
 
 
 
@@ -218,6 +220,8 @@ function AppRoutes() {
         <Route path="/product-overview" element={<ProductOverviewPage />} />
         <Route path="/blog" element={<BlogHomePage />} />
         <Route path="/blog/:slug" element={<BlogArticlePage />} />
+        <Route path="/debug/ai" element={<AIDebugPanel />} />
+
 
         <Route path="/survey" element={<SurveyScreen mode="initial" />} />
         
