@@ -1808,6 +1808,7 @@ async forceCompleteOnboarding(familyId) {
 
 
 
+// Replace the existing handleProviderRequest method in EnhancedChatService.js
 async handleProviderRequest(message, familyContext) {
   try {
     if (!familyContext.familyId) {
@@ -1815,53 +1816,24 @@ async handleProviderRequest(message, familyContext) {
       return { success: false, error: "Family ID is required" };
     }
     
-    console.log("Handling provider request:", message);
-    console.log("Attempting to process provider with familyId:", familyContext.familyId);
-
+    console.log("⭐ DIAGNOSTIC: Processing provider request");
+    console.log(`Message: "${message.substring(0, 100)}..."`);
+    console.log(`Family ID: ${familyContext.familyId}`);
     
-    // Get AllieAIService
-    let AllieAIService;
-    try {
-      AllieAIService = (await import('./AllieAIService')).default;
-    } catch (error) {
-      console.error("Failed to import AllieAIService:", error);
-      return "I'm having trouble connecting to the provider service right now. Please try again in a moment.";
-    }
+    // CRITICAL FIX: Import AllieAIService dynamically to ensure it's loaded
+    const AllieAIService = (await import('./AllieAIService')).default;
     
-    // Process the provider request
+    // Process the provider directly
     const result = await AllieAIService.processProviderFromChat(message, familyContext.familyId);
     console.log("Provider processing result:", result);
 
     
-    if (result.success) {
-      // Format success message
-      let response = `✅ Added provider: ${result.providerDetails.name}\n`;
-      
-      if (result.providerDetails.specialty) {
-        response += `Type: ${result.providerDetails.specialty}\n`;
-      }
-      
-      if (result.providerDetails.email) {
-        response += `Email: ${result.providerDetails.email}\n`;
-      }
-      
-      // For children teachers, add extra context
-      if (message.toLowerCase().includes("for") && 
-          (result.providerDetails.type === "education" || message.toLowerCase().includes("teacher"))) {
-        // Extract child name
-        const forPattern = /for\s+([a-z]+)/i;
-        const forMatch = message.match(forPattern);
-        if (forMatch && forMatch[1]) {
-          response += `For: ${forMatch[1].charAt(0).toUpperCase() + forMatch[1].slice(1)}\n`;
-        }
-      }
-      
-      response += "\nThe provider has been successfully added to your family's records. Is there anything else you'd like to add about this provider, such as phone number, location, or when appointments are scheduled?";
-      
-      return response;
-    } else {
-      return `I wasn't able to add this provider to your directory. ${result.error || "Please try again with more details about the provider."} You can also add providers manually in the Family Provider Directory section.`;
+    if (result && result.success) {
+      console.log("✅ Provider request handled successfully");
+      return `I've added ${result.providerDetails.name} as a provider for your family. You can find them in your Family Provider Directory.`;
     }
+    
+    return `I wasn't able to add this provider to your directory. ${result.error || "Please try again with more details about the provider."} You can also add providers manually in the Family Provider Directory section.`;
   } catch (error) {
     console.error("Error handling provider request:", error);
     return `I'm sorry, I couldn't add the provider. ${error.message || "Something went wrong."} You can add providers manually in the Family Provider Directory section.`;
