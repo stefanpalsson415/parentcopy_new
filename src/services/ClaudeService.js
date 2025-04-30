@@ -433,7 +433,8 @@ if (!userId) {
       // Try to extract event anyway since we're clearly logged in but auth is failing
       try {
         // Use a simplified path for event extraction
-        const basicEventData = await this.extractCalendarRequest(message);
+        const basicEventData = await this.extractCalendarRequest(messageText);
+
         
         if (basicEventData) {
           return `I can help you add "${basicEventData.title || 'this event'}" to your calendar. However, I'm having trouble with your login session. Please try again in a moment, or add it directly through the calendar widget.`;
