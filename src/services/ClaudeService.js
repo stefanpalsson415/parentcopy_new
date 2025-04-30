@@ -384,29 +384,27 @@ if (!this.disableCalendarDetection && messageText.length > 0) {
     // IMPROVED: Better error handling and context validation
     console.log("Detected calendar intent, attempting to extract details");
     
-    // Validate required context
+    // Validate required context - Get userId from context or directly from auth
 const userId = context.userId || auth.currentUser?.uid;
 if (!userId) {
-  console.warn("Missing userId in context, cannot proceed with calendar extraction");
+  console.warn("Missing userId in context and not found in auth, cannot proceed with calendar extraction");
   // Return special marker
   return "I'd like to add this to your calendar, but I need you to be logged in first. Once you're logged in, I can help you schedule events and send reminders.";
 }
 
-// Use userId in subsequent code instead of context.userId
-try {
-  // Log context for debugging
-  console.log("Extracting calendar details with context:", {
-    userId: userId,
-    familyId: context.familyId,
-    messageLength: messageText.length
-  });
-  
-  const detailCollectionResponse = await this.extractAndCollectEventDetails(
-    messageText, 
-    userId,
-    context.familyId
-  );
-  // Rest of function remains the same
+// Log context for debugging
+console.log("Extracting calendar details with context:", {
+  userId: userId,
+  familyId: context.familyId,
+  messageLength: messageText.length
+});
+
+// Use userId instead of context.userId for the rest of the function
+const detailCollectionResponse = await this.extractAndCollectEventDetails(
+  messageText, 
+  userId,
+  context.familyId
+);
     
     try {
       // Log context for debugging
