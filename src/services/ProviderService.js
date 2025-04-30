@@ -76,63 +76,6 @@ async testDirectProviderCreation(familyId) {
 }
 
 
-// Add this test method to ProviderService.js
-async testDirectProviderCreation(familyId) {
-  try {
-    console.log("🧪 RUNNING DIRECT PROVIDER CREATION TEST");
-    
-    if (!familyId) {
-      console.error("❌ No family ID provided for test");
-      return false;
-    }
-    
-    // Create test provider
-    const testProvider = {
-      name: "Test Provider " + new Date().toISOString().substring(11, 19),
-      type: "education",
-      specialty: "Test Teacher",
-      email: "test@example.com",
-      familyId: familyId
-    };
-    
-    console.log("📝 Test provider data:", testProvider);
-    
-    // Direct Firebase approach
-    const providersRef = collection(this.db, "providers");
-    console.log("📁 Using collection:", providersRef.path);
-    
-    const docRef = await addDoc(providersRef, {
-      ...testProvider,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-    
-    console.log("✅ Test provider created with ID:", docRef.id);
-    
-    // Verify creation
-    const docSnapshot = await getDoc(doc(this.db, "providers", docRef.id));
-    
-    if (docSnapshot.exists()) {
-      console.log("✅ Verified provider exists in Firestore");
-      // Clean up by deleting the test provider
-      await deleteDoc(doc(this.db, "providers", docRef.id));
-      console.log("🧹 Test provider cleaned up");
-      return true;
-    } else {
-      console.error("❌ Provider verification failed");
-      return false;
-    }
-  } catch (error) {
-    console.error("❌ Test provider creation failed:", error);
-    console.error("Error details:", {
-      code: error.code,
-      message: error.message,
-      stack: error.stack
-    });
-    return false;
-  }
-}
-
 
 /**
    * Extract provider details from a chat message

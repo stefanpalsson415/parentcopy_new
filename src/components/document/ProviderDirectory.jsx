@@ -684,6 +684,54 @@ useEffect(() => {
           </div>
         </div>
       )}
+
+      {/* Add this debug button to the header section of ProviderDirectory.jsx */}
+<button
+  className="p-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 text-xs"
+  onClick={() => {
+    // Import and expose Firebase instances - use the correct path
+    import('../../services/firebase').then(module => {
+      // Expose the database for console testing
+      window.db = module.db;
+      window.auth = module.auth;
+      window.familyId = familyId; // Use the familyId from props
+
+      // Log the exposed variables
+      console.log("✅ DB REFERENCE:", window.db);
+      console.log("✅ AUTH:", window.auth);
+      console.log("✅ FAMILY ID:", window.familyId);
+      
+      // Create a message for the user
+      alert("Firebase references exposed to window objects. Check console and run test.");
+      
+      // Run test directly if desired
+      import('../../services/ProviderService').then(module => {
+        const ProviderService = module.default;
+        console.log("✅ ProviderService loaded:", ProviderService);
+        
+        // Run the test with the current family ID
+        ProviderService.testDirectProviderCreation(window.familyId)
+          .then(result => {
+            console.log("✅ Test result:", result);
+            if (result) {
+              alert("Provider creation test successful! Check console for details.");
+            } else {
+              alert("Provider creation test failed. Check console for details.");
+            }
+          })
+          .catch(err => {
+            console.error("❌ Test execution error:", err);
+            alert("Error running test. Check console for details.");
+          });
+      });
+    }).catch(error => {
+      console.error("Error loading Firebase modules:", error);
+      alert("Failed to load Firebase modules. See console for details.");
+    });
+  }}
+>
+  Debug: Test Provider Creation
+</button>
       
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
