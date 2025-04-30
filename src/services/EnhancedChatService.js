@@ -1422,8 +1422,10 @@ if (familyContext.familyId) {
 }
 
 
-// This is a partial edit for EnhancedChatService.js - add this at the beginning of the getAIResponse method
-// Make sure it's properly nested within the existing method
+
+
+// COMPLETE REPLACEMENT for the getAIResponse method in EnhancedChatService.js
+// Replace the entire getAIResponse method with this version
 
 async getAIResponse(message, familyContext, messageHistory = [], options = {}) {
   try {
@@ -1466,142 +1468,23 @@ async getAIResponse(message, familyContext, messageHistory = [], options = {}) {
       console.error("Error checking/processing action:", actionError);
       // Continue with normal processing
     }
-    
-} catch (actionError) {
-  console.error("Error checking/processing action:", actionError);
-}
-  try {
-    // Get family context
-    const familyContext = await this.getFamilyContext(familyId);
-    
-    // Get current user ID
-    const userId = this.getCurrentUserFromHistory(messageHistory)?.id;
-    
-    // FIRST: Try to process as an actionable request
-    const actionResult = await this.processActionableRequest(message, familyId, userId);
-    
-    if (actionResult) {
-      if (actionResult.success) {
-        // Action was successfully processed
-        return actionResult.message;
-      } else if (actionResult.message && 
-                (actionResult.message.includes("I'm not sure") || 
-                 actionResult.message.includes("I encountered an error") ||
-                 actionResult.message.includes("I don't yet have the capability"))) {
-        // Identified as an action but couldn't process it - return the error
-        return actionResult.message;
-      }
-    
-    // Use the enhanced IntentClassifier instead of basic AdvancedNLU
-    const analysis = IntentClassifier.analyzeMessage(
-      message, 
-      familyId, 
-      familyContext
-    );
-    
-    // Apply feedback learnings to optimize interaction
-    const promptOptimizations = FeedbackLearningSystem.getPromptOptimizations(
-      analysis.intent,
-      {
-        ...familyContext,
-        ...analysis.conversationContext
-      }
-    );
 
-    // First check: specifically look for calendar-related phrases first
-    const calendarIndicators = [
-      'add to calendar', 
-      'schedule an appointment', 
-      'doctor appointment', 
-      'dentist appointment',
-      'book a meeting',
-      'create event',
-      'make appointment'
-    ];
+    // Log input request
+    console.log(`Getting AI response for: "${message.substring(0, 100)}..."`);
     
-    const isDirectCalendarRequest = calendarIndicators.some(phrase => 
-      message.toLowerCase().includes(phrase)
-    );
-    
-    if (isDirectCalendarRequest) {
-      console.log("Detected direct calendar request, bypassing other handlers");
-      
-      try {
-        // Import ClaudeService
-        const ClaudeService = (await import('./ClaudeService')).default;
-        
-        // Try to extract and collect event details
-        const detailCollectionResponse = await ClaudeService.extractAndCollectEventDetails(
-          message, 
-          this.getCurrentUserFromHistory(messageHistory)?.id,
-          familyId
-        );
-        
-        if (detailCollectionResponse) {
-          console.log("✅ Calendar processing successful");
-          return detailCollectionResponse;
-        }
-      } catch (calendarError) {
-        console.error("Error in direct calendar processing:", calendarError);
-        // Continue with regular processing if direct handling fails
-      }
-    }
-
-    // In src/services/EnhancedChatService.js, in the getAIResponse method, add this after the calendar detection block:
-
-// Add more explicit provider detection
-if (!isDirectCalendarRequest && (
-  message.toLowerCase().includes("add provider") ||
-  message.toLowerCase().includes("add a provider") ||
-  message.toLowerCase().includes("new provider") ||
-  message.toLowerCase().includes("add doctor") ||
-  message.toLowerCase().includes("add dr") ||
-  message.toLowerCase().includes("add therapist") ||
-  message.toLowerCase().includes("want to add a provider") ||
-  // Add key patterns for teachers and other provider types
-  message.toLowerCase().includes("add a teacher") ||
-  message.toLowerCase().includes("add teacher") ||
-  message.toLowerCase().includes("add a violin teacher") ||
-  message.toLowerCase().includes("add violin teacher")
-)) {
-  console.log("🔍 Detected explicit provider request, handling with provider service");
-
-  try {
-    // Import AllieAIService dynamically
-    const AllieAIService = (await import('./AllieAIService')).default;
-    
-    // Process the provider directly
-    const result = await AllieAIService.processProviderFromChat(message, familyContext.familyId);
-    console.log("Provider processing result:", result);
-    
-    if (result && result.success) {
-      console.log("✅ Provider request handled successfully");
-      return `I've added ${result.providerDetails.name} as a provider for your family. You can find them in your Family Provider Directory.`;
-    }
-  } catch (error) {
-    console.error("Error processing provider request:", error);
-  }
-}
-
-    // Check for todos since this is common and needs special handling
-    const todoKeywords = ['todo', 'to-do', 'to do', 'add a task', 'create a task', 'make a task'];
-    const isTodoRequest = todoKeywords.some(keyword => message.toLowerCase().includes(keyword));
-    
-    if (isTodoRequest || message.toLowerCase().includes('create') && message.toLowerCase().includes('for')) {
-      // Try to handle as a shared todo request first
-      const todoResponse = await this.handleSharedTodoRequest(message, familyContext, 
-          this.getCurrentUserFromHistory(messageHistory)?.id);
-          
-      if (todoResponse) {
-        console.log("Handled as todo request:", todoResponse);
-        return todoResponse;
-      }
+    // Ensure context is valid
+    if (!familyContext) {
+      console.warn("No family context provided for AI response");
+      familyContext = {};
     }
     
-    // Format messages for Claude API using our helper
-    const formattedMessages = ChatPersistenceService.formatMessagesForClaude(messageHistory);
+    // Format messages for Claude
+    const formattedMessages = messageHistory.map(msg => ({
+      role: msg.sender === 'allie' ? 'assistant' : 'user',
+      content: msg.text || ""
+    }));
     
-    // Add the current message to the end if it's not already there
+    // Add current message if not already included
     if (formattedMessages.length === 0 || 
         formattedMessages[formattedMessages.length - 1].content !== message) {
       formattedMessages.push({
@@ -1610,45 +1493,161 @@ if (!isDirectCalendarRequest && (
       });
     }
     
-    try {
-      // Enhanced context with current message
-      const enhancedContext = {
-        ...familyContext,
-        currentIntent: analysis.intent,
-        currentEntities: analysis.entities,
-        conversationContext: analysis.conversationContext,
-        promptOptimizations,
-        userId: this.getCurrentUserFromHistory(messageHistory)?.id,
-        previousAIMessages: messageHistory
-          .filter(msg => msg.sender === 'allie')
-          .map(msg => msg.text)
-          .slice(-3)
-      };
+    // Lookup or survey message handling
+    let specialResponse = null;
+    
+    // Try lookups first if it seems like a lookup query
+    if (!specialResponse && message.toLowerCase().includes('calendar') || 
+        message.toLowerCase().includes('what') || 
+        message.toLowerCase().includes('show') || 
+        message.toLowerCase().includes('find')) {
+      try {
+        const maybeCalendarResult = await this.lookupCalendarEvent(
+          message, familyContext.familyId, this.currentUser?.uid
+        );
+        
+        if (maybeCalendarResult.success) {
+          specialResponse = maybeCalendarResult.message;
+        }
+      } catch (lookupError) {
+        console.error("Error during calendar lookup:", lookupError);
+      }
+    }
+    
+    // Check if this is a survey question
+    if (!specialResponse && (message.toLowerCase().includes('survey') || 
+         message.toLowerCase().includes('question') || 
+         message.toLowerCase().includes('weight'))) {
+      try {
+        const surveyResult = await this.answerSurveyQuestion(message, familyContext);
+        if (surveyResult) {
+          specialResponse = surveyResult;
+        }
+      } catch (surveyError) {
+        console.error("Error handling survey question:", surveyError);
+      }
+    }
+    
+    // Check for direct calendar request (e.g. "add to calendar...")
+    let isDirectCalendarRequest = false;
+    
+    if (!specialResponse) {
+      const calendarIndicators = [
+        'add to calendar', 
+        'schedule', 
+        'add event', 
+        'create event',
+        'set up appointment',
+        'book appointment',
+        'add appointment'
+      ];
       
-      // Send to Claude for response
-      const claudeResponse = await ClaudeService.generateResponse(
-        formattedMessages,
-        enhancedContext,
-        { temperature: 0.7 }
+      isDirectCalendarRequest = calendarIndicators.some(indicator => 
+        message.toLowerCase().includes(indicator)
       );
       
-      // Check if response contains event collection marker
-      if (claudeResponse.includes('<event_collection session=')) {
-        console.log("🎯 Event collection flow detected in response");
+      if (isDirectCalendarRequest) {
+        try {
+          console.log("Detected calendar request, forwarding to calendar service");
+          
+          const { default: ClaudeService } = await import('./ClaudeService');
+          
+          // Extract and collect event details
+          const result = await ClaudeService.extractAndCollectEventDetails(
+            message, 
+            this.currentUser?.uid, 
+            familyContext.familyId
+          );
+          
+          if (result) {
+            specialResponse = result;
+          }
+        } catch (calendarError) {
+          console.error("Error processing calendar request:", calendarError);
+        }
+      }
+    }
+    
+    // Handle provider request
+    if (!specialResponse && !isDirectCalendarRequest) {
+      // Check if this looks like a provider request
+      const providerIndicators = [
+        'add provider', 
+        'add a provider', 
+        'add doctor', 
+        'add teacher',
+        'music teacher',
+        'piano teacher',
+        'harmonica teacher',
+        'violin teacher'
+      ];
+      
+      const isProviderRequest = providerIndicators.some(indicator => 
+        message.toLowerCase().includes(indicator)
+      );
+      
+      if (isProviderRequest) {
+        try {
+          specialResponse = await this.handleProviderRequest(message, familyContext);
+        } catch (providerError) {
+          console.error("Error handling provider request:", providerError);
+        }
+      }
+    }
+    
+    // Return special response if we have one
+    if (specialResponse) {
+      return specialResponse;
+    }
+    
+    // Import services dynamically
+    const { default: ClaudeService } = await import('./ClaudeService');
+    
+    // Generate response with Claude
+    try {
+      // Add detailed context for Claude
+      const enhancedContext = {
+        ...familyContext,
+        currentIntent: this.determineIntent(message)
+      };
+      
+      // Add current entities if available
+      if (this.lastEntities && Object.keys(this.lastEntities).length > 0) {
+        enhancedContext.currentEntities = this.lastEntities;
       }
       
-      return claudeResponse;
+      // Add tracking info
+      if (this.recentResponses && this.recentResponses.length > 0) {
+        enhancedContext.previousAIMessages = this.recentResponses.map(r => r.text);
+      }
+      
+      // Get response from Claude
+      const response = await ClaudeService.generateResponse(
+        formattedMessages,
+        enhancedContext,
+        options
+      );
+      
+      // Track this response
+      if (this.recentResponses) {
+        this.recentResponses.unshift({ text: response });
+        // Keep only last 5 responses
+        if (this.recentResponses.length > 5) {
+          this.recentResponses.pop();
+        }
+      }
+      
+      return response;
     } catch (claudeError) {
-      console.error("Error in Claude API call:", claudeError);
-      return this.generateFallbackResponse(message, familyContext, analysis.intent) || 
+      console.error("Error getting response from Claude:", claudeError);
+      return 
         "I'm sorry, but I'm having trouble connecting to my language processing system. Please try again in a moment.";
     }
   } catch (error) {
     console.error("Error getting AI response:", error);
     return "I'm sorry, I encountered an issue processing your request. Please try again.";
   }
-} 
-
+}
 // Add helper method to get current user from message history
 getCurrentUserFromHistory(messageHistory) {
   if (!messageHistory || messageHistory.length === 0) {
