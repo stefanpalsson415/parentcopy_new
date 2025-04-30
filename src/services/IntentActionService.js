@@ -40,85 +40,85 @@ class IntentActionService {
       [ActionTypes.QUERY_PROVIDERS]: this.handleQueryProviders
     };
       
-    // Map of user-friendly terms to action types
-    this.intentMapping = {
-      // Provider intents
-      'add provider': ActionTypes.ADD_PROVIDER,
-  'add a provider': ActionTypes.ADD_PROVIDER,
-  'add teacher': ActionTypes.ADD_PROVIDER,
-  'add a teacher': ActionTypes.ADD_PROVIDER,
-  'music teacher': ActionTypes.ADD_PROVIDER,
-  'piano teacher': ActionTypes.ADD_PROVIDER,
-  'harmonica teacher': ActionTypes.ADD_PROVIDER,
-  'violin teacher': ActionTypes.ADD_PROVIDER,
-  'guitar teacher': ActionTypes.ADD_PROVIDER,
-  'doctor': ActionTypes.ADD_PROVIDER,
-  'dentist': ActionTypes.ADD_PROVIDER,
-  'pediatrician': ActionTypes.ADD_PROVIDER,
-  'coach': ActionTypes.ADD_PROVIDER,
-  'tutor': ActionTypes.ADD_PROVIDER,
-      
-      // Calendar/event intents
-      'add to calendar': ActionTypes.ADD_EVENT,
-      'schedule': ActionTypes.ADD_EVENT,
-      'add event': ActionTypes.ADD_EVENT,
-      'create event': ActionTypes.ADD_EVENT,
-      'plan event': ActionTypes.ADD_EVENT,
-      'birthday': ActionTypes.ADD_EVENT,
-      'appointment': ActionTypes.ADD_APPOINTMENT,
-      'doctor appointment': ActionTypes.ADD_APPOINTMENT,
-      'dentist appointment': ActionTypes.ADD_APPOINTMENT,
-      'check-up': ActionTypes.ADD_APPOINTMENT,
-      'checkup': ActionTypes.ADD_APPOINTMENT,
-      'medical visit': ActionTypes.ADD_APPOINTMENT,
-      
-      // Task intents
-      'add task': ActionTypes.ADD_TASK,
-      'create task': ActionTypes.ADD_TASK,
-      'assign task': ActionTypes.ADD_TASK,
-      'todo': ActionTypes.ADD_TASK,
-      'to-do': ActionTypes.ADD_TASK,
-      'to do': ActionTypes.ADD_TASK,
-      'complete task': ActionTypes.COMPLETE_TASK,
-      'finish task': ActionTypes.COMPLETE_TASK,
-      'done task': ActionTypes.COMPLETE_TASK,
-      'task is done': ActionTypes.COMPLETE_TASK,
-      'reassign task': ActionTypes.REASSIGN_TASK,
-      
-      // Growth tracking
-      'track growth': ActionTypes.TRACK_GROWTH,
-      'record height': ActionTypes.TRACK_GROWTH,
-      'record weight': ActionTypes.TRACK_GROWTH,
-      'growth data': ActionTypes.TRACK_GROWTH,
-      'weight measurement': ActionTypes.TRACK_GROWTH,
-      'height measurement': ActionTypes.TRACK_GROWTH,
-      
-      // Document intents
-      'add document': ActionTypes.ADD_DOCUMENT,
-      'upload document': ActionTypes.ADD_DOCUMENT,
-      'save document': ActionTypes.ADD_DOCUMENT,
-      'store document': ActionTypes.ADD_DOCUMENT,
-      'medical record': ActionTypes.ADD_DOCUMENT,
-      'school document': ActionTypes.ADD_DOCUMENT,
-      
-      // Relationship
-      'date night': ActionTypes.SCHEDULE_DATE_NIGHT,
-      'couple time': ActionTypes.SCHEDULE_DATE_NIGHT,
-      'relationship activity': ActionTypes.SCHEDULE_DATE_NIGHT,
-      'couple activity': ActionTypes.SCHEDULE_DATE_NIGHT,
-      
-      // Queries
-      'what tasks': ActionTypes.QUERY_TASKS,
-      'show tasks': ActionTypes.QUERY_TASKS,
-      'task list': ActionTypes.QUERY_TASKS,
-      'pending tasks': ActionTypes.QUERY_TASKS,
-      'show calendar': ActionTypes.QUERY_CALENDAR,
-      'what events': ActionTypes.QUERY_CALENDAR,
-      'upcoming events': ActionTypes.QUERY_CALENDAR,
-      'find providers': ActionTypes.QUERY_PROVIDERS,
-      'show providers': ActionTypes.QUERY_PROVIDERS,
-      'list providers': ActionTypes.QUERY_PROVIDERS
-    };
+    // In src/services/IntentActionService.js, update the this.intentMapping in the constructor:
+this.intentMapping = {
+    // Provider intents
+    'add provider': ActionTypes.ADD_PROVIDER,
+    'add a provider': ActionTypes.ADD_PROVIDER,
+    'add teacher': ActionTypes.ADD_PROVIDER,
+    'add a teacher': ActionTypes.ADD_PROVIDER,
+    'music teacher': ActionTypes.ADD_PROVIDER,
+    'piano teacher': ActionTypes.ADD_PROVIDER,
+    'harmonica teacher': ActionTypes.ADD_PROVIDER,
+    'violin teacher': ActionTypes.ADD_PROVIDER,
+    'guitar teacher': ActionTypes.ADD_PROVIDER,
+    'doctor': ActionTypes.ADD_PROVIDER,
+    'dentist': ActionTypes.ADD_PROVIDER,
+    'pediatrician': ActionTypes.ADD_PROVIDER,
+    'coach': ActionTypes.ADD_PROVIDER,
+    'tutor': ActionTypes.ADD_PROVIDER,
+    
+    // Calendar/event intents
+    'add to calendar': ActionTypes.ADD_EVENT,
+    'schedule': ActionTypes.ADD_EVENT,
+    'add event': ActionTypes.ADD_EVENT,
+    'create event': ActionTypes.ADD_EVENT,
+    'plan event': ActionTypes.ADD_EVENT,
+    'birthday': ActionTypes.ADD_EVENT,
+    'appointment': ActionTypes.ADD_APPOINTMENT,
+    'doctor appointment': ActionTypes.ADD_APPOINTMENT,
+    'dentist appointment': ActionTypes.ADD_APPOINTMENT,
+    'check-up': ActionTypes.ADD_APPOINTMENT,
+    'checkup': ActionTypes.ADD_APPOINTMENT,
+    'medical visit': ActionTypes.ADD_APPOINTMENT,
+    
+    // Task intents
+    'add task': ActionTypes.ADD_TASK,
+    'create task': ActionTypes.ADD_TASK,
+    'assign task': ActionTypes.ADD_TASK,
+    'todo': ActionTypes.ADD_TASK,
+    'to-do': ActionTypes.ADD_TASK,
+    'to do': ActionTypes.ADD_TASK,
+    'complete task': ActionTypes.COMPLETE_TASK,
+    'finish task': ActionTypes.COMPLETE_TASK,
+    'done task': ActionTypes.COMPLETE_TASK,
+    'task is done': ActionTypes.COMPLETE_TASK,
+    'reassign task': ActionTypes.REASSIGN_TASK,
+    
+    // Growth tracking
+    'track growth': ActionTypes.TRACK_GROWTH,
+    'record height': ActionTypes.TRACK_GROWTH,
+    'record weight': ActionTypes.TRACK_GROWTH,
+    'growth data': ActionTypes.TRACK_GROWTH,
+    'weight measurement': ActionTypes.TRACK_GROWTH,
+    'height measurement': ActionTypes.TRACK_GROWTH,
+    
+    // Document intents
+    'add document': ActionTypes.ADD_DOCUMENT,
+    'upload document': ActionTypes.ADD_DOCUMENT,
+    'save document': ActionTypes.ADD_DOCUMENT,
+    'store document': ActionTypes.ADD_DOCUMENT,
+    'medical record': ActionTypes.ADD_DOCUMENT,
+    'school document': ActionTypes.ADD_DOCUMENT,
+    
+    // Relationship
+    'date night': ActionTypes.SCHEDULE_DATE_NIGHT,
+    'couple time': ActionTypes.SCHEDULE_DATE_NIGHT,
+    'relationship activity': ActionTypes.SCHEDULE_DATE_NIGHT,
+    'couple activity': ActionTypes.SCHEDULE_DATE_NIGHT,
+    
+    // Queries
+    'what tasks': ActionTypes.QUERY_TASKS,
+    'show tasks': ActionTypes.QUERY_TASKS,
+    'task list': ActionTypes.QUERY_TASKS,
+    'pending tasks': ActionTypes.QUERY_TASKS,
+    'show calendar': ActionTypes.QUERY_CALENDAR,
+    'what events': ActionTypes.QUERY_CALENDAR,
+    'upcoming events': ActionTypes.QUERY_CALENDAR,
+    'find providers': ActionTypes.QUERY_PROVIDERS,
+    'show providers': ActionTypes.QUERY_PROVIDERS,
+    'list providers': ActionTypes.QUERY_PROVIDERS
+  };
     
     // For tracking statistics
     this.stats = {

@@ -3,7 +3,6 @@ import CalendarService from './CalendarService';
 import { auth } from './firebase';
 
 class ClaudeService {
-// NEW CODE in ClaudeService.js constructor
 constructor() {
   // Determine environment type
   const hostname = window.location.hostname;
@@ -43,9 +42,6 @@ constructor() {
     isProcessingProvider: false,
     isProcessingTask: false
   };
-}
-
-
 
   this.retryCount = 3;
   this.functionRegion = 'europe-west1'; // Match this to your deployment region
@@ -336,70 +332,57 @@ if (eventCollectionMarker) {
   }
 }
 
+// In src/services/ClaudeService.js generateResponse method 
+// This should replace the existing calendar detection block
+
 // Check for calendar request 
 console.log("Checking for calendar intent in message:", messageText.substring(0, 50) + (messageText.length > 50 ? "..." : ""));
 console.log("Calendar detection enabled:", !this.disableCalendarDetection);
 
-// Log the actual runtime flag value
+// FIXED: Log the actual runtime flag value
 console.log("Runtime disableCalendarDetection flag:", this.disableCalendarDetection);
 
-// IMPORTANT NEW CODE: Skip calendar detection when processing providers
-if (this.currentProcessingContext && this.currentProcessingContext.isProcessingProvider) {
-  console.log("Currently processing provider request - skipping calendar detection");
-} else if (!this.disableCalendarDetection && messageText.length > 0) {
-  // IMPROVED: First check for provider-specific terms to avoid calendar detection conflicts
-  const providerTerms = [
-    'add provider', 'add a provider', 'add teacher', 'add a teacher',
-    'piano teacher', 'music teacher', 'harmonica teacher', 'violin teacher',
-    'guitar teacher', 'add doctor', 'add a doctor'
+if (!this.disableCalendarDetection && messageText.length > 0) {
+  // IMPROVED: Expanded list of calendar keywords for better detection
+  const calendarKeywords = [
+    'add to calendar', 'schedule', 'appointment', 'meeting', 'event',
+    'calendar', 'book', 'plan', 'sync', 'reminder', 'save date',
+    'dentist', 'doctor', 'visit', 'checkup', 'check-up', 'due date',
+    'birthday', 'party', 'class', 'lesson', 'activity', 'session',
+    'conference', 'deadline', 'celebration', 'anniversary', 'create',
+    'put on calendar', 'date', 'time', 'tomorrow', 'next week',
+    'set meeting', 'add an event'
   ];
   
-  const isProviderRequest = providerTerms.some(term => 
-    messageText.toLowerCase().includes(term)
+  // IMPROVED: Check specific appointment patterns
+  const appointmentPatterns = [
+    /(?:book|schedule|appointment|with|see|visit)\s+(?:dr\.?|doctor|dentist)/i,
+    /(?:dental|doctor|medical|appointment|checkup|check-up)\s+(?:for|on)/i,
+    /(?:add|schedule|create|book)\s+(?:a|an)\s+(\w+)\s+(?:for|on|at)/i,
+    /(?:on|next|this)\s+(\w+day)/i
+  ];
+  
+  // Check for keywords
+  const hasKeyword = calendarKeywords.some(keyword =>
+    messageText.toLowerCase().includes(keyword)
   );
   
-  if (isProviderRequest) {
-    console.log("Provider-related terms detected, skipping calendar detection");
-  } else {
-    // Calendar detection keywords and patterns
-    const calendarKeywords = [
-      'add to calendar', 'schedule', 'appointment', 'meeting', 'event',
-      'calendar', 'book', 'plan', 'sync', 'reminder', 'save date',
-      'dentist', 'doctor', 'visit', 'checkup', 'check-up', 'due date',
-      'birthday', 'party', 'class', 'lesson', 'activity', 'session',
-      'conference', 'deadline', 'celebration', 'anniversary', 'create',
-      'put on calendar', 'date', 'time', 'tomorrow', 'next week',
-      'set meeting', 'add an event'
-    ];
-    
-    // Check specific appointment patterns
-    const appointmentPatterns = [
-      /(?:book|schedule|appointment|with|see|visit)\s+(?:dr\.?|doctor|dentist)/i,
-      /(?:dental|doctor|medical|appointment|checkup|check-up)\s+(?:for|on)/i,
-      /(?:add|schedule|create|book)\s+(?:a|an)\s+(\w+)\s+(?:for|on|at)/i,
-      /(?:on|next|this)\s+(\w+day)/i
-    ];
-    
-    // Check for keywords
-    const hasKeyword = calendarKeywords.some(keyword =>
-      messageText.toLowerCase().includes(keyword)
-    );
-    
-    // Check for appointment patterns
-    const hasAppointmentPattern = appointmentPatterns.some(pattern =>
-      pattern.test(messageText)
-    );
-    
-    // Combined check
-    const isCalendarRequest = hasKeyword || hasAppointmentPattern;
-    
-    console.log("Calendar detection result:", { 
-      hasKeyword, 
-      hasAppointmentPattern, 
-      isCalendarRequest 
-    });
-    
-    if (isCalendarRequest) {
+  // Check for appointment patterns
+  const hasAppointmentPattern = appointmentPatterns.some(pattern =>
+    pattern.test(messageText)
+  );
+  
+  // Combined check
+  const isCalendarRequest = hasKeyword || hasAppointmentPattern;
+  
+  console.log("Calendar detection result:", { 
+    hasKeyword, 
+    hasAppointmentPattern, 
+    isCalendarRequest 
+  });
+  
+  if (isCalendarRequest) {
+    // IMPROVED: Better error handling and context validation
     console.log("Detected calendar intent, attempting to extract details");
     
     // Validate required context
@@ -458,7 +441,6 @@ if (this.currentProcessingContext && this.currentProcessingContext.isProcessingP
     }
   }
 }
-
       
       // Check if messages is an array of our internal message format
       let formattedMessages;
