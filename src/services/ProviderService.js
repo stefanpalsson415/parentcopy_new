@@ -165,118 +165,88 @@ extractProviderInfo(message) {
    */
  // Add or update this method in src/services/ProviderService.js
 
-// NEW CODE for src/services/ProviderService.js
-async saveProvider(familyId, providerData) {
+ async saveProvider(familyId, providerData) {
   try {
     if (!familyId) {
-      console.error("❌ No family ID provided for saving provider");
+      console.error("❌ No family ID provided");
       return { success: false, error: "Family ID is required" };
     }
     
-    // DIAGNOSTIC: Log all inputs clearly
-    console.log("🔍 Provider save called with:", {
+    if (!providerData || !providerData.name) {
+      console.error("❌ No provider name provided");
+      return { success: false, error: "Provider name is required" };
+    }
+    
+    console.log("💾 SIMPLIFIED PROVIDER SAVE STARTING");
+    console.log("📝 Input data:", {
       familyId,
-      providerData: {
-        name: providerData?.name || "(missing)",
-        type: providerData?.type || "(missing)",
-        specialty: providerData?.specialty || "(none)",
-        email: providerData?.email || "(none)",
-        phone: providerData?.phone || "(none)",
+      provider: {
+        name: providerData.name,
+        type: providerData.type || "medical",
+        specialty: providerData.specialty || "",
+        email: providerData.email || ""
       }
     });
-    
-    // SIMPLIFY: Remove the complex locking mechanism that might be causing issues
-    // Instead just log that we're starting a save
-    console.log(`✅ Starting direct provider save for family: ${familyId}`);
-    
-    // ALWAYS use "providers" collection
-    const collectionName = "providers";
-    const providersRef = collection(db, collectionName);
-    
-    // DIAGNOSTIC: Log the Firebase reference we're using
-    console.log(`📁 Using Firestore collection: ${collectionName}`);
     
     // Prepare provider data with required fields
     const providerToAdd = {
       ...providerData,
-      name: providerData.name || "Unnamed Provider",
+      name: providerData.name,
       type: providerData.type || "medical",
       familyId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
     
-    // DIAGNOSTIC: Log the final data being sent to Firebase
-    console.log("📤 Data being sent to Firebase:", providerToAdd);
+    // DIRECT FIRESTORE: Using a single consistent collection name 
+    const providersRef = collection(db, "providers");
     
-    // Simple direct approach - create a new provider
-    let providerId;
-    try {
-      const newProviderRef = await addDoc(providersRef, providerToAdd);
-      providerId = newProviderRef.id;
-      console.log(`✅ Created new provider with ID: ${providerId}`);
-    } catch (createError) {
-      // Full error logging
-      console.error("❌ Firebase addDoc operation failed:", createError);
-      console.error("Error details:", {
-        code: createError.code,
-        message: createError.message,
-        stack: createError.stack,
+    // Simplest possible approach - add the document to the collection
+    const docRef = await addDoc(providersRef, providerToAdd);
+    const providerId = docRef.id;
+    
+    console.log(`✅ Provider added successfully with ID: ${providerId}`);
+    
+    // Trigger UI updates with a reliable approach
+    if (typeof window !== 'undefined') {
+      // Single robust event dispatch that all components can listen for
+      console.log("🔔 Dispatching provider-added event");
+      const event = new CustomEvent('provider-added', {
+        detail: {
+          providerId,
+          providerName: providerData.name,
+          isNew: true
+        }
       });
-      throw createError;
+      window.dispatchEvent(event);
+      
+      // Force other refreshes if needed
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('directory-refresh-needed'));
+        window.dispatchEvent(new CustomEvent('force-data-refresh'));
+      }, 500);
     }
-    
-    // Explicit delay to ensure Firebase has time to process
-    console.log(`⏱️ Waiting 500ms for Firebase to complete...`);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Verify the provider was created by reading it back
-    try {
-      const providerDoc = await getDoc(doc(db, collectionName, providerId));
-      if (providerDoc.exists()) {
-        console.log(`✅ Verified provider exists in Firestore: ${providerId}`);
-      } else {
-        console.error(`❌ Provider verification failed - document not found after creation: ${providerId}`);
-      }
-    } catch (verifyError) {
-      console.warn(`⚠️ Could not verify provider creation (but may still have worked):`, verifyError);
-    }
-    
-    // Dispatch events to update UI components
-    console.log(`🔔 Dispatching provider-added event for ID: ${providerId}`);
-    window.dispatchEvent(new CustomEvent('provider-added', {
-      detail: {
-        providerId,
-        isNew: true,
-        provider: providerToAdd
-      }
-    }));
-    
-    console.log(`🔔 Dispatching directory-refresh-needed event`);
-    window.dispatchEvent(new CustomEvent('directory-refresh-needed'));
-    
-    // Second refresh with delay for components that might load later
-    setTimeout(() => {
-      console.log(`🔔 Dispatching delayed force-data-refresh event`);
-      window.dispatchEvent(new CustomEvent('force-data-refresh'));
-    }, 1000);
     
     return { 
       success: true, 
       providerId,
-      isNew: true
+      isNew: true,
+      provider: providerToAdd
     };
   } catch (error) {
-    console.error("❌ CRITICAL ERROR saving provider:", error);
-    console.error("Full error details:", {
+    // Better error logging for debugging
+    console.error("❌ CRITICAL ERROR in saveProvider:", error);
+    console.error("Error details:", {
+      name: error.name,
       message: error.message,
-      stack: error.stack,
-      code: error.code,
-      familyId: familyId,
-      providerName: providerData?.name || "Unknown"
+      code: error.code || 'unknown',
+      stack: error.stack
     });
     
-    return { success: false, error: error.message };
+    return { 
+      success: false, 
+      error: error.message || "Unknown Firebase error" 
+    };
   }
 }
   

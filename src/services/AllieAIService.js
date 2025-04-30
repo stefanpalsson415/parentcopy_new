@@ -516,123 +516,84 @@ extractProviderDetails(message) {
 }
 
 
-  // NEW CODE for AllieAIService.js
 async processProviderFromChat(message, familyId) {
   try {
     if (!familyId) {
-      console.error("❌ ERROR: Missing familyId in processProviderFromChat");
+      console.error("Missing familyId in processProviderFromChat");
       return { success: false, error: "Family ID is required" };
     }
     
-    console.log("🔍 DIAGNOSTIC: Processing provider from chat:");
-    console.log("📝 Message:", message);
-    console.log("👪 Family ID:", familyId);
+    console.log("⭐ DIAGNOSTIC: Processing provider request");
+    console.log(`Message: "${message.substring(0, 100)}..."`);
+    console.log(`Family ID: ${familyId}`);
     
-    // Extract provider details
+    // Extract provider details using the service's method
     const providerDetails = this.extractProviderDetails(message);
-    console.log("🔎 Extracted provider details:", providerDetails);
     
-    // Validate provider details
-    if (!providerDetails.name || providerDetails.name === "Unknown Provider") {
-      console.error("❌ ERROR: Could not extract provider name");
+    // Log the extracted information for diagnostics
+    console.log("Extracted provider details:", {
+      name: providerDetails.name || "(missing)",
+      type: providerDetails.type || "(missing)",
+      specialty: providerDetails.specialty || "(none)",
+      email: providerDetails.email || "(none)"
+    });
+    
+    // Validate the essential fields
+    if (!providerDetails.name) {
+      console.error("Could not determine provider name from message");
       return { 
         success: false, 
-        error: "Could not determine the provider's name from your message" 
+        error: "I couldn't determine the provider's name. Please specify their name clearly." 
       };
     }
     
-    // DIRECT FIREBASE APPROACH - Bypass ProviderService for diagnostic purposes
-    console.log("⚡ DIAGNOSTIC: Using direct Firebase approach to save provider");
+    // SIMPLIFIED: Use a clean approach - import the service explicitly
+    const { default: ProviderService } = await import('./ProviderService');
     
-    try {
-      // Import Firebase directly
-      const { db } = await import('./firebase');
-      const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
-      
-      // Prepare provider data
-      const providerToAdd = {
-        ...providerDetails,
-        familyId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
-      
-      console.log("📤 Sending data directly to Firebase 'providers' collection:", providerToAdd);
-      
-      // Add to 'providers' collection
-      const providersRef = collection(db, "providers");
-      const docRef = await addDoc(providersRef, providerToAdd);
-      const providerId = docRef.id;
-      
-      console.log("✅ SUCCESS: Provider directly added to Firebase with ID:", providerId);
-      
-      // Dispatch an event to notify components
-      console.log("🔔 Dispatching provider-added event");
+    // Add familyId to provider details
+    providerDetails.familyId = familyId;
+    
+    // Log what we're about to do
+    console.log(`Attempting to save provider "${providerDetails.name}" for family ${familyId}`);
+    
+    // Save provider using the service
+    const result = await ProviderService.saveProvider(familyId, providerDetails);
+    
+    console.log("Provider save result:", result);
+    
+    if (result.success) {
+      // Force UI updates in case events aren't working properly
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('provider-added', {
-          detail: {
-            providerId,
-            provider: providerToAdd,
-            familyId
-          }
-        }));
-        
-        // Also dispatch directory refresh events
-        window.dispatchEvent(new CustomEvent('directory-refresh-needed'));
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('force-data-refresh'));
-        }, 500);
+        console.log("Dispatching UI refresh events");
+        window.dispatchEvent(new CustomEvent('provider-added'));
+        setTimeout(() => window.dispatchEvent(new CustomEvent('directory-refresh-needed')), 500);
       }
       
       return { 
         success: true, 
-        providerId,
+        providerId: result.providerId,
         providerDetails,
         isNew: true,
-        message: `Successfully added ${providerDetails.name} to your provider directory.`
+        message: `I've added ${providerDetails.name} to your provider directory.`
       };
-    } catch (directFirebaseError) {
-      console.error("❌ CRITICAL ERROR in direct Firebase save:", directFirebaseError);
-      console.error("Error details:", {
-        code: directFirebaseError.code,
-        message: directFirebaseError.message,
-        stack: directFirebaseError.stack
-      });
-      
-      // As a last resort, try the original ProviderService approach
-      console.log("⚠️ Trying fallback approach using ProviderService");
-      try {
-        const { default: ProviderService } = await import('./ProviderService');
-        
-        providerDetails.familyId = familyId;
-        const result = await ProviderService.saveProvider(familyId, providerDetails);
-        
-        console.log("🔄 ProviderService fallback result:", result);
-        
-        if (result.success) {
-          console.log("✅ Provider saved successfully via fallback");
-          return { 
-            success: true, 
-            providerId: result.providerId,
-            providerDetails,
-            isNew: result.isNew,
-            message: `Successfully added ${providerDetails.name} to your provider directory.`
-          };
-        } else {
-          throw new Error(result.error || "Failed to create provider via ProviderService");
-        }
-      } catch (fallbackError) {
-        console.error("❌ Both direct and fallback approaches failed:", fallbackError);
-        return { success: false, error: "Failed to create provider after multiple attempts" };
-      }
+    } else {
+      throw new Error(result.error || "Failed to save provider");
     }
   } catch (error) {
-    console.error("❌ Unhandled error in processProviderFromChat:", error);
-    console.error("Full error details:", {
-      message: error.message,
-      stack: error.stack
-    });
-    return { success: false, error: error.message };
+    console.error("Error processing provider request:", error);
+    
+    // Better error recovery
+    if (error.message?.includes("permission") || error.code === "permission-denied") {
+      return { 
+        success: false, 
+        error: "I don't have permission to add providers to your directory. Please check your account settings." 
+      };
+    }
+    
+    return { 
+      success: false, 
+      error: "I encountered a technical issue while adding this provider. Please try again or add them directly through the Provider Directory." 
+    };
   }
 }
 
