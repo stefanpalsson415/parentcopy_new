@@ -334,14 +334,28 @@ if (eventCollectionMarker) {
 // In src/services/ClaudeService.js generateResponse method 
 // This should replace the existing calendar detection block
 
-// Check for calendar request 
-console.log("Checking for calendar intent in message:", messageText.substring(0, 50) + (messageText.length > 50 ? "..." : ""));
-console.log("Calendar detection enabled:", !this.disableCalendarDetection);
+// Enhanced calendar detection logic with better logging
+console.log("🗓️ Checking for calendar intent in message:", messageText.substring(0, 50) + (messageText.length > 50 ? "..." : ""));
+console.log("🗓️ Calendar detection setting:", !this.disableCalendarDetection);
 
-// FIXED: Log the actual runtime flag value
-console.log("Runtime disableCalendarDetection flag:", this.disableCalendarDetection);
+// CRITICAL FIX: Force-enable calendar detection when in dashboard
+let calendarDetectionEnabled = !this.disableCalendarDetection;
 
-if (!this.disableCalendarDetection && messageText.length > 0) {
+// Force enable calendar detection if we're processing a specific type of appointment
+if (this.currentProcessingContext && !this.currentProcessingContext.isProcessingProvider) {
+  if (messageText.toLowerCase().includes('appointment') || 
+      messageText.toLowerCase().includes('schedule') ||
+      messageText.toLowerCase().includes('calendar')) {
+    console.log("🗓️ Force-enabling calendar detection for appointment-related message");
+    calendarDetectionEnabled = true;
+    // Make sure the flag is consistent
+    this.disableCalendarDetection = false;
+  }
+}
+
+console.log("🗓️ Final calendar detection enabled state:", calendarDetectionEnabled);
+
+if (calendarDetectionEnabled && messageText.length > 0) {
   // IMPROVED: Expanded list of calendar keywords for better detection
   const calendarKeywords = [
     'add to calendar', 'schedule', 'appointment', 'meeting', 'event',
@@ -350,15 +364,16 @@ if (!this.disableCalendarDetection && messageText.length > 0) {
     'birthday', 'party', 'class', 'lesson', 'activity', 'session',
     'conference', 'deadline', 'celebration', 'anniversary', 'create',
     'put on calendar', 'date', 'time', 'tomorrow', 'next week',
-    'set meeting', 'add an event'
+    'set meeting', 'add an event', 'therapy', 'therapist'
   ];
   
-  // IMPROVED: Check specific appointment patterns
+  // IMPROVED: Check specific appointment patterns with broader matching
   const appointmentPatterns = [
-    /(?:book|schedule|appointment|with|see|visit)\s+(?:dr\.?|doctor|dentist)/i,
-    /(?:dental|doctor|medical|appointment|checkup|check-up)\s+(?:for|on)/i,
-    /(?:add|schedule|create|book)\s+(?:a|an)\s+(\w+)\s+(?:for|on|at)/i,
-    /(?:on|next|this)\s+(\w+day)/i
+    /(?:book|schedule|appointment|with|see|visit)\s+(?:dr\.?|doctor|dentist|therapist)/i,
+    /(?:dental|doctor|medical|therapy|speech|appointment|checkup|check-up)\s+(?:for|on|at)/i,
+    /(?:add|schedule|create|book)\s+(?:a|an|the)?\s+([a-z]+(?:\s+[a-z]+)?)\s+(?:for|on|at|who)/i,
+    /(?:on|next|this|every)\s+(\w+day)/i,
+    /(?:at|with)\s+([a-z]+(?:'|')?s(?:\s+[a-z]+))/i // For "at Children's Hospital" pattern
   ];
   
   // Check for keywords
@@ -385,9 +400,50 @@ if (!this.disableCalendarDetection && messageText.length > 0) {
     console.log("Detected calendar intent, attempting to extract details");
     
     // Validate required context - Get userId from context or directly from auth
+// IMPROVED AUTH HANDLING: Get userId from multiple sources with better logging
 const userId = context.userId || auth.currentUser?.uid;
+console.log("🔐 AUTH CHECK in calendar extraction:", { 
+  contextUserId: context.userId,
+  authCurrentUser: auth.currentUser?.uid,
+  resolvedUserId: userId
+});
+
+// Force auth if we're in a dashboard context
+if (!userId && typeof window !== 'undefined') {
+  console.log("🔐 No userId found but we appear to be in browser context - attempting to get current user");
+  // This is a fallback for when we're in a dashboard context but auth.currentUser isn't available yet
+  if (auth.currentUser) {
+    console.log("🔐 Retrieved current user:", auth.currentUser.uid);
+    const userId = auth.currentUser.uid;
+  }
+}
+
 if (!userId) {
-  console.warn("Missing userId in context and not found in auth, cannot proceed with calendar extraction");
+  console.warn("❌ CRITICAL AUTH FAILURE: Missing userId in all sources, cannot proceed with calendar extraction");
+  
+  // Check if we're actually in the dashboard by looking at the URL
+  if (typeof window !== 'undefined' && window.location.pathname.includes('/dashboard')) {
+    console.log("📋 We appear to be in dashboard but auth is missing - using fallback mechanism");
+    
+    // Try to get familyId from context or localStorage as a last resort
+    const fallbackFamilyId = context.familyId || localStorage.getItem('selectedFamilyId');
+    
+    if (fallbackFamilyId) {
+      console.log("📋 Using fallback familyId:", fallbackFamilyId);
+      // Try to extract event anyway since we're clearly logged in but auth is failing
+      try {
+        // Use a simplified path for event extraction
+        const basicEventData = await this.extractCalendarRequest(message);
+        
+        if (basicEventData) {
+          return `I can help you add "${basicEventData.title || 'this event'}" to your calendar. However, I'm having trouble with your login session. Please try again in a moment, or add it directly through the calendar widget.`;
+        }
+      } catch (e) {
+        console.error("Calendar fallback extraction failed:", e);
+      }
+    }
+  }
+  
   // Return special marker
   return "I'd like to add this to your calendar, but I need you to be logged in first. Once you're logged in, I can help you schedule events and send reminders.";
 }
@@ -1391,14 +1447,77 @@ formatCollectedEventData(collectedData) {
 }
 
 
-// In src/services/ClaudeService.js, replace the createEventFromCollectedData method with this improved version:
 async createEventFromCollectedData(eventData, userId, familyId) {
   try {
-    // Validate required parameters
-    if (!userId) {
-      console.error("Missing userId for event creation");
-      return { success: false, error: "Missing user ID" };
+    // IMPROVED: More robust validation with fallbacks for authentication
+    let actualUserId = userId;
+    let actualFamilyId = familyId;
+    
+    // If userId is missing, try to get it from auth
+    if (!actualUserId) {
+      console.warn("⚠️ Missing userId for event creation - attempting to get from current auth");
+      actualUserId = auth.currentUser?.uid;
+      
+      // Log actual user status
+      console.log("🔐 Auth status check:", {
+        authCurrentUser: auth.currentUser?.uid,
+        authCurrentUserEmail: auth.currentUser?.email,
+        isLoggedIn: !!auth.currentUser
+      });
+      
+      // As a last resort, try to get from localStorage
+      if (!actualUserId && typeof window !== 'undefined') {
+        try {
+          // Try various localStorage keys that might have user information
+          const storedUser = localStorage.getItem('currentUser') || 
+                            localStorage.getItem('user') || 
+                            localStorage.getItem('userId');
+          
+          if (storedUser) {
+            try {
+              const parsedUser = JSON.parse(storedUser);
+              actualUserId = parsedUser.uid || parsedUser.id;
+              console.log("📋 Retrieved userId from localStorage:", actualUserId);
+            } catch (e) {
+              // If not JSON, might be direct ID
+              actualUserId = storedUser;
+              console.log("📋 Using direct userId from localStorage:", actualUserId);
+            }
+          }
+        } catch (storageError) {
+          console.error("Error accessing localStorage:", storageError);
+        }
+      }
     }
+    
+    // Also ensure familyId is available - similar fallbacks
+    if (!actualFamilyId) {
+      console.warn("⚠️ Missing familyId for event creation - attempting to get from localStorage");
+      if (typeof window !== 'undefined') {
+        actualFamilyId = localStorage.getItem('selectedFamilyId') || 
+                        localStorage.getItem('familyId');
+        
+        if (actualFamilyId) {
+          console.log("📋 Retrieved familyId from localStorage:", actualFamilyId);
+        }
+      }
+    }
+    
+    // Final validation check
+    if (!actualUserId) {
+      console.error("❌ CRITICAL: No userId available from any source for event creation");
+      return { success: false, error: "Missing user ID - authentication required" };
+    }
+    
+    // Enhanced logging for debugging
+    console.log("🗓️ Creating event from collected data:", {
+      title: eventData.title || "Untitled Event",
+      type: eventData.eventType || "general",
+      dateTime: eventData.dateTime,
+      userId: actualUserId,
+      familyId: actualFamilyId,
+      doctorName: eventData.doctorName || eventData.appointmentDetails?.doctorName
+    });
     
     // Enhanced logging for debugging
     console.log("Creating event from collected data:", {

@@ -623,6 +623,57 @@ const renderTabContent = () => {
           {renderTabContent()}
         </ErrorBoundary>
       </div>
+      {/* Test Calendar API Button */}
+<div className="fixed bottom-24 right-4 z-10">
+  <button
+    className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full shadow-lg flex items-center space-x-2"
+    onClick={async () => {
+      try {
+        // Log auth status
+        console.log("🔐 Auth Status:", {
+          currentUser: auth.currentUser?.uid,
+          email: auth.currentUser?.email,
+          isLoggedIn: !!auth.currentUser
+        });
+        
+        // Test calendar API directly
+        const { default: CalendarService } = await import('../services/CalendarService');
+        
+        // Create a simple test event
+        const testEvent = {
+          title: "Test Event from Dashboard",
+          description: "This is a test event to diagnose calendar issues",
+          start: {
+            dateTime: new Date().toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          },
+          end: {
+            dateTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          }
+        };
+        
+        // Try to add the event
+        const result = await CalendarService.addEvent(testEvent, auth.currentUser?.uid);
+        console.log("📅 Test event result:", result);
+        
+        // Show result to user
+        alert(result.success 
+          ? "Calendar test successful! Event added."
+          : `Calendar test failed: ${result.error || "Unknown error"}`);
+        
+        // Force calendar refresh
+        window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
+      } catch (error) {
+        console.error("📅 Calendar test error:", error);
+        alert(`Calendar test error: ${error.message}`);
+      }
+    }}
+  >
+    <Calendar size={16} />
+    <span>Test Calendar API</span>
+  </button>
+</div>
 
       {/* Settings Modal */}
       {showSettings && (
