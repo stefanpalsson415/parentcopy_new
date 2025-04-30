@@ -27,7 +27,8 @@ class AIOrchestrator {
       }
       
       // Connect services together
-      IntentActionService.setClaudeService(ClaudeService);
+      IntentActionService.claudeService = ClaudeService;
+
       
       // Set calendar detection flags properly
       ClaudeService.disableCalendarDetection = false;

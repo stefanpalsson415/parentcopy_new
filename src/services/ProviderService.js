@@ -356,7 +356,6 @@ extractProviderInfo(message) {
 
 // In src/services/ProviderService.js, enhance the saveProvider method
 
-// In src/services/ProviderService.js
 async saveProvider(familyId, providerData) {
   try {
     if (!familyId) {
@@ -418,6 +417,7 @@ async saveProvider(familyId, providerData) {
         detail: {
           providerId,
           providerName: providerData.name,
+          providerType: providerData.type,
           isNew: true
         }
       }));

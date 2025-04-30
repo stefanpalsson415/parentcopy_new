@@ -121,15 +121,15 @@ this.intentMapping = {
   };
     
     // For tracking statistics
-    this.stats = {
-      totalRequests: 0,
-      successfulActions: 0,
-      failedActions: 0,
-      actionTypeCount: {}
-    };
-    
-    this.claudeService = null;
-    IntentActionService.setClaudeService(ClaudeService);
+this.stats = {
+    totalRequests: 0,
+    successfulActions: 0,
+    failedActions: 0,
+    actionTypeCount: {}
+  };
+  
+  this.claudeService = null;
+  this.setClaudeService(ClaudeService);
 
   }
 
@@ -285,13 +285,13 @@ this.intentMapping = {
    * @param {string} userId - User ID
    * @returns {Promise<object>} Result of adding provider
    */
-  // In src/services/IntentActionService.js, update the handleAddProvider method
-async handleAddProvider(message, familyId, userId) {
+  async handleAddProvider(message, familyId, userId) {
     try {
       console.log("Handling add provider request:", message);
       
-      // Set context flag to avoid calendar detection interference
+      // IMPORTANT: Set context flag to avoid calendar detection interference
       if (this.claudeService) {
+        console.log("🔴 Explicitly disabling calendar detection for provider processing");
         this.claudeService.currentProcessingContext = {
           isProcessingProvider: true,
           isProcessingTask: false
@@ -304,11 +304,13 @@ async handleAddProvider(message, familyId, userId) {
       const { default: AllieAIService } = await import('./AllieAIService');
       
       // Process the provider
+      console.log("⭐ Calling processProviderFromChat with message:", message.substring(0, 100));
       const result = await AllieAIService.processProviderFromChat(message, familyId);
       console.log("Provider processing result:", result);
       
       // Reset context flags
       if (this.claudeService) {
+        console.log("🟢 Re-enabling calendar detection after provider processing");
         this.claudeService.currentProcessingContext.isProcessingProvider = false;
         this.claudeService.disableCalendarDetection = false;
       }
@@ -316,7 +318,7 @@ async handleAddProvider(message, familyId, userId) {
       if (result && result.success) {
         // Force UI updates in case events aren't working properly
         if (typeof window !== 'undefined') {
-          console.log("Dispatching UI refresh events");
+          console.log("🔔 Dispatching UI refresh events");
           window.dispatchEvent(new CustomEvent('provider-added', {
             detail: {
               providerId: result.providerId,
@@ -339,7 +341,17 @@ async handleAddProvider(message, familyId, userId) {
         result.error
       );
     } catch (error) {
-      console.error("Error handling add provider:", error);
+      console.error("❌ Error handling add provider:", error);
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack
+      });
+      
+      // Make sure to reset the flag even if there's an error
+      if (this.claudeService) {
+        console.log("🟢 Re-enabling calendar detection after provider processing error");
+        this.claudeService.disableCalendarDetection = false;
+      }
       
       return createErrorResult(
         "I encountered an error while adding this provider. Please try being more specific about the provider's name and type.",

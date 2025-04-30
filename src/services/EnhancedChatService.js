@@ -1740,7 +1740,40 @@ async processActionableRequest(message, familyId, userId) {
   }
 }
 
-
+// Add this method to EnhancedChatService.js (after existing methods)
+/**
+ * Determine the intent of a user message
+ * @param {string} message - User message
+ * @returns {string|null} Intent identifier
+ */
+determineIntent(message) {
+  try {
+    // Use the NLU component to detect intent
+    if (this.nlu && typeof this.nlu.detectIntent === 'function') {
+      return this.nlu.detectIntent(message);
+    }
+    
+    // Fallback to basic intent detection if NLU is not available
+    const intentPatterns = {
+      'calendar.add': ['add to calendar', 'schedule', 'appointment'],
+      'provider.add': ['add provider', 'add a provider', 'new provider', 'save doctor'],
+      'task.add': ['add task', 'new task', 'create todo'],
+      'child.track': ['track growth', 'record height', 'child milestone']
+    };
+    
+    const messageLower = message.toLowerCase();
+    for (const [intent, patterns] of Object.entries(intentPatterns)) {
+      if (patterns.some(pattern => messageLower.includes(pattern))) {
+        return intent;
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error determining intent:", error);
+    return null;
+  }
+}
 
 // Add these new methods to EnhancedChatService
 /**
