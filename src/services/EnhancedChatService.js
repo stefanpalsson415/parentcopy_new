@@ -1808,7 +1808,6 @@ async forceCompleteOnboarding(familyId) {
 
 
 
-// Replace the handleProviderRequest method in src/services/EnhancedChatService.js
 async handleProviderRequest(message, familyContext) {
   try {
     if (!familyContext.familyId) {
