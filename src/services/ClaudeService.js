@@ -1611,31 +1611,40 @@ async createEventFromCollectedData(eventData, userId, familyId) {
     }
     
     console.log("Final event object ready for saving:", event);
-    
-    // CRITICAL FIX: First try to use EventStore directly
-    // NEW CODE for the Firebase part in createEventFromCollectedData
-// As a last resort, try Firebase directly - using the successful approach
-try {
-  // Use consistent dynamic import pattern
-  const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
-  const { db } = await import('../services/firebase');
-  
-  // Log more details for debugging
-  console.log("🔥 Attempting direct Firebase write for event with:", { 
-    userId, 
-    familyId, 
-    eventTitle: event.title || 'Untitled' 
-  });
-  
-  // Prepare the event for direct Firestore insertion
-  const firestoreEvent = {
-    ...event,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  };
-  
-  // Add to Firestore events collection
-  const docRef = await addDoc(collection(db, "events"), firestoreEvent);
+    try {
+      // Use consistent dynamic import pattern
+      const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
+      const { db } = await import('../services/firebase');
+      const { auth } = await import('../services/firebase');
+      
+      // Critical fix: Ensure userId is defined using multiple fallbacks
+      const effectiveUserId = userId || auth.currentUser?.uid || 'system-default';
+      
+      // Log more details for debugging
+      console.log("🔥 Attempting direct Firebase write for event with:", { 
+        providedUserId: userId,
+        effectiveUserId: effectiveUserId, 
+        authCurrentUser: auth.currentUser?.uid,
+        familyId, 
+        eventTitle: event.title || 'Untitled' 
+      });
+      
+      // Prepare the event for direct Firestore insertion with guaranteed userId
+      const firestoreEvent = {
+        ...event,
+        userId: effectiveUserId, // Explicitly set userId with fallback
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      
+      // Verify critical fields before writing
+      if (!firestoreEvent.familyId) {
+        console.warn("Missing familyId, using fallback");
+        firestoreEvent.familyId = familyId || 'default-family';
+      }
+      
+      // Add to Firestore events collection
+      const docRef = await addDoc(collection(db, "events"), firestoreEvent);
   
   console.log("🔥 Direct Firebase insertion successful:", docRef.id);
   

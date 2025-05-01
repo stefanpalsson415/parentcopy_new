@@ -360,6 +360,22 @@ const isMeetingStartMessage = (text) => {
          lowerText.includes('meeting for week');
 };
 
+// Add this function to AllieChat.jsx
+const isCorrection = (text) => {
+  const lowerText = text.toLowerCase().trim();
+  return (
+    lowerText === "not correct" ||
+    lowerText === "that's not right" ||
+    lowerText === "no" ||
+    lowerText === "that's wrong" ||
+    lowerText.includes("not an event") ||
+    lowerText.includes("not a") ||
+    lowerText.includes("incorrect") ||
+    lowerText.includes("that's not what i")
+  );
+};
+
+
 
 // Update meeting notes based on current stage
 const updateMeetingNotes = (input) => {
@@ -914,6 +930,29 @@ const handleSend = useCallback(async () => {
         setImagePreview(null);
       }
       
+      const lastAllieMessage = messages[messages.length - 1]?.sender === 'allie' ? messages[messages.length - 1] : null;
+      if (lastAllieMessage && isCorrection(currentMessageText)) {
+        // User is correcting Allie
+        console.log("Detected correction, resetting conversation context");
+        
+        // Clear any misinterpreted intent
+        setDetectedIntent(null);
+        
+        // Add a reset message
+        setMessages(prev => [...prev, userMessage, {
+          familyId,
+          sender: 'allie',
+          userName: 'Allie',
+          text: "I'm sorry for misunderstanding. Let's try again - what would you like me to help you with?",
+          timestamp: new Date().toISOString()
+        }]);
+        
+        setInput('');
+        setLoading(false);
+        return;
+      }
+
+
       // Save user message to database first
       const savedMessage = await ChatPersistenceService.saveMessage(userMessage);
       

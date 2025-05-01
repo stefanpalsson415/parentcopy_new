@@ -182,15 +182,21 @@ async processUserRequest(message, familyId, userId) {
  * @param {string} message - User message
  * @returns {Promise<string>} Intent identifier
  */
-async identifyIntent(message) {
+  async identifyIntent(message) {
     try {
       console.log("Using Claude for intent classification");
       
       const systemPrompt = `You are an intent classifier for Allie, a family management assistant.
       Determine what action the user wants to perform from their message.
       
+      IMPORTANT DISTINCTION:
+      - If the user mentions babysitters, childcare providers, doctors, teachers - this is ADD_PROVIDER
+      - If the user mentions schedule/calendar/appointment with date/time - this is ADD_EVENT
+      - When in doubt between provider and event, check if there's a specific date/time mentioned
+      - Names with phone numbers are typically providers, not events
+      
       Return ONE of the following intent labels without explanation:
-      - add_provider (for adding healthcare providers, teachers, coaches)
+      - add_provider (for adding healthcare providers, teachers, coaches, babysitters)
       - add_event (for adding events to calendar)
       - add_appointment (for medical/dental appointments)
       - add_task (for creating tasks or todos)
