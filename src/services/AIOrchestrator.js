@@ -2,7 +2,8 @@
 import ClaudeService from './ClaudeService';
 import IntentActionService from './IntentActionService';
 import EnhancedChatService from './EnhancedChatService';
-import { auth } from './firebase'; // Add this import statement
+import { auth, db } from './firebase';
+import { collection, addDoc, getDoc, getDocs, query, where, orderBy, limit, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
 
 /**
@@ -12,15 +13,38 @@ import { auth } from './firebase'; // Add this import statement
 class AIOrchestrator {
   constructor() {
     this.initialized = false;
+    this.authContext = null;
+  }
+  
+  /**
+   * Set authentication context for the AI system
+   * @param {object} authContext - Authentication context
+   */
+  setAuthContext(authContext) {
+    this.authContext = authContext;
+    console.log("Auth context set in AIOrchestrator:", authContext);
+    
+    // Share with other services
+    if (ClaudeService && typeof ClaudeService.setAuthContext === 'function') {
+      ClaudeService.setAuthContext(authContext);
+    }
+    
+    if (IntentActionService && typeof IntentActionService.setAuthContext === 'function') {
+      IntentActionService.setAuthContext(authContext);
+    }
+    
+    if (EnhancedChatService && typeof EnhancedChatService.setAuthContext === 'function') {
+      EnhancedChatService.setAuthContext(authContext);
+    }
   }
   
   /**
  * Initialize all AI services with proper dependencies
  */
-async initialize() {
+  async initialize() {
     if (this.initialized) return { success: true };
     
-    console.log("Initializing AI Orchestrator and services");
+    console.log("🚀 Initializing AI Orchestrator and services");
     
     try {
       // First ensure ClaudeService is initialized
@@ -28,24 +52,56 @@ async initialize() {
         await ClaudeService.testConnectionWithRetry();
       }
       
-      // Connect services together
+      // Connect services together with explicit context sharing
       IntentActionService.claudeService = ClaudeService;
       
-      // Extract auth context from current user if available
+      // IMPROVED: Extract auth context from current user if available
       const currentUser = auth.currentUser;
       if (currentUser) {
+        console.log("🔍 Current user found:", currentUser.uid);
+        
+        // Try to get familyId from localStorage for complete context
+        let familyId = null;
+        if (typeof window !== 'undefined') {
+          familyId = localStorage.getItem('selectedFamilyId') || localStorage.getItem('currentFamilyId');
+          if (familyId) {
+            console.log("🔍 Found familyId in localStorage:", familyId);
+          }
+        }
+        
+        // Set auth context with improved tracking
         this.setAuthContext({
           userId: currentUser.uid,
+          familyId: familyId,
           timestamp: Date.now()
         });
-        console.log("Authentication context initialized from current user");
+        
+        console.log("✅ Authentication context initialized from current user and localStorage");
+      } else {
+        console.log("⚠️ No current user found during initialization");
+        
+        // Try to recover from localStorage if available
+        if (typeof window !== 'undefined') {
+          const storedUserId = localStorage.getItem('userId');
+          const storedFamilyId = localStorage.getItem('selectedFamilyId') || localStorage.getItem('currentFamilyId');
+          
+          if (storedUserId || storedFamilyId) {
+            console.log("🔍 Found partial auth data in localStorage");
+            this.setAuthContext({
+              userId: storedUserId,
+              familyId: storedFamilyId,
+              timestamp: Date.now(),
+              isRecovered: true
+            });
+          }
+        }
       }
       
       // Track initialization time
       this.initTime = new Date();
       this.initialized = true;
       
-      console.log("AI Orchestrator initialized successfully");
+      console.log("✅ AI Orchestrator initialized successfully");
       
       // Run diagnostics
       const diagnostics = await IntentActionService.runDiagnosticTests();
@@ -59,10 +115,10 @@ async initialize() {
         .filter(([_, info]) => !info.implemented)
         .map(([name]) => name);
       
-      console.log(`AI Action handlers ready: ${implementedActions.length} implemented, ${unimplementedActions.length} pending`);
-      console.log("Implemented:", implementedActions.join(", "));
+      console.log(`✅ AI Action handlers ready: ${implementedActions.length} implemented, ${unimplementedActions.length} pending`);
+      console.log("✅ Implemented:", implementedActions.join(", "));
       if (unimplementedActions.length > 0) {
-        console.log("Not yet implemented:", unimplementedActions.join(", "));
+        console.log("⚠️ Not yet implemented:", unimplementedActions.join(", "));
       }
       
       return {
@@ -71,7 +127,7 @@ async initialize() {
         unimplementedActions
       };
     } catch (error) {
-      console.error("Error initializing AI Orchestrator:", error);
+      console.error("❌ Error initializing AI Orchestrator:", error);
       
       this.initialized = false;
       
@@ -82,25 +138,110 @@ async initialize() {
     }
   }
 
+/**
+ * Update auth context with family ID for all services
+ * @param {string} familyId - Family ID to set
+ */
+updateFamilyContext(familyId) {
+    if (!familyId) return;
+    
+    console.log("🔄 Updating family context for all services:", familyId);
+    
+    // Update internal auth context
+    if (this.authContext) {
+      this.authContext.familyId = familyId;
+      this.authContext.timestamp = Date.now();
+      console.log("✅ Updated internal auth context with familyId");
+    } else {
+      this.authContext = {
+        userId: null,
+        familyId: familyId,
+        timestamp: Date.now()
+      };
+      console.log("✅ Created new auth context with familyId");
+    }
+    
+    // Update ClaudeService auth context
+    if (ClaudeService) {
+      ClaudeService.authContext = {
+        ...ClaudeService.authContext,
+        familyId: familyId,
+        timestamp: Date.now()
+      };
+      console.log("✅ Updated ClaudeService auth context");
+    }
+    
+    // Update IntentActionService auth context
+    if (IntentActionService) {
+      IntentActionService.authContext = {
+        ...IntentActionService.authContext,
+        familyId: familyId,
+        timestamp: Date.now()
+      };
+      console.log("✅ Updated IntentActionService auth context");
+    }
+    
+    // Store in localStorage for recovery
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('currentFamilyId', familyId);
+        console.log("✅ Stored familyId in localStorage for recovery");
+      }
+    } catch (e) {
+      console.warn("❌ Could not store familyId in localStorage:", e);
+    }
+    
+    return this.authContext;
+  }
+
+
   /**
  * Ensure authentication context is properly set for all services
  * @param {Object} context - User context with authentication data
  */
-setAuthContext(context) {
-    if (!context || !context.userId) return;
+  setAuthContext(context) {
+    if (!context) return;
     
+    // More tolerant of partial context
     this.authContext = {
-      userId: context.userId,
-      familyId: context.familyId,
-      timestamp: Date.now()
+      userId: context.userId || this.authContext?.userId || null,
+      familyId: context.familyId || this.authContext?.familyId || null,
+      timestamp: Date.now(),
+      isRecovered: context.isRecovered || false
     };
     
-    // Update services that need auth context
+    // Log context update
+    console.log("🔐 Auth context set:", {
+      userId: this.authContext.userId ? this.authContext.userId.substring(0, 8) + '...' : null,
+      familyId: this.authContext.familyId,
+      isRecovered: this.authContext.isRecovered
+    });
+    
+    // Update all services that need auth context
     if (ClaudeService) {
       ClaudeService.authContext = this.authContext;
+      console.log("📋 Updated ClaudeService auth context");
     }
     
-    console.log("Auth context set successfully:", this.authContext);
+    if (IntentActionService) {
+      IntentActionService.authContext = this.authContext;
+      console.log("📋 Updated IntentActionService auth context");
+    }
+    
+    // Store in localStorage for recovery
+    try {
+      if (typeof window !== 'undefined' && this.authContext.userId) {
+        localStorage.setItem('userId', this.authContext.userId);
+        if (this.authContext.familyId) {
+          localStorage.setItem('currentFamilyId', this.authContext.familyId);
+        }
+        console.log("💾 Persisted auth context to localStorage");
+      }
+    } catch (e) {
+      console.warn("⚠️ Could not persist auth context:", e);
+    }
+    
+    return this.authContext;
   }
   
 /**

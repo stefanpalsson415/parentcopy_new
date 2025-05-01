@@ -43,16 +43,69 @@ class EnhancedChatService {
     this.feedbackLog = {};
     this.recentResponses = [];
     
+    // Initialize authContext for Firebase operations
+    this.authContext = {
+      userId: null,
+      familyId: null,
+      timestamp: Date.now()
+    };
+    
     // Add a reference to current user from auth
     if (auth.currentUser) {
       this.currentUser = auth.currentUser;
+      this.authContext.userId = auth.currentUser.uid;
+      console.log("👤 EnhancedChatService initialized with user:", auth.currentUser.uid);
+      
+      // Try to get familyId from localStorage
+      if (typeof window !== 'undefined') {
+        const storedFamilyId = localStorage.getItem('selectedFamilyId') || localStorage.getItem('currentFamilyId');
+        if (storedFamilyId) {
+          this.authContext.familyId = storedFamilyId;
+          console.log("👪 Initialized with familyId from localStorage:", storedFamilyId);
+        }
+      }
     }
     
     // Listen for auth state changes
     auth.onAuthStateChanged(user => {
       this.currentUser = user;
-      console.log("EnhancedChatService updated auth state:", user?.uid);
+      if (user) {
+        this.authContext.userId = user.uid;
+        this.authContext.timestamp = Date.now();
+      } else {
+        this.authContext.userId = null;
+      }
+      console.log("👤 EnhancedChatService updated auth state:", user?.uid);
     });
+  }
+  
+  /**
+   * Set authentication context for Firebase operations
+   * @param {object} authContext - Auth context with userId and familyId
+   */
+  setAuthContext(authContext) {
+    if (!authContext) return;
+    
+    console.log("🔐 Setting auth context in EnhancedChatService:", {
+      userId: authContext.userId,
+      familyId: authContext.familyId,
+      hasValues: !!authContext.userId || !!authContext.familyId
+    });
+    
+    this.authContext = {
+      ...this.authContext,
+      ...authContext,
+      lastUpdated: Date.now()
+    };
+    
+    // Save the userId for direct Firebase operations
+    if (authContext.userId) {
+      console.log("🔐 Updated userId in EnhancedChatService:", authContext.userId);
+    }
+    
+    if (authContext.familyId) {
+      console.log("🔐 Updated familyId in EnhancedChatService:", authContext.familyId);
+    }
   }
   
   async loadMessages(familyId, options = {}) {
@@ -1396,8 +1449,12 @@ if (familyContext.familyId) {
   
   console.log("Creating task for Kanban board:", taskData);
   
-  // Add to Firestore kanbanTasks collection
-  const docRef = await addDoc(collection(db, "kanbanTasks"), taskData);
+  try {
+    // Use direct db reference to ensure Firebase writing works
+    console.log("Adding task to Firestore kanbanTasks collection");
+    // Add to Firestore kanbanTasks collection
+    const docRef = await addDoc(collection(db, "kanbanTasks"), taskData);
+    console.log("✅ Task successfully added to Firestore with ID:", docRef.id);
   
   // Trigger update event for the UI
   if (typeof window !== 'undefined') {
@@ -1425,6 +1482,10 @@ if (familyContext.familyId) {
   } column on your task board.`;
   
   return response;
+  } catch (error) {
+    console.error("Error adding task to Firestore:", error);
+    return `I tried to add "${todoText}" to your tasks, but encountered an error. You can add it directly from the Tasks tab.`;
+  }
 } else {
       return "I'd like to add this to your todo list, but I need to know which family this belongs to. Please make sure you're logged in and try again.";
     }

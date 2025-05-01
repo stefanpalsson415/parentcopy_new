@@ -4,6 +4,8 @@ import { createSuccessResult, createErrorResult } from '../utils/ActionResultBui
 import { ActionTypes } from '../utils/ActionTypes';
 import ConversationContext from './ConversationContext';
 import ActionLearningSystem from './ActionLearningSystem';
+import { db, auth } from './firebase';
+import { collection, addDoc, getDoc, getDocs, query, where, orderBy, limit, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
 
 /**
@@ -39,6 +41,13 @@ class IntentActionService {
       [ActionTypes.QUERY_TASKS]: this.handleQueryTasks,
       [ActionTypes.QUERY_PROVIDERS]: this.handleQueryProviders
     };
+    
+    // Auth context to ensure Firebase operations work
+    this.authContext = {
+      userId: null,
+      familyId: null,
+      timestamp: Date.now()
+    };
       
     // In the constructor, replace this.intentMapping with:
 this.intentMapping = {
@@ -63,7 +72,26 @@ this.stats = {
   
   this.claudeService = null;
   this.setClaudeService(ClaudeService);
-
+  }
+  
+  /**
+   * Set authentication context 
+   * @param {object} authContext - Authentication context with userId and familyId
+   */
+  setAuthContext(authContext) {
+    if (!authContext) return;
+    
+    console.log("Setting auth context in IntentActionService:", {
+      userId: authContext.userId,
+      familyId: authContext.familyId,
+      hasValues: !!authContext.userId || !!authContext.familyId
+    });
+    
+    this.authContext = {
+      ...this.authContext,
+      ...authContext,
+      lastUpdated: Date.now()
+    };
   }
 
   /**
@@ -78,7 +106,39 @@ this.stats = {
 async processUserRequest(message, familyId, userId) {
     try {
       console.log("Processing user request:", message);
+      console.log("Auth context:", { familyId, userId });
       this.stats.totalRequests++;
+      
+      // Update authContext with supplied values
+      if (!this.authContext) {
+        this.authContext = { userId: null, familyId: null };
+      }
+      
+      // Ensure we have the latest auth context in case it was passed directly
+      if (userId) {
+        this.authContext.userId = userId;
+      }
+      
+      if (familyId) {
+        this.authContext.familyId = familyId;
+      }
+      
+      // Fallback to auth.currentUser if userId not provided
+      if (!userId && !this.authContext.userId && auth.currentUser) {
+        userId = auth.currentUser.uid;
+        this.authContext.userId = userId;
+        console.log("Using auth.currentUser.uid:", userId);
+      }
+      
+      // Try to get familyId from localStorage as last resort
+      if (!familyId && !this.authContext.familyId && typeof window !== 'undefined') {
+        const storedFamilyId = localStorage.getItem('selectedFamilyId');
+        if (storedFamilyId) {
+          familyId = storedFamilyId;
+          this.authContext.familyId = familyId;
+          console.log("Using familyId from localStorage:", familyId);
+        }
+      }
       
       // Basic validation
       if (!message) {
@@ -149,9 +209,15 @@ async processUserRequest(message, familyId, userId) {
     // Quick content analysis for common actions
     const lowerMessage = message.toLowerCase();
     
-    // Check for provider patterns
+    // Check for provider patterns - expanded to include more provider types
     if (lowerMessage.includes('add') && 
-        (lowerMessage.includes('doctor') || lowerMessage.includes('provider'))) {
+        (lowerMessage.includes('doctor') || 
+         lowerMessage.includes('provider') || 
+         lowerMessage.includes('coach') || 
+         lowerMessage.includes('teacher') || 
+         lowerMessage.includes('therapist') || 
+         lowerMessage.includes('babysitter') || 
+         lowerMessage.includes('tutor'))) {
       return this.handleAddProvider(message, familyId, userId);
     }
     
@@ -224,11 +290,36 @@ async processUserRequest(message, familyId, userId) {
       
       // Clean and extract the intent
       const rawIntent = response.trim().toLowerCase();
-      const intent = rawIntent.replace(/[^a-z_]/g, ''); // Remove any unexpected characters
+      console.log(`Raw intent from Claude: "${rawIntent}"`);
       
-      console.log(`Claude classified intent as: ${intent}`);
+      // First, check for exact matches with our known intents
+      if (this.actionHandlers[rawIntent]) {
+        console.log(`Exact match found for intent: ${rawIntent}`);
+        return rawIntent;
+      }
       
-      return this.actionHandlers[intent] ? intent : null;
+      // Handle "add_provider" -> ActionTypes.ADD_PROVIDER mapping
+      if (rawIntent === 'add_provider') {
+        console.log(`Converting add_provider to ActionTypes.ADD_PROVIDER`);
+        return ActionTypes.ADD_PROVIDER;
+      }
+      
+      // For other add_xyz patterns, try to match with ActionTypes
+      if (rawIntent.startsWith('add_')) {
+        // Convert add_event to ADD_EVENT format
+        const convertedIntent = rawIntent.toUpperCase().replace(/_/g, '_');
+        console.log(`Converting ${rawIntent} to ${convertedIntent}`);
+        
+        if (this.actionHandlers[convertedIntent]) {
+          return convertedIntent;
+        }
+      }
+      
+      // Remove any unexpected characters as a last resort
+      const cleanedIntent = rawIntent.replace(/[^a-z_]/g, '');
+      console.log(`Cleaned intent: ${cleanedIntent}`);
+      
+      return this.actionHandlers[cleanedIntent] ? cleanedIntent : null;
     } catch (error) {
       console.error("Error identifying intent with Claude:", error);
       return null;
@@ -262,14 +353,33 @@ async processUserRequest(message, familyId, userId) {
    */
   // Find the handleAddProvider method in IntentActionService.js and replace it with this
 
-// NEW CODE
-async handleAddProvider(message, familyId, userId) {
+  async handleAddProvider(message, familyId, userId) {
     try {
-      console.log("Handling add provider request:", message);
+      console.log("🔄 Handling add provider request:", message);
+      console.log("🔍 Context:", { familyId, userId });
       
+      // CRITICAL FIX: Better familyId validation with fallback
       if (!familyId) {
-        console.error("No family ID provided to handleAddProvider");
-        return createErrorResult("I need to know which family this provider belongs to.");
+        console.error("❌ No family ID provided to handleAddProvider - attempting to retrieve from context");
+        
+        // Try to get familyId from auth context
+        if (this.authContext && this.authContext.familyId) {
+          familyId = this.authContext.familyId;
+          console.log("✅ Retrieved familyId from authContext:", familyId);
+        } else if (typeof window !== 'undefined') {
+          // Try to get from localStorage as last resort
+          const storedFamilyId = localStorage.getItem('selectedFamilyId');
+          if (storedFamilyId) {
+            familyId = storedFamilyId;
+            console.log("✅ Retrieved familyId from localStorage:", familyId);
+          }
+        }
+        
+        // If still no familyId, return error
+        if (!familyId) {
+          console.error("❌ Could not retrieve familyId from any source");
+          return createErrorResult("I need to know which family this provider belongs to. Please ensure you're logged in.");
+        }
       }
       
       // Set context flag to avoid calendar detection interference
@@ -277,21 +387,62 @@ async handleAddProvider(message, familyId, userId) {
         this.claudeService.disableCalendarDetection = true;
       }
       
-      // Extract provider details using AI
-      const providerDetails = await ClaudeService.extractEntityWithAI(message, 'provider');
+      // Extract provider details using AI with enhanced coaching prompt
+      const coachingKeywords = ['coach', 'trainer', 'instructor', 'teacher'];
+      const isCoachingProvider = coachingKeywords.some(keyword => message.toLowerCase().includes(keyword));
       
-      if (!providerDetails || !providerDetails.name) {
-        return createErrorResult("I couldn't identify the provider details. Could you please be more specific?");
+      let providerDetails;
+      if (isCoachingProvider) {
+        console.log("🏃‍♂️ Detected coaching provider request, using specialized extraction");
+        
+        // Use specialized extraction for coaches
+        providerDetails = await ClaudeService.extractEntityWithAI(message, 'provider', {
+          additionalSystemPrompt: `Pay special attention to extracting details about coaches, trainers, and instructors.
+          If you see indicators of sports, activities, or specialized training mentioned, classify the provider 
+          as the appropriate type of coach (e.g., 'swimming coach', 'running coach', 'music teacher', etc.).
+          Be sure to correctly extract the full name of the coach, even when it's a formal name like "Thomas Ledbetter".
+          Also extract which child this coach is for, if mentioned.`
+        });
+      } else {
+        providerDetails = await ClaudeService.extractEntityWithAI(message, 'provider');
       }
       
-      // CRITICAL FIX: DIRECT FIREBASE OPERATION
-      try {
-        // Using the successful pattern from the test function
-        const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
-        // Ensure absolute path to avoid module resolution issues
-        const { db } = await import('../services/firebase');
+      // Enhanced fallback extraction if AI extraction fails
+      if (!providerDetails || !providerDetails.name) {
+        console.log("AI extraction failed, attempting direct extraction");
         
-        // Prepare provider data
+        // Try pattern matching for common provider formats
+        const namePattern = /add\s+(?:a\s+)?(?:new\s+)?(?:\w+\s+)?(?:coach|doctor|provider|teacher|instructor|trainer|tutor|babysitter)(?:\s+for\s+\w+)?,?\s+(?:(?:named|called|with the name)\s+)?([\w\s\.]+)(?:$|,|\.|;)/i;
+        const match = message.match(namePattern);
+        
+        if (match && match[1]) {
+          const name = match[1].trim();
+          console.log(`Extracted provider name directly: ${name}`);
+          
+          // Extract type
+          let type = 'provider';
+          if (message.toLowerCase().includes('coach')) type = 'coach';
+          else if (message.toLowerCase().includes('doctor')) type = 'medical';
+          else if (message.toLowerCase().includes('teacher')) type = 'education';
+          else if (message.toLowerCase().includes('babysitter')) type = 'childcare';
+          
+          // Create basic provider details
+          providerDetails = {
+            name: name,
+            type: type,
+            notes: "Added via Allie Chat with direct extraction"
+          };
+        } else {
+          return createErrorResult("I couldn't identify the provider details. Could you please provide the provider's name and type?");
+        }
+      }
+      
+      // CRITICAL FIX: DIRECT FIREBASE OPERATION WITH BETTER ERROR HANDLING
+      try {
+        // Using the already imported Firebase components
+        console.log("🔥 Using Firebase functions");
+        
+        // Prepare provider data - make sure familyId is set
         const provider = {
           name: providerDetails.name || "Unknown Provider",
           type: providerDetails.type || "medical",
@@ -300,18 +451,24 @@ async handleAddProvider(message, familyId, userId) {
           email: providerDetails.email || "",
           address: providerDetails.address || "",
           notes: providerDetails.notes || "Added via Allie chat",
-          familyId: familyId,
+          familyId: familyId, // Explicitly set familyId from validated source
           createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
+          updatedAt: serverTimestamp(),
+          createdBy: userId || 'system'
         };
         
-        // Add directly to Firestore
-        console.log("Adding provider directly to Firestore:", provider);
+        // Add directly to Firestore with better logging
+        console.log("🔥 Adding provider directly to Firestore:", { 
+          providerName: provider.name,
+          familyId: provider.familyId
+        });
+        
         const docRef = await addDoc(collection(db, "providers"), provider);
-        console.log("Provider added successfully with ID:", docRef.id);
+        console.log("✅ Provider added successfully with ID:", docRef.id);
         
         // Trigger UI updates
         if (typeof window !== 'undefined') {
+          console.log("📢 Dispatching UI update events");
           window.dispatchEvent(new CustomEvent('provider-added', { 
             detail: { providerId: docRef.id } 
           }));
@@ -323,14 +480,20 @@ async handleAddProvider(message, familyId, userId) {
           { providerId: docRef.id, provider }
         );
       } catch (firebaseError) {
-        console.error("Firebase operation failed:", firebaseError);
+        console.error("❌ Firebase operation failed:", firebaseError);
+        console.error("Error details:", {
+          message: firebaseError.message,
+          code: firebaseError.code,
+          stack: firebaseError.stack
+        });
+        
         return createErrorResult(
           "I had trouble saving this provider. Let's try again with more specific information.",
           firebaseError.message
         );
       }
     } catch (error) {
-      console.error("Error handling add provider:", error);
+      console.error("❌ Error handling add provider:", error);
       return createErrorResult("I encountered an error while adding this provider.", error.message);
     } finally {
       // Reset context flag
@@ -452,8 +615,8 @@ async handleAddAppointment(message, familyId, userId) {
       
       // CRITICAL FIX: DIRECT FIREBASE OPERATION
       try {
-        const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
-        const { db } = await import('./firebase');
+        // Using the already imported Firebase components
+        console.log("🔥 Using Firebase functions for appointment");
         
         // Prepare appointment data
         const eventDate = appointmentDetails.dateTime ? 

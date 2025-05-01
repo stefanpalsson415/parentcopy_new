@@ -1,58 +1,92 @@
 // src/services/ClaudeService.js
 import CalendarService from './CalendarService';
-import { auth } from './firebase';
+import { auth, db } from './firebase';
+import { collection, addDoc, getDoc, getDocs, query, where, orderBy, limit, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
 class ClaudeService {
-constructor() {
-  // Determine environment type
-  const hostname = window.location.hostname;
-  const isProduction = hostname === 'checkallie.com' || hostname === 'www.checkallie.com';
-  const isLocalhost = hostname === 'localhost' || hostname.includes('127.0.0.1');
-
-  // Set the appropriate API URL based on environment
-  if (isLocalhost) {
-    // For local development, first try the local proxy server
-    this.proxyUrl = 'http://localhost:3001/api/claude';
-    console.log("Running in local development mode - using local proxy server");
+  constructor() {
+    // Determine environment type
+    const hostname = window.location.hostname;
+    const isProduction = hostname === 'checkallie.com' || hostname === 'www.checkallie.com';
+    const isLocalhost = hostname === 'localhost' || hostname.includes('127.0.0.1');
+  
+    // Set the appropriate API URL based on environment
+    if (isLocalhost) {
+      // For local development, first try the local proxy server
+      this.proxyUrl = 'http://localhost:3001/api/claude';
+      console.log("Running in local development mode - using local proxy server");
+      
+      // Add a fallback option for when the local server isn't running
+      this.fallbackProxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude';
+    } else {
+      // For production domain, use the direct Cloud Functions URL
+      this.proxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude';
+      console.log("Running in production - using Cloud Functions URL:", this.proxyUrl);
+      
+      // Production fallback is the same URL but with a different path format
+      this.fallbackProxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude/api/claude';
+    }
     
-    // Add a fallback option for when the local server isn't running
-    this.fallbackProxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude';
-  } else {
-    // For production domain, use the direct Cloud Functions URL
-    this.proxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude';
-    console.log("Running in production - using Cloud Functions URL:", this.proxyUrl);
+    // Model settings
+    this.model = 'claude-3-5-sonnet-20240620';  // Update to the latest Claude model
+  
+    // Basic settings
+    this.mockMode = false;
+    this.debugMode = true; // Always enable logging for debugging
+    this.disableAICalls = false;
     
-    // Production fallback is the same URL but with a different path format
-    this.fallbackProxyUrl = 'https://europe-west1-parentload-ba995.cloudfunctions.net/claude/api/claude';
+    // CRITICAL FIX: Initialize important flags and ensure they're never undefined
+    // Always enable calendar detection by default
+    this.disableCalendarDetection = false;
+    
+    // Track when we set this flag with timestamps for debugging
+    this.calendarDetectionState = {
+      currentValue: false, // false means enabled
+      lastUpdated: Date.now(),
+      history: [{value: false, timestamp: Date.now(), reason: "initial"}]
+    };
+    
+    console.log("🔴 Calendar detection explicitly enabled in constructor:", !this.disableCalendarDetection);
+    
+    this.currentProcessingContext = {
+      isProcessingProvider: false,
+      isProcessingTask: false,
+      lastContext: "none",
+      timestamp: Date.now()
+    };
+  
+    // Add auth context initialization - critical for Firebase operations
+    this.authContext = {
+      userId: null,
+      familyId: null,
+      timestamp: Date.now()
+    };
+    
+    // Check if we can get auth immediately
+    if (auth && auth.currentUser) {
+      this.authContext.userId = auth.currentUser.uid;
+      console.log("🔑 Found authenticated user in constructor:", auth.currentUser.uid);
+      
+      // Try to get familyId from localStorage
+      if (typeof window !== 'undefined') {
+        const storedFamilyId = localStorage.getItem('selectedFamilyId') || localStorage.getItem('currentFamilyId');
+        if (storedFamilyId) {
+          this.authContext.familyId = storedFamilyId;
+          console.log("🔑 Found familyId in localStorage:", storedFamilyId);
+        }
+      }
+    }
+  
+    this.retryCount = 3;
+    this.functionRegion = 'europe-west1'; // Match this to your deployment region
+    
+    // Add connection test with retry capability - delay slightly to ensure browser is ready
+    setTimeout(() => {
+      this.testConnectionWithRetry();
+    }, 1500);
+    
+    console.log(`Claude service initialized to use proxy server at ${this.proxyUrl}`);
   }
-  
-  // Model settings
-  this.model = 'claude-3-5-sonnet-20240620';  // Update to the latest Claude model
-
-  // Basic settings
-  this.mockMode = false;
-  this.debugMode = true; // Always enable logging for debugging
-  this.disableAICalls = false;
-  
-  // CRITICAL FIX: Explicitly set this to false and log it
-  this.disableCalendarDetection = false;
-  console.log("🔴 Calendar detection explicitly enabled in constructor:", !this.disableCalendarDetection);
-  
-  this.currentProcessingContext = {
-    isProcessingProvider: false,
-    isProcessingTask: false
-  };
-
-  this.retryCount = 3;
-  this.functionRegion = 'europe-west1'; // Match this to your deployment region
-  
-  // Add connection test with retry capability - delay slightly to ensure browser is ready
-  setTimeout(() => {
-    this.testConnectionWithRetry();
-  }, 1500);
-  
-  console.log(`Claude service initialized to use proxy server at ${this.proxyUrl}`);
-}
 
 async testConnectionWithRetry(attempts = 3) {
   for (let i = 0; i < attempts; i++) {
@@ -210,6 +244,36 @@ async testProxyConnection() {
       } catch (e) {
         // Ignore DOM errors
       }
+    }
+  }
+  
+  /**
+   * Set authentication context - critically important for Firebase operations
+   * @param {object} authContext - Auth context with userId and familyId 
+   */
+  setAuthContext(authContext) {
+    if (!authContext) return;
+    
+    console.log("🔐 Setting auth context in ClaudeService:", {
+      userId: authContext.userId,
+      familyId: authContext.familyId,
+      hasValues: !!authContext.userId || !!authContext.familyId
+    });
+    
+    // Update auth context with the new values
+    this.authContext = {
+      ...this.authContext,
+      ...authContext,
+      lastUpdated: Date.now()
+    };
+    
+    // Make user auth context available to Firestore operations
+    if (authContext.userId) {
+      console.log("🔐 Updated userId in ClaudeService:", authContext.userId);
+    }
+    
+    if (authContext.familyId) {
+      console.log("🔐 Updated familyId in ClaudeService:", authContext.familyId);
     }
   }
   
@@ -576,13 +640,44 @@ const detailCollectionResponse = await this.extractAndCollectEventDetails(
         );
 
         console.log("Making request to Claude API:", this.proxyUrl);
+        
+        // Gather auth information from context and this.authContext
+        const authUserId = this.authContext?.userId || auth?.currentUser?.uid;
+        const authFamilyId = this.authContext?.familyId || 
+                             (typeof window !== 'undefined' ? localStorage.getItem('selectedFamilyId') : null);
+        
+        console.log("🔑 Auth context for API request:", {
+          authUserId: authUserId ? "present" : "missing",
+          authFamilyId: authFamilyId ? "present" : "missing" 
+        });
+        
+        // Include auth headers if available
+        const headers = {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        };
+        
+        if (authUserId) {
+          headers['X-User-Id'] = authUserId;
+        }
+        
+        if (authFamilyId) {
+          headers['X-Family-Id'] = authFamilyId;
+        }
+        
+        // Include auth context in payload as well for redundancy
+        const enhancedPayload = {
+          ...payload,
+          authContext: {
+            userId: authUserId,
+            familyId: authFamilyId
+          }
+        };
+        
         const responsePromise = fetch(this.proxyUrl, {
           method: 'POST',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload),
+          headers,
+          body: JSON.stringify(enhancedPayload),
           signal: controller.signal
         });
 
@@ -1084,8 +1179,14 @@ async extractEntityWithAI(message, entityType, options = {}) {
       Return a JSON object with these extracted details. If information is missing, leave the field empty.`
     };
     
-    const systemPrompt = templates[entityType] || 
+    // Allow customizing the system prompt with additional instructions
+    let systemPrompt = templates[entityType] || 
       `Extract all information related to ${entityType} from the user's message and return as a JSON object.`;
+      
+    // Add any additional system prompt from options
+    if (options.additionalSystemPrompt) {
+      systemPrompt = `${systemPrompt}\n\n${options.additionalSystemPrompt}`;
+    }
     
     const response = await this.generateResponse(
       [{ role: 'user', content: `Extract ${entityType} details from: "${message}"` }],
