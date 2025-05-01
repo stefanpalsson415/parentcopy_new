@@ -73,13 +73,15 @@ this.stats = {
  * @param {string} userId - User ID
  * @returns {Promise<object>} Result of the action
  */
+// Find the processUserRequest method in IntentActionService.js and replace it with this
+
 async processUserRequest(message, familyId, userId) {
     try {
       console.log("Processing user request:", message);
       this.stats.totalRequests++;
       
       // Basic validation
-      if (!message || !familyId) {
+      if (!message) {
         return createErrorResult("I need more information to process your request.");
       }
       
@@ -88,6 +90,16 @@ async processUserRequest(message, familyId, userId) {
       console.log("Identified intent:", intent);
       
       if (!intent) {
+        // No intent identified - try direct Firebase operation based on content analysis
+        try {
+          const result = await this.tryDirectAction(message, familyId, userId);
+          if (result && result.success) {
+            return result;
+          }
+        } catch (directError) {
+          console.warn("Direct action attempt failed:", directError);
+        }
+        
         return createErrorResult("I'm not sure what you'd like me to do. Could you please be more specific?");
       }
       
@@ -110,6 +122,8 @@ async processUserRequest(message, familyId, userId) {
       } else {
         this.stats.failedActions++;
       }
+      
+      // Record for learning
       await ActionLearningSystem.recordAction(
         intent,   
         message,   
@@ -128,6 +142,39 @@ async processUserRequest(message, familyId, userId) {
       
       return createErrorResult("I encountered an error while processing your request. Please try again or provide more details.", error.message);
     }
+  }
+  
+  // Add this new method to try direct action as a fallback
+  async tryDirectAction(message, familyId, userId) {
+    // Quick content analysis for common actions
+    const lowerMessage = message.toLowerCase();
+    
+    // Check for provider patterns
+    if (lowerMessage.includes('add') && 
+        (lowerMessage.includes('doctor') || lowerMessage.includes('provider'))) {
+      return this.handleAddProvider(message, familyId, userId);
+    }
+    
+    // Check for appointment patterns
+    if ((lowerMessage.includes('add') || lowerMessage.includes('schedule')) && 
+        (lowerMessage.includes('appointment') || lowerMessage.includes('checkup'))) {
+      return this.handleAddAppointment(message, familyId, userId);
+    }
+    
+    // Check for growth tracking patterns
+    if ((lowerMessage.includes('record') || lowerMessage.includes('track')) && 
+        (lowerMessage.includes('height') || lowerMessage.includes('weight'))) {
+      return this.handleTrackGrowth(message, familyId, userId);
+    }
+    
+    // Check for task patterns
+    if ((lowerMessage.includes('add') || lowerMessage.includes('create')) && 
+        (lowerMessage.includes('task') || lowerMessage.includes('todo'))) {
+      return this.handleAddTask(message, familyId, userId);
+    }
+    
+    // No direct matches found
+    return null;
   }
   
   /**
@@ -207,78 +254,80 @@ async identifyIntent(message) {
    * @param {string} userId - User ID
    * @returns {Promise<object>} Result of adding provider
    */
-  async handleAddProvider(message, familyId, userId) {
+  // Find the handleAddProvider method in IntentActionService.js and replace it with this
+
+async handleAddProvider(message, familyId, userId) {
     try {
       console.log("Handling add provider request:", message);
       
-      // IMPORTANT: Set context flag to avoid calendar detection interference
+      if (!familyId) {
+        console.error("No family ID provided to handleAddProvider");
+        return createErrorResult("I need to know which family this provider belongs to.");
+      }
+      
+      // Set context flag to avoid calendar detection interference
       if (this.claudeService) {
-        console.log("🔴 Explicitly disabling calendar detection for provider processing");
-        this.claudeService.currentProcessingContext = {
-          isProcessingProvider: true,
-          isProcessingTask: false
-        };
-        // Explicitly disable calendar detection during provider processing
         this.claudeService.disableCalendarDetection = true;
       }
       
-      // Import services dynamically to avoid circular dependencies
-      const { default: AllieAIService } = await import('./AllieAIService');
+      // Extract provider details using AI
+      const providerDetails = await ClaudeService.extractEntityWithAI(message, 'provider');
       
-      // Process the provider
-      console.log("⭐ Calling processProviderFromChat with message:", message.substring(0, 100));
-      const result = await AllieAIService.processProviderFromChat(message, familyId);
-      console.log("Provider processing result:", result);
-      
-      // Reset context flags
-      if (this.claudeService) {
-        console.log("🟢 Re-enabling calendar detection after provider processing");
-        this.claudeService.currentProcessingContext.isProcessingProvider = false;
-        this.claudeService.disableCalendarDetection = false;
+      if (!providerDetails || !providerDetails.name) {
+        return createErrorResult("I couldn't identify the provider details. Could you please be more specific?");
       }
       
-      if (result && result.success) {
-        // Force UI updates in case events aren't working properly
+      // CRITICAL FIX: DIRECT FIREBASE OPERATION
+      try {
+        const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
+        const { db } = await import('./firebase');
+        
+        // Prepare provider data
+        const provider = {
+          name: providerDetails.name || "Unknown Provider",
+          type: providerDetails.type || "medical",
+          specialty: providerDetails.specialty || "",
+          phone: providerDetails.phone || "",
+          email: providerDetails.email || "",
+          address: providerDetails.address || "",
+          notes: providerDetails.notes || "Added via Allie chat",
+          familyId: familyId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        };
+        
+        // Add directly to Firestore
+        console.log("Adding provider directly to Firestore:", provider);
+        const docRef = await addDoc(collection(db, "providers"), provider);
+        console.log("Provider added successfully with ID:", docRef.id);
+        
+        // Trigger UI updates
         if (typeof window !== 'undefined') {
-          console.log("🔔 Dispatching UI refresh events");
-          window.dispatchEvent(new CustomEvent('provider-added', {
-            detail: {
-              providerId: result.providerId,
-              providerName: result.providerDetails.name,
-              providerType: result.providerDetails.type,
-              isNew: true
-            }
+          window.dispatchEvent(new CustomEvent('provider-added', { 
+            detail: { providerId: docRef.id } 
           }));
-          setTimeout(() => window.dispatchEvent(new CustomEvent('directory-refresh-needed')), 500);
+          window.dispatchEvent(new CustomEvent('directory-refresh-needed'));
         }
         
         return createSuccessResult(
-          `I've added ${result.providerDetails.name} to your provider directory. You can find them in the Family Provider Directory.`,
-          result.providerDetails
+          `I've added ${provider.name} as a ${provider.type} provider to your directory.`,
+          { providerId: docRef.id, provider }
+        );
+      } catch (firebaseError) {
+        console.error("Firebase operation failed:", firebaseError);
+        return createErrorResult(
+          "I had trouble saving this provider. Let's try again with more specific information.",
+          firebaseError.message
         );
       }
-      
-      return createErrorResult(
-        `I couldn't add this provider. ${result.error || "Please try again with more details about the provider."}`,
-        result.error
-      );
     } catch (error) {
-      console.error("❌ Error handling add provider:", error);
-      console.error("Error details:", {
-        message: error.message,
-        stack: error.stack
-      });
-      
-      // Make sure to reset the flag even if there's an error
+      console.error("Error handling add provider:", error);
+      return createErrorResult("I encountered an error while adding this provider.", error.message);
+    } finally {
+      // Reset context flag
       if (this.claudeService) {
-        console.log("🟢 Re-enabling calendar detection after provider processing error");
         this.claudeService.disableCalendarDetection = false;
       }
-      
-      return createErrorResult(
-        "I encountered an error while adding this provider. Please try being more specific about the provider's name and type.",
-        error.message
-      );
     }
   }
 
@@ -357,85 +406,118 @@ async debugClassifyIntent(message) {
    * @param {string} userId - User ID
    * @returns {Promise<object>} Result of adding appointment
    */
-  async handleAddAppointment(message, familyId, userId) {
+  // Find the handleAddAppointment method and replace it with this
+
+async handleAddAppointment(message, familyId, userId) {
     try {
       console.log("Handling add appointment request:", message);
       
-      // Import necessary services
-      const { default: AllieAIService } = await import('./AllieAIService');
-      const { default: ChildTrackingService } = await import('./ChildTrackingService');
-      
-      // First try to extract child info
-      const familyContext = await this.getFamilyContext(familyId);
-      const children = familyContext.children || [];
-      let childId = null;
-      let childName = null;
-      
-      // Check if a specific child is mentioned
-      for (const child of children) {
-        if (message.toLowerCase().includes(child.name.toLowerCase())) {
-          childId = child.id;
-          childName = child.name;
-          break;
-        }
-      }
-      
-      // If no child mentioned but only one child in family, use that one
-      if (!childId && children.length === 1) {
-        childId = children[0].id;
-        childName = children[0].name;
+      if (!familyId) {
+        return createErrorResult("I need to know which family this appointment is for.");
       }
       
       // Extract appointment details
-      const appointmentDetails = await AllieAIService.extractAppointmentDetails(message);
+      const appointmentDetails = await ClaudeService.extractEntityWithAI(message, 'event');
       
-      // Add child info to appointment
-      if (childId) {
-        appointmentDetails.childId = childId;
-        appointmentDetails.childName = childName;
+      if (!appointmentDetails || !appointmentDetails.title) {
+        return createErrorResult("I couldn't identify the appointment details. Could you provide more information?");
       }
       
-      appointmentDetails.userId = userId;
-      appointmentDetails.familyId = familyId;
+      // Find mentioned child if any
+      let childId = appointmentDetails.childId;
+      let childName = appointmentDetails.childName;
       
-      // Save to both ChildTrackingService and Calendar
-      const result = await ChildTrackingService.addMedicalAppointment(
-        familyId,
-        childId,
-        appointmentDetails,
-        true // Add to calendar too
-      );
+      if (!childId && childName) {
+        // Try to find child by name in context
+        const familyContext = await this.getFamilyContext(familyId);
+        const children = familyContext.children || [];
+        const matchedChild = children.find(c => 
+          c.name.toLowerCase() === childName.toLowerCase()
+        );
+        
+        if (matchedChild) {
+          childId = matchedChild.id;
+          childName = matchedChild.name;
+        }
+      }
       
-      if (result.success) {
-        // Force UI refresh
+      // CRITICAL FIX: DIRECT FIREBASE OPERATION
+      try {
+        const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
+        const { db } = await import('./firebase');
+        
+        // Prepare appointment data
+        const eventDate = appointmentDetails.dateTime ? 
+          new Date(appointmentDetails.dateTime) : new Date();
+        
+        const appointment = {
+          title: appointmentDetails.title || "Medical Appointment",
+          type: appointmentDetails.eventType || "medical",
+          appointmentType: appointmentDetails.appointmentType || "general",
+          date: eventDate,
+          dateTime: eventDate,
+          location: appointmentDetails.location || "",
+          doctor: appointmentDetails.doctor || "",
+          notes: appointmentDetails.description || "",
+          completed: false,
+          childId: childId,
+          childName: childName,
+          familyId: familyId,
+          userId: userId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        };
+        
+        // Add to both calendar_events AND medicalAppointments collection
+        console.log("Adding appointment directly to Firestore");
+        
+        // Save to medicalAppointments collection
+        const appointmentRef = await addDoc(collection(db, "medicalAppointments"), appointment);
+        
+        // Also save to calendar_events collection for calendar integration
+        const calendarEvent = {
+          title: appointment.title,
+          description: appointment.notes,
+          location: appointment.location,
+          start: { dateTime: eventDate.toISOString() },
+          end: { dateTime: new Date(eventDate.getTime() + 3600000).toISOString() }, // 1 hour later
+          eventType: "appointment",
+          category: "medical",
+          familyId: familyId,
+          userId: userId,
+          childId: childId,
+          childName: childName,
+          createdAt: serverTimestamp()
+        };
+        
+        const calendarRef = await addDoc(collection(db, "calendar_events"), calendarEvent);
+        
+        // Trigger UI updates
         if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('child-data-updated', { 
+            detail: { childId, dataType: 'appointment' } 
+          }));
           window.dispatchEvent(new CustomEvent('force-calendar-refresh'));
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('force-data-refresh'));
-          }, 1000);
         }
         
         return createSuccessResult(
-          `I've added a ${appointmentDetails.appointmentType || 'medical'} appointment ${childName ? `for ${childName} ` : ''}on ${new Date(appointmentDetails.dateTime).toLocaleDateString()} at ${new Date(appointmentDetails.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}. You can find it in your calendar and in the Children Tracking tab.`,
-          {
-            appointmentId: result.appointmentId,
-            calendarEventId: result.calendarEventId,
-            appointment: appointmentDetails
+          `I've scheduled a ${appointment.appointmentType} appointment${childName ? ` for ${childName}` : ''} on ${eventDate.toLocaleDateString()} at ${eventDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.`,
+          { 
+            appointmentId: appointmentRef.id, 
+            calendarEventId: calendarRef.id, 
+            appointment 
           }
         );
+      } catch (firebaseError) {
+        console.error("Firebase operation failed:", firebaseError);
+        return createErrorResult(
+          "I had trouble saving this appointment. Let's try again with more details.",
+          firebaseError.message
+        );
       }
-      
-      return createErrorResult(
-        `I couldn't add this appointment. ${result.error || "Please try again with more details."}`,
-        result.error
-      );
     } catch (error) {
       console.error("Error handling add appointment:", error);
-      
-      return createErrorResult(
-        "I encountered an error while adding this appointment. Please try again with a clearer date, time, and which child this is for.",
-        error.message
-      );
+      return createErrorResult("I encountered an error while adding this appointment.", error.message);
     }
   }
 
@@ -502,106 +584,91 @@ async debugClassifyIntent(message) {
    * @param {string} userId - User ID
    * @returns {Promise<object>} Result of tracking growth
    */
-  async handleTrackGrowth(message, familyId, userId) {
+  // Add this new method to IntentActionService.js
+
+async handleTrackGrowth(message, familyId, userId) {
     try {
       console.log("Handling track growth request:", message);
       
-      // Import necessary services
-      const { default: ClaudeService } = await import('./ClaudeService');
-      const { default: ChildTrackingService } = await import('./ChildTrackingService');
-      
-      // Get family context to identify children
-      const familyContext = await this.getFamilyContext(familyId);
-      const children = familyContext.children || [];
-      
-      // Extract measurement details using Claude
-      const systemPrompt = `You are an AI assistant that extracts child growth measurement details.
-      Extract the following information from the user's message:
-      - childName: The name of the child (if mentioned)
-      - height: Height measurement (with units)
-      - weight: Weight measurement (with units)
-      - date: When the measurement was taken (default to today)
-      - shoeSize: Shoe size (if mentioned)
-      - clothingSize: Clothing size (if mentioned)
-      
-      Return ONLY a JSON object without any explanation.`;
-      
-      const response = await ClaudeService.generateResponse(
-        [{ role: 'user', content: `Extract growth measurement details from: "${message}"` }],
-        { system: systemPrompt },
-        { temperature: 0.1 }
-      );
-      
-      // Parse the growth data from Claude's response
-      let growthData;
-      try {
-        const jsonMatch = response.match(/({[\s\S]*})/);
-        if (jsonMatch) {
-          growthData = JSON.parse(jsonMatch[0]);
-        } else {
-          throw new Error("Could not extract growth data from response");
-        }
-      } catch (parseError) {
-        console.error("Error parsing growth data:", parseError);
-        return createErrorResult(
-          "I couldn't understand the growth measurements. Please specify height, weight, or other measurements more clearly.",
-          parseError.message
-        );
+      if (!familyId) {
+        return createErrorResult("I need to know which family this growth data is for.");
       }
       
-      // Determine which child this is for
-      let childId = null;
-      let childName = growthData.childName || null;
+      // Extract growth measurement details using AI
+      const growthDetails = await ClaudeService.extractEntityWithAI(message, 'growth');
       
-      // If child name was extracted, find matching child
+      if (!growthDetails) {
+        return createErrorResult("I couldn't identify the growth measurement details. Could you provide more information?");
+      }
+      
+      // Find mentioned child if any
+      let childId = null;
+      let childName = growthDetails.childName || null;
+      
       if (childName) {
-        const matchedChild = children.find(child => 
-          child.name.toLowerCase() === childName.toLowerCase()
+        // Try to find child by name in context
+        const familyContext = await this.getFamilyContext(familyId);
+        const children = familyContext.children || [];
+        const matchedChild = children.find(c => 
+          c.name.toLowerCase() === childName.toLowerCase()
         );
         
         if (matchedChild) {
           childId = matchedChild.id;
-          childName = matchedChild.name; // Use correct capitalization
+          childName = matchedChild.name;
         }
       }
       
-      // If no child matched but there's only one child, use that one
-      if (!childId && children.length === 1) {
-        childId = children[0].id;
-        childName = children[0].name;
-      }
-      
-      // If we still don't have a child ID, return error
       if (!childId) {
-        return createErrorResult(
-          "I couldn't determine which child these measurements are for. Please specify the child's name.",
-          "Missing child reference"
-        );
+        return createErrorResult("I couldn't determine which child this measurement is for. Please specify the child's name.");
       }
       
-      // Prepare growth entry
-      const growthEntry = {
-        date: growthData.date || new Date().toISOString().split('T')[0],
-        height: growthData.height || null,
-        weight: growthData.weight || null,
-        shoeSize: growthData.shoeSize || null,
-        clothingSize: growthData.clothingSize || null,
-        notes: `Added via Allie chat: "${message.substring(0, 100)}"`,
-        createdAt: new Date().toISOString()
-      };
-      
-      // Save to child's record
-      const result = await ChildTrackingService.addGrowthData(
-        familyId,
-        childId,
-        growthEntry
-      );
-      
-      if (result.success) {
-        // Force UI refresh
+      // DIRECT FIREBASE OPERATION
+      try {
+        const { collection, addDoc, doc, getDoc, updateDoc, serverTimestamp, arrayUnion } = await import('firebase/firestore');
+        const { db } = await import('./firebase');
+        
+        // Prepare growth data
+        const growthEntry = {
+          date: growthDetails.date || new Date().toISOString().split('T')[0],
+          height: growthDetails.height || null,
+          weight: growthDetails.weight || null,
+          shoeSize: growthDetails.shoeSize || null,
+          clothingSize: growthDetails.clothingSize || null,
+          notes: `Added via Allie chat: "${message.substring(0, 100)}"`,
+          childId: childId,
+          childName: childName,
+          createdAt: new Date().toISOString()
+        };
+        
+        // First try to update existing child document
+        const childDocRef = doc(db, "familyMembers", childId);
+        const childDoc = await getDoc(childDocRef);
+        
+        if (childDoc.exists()) {
+          // Get current growth data or initialize empty array
+          const childData = childDoc.data();
+          
+          // Update with growth data
+          await updateDoc(childDocRef, {
+            growthData: arrayUnion(growthEntry),
+            updatedAt: serverTimestamp()
+          });
+          
+          console.log(`Growth data added for child: ${childId}`);
+        } else {
+          // If child document doesn't exist, create a standalone growth record
+          await addDoc(collection(db, "growthMeasurements"), {
+            ...growthEntry,
+            familyId: familyId,
+            createdAt: serverTimestamp()
+          });
+        }
+        
+        // Trigger UI updates
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('child-data-updated', {
-            detail: { childId, dataType: 'growth' }
+          window.dispatchEvent(new CustomEvent('child-data-updated', { 
+            detail: { childId, dataType: 'growth' } 
           }));
         }
         
@@ -621,23 +688,17 @@ async debugClassifyIntent(message) {
         
         responseMsg += ` You can view this data in the Children Tracking tab.`;
         
-        return createSuccessResult(
-          responseMsg,
-          { childId, childName, growthEntry }
+        return createSuccessResult(responseMsg, { childId, childName, growthEntry });
+      } catch (firebaseError) {
+        console.error("Firebase operation failed:", firebaseError);
+        return createErrorResult(
+          "I had trouble saving this growth data. Please try again with more specific measurements.",
+          firebaseError.message
         );
       }
-      
-      return createErrorResult(
-        `I couldn't save this growth data. ${result.error || "Please try again with more specific measurements."}`,
-        result.error
-      );
     } catch (error) {
       console.error("Error handling track growth:", error);
-      
-      return createErrorResult(
-        "I encountered an error while recording this growth data. Please try again with clearer measurements.",
-        error.message
-      );
+      return createErrorResult("I encountered an error while recording this growth data.", error.message);
     }
   }
 

@@ -779,6 +779,55 @@ onClick={() => {
 >
   Debug: Test Provider Creation
 </button>
+// Add this debug button to the header section of ProviderDirectory.jsx
+<button
+  className="p-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 text-xs"
+  onClick={() => {
+    // Import and expose Firebase instances
+    import('../../services/firebase').then(module => {
+      // Expose the database for console testing
+      window.db = module.db;
+      window.auth = module.auth;
+      window.familyId = familyId;
+
+      // Log the exposed variables
+      console.log("✅ DB REFERENCE:", window.db);
+      console.log("✅ AUTH:", window.auth);
+      console.log("✅ FAMILY ID:", window.familyId);
+      
+      // Create a message for the user
+      alert("Firebase references exposed to window objects. Check console and run test.");
+      
+      // Create and add a test provider
+      const { collection, addDoc, serverTimestamp } = require('firebase/firestore');
+      
+      const testProvider = {
+        name: "Test Provider " + new Date().toTimeString().slice(0, 8),
+        type: "medical",
+        specialty: "Testing",
+        familyId: familyId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      
+      addDoc(collection(window.db, "providers"), testProvider)
+        .then(docRef => {
+          console.log("✅ TEST PROVIDER ADDED:", docRef.id);
+          alert("Test provider added! ID: " + docRef.id);
+          
+          // Force UI refresh
+          window.dispatchEvent(new CustomEvent('provider-added'));
+          setTimeout(() => window.dispatchEvent(new CustomEvent('directory-refresh-needed')), 500);
+        })
+        .catch(err => {
+          console.error("❌ TEST PROVIDER FAILED:", err);
+          alert("Test failed: " + err.message);
+        });
+    });
+  }}
+>
+  Debug: Test Provider Creation
+</button>
       
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
