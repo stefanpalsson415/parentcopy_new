@@ -20,7 +20,7 @@ import DocumentOCRService from '../../services/DocumentOCRService';
 import ChatPersistenceService from '../../services/ChatPersistenceService';
 import UnifiedParserService from '../../services/UnifiedParserService';
 import { addDoc, collection } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { db, auth } from '../../services/firebase';
 import FamilyBalanceChart from '../meeting/FamilyBalanceChart';
 import ClaudeService from '../../services/ClaudeService';
 
@@ -542,6 +542,84 @@ const shouldAdvanceStage = (message, currentStage) => {
   
   // Default to false - don't advance yet
   return false;
+};
+
+// Add this function near other handler functions in AllieChat.jsx
+const testFirebaseWrite = async () => {
+  try {
+    // Add a test loading message
+    setMessages(prev => [...prev, {
+      familyId,
+      sender: 'allie',
+      userName: 'Allie',
+      text: "Testing direct Firebase write...",
+      timestamp: new Date().toISOString()
+    }]);
+    
+    console.log("🔥 Starting direct Firebase write test");
+    console.log("🔥 Current auth state:", auth.currentUser?.uid);
+    console.log("🔥 Family ID:", familyId);
+    
+    // Import Firebase methods
+    const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
+    const { db } = await import('../services/firebase');
+    
+    // Create test object
+    const testObject = {
+      name: "Test Provider",
+      type: "test",
+      notes: "Created via debug button",
+      familyId: familyId,
+      createdAt: serverTimestamp(),
+      createdBy: auth.currentUser?.uid || 'debug-user',
+      testTimestamp: new Date().toISOString()
+    };
+    
+    // Try writing to both debug collection and providers collection
+    console.log("🔥 Writing test object:", testObject);
+    
+    // First try adding to debug collection
+    const debugRef = await addDoc(collection(db, "debug"), testObject);
+    console.log("🔥 Successfully wrote to debug collection:", debugRef.id);
+    
+    // Then try adding to providers collection (our actual target)
+    const providerRef = await addDoc(collection(db, "providers"), testObject);
+    console.log("🔥 Successfully wrote to providers collection:", providerRef.id);
+    
+    // Update UI with success
+    setMessages(prev => prev.filter(m => !m.text?.includes("Testing direct")).concat({
+      familyId,
+      sender: 'allie',
+      userName: 'Allie',
+      text: `Firebase write test SUCCESSFUL! Debug ID: ${debugRef.id}, Provider ID: ${providerRef.id}`,
+      timestamp: new Date().toISOString()
+    }));
+    
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('provider-added'));
+      window.dispatchEvent(new CustomEvent('directory-refresh-needed'));
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("🔥 Firebase write test FAILED:", error);
+    console.error("🔥 Error details:", {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+    
+    // Update UI with error
+    setMessages(prev => prev.filter(m => !m.text?.includes("Testing direct")).concat({
+      familyId,
+      sender: 'allie',
+      userName: 'Allie',
+      text: `Firebase write test FAILED: ${error.message}`,
+      timestamp: new Date().toISOString()
+    }));
+    
+    return false;
+  }
 };
 
 // Replace the processMeetingStage function with this improved version:
@@ -2960,6 +3038,15 @@ You can view and manage this in your calendar.`,
                 <Info size={18} />
               </button>
               
+              {/* Add this inside the chat header div, next to the other buttons */}
+<button 
+  onClick={testFirebaseWrite}
+  className="p-1 bg-red-100 text-red-700 rounded mr-1 text-xs"
+  title="Test Firebase Write"
+>
+  Test DB
+</button>
+
               {/* Resize buttons */}
               <button 
                 onClick={() => handleResize('up')} 
