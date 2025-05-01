@@ -1448,8 +1448,6 @@ formatCollectedEventData(collectedData) {
 }
 
 
-// NEW CODE - Replace with this improved auth handling
-
 async createEventFromCollectedData(eventData, userId, familyId) {
   try {
     // IMPROVED: More robust validation with fallbacks for authentication
@@ -1459,51 +1457,32 @@ async createEventFromCollectedData(eventData, userId, familyId) {
     // If userId is missing, try to get it from auth
     if (!actualUserId) {
       console.warn("⚠️ Missing userId for event creation - attempting to get from current auth");
-      
-      // Try the direct auth object first
-      if (auth && auth.currentUser) {
-        actualUserId = auth.currentUser.uid;
-        console.log("🔐 Retrieved userId from auth.currentUser:", actualUserId);
-      } else {
-        console.warn("⚠️ auth.currentUser not available, trying window.auth");
-        // Try global window.auth as fallback
-        if (typeof window !== 'undefined' && window.auth && window.auth.currentUser) {
-          actualUserId = window.auth.currentUser.uid;
-          console.log("🔐 Retrieved userId from window.auth.currentUser:", actualUserId);
-        }
-      }
+      actualUserId = auth.currentUser?.uid;
       
       // Log actual user status
       console.log("🔐 Auth status check:", {
-        authCurrentUser: auth?.currentUser?.uid,
-        windowAuthCurrentUser: typeof window !== 'undefined' ? window.auth?.currentUser?.uid : undefined,
-        isLoggedIn: !!(auth?.currentUser || (typeof window !== 'undefined' && window.auth?.currentUser))
+        authCurrentUser: auth.currentUser?.uid,
+        authCurrentUserEmail: auth.currentUser?.email,
+        isLoggedIn: !!auth.currentUser
       });
       
       // As a last resort, try to get from localStorage
       if (!actualUserId && typeof window !== 'undefined') {
         try {
-          // First check for a selectedUserId (used in family context)
-          const directUserId = localStorage.getItem('selectedUserId');
-          if (directUserId) {
-            actualUserId = directUserId;
-            console.log("📋 Retrieved userId directly from localStorage.selectedUserId:", actualUserId);
-          } else {
-            // Try other possible localStorage keys
-            const storedUser = localStorage.getItem('currentUser') || 
-                              localStorage.getItem('user') || 
-                              localStorage.getItem('userId');
-            
-            if (storedUser) {
-              try {
-                const parsedUser = JSON.parse(storedUser);
-                actualUserId = parsedUser.uid || parsedUser.id;
-                console.log("📋 Retrieved userId from localStorage parsed object:", actualUserId);
-              } catch (e) {
-                // If not JSON, might be direct ID
-                actualUserId = storedUser;
-                console.log("📋 Using direct userId from localStorage string:", actualUserId);
-              }
+          // Try various localStorage keys that might have user information
+          const storedUser = localStorage.getItem('currentUser') || 
+                            localStorage.getItem('user') || 
+                            localStorage.getItem('userId');
+          
+          if (storedUser) {
+            try {
+              const parsedUser = JSON.parse(storedUser);
+              actualUserId = parsedUser.uid || parsedUser.id;
+              console.log("📋 Retrieved userId from localStorage:", actualUserId);
+            } catch (e) {
+              // If not JSON, might be direct ID
+              actualUserId = storedUser;
+              console.log("📋 Using direct userId from localStorage:", actualUserId);
             }
           }
         } catch (storageError) {
@@ -1511,6 +1490,215 @@ async createEventFromCollectedData(eventData, userId, familyId) {
         }
       }
     }
+    
+    // Also ensure familyId is available - similar fallbacks
+    if (!actualFamilyId) {
+      console.warn("⚠️ Missing familyId for event creation - attempting to get from localStorage");
+      if (typeof window !== 'undefined') {
+        actualFamilyId = localStorage.getItem('selectedFamilyId') || 
+                        localStorage.getItem('familyId');
+        
+        if (actualFamilyId) {
+          console.log("📋 Retrieved familyId from localStorage:", actualFamilyId);
+        }
+      }
+    }
+    
+    // Final validation check
+    if (!actualUserId) {
+      console.error("❌ CRITICAL: No userId available from any source for event creation");
+      return { success: false, error: "Missing user ID - authentication required" };
+    }
+    
+    // Enhanced logging for debugging
+    console.log("🗓️ Creating event from collected data:", {
+      title: eventData.title || "Untitled Event",
+      type: eventData.eventType || "general",
+      dateTime: eventData.dateTime,
+      userId: actualUserId,
+      familyId: actualFamilyId,
+      doctorName: eventData.doctorName || eventData.appointmentDetails?.doctorName
+    });
+    
+    // Enhanced logging for debugging
+    console.log("Creating event from collected data:", {
+      title: eventData.title || "Untitled Event",
+      type: eventData.eventType || "general",
+      dateTime: eventData.dateTime,
+      userId: userId,
+      familyId: familyId,
+      doctorName: eventData.doctorName || eventData.appointmentDetails?.doctorName
+    });
+    
+    // Ensure we have valid date values
+    const startDateTime = eventData.dateTime || new Date().toISOString();
+    const startDate = new Date(startDateTime);
+    const endDate = eventData.endDateTime ? 
+      new Date(eventData.endDateTime) : 
+      new Date(startDate.getTime() + 60 * 60 * 1000); // Default to 1 hour later
+    
+    // Prepare the event for the calendar with all required fields
+    const event = {
+      title: eventData.title || "Untitled Event",
+      summary: eventData.title || "Untitled Event",
+      description: eventData.description || "",
+      location: eventData.location || "",
+      // Make sure eventType is set appropriately
+      eventType: eventData.eventType || "general",
+      category: eventData.category || eventData.eventType || "general",
+      // Add user and family IDs
+      userId,
+      familyId,
+      // Ensure proper datetime format - CRITICAL PART
+      start: {
+        dateTime: startDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      end: {
+        dateTime: endDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      // Also include these date formats for maximum compatibility
+      date: startDate.toISOString(),
+      dateTime: startDate.toISOString(), 
+      dateObj: startDate,
+      dateEndObj: endDate,
+      endDateTime: endDate.toISOString(),
+      reminders: {
+        useDefault: false,
+        overrides: [
+          {'method': 'popup', 'minutes': 30}
+        ]
+      },
+      // Add a special source flag to track chat-created events
+      source: 'allie-chat',
+      creationSource: 'allie-chat'
+    };
+    
+    // Add child-specific fields if present
+    if (eventData.childId) event.childId = eventData.childId;
+    if (eventData.childName) event.childName = eventData.childName;
+    if (eventData.attendingParentId) event.attendingParentId = eventData.attendingParentId;
+    
+    // Add doctor name for medical appointments
+    if (eventData.doctorName || eventData.appointmentDetails?.doctorName) {
+      event.doctorName = eventData.doctorName || eventData.appointmentDetails.doctorName;
+    }
+    
+    // Add appointment-specific details
+    if (eventData.eventType === 'doctor' || eventData.eventType === 'dentist') {
+      event.appointmentDetails = eventData.appointmentDetails || {
+        doctorName: eventData.doctorName || "Unknown",
+        reasonForVisit: "",
+        duration: 60
+      };
+      
+      // Also add these to extraDetails to ensure they're saved
+      event.extraDetails = {
+        ...(eventData.extraDetails || {}),
+        appointmentDetails: event.appointmentDetails,
+        doctorName: event.doctorName,
+        creationSource: 'allie-chat',
+        parsedWithAI: true
+      };
+    } else {
+      // For non-medical events, just add generic extraDetails
+      event.extraDetails = {
+        ...(eventData.extraDetails || {}),
+        creationSource: 'allie-chat',
+        parsedWithAI: true
+      };
+    }
+    
+    console.log("Final event object ready for saving:", event);
+    
+    // CRITICAL FIX: First try to use EventStore directly
+    try {
+      const { default: eventStore } = await import('./EventStore');
+      
+      // Force a cache clear before adding the event
+      if (typeof eventStore.clearCache === 'function') {
+        eventStore.clearCache();
+      }
+      
+      // Add the event directly to the events collection
+      const result = await eventStore.addEvent(event, userId, familyId);
+      console.log("Direct EventStore result:", result);
+      
+      if (result.success) {
+        // Dispatch comprehensive notification events
+        this.dispatchCalendarNotifications(event, result);
+        
+        return {
+          success: true,
+          eventId: result.eventId || result.firestoreId || result.universalId
+        };
+      }
+    } catch (error) {
+      console.error("Error with direct EventStore approach:", error);
+    }
+    
+    // If direct method failed, try using UnifiedEventService
+    try {
+      const { default: UnifiedEventService } = await import('./UnifiedEventService');
+      
+      // Add event through the unified service
+      const result = await UnifiedEventService.addEvent(
+        event, 
+        userId, 
+        familyId, 
+        { source: 'chat' }
+      );
+      
+      console.log("UnifiedEventService result:", result);
+      
+      // Dispatch notification events
+      this.dispatchCalendarNotifications(event, result);
+      
+      return {
+        success: true,
+        eventId: result.eventId || result.firestoreId || result.universalId
+      };
+    } catch (error) {
+      console.error("Error using UnifiedEventService:", error);
+    }
+    
+    // As a last resort, try Firebase directly
+    try {
+      const { collection, addDoc, serverTimestamp } = (await import('firebase/firestore'));
+      const { db } = (await import('./firebase'));
+      
+      // Prepare the event for direct Firestore insertion
+      const firestoreEvent = {
+        ...event,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      
+      // Add to Firestore events collection
+      const docRef = await addDoc(collection(db, "events"), firestoreEvent);
+      
+      console.log("Direct Firebase insertion successful:", docRef.id);
+      
+      // Dispatch notifications
+      this.dispatchCalendarNotifications(event, { 
+        success: true, 
+        eventId: docRef.id 
+      });
+      
+      return {
+        success: true,
+        eventId: docRef.id
+      };
+    } catch (error) {
+      console.error("All approaches failed. Final error:", error);
+      return { success: false, error: error.message };
+    }
+  } catch (error) {
+    console.error("Error creating event from collected data:", error);
+    return { success: false, error: error.message };
+  }
+}
 
 // Add this helper method to handle notifications
 dispatchCalendarNotifications(event, result) {
