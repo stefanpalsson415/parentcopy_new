@@ -1430,45 +1430,49 @@ const processSpecificRequest = async (messageText, type) => {
       // FALLBACK: Still try to parse using the old method in case the primary method failed
       const todoData = await UnifiedParserService.parseTodo(messageText, familyContext, recentMessages);
       
-      if (todoData && todoData.text) {
-        try {
-          // Create task for Kanban board instead of relationshipTodos
-          const db = (await import('../../services/firebase')).db;
-          const { collection, addDoc, serverTimestamp } = (await import('firebase/firestore'));
-          
-          // Format as kanban task
-          const taskItem = {
-            title: todoData.text,
-            description: todoData.notes || "Added via Allie Chat",
-            dueDate: todoData.dueDate,
-            priority: "medium",
-            category: todoData.category || "household",
-            assignedTo: null,
-            column: "upcoming",
-            familyId: familyId,
-            createdAt: serverTimestamp(),
-            createdBy: selectedUser?.id || 'allie-chat',
-            updatedAt: serverTimestamp(),
-            subtasks: [],
-            comments: [],
-            completed: false
-          };
-          
-          // Try to match assignee to a family member
-          if (todoData.assignedTo) {
-            const assignee = familyMembers.find(member => 
-              member.name.toLowerCase() === todoData.assignedTo.toLowerCase()
-            );
-            
-            if (assignee) {
-              taskItem.assignedTo = assignee.id;
-              taskItem.assignedToName = assignee.name;
-            }
-          }
-          
-          // Add to Kanban tasks collection
-          const docRef = await addDoc(collection(db, "kanbanTasks"), taskItem);
-          
+      // NEW CODE for processSpecificRequest function
+if (todoData && todoData.text) {
+  try {
+    // Create task for Kanban board - using successful pattern
+    const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
+    const { db } = await import('../../services/firebase');
+    
+    console.log("🔥 Starting to create kanban task:", todoData.text);
+    
+    // Format as kanban task
+    const taskItem = {
+      title: todoData.text,
+      description: todoData.notes || "Added via Allie Chat",
+      dueDate: todoData.dueDate,
+      priority: "medium",
+      category: todoData.category || "household",
+      assignedTo: null,
+      column: "upcoming",
+      familyId: familyId,
+      createdAt: serverTimestamp(),
+      createdBy: selectedUser?.id || 'allie-chat',
+      updatedAt: serverTimestamp(),
+      subtasks: [],
+      comments: [],
+      completed: false
+    };
+    
+    // Try to match assignee to a family member
+    if (todoData.assignedTo) {
+      const assignee = familyMembers.find(member => 
+        member.name.toLowerCase() === todoData.assignedTo.toLowerCase()
+      );
+      
+      if (assignee) {
+        taskItem.assignedTo = assignee.id;
+        taskItem.assignedToName = assignee.name;
+      }
+    }
+    
+    // Add to Kanban tasks collection
+    console.log("🔥 About to add to kanbanTasks collection:", { familyId });
+    const docRef = await addDoc(collection(db, "kanbanTasks"), taskItem);
+    console.log("🔥 Kanban task created successfully:", docRef.id);          
           // Trigger update event for the UI
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('kanban-task-added', { 

@@ -1613,87 +1613,46 @@ async createEventFromCollectedData(eventData, userId, familyId) {
     console.log("Final event object ready for saving:", event);
     
     // CRITICAL FIX: First try to use EventStore directly
-    try {
-      const { default: eventStore } = await import('./EventStore');
-      
-      // Force a cache clear before adding the event
-      if (typeof eventStore.clearCache === 'function') {
-        eventStore.clearCache();
-      }
-      
-      // Add the event directly to the events collection
-      const result = await eventStore.addEvent(event, userId, familyId);
-      console.log("Direct EventStore result:", result);
-      
-      if (result.success) {
-        // Dispatch comprehensive notification events
-        this.dispatchCalendarNotifications(event, result);
-        
-        return {
-          success: true,
-          eventId: result.eventId || result.firestoreId || result.universalId
-        };
-      }
-    } catch (error) {
-      console.error("Error with direct EventStore approach:", error);
-    }
-    
-    // If direct method failed, try using UnifiedEventService
-    try {
-      const { default: UnifiedEventService } = await import('./UnifiedEventService');
-      
-      // Add event through the unified service
-      const result = await UnifiedEventService.addEvent(
-        event, 
-        userId, 
-        familyId, 
-        { source: 'chat' }
-      );
-      
-      console.log("UnifiedEventService result:", result);
-      
-      // Dispatch notification events
-      this.dispatchCalendarNotifications(event, result);
-      
-      return {
-        success: true,
-        eventId: result.eventId || result.firestoreId || result.universalId
-      };
-    } catch (error) {
-      console.error("Error using UnifiedEventService:", error);
-    }
-    
-    // As a last resort, try Firebase directly
-    try {
-      const { collection, addDoc, serverTimestamp } = (await import('firebase/firestore'));
-      const { db } = (await import('./firebase'));
-      
-      // Prepare the event for direct Firestore insertion
-      const firestoreEvent = {
-        ...event,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
-      
-      // Add to Firestore events collection
-      const docRef = await addDoc(collection(db, "events"), firestoreEvent);
-      
-      console.log("Direct Firebase insertion successful:", docRef.id);
-      
-      // Dispatch notifications
-      this.dispatchCalendarNotifications(event, { 
-        success: true, 
-        eventId: docRef.id 
-      });
-      
-      return {
-        success: true,
-        eventId: docRef.id
-      };
-    } catch (error) {
-      console.error("All approaches failed. Final error:", error);
-      return { success: false, error: error.message };
-    }
+    // NEW CODE for the Firebase part in createEventFromCollectedData
+// As a last resort, try Firebase directly - using the successful approach
+try {
+  // Use consistent dynamic import pattern
+  const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
+  const { db } = await import('../services/firebase');
+  
+  // Log more details for debugging
+  console.log("🔥 Attempting direct Firebase write for event with:", { 
+    userId, 
+    familyId, 
+    eventTitle: event.title || 'Untitled' 
+  });
+  
+  // Prepare the event for direct Firestore insertion
+  const firestoreEvent = {
+    ...event,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
+  
+  // Add to Firestore events collection
+  const docRef = await addDoc(collection(db, "events"), firestoreEvent);
+  
+  console.log("🔥 Direct Firebase insertion successful:", docRef.id);
+  
+  // Dispatch notifications
+  this.dispatchCalendarNotifications(event, { 
+    success: true, 
+    eventId: docRef.id 
+  });
+  
+  return {
+    success: true,
+    eventId: docRef.id
+  };
+} catch (error) {
+  console.error("🔥 All approaches failed. Final error:", error);
+  return { success: false, error: error.message };
+}
   } catch (error) {
     console.error("Error creating event from collected data:", error);
     return { success: false, error: error.message };

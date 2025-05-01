@@ -256,6 +256,7 @@ async identifyIntent(message) {
    */
   // Find the handleAddProvider method in IntentActionService.js and replace it with this
 
+// NEW CODE
 async handleAddProvider(message, familyId, userId) {
     try {
       console.log("Handling add provider request:", message);
@@ -279,8 +280,10 @@ async handleAddProvider(message, familyId, userId) {
       
       // CRITICAL FIX: DIRECT FIREBASE OPERATION
       try {
+        // Using the successful pattern from the test function
         const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
-        const { db } = await import('./firebase');
+        // Ensure absolute path to avoid module resolution issues
+        const { db } = await import('../services/firebase');
         
         // Prepare provider data
         const provider = {
