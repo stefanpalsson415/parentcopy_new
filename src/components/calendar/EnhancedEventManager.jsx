@@ -326,12 +326,14 @@ const EnhancedEventManager = ({
     }
   }, [event.category, event.eventType, familyMembers]);
   
- // NEW CODE (revised initPlacesAutocomplete function)
+ // COMPLETELY REVISED initPlacesAutocomplete function with better error handling
 const initPlacesAutocomplete = async () => {
   if (!window.google || !window.google.maps) {
-    console.warn("Google Maps API not available");
+    console.warn("Google Maps API not available - the location input will work in manual mode only");
     return false;
   }
+  
+  console.log("🌎 Google Maps API available, version:", window.google.maps.version || "unknown");
 
   try {
     // Make sure we have the places library
@@ -374,9 +376,44 @@ const initPlacesAutocomplete = async () => {
       input.value = event.location || '';
       container.appendChild(input);
       
-      // Create Autocomplete instance
+      // Create Autocomplete instance with improved configuration
       const autocomplete = new window.google.maps.places.Autocomplete(input, {
         types: ['address', 'establishment'],
+        fields: ['formatted_address', 'geometry', 'name'],
+      });
+      
+      // Show dropdown after typing at least 4 characters
+      const autocompleteMinChars = 4;
+      let keyboardListener;
+      
+      // Add input event listener to control when suggestions appear
+      input.addEventListener('input', function() {
+        // Clear existing predictions if input is shorter than minimum
+        if (this.value.length < autocompleteMinChars) {
+          // Hide predictions container if visible
+          const predictionsContainer = document.querySelector('.pac-container');
+          if (predictionsContainer) {
+            predictionsContainer.style.display = 'none';
+          }
+        } 
+        // Once we reach minimum length, trigger predictions
+        else if (this.value.length === autocompleteMinChars) {
+          // Simulate keyboard events to trigger predictions
+          const event = new KeyboardEvent('keydown', {
+            key: 'ArrowDown',
+            code: 'ArrowDown',
+            keyCode: 40,
+            which: 40,
+            bubbles: true
+          });
+          this.dispatchEvent(event);
+          
+          // Force display of predictions
+          const predictionsContainer = document.querySelector('.pac-container');
+          if (predictionsContainer) {
+            predictionsContainer.style.display = 'block';
+          }
+        }
       });
       
       // Add event listener
@@ -426,16 +463,52 @@ const initPlacesAutocomplete = async () => {
           border-radius: 0.375rem;
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
           z-index: 100;
+          max-height: 250px;
+          overflow-y: auto;
+          background-color: white;
+          border: 1px solid #e5e7eb;
         }
         #place-autocomplete-element::part(item) {
           padding: 0.5rem 0.75rem;
           font-family: Roboto, sans-serif;
           font-size: 0.875rem;
+          cursor: pointer;
+          border-bottom: 1px solid #f3f4f6;
         }
         #place-autocomplete-element::part(item:hover) {
           background-color: #f3f4f6;
         }
         #place-autocomplete-element::part(item[active]) {
+          background-color: #e5e7eb;
+        }
+        
+        /* Custom styles for dropdown visibility */
+        #place-autocomplete-element {
+          --gmpx-color-on-surface: #333333;
+          --gmpx-color-surface: #ffffff;
+          --gmpx-font-family-heading: Roboto, sans-serif;
+          --gmpx-font-family-body: Roboto, sans-serif;
+        }
+        
+        /* Legacy Autocomplete dropdown styling */
+        .pac-container {
+          border-radius: 0.375rem;
+          margin-top: 0.25rem;
+          border: 1px solid #e5e7eb;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+          font-family: Roboto, sans-serif;
+          z-index: 9999 !important;
+        }
+        .pac-item {
+          padding: 0.5rem 0.75rem;
+          font-size: 0.875rem;
+          cursor: pointer;
+          border-bottom: 1px solid #f3f4f6;
+        }
+        .pac-item:hover {
+          background-color: #f3f4f6;
+        }
+        .pac-item-selected {
           background-color: #e5e7eb;
         }
       `;
@@ -447,7 +520,9 @@ const initPlacesAutocomplete = async () => {
         types: ['address', 'establishment'],
         locationBias: navigator.geolocation ? 
           { radius: 10000, center: { lat: 0, lng: 0 } } : 
-          undefined
+          undefined,
+        // Configure to show dropdown after 4 characters
+        minLengthToShowPredictions: 4
       });
       
       // Set ID for CSS targeting
@@ -478,6 +553,14 @@ const initPlacesAutocomplete = async () => {
             if (event.location) {
               inputElement.value = event.location;
             }
+            
+            // Add input listener to monitor character count for debugging
+            const minChars = 4;
+            inputElement.addEventListener('input', function() {
+              if (this.value.length === minChars) {
+                console.log(`Reached minimum ${minChars} chars for autocomplete suggestions`);
+              }
+            });
           }
         } catch (e) {
           console.warn("Could not modify shadow DOM:", e);
@@ -500,27 +583,55 @@ const initPlacesAutocomplete = async () => {
           const place = placePrediction.toPlace();
           
           // Fetch fields with the new API pattern
-          await place.fetchFields({
-            fields: ["formattedAddress", "displayName", "name", "location"]
-          });
+          try {
+            await place.fetchFields({
+              fields: ["formattedAddress", "displayName", "name", "location"]
+            });
+          } catch (fieldError) {
+            console.warn("Error fetching place fields, trying alternative approach:", fieldError);
+            // Fallback to use whatever data we have available
+          }
           
           console.log("Fetched place fields:", place);
           
           // Extract location text with fallbacks
-          let locationText = place.formattedAddress || place.displayName || place.name || "";
+          let locationText = "";
+          
+          if (place.formattedAddress) {
+            locationText = place.formattedAddress;
+          } else if (place.displayName) {
+            locationText = place.displayName;
+          } else if (place.name) {
+            locationText = place.name;
+          } else if (placePrediction.description) {
+            // Fall back to the description from the prediction if place fields failed
+            locationText = placePrediction.description;
+          }
           
           if (locationText) {
             console.log("Setting location to:", locationText);
             
             // Update state with location and coordinates
-            setEvent(prev => ({ 
-              ...prev, 
-              location: locationText,
-              coordinates: place.location ? { 
-                lat: place.location.lat, 
-                lng: place.location.lng 
-              } : prev.coordinates
-            }));
+            setEvent(prev => {
+              // Create a coordinates object only if we have valid location data
+              let coordinates = prev.coordinates;
+              try {
+                if (place.location && typeof place.location.lat === 'number' && typeof place.location.lng === 'number') {
+                  coordinates = { 
+                    lat: place.location.lat, 
+                    lng: place.location.lng 
+                  };
+                }
+              } catch (coordError) {
+                console.warn("Error setting coordinates, using previous or none:", coordError);
+              }
+              
+              return {
+                ...prev, 
+                location: locationText,
+                coordinates: coordinates
+              };
+            });
             
             prevLocationRef.current = locationText;
             
@@ -545,47 +656,85 @@ const initPlacesAutocomplete = async () => {
 };
 
   
-  // Initialize Places API after DOM is ready
+  // Initialize Places API after DOM is ready - with faster initialization
 useEffect(() => {
-  // Add a delay to ensure DOM is ready
-  const timeoutId = setTimeout(async () => {
-    if (!placesInitialized && window.google && window.google.maps) {
-      console.log("Initializing Places Autocomplete...");
-      try {
-        const success = await initPlacesAutocomplete();
-        console.log("Places initialization result:", success);
-        setPlacesInitialized(success);
-      } catch (error) {
-        console.error("Error in Places initialization:", error);
-        setPlacesInitialized(false);
-      }
+  // Check if we need to initialize the Google Maps API
+  if (!window.google || !window.google.maps) {
+    console.log("Google Maps API not loaded yet, setting up script");
+    
+    // Check if we already tried loading the API
+    if (!document.getElementById('google-maps-script')) {
+      // Create the script element
+      const script = document.createElement('script');
+      script.id = 'google-maps-script';
+      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyBqYIVmfq50H1nHQfiy0r2QLhQvWJAuIFI&libraries=places`;
+      script.async = true;
+      script.defer = true;
+      
+      // Set up callback
+      script.onload = () => {
+        console.log("Google Maps API loaded via script");
+        window.dispatchEvent(new Event('google-maps-api-loaded'));
+      };
+      
+      // Add to document
+      document.head.appendChild(script);
     }
-  }, 1000); // Increased timeout to ensure DOM and API are fully loaded
+  }
   
-  // Listen for API loaded event
-  const handleMapsApiLoaded = async () => {
-    console.log("Maps API loaded event received");
-    if (!placesInitialized) {
-      try {
-        const success = await initPlacesAutocomplete();
-        console.log("Places initialization result from event:", success);
+  // Attempt to initialize immediately if API is already loaded
+  if (!placesInitialized && window.google && window.google.maps) {
+    console.log("Google Maps API already loaded, initializing Places immediately");
+    initPlacesAutocomplete()
+      .then(success => {
+        console.log("Places immediate initialization result:", success);
         setPlacesInitialized(success);
-      } catch (error) {
-        console.error("Error in Places initialization from event:", error);
+      })
+      .catch(error => {
+        console.error("Error in immediate Places initialization:", error);
         setPlacesInitialized(false);
+      });
+  } else {
+    // Otherwise, try initializing with a short delay 
+    const timeoutId = setTimeout(async () => {
+      if (!placesInitialized && window.google && window.google.maps) {
+        console.log("Initializing Places Autocomplete with delay...");
+        try {
+          const success = await initPlacesAutocomplete();
+          console.log("Places delayed initialization result:", success);
+          setPlacesInitialized(success);
+        } catch (error) {
+          console.error("Error in Places delayed initialization:", error);
+          setPlacesInitialized(false);
+        }
       }
-    }
-  };
-  
-  window.addEventListener('google-maps-api-loaded', handleMapsApiLoaded);
-  
-  return () => {
-    clearTimeout(timeoutId);
-    window.removeEventListener('google-maps-api-loaded', handleMapsApiLoaded);
-  };
+    }, 300); // Shortened delay to avoid flickering
+    
+    // Listen for API loaded event
+    const handleMapsApiLoaded = async () => {
+      console.log("Maps API loaded event received");
+      if (!placesInitialized) {
+        try {
+          const success = await initPlacesAutocomplete();
+          console.log("Places initialization result from event:", success);
+          setPlacesInitialized(success);
+        } catch (error) {
+          console.error("Error in Places initialization from event:", error);
+          setPlacesInitialized(false);
+        }
+      }
+    };
+    
+    window.addEventListener('google-maps-api-loaded', handleMapsApiLoaded);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('google-maps-api-loaded', handleMapsApiLoaded);
+    };
+  }
 }, [placesInitialized]);
   
-  // Synchronize event location with Places input
+  // Synchronize event location with Places input - improved implementation
   useEffect(() => {
     if (isUpdatingRef.current || !placesInitialized || !placeAutocompleteElementRef.current) return;
     
@@ -593,20 +742,68 @@ useEffect(() => {
       prevLocationRef.current = event.location;
       
       try {
-        const input = placeAutocompleteElementRef.current.querySelector('input');
-        if (input && input.value !== event.location) {
-          input.value = event.location;
+        // Handle modern API (PlaceAutocompleteElement with shadow DOM)
+        if (placeAutocompleteElementRef.current.shadowRoot) {
+          const shadowInput = placeAutocompleteElementRef.current.shadowRoot.querySelector('input');
+          if (shadowInput && shadowInput.value !== event.location) {
+            shadowInput.value = event.location;
+            console.log("Updated shadow DOM input with location:", event.location);
+          }
+        }
+        // Handle legacy API (standard input element)
+        else if (placeAutocompleteElementRef.current.tagName === 'INPUT') {
+          if (placeAutocompleteElementRef.current.value !== event.location) {
+            placeAutocompleteElementRef.current.value = event.location;
+            console.log("Updated legacy input with location:", event.location);
+          }
+        }
+        // Handle fallback input
+        else {
+          const input = document.getElementById('location-input');
+          if (input && input.value !== event.location) {
+            input.value = event.location;
+            console.log("Updated fallback input with location:", event.location);
+          }
         }
       } catch (error) {
         console.warn("Error updating location input value:", error);
+        
+        // Last resort fallback - create an input if all else fails
+        if (!document.getElementById('location-input')) {
+          try {
+            const container = document.getElementById('places-container');
+            if (container) {
+              console.log("Creating fallback input as last resort");
+              const fallbackInput = document.createElement('input');
+              fallbackInput.id = 'location-input';
+              fallbackInput.className = 'w-full p-2 border border-gray-300 rounded-md';
+              fallbackInput.value = event.location;
+              fallbackInput.placeholder = 'Where is this event happening?';
+              fallbackInput.addEventListener('change', (e) => {
+                handleManualLocationInput(e.target.value);
+              });
+              
+              // Clear container and add fallback
+              container.innerHTML = '';
+              container.appendChild(fallbackInput);
+            }
+          } catch (fallbackError) {
+            console.error("Failed to create fallback input:", fallbackError);
+          }
+        }
       }
     }
   }, [event.location, placesInitialized]);
   
-  // Manual location input handler
+  // Enhanced manual location input handler with better state management
   const handleManualLocationInput = (value) => {
-    setEvent(prev => ({ ...prev, location: value }));
-    prevLocationRef.current = value;
+    console.log("Manual location input updated:", value);
+    setEvent(prev => {
+      const updatedEvent = { ...prev, location: value };
+      // Store safely in a ref to avoid race conditions
+      prevLocationRef.current = value;
+      return updatedEvent;
+    });
   };
   
   const handleSave = async () => {
@@ -627,33 +824,53 @@ useEffect(() => {
         return;
       }
       
-      // Check if we need to update location from input field
+      // IMPORTANT: Synchronize location field with all possible inputs before saving
       // This ensures we capture any manually entered text that might not be in state yet
+      let finalLocation = event.location;
+      let foundLocation = false;
+      
+      // Check the standard input (fallback and legacy)
       const manualInput = document.getElementById('location-input');
-      if (manualInput && manualInput.value && manualInput.value !== event.location) {
-        handleManualLocationInput(manualInput.value);
+      if (manualInput && manualInput.value) {
+        console.log("Found location in standard input:", manualInput.value);
+        finalLocation = manualInput.value;
+        foundLocation = true;
       }
       
-      // Similarly, check if we need to update from the PlaceAutocompleteElement
-      if (placeAutocompleteElementRef.current) {
+      // Check legacy PlaceAutocomplete input
+      const legacyInput = document.getElementById('location-input-legacy');
+      if (!foundLocation && legacyInput && legacyInput.value) {
+        console.log("Found location in legacy input:", legacyInput.value);
+        finalLocation = legacyInput.value;
+        foundLocation = true;
+      }
+      
+      // Check PlaceAutocompleteElement with shadow DOM
+      if (!foundLocation && placeAutocompleteElementRef.current) {
         try {
           if (typeof placeAutocompleteElementRef.current.shadowRoot === 'object') {
-            // Modern API case
+            // Modern API case with Shadow DOM
             const shadowInput = placeAutocompleteElementRef.current.shadowRoot?.querySelector('input');
-            if (shadowInput && shadowInput.value && shadowInput.value !== event.location) {
-              console.log("Updating location from shadow DOM input:", shadowInput.value);
-              setEvent(prev => ({ ...prev, location: shadowInput.value }));
+            if (shadowInput && shadowInput.value) {
+              console.log("Found location in Shadow DOM input:", shadowInput.value);
+              finalLocation = shadowInput.value;
+              foundLocation = true;
             }
-          } else if (placeAutocompleteElementRef.current.value && 
-                    placeAutocompleteElementRef.current.value !== event.location) {
-            // Legacy API case
-            console.log("Updating location from legacy input:", placeAutocompleteElementRef.current.value);
-            setEvent(prev => ({ ...prev, location: placeAutocompleteElementRef.current.value }));
+          } else if (placeAutocompleteElementRef.current.tagName === 'INPUT' && 
+                     placeAutocompleteElementRef.current.value) {
+            // Legacy API case (direct input element)
+            console.log("Found location in legacy autocomplete:", placeAutocompleteElementRef.current.value);
+            finalLocation = placeAutocompleteElementRef.current.value;
+            foundLocation = true;
           }
         } catch (e) {
-          console.warn("Error checking location input value:", e);
+          console.warn("Error checking autocomplete location value:", e);
         }
       }
+      
+      // Apply the final location to event state (this updates synchronously)
+      console.log("Final location to use:", finalLocation);
+      event.location = finalLocation;
       
       // Format the event for the calendar service
       const calendarEvent = {
@@ -2378,6 +2595,8 @@ useEffect(() => {
     
     // For event types that don't match category
     switch(event.eventType) {
+      case 'appointment':
+        return renderAppointmentFields();
       case 'date-night':
         return renderDateNightFields();
       case 'travel':
@@ -2427,9 +2646,20 @@ useEffect(() => {
             </button>
             <button
               type="button"
-              onClick={() => setEvent(prev => ({ ...prev, category: 'appointment', eventType: 'appointment' }))}
+              onClick={() => setEvent(prev => ({ 
+                ...prev, 
+                category: 'appointment', 
+                eventType: 'appointment',
+                appointmentDetails: {
+                  ...(prev.appointmentDetails || {}),
+                  reasonForVisit: '',
+                  doctorName: '',
+                  duration: 60,
+                  transportation: ''
+                }
+              }))}
               className={`px-3 py-1 text-sm rounded-full ${
-                event.category === 'appointment' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+                (event.category === 'appointment' || event.eventType === 'appointment') ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
               }`}
             >
               Appointment
@@ -2663,7 +2893,21 @@ useEffect(() => {
     <div 
       id="places-container" 
       className="w-full overflow-hidden"
-    ></div>
+    >
+      {/* Fallback input for when Google Maps Places API isn't loaded yet */}
+      <input 
+        type="text" 
+        id="location-input"
+        className="w-full p-2 border border-gray-300 rounded-md text-sm pl-9"
+        placeholder="Where is this event happening?"
+        value={event.location || ''}
+        onChange={(e) => handleManualLocationInput(e.target.value)}
+      />
+      <MapPin 
+        size={16} 
+        className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" 
+      />
+    </div>
     
     {/* Icon is now injected within the component initialization */}
   </div>

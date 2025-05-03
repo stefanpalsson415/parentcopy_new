@@ -5,9 +5,12 @@
     <!-- Adjust this if you want a different favicon file (e.g., .ico) -->
     <link rel="icon" href="%PUBLIC_URL%/favicon.svg" />
 
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#0084ff" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Allie" />
+    
     <!-- Primary description for SEO -->
     <meta
       name="description"
@@ -25,18 +28,148 @@
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
 
+    <!-- Apple PWA splash screens -->
+    <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/apple-splash-2048-2732.png" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+    <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/apple-splash-1668-2388.png" media="(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+    <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/apple-splash-1536-2048.png" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+    <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/apple-splash-1125-2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+    <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/apple-splash-828-1792.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+
     <!--
       The %PUBLIC_URL% placeholder is replaced with the URL of the `public` folder
       during the build step. Only files inside the `public` folder can be referenced here.
     -->
     <title>Allie | Balance Family Responsibilities Together</title>
+    
+    <!-- Detect mobile and add PWA install prompt -->
+    <style>
+      #pwa-install-prompt {
+        display: none;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background-color: #0084ff;
+        color: white;
+        padding: 16px;
+        text-align: center;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
+        z-index: 9999;
+      }
+      #pwa-install-prompt button {
+        background: white;
+        color: #0084ff;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-weight: bold;
+        margin: 8px 4px;
+        cursor: pointer;
+      }
+      @media (display-mode: standalone) {
+        #pwa-install-prompt {
+          display: none !important;
+        }
+      }
+    </style>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <!--
-      This is where your React app is injected when you run `npm run build`.
-      Any scripts will be automatically inserted just before the closing </body> tag.
-    -->
+    
+    <!-- PWA install prompt -->
+    <div id="pwa-install-prompt">
+      <p>Get the Allie app experience</p>
+      <button id="pwa-install-button">Add to Home Screen</button>
+      <button id="pwa-dismiss-button">Not Now</button>
+    </div>
+    
+    <!-- Service worker registration and PWA prompt -->
+    <script>
+      // Check if service worker is supported
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then(function(registration) {
+              console.log('ServiceWorker registration successful with scope: ', registration.scope);
+            })
+            .catch(function(error) {
+              console.log('ServiceWorker registration failed: ', error);
+            });
+        });
+      }
+      
+      // Handle PWA install prompt on iOS
+      let deferredPrompt;
+      const pwaPrompt = document.getElementById('pwa-install-prompt');
+      const installButton = document.getElementById('pwa-install-button');
+      const dismissButton = document.getElementById('pwa-dismiss-button');
+      
+      // Check if on mobile
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      
+      // Show the install prompt if mobile and not in standalone mode
+      if (isMobile && window.matchMedia('(display-mode: browser)').matches) {
+        // Wait 3 seconds before showing prompt
+        setTimeout(() => {
+          pwaPrompt.style.display = 'block';
+        }, 3000);
+      }
+      
+      // For iOS (doesn't support beforeinstallprompt)
+      if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+        installButton.addEventListener('click', (e) => {
+          // Show instructions for iOS
+          alert('To install Allie on your home screen: tap the share button, then "Add to Home Screen".');
+          pwaPrompt.style.display = 'none';
+        });
+      }
+      
+      // For Android
+      window.addEventListener('beforeinstallprompt', (e) => {
+        // Prevent Chrome 67+ from automatically showing the prompt
+        e.preventDefault();
+        // Stash the event so it can be triggered later
+        deferredPrompt = e;
+        
+        // Show install button
+        if (pwaPrompt) {
+          pwaPrompt.style.display = 'block';
+          
+          installButton.addEventListener('click', (e) => {
+            // Hide our user interface that shows our A2HS button
+            pwaPrompt.style.display = 'none';
+            // Show the prompt
+            deferredPrompt.prompt();
+            // Wait for the user to respond to the prompt
+            deferredPrompt.userChoice.then((choiceResult) => {
+              if (choiceResult.outcome === 'accepted') {
+                console.log('User accepted the A2HS prompt');
+              } else {
+                console.log('User dismissed the A2HS prompt');
+              }
+              deferredPrompt = null;
+            });
+          });
+        }
+      });
+      
+      // Handle dismiss button
+      dismissButton.addEventListener('click', () => {
+        pwaPrompt.style.display = 'none';
+        // Save to localStorage to avoid showing again too soon
+        localStorage.setItem('pwa-prompt-dismissed', Date.now());
+      });
+      
+      // Check if we should show the prompt based on previous dismissal
+      const lastDismissed = localStorage.getItem('pwa-prompt-dismissed');
+      if (lastDismissed) {
+        // Don't show again for at least 7 days
+        const daysSinceDismissed = (Date.now() - lastDismissed) / (1000 * 60 * 60 * 24);
+        if (daysSinceDismissed < 7) {
+          pwaPrompt.style.display = 'none';
+        }
+      }
+    </script>
   </body>
 </html>

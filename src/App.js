@@ -29,6 +29,7 @@ import RelationshipFeaturesPage from './components/marketing/RelationshipFeature
 import AIAssistantPage from './components/marketing/AIAssistantPage';
 import { useAuth } from './contexts/AuthContext';
 import RevisedFloatingCalendarWidget from './components/calendar/RevisedFloatingCalendarWidget';
+import ResponsiveChatWrapper from './components/chat/ResponsiveChatWrapper';
 import EmailOptIn from './components/marketing/EmailOptIn';
 import ClaudeDebugger from './components/debug/ClaudeDebugger';
 import './styles/atomicHabits.css';
@@ -233,6 +234,7 @@ function AppRoutes() {
         <Route path="/mini-results" element={<MiniResultsScreen />} />
         <Route path="/payment" element={<PaymentScreen />} />
         <Route path="/dashboard" element={<DashboardScreen />} />
+        <Route path="/chat" element={<ResponsiveChatWrapper />} />
         <Route path="/debug/claude" element={<ClaudeDebugger />} />
         <Route path="/investor" element={<InvestorFunnel />} />
         <Route path="/debug/ai" element={<AIDebugPanel />} />

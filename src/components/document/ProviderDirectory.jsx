@@ -32,6 +32,8 @@ import UserAvatar from '../common/UserAvatar';
  * @param {Function} props.onAddProvider - Callback for adding a provider
  * @param {Function} props.onUpdateProvider - Callback for updating a provider
  * @param {Function} props.onDeleteProvider - Callback for deleting a provider
+ * @param {boolean} props.selectMode - Whether the component is in select mode (for selecting providers for events)
+ * @param {Function} props.onSelectProvider - Callback when a provider is selected in select mode
  */
 const ProviderDirectory = ({
   familyId,
@@ -40,7 +42,9 @@ const ProviderDirectory = ({
   onAddProvider,
   onUpdateProvider,
   onDeleteProvider,
-  onClose
+  onClose,
+  selectMode = false,
+  onSelectProvider
 }) => {
   const { currentUser } = useAuth();
   const [viewMode, setViewMode] = useState('card');
@@ -82,50 +86,83 @@ const ProviderDirectory = ({
     setViewMode(viewMode === 'card' ? 'list' : 'card');
   };
   
-  // Filter providers based on search and category
-  const filteredProviders = providers.filter(provider => {
-    // Filter by category
-    if (categoryFilter !== 'all' && provider.type !== categoryFilter) {
-      return false;
-    }
-    
-    // Filter by search query
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        provider.name?.toLowerCase().includes(query) ||
-        provider.specialty?.toLowerCase().includes(query) ||
-        provider.notes?.toLowerCase().includes(query)
-      );
-    }
-    
-    return true;
-  });
+  // State to track locally deleted providers (for immediate UI update)
+  const [locallyDeletedProviderIds, setLocallyDeletedProviderIds] = useState([]);
+
+  // Filter providers based on search and category, and exclude locally deleted ones
+  const filteredProviders = providers
+    .filter(provider => {
+      // Exclude providers that were locally deleted
+      if (locallyDeletedProviderIds.includes(provider.id)) {
+        return false;
+      }
+      
+      // Filter by category
+      if (categoryFilter !== 'all' && provider.type !== categoryFilter) {
+        return false;
+      }
+      
+      // Filter by search query
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        return (
+          provider.name?.toLowerCase().includes(query) ||
+          provider.specialty?.toLowerCase().includes(query) ||
+          provider.notes?.toLowerCase().includes(query)
+        );
+      }
+      
+      return true;
+    });
 
 
-  // Set up event listeners for provider refresh
+  // Set up event listeners for provider refresh with improved state handling
 useEffect(() => {
   const handleDirectoryRefresh = () => {
     console.log("Directory refresh event received, reloading providers");
-    // Force refresh by toggling search query
-    setSearchQuery(prev => prev + " ");
-    setSearchQuery(prev => prev.trim());
     
-    // Force a UI refresh by dispatching a custom event
+    // IMPROVED: Force a re-render by creating a copy of the providers array
+    // This ensures React detects the change and re-renders the component
+    if (Array.isArray(providers)) {
+      const updatedProviders = [...providers];
+      console.log(`Refreshing directory with ${updatedProviders.length} providers`);
+      
+      // Force a change in state that depends on providers to trigger filtering
+      setSearchQuery(prev => {
+        if (prev === '') return ' ';
+        return prev === ' ' ? '' : ' ';
+      });
+      
+      // Schedule another refresh after a short delay to ensure UI is updated
+      setTimeout(() => {
+        setSearchQuery(prev => prev.trim());
+      }, 100);
+    }
+    
+    // Force a UI refresh by dispatching a custom event to parent components
     window.dispatchEvent(new CustomEvent('force-data-refresh'));
   };
   
-  // Listen for the refresh event
+  // Listen for the refresh events
   window.addEventListener('directory-refresh-needed', handleDirectoryRefresh);
   window.addEventListener('provider-added', handleDirectoryRefresh);
+  window.addEventListener('provider-removed', handleDirectoryRefresh);
   
   // Clean up
   return () => {
     window.removeEventListener('directory-refresh-needed', handleDirectoryRefresh);
     window.removeEventListener('provider-added', handleDirectoryRefresh);
+    window.removeEventListener('provider-removed', handleDirectoryRefresh);
   };
-}, []);
+}, [providers]); // Add providers as a dependency to ensure we use the latest version
   
+  // Reset locally deleted providers when the providers prop changes
+  // This ensures we don't accidentally hide providers that exist in new data
+  useEffect(() => {
+    // When providers are updated from parent, we can clear our local deletion tracking
+    setLocallyDeletedProviderIds([]);
+  }, [providers]);
+
   useEffect(() => {
     const handleProviderAdded = () => {
       console.log("Provider added event received in ProviderDirectory");
@@ -138,6 +175,9 @@ useEffect(() => {
       
       // Set a flag to prevent recursive refreshes
       window._handlingProviderRefresh = true;
+      
+      // Reset locally deleted providers since we're getting fresh data
+      setLocallyDeletedProviderIds([]);
       
       // Force refresh of providers directly
       if (onAddProvider || familyId) {
@@ -160,13 +200,13 @@ useEffect(() => {
           
           // Clear the flag after completing refresh
           window._handlingProviderRefresh = false;
-        }, 1000);
+        }, 300); // Reduced from 1000ms to 300ms for faster feedback
       } else {
         window._handlingProviderRefresh = false;
       }
     };
   
-    // Listen for the custom event
+    // Listen for the custom events
     window.addEventListener('provider-added', handleProviderAdded);
     window.addEventListener('directory-refresh-needed', () => {
       // Force component redraw by updating a small piece of state
@@ -255,11 +295,63 @@ useEffect(() => {
     setShowDeleteConfirm(true);
   };
   
-  // Handle actual deletion
+  // Handle actual deletion with direct state update
   const handleDelete = async () => {
     if (providerToDelete && onDeleteProvider) {
-      await onDeleteProvider(providerToDelete.id);
+      try {
+        // Store the provider ID before deletion for UI updates
+        const providerIdToRemove = providerToDelete.id;
+        
+        // CRITICAL FIX: Immediately add the provider ID to our locally deleted list
+        // This will instantly remove it from the UI through our filtered providers
+        setLocallyDeletedProviderIds(prev => [...prev, providerIdToRemove]);
+        
+        // Close the confirmation dialog immediately for better UX
+        setShowDeleteConfirm(false);
+        
+        // Now call the parent's delete handler
+        console.log("Deleting provider with ID:", providerIdToRemove);
+        const success = await onDeleteProvider(providerIdToRemove);
+        
+        if (success) {
+          console.log("Provider deletion successful:", providerIdToRemove);
+          
+          // Keep the provider in our locally deleted list
+          // The next time the component receives new props, it will be gone anyway
+          
+          // Dispatch events to ensure other components update
+          window.dispatchEvent(new CustomEvent('provider-removed', {
+            detail: { providerId: providerIdToRemove }
+          }));
+          
+          window.dispatchEvent(new CustomEvent('directory-refresh-needed'));
+          window.dispatchEvent(new CustomEvent('force-data-refresh'));
+        } else {
+          // If deletion failed in the backend, we should remove it from our deleted list
+          console.warn("Provider deletion failed, removing from locally deleted list");
+          setLocallyDeletedProviderIds(prev => 
+            prev.filter(id => id !== providerIdToRemove)
+          );
+          
+          // Show an error message
+          alert("Failed to delete provider. Please try again.");
+        }
+      } catch (error) {
+        console.error("Error deleting provider:", error);
+        
+        // If an error occurred, remove from locally deleted list
+        if (providerToDelete?.id) {
+          setLocallyDeletedProviderIds(prev => 
+            prev.filter(id => id !== providerToDelete.id)
+          );
+        }
+        
+        // Show an error message
+        alert("Error deleting provider: " + error.message);
+      }
     }
+    
+    // Reset state even if deletion failed
     setShowDeleteConfirm(false);
     setProviderToDelete(null);
   };
@@ -269,6 +361,13 @@ useEffect(() => {
     return providerTypes.find(type => type.id === typeId) || providerTypes.find(type => type.id === 'other');
   };
   
+  // Handle clicking on a provider card
+  const handleProviderClick = (provider) => {
+    if (selectMode && onSelectProvider) {
+      onSelectProvider(provider);
+    }
+  };
+  
   return (
     <div className="bg-white rounded-lg font-roboto">
       {/* Header with controls */}
@@ -276,10 +375,12 @@ useEffect(() => {
   <div>
     <h3 className="text-lg font-medium font-roboto flex items-center">
       <User size={20} className="mr-2 text-purple-500" />
-      Family Provider Directory
+      {selectMode ? "Select a Provider" : "Family Provider Directory"}
     </h3>
     <p className="text-sm text-gray-500 font-roboto">
-      Manage your family's doctors, teachers, childcare, and service providers
+      {selectMode 
+        ? "Choose a provider for this event" 
+        : "Manage your family's doctors, teachers, childcare, and service providers"}
     </p>
   </div>
   
@@ -291,12 +392,14 @@ useEffect(() => {
     >
       {viewMode === 'card' ? <List size={20} /> : <Grid size={20} />}
     </button>
-    <button 
-      className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
-      onClick={() => openProviderModal()}
-    >
-      <Plus size={20} />
-    </button>
+    {!selectMode && (
+      <button 
+        className="p-2 rounded-md bg-black text-white hover:bg-gray-800"
+        onClick={() => openProviderModal()}
+      >
+        <Plus size={20} />
+      </button>
+    )}
     {onClose && (
       <button 
         className="p-2 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700"
@@ -384,7 +487,8 @@ useEffect(() => {
       key={provider.id} 
       className={`border rounded-lg p-5 hover:bg-gray-50 ${
         viewMode === 'list' ? "flex items-center justify-between" : ""
-      }`}
+      } ${selectMode ? "cursor-pointer" : ""}`}
+      onClick={selectMode ? () => onSelectProvider && onSelectProvider(provider) : undefined}
     >
       {viewMode === 'card' ? (
         <div>
@@ -410,20 +514,35 @@ useEffect(() => {
               </div>
             </div>
             <div className="flex space-x-2">
-              <button
-                onClick={() => openProviderModal(provider)}
-                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
-                title="Edit"
-              >
-                <Edit size={16} />
-              </button>
-              <button
-                onClick={() => confirmDelete(provider)}
-                className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                title="Delete"
-              >
-                <Trash2 size={16} />
-              </button>
+              {selectMode ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectProvider && onSelectProvider(provider);
+                  }}
+                  className="px-3 py-1.5 text-sm bg-black text-white hover:bg-gray-800 rounded"
+                  title="Select Provider"
+                >
+                  Select
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => openProviderModal(provider)}
+                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                    title="Edit"
+                  >
+                    <Edit size={16} />
+                  </button>
+                  <button
+                    onClick={() => confirmDelete(provider)}
+                    className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                    title="Delete"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </>
+              )}
             </div>
           </div>
           
@@ -486,20 +605,35 @@ useEffect(() => {
             </div>
           </div>
           <div className="flex space-x-2">
-            <button
-              onClick={() => openProviderModal(provider)}
-              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
-              title="Edit"
-            >
-              <Edit size={16} />
-            </button>
-            <button
-              onClick={() => confirmDelete(provider)}
-              className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-              title="Delete"
-            >
-              <Trash2 size={16} />
-            </button>
+            {selectMode ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectProvider && onSelectProvider(provider);
+                }}
+                className="px-3 py-1.5 text-sm bg-black text-white hover:bg-gray-800 rounded"
+                title="Select Provider"
+              >
+                Select
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => openProviderModal(provider)}
+                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                  title="Edit"
+                >
+                  <Edit size={16} />
+                </button>
+                <button
+                  onClick={() => confirmDelete(provider)}
+                  className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                  title="Delete"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </>
+            )}
           </div>
         </>
       )}
@@ -685,149 +819,6 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Add this debug button to the header section of ProviderDirectory.jsx */}
-<button
-  className="p-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 text-xs"
-onClick={() => {
-  // Import and expose Firebase instances
-  import('../../services/firebase').then(module => {
-    // Expose the database for console testing
-    window.db = module.db;
-    window.auth = module.auth;
-    window.familyId = familyId;
-
-    // Log the exposed variables
-    console.log("✅ DB REFERENCE:", window.db);
-    console.log("✅ AUTH:", window.auth);
-    console.log("✅ FAMILY ID:", window.familyId);
-    
-    // Create a message for the user
-    alert("Firebase references exposed to window objects. Check console and run test.");
-    
-    // Run test directly if desired
-    import('../../services/ProviderService').then(module => {
-      const ProviderService = module.default;
-      console.log("✅ ProviderService loaded:", ProviderService);
-      
-      // Run the test with the current family ID, and DON'T delete the provider after
-      ProviderService.testDirectProviderCreation(window.familyId, false)
-        .then(result => {
-          console.log("✅ Test result:", result);
-          if (result) {
-            alert("Provider creation test successful! Check Firestore 'providers' collection!");
-          } else {
-            alert("Provider creation test failed. Check console for details.");
-          }
-        })
-        .catch(err => {
-          console.error("❌ Test execution error:", err);
-          alert("Error running test. Check console for details.");
-        });
-    });
-  }).catch(error => {
-    console.error("Error loading Firebase modules:", error);
-    alert("Failed to load Firebase modules. See console for details.");
-  });
-}}
->
-  Debug: Test Provider Creation
-</button>
-
-<button
-  className="p-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 text-xs"
-  onClick={() => {
-    // Import and expose Firebase instances
-    import('../../services/firebase').then(module => {
-      // Expose the database for console testing
-      window.db = module.db;
-      window.auth = module.auth;
-      window.familyId = familyId;
-
-      // Log the exposed variables
-      console.log("✅ DB REFERENCE:", window.db);
-      console.log("✅ AUTH:", window.auth);
-      console.log("✅ FAMILY ID:", window.familyId);
-      
-      // Create a message for the user
-      alert("Firebase references exposed to window objects. Check console and run test.");
-      
-      // Run test directly if desired
-      import('../../services/ProviderService').then(module => {
-        const ProviderService = module.default;
-        console.log("✅ ProviderService loaded:", ProviderService);
-        
-        // Run the test with the current family ID, and DON'T delete the provider after
-        ProviderService.testDirectProviderCreation(window.familyId, false)
-          .then(result => {
-            console.log("✅ Test result:", result);
-            if (result) {
-              alert("Provider creation test successful! Check Firestore 'providers' collection!");
-            } else {
-              alert("Provider creation test failed. Check console for details.");
-            }
-          })
-          .catch(err => {
-            console.error("❌ Test execution error:", err);
-            alert("Error running test. Check console for details.");
-          });
-      });
-    }).catch(error => {
-      console.error("Error loading Firebase modules:", error);
-      alert("Failed to load Firebase modules. See console for details.");
-    });
-  }}
->
-  Debug: Test Provider Creation
-</button>
-// Add this debug button to the header section of ProviderDirectory.jsx
-<button
-  className="p-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 text-xs"
-  onClick={() => {
-    // Import and expose Firebase instances
-    import('../../services/firebase').then(module => {
-      // Expose the database for console testing
-      window.db = module.db;
-      window.auth = module.auth;
-      window.familyId = familyId;
-
-      // Log the exposed variables
-      console.log("✅ DB REFERENCE:", window.db);
-      console.log("✅ AUTH:", window.auth);
-      console.log("✅ FAMILY ID:", window.familyId);
-      
-      // Create a message for the user
-      alert("Firebase references exposed to window objects. Check console and run test.");
-      
-      // Create and add a test provider
-      const { collection, addDoc, serverTimestamp } = require('firebase/firestore');
-      
-      const testProvider = {
-        name: "Test Provider " + new Date().toTimeString().slice(0, 8),
-        type: "medical",
-        specialty: "Testing",
-        familyId: familyId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
-      
-      addDoc(collection(window.db, "providers"), testProvider)
-        .then(docRef => {
-          console.log("✅ TEST PROVIDER ADDED:", docRef.id);
-          alert("Test provider added! ID: " + docRef.id);
-          
-          // Force UI refresh
-          window.dispatchEvent(new CustomEvent('provider-added'));
-          setTimeout(() => window.dispatchEvent(new CustomEvent('directory-refresh-needed')), 500);
-        })
-        .catch(err => {
-          console.error("❌ TEST PROVIDER FAILED:", err);
-          alert("Test failed: " + err.message);
-        });
-    });
-  }}
->
-  Debug: Test Provider Creation
-</button>
       
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (

@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { 
-  X, Check, Edit, Trash2, Calendar, Clock, MapPin, User, FileText, Bell, Users, Info, AlertCircle, BrainCircuit
+  X, Check, Edit, Trash2, Calendar, Clock, MapPin, User, FileText, Bell, Users, Info, AlertCircle, BrainCircuit,
+  Plus, UserPlus, Phone
 } from 'lucide-react';
 import UserAvatar from '../common/UserAvatar';
 import EventSourceBadge from './EventSourceBadge';
+import DocumentLibrary from '../document/DocumentLibrary';
+import ProviderDirectory from '../document/ProviderDirectory';
 
 /**
  * Component to display event details with options to edit or delete
@@ -31,13 +34,50 @@ const EventDetails = ({
   showAiMetadata = false
 }) => {
   // Add a null check before trying to use event properties
-// State for showing/hiding sections
-const [showConflicts, setShowConflicts] = useState(false);
+  // State for showing/hiding sections
+  const [showConflicts, setShowConflicts] = useState(false);
+  const [showDocumentLibrary, setShowDocumentLibrary] = useState(false);
+  const [showProviderDirectory, setShowProviderDirectory] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-if (!event) {
-  console.warn("EventDetails received null event");
-  return null;
-}
+  if (!event) {
+    console.warn("EventDetails received null event");
+    return null;
+  }
+  
+  // Handler for adding a document to the event
+  const handleAddDocument = (document) => {
+    console.log("Adding document to event:", document);
+    
+    // Create a copy of the event with the document added
+    const updatedEvent = {
+      ...event,
+      documents: [...(event.documents || []), document]
+    };
+    
+    // Call onEdit to update the event
+    onEdit(updatedEvent);
+    
+    // Close the document library
+    setShowDocumentLibrary(false);
+  };
+  
+  // Handler for adding a provider to the event
+  const handleAddProvider = (provider) => {
+    console.log("Adding provider to event:", provider);
+    
+    // Create a copy of the event with the provider added
+    const updatedEvent = {
+      ...event,
+      providers: [...(event.providers || []), provider]
+    };
+    
+    // Call onEdit to update the event
+    onEdit(updatedEvent);
+    
+    // Close the provider directory
+    setShowProviderDirectory(false);
+  };
   
   // Format date for display
   const formatDate = (dateString) => {
@@ -250,54 +290,85 @@ if (!event) {
 )}
 
 {/* Documents */}
-{(event.documents && event.documents.length > 0) && (
-  <div className="flex items-start">
-    <FileText size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
-    <div>
-      <p className="font-medium text-sm font-roboto">Attached Documents</p>
-      <div className="space-y-1 mt-1">
-        {event.documents.map((doc, index) => (
-          <div key={index} className="flex items-center text-sm text-blue-600">
-            <FileText size={14} className="mr-1" />
-            <a 
-              href={doc.fileUrl} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="hover:underline text-xs"
-            >
-              {doc.title || doc.fileName}
-            </a>
-          </div>
-        ))}
+<div className="flex items-start">
+  <FileText size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+  <div className="w-full">
+    <p className="font-medium text-sm font-roboto mb-2">Attach Documents</p>
+    
+    {/* Document selector button that matches the UI in the screenshot */}
+    <button 
+      onClick={() => setShowDocumentLibrary(true)}
+      className="w-full flex items-center justify-center gap-2 py-3 px-4 text-gray-500 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 mb-3"
+    >
+      <FileText size={18} />
+      <span>Select Documents</span>
+    </button>
+    
+    {/* Only show attached documents section if there are any */}
+    {event.documents && event.documents.length > 0 && (
+      <div>
+        <p className="font-medium text-xs text-gray-700 mb-1">Attached:</p>
+        <div className="space-y-1 mt-1">
+          {event.documents.map((doc, index) => (
+            <div key={index} className="flex items-center text-sm text-blue-600">
+              <FileText size={14} className="mr-1" />
+              <a 
+                href={doc.fileUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="hover:underline text-xs"
+              >
+                {doc.title || doc.fileName}
+              </a>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    )}
   </div>
-)}
+</div>
 
 {/* Providers */}
-{(event.providers && event.providers.length > 0) && (
-  <div className="flex items-start">
-    <User size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
-    <div>
-      <p className="font-medium text-sm font-roboto">Providers</p>
-      <div className="space-y-1 mt-1">
-        {event.providers.map((provider, index) => (
-          <div key={index} className="text-sm">
-            <p className="font-medium">{provider.name}</p>
-            {provider.specialty && (
-              <p className="text-xs text-gray-600">{provider.specialty}</p>
-            )}
-            {provider.phone && (
-              <p className="text-xs text-blue-600">
-                <a href={`tel:${provider.phone}`}>{provider.phone}</a>
-              </p>
-            )}
-          </div>
-        ))}
+<div className="flex items-start">
+  <User size={18} className="mr-2 mt-1 text-gray-500 flex-shrink-0" />
+  <div className="w-full">
+    <p className="font-medium text-sm font-roboto mb-2">Link to Provider</p>
+    
+    {/* Provider selector button that matches the UI in the screenshot */}
+    <button 
+      onClick={() => setShowProviderDirectory(true)}
+      className="w-full flex items-center justify-center gap-2 py-3 px-4 text-gray-500 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 mb-3"
+    >
+      <User size={18} />
+      <span>Select Provider</span>
+    </button>
+    
+    {/* Only show linked providers section if there are any */}
+    {event.providers && event.providers.length > 0 && (
+      <div>
+        <p className="font-medium text-xs text-gray-700 mb-1">Linked provider(s):</p>
+        <div className="space-y-2 mt-1">
+          {event.providers.map((provider, index) => (
+            <div key={index} className="p-2 bg-gray-50 rounded-md border border-gray-100">
+              <p className="font-medium text-sm">{provider.name}</p>
+              {provider.specialty && (
+                <p className="text-xs text-gray-600">{provider.specialty}</p>
+              )}
+              {provider.phone && (
+                <p className="text-xs text-blue-600 mt-1">
+                  <a href={`tel:${provider.phone}`} className="flex items-center">
+                    <Phone size={12} className="mr-1" />
+                    {provider.phone}
+                  </a>
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    )}
   </div>
-)}
+</div>
 
 {/* Reminders */}
 {event.reminders && event.reminders.overrides && event.reminders.overrides.length > 0 && (
@@ -439,9 +510,17 @@ if (!event) {
             )}
           </div>
         </div>
-        <div className="p-4 border-t flex justify-between">
+        {/* Move buttons to the top */}
+        <div className="p-4 border-b flex justify-between">
           <button
-            onClick={() => onDelete(event)}
+            onClick={() => onEdit(event)}
+            className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 font-roboto flex items-center"
+          >
+            <Edit size={16} className="mr-2" />
+            Update Event
+          </button>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
             className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-50 font-roboto flex items-center"
             disabled={pendingAction === 'delete'}
           >
@@ -457,13 +536,6 @@ if (!event) {
               </>
             )}
           </button>
-          <button
-            onClick={() => onEdit(event)}
-            className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 font-roboto flex items-center"
-          >
-            <Edit size={16} className="mr-2" />
-            Edit
-          </button>
         </div>
         
         {/* Success Animation */}
@@ -476,6 +548,60 @@ if (!event) {
                 </div>
                 <h3 className="text-lg font-medium">Event Updated!</h3>
                 <p className="text-sm text-gray-500 mt-1">Successfully updated in your calendar</p>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Document Library Overlay */}
+        {showDocumentLibrary && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 p-4">
+            <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <DocumentLibrary 
+                onClose={() => setShowDocumentLibrary(false)}
+                onAddDocument={handleAddDocument}
+              />
+            </div>
+          </div>
+        )}
+        
+        {/* Provider Directory Overlay */}
+        {showProviderDirectory && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 p-4">
+            <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <ProviderDirectory 
+                onClose={() => setShowProviderDirectory(false)}
+                selectMode={true}
+                onSelectProvider={handleAddProvider}
+              />
+            </div>
+          </div>
+        )}
+        
+        {/* Delete confirmation modal */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 p-4">
+            <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
+              <h3 className="text-lg font-medium mb-3">Confirm Delete</h3>
+              <p className="mb-4">
+                Are you sure you want to delete this event? This action cannot be undone.
+              </p>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="px-4 py-2 border border-gray-300 rounded text-sm text-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowDeleteConfirm(false);
+                    onDelete(event);
+                  }}
+                  className="px-4 py-2 bg-red-600 text-white rounded text-sm"
+                >
+                  Delete Event
+                </button>
               </div>
             </div>
           </div>

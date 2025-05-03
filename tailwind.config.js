@@ -8,6 +8,7 @@ module.exports = {
     extend: {
       animation: {
         'loading': 'loading 1.5s ease-in-out infinite',
+        'bounce-slow': 'bounce 3s ease-in-out infinite',
       },
       keyframes: {
         loading: {

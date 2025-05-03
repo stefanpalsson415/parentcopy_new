@@ -70,9 +70,10 @@ class ParserFeedbackService {
       // Analyze differences between initial parse and user edits
       const learningData = this.analyzeDifferences(item.data);
 
-      // TODO: In a full implementation, this would update parsing models or rules
-      // For now, we'll just log the learning opportunities
-      console.log("Learning opportunities from parser feedback:", learningData);
+      // Store the learning data in Firebase for future model improvements
+      this.storeFeedbackLearningData(learningData)
+        .then(() => console.log("Saved parser feedback learning data"))
+        .catch(err => console.error("Error saving parser feedback:", err));
 
       this.isProcessing = false;
       this.processQueue(); // Process next item if available

@@ -416,8 +416,6 @@ async generateBalanceExperiments(familyId, weightedScores) {
   }
 
 // In src/services/AllieAIService.js
-// Add this method
-
 extractProviderDetails(message) {
   try {
     // Start with empty details object
@@ -1529,7 +1527,6 @@ async saveAppointmentToDatabase(familyId, childId, appointmentDetails) {
 }
 
 
-// Add this new method to AllieAIService.js
 async processTaskFromChat(message, familyId, userId) {
   try {
     if (!familyId) return { success: false, error: "Family ID is required" };
@@ -1716,9 +1713,6 @@ async processTaskFromChat(message, familyId, userId) {
   }
 }
 
-
-
-// Replace with:
 async addAppointmentToCalendar(appointmentDetails) {
   try {
     // Parse date and time
@@ -2265,8 +2259,6 @@ getFallbackChildInsights(childrenData) {
   }
 
 
-// Add this function to src/services/AllieAIService.js
-
 /**
  * Generate couples meeting agenda based on both partners' assessments and prework
  * @param {string} familyId - Family ID
@@ -2274,7 +2266,6 @@ getFallbackChildInsights(childrenData) {
  * @param {object} cycleData - Cycle data with assessments and prework
  * @returns {Promise<object>} Generated meeting agenda
  */
-// This function should be added or updated in AllieAIService.js
 async generateCouplesMeetingAgenda(familyId, cycleNumber, cycleData) {
   try {
     if (!familyId || !cycleData) {
@@ -2387,7 +2378,6 @@ async generateCouplesMeetingAgenda(familyId, cycleNumber, cycleData) {
   }
 }
 
-// Add this fallback function if it doesn't exist
 getFallbackMeetingAgenda(cycleNumber) {
   return {
     title: `Cycle ${cycleNumber}: Strengthening Your Partnership`,

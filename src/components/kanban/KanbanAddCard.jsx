@@ -1,7 +1,8 @@
 // src/components/kanban/KanbanAddCard.jsx
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Tag, User, AlertCircle, Plus } from 'lucide-react';
+import { X, Calendar, Tag, User, AlertCircle, Plus, Star } from 'lucide-react';
 import UserAvatar from '../common/UserAvatar';
+import { useFamily } from '../../contexts/FamilyContext';
 
 const KanbanAddCard = ({ 
   isOpen, 
@@ -11,6 +12,7 @@ const KanbanAddCard = ({
   familyMembers = [],
   columnId
 }) => {
+  const { familyMembers: allMembers } = useFamily();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -19,7 +21,12 @@ const KanbanAddCard = ({
   const [assignedTo, setAssignedTo] = useState('');
   const [subtasks, setSubtasks] = useState([]);
   const [newSubtask, setNewSubtask] = useState('');
+  const [hasKidToken, setHasKidToken] = useState(false);
+  const [selectedKidId, setSelectedKidId] = useState('');
   const [errors, setErrors] = useState({});
+  
+  // Filter to get just child members
+  const childMembers = allMembers.filter(m => m.role === 'child');
 
   useEffect(() => {
     if (isOpen) {
@@ -32,6 +39,8 @@ const KanbanAddCard = ({
         setCategory(initialData.category || 'household');
         setAssignedTo(initialData.assignedTo || '');
         setSubtasks(initialData.subtasks || []);
+        setHasKidToken(initialData.hasKidToken || false);
+        setSelectedKidId(initialData.kidTokenChildId || '');
       } else {
         // Create mode - initialize with defaults
         setTitle('');
@@ -41,6 +50,8 @@ const KanbanAddCard = ({
         setCategory('household');
         setAssignedTo('');
         setSubtasks([]);
+        setHasKidToken(false);
+        setSelectedKidId('');
       }
       setErrors({});
     }
@@ -67,6 +78,11 @@ const KanbanAddCard = ({
       assignedTo: assignedTo || null,
       subtasks,
       column: columnId || initialData.column || 'upcoming',
+      // Add kid token properties
+      hasKidToken,
+      kidTokenChildId: hasKidToken ? selectedKidId : null,
+      kidTokenVerified: initialData.kidTokenVerified || false,
+      childVerified: initialData.childVerified || false,
       ...(initialData.id && { id: initialData.id })
     };
     
@@ -285,6 +301,72 @@ const KanbanAddCard = ({
               </div>
             </div>
           </div>
+          
+          {/* Kid Token Section - only show if assignedTo is a parent */}
+          {assignedTo && familyMembers.find(m => m.id === assignedTo)?.role === 'parent' && (
+            <div className="pt-3 border-t">
+              <div className="flex items-center justify-between mb-2">
+                <label className="flex items-center text-sm font-medium text-gray-700">
+                  <Star size={14} className="text-yellow-500 mr-2" />
+                  Kid Token Verification
+                </label>
+                <label className="inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hasKidToken}
+                    onChange={() => setHasKidToken(!hasKidToken)}
+                    className="sr-only peer"
+                  />
+                  <div className="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                  <span className="ml-3 text-sm font-medium text-gray-700">
+                    {hasKidToken ? 'Enabled' : 'Disabled'}
+                  </span>
+                </label>
+              </div>
+              
+              {hasKidToken && (
+                <div className="bg-yellow-50 p-3 rounded-md mb-2">
+                  <p className="text-sm text-yellow-800 mb-2">
+                    A child will verify when this task is completed, earning a "Family Buck" token.
+                  </p>
+                  
+                  {childMembers.length > 0 ? (
+                    <>
+                      <label className="block text-sm font-medium text-yellow-800 mb-1">
+                        Select Child Verifier:
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {childMembers.map(child => (
+                          <button
+                            key={child.id}
+                            type="button"
+                            onClick={() => setSelectedKidId(child.id)}
+                            className={`flex flex-col items-center p-2 rounded-md ${
+                              selectedKidId === child.id 
+                                ? 'bg-yellow-200 border-2 border-yellow-500' 
+                                : 'bg-yellow-100 hover:bg-yellow-200'
+                            }`}
+                          >
+                            <UserAvatar user={child} size={24} className="mb-1" />
+                            <span className="text-xs truncate max-w-full">{child.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                      {hasKidToken && !selectedKidId && (
+                        <p className="text-xs text-red-600 mt-1">
+                          Please select a child to verify this task.
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-yellow-800">
+                      No children available in this family. Add children to use this feature.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           
           {/* Submit Button */}
           <div className="flex justify-end space-x-2 pt-2 border-t">

@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   FileText, Image, FileIcon, Paperclip, Search, Filter, Upload, 
-  Download, Trash2, Eye, FolderPlus, Folder, X, Calendar, User
+  Download, Trash2, Eye, FolderPlus, Folder, X, Calendar, User,
+  Check, Plus
 } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -14,7 +15,13 @@ import {
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import UserAvatar from '../common/UserAvatar';
 
-const DocumentLibrary = ({ initialChildId = null, initialCategory = null, onClose }) => {
+const DocumentLibrary = ({ 
+  initialChildId = null, 
+  initialCategory = null, 
+  onClose,
+  selectMode = false,
+  onSelectDocument = null 
+}) => {
   const { familyMembers, familyId } = useFamily();
   const { currentUser } = useAuth();
   const [documents, setDocuments] = useState([]);
@@ -28,6 +35,7 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null, onClos
     type: 'all'
   });
   const [selectedDocument, setSelectedDocument] = useState(null);
+  const [selectedDocuments, setSelectedDocuments] = useState([]);
   const [viewMode, setViewMode] = useState('grid');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadData, setUploadData] = useState({
@@ -336,6 +344,26 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null, onClos
     setSelectedDocument(document);
   };
   
+  // Handle document selection
+  const handleDocumentSelection = (document) => {
+    if (selectMode && onSelectDocument) {
+      onSelectDocument(document);
+    } else {
+      // Toggle document selection for multi-select
+      const isSelected = selectedDocuments.some(doc => doc.id === document.id);
+      if (isSelected) {
+        setSelectedDocuments(selectedDocuments.filter(doc => doc.id !== document.id));
+      } else {
+        setSelectedDocuments([...selectedDocuments, document]);
+      }
+    }
+  };
+  
+  // Check if a document is selected
+  const isDocumentSelected = (documentId) => {
+    return selectedDocuments.some(doc => doc.id === documentId);
+  };
+  
   // Get child name
   const getChildName = (childId) => {
     const child = children.find(c => c.id === childId);
@@ -402,8 +430,29 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null, onClos
       {/* Header */}
       <div className="p-4 border-b">
         <div className="flex justify-between items-center">
-          <h2 className="text-lg font-medium">Document Library</h2>
+          <h2 className="text-lg font-medium">
+            {selectMode ? 'Select Document' : 'Document Library'}
+            {selectMode && selectedDocuments.length > 0 && (
+              <span className="ml-2 text-sm text-gray-500">
+                ({selectedDocuments.length} selected)
+              </span>
+            )}
+          </h2>
           <div className="flex space-x-2">
+            {selectMode && selectedDocuments.length > 0 && (
+              <button
+                onClick={() => {
+                  if (onSelectDocument && selectedDocuments.length === 1) {
+                    onSelectDocument(selectedDocuments[0]);
+                  }
+                }}
+                className="px-3 py-1 bg-green-600 text-white rounded-md text-sm flex items-center hover:bg-green-700"
+                disabled={selectedDocuments.length !== 1}
+              >
+                <Check size={14} className="mr-1" />
+                Attach Selected
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-2 rounded-md hover:bg-gray-100"
@@ -411,20 +460,24 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null, onClos
             >
               <X size={18} />
             </button>
-            <button
-              onClick={() => setShowUploadModal(true)}
-              className="px-3 py-1 bg-black text-white rounded-md text-sm flex items-center hover:bg-gray-800"
-            >
-              <Upload size={14} className="mr-1" />
-              Upload
-            </button>
-            <button
-              onClick={() => createFolder(prompt('Enter folder name:'))}
-              className="px-3 py-1 border border-gray-300 rounded-md text-sm flex items-center hover:bg-gray-50"
-            >
-              <FolderPlus size={14} className="mr-1" />
-              New Folder
-            </button>
+            {!selectMode && (
+              <>
+                <button
+                  onClick={() => setShowUploadModal(true)}
+                  className="px-3 py-1 bg-black text-white rounded-md text-sm flex items-center hover:bg-gray-800"
+                >
+                  <Upload size={14} className="mr-1" />
+                  Upload
+                </button>
+                <button
+                  onClick={() => createFolder(prompt('Enter folder name:'))}
+                  className="px-3 py-1 border border-gray-300 rounded-md text-sm flex items-center hover:bg-gray-50"
+                >
+                  <FolderPlus size={14} className="mr-1" />
+                  New Folder
+                </button>
+              </>
+            )}
           </div>
         </div>
         
@@ -558,10 +611,26 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null, onClos
                 key={document.id}
                 className={`border rounded-lg p-3 hover:bg-gray-50 ${
                   viewMode === 'grid' ? "" : "flex items-center justify-between"
-                }`}
+                } ${isDocumentSelected(document.id) ? "ring-2 ring-blue-500 bg-blue-50" : ""}`}
+                onClick={selectMode ? () => handleDocumentSelection(document) : undefined}
               >
                 {viewMode === 'grid' ? (
-                  <div>
+                  <div className="relative">
+                    {selectMode && (
+                      <div className="absolute -top-1 -right-1 z-10">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                          isDocumentSelected(document.id) 
+                            ? "bg-blue-500 text-white" 
+                            : "bg-gray-200 text-gray-600"
+                        }`}>
+                          {isDocumentSelected(document.id) ? (
+                            <Check size={14} />
+                          ) : (
+                            <Plus size={14} />
+                          )}
+                        </div>
+                      </div>
+                    )}
                     <div className="flex justify-center mb-2">
                       {getFileIcon(document.fileType)}
                     </div>
@@ -577,33 +646,71 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null, onClos
                       </p>
                     </div>
                     <div className="mt-2 pt-2 border-t flex justify-center space-x-3">
-                      <button
-                        onClick={() => viewDocument(document)}
-                        className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                        title="View"
-                      >
-                        <Eye size={16} />
-                      </button>
-                      <a
-                        href={document.fileUrl}
-                        download={document.fileName}
-                        className="p-1 text-green-600 hover:bg-green-50 rounded"
-                        title="Download"
-                      >
-                        <Download size={16} />
-                      </a>
-                      <button
-                        onClick={() => deleteDocument(document.id)}
-                        className="p-1 text-red-600 hover:bg-red-50 rounded"
-                        title="Delete"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {!selectMode && (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              viewDocument(document);
+                            }}
+                            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                            title="View"
+                          >
+                            <Eye size={16} />
+                          </button>
+                          <a
+                            href={document.fileUrl}
+                            download={document.fileName}
+                            onClick={(e) => e.stopPropagation()}
+                            className="p-1 text-green-600 hover:bg-green-50 rounded"
+                            title="Download"
+                          >
+                            <Download size={16} />
+                          </a>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteDocument(document.id);
+                            }}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </>
+                      )}
+                      {selectMode && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onSelectDocument) {
+                              onSelectDocument(document);
+                            }
+                          }}
+                          className="px-3 py-1 bg-blue-600 text-white rounded-md text-xs flex items-center hover:bg-blue-700"
+                        >
+                          <Check size={12} className="mr-1" />
+                          Select
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : (
                   <>
                     <div className="flex items-center">
+                      {selectMode && (
+                        <div className={`mr-3 w-6 h-6 rounded-full flex items-center justify-center ${
+                          isDocumentSelected(document.id) 
+                            ? "bg-blue-500 text-white" 
+                            : "bg-gray-200 text-gray-600"
+                        }`}>
+                          {isDocumentSelected(document.id) ? (
+                            <Check size={14} />
+                          ) : (
+                            <Plus size={14} />
+                          )}
+                        </div>
+                      )}
                       {getFileIcon(document.fileType)}
                       <div className="ml-3">
                         <p className="font-medium text-sm">{document.title}</p>
@@ -613,28 +720,53 @@ const DocumentLibrary = ({ initialChildId = null, initialCategory = null, onClos
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => viewDocument(document)}
-                        className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                        title="View"
-                      >
-                        <Eye size={16} />
-                      </button>
-                      <a
-                        href={document.fileUrl}
-                        download={document.fileName}
-                        className="p-1 text-green-600 hover:bg-green-50 rounded"
-                        title="Download"
-                      >
-                        <Download size={16} />
-                      </a>
-                      <button
-                        onClick={() => deleteDocument(document.id)}
-                        className="p-1 text-red-600 hover:bg-red-50 rounded"
-                        title="Delete"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {!selectMode && (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              viewDocument(document);
+                            }}
+                            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                            title="View"
+                          >
+                            <Eye size={16} />
+                          </button>
+                          <a
+                            href={document.fileUrl}
+                            download={document.fileName}
+                            onClick={(e) => e.stopPropagation()}
+                            className="p-1 text-green-600 hover:bg-green-50 rounded"
+                            title="Download"
+                          >
+                            <Download size={16} />
+                          </a>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteDocument(document.id);
+                            }}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </>
+                      )}
+                      {selectMode && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onSelectDocument) {
+                              onSelectDocument(document);
+                            }
+                          }}
+                          className="px-3 py-1 bg-blue-600 text-white rounded-md text-xs flex items-center hover:bg-blue-700"
+                        >
+                          <Check size={12} className="mr-1" />
+                          Select
+                        </button>
+                      )}
                     </div>
                   </>
                 )}

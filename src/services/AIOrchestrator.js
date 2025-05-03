@@ -147,14 +147,24 @@ updateFamilyContext(familyId) {
     
     console.log("🔄 Updating family context for all services:", familyId);
     
+    // Get current auth user to ensure we have userId
+    const currentUserId = auth.currentUser?.uid || this.authContext?.userId;
+    
     // Update internal auth context
     if (this.authContext) {
       this.authContext.familyId = familyId;
       this.authContext.timestamp = Date.now();
-      console.log("✅ Updated internal auth context with familyId");
+      // Ensure userId is preserved
+      if (!this.authContext.userId && currentUserId) {
+        this.authContext.userId = currentUserId;
+      }
+      console.log("✅ Updated internal auth context with familyId:", {
+        userId: this.authContext.userId?.substring(0, 8) + '...',
+        familyId: this.authContext.familyId
+      });
     } else {
       this.authContext = {
-        userId: null,
+        userId: currentUserId,
         familyId: familyId,
         timestamp: Date.now()
       };
@@ -166,6 +176,7 @@ updateFamilyContext(familyId) {
       ClaudeService.authContext = {
         ...ClaudeService.authContext,
         familyId: familyId,
+        userId: currentUserId || ClaudeService.authContext?.userId,
         timestamp: Date.now()
       };
       console.log("✅ Updated ClaudeService auth context");
@@ -176,6 +187,7 @@ updateFamilyContext(familyId) {
       IntentActionService.authContext = {
         ...IntentActionService.authContext,
         familyId: familyId,
+        userId: currentUserId || IntentActionService.authContext?.userId,
         timestamp: Date.now()
       };
       console.log("✅ Updated IntentActionService auth context");
@@ -185,10 +197,28 @@ updateFamilyContext(familyId) {
     try {
       if (typeof window !== 'undefined') {
         localStorage.setItem('currentFamilyId', familyId);
-        console.log("✅ Stored familyId in localStorage for recovery");
+        localStorage.setItem('selectedFamilyId', familyId); // Add both keys for compatibility
+        if (currentUserId) {
+          localStorage.setItem('userId', currentUserId);
+        }
+        console.log("✅ Stored family and user IDs in localStorage for recovery");
       }
     } catch (e) {
       console.warn("❌ Could not store familyId in localStorage:", e);
+    }
+    
+    // Test Firebase write to verify permissions
+    if (ClaudeService && typeof ClaudeService.testFirebaseWrite === 'function') {
+      console.log("🧪 Testing Firebase write after context update");
+      setTimeout(() => {
+        ClaudeService.testFirebaseWrite()
+          .then(success => {
+            console.log("Firebase write test result:", success ? "✅ Success" : "❌ Failed");
+          })
+          .catch(error => {
+            console.error("Error during Firebase write test:", error);
+          });
+      }, 500);
     }
     
     return this.authContext;

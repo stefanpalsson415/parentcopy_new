@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Filter, Settings, Users, Heart, Info, Calendar, Bell, MessageSquare } from 'lucide-react';
+import { LogOut, Filter, Settings, Users, Heart, Info, Calendar, Bell, MessageSquare, Clipboard, Gift, Award } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import DashboardTab from './tabs/DashboardTab';
 import TasksTab from './tabs/TasksTab';
+import TaskBoardTab from './tabs/TaskBoardTab';
 import RelationshipTab from './tabs/RelationshipTab';
 import HowThisWorksScreen from '../education/HowThisWorksScreen';
 import PersonalizedApproachScreen from '../education/PersonalizedApproachScreen';
@@ -16,6 +17,7 @@ import RelationshipMeetingScreen from '../meeting/RelationshipMeetingScreen';
 import DashboardTutorial from '../onboarding/DashboardTutorial';
 import ErrorBoundary from '../common/ErrorBoundary';
 import ChildrenTrackingTab from './tabs/ChildrenTrackingTab';
+import KidsInterestsTab from './tabs/KidsInterestsTab';
 import SurveyScreen from '../survey/SurveyScreen';
 //import ClaudeService from '../../services/ClaudeService';
 import { FloatingCalendar } from '../calendar';
@@ -61,7 +63,9 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
   const [notifications, setNotifications] = useState({
     tasks: 0,
     relationships: 0,
-    dashboard: 0
+    dashboard: 0,
+    interests: 0,
+    tokens: 0
   });
 
   //const [allieAIService, setAllieAIService] = useState(null);
@@ -78,7 +82,9 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
     setNotifications({
       tasks: incompleteTasks,
       relationships: relationshipNotifs, 
-      dashboard: 0  // Add dashboard notifications if needed
+      dashboard: 0,  // Add dashboard notifications if needed
+      interests: 0,  // Add interests notifications if needed
+      tokens: 0      // Add token notifications if needed
     });
   }, [taskRecommendations, selectedUser]);
 
@@ -104,6 +110,16 @@ const DashboardScreen = ({ onOpenFamilyMeeting }) => {
       return () => clearTimeout(timer);
     }
   }, []);
+  
+  // Set tab based on URL query parameters
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    
+    if (tab && ['dashboard', 'tasks', 'relationship', 'children', 'interests'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [location]);
 
   // Consolidated family loading from all possible sources
   useEffect(() => {
@@ -461,6 +477,8 @@ const renderTabContent = () => {
       />;
     case 'children':
       return <ChildrenTrackingTab />;
+    case 'interests':
+      return <KidsInterestsTab />;
     default:
       return <div>Select a tab</div>;
   }
@@ -600,6 +618,8 @@ const renderTabContent = () => {
       </button>
     )}
     
+    
+
     {/* Children Tracking Tab */}
     <button 
       id="children-tab"
@@ -612,6 +632,28 @@ const renderTabContent = () => {
     >
       Family Command Center
     </button>
+    
+    {/* Kids Interests Tab */}
+    <button 
+      id="interests-tab"
+      className={`px-6 py-2 font-medium whitespace-nowrap font-roboto rounded-lg transition-all mx-2 relative ${
+        activeTab === 'interests' 
+          ? 'bg-black text-white shadow-sm' 
+          : 'text-gray-700 hover:bg-gray-100'
+      }`}
+      onClick={() => setActiveTab('interests')}
+    >
+      <div className="flex items-center">
+        <Gift size={16} className="mr-1" />
+        Kids Gift Ideas
+      </div>
+      {notifications.interests > 0 && (
+        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
+          {notifications.interests}
+        </span>
+      )}
+    </button>
+
   </div>
 </div>
       

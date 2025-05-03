@@ -472,11 +472,77 @@ for (const pattern of timePatterns) {
       3. Try to determine the most specific event type possible
       4. For child-related events, make sure to extract the child's name
       5. Set any missing fields to null, don't omit them`;
+      
+      case 'todo':
+      case 'task':
+        return `Extract the following details about the task/todo item:
+        {
+          "text": "string (the main task description)",
+          "notes": "string (any additional details about the task)",
+          "assignedTo": "string (the person who should do the task - extract name only like 'mom', 'dad', 'papa')",
+          "dueDate": "string (ISO date string when task needs to be completed, like 2023-05-07T00:00:00.000Z)",
+          "category": "string (household, parenting, work, errands, relationship, personal)"
+        }
+        
+        VERY IMPORTANT INSTRUCTIONS FOR DUE DATES:
+        1. Be EXTREMELY precise about extracting due dates
+        2. Look carefully for phrases like "by May 7th", "due next Tuesday", "has to do it by", etc.
+        3. If a specific date is mentioned with phrases like "by", "before", "due", "needs to be done by", that MUST be used as the dueDate
+        4. Convert relative dates (tomorrow, next Friday, etc.) to actual ISO dates
+        5. Do NOT default to today's date unless explicitly stated as "today"
+        6. If no due date is specified, set dueDate to null
+        
+        For task categorization:
+        - "household" for cleaning, repairs, maintenance
+        - "parenting" for child-related responsibilities
+        - "work" for professional tasks
+        - "errands" for shopping, appointments
+        - "relationship" for couple/family activities
+        - "personal" for self-care, health
+        
+        Set any missing fields to null, don't omit them.`;
         
       default:
         return `Extract all relevant information from the text and return it as a JSON object.`;
     }
   }
+
+/**
+ * Parse task/todo information from text
+ * @param {string} text - The text to parse
+ * @param {object} context - Additional context (family members, etc.)
+ * @param {Array} recentMessages - Recent messages for context
+ * @returns {Promise<object>} Extracted task details
+ */
+async parseTodo(text, context = {}, recentMessages = []) {
+  console.log(`Parsing todo/task from text: "${text.substring(0, 50)}..."`);
+  
+  // Extract task-specific keywords to improve classification
+  const taskTerms = ['task', 'todo', 'to-do', 'to do', 'assignment', 'chore', 'reminder'];
+  const hasTaskTerms = taskTerms.some(term => text.toLowerCase().includes(term));
+  
+  // Look for due date indicators
+  const dueDateTerms = ['by', 'due', 'before', 'until', 'prior to', 'no later than', 'has to do it by'];
+  const hasDueDateTerms = dueDateTerms.some(term => text.toLowerCase().includes(term));
+  
+  let enhancedContext = {...context};
+  
+  if (hasTaskTerms) {
+    console.log("Detected explicit task request, using enhanced parsing");
+    enhancedContext.expectedTaskType = 'task';
+    enhancedContext.keywords = ['task', 'todo', 'assign'];
+  }
+  
+  if (hasDueDateTerms) {
+    console.log("Detected due date in task request, ensuring due date extraction");
+    enhancedContext.hasDueDate = true;
+    enhancedContext.expectDueDate = true;
+  }
+  
+  return recentMessages && recentMessages.length > 0 ?
+    this.parseWithRecentContext(text, recentMessages, 'task', enhancedContext) :
+    this.parseWithMinimalContext(text, 'task', enhancedContext);
+}
 
 /**
  * Parse provider information from text

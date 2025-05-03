@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "name": "Allie - Your Family Assistant",
+  "short_name": "Allie",
   "icons": [
     {
       "src": "favicon.ico",
@@ -10,16 +10,36 @@
     {
       "src": "logo192.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
       "src": "logo512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "theme_color": "#0084ff",
+  "background_color": "#ffffff",
+  "description": "Allie helps balance your family responsibilities and improve communication",
+  "orientation": "portrait-primary",
+  "shortcuts": [
+    {
+      "name": "Chat with Allie",
+      "short_name": "Chat",
+      "description": "Start a conversation with Allie",
+      "url": "/chat",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "View Calendar",
+      "short_name": "Calendar",
+      "description": "Check your family calendar",
+      "url": "/calendar",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    }
+  ]
 }

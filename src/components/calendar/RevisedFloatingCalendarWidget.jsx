@@ -1,12 +1,14 @@
 // src/components/calendar/RevisedFloatingCalendarWidget.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, PlusCircle, Filter, X, Check, AlertCircle, Info } from 'lucide-react';
+import { Calendar, PlusCircle, Filter, X, Check, AlertCircle, Info, User, FileText, Phone } from 'lucide-react';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useEvents } from '../../contexts/EventContext'; // Import EventContext
 import CalendarService from '../../services/CalendarService';
 import CalendarErrorHandler from '../../utils/CalendarErrorHandler';
 import { useNavigate } from 'react-router-dom';
+import DocumentLibrary from '../document/DocumentLibrary';
+import ProviderDirectory from '../document/ProviderDirectory';
 
 // Import sub-components
 import CalendarHeader from './CalendarHeader';
@@ -20,8 +22,11 @@ import EventSourceBadge from './EventSourceBadge';
 /**
  * RevisedFloatingCalendarWidget - A comprehensive floating calendar with filtering, 
  * event management, and detail views with improved metadata handling and duplicate prevention.
+ * @param {Object} props
+ * @param {string} props.initialSelectedMember - The ID of the initially selected member
+ * @param {boolean} props.embedded - Whether the widget is embedded in another component
  */
-const RevisedFloatingCalendarWidget = () => {
+const RevisedFloatingCalendarWidget = ({ initialSelectedMember, embedded = false }) => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { 
@@ -44,9 +49,9 @@ const RevisedFloatingCalendarWidget = () => {
   } = useEvents();
   
   // UI State
-  const [isOpen, setIsOpen] = useState(false);
-  const [widgetHeight, setWidgetHeight] = useState(45);
-  const [widgetWidth, setWidgetWidth] = useState(64);
+  const [isOpen, setIsOpen] = useState(embedded ? true : false);
+  const [widgetHeight, setWidgetHeight] = useState(embedded ? 60 : 45); // Taller when embedded
+  const [widgetWidth, setWidgetWidth] = useState(embedded ? 100 : 64); // Wider when embedded
   const [isDragging, setIsDragging] = useState(null);
   const [startDragPos, setStartDragPos] = useState({ x: 0, y: 0 });
   const [startDimensions, setStartDimensions] = useState({ width: 0, height: 0 });
@@ -55,7 +60,7 @@ const RevisedFloatingCalendarWidget = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [view, setView] = useState('all'); // 'all', 'tasks', 'appointments', 'activities', etc.
-  const [selectedMember, setSelectedMember] = useState('all');
+  const [selectedMember, setSelectedMember] = useState(initialSelectedMember || 'all');
   const [lastRefresh, setLastRefresh] = useState(Date.now());
   const [loading, setLoading] = useState(false);
   const [showEventManager, setShowEventManager] = useState(false);
@@ -104,6 +109,12 @@ const RevisedFloatingCalendarWidget = () => {
   // Listen for calendar update events with debouncing to prevent infinite loops
 // Add this ref at the top level of the component, outside any useEffect
 const lastRefreshTimeRef = useRef(0);
+
+// State for provider and document modals
+const [showProviderDirectory, setShowProviderDirectory] = useState(false);
+const [showDocumentLibrary, setShowDocumentLibrary] = useState(false);
+const [documentSelectionCallback, setDocumentSelectionCallback] = useState(null);
+const [providerSelectionCallback, setProviderSelectionCallback] = useState(null);
 
 // In RevisedFloatingCalendarWidget.jsx - improved handleForceRefresh function
 const handleForceRefresh = async () => {
@@ -189,11 +200,33 @@ useEffect(() => {
     }
   };
   
+  // Handler for opening provider directory
+  const handleOpenProviderDirectory = (event) => {
+    console.log("🔍 Open provider directory event received", event.detail);
+    if (event.detail && event.detail.onSelect) {
+      setProviderSelectionCallback(() => event.detail.onSelect);
+      setShowProviderDirectory(true);
+    }
+  };
+  
+  // Handler for opening document library
+  const handleOpenDocumentLibrary = (event) => {
+    console.log("📄 Open document library event received", event.detail);
+    if (event.detail && event.detail.onSelect) {
+      setDocumentSelectionCallback(() => event.detail.onSelect);
+      setShowDocumentLibrary(true);
+    }
+  };
+  
   // IMPROVED: Add event listener for the specific calendar-event-updated event
   window.addEventListener('force-calendar-refresh', handleForceRefresh);
   window.addEventListener('calendar-event-added', refreshEventsHandler);
   window.addEventListener('calendar-child-event-added', refreshEventsHandler);
   window.addEventListener('calendar-event-updated', refreshEventsHandler);
+  
+  // Add event listeners for opening provider directory and document library
+  window.addEventListener('open-provider-directory', handleOpenProviderDirectory);
+  window.addEventListener('open-document-library', handleOpenDocumentLibrary);
   
   // ADDED: Initial load when component mounts
   console.log("Calendar widget mounted, performing initial data load");
@@ -206,6 +239,8 @@ useEffect(() => {
     window.removeEventListener('calendar-event-added', refreshEventsHandler);
     window.removeEventListener('calendar-child-event-added', refreshEventsHandler);
     window.removeEventListener('calendar-event-updated', refreshEventsHandler);
+    window.removeEventListener('open-provider-directory', handleOpenProviderDirectory);
+    window.removeEventListener('open-document-library', handleOpenDocumentLibrary);
   };
 }, [refreshEvents]); // FIXED: Add refreshEvents as a dependency
   
@@ -349,6 +384,8 @@ useEffect(() => {
   // In RevisedFloatingCalendarWidget.jsx
 // In RevisedFloatingCalendarWidget.jsx
 const handleEventClick = async (event) => {
+  console.log("🔍 Event clicked:", event);
+  
   // First verify we have a valid event object to prevent errors
   if (!event || typeof event !== 'object') {
     console.error("Clicked on invalid event:", event);
@@ -379,7 +416,9 @@ const handleEventClick = async (event) => {
     siblingIds: event.siblingIds || [],
     siblingNames: event.siblingNames || [],
     // Make sure we have the ID for updating
-    firestoreId: event.firestoreId || event.id
+    firestoreId: event.firestoreId || event.id,
+    // Ensure coordinates are included if they exist
+    coordinates: event.coordinates || null
   };
   
   // Store the selected event
@@ -390,9 +429,10 @@ const handleEventClick = async (event) => {
     const conflicts = await checkForEventConflicts(event);
     setConflictingEvents(conflicts);
     
-    // Show the event in the editor
-    setShowEventDetails(true); // Changed to true for better UX - show details first
-    setIsEditingEvent(false); // Don't immediately go into edit mode
+    // CHANGED: Skip details view and go directly to edit mode
+    setShowEventDetails(false);
+    setIsEditingEvent(true);
+    setEditedEvent(formattedEvent);
   } catch (error) {
     console.error("Error preparing event for viewing:", error);
     CalendarService.showNotification("Error loading event details", "error");
@@ -470,6 +510,12 @@ const handleEventAdd = async (event) => {
 };
   
   const handleEventEdit = (event) => {
+    console.log("🖊️ Event edit requested:", {
+      id: event.firestoreId || event.id,
+      title: event.title,
+      hasLocation: !!event.location
+    });
+    
     // Create a properly formatted event object for the editor
     const formattedEvent = {
       ...event,
@@ -487,8 +533,19 @@ const handleEventAdd = async (event) => {
       siblingIds: event.siblingIds || [],
       siblingNames: event.siblingNames || [],
       // Make sure we have the ID for updating
-      firestoreId: event.firestoreId || event.id
+      firestoreId: event.firestoreId || event.id,
+      // Ensure coordinates are included if they exist
+      coordinates: event.coordinates || null
     };
+    
+    // Log detailed event data for debugging
+    console.log("🖊️ Formatted event for editor:", {
+      id: formattedEvent.firestoreId,
+      title: formattedEvent.title,
+      location: formattedEvent.location,
+      hasCoordinates: !!formattedEvent.coordinates,
+      dateTime: formattedEvent.dateTime
+    });
     
     setSelectedEvent(formattedEvent);
     setShowEventDetails(false);
@@ -755,7 +812,7 @@ const handleEventAdd = async (event) => {
     }
   };
   
- // NEW CODE
+ // IMPROVED: Enhanced handleUpdateEvent with better location handling
 const handleUpdateEvent = async (updatedEvent) => {
   try {
     setPendingAction('update');
@@ -766,44 +823,50 @@ const handleUpdateEvent = async (updatedEvent) => {
       return;
     }
     
-    console.log("Updating event with data:", updatedEvent);
+    console.log("🔄 Updating event with data:", {
+      id: updatedEvent.firestoreId,
+      title: updatedEvent.title,
+      location: updatedEvent.location,
+      dateTime: updatedEvent.dateTime,
+      hasCoordinates: !!updatedEvent.coordinates
+    });
     
     // IMPORTANT: Extract and validate date with detailed logging
-// We need to carefully track where the date is coming from
-let newDate, dateSrc;
+    // We need to carefully track where the date is coming from
+    let newDate, dateSrc;
 
-// Order of date sources by preference
-if (updatedEvent.dateObj instanceof Date && !isNaN(updatedEvent.dateObj.getTime())) {
-  newDate = updatedEvent.dateObj;
-  dateSrc = "dateObj";
-} else if (updatedEvent.dateTime) {
-  newDate = new Date(updatedEvent.dateTime);
-  dateSrc = "dateTime";
-} else if (updatedEvent.start?.dateTime) {
-  newDate = new Date(updatedEvent.start.dateTime);
-  dateSrc = "start.dateTime";
-} else if (updatedEvent.date) {
-  newDate = new Date(updatedEvent.date);
-  dateSrc = "date";
-} else {
-  newDate = new Date(); // Last resort fallback
-  dateSrc = "fallback";
-}
+    // Order of date sources by preference
+    if (updatedEvent.dateObj instanceof Date && !isNaN(updatedEvent.dateObj.getTime())) {
+      newDate = updatedEvent.dateObj;
+      dateSrc = "dateObj";
+    } else if (updatedEvent.dateTime) {
+      newDate = new Date(updatedEvent.dateTime);
+      dateSrc = "dateTime";
+    } else if (updatedEvent.start?.dateTime) {
+      newDate = new Date(updatedEvent.start.dateTime);
+      dateSrc = "start.dateTime";
+    } else if (updatedEvent.date) {
+      newDate = new Date(updatedEvent.date);
+      dateSrc = "date";
+    } else {
+      newDate = new Date(); // Last resort fallback
+      dateSrc = "fallback";
+    }
 
-// More detailed validation of the date - verify with explicit logging
-if (isNaN(newDate.getTime())) {
-  console.error("INVALID DATE DETECTED FOR EVENT UPDATE:", {
-    dateObj: updatedEvent.dateObj,
-    dateTime: updatedEvent.dateTime,
-    startDateTime: updatedEvent.start?.dateTime,
-    date: updatedEvent.date
-  });
-  CalendarService.showNotification("Invalid date format for event update", "error");
-  setPendingAction(null);
-  return;
-}
+    // More detailed validation of the date - verify with explicit logging
+    if (isNaN(newDate.getTime())) {
+      console.error("❌ INVALID DATE DETECTED FOR EVENT UPDATE:", {
+        dateObj: updatedEvent.dateObj,
+        dateTime: updatedEvent.dateTime,
+        startDateTime: updatedEvent.start?.dateTime,
+        date: updatedEvent.date
+      });
+      CalendarService.showNotification("Invalid date format for event update", "error");
+      setPendingAction(null);
+      return;
+    }
 
-console.log(`Event date update from source ${dateSrc}:`, newDate.toISOString());
+    console.log(`📅 Event date update from source ${dateSrc}:`, newDate.toISOString());
     
     // Calculate end time (preserve duration if possible)
     let endDate;
@@ -818,11 +881,24 @@ console.log(`Event date update from source ${dateSrc}:`, newDate.toISOString());
       endDate = new Date(newDate.getTime() + 60 * 60 * 1000);
     }
     
-    // Create updated event object with required fields
+    // IMPROVED: Log location data specifically to track issues
+    console.log("📍 Location data for update:", {
+      location: updatedEvent.location || "(empty)",
+      hasCoordinates: !!updatedEvent.coordinates,
+      coordinates: updatedEvent.coordinates,
+      locationFromExtraDetails: updatedEvent.extraDetails?.manualLocationInput ? "manual input" : "places API"
+    });
+    
+    // Create updated event object with required fields - COMPREHENSIVE UPDATE
     const eventUpdate = {
+      ...updatedEvent, // First include ALL fields from the updated event 
+      
+      // Then override specific fields for consistency
       summary: updatedEvent.title,
       title: updatedEvent.title, // Add explicit title field
       description: updatedEvent.description || '',
+      
+      // CRITICAL FIX: Ensure location is properly included from all possible sources
       location: updatedEvent.location || '',
       
       // Set all date formats for maximum compatibility
@@ -840,29 +916,45 @@ console.log(`Event date update from source ${dateSrc}:`, newDate.toISOString());
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       },
       
-      // Include document and provider references
-      documents: updatedEvent.documents || [],
-      providers: updatedEvent.providers || [],
+      // IMPROVED: Add coordinates directly at top level for better preservation
+      coordinates: updatedEvent.coordinates || null,
       
-      // Include attendees
-      attendees: updatedEvent.attendees || [],
+      // Include document and provider references - ensure proper deep copying
+      documents: updatedEvent.documents ? [...updatedEvent.documents] : [],
+      providers: updatedEvent.providers ? [...updatedEvent.providers] : [],
+      
+      // Include attendees with proper deep copying
+      attendees: updatedEvent.attendees ? [...updatedEvent.attendees] : [],
       
       // Child and parent associations
       childId: updatedEvent.childId,
       childName: updatedEvent.childName,
       attendingParentId: updatedEvent.attendingParentId,
-      siblingIds: updatedEvent.siblingIds || [],
-      siblingNames: updatedEvent.siblingNames || [],
+      siblingIds: updatedEvent.siblingIds ? [...updatedEvent.siblingIds] : [],
+      siblingNames: updatedEvent.siblingNames ? [...updatedEvent.siblingNames] : [],
       
-      // Reminders and additional context
-      reminders: updatedEvent.reminders,
+      // Ensure reminders object is preserved correctly
+      reminders: updatedEvent.reminders ? {
+        ...updatedEvent.reminders,
+        overrides: updatedEvent.reminders.overrides ? 
+          [...updatedEvent.reminders.overrides] : []
+      } : undefined,
+      
       notes: updatedEvent.notes || updatedEvent.extraDetails?.notes,
       
       // Event type/category
       category: updatedEvent.category || updatedEvent.eventType || 'general',
       eventType: updatedEvent.eventType || updatedEvent.category || 'general',
       
-      // Ensure we preserve AI metadata
+      // Explicitly include key fields that might be missed
+      birthdayDetails: updatedEvent.birthdayDetails ? {...updatedEvent.birthdayDetails} : undefined,
+      meetingDetails: updatedEvent.meetingDetails ? {...updatedEvent.meetingDetails} : undefined,
+      appointmentDetails: updatedEvent.appointmentDetails ? {...updatedEvent.appointmentDetails} : undefined,
+      
+      // Flag to prevent cached copies in the UI
+      _lastUpdated: Date.now(),
+      
+      // Ensure we preserve and extend AI metadata
       extraDetails: {
         ...(updatedEvent.extraDetails || {}),
         parsedWithAI: updatedEvent.extraDetails?.parsedWithAI || false,
@@ -871,6 +963,11 @@ console.log(`Event date update from source ${dateSrc}:`, newDate.toISOString());
         originalText: updatedEvent.extraDetails?.originalText || '',
         creationSource: updatedEvent.extraDetails?.creationSource || 'manual',
         updatedAt: new Date().toISOString(), // Add timestamp
+        lastUpdateFrom: 'RevisedFloatingCalendarWidget',
+        
+        // IMPROVED: Additional location tracking in extraDetails
+        locationLastUpdated: new Date().toISOString(),
+        savedLocation: updatedEvent.location || '',
         
         // Provider details for appointments
         ...(updatedEvent.category === 'appointment' && updatedEvent.providers?.[0] ? {
@@ -880,10 +977,12 @@ console.log(`Event date update from source ${dateSrc}:`, newDate.toISOString());
           providerAddress: updatedEvent.providers[0].address
         } : {}),
         
-        // Birthday details
-        ...(updatedEvent.category === 'birthday' ? {
-          birthdayChildName: updatedEvent.extraDetails?.birthdayChildName,
-          birthdayChildAge: updatedEvent.extraDetails?.birthdayChildAge
+        // Birthday details preservation
+        ...(updatedEvent.category === 'birthday' || updatedEvent.birthdayDetails ? {
+          birthdayChildName: updatedEvent.birthdayDetails?.birthdayChildName || 
+                            updatedEvent.extraDetails?.birthdayChildName,
+          birthdayChildAge: updatedEvent.birthdayDetails?.birthdayChildAge || 
+                           updatedEvent.extraDetails?.birthdayChildAge
         } : {})
       }
     };
@@ -892,13 +991,18 @@ console.log(`Event date update from source ${dateSrc}:`, newDate.toISOString());
     resetEventCache();
     setEventCache(new Map());
     
-    console.log(`Sending update for event ${updatedEvent.firestoreId}:`, eventUpdate);
+    console.log(`📤 Sending update for event ${updatedEvent.firestoreId}:`, {
+      title: eventUpdate.title,
+      location: eventUpdate.location,
+      date: eventUpdate.dateTime,
+      coordinates: eventUpdate.coordinates
+    });
     
     // Update event using EventContext
     const result = await updateEvent(updatedEvent.firestoreId, eventUpdate);
     
     if (result.success) {
-      console.log("Event updated successfully:", result);
+      console.log("✅ Event updated successfully:", result);
       
       // IMMEDIATELY force a complete refresh of the event store
       if (typeof window !== 'undefined') {
@@ -958,13 +1062,13 @@ console.log(`Event date update from source ${dateSrc}:`, newDate.toISOString());
       }, 2500);
       
     } else {
-      console.error("Failed to update event:", result.error);
+      console.error("❌ Failed to update event:", result.error);
       CalendarService.showNotification(result.error || "Failed to update event", "error");
     }
     
     setPendingAction(null);
   } catch (error) {
-    console.error("Error updating event:", error);
+    console.error("❌ Error updating event:", error);
     CalendarService.showNotification("Failed to update event: " + error.message, "error");
     setPendingAction(null);
   }
@@ -1091,7 +1195,9 @@ console.log(`Event date update from source ${dateSrc}:`, newDate.toISOString());
     setSelectedMember('all');
   };
   
-  if (!isOpen) {
+  // When in embedded mode, always render the full calendar
+  // When in floating mode, render the minimized button if not open
+  if (!isOpen && !embedded) {
     return (
       <div className="fixed bottom-4 left-4 z-40">
         <button
@@ -1265,17 +1371,21 @@ const getEventsForSelectedDate = () => {
     .map(event => event.dateObj);
   
   return (
-    <div className="fixed bottom-4 left-4 z-40">
+    <div className={embedded ? "w-full h-full" : "fixed bottom-4 left-4 z-40"}>
       <div 
         ref={widgetRef}
         className="bg-white border border-black shadow-lg rounded-lg flex flex-col relative overflow-hidden"
-        style={{ height: `${widgetHeight}rem`, width: `${widgetWidth}rem` }}
+        style={{ 
+          height: embedded ? "100%" : `${widgetHeight}rem`, 
+          width: embedded ? "100%" : `${widgetWidth}rem`
+        }}
       >
         {/* Header Component */}
 <CalendarHeader 
-  onClose={() => setIsOpen(false)} 
-  onMinimize={() => setIsOpen(false)}
+  onClose={embedded ? null : () => setIsOpen(false)} 
+  onMinimize={embedded ? null : () => setIsOpen(false)}
   onRefresh={handleForceRefresh}
+  embedded={embedded}
 />
         
         {/* Calendar content */}
@@ -1437,44 +1547,69 @@ const getEventsForSelectedDate = () => {
           
         </div>
         
-        {/* Resize handles */}
-        <div 
-          className="absolute bottom-0 right-0 w-4 h-4 bg-gray-200 rounded-bl-lg cursor-nwse-resize flex items-center justify-center"
-          onMouseDown={(e) => startDrag(e, 'both')}
-          ref={dragHandleRef}
-        >
-          <svg width="10" height="10" viewBox="0 0 10 10">
-            <path d="M9 1L1 9M6 1L1 6M9 4L4 9" stroke="currentColor" strokeWidth="1.5" />
-          </svg>
-        </div>
-        
-        <div 
-          className="absolute bottom-0 right-1/2 w-16 h-3 bg-gray-200 rounded-t-lg cursor-ns-resize transform translate-x-1/2"
-          onMouseDown={(e) => startDrag(e, 'height')}
-        >
-          <div className="flex justify-center items-center h-full">
-            <div className="w-4 h-1 bg-gray-400 rounded"></div>
-          </div>
-        </div>
-        
-        <div 
-          className="absolute right-0 top-1/2 h-16 w-3 bg-gray-200 rounded-l-lg cursor-ew-resize transform -translate-y-1/2"
-          onMouseDown={(e) => startDrag(e, 'width')}
-        >
-          <div className="flex justify-center items-center h-full">
-            <div className="h-4 w-1 bg-gray-400 rounded"></div>
-          </div>
-        </div>
+        {/* Resize handles - only shown in floating mode */}
+        {!embedded && (
+          <>
+            <div 
+              className="absolute bottom-0 right-0 w-4 h-4 bg-gray-200 rounded-bl-lg cursor-nwse-resize flex items-center justify-center"
+              onMouseDown={(e) => startDrag(e, 'both')}
+              ref={dragHandleRef}
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10">
+                <path d="M9 1L1 9M6 1L1 6M9 4L4 9" stroke="currentColor" strokeWidth="1.5" />
+              </svg>
+            </div>
+            
+            <div 
+              className="absolute bottom-0 right-1/2 w-16 h-3 bg-gray-200 rounded-t-lg cursor-ns-resize transform translate-x-1/2"
+              onMouseDown={(e) => startDrag(e, 'height')}
+            >
+              <div className="flex justify-center items-center h-full">
+                <div className="w-4 h-1 bg-gray-400 rounded"></div>
+              </div>
+            </div>
+            
+            <div 
+              className="absolute right-0 top-1/2 h-16 w-3 bg-gray-200 rounded-l-lg cursor-ew-resize transform -translate-y-1/2"
+              onMouseDown={(e) => startDrag(e, 'width')}
+            >
+              <div className="flex justify-center items-center h-full">
+                <div className="h-4 w-1 bg-gray-400 rounded"></div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
       
-      {/* Calendar icon button - remains visible when widget is open */}
-      <button
-        onClick={() => setIsOpen(false)}
-        className="bg-black text-white p-3 rounded-full hover:bg-gray-800 shadow-lg"
-      >
-        <Calendar size={24} />
-      </button>
+      {/* Calendar icon button - only shown in floating mode */}
+      {!embedded && (
+        <button
+          onClick={() => setIsOpen(false)}
+          className="bg-black text-white p-3 rounded-full hover:bg-gray-800 shadow-lg"
+        >
+          <Calendar size={24} />
+        </button>
+      )}
       
+{/* Event details modal */}
+{showEventDetails && selectedEvent && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <EventDetails
+        event={selectedEvent}
+        onClose={() => setShowEventDetails(false)}
+        onEdit={handleEventEdit}
+        onDelete={handleDeleteEvent}
+        familyMembers={familyMembers}
+        pendingAction={pendingAction}
+        showSuccess={showSuccess}
+        conflictingEvents={conflictingEvents}
+        showAiMetadata={showAiParseInfo}
+      />
+    </div>
+  </div>
+)}
+
 {/* Enhanced Event Manager - handles both creating new events and viewing/editing existing ones */}
 {(showEventManager || (selectedEvent && isEditingEvent)) && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -1483,8 +1618,28 @@ const getEventsForSelectedDate = () => {
         initialEvent={isEditingEvent ? selectedEvent : null}
         selectedDate={selectedDate}
         onSave={async (result) => {
-          // Replace the handler with this enhanced version
+          console.log("🔄 EnhancedEventManager onSave called with result:", {
+            success: result?.success,
+            eventData: result?.eventData || null,
+            isEdit: isEditingEvent
+          });
+          
           if (result?.success) {
+            // For editing existing events, use our improved handler which has better location handling
+            if (isEditingEvent && result.eventData) {
+              console.log("🔄 Using enhanced update handler for existing event");
+              
+              // Call our improved handler with the event data
+              await handleUpdateEvent(result.eventData);
+              
+              // Close forms since handleUpdateEvent handles everything else
+              setShowEventManager(false);
+              setShowEventDetails(false);
+              setIsEditingEvent(false);
+              return;
+            }
+            
+            // For new events, continue with the existing flow
             // Close the editor/creator
             setShowEventManager(false);
             setShowEventDetails(false);
@@ -1559,6 +1714,85 @@ const getEventsForSelectedDate = () => {
                 Successfully {isEditingEvent ? 'updated in' : 'added to'} your calendar
               </p>
             </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Event details modal */}
+      {showEventDetails && selectedEvent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <EventDetails
+              event={selectedEvent}
+              onClose={() => setShowEventDetails(false)}
+              onEdit={handleEventEdit}
+              onDelete={handleDeleteEvent}
+              familyMembers={familyMembers}
+              pendingAction={pendingAction}
+              showSuccess={showSuccess}
+              conflictingEvents={conflictingEvents}
+              showAiMetadata={showAiParseInfo}
+            />
+          </div>
+        </div>
+      )}
+      
+      {/* Provider Directory Modal */}
+      {showProviderDirectory && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-4 border-b flex justify-between items-center">
+              <h3 className="text-lg font-medium">Select Provider</h3>
+              <button 
+                onClick={() => setShowProviderDirectory(false)}
+                className="p-2 rounded-md hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            <ProviderDirectory 
+              onClose={() => setShowProviderDirectory(false)}
+              selectMode={true}
+              onSelectProvider={(provider) => {
+                console.log("Provider selected:", provider);
+                // Call the callback provided in the custom event
+                if (providerSelectionCallback) {
+                  providerSelectionCallback(provider);
+                }
+                setShowProviderDirectory(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
+      
+      {/* Document Library Modal */}
+      {showDocumentLibrary && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-4 border-b flex justify-between items-center">
+              <h3 className="text-lg font-medium">Select Document</h3>
+              <button 
+                onClick={() => setShowDocumentLibrary(false)}
+                className="p-2 rounded-md hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            <DocumentLibrary 
+              onClose={() => setShowDocumentLibrary(false)}
+              selectMode={true}
+              onSelectDocument={(document) => {
+                console.log("Document selected:", document);
+                // Call the callback provided in the custom event
+                if (documentSelectionCallback) {
+                  documentSelectionCallback(document);
+                }
+                setShowDocumentLibrary(false);
+              }}
+            />
           </div>
         </div>
       )}

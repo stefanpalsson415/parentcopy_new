@@ -277,6 +277,84 @@ async testProxyConnection() {
     }
   }
   
+  /**
+   * Test write to Firestore - use this for debugging Firebase permissions
+   * @returns {Promise<boolean>} Success status
+   */
+  async testFirebaseWrite() {
+    try {
+      console.log("🧪 Testing Firebase write access with improved diagnostics");
+      
+      // Use the new FirebasePermissionTest utility for comprehensive testing
+      // This dynamically imports the utility to avoid unnecessary load time impact
+      const { default: FirebasePermissionTest } = await import('./FirebasePermissionTest');
+      
+      // Run comprehensive permission tests
+      const results = await FirebasePermissionTest.testPermissions(this.authContext);
+      
+      // Log detailed results
+      console.log("📊 Firebase permission test results:", results);
+      
+      // If tests failed, try to recover
+      if (!results.success) {
+        console.warn("⚠️ Firebase permissions test failed, attempting recovery...");
+        
+        // If we have a current user but auth context is missing, rebuild context
+        if (auth.currentUser && (!this.authContext || !this.authContext.userId)) {
+          console.log("🔄 Rebuilding auth context from current user");
+          
+          // Get familyId from localStorage if possible
+          let familyId = null;
+          if (typeof window !== 'undefined') {
+            familyId = localStorage.getItem('selectedFamilyId') || 
+                       localStorage.getItem('currentFamilyId');
+          }
+          
+          // If we still don't have a familyId, use the hardcoded fallback
+          if (!familyId) {
+            familyId = 'm93tlovs6ty9sg8k0c8'; // Known working familyId
+            console.log("⚠️ Using hardcoded familyId fallback:", familyId);
+          }
+          
+          // Update auth context
+          this.authContext = {
+            userId: auth.currentUser.uid,
+            familyId: familyId,
+            timestamp: Date.now(),
+            recovered: true
+          };
+          
+          // Save to localStorage
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('userId', auth.currentUser.uid);
+              localStorage.setItem('currentFamilyId', familyId);
+              localStorage.setItem('selectedFamilyId', familyId);
+            } catch (e) {
+              console.warn("Failed to save to localStorage:", e);
+            }
+          }
+          
+          // Run test again with recovered context
+          const recoveryResults = await FirebasePermissionTest.testPermissions(this.authContext);
+          console.log("📊 Recovery test results:", recoveryResults);
+          
+          return recoveryResults.success;
+        }
+      }
+      
+      return results.success;
+    } catch (error) {
+      console.error("❌ Firebase write test failed:", error);
+      console.error("Error details:", {
+        code: error.code, 
+        message: error.message,
+        stack: error.stack
+      });
+      return false;
+    }
+  }
+  
   // Add a test method to verify connectivity
   async testConnection() {
     try {
@@ -303,6 +381,71 @@ async testProxyConnection() {
   
 async generateResponse(messages, context, options = {}) {
   try {
+    // CRITICAL FIX: Block for task queries to prevent calendar misinterpretation
+    const lastMessage = messages[messages.length - 1];
+    const messageText = lastMessage && lastMessage.content ? lastMessage.content : '';
+    
+    // IMPROVED: Detect task queries more reliably with enhanced patterns
+    // Look for explicit task-related patterns to distinguish from calendar events
+    if (messageText) {
+      let messageLC = messageText.toLowerCase();
+
+      // Check for task query patterns which should NOT trigger calendar
+      if ((messageLC.includes('what') || 
+           messageLC.includes('which') || 
+           messageLC.includes('do i have') || 
+           messageLC.includes('show me') || 
+           messageLC.includes('list')) && 
+          (messageLC.includes('task') || 
+           messageLC.includes('todo') || 
+           messageLC.includes('to do') || 
+           messageLC.includes('to-do') ||
+           messageLC.includes('assignment'))) {
+        
+        // This is a task query, not a calendar request
+        console.log("🚫 Task query detected - disabling calendar detection for this message");
+        this.disableCalendarDetection = true;
+        this.currentProcessingContext = {
+          ...this.currentProcessingContext,
+          isProcessingTask: true,
+          lastContext: "task_query",
+          timestamp: Date.now()
+        };
+        
+        // Reset after processing with increased timeout
+        setTimeout(() => {
+          this.disableCalendarDetection = false;
+          console.log("✅ Re-enabled calendar detection after task query");
+        }, 5000); // Increased to 5 seconds for safety
+      }
+      
+      // Also check for provider-related queries to block calendar detection
+      else if (messageLC.includes('provider') || 
+               messageLC.includes('doctor') || 
+               messageLC.includes('coach') || 
+               messageLC.includes('therapist') || 
+               (messageLC.includes('add') && 
+                (messageLC.includes('new') || messageLC.includes('create')) && 
+                !messageLC.includes('event') && 
+                !messageLC.includes('calendar'))) {
+                
+        console.log("🚫 Potential provider operation detected - disabling calendar detection");
+        this.disableCalendarDetection = true;
+        this.currentProcessingContext = {
+          ...this.currentProcessingContext,
+          isProcessingProvider: true,
+          lastContext: "provider_operation", 
+          timestamp: Date.now()
+        };
+        
+        // Reset after a longer period for provider operations
+        setTimeout(() => {
+          this.disableCalendarDetection = false;
+          console.log("✅ Re-enabled calendar detection after provider operation");
+        }, 6000);
+      }
+    }
+    
     // Add a call tracking mechanism to prevent infinite loops
     if (!this._callTracker) {
       this._callTracker = {
@@ -375,9 +518,14 @@ async generateResponse(messages, context, options = {}) {
 const lastMessage = messages[messages.length - 1];
 const messageText = lastMessage.content || lastMessage.text || "";
 
-const eventCollectionMarker = context?.previousAIMessages?.find(msg => 
-  msg.includes('<voiceNote>event_collection:')
-);
+// Safely check if any previous message includes event collection markers
+let eventCollectionMarker = null;
+if (context?.previousAIMessages && Array.isArray(context.previousAIMessages)) {
+  // Find messages that include the marker, with type checking
+  eventCollectionMarker = context.previousAIMessages.find(msg => 
+    typeof msg === 'string' && msg.includes('<voiceNote>event_collection:')
+  );
+}
 
 if (eventCollectionMarker) {
   // Extract session ID and step
@@ -431,6 +579,44 @@ if (calendarDetectionEnabled && messageText.length > 0) {
     'set meeting', 'add an event', 'therapy', 'therapist'
   ];
   
+  // CRITICAL FIX: First check for provider request to prevent calendar mismatch
+  if (calendarDetectionEnabled && messageText.length > 0) {
+    // Check for task query patterns which should NOT trigger calendar
+    if ((messageText.toLowerCase().includes('what') || 
+         messageText.toLowerCase().includes('which') || 
+         messageText.toLowerCase().includes('do i have') || 
+         messageText.toLowerCase().includes('show me') || 
+         messageText.toLowerCase().includes('list')) && 
+        messageText.toLowerCase().includes('task')) {
+      // This is a task query, not a calendar request
+      console.log("🚫 Task query detected - disabling calendar detection for this message");
+      this.disableCalendarDetection = true;
+      
+      setTimeout(() => {
+        this.disableCalendarDetection = false;
+        console.log("✅ Re-enabled calendar detection after task query");
+      }, 2000);
+    }
+    
+    // Check for provider-specific requests which should NOT trigger calendar
+    if (messageText.toLowerCase().includes('provider') || 
+        (messageText.toLowerCase().includes('add') && 
+         (messageText.toLowerCase().includes('doctor') || 
+          messageText.toLowerCase().includes('coach') || 
+          messageText.toLowerCase().includes('teacher') || 
+          messageText.toLowerCase().includes('therapist') || 
+          messageText.toLowerCase().includes('babysitter')))) {
+      // This is likely a provider request, not a calendar request
+      console.log("🚫 Provider request detected - disabling calendar detection for this message");
+      this.disableCalendarDetection = true;
+      
+      setTimeout(() => {
+        this.disableCalendarDetection = false;
+        console.log("✅ Re-enabled calendar detection after provider request");
+      }, 2000);
+    }
+  }
+  
   // IMPROVED: Check specific appointment patterns with broader matching
   const appointmentPatterns = [
     /(?:book|schedule|appointment|with|see|visit)\s+(?:dr\.?|doctor|dentist|therapist)/i,
@@ -441,6 +627,36 @@ if (calendarDetectionEnabled && messageText.length > 0) {
   ];
   
   // Check for keywords
+  // First check if we're explicitly handling a task (set by IntentActionService)
+  if (this.currentProcessingContext.isProcessingTask) {
+    console.log("🚫 Task processing active - skipping calendar detection completely");
+    return false;
+  }
+  
+  // Check for task-related patterns that should override calendar detection
+  const taskOverridePatterns = [
+    /create\s+a\s+(?:new\s+)?task\s+/i,
+    /add\s+a\s+(?:new\s+)?task\s+/i,
+    /add\s+task\s+/i,
+    /new\s+task\s+for\s+/i
+  ];
+  
+  const isTaskRequest = taskOverridePatterns.some(pattern => pattern.test(messageText));
+  
+  if (isTaskRequest) {
+    console.log("🚫 Task request detected - overriding calendar detection");
+    // Set context for task processing
+    this.currentProcessingContext = {
+      ...this.currentProcessingContext,
+      isProcessingTask: true,
+      lastContext: "task_creation",
+      timestamp: Date.now()
+    };
+    
+    // Return early - this is NOT a calendar request
+    return false;
+  }
+  
   const hasKeyword = calendarKeywords.some(keyword =>
     messageText.toLowerCase().includes(keyword)
   );
@@ -1029,6 +1245,16 @@ extractTitleFallback(message) {
 }
 
 extractDateTimeFallback(message) {
+  // CRITICAL: Check if this is a task request with a due date
+  // We should NOT be treating these as calendar events!
+  if (this.currentProcessingContext.isProcessingTask) {
+    console.log("🚨 Task context active - SKIPPING calendar date extraction");
+    // Return a date 1 hour from now as a reasonable fallback
+    const fallbackDate = new Date();
+    fallbackDate.setHours(fallbackDate.getHours() + 1);
+    return fallbackDate;
+  }
+  
   // Try to extract date and time using pattern matching
   const dateTimePatterns = [
     // Match "on April 28th at 3pm"

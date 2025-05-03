@@ -156,12 +156,86 @@ class DocumentProcessingService {
   async preprocessDocument(file) {
     // For image files, we might want to resize or compress them
     if (file.type.startsWith('image/')) {
-      // In a real implementation, we would resize/compress the image
-      // For now, we'll just return the original file
+      try {
+        // Try to compress/resize the image if it's large
+        if (file.size > 2000000) { // 2MB
+          console.log("Image is large, applying compression");
+          
+          // Read file as data URL
+          const fileReader = new FileReader();
+          const imageDataPromise = new Promise((resolve, reject) => {
+            fileReader.onload = () => resolve(fileReader.result);
+            fileReader.onerror = reject;
+            fileReader.readAsDataURL(file);
+          });
+          
+          const imageData = await imageDataPromise;
+          
+          // Create an image element to load the image
+          const img = new Image();
+          const loadPromise = new Promise((resolve) => {
+            img.onload = () => resolve();
+            img.src = imageData;
+          });
+          
+          await loadPromise;
+          
+          // Create a canvas to resize/compress
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          // Calculate new dimensions (max 1600px on longest side)
+          const maxDimension = 1600;
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > height && width > maxDimension) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else if (height > maxDimension) {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          // Draw resized image on canvas
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Convert to Blob with reduced quality
+          const canvasDataPromise = new Promise((resolve) => {
+            canvas.toBlob((blob) => {
+              resolve(blob);
+            }, file.type, 0.7); // Use 70% quality
+          });
+          
+          const compressedBlob = await canvasDataPromise;
+          
+          // Create a new file from the blob
+          const compressedFile = new File([compressedBlob], file.name, {
+            type: file.type,
+            lastModified: file.lastModified
+          });
+          
+          return {
+            file: compressedFile,
+            processed: true,
+            reason: "Image compressed and resized",
+            originalSize: file.size,
+            newSize: compressedFile.size
+          };
+        }
+      } catch (error) {
+        console.error("Error preprocessing image:", error);
+        // Fall through to default return if compression fails
+      }
+      
+      // If no compression needed or compression failed, return original
       return {
         file,
         processed: false,
-        reason: "No processing needed"
+        reason: "No processing needed or compression failed"
       };
     }
     
@@ -189,20 +263,36 @@ class DocumentProcessingService {
    * @returns {Promise<Object>} Extracted text and metadata
    */
   async extractTextFromDocument(file) {
-    // In a production environment, this would call a real OCR service
-    // For this implementation, we'll simulate OCR with a placeholder
-    
-    // Simulate OCR processing time
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    return {
-      text: `This is simulated OCR text for ${file.name}. In a real implementation, this would be the actual text extracted from the document.`,
-      metadata: {
-        ocrEngine: 'Simulated OCR',
-        confidence: 0.85,
-        processingTime: 500
-      }
-    };
+    try {
+      // Use DocumentOCRService to extract text
+      const { default: DocumentOCRService } = await import('./DocumentOCRService');
+      console.log("Extracting text from document:", file.name);
+      
+      // Extract text from the document using OCR service
+      const ocrResult = await DocumentOCRService.processDocument(file);
+      
+      return {
+        text: ocrResult.text,
+        metadata: {
+          ocrEngine: ocrResult.engine || 'Cloud OCR',
+          confidence: ocrResult.confidence || 0.9,
+          processingTime: ocrResult.processingTime || 500
+        }
+      };
+    } catch (error) {
+      console.error("Error in extractTextFromDocument:", error);
+      
+      // Fallback if DocumentOCRService fails
+      return {
+        text: `Document content for ${file.name}. Unfortunately, OCR extraction encountered an error.`,
+        metadata: {
+          ocrEngine: 'Fallback extractor',
+          confidence: 0.5,
+          processingTime: 0,
+          error: error.message
+        }
+      };
+    }
   }
 
   /**

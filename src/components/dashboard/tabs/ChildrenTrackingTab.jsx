@@ -1,22 +1,22 @@
 // src/components/dashboard/tabs/ChildrenTrackingTab.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  Calendar, AlertCircle, 
-  Activity, Users, Search, X, RefreshCw, 
-  User, PlusCircle, Mic, CheckCircle, Info
+  Calendar, AlertCircle, Activity, Users, Search, X, RefreshCw, 
+  User, PlusCircle, Mic, CheckCircle, Info, FileText, 
+  Heart, List, ChevronRight, LayoutGrid, Book, Camera,
+  Clipboard, Database, ArrowRight, Archive, School
 } from 'lucide-react';
 import { useFamily } from '../../../contexts/FamilyContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useEvents } from '../../../contexts/EventContext';
 import { db } from '../../../services/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import AllieAIService from '../../../services/AllieAIService';
 import UserAvatar from '../../common/UserAvatar';
+import RevisedFloatingCalendarWidget from '../../calendar/RevisedFloatingCalendarWidget';
 import EnhancedEventManager from '../../calendar/EnhancedEventManager';
 import DocumentLibrary from '../../document/DocumentLibrary';
 import ProviderDirectory from '../../document/ProviderDirectory';
-import FamilyKanbanBoard from '../../kanban/FamilyKanbanBoard';
-import ChildDashboard from '../ChildDashboard';
 
 const ChildrenTrackingTab = () => {
   // Context hooks
@@ -28,8 +28,10 @@ const ChildrenTrackingTab = () => {
   } = useFamily();
 
   const { currentUser } = useAuth();
+  const { events, loading: eventsLoading, refreshEvents } = useEvents();
 
   // Local state
+  const [activeSection, setActiveSection] = useState('calendar'); // 'calendar', 'information', 'growth'
   const [childrenData, setChildrenData] = useState({});
   const [loading, setLoading] = useState(true);
   const [loadingSection, setLoadingSection] = useState(null);
@@ -38,32 +40,21 @@ const ChildrenTrackingTab = () => {
   const [tabError, setTabError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [allieMessage, setAllieMessage] = useState(null);
-  const [newVoiceEntry, setNewVoiceEntry] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingText, setRecordingText] = useState('');
-  const [expandedSections, setExpandedSections] = useState({
-    taskBoard: true
-  });
-
-  // Healthcare provider management 
-  const [healthcareProviders, setHealthcareProviders] = useState([]);
-  const [loadingProviders, setLoadingProviders] = useState(false);
+  const [showVoiceEntry, setShowVoiceEntry] = useState(false);
+  const [relevantProviders, setRelevantProviders] = useState([]);
+  const [relevantDocuments, setRelevantDocuments] = useState([]);
+  const [showAllDocuments, setShowAllDocuments] = useState(false);
 
   // Modal states
   const [activeModal, setActiveModal] = useState(null);
-  const [modalData, setModalData] = useState({});
-  const [uploadingDocument, setUploadingDocument] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [documents, setDocuments] = useState([]);
-  const [activeComponent, setActiveComponent] = useState(null);
+  const [modalProps, setModalProps] = useState(null);
   
   // Refs
   const searchInputRef = useRef(null);
-  const microphoneRef = useRef(null);
+  const calendarWidgetRef = useRef(null);
   const fileInputRef = useRef(null);
-
-  // Use events hook
-  const { events, loading: eventsLoading } = useEvents();
 
   // Helper function to get child name
   const getChildName = useCallback((childId) => {
@@ -89,31 +80,20 @@ const ChildrenTrackingTab = () => {
             .filter(member => member.role === 'child')
             .forEach(child => {
               fallbackData[child.id] = {
-                medicalAppointments: [],
+                providers: [],
+                documents: [],
                 growthData: [],
-                routines: [],
-                clothesHandMeDowns: []
+                healthRecords: []
               };
             });
           
           setChildrenData(fallbackData);
         }
-        
-        // Ensure we always have some insights
-        if (!aiInsights || aiInsights.length === 0) {
-          setAiInsights([{
-            title: "Getting Started",
-            type: "recommendation",
-            content: "Start tracking your children's health, growth, and routines to get personalized insights.",
-            priority: "medium",
-            childId: null
-          }]);
-        }
       }
-    }, 15000); // 15 second safety timeout
+    }, 10000); // 10 second safety timeout
     
     return () => clearTimeout(safetyTimer);
-  }, [loading, childrenData, aiInsights, familyMembers]);
+  }, [loading, childrenData, familyMembers]);
 
   // Effect to load children's data
   useEffect(() => {
@@ -124,11 +104,6 @@ const ChildrenTrackingTab = () => {
         
         setLoading(true);
         console.log("Loading children data...");
-        
-        // Add a timeout to prevent UI freeze if Firebase is slow
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Loading children data timed out")), 10000)
-        );
         
         // Create the main data loading function
         const dataLoadingPromise = async () => {
@@ -149,10 +124,10 @@ const ChildrenTrackingTab = () => {
                 .filter(member => member.role === 'child')
                 .forEach(child => {
                   initialChildrenData[child.id] = {
-                    medicalAppointments: [],
+                    providers: [],
+                    documents: [],
                     growthData: [],
-                    routines: [],
-                    clothesHandMeDowns: []
+                    healthRecords: []
                   };
                 });
               
@@ -167,17 +142,8 @@ const ChildrenTrackingTab = () => {
           }
         };
         
-        // Race the data loading against the timeout
-        let childrenDataResult;
-        try {
-          childrenDataResult = await Promise.race([dataLoadingPromise(), timeoutPromise]);
-        } catch (timeoutError) {
-          console.warn("Children data loading timed out, showing empty state");
-          childrenDataResult = {}; // Empty state if timeout
-          if (isMounted) {
-            setTabError("Loading took too long. Some data may be unavailable.");
-          }
-        }
+        // Load data
+        const childrenDataResult = await dataLoadingPromise();
         
         // Set the children data if component is still mounted
         if (isMounted) {
@@ -188,20 +154,8 @@ const ChildrenTrackingTab = () => {
             setActiveChild(familyMembers.filter(m => m.role === 'child')[0].id);
           }
           
-          // Set loading to false before AI generation
+          // Set loading to false
           setLoading(false);
-        }
-        
-        // Generate local insights
-        if (isMounted && Object.keys(childrenDataResult).length > 0) {
-          try {
-            const localInsights = generateLocalInsights(childrenDataResult);
-            if (localInsights && localInsights.length > 0) {
-              setAiInsights(localInsights);
-            }
-          } catch (insightError) {
-            console.error("Failed to generate insights:", insightError);
-          }
         }
       } catch (error) {
         console.error("Error loading children data:", error);
@@ -209,13 +163,6 @@ const ChildrenTrackingTab = () => {
           setLoading(false);
           setTabError("There was an error loading children data. Please try refreshing the page.");
           setChildrenData({});
-          setAiInsights([{
-            title: "Getting Started",
-            type: "recommendation",
-            content: "Start tracking your children's health, growth, and routines to get personalized insights.",
-            priority: "medium",
-            childId: null
-          }]);
         }
       }
     };
@@ -258,182 +205,88 @@ const ChildrenTrackingTab = () => {
     }
   }, [activeChild]);
 
-  // Generate local insights function
-  const generateLocalInsights = useCallback((data) => {
-    try {
-      // For a simplified version, create some dynamic insights based on the data
-      const insights = [];
-      
-      // Safely process data for each child
-      if (!data || typeof data !== 'object') {
-        console.warn("Invalid data provided to generateLocalInsights", data);
-        return getDefaultInsights();
-      }
-      
-      // Process children data
-      Object.keys(data).forEach(childId => {
-        try {
-          const childData = data[childId];
-          if (!childData) return;
-          
-          const childName = getChildName(childId) || "Your child";
-          
-          // Medical appointment insights
-          if (childData.medicalAppointments && Array.isArray(childData.medicalAppointments)) {
-            // Check for upcoming appointments
-            const upcomingAppointments = childData.medicalAppointments.filter(apt => 
-              apt && !apt.completed && apt.date && new Date(apt.date) > new Date()
-            );
-            
-            if (upcomingAppointments.length > 0) {
-              const nextAppointment = upcomingAppointments.sort((a, b) => 
-                new Date(a.date) - new Date(b.date)
-              )[0];
-              
-              insights.push({
-                type: "medical",
-                title: "Upcoming Medical Appointment",
-                content: `${childName} has a ${nextAppointment.title || 'medical'} appointment on ${formatDate(nextAppointment.date)}${nextAppointment.time ? ` at ${nextAppointment.time}` : ''}.`,
-                priority: "medium",
-                childId: childId
-              });
-            } else {
-              // No upcoming appointments
-              insights.push({
-                type: "recommendation",
-                title: "Schedule a Check-up",
-                content: `${childName} doesn't have any upcoming medical appointments scheduled. Consider scheduling a routine check-up.`,
-                priority: "medium",
-                childId: childId
-              });
-            }
-          }
-          
-          // Growth data insights
-          if (childData.growthData && Array.isArray(childData.growthData) && childData.growthData.length > 0) {
-            // Check if growth data is recent
-            const latestGrowthEntry = childData.growthData.sort((a, b) => 
-              new Date(b.date || 0) - new Date(a.date || 0)
-            )[0];
-            
-            if (latestGrowthEntry && latestGrowthEntry.date) {
-              const threeMothsAgo = new Date();
-              threeMothsAgo.setMonth(threeMothsAgo.getMonth() - 3);
-              
-              if (new Date(latestGrowthEntry.date) < threeMothsAgo) {
-                insights.push({
-                  type: "growth",
-                  title: "Growth Update Reminder",
-                  content: `${childName}'s growth measurements were last updated on ${formatDate(latestGrowthEntry.date)}. Consider updating their height and weight.`,
-                  priority: "low",
-                  childId: childId
-                });
-              }
-            }
-          } else {
-            // No growth data recorded
-            insights.push({
-              type: "recommendation",
-              title: "Missing Growth Data",
-              content: `You haven't recorded any growth data for ${childName} yet. Tracking height, weight, and sizes helps monitor their development.`,
-              priority: "medium",
-              childId: childId
-            });
-          }
-        } catch (childError) {
-          console.warn(`Error generating insights for child ${childId}:`, childError);
-        }
-      });
-      
-      // If we have no insights, add default ones
-      if (insights.length === 0) {
-        return getDefaultInsights();
-      }
-      
-      // Sort insights by priority
-      const priorityOrder = { high: 0, medium: 1, low: 2 };
-      insights.sort((a, b) => {
-        return priorityOrder[a.priority || 'medium'] - priorityOrder[b.priority || 'medium'];
-      });
-      
-      return insights;
-    } catch (error) {
-      console.error("Error in generateLocalInsights:", error);
-      return getDefaultInsights();
+  // Load related providers and documents when child changes
+  useEffect(() => {
+    if (activeChild) {
+      loadRelevantProviders(activeChild);
+      loadRelevantDocuments(activeChild);
     }
-  }, [getChildName]);
+  }, [activeChild]);
 
-  // Helper function for default insights
-  const getDefaultInsights = () => {
-    return [
-      {
-        type: "recommendation",
-        title: "Getting Started",
-        content: "Start tracking your children's health, growth, and routines to get personalized insights.",
-        priority: "medium",
-        childId: null
-      },
-      {
-        type: "recommendation",
-        title: "Regular Health Check-ups",
-        content: "Regular medical check-ups are important for monitoring your family's health. Schedule appointments for anyone who hasn't had a check-up in the past year.",
-        priority: "high",
-        childId: null
-      },
-      {
-        type: "recommendation",
-        title: "Growth Tracking",
-        content: "Tracking your children's growth helps identify potential health concerns early. Try measuring height and weight quarterly.",
-        priority: "medium",
-        childId: null
-      }
-    ];
+  // Load relevant providers for the child
+  const loadRelevantProviders = async (childId) => {
+    try {
+      setLoadingSection('providers');
+      // For demo, we'll use these mock providers
+      const mockProviders = [
+        {
+          id: 'prov1',
+          name: 'Dr. Sarah Johnson',
+          type: 'Pediatrician',
+          phone: '(555) 123-4567',
+          address: '123 Medical Plaza, Suite 400',
+          lastVisit: '2025-04-10'
+        },
+        {
+          id: 'prov2',
+          name: 'Dr. Michael Chen',
+          type: 'Dentist',
+          phone: '(555) 987-6543',
+          address: '456 Dental Office, Suite 200',
+          lastVisit: '2025-03-15'
+        }
+      ];
+      
+      setRelevantProviders(mockProviders);
+      setLoadingSection(null);
+    } catch (error) {
+      console.error("Error loading providers:", error);
+      setRelevantProviders([]);
+      setLoadingSection(null);
+    }
   };
 
-  // Format date helper
-  const formatDate = useCallback((dateString) => {
-    if (!dateString) return "Not scheduled";
-    
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric'
-    });
-  }, []);
-
-  const openModal = (modalType, data) => {
-    setActiveComponent({
-      type: 'eventManager',
-      props: {
-        initialEvent: {
-          title: modalType === 'growth' ? 'Growth Measurement' : '',
-          description: '',
-          childId: data.childId,
-          childName: getChildName(data.childId),
-          category: modalType === 'appointment' ? 'medical' : 
-                   modalType === 'routine' ? 'activity' : 
-                   modalType === 'growth' ? 'growth' : 'general',
-          ...data
+  // Load relevant documents for the child
+  const loadRelevantDocuments = async (childId) => {
+    try {
+      setLoadingSection('documents');
+      // For demo, we'll use these mock documents
+      const mockDocuments = [
+        {
+          id: 'doc1',
+          name: 'Annual Check-up Report',
+          type: 'medical',
+          date: '2025-04-10',
+          provider: 'Dr. Sarah Johnson'
         },
-        eventType: modalType,
-        onSave: (result) => {
-          if (result.success) {
-            setAllieMessage({
-              type: 'success',
-              text: `${modalType.charAt(0).toUpperCase() + modalType.slice(1)} saved successfully!`
-            });
-          }
-          setActiveComponent(null);
+        {
+          id: 'doc2',
+          name: 'Dental X-Rays',
+          type: 'dental',
+          date: '2025-03-15',
+          provider: 'Dr. Michael Chen'
         },
-        onCancel: () => setActiveComponent(null)
-      }
-    });
+        {
+          id: 'doc3',
+          name: 'School Physical Form',
+          type: 'form',
+          date: '2025-02-20',
+          provider: 'School District'
+        }
+      ];
+      
+      setRelevantDocuments(mockDocuments);
+      setLoadingSection(null);
+    } catch (error) {
+      console.error("Error loading documents:", error);
+      setRelevantDocuments([]);
+      setLoadingSection(null);
+    }
   };
 
   // Handle voice input
   const handleVoiceInput = () => {
-    setNewVoiceEntry(true);
+    setShowVoiceEntry(true);
     // Check if browser supports speech recognition
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       setAllieMessage({
@@ -479,17 +332,7 @@ const ChildrenTrackingTab = () => {
       
       // Process the recorded text
       if (recordingText && recordingText !== 'Listening...') {
-        const lowerRecordingText = recordingText.toLowerCase();
-        
-        // Check if it's a task-related command
-        if (lowerRecordingText.includes('task') || 
-            lowerRecordingText.includes('todo') || 
-            lowerRecordingText.includes('remind me') || 
-            lowerRecordingText.includes('add to list')) {
-          handleVoiceTask(recordingText);
-        } else {
-          processVoiceCommand(recordingText);
-        }
+        processVoiceCommand(recordingText);
       }
     };
 
@@ -501,7 +344,7 @@ const ChildrenTrackingTab = () => {
     // Create a friendly confirmation and show it in the UI
     setAllieMessage({
       type: 'success',
-      text: `I heard: "${text}". Processing your request...`
+      text: `Processing: "${text}"`
     });
 
     // For demo purposes, show a mock response after a delay
@@ -515,55 +358,18 @@ const ChildrenTrackingTab = () => {
       else if (lowerText.includes('growth') || lowerText.includes('weight') || lowerText.includes('height')) {
         handleVoiceGrowthEntry(text);
       }
-      else if (lowerText.includes('routine') || lowerText.includes('schedule')) {
-        handleVoiceRoutine(text);
+      else if (lowerText.includes('document') || lowerText.includes('scan') || lowerText.includes('upload')) {
+        handleVoiceDocumentUpload(text);
       }
       else {
         // Default response if we can't categorize
         setAllieMessage({
           type: 'info',
-          text: "I'm not sure how to process that request yet. Try saying something like 'Add a doctor's appointment' or 'Record Emma's height measurement'."
+          text: "I'll store that information and process it for you. Would you like to add more details?"
         });
+        // In a real implementation, this would use Claude to process the text
       }
-    }, 1500);
-  };
-
-  // Handle voice task
-  const handleVoiceTask = async (text) => {
-    try {
-      setAllieMessage({
-        type: 'info',
-        text: `Processing task: "${text}"`
-      });
-      
-      // Use the AllieAIService to process the task
-      const result = await AllieAIService.processTaskFromChat(
-        text,
-        familyId,
-        currentUser?.uid
-      );
-      
-      if (result.success) {
-        setAllieMessage({
-          type: 'success',
-          text: `Added "${result.task.title}" to your tasks${result.task.assignedToName ? ` and assigned it to ${result.task.assignedToName}` : ''}.`
-        });
-        
-        // Expand the task board section to show the new task
-        setExpandedSections(prev => ({...prev, taskBoard: true}));
-      } else {
-        setAllieMessage({
-          type: 'error',
-          text: `Sorry, I couldn't add that task: ${result.error}`
-        });
-      }
-    } catch (error) {
-      console.error("Error handling voice task:", error);
-      setAllieMessage({
-        type: 'error',
-        text: 'Sorry, there was an error processing your task. Please try again.'
-      });
-    }
+    }, 1000);
   };
 
   // Handle voice appointment commands
@@ -583,7 +389,7 @@ const ChildrenTrackingTab = () => {
       return;
     }
 
-    // Mock data extraction - in a real implementation, this would use NLP
+    // Mock data extraction - in a real implementation, this would use Claude
     let appointmentType = 'checkup';
     if (text.toLowerCase().includes('dentist')) appointmentType = 'dentist';
     else if (text.toLowerCase().includes('eye') || text.toLowerCase().includes('vision')) appointmentType = 'eye exam';
@@ -593,39 +399,17 @@ const ChildrenTrackingTab = () => {
     date.setDate(date.getDate() + 14); // Two weeks from now
     
     const initialEvent = {
-      title: `${appointmentType.charAt(0).toUpperCase() + appointmentType.slice(1)}`,
+      title: `${appointmentType.charAt(0).toUpperCase() + appointmentType.slice(1)} Appointment`,
       description: `Voice entry: "${text}"`,
       location: '',
       childId: childId,
       childName: getChildName(childId),
       dateTime: date.toISOString(),
-      category: 'medical',
+      category: 'appointment',
       eventType: 'appointment'
     };
     
-    setActiveComponent({
-      type: 'eventManager',
-      props: {
-        initialEvent,
-        eventType: 'appointment',
-        onSave: (result) => {
-          if (result.success) {
-            setAllieMessage({
-              type: 'success',
-              text: 'Appointment added successfully!'
-            });
-          }
-          setActiveComponent(null);
-        },
-        onCancel: () => {
-          setActiveComponent(null);
-          setAllieMessage({
-            type: 'info',
-            text: 'Appointment creation cancelled.'
-          });
-        }
-      }
-    });
+    openModal('appointment', initialEvent);
   };
 
   // Handle voice growth entry
@@ -664,261 +448,103 @@ const ChildrenTrackingTab = () => {
       category: 'growth',
       eventType: 'growth',
       height: height,
-      weight: weight,
-      shoeSize: '',
-      clothingSize: ''
+      weight: weight
     };
     
-    setActiveComponent({
-      type: 'eventManager',
-      props: {
-        initialEvent,
-        eventType: 'growth',
-        onSave: (result) => {
-          if (result.success) {
-            setAllieMessage({
-              type: 'success',
-              text: 'Growth measurement added successfully!'
-            });
-          }
-          setActiveComponent(null);
-        },
-        onCancel: () => {
-          setActiveComponent(null);
-          setAllieMessage({
-            type: 'info',
-            text: 'Measurement creation cancelled.'
-          });
-        }
-      }
-    });
+    openModal('growth', initialEvent);
   };
 
-  // Handle voice routine commands
-  const handleVoiceRoutine = (text) => {
-    // Extract child
-    const childMatches = familyMembers
-      .filter(m => m.role === 'child')
-      .filter(child => text.toLowerCase().includes(child.name.toLowerCase()));
-    
-    const childId = childMatches.length > 0 ? childMatches[0].id : activeChild;
-    
-    if (!childId) {
-      setAllieMessage({
-        type: 'warning',
-        text: "I didn't catch which child this routine is for. Please try again or select a child first."
-      });
-      return;
-    }
-
-    // Simple extraction for routine type
-    let routineTitle = 'Daily Routine';
-    if (text.toLowerCase().includes('morning')) routineTitle = 'Morning Routine';
-    else if (text.toLowerCase().includes('bedtime') || text.toLowerCase().includes('night')) routineTitle = 'Bedtime Routine';
-    else if (text.toLowerCase().includes('school')) routineTitle = 'School Routine';
-    
-    const initialEvent = {
-      title: routineTitle,
-      description: `Voice entry: "${text}"`,
-      childId: childId,
-      childName: getChildName(childId),
-      dateTime: new Date().toISOString(),
-      category: 'activity',
-      eventType: 'activity',
-      isRecurring: true,
-      recurrence: {
-        frequency: 'weekly',
-        days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-        endDate: ''
-      },
-      startTime: '08:00',
-      endTime: ''
-    };
-    
-    setActiveComponent({
-      type: 'eventManager',
-      props: {
-        initialEvent,
-        eventType: 'routine',
-        onSave: (result) => {
-          if (result.success) {
-            setAllieMessage({
-              type: 'success',
-              text: 'Routine added successfully!'
-            });
-          }
-          setActiveComponent(null);
-        },
-        onCancel: () => {
-          setActiveComponent(null);
-          setAllieMessage({
-            type: 'info',
-            text: 'Routine creation cancelled.'
-          });
-        }
-      }
+  // Handle document upload from voice command
+  const handleVoiceDocumentUpload = (text) => {
+    setAllieMessage({
+      type: 'info',
+      text: "I'm ready to process a document. Please take a photo or upload a file."
     });
+    
+    // In a real implementation, this would trigger the camera or file upload
+    setTimeout(() => {
+      openModal('document', { type: 'upload', childId: activeChild });
+    }, 1500);
   };
 
-  // Open documents library
-  const handleOpenDocuments = (childId) => {
-    setActiveComponent({
-      type: 'documentLibrary',
-      props: {
-        initialChildId: childId,
-        onClose: () => setActiveComponent(null)
-      }
-    });
+  // Open modal based on type
+  const openModal = (type, data) => {
+    setActiveModal(type);
+    setModalProps(data);
   };
 
-  // Open provider directory
-const handleOpenProviders = () => {
-  // Before showing directory, load providers
-  setLoadingProviders(true);
-  
-  // Define provider functions with proper implementations
-  const handleAddProvider = async (providerData) => {
-    try {
-      console.log("Adding provider:", providerData);
-      
-      // Import ProviderService dynamically to ensure it's loaded
-      const { default: ProviderService } = await import('../../../services/ProviderService');
-      
-      // Call the actual service method
-      const result = await ProviderService.saveProvider(familyId, {
-        ...providerData,
-        familyId: familyId
-      });
-      
-      if (result.success) {
-        setAllieMessage({
-          type: 'success',
-          text: `Successfully added ${providerData.name} to your providers!`
-        });
-        
-        // Force refresh providers list
-        window.dispatchEvent(new CustomEvent('provider-added'));
-        
-        // Also force data refresh
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('force-data-refresh'));
-        }, 500);
-        
-        return true;
-      } else {
-        setAllieMessage({
-          type: 'error',
-          text: `Failed to add provider: ${result.error || 'Unknown error'}`
-        });
-        return false;
-      }
-    } catch (error) {
-      console.error("Error adding provider:", error);
-      setAllieMessage({
-        type: 'error',
-        text: 'There was an error adding the provider. Please try again.'
-      });
-      return false;
+  // Close modal
+  const closeModal = () => {
+    setActiveModal(null);
+    setModalProps(null);
+  };
+
+  // Format date helper
+  const formatDate = useCallback((dateString) => {
+    if (!dateString) return "Not scheduled";
+    
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      weekday: 'short', 
+      month: 'short', 
+      day: 'numeric'
+    });
+  }, []);
+
+  // Get child's upcoming appointments
+  const getChildAppointments = () => {
+    if (!activeChild || !events) return [];
+    
+    return events.filter(event => 
+      event.childId === activeChild && 
+      (event.category === 'appointment' || event.eventType === 'appointment') &&
+      new Date(event.dateTime) > new Date()
+    ).sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+  };
+
+  // Handle camera capture or file upload
+  const handleDocumentCapture = () => {
+    // Trigger file input click
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
     }
   };
-  
-  const handleUpdateProvider = async (providerData) => {
-    try {
-      const { default: ProviderService } = await import('../../../services/ProviderService');
-      const result = await ProviderService.saveProvider(familyId, providerData);
-      
-      if (result.success) {
-        setAllieMessage({
-          type: 'success',
-          text: `Successfully updated ${providerData.name}`
-        });
-        return true;
-      } else {
-        setAllieMessage({
-          type: 'error',
-          text: `Failed to update provider: ${result.error || 'Unknown error'}`
-        });
-        return false;
-      }
-    } catch (error) {
-      console.error("Error updating provider:", error);
-      setAllieMessage({
-        type: 'error',
-        text: 'There was an error updating the provider. Please try again.'
-      });
-      return false;
-    }
-  };
-  
-  const handleDeleteProvider = async (providerId) => {
-    try {
-      const { default: ProviderService } = await import('../../../services/ProviderService');
-      // We need to implement a deleteProvider method if it doesn't exist
-      if (typeof ProviderService.deleteProvider === 'function') {
-        const result = await ProviderService.deleteProvider(familyId, providerId);
-        if (result.success) {
-          setAllieMessage({
-            type: 'success',
-            text: 'Provider deleted successfully'
-          });
-          return true;
-        }
-      }
-      
-      // Fallback: Try direct Firestore delete
-      const { doc, deleteDoc } = await import('firebase/firestore');
-      const { db } = await import('../../../services/firebase');
-      await deleteDoc(doc(db, "providers", providerId));
-      
+
+  // Handle file selection
+  const handleFileSelected = (e) => {
+    const file = e.target.files[0];
+    if (file) {
       setAllieMessage({
         type: 'success',
-        text: 'Provider deleted successfully'
+        text: `Processing ${file.name}...`
       });
-      return true;
-    } catch (error) {
-      console.error("Error deleting provider:", error);
-      setAllieMessage({
-        type: 'error',
-        text: 'There was an error deleting the provider. Please try again.'
-      });
-      return false;
+      
+      // In a real implementation, this would upload the file and process it with Claude
+      setTimeout(() => {
+        setAllieMessage({
+          type: 'success',
+          text: `${file.name} processed and stored for ${getChildName(activeChild)}`
+        });
+        
+        // Update documents list with the new file
+        setRelevantDocuments(prev => [
+          {
+            id: `doc-${Date.now()}`,
+            name: file.name,
+            type: 'upload',
+            date: new Date().toISOString(),
+            provider: 'User upload'
+          },
+          ...prev
+        ]);
+      }, 2000);
     }
   };
-  
-  // Load providers
-const loadProviders = async () => {
-  try {
-    setLoadingProviders(true);
-    const { default: ProviderService } = await import('../../../services/ProviderService');
-    const providers = await ProviderService.getProviders(familyId);
-    setHealthcareProviders(providers);
-    setLoadingProviders(false);
-    return providers;
-  } catch (error) {
-    console.error("Error loading providers:", error);
-    setHealthcareProviders([]);
-    setLoadingProviders(false);
-    return [];
-  }
-};
 
-// Load providers initially
-loadProviders().then(initialProviders => {
-  // Now open the directory with loaded providers
-  setActiveComponent({
-    type: 'providerDirectory',
-    props: {
-      familyId: familyId,
-      providers: initialProviders, // Use the providers we just loaded
-      loadingProviders: false, // We've finished loading
-      onAddProvider: handleAddProvider,
-      onUpdateProvider: handleUpdateProvider,
-      onDeleteProvider: handleDeleteProvider,
-      onClose: () => setActiveComponent(null)
-    }
-  });
-});
-};
+  // Toggle between showing calendar and information sections
+  const toggleSection = (section) => {
+    setActiveSection(section);
+  };
 
   return (
     <div className="relative min-h-full">
@@ -932,25 +558,6 @@ loadProviders().then(initialProviders => {
         </div>
       )}
       
-      {/* Family Task Board section - at top */}
-      <div id="task-board-section" className="border border-gray-200 rounded-lg bg-white mb-6">
-        <div className="p-4 border-t border-gray-200">
-          {expandedSections.taskBoard ? (
-            <FamilyKanbanBoard 
-              hideHeader={false}
-              onMinimize={() => setExpandedSections(prev => ({...prev, taskBoard: false}))}
-            />
-          ) : (
-            <button
-              onClick={() => setExpandedSections(prev => ({...prev, taskBoard: true}))}
-              className="w-full flex items-center justify-between p-3 font-medium font-roboto"
-            >
-              <h2 className="text-xl font-bold font-roboto m-0">Family Task Board</h2>
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* Error message */}
       {tabError && (
         <div className="bg-red-50 border border-red-100 text-red-700 rounded-lg p-4 mb-6 flex items-start">
@@ -1007,11 +614,27 @@ loadProviders().then(initialProviders => {
               <button
                 className="py-2 px-3 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 flex items-center font-roboto"
                 onClick={handleVoiceInput}
-                ref={microphoneRef}
               >
                 <Mic size={16} className="mr-2" />
                 Voice Input
               </button>
+              
+              {/* Camera capture button */}
+              <button
+                className="py-2 px-3 bg-green-50 text-green-600 rounded-md hover:bg-green-100 flex items-center font-roboto"
+                onClick={handleDocumentCapture}
+              >
+                <Camera size={16} className="mr-2" />
+                Capture Document
+              </button>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                accept="image/*" 
+                capture="environment"
+                onChange={handleFileSelected}
+              />
             </div>
           )}
         </div>
@@ -1037,18 +660,401 @@ loadProviders().then(initialProviders => {
           ))}
       </div>
       
-      {/* Main Child Dashboard */}
+      {/* Section Navigation */}
+      <div className="mb-6 border-b border-gray-200">
+        <div className="flex space-x-4">
+          <button
+            onClick={() => toggleSection('calendar')}
+            className={`px-4 py-2 font-medium text-sm border-b-2 ${
+              activeSection === 'calendar' 
+                ? 'border-blue-500 text-blue-600' 
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <div className="flex items-center">
+              <Calendar size={16} className="mr-2" />
+              Calendar Events
+            </div>
+          </button>
+          <button
+            onClick={() => toggleSection('information')}
+            className={`px-4 py-2 font-medium text-sm border-b-2 ${
+              activeSection === 'information' 
+                ? 'border-blue-500 text-blue-600' 
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <div className="flex items-center">
+              <Database size={16} className="mr-2" />
+              Stored Information
+            </div>
+          </button>
+          <button
+            onClick={() => toggleSection('growth')}
+            className={`px-4 py-2 font-medium text-sm border-b-2 ${
+              activeSection === 'growth' 
+                ? 'border-blue-500 text-blue-600' 
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <div className="flex items-center">
+              <Activity size={16} className="mr-2" />
+              Growth & Development
+            </div>
+          </button>
+        </div>
+      </div>
+      
+      {/* Section Content */}
       {activeChild && (
-        <ChildDashboard 
-        child={familyMembers.find(m => m.id === activeChild)}
-        childData={childrenData[activeChild]}
-        onOpenAppointment={(data) => openModal('appointment', data)}
-        onOpenGrowth={(data) => openModal('growth', data)}
-        onOpenRoutine={(data) => openModal('routine', data)}
-        onOpenDocuments={handleOpenDocuments}
-        onOpenProviders={handleOpenProviders}
-      />
+        <div className="bg-white rounded-lg shadow-sm p-1">
+          {/* Calendar Events Section */}
+          {activeSection === 'calendar' && (
+            <div className="p-4">
+              <div className="mb-6">
+                <h3 className="text-lg font-medium mb-4">Calendar Events for {getChildName(activeChild)}</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Keep track of appointments, activities, and school events in one place.
+                </p>
+                
+                {/* Embedded Calendar Widget */}
+                <div 
+                  ref={calendarWidgetRef}
+                  className="w-full bg-white rounded-lg border border-gray-200 mb-8"
+                  style={{ height: '600px', position: 'relative' }}
+                >
+                  <RevisedFloatingCalendarWidget 
+                    initialSelectedMember={activeChild}
+                    embedded={true}
+                  />
+                </div>
+                
+                {/* Upcoming Appointments */}
+                <div className="mb-6">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="font-medium">Upcoming Appointments</h4>
+                    <button 
+                      onClick={() => openModal('appointment', { childId: activeChild })}
+                      className="text-sm text-blue-600 hover:text-blue-800 flex items-center"
+                    >
+                      <PlusCircle size={14} className="mr-1" />
+                      Add Appointment
+                    </button>
+                  </div>
+                  
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    {getChildAppointments().length > 0 ? (
+                      <ul className="space-y-2">
+                        {getChildAppointments().slice(0, 3).map(appointment => (
+                          <li key={appointment.id} className="flex items-start p-2 border-b border-gray-100">
+                            <div className="bg-red-100 text-red-700 p-2 rounded-full mr-3">
+                              <Activity size={18} />
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-medium">{appointment.title}</p>
+                              <p className="text-sm text-gray-600">
+                                {formatDate(appointment.dateTime)}
+                                {appointment.location && ` • ${appointment.location}`}
+                              </p>
+                            </div>
+                            <button 
+                              onClick={() => openModal('appointment', appointment)}
+                              className="text-gray-400 hover:text-gray-700"
+                            >
+                              <ChevronRight size={18} />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="text-center py-8">
+                        <Calendar size={40} className="text-gray-300 mx-auto mb-2" />
+                        <p className="text-gray-500">No upcoming appointments</p>
+                        <button 
+                          onClick={() => openModal('appointment', { childId: activeChild })}
+                          className="mt-3 px-4 py-2 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600"
+                        >
+                          Add Appointment
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Stored Information Section */}
+          {activeSection === 'information' && (
+            <div className="p-4">
+              <div className="mb-6">
+                <h3 className="text-lg font-medium mb-4">Stored Information for {getChildName(activeChild)}</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Access and organize medical records, documents, providers, and other important information.
+                </p>
+                
+                {/* Two-column layout for desktop */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Healthcare Providers Column */}
+                  <div>
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="font-medium">Healthcare Providers</h4>
+                      <button 
+                        onClick={() => openModal('provider', { childId: activeChild })}
+                        className="text-sm text-blue-600 hover:text-blue-800 flex items-center"
+                      >
+                        <PlusCircle size={14} className="mr-1" />
+                        Add Provider
+                      </button>
+                    </div>
+                    
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      {loadingSection === 'providers' ? (
+                        <div className="flex justify-center items-center py-8">
+                          <div className="w-6 h-6 border-2 border-t-blue-500 border-blue-200 rounded-full animate-spin"></div>
+                        </div>
+                      ) : relevantProviders.length > 0 ? (
+                        <ul className="space-y-3">
+                          {relevantProviders.map(provider => (
+                            <li key={provider.id} className="flex items-start p-3 bg-white rounded-md shadow-sm">
+                              <div className="bg-blue-100 text-blue-700 p-2 rounded-full mr-3">
+                                <User size={16} />
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-medium">{provider.name}</p>
+                                <p className="text-sm text-gray-500">{provider.type}</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Last visit: {formatDate(provider.lastVisit)}
+                                </p>
+                              </div>
+                              <button 
+                                onClick={() => openModal('providerDetail', provider)}
+                                className="text-gray-400 hover:text-gray-700"
+                              >
+                                <ChevronRight size={18} />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="text-center py-8">
+                          <User size={40} className="text-gray-300 mx-auto mb-2" />
+                          <p className="text-gray-500">No providers added yet</p>
+                          <button 
+                            onClick={() => openModal('provider', { childId: activeChild })}
+                            className="mt-3 px-4 py-2 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600"
+                          >
+                            Add Provider
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Documents Column */}
+                  <div>
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="font-medium">Documents & Records</h4>
+                      <button 
+                        onClick={() => openModal('document', { childId: activeChild })}
+                        className="text-sm text-blue-600 hover:text-blue-800 flex items-center"
+                      >
+                        <PlusCircle size={14} className="mr-1" />
+                        Add Document
+                      </button>
+                    </div>
+                    
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      {loadingSection === 'documents' ? (
+                        <div className="flex justify-center items-center py-8">
+                          <div className="w-6 h-6 border-2 border-t-blue-500 border-blue-200 rounded-full animate-spin"></div>
+                        </div>
+                      ) : relevantDocuments.length > 0 ? (
+                        <div>
+                          <ul className="space-y-3">
+                            {(showAllDocuments ? relevantDocuments : relevantDocuments.slice(0, 3)).map(doc => (
+                              <li key={doc.id} className="flex items-start p-3 bg-white rounded-md shadow-sm">
+                                <div className={`text-white p-2 rounded-full mr-3 ${
+                                  doc.type === 'medical' ? 'bg-red-500' :
+                                  doc.type === 'dental' ? 'bg-blue-500' :
+                                  doc.type === 'form' ? 'bg-purple-500' :
+                                  'bg-gray-500'
+                                }`}>
+                                  <FileText size={16} />
+                                </div>
+                                <div className="flex-1">
+                                  <p className="font-medium">{doc.name}</p>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Added: {formatDate(doc.date)}
+                                    {doc.provider && ` • ${doc.provider}`}
+                                  </p>
+                                </div>
+                                <button 
+                                  onClick={() => openModal('documentDetail', doc)}
+                                  className="text-gray-400 hover:text-gray-700"
+                                >
+                                  <ChevronRight size={18} />
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                          
+                          {relevantDocuments.length > 3 && (
+                            <button
+                              onClick={() => setShowAllDocuments(!showAllDocuments)}
+                              className="w-full mt-3 py-2 text-sm text-blue-600 hover:text-blue-800"
+                            >
+                              {showAllDocuments ? 'Show Less' : `Show All (${relevantDocuments.length})`}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8">
+                          <FileText size={40} className="text-gray-300 mx-auto mb-2" />
+                          <p className="text-gray-500">No documents added yet</p>
+                          <button 
+                            onClick={() => openModal('document', { childId: activeChild })}
+                            className="mt-3 px-4 py-2 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600"
+                          >
+                            Add Document
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Additional Information Categories */}
+                <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {/* School Information */}
+                  <div 
+                    onClick={() => openModal('schoolInfo', { childId: activeChild })}
+                    className="border border-gray-200 rounded-lg p-4 flex items-center hover:bg-gray-50 cursor-pointer"
+                  >
+                    <div className="bg-indigo-100 p-3 rounded-full mr-3">
+                      <School size={20} className="text-indigo-600" />
+                    </div>
+                    <div>
+                      <h5 className="font-medium">School Information</h5>
+                      <p className="text-sm text-gray-500">Teachers, schedules, and contacts</p>
+                    </div>
+                  </div>
+                  
+                  {/* Health History */}
+                  <div 
+                    onClick={() => openModal('healthHistory', { childId: activeChild })}
+                    className="border border-gray-200 rounded-lg p-4 flex items-center hover:bg-gray-50 cursor-pointer"
+                  >
+                    <div className="bg-red-100 p-3 rounded-full mr-3">
+                      <Heart size={20} className="text-red-600" />
+                    </div>
+                    <div>
+                      <h5 className="font-medium">Health History</h5>
+                      <p className="text-sm text-gray-500">Medical history and conditions</p>
+                    </div>
+                  </div>
+                  
+                  {/* Insurance */}
+                  <div 
+                    onClick={() => openModal('insurance', { childId: activeChild })}
+                    className="border border-gray-200 rounded-lg p-4 flex items-center hover:bg-gray-50 cursor-pointer"
+                  >
+                    <div className="bg-green-100 p-3 rounded-full mr-3">
+                      <Clipboard size={20} className="text-green-600" />
+                    </div>
+                    <div>
+                      <h5 className="font-medium">Insurance Information</h5>
+                      <p className="text-sm text-gray-500">Plans, coverage, and cards</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Growth & Development Section */}
+          {activeSection === 'growth' && (
+            <div className="p-4">
+              <div className="mb-6">
+                <h3 className="text-lg font-medium mb-4">Growth & Development for {getChildName(activeChild)}</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Track physical growth, developmental milestones, and educational progress.
+                </p>
+                
+                {/* Growth Chart Placeholder */}
+                <div className="mb-8 p-6 bg-gray-50 rounded-lg border border-gray-200 text-center">
+                  <Activity size={48} className="text-gray-300 mx-auto mb-4" />
+                  <h4 className="font-medium mb-2">Growth Chart</h4>
+                  <p className="text-sm text-gray-500 mb-4">Track height, weight, and other measurements over time</p>
+                  <button 
+                    onClick={() => openModal('growth', { childId: activeChild })}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600"
+                  >
+                    Add Measurement
+                  </button>
+                </div>
+                
+                {/* Developmental Milestones */}
+                <div className="mb-8">
+                  <h4 className="font-medium mb-3">Developmental Milestones</h4>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-center text-gray-500 py-6">
+                      Track important milestones and achievements
+                    </p>
+                    <button 
+                      onClick={() => openModal('milestone', { childId: activeChild })}
+                      className="w-full py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50"
+                    >
+                      Add Milestone
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Educational Progress */}
+                <div>
+                  <h4 className="font-medium mb-3">Educational Progress</h4>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-center text-gray-500 py-6">
+                      Keep track of academic progress and achievements
+                    </p>
+                    <button 
+                      onClick={() => openModal('education', { childId: activeChild })}
+                      className="w-full py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50"
+                    >
+                      Add Education Record
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       )}
+      
+      {/* Allie Chat Integration */}
+      <div className="mt-8 bg-blue-50 rounded-lg p-4 flex items-start">
+        <div className="bg-blue-100 p-3 rounded-full mr-4">
+          <Mic size={22} className="text-blue-600" />
+        </div>
+        <div>
+          <h3 className="font-medium text-blue-800 mb-1">Allie Chat Integration</h3>
+          <p className="text-sm text-blue-700 mb-3">
+            Allie can help you capture, store, and organize information about {activeChild ? getChildName(activeChild) : 'your children'}.
+          </p>
+          <button
+            onClick={handleVoiceInput}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 mr-2"
+          >
+            Talk to Allie
+          </button>
+          <button
+            onClick={handleDocumentCapture}
+            className="px-4 py-2 bg-white border border-blue-300 text-blue-700 rounded-md text-sm hover:bg-blue-50"
+          >
+            Scan Document
+          </button>
+        </div>
+      </div>
       
       {/* Allie notification */}
       {allieMessage && (
@@ -1092,7 +1098,7 @@ loadProviders().then(initialProviders => {
       )}
       
       {/* Voice input modal */}
-      {newVoiceEntry && (
+      {showVoiceEntry && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
             <div className="text-center">
@@ -1109,7 +1115,7 @@ loadProviders().then(initialProviders => {
               <p className="text-sm text-gray-500 mb-4 font-roboto">
                 {isRecording 
                   ? 'Speak clearly, I\'m listening...' 
-                  : 'Click Start to record a voice command like "Add a doctor\'s appointment" or "Record Emma\'s height measurement"'}
+                  : 'Click Start to record a voice command or to capture information about your child'}
               </p>
               
               {recordingText && recordingText !== 'Listening...' && (
@@ -1121,44 +1127,171 @@ loadProviders().then(initialProviders => {
               <div className="flex justify-center space-x-3">
                 <button
                   className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-roboto hover:bg-gray-50"
-                  onClick={() => setNewVoiceEntry(false)}
+                  onClick={() => setShowVoiceEntry(false)}
                 >
                   Cancel
                 </button>
                 
                 {!isRecording ? (
-  <button
-    className="px-4 py-2 bg-blue-600 text-white rounded-md font-roboto hover:bg-blue-700"
-    onClick={handleVoiceInput}
-  >
-    Start Recording
-  </button>
-) : (
-  <button
-    className="px-4 py-2 bg-red-600 text-white rounded-md font-roboto hover:bg-red-700"
-    onClick={() => setIsRecording(false)}
-  >
-    Stop Recording
-  </button>
-)}
+                  <button
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md font-roboto hover:bg-blue-700"
+                    onClick={handleVoiceInput}
+                  >
+                    Start Recording
+                  </button>
+                ) : (
+                  <button
+                    className="px-4 py-2 bg-red-600 text-white rounded-md font-roboto hover:bg-red-700"
+                    onClick={() => setIsRecording(false)}
+                  >
+                    Stop Recording
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
       
-      {/* Render active component (EnhancedEventManager, DocumentLibrary, etc.) */}
-      {activeComponent && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-    {activeComponent.type === 'eventManager' && (
-      <EnhancedEventManager {...activeComponent.props} />
-    )}
-    {activeComponent.type === 'documentLibrary' && (
-      <DocumentLibrary {...activeComponent.props} />
-    )}
-    {activeComponent.type === 'providerDirectory' && (
-      <ProviderDirectory {...activeComponent.props} />
-          )}
+      {/* Modals */}
+      {activeModal === 'appointment' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <EnhancedEventManager 
+            initialEvent={modalProps}
+            eventType="appointment"
+            onSave={(result) => {
+              if (result.success) {
+                setAllieMessage({
+                  type: 'success',
+                  text: 'Appointment saved successfully!'
+                });
+                // Force refresh events
+                if (typeof refreshEvents === 'function') {
+                  refreshEvents();
+                }
+              }
+              closeModal();
+            }}
+            onCancel={closeModal}
+          />
+        </div>
+      )}
+      
+      {activeModal === 'growth' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium">Add Growth Measurement</h3>
+              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Date</label>
+                <input 
+                  type="date" 
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  defaultValue={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Height</label>
+                  <input 
+                    type="text" 
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    placeholder="e.g., 105 cm"
+                    defaultValue={modalProps?.height || ''}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-1">Weight</label>
+                  <input 
+                    type="text" 
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    placeholder="e.g., 20 kg"
+                    defaultValue={modalProps?.weight || ''}
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Head Circumference</label>
+                  <input 
+                    type="text" 
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    placeholder="e.g., 45 cm"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-1">BMI</label>
+                  <input 
+                    type="text" 
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    placeholder="Calculated BMI"
+                    disabled
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Notes</label>
+                <textarea 
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  rows="3"
+                  placeholder="Additional notes about this measurement"
+                  defaultValue={modalProps?.description || ''}
+                ></textarea>
+              </div>
+              
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  onClick={closeModal}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setAllieMessage({
+                      type: 'success',
+                      text: 'Growth measurement saved successfully!'
+                    });
+                    closeModal();
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md"
+                >
+                  Save Measurement
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {activeModal === 'document' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <DocumentLibrary 
+            onClose={closeModal}
+            initialChildId={modalProps?.childId}
+            selectMode={false}
+          />
+        </div>
+      )}
+      
+      {activeModal === 'provider' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <ProviderDirectory 
+            onClose={closeModal}
+            familyId={familyId}
+            selectMode={false}
+          />
         </div>
       )}
     </div>
